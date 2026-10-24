@@ -520,7 +520,9 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64,
         if response.changed() {
             next = Some(value);
         }
-        if let Some(n) = scrub::field(ui, response.id, response.rect, &value.to_string(), Some(value), decimals as i32) {
+        if let Some(n) =
+            scrub::field(ui, response.id, response.rect, &value.to_string(), Some(value), decimals as i32, &(from(range.0)..=from(range.1)))
+        {
             next = Some(n);
         }
         // Lengths' rails cover a useful working range; larger values can still be typed.

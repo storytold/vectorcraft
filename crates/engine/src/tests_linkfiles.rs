@@ -306,7 +306,7 @@ fn a_copy_stays_inside_the_write_root() {
     let allowed = root.join("allowed");
     write(&allowed.join("photo.png"), b"kept as it is");
     std::os::unix::fs::symlink(allowed.join("photo.png"), root.join("doc/photo.png")).unwrap();
-    let roots = crate::file_access::AutomationRoots::new(Some(&root), Some(&allowed)).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&root], &[&allowed]).unwrap();
     let r = crate::file_access::confine(roots.as_ref(), || s.execute("links.relink", &json!({"ids": [id], "path": found, "copy": true})));
     assert!(matches!(&r, Err(EngineError::Other(m)) if m.contains("outside the write root")), "{r:?}");
     assert!(!root.join("doc/photo 2.png").exists());
@@ -332,7 +332,7 @@ fn an_svg_reads_its_links_within_the_read_root() {
     };
     let (inside, outside) = (import("in"), import("out"));
     assert_eq!(inside, outside, "both are read with no roots in force");
-    let roots = crate::file_access::AutomationRoots::new(Some(&root.join("in")), None).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&root.join("in")], &[]).unwrap();
     crate::file_access::confine(roots.as_ref(), || {
         assert_eq!(import("in"), inside, "inside the read root: read as before");
         assert_ne!(import("out"), outside, "outside the read root: not read");

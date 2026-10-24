@@ -83,8 +83,20 @@ fn renamed(v: &Value) -> Vec<(String, String, String)> {
 
 // ---------- M4.22: resources ----------
 
+/// Verify ordinary paste retains image, symbol and pattern resources and their rendered appearance.
 #[test]
 fn an_image_symbol_and_pattern_rect_pasted_into_a_new_document_render_the_same() {
+    resource_transfer(false);
+}
+
+/// Verify a translated artwork drop preserves editable resources, pattern phase, opacity and clipboard contents.
+#[test]
+fn dropped_artwork_preserves_editable_images_symbols_patterns_and_clipboard() {
+    resource_transfer(true);
+}
+
+/// Exercise paste or tab-drop resource transfer and compare source and destination rendering.
+fn resource_transfer(drag: bool) {
     let mut s = session();
     // Pattern "Dots" painting a rectangle.
     let dot = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
@@ -107,21 +119,37 @@ fn an_image_symbol_and_pattern_rect_pasted_into_a_new_document_render_the_same()
     sel(&mut s, &[e]);
     s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
     s.execute("select.all", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"opacity":45})).unwrap();
     s.execute("edit.copy", &json!({})).unwrap();
     assert_eq!(s.clipboard.nodes.len(), 3);
     assert_eq!((s.clipboard.symbols.len(), s.clipboard.patterns.len(), s.clipboard.images.len()), (1, 1, 1));
     let before = render(&s);
-
+    let source = s.doc().unwrap().clone();
+    let ids = source.selection.objects.clone();
     new_doc(&mut s);
     assert!(before != render(&s));
-    let r = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    let r = if drag {
+        s.clipboard = Clipboard::default();
+        s.execute("edit.dropSelection", &json!({"sourceDocument": source.uid, "ids": ids, "grab": [0,0], "at": [13,17]})).unwrap()
+    } else {
+        s.execute("edit.pasteInPlace", &json!({})).unwrap()
+    };
+    if drag {
+        assert_eq!(s.clipboard, Clipboard::default());
+    }
+    assert_eq!(s.documents()[0].doc, source.doc);
     // The pattern (its swatch comes along), the symbol and the image blob.
     assert_eq!((r["added"].as_u64(), r["merged"].as_u64()), (Some(3), Some(0)), "{r}");
     let d = doc(&s);
     assert!(d.pattern("Dots").is_some() && d.swatch("Dots").is_some());
     assert!(d.symbols.iter().any(|x| x.name == "Badge"));
     assert_eq!(d.images.len(), 1);
-    assert!(before == render(&s), "the pasted art renders as it did in its own document");
+    let after = if drag {
+        vectorcraft_render::Renderer::new().render_region(doc(&s), Rect::new(13.0, 17.0, 413.0, 317.0), 1.0, true).pixels
+    } else {
+        render(&s)
+    };
+    assert!(before == after, "the transferred art, its transparency and pattern alignment render as in the source");
 }
 
 #[test]
@@ -648,4 +676,108 @@ fn paste_remembers_layers_survives_save_and_old_files_load_without_it() {
     let v: Value = serde_json::from_slice(&vectorcraft_format::save(&Document::new(10.0, 10.0), false)).unwrap();
     assert!(v.get("paste_remembers_layers").is_none(), "off is not written");
     assert!(!vectorcraft_format::load(v.to_string().as_bytes()).unwrap().paste_remembers_layers);
+}
+
+/// Verify document-scoped object IDs, grab-point placement and one destination Undo/Redo step.
+#[test]
+fn artwork_drop_uses_source_ids_hotspot_and_one_target_undo_step() {
+    let mut s = session();
+    let r = swatched_rect(&mut s, "Brand", "#ff0000");
+    let source = s.doc().unwrap().clone();
+    new_doc(&mut s);
+    let other = swatched_rect(&mut s, "Brand", "#0000ff");
+    assert_eq!(r, other, "node ids collide across documents");
+    copy(&mut s, &[other]);
+    let clip = s.clipboard.clone();
+    let target = s.doc().unwrap().clone();
+    let result = s.execute("edit.dropSelection", &json!({"sourceDocument": source.uid, "ids": [r, r], "grab": [25,30], "at": [175,130]})).unwrap();
+    let ids = ids_of(&result);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(fill(&s, ids[0]), linked(hex("#ff0000"), "Brand 2", 1.0));
+    assert_eq!(fill(&s, other), linked(hex("#0000ff"), "Brand", 1.0));
+    assert_eq!(node(&s, ids[0]).geometric_bounds().unwrap(), Rect::new(170.0, 120.0, 210.0, 160.0));
+    assert_eq!(s.doc().unwrap().history.undo.len(), target.history.undo.len() + 1);
+    assert_eq!(s.clipboard, clip);
+    assert_eq!(s.documents()[0].doc, source.doc);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, target.doc);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, ids);
+}
+
+/// Verify malformed, oversized, stale and overflowing drop requests leave document and clipboard state intact.
+#[test]
+fn invalid_artwork_drop_is_atomic() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 10.0, 40.0, 40.0);
+    let uid = s.execute("document.inspect", &json!({})).unwrap()["uid"].as_u64().unwrap();
+    new_doc(&mut s);
+    let target = s.doc().unwrap().clone();
+    let clipboard = s.clipboard.clone();
+    for patch in [
+        json!({"sourceDocument": u64::MAX}),
+        json!({"sourceDocument": -1}),
+        json!({"sourceDocument": 1.5}),
+        json!({"sourceDocument": null}),
+        json!({"ids": vec![r;10001]}),
+        json!({"ids": null}),
+        json!({"ids": [r,-1]}),
+        json!({"ids": [r,1.5]}),
+        json!({"grab": [0,0,0]}),
+        json!({"grab": ["0",0]}),
+        json!({"ids": []}),
+        json!({"ids": [r, 9999999]}),
+        json!({"ids": ["1"]}),
+        json!({"grab": [0]}),
+        json!({"at": [null, 0]}),
+        json!({"at": [1e308, 0]}),
+    ] {
+        let mut p = json!({"sourceDocument": uid, "ids": [r], "grab": [0,0], "at": [50,60]});
+        p.as_object_mut().unwrap().extend(patch.as_object().unwrap().clone());
+        assert!(s.execute("edit.dropSelection", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().doc, target.doc);
+        assert_eq!(s.doc().unwrap().history.undo.len(), target.history.undo.len());
+        assert_eq!(s.doc().unwrap().selection, target.selection);
+        assert_eq!(s.clipboard, clipboard);
+    }
+    s.execute("file.close", &json!({"index":0})).unwrap();
+    assert!(s.execute("edit.dropSelection", &json!({"sourceDocument": uid,"ids":[r],"grab":[0,0],"at":[50,60]})).is_err());
+    assert_eq!(s.doc().unwrap().doc, target.doc);
+}
+
+/// Verify refusing a locked insertion context preserves the target document and its undo history.
+#[test]
+fn artwork_drop_into_a_locked_destination_is_atomic() {
+    let mut s = session();
+    let r = swatched_rect(&mut s, "Brand", "#ff0000");
+    let uid = s.doc().unwrap().uid;
+    new_doc(&mut s);
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.setProps", &json!({"id":layer,"locked":true})).unwrap();
+    let target = s.doc().unwrap().clone();
+    assert!(s.execute("edit.dropSelection", &json!({"sourceDocument":uid,"ids":[r],"grab":[0,0],"at":[100,100]})).is_err());
+    assert_eq!(s.doc().unwrap().doc, target.doc);
+    assert_eq!(s.doc().unwrap().selection, target.selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), target.history.undo.len());
+}
+
+/// Verify tab drops use the editable current layer despite Paste Remembers Layers and source-layer name collisions.
+#[test]
+fn artwork_drop_uses_the_current_layer_even_when_paste_remembers_hidden_or_locked_source_layers() {
+    for hidden in [true, false] {
+        let mut s = session();
+        let r = rect(&mut s, 10.0, 10.0, 40.0, 40.0);
+        let uid = s.doc().unwrap().uid;
+        new_doc(&mut s);
+        let blocked = doc(&s).layers[0].id;
+        s.execute("layer.setProps", &json!({"id":blocked,"visible":!hidden,"locked":!hidden})).unwrap();
+        let current = id_of(&s.execute("layer.new", &json!({"name":"Flyer"})).unwrap());
+        s.execute("layer.pasteRemembersLayers", &json!({"on":true})).unwrap();
+        let blocked_before = node(&s, blocked);
+        let placed = ids_of(&s.execute("edit.dropSelection", &json!({"sourceDocument":uid,"ids":[r],"grab":[0,0],"at":[100,100]})).unwrap());
+        assert_eq!(doc(&s).parent_of(placed[0]), Some(current));
+        assert_eq!(node(&s, blocked), blocked_before);
+        assert_eq!(doc(&s).layers.len(), 2);
+        assert!(doc(&s).paste_remembers_layers, "the preference still applies to ordinary Paste");
+    }
 }

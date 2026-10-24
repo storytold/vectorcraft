@@ -143,6 +143,96 @@ fn bad_ids_are_refused_and_change_nothing() {
     }
 }
 
+/// A layer or sublayer is not an object these commands act on: its id is refused, alone or with an
+/// object's, and the document, the selection and the undo history stay as they were.
+#[test]
+fn layer_ids_are_refused_and_change_nothing() {
+    let (mut s, ids) = doc();
+    let layer = s.execute("layer.new", &json!({"name": "Top"})).unwrap()["id"].as_u64().unwrap();
+    let sub = s.execute("layer.newSublayer", &json!({"parent": layer})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [ids[3]]})).unwrap();
+    let st = s.doc().unwrap();
+    let (before, undo) = (st.doc.clone(), st.history.undo.len());
+    let params = |cmd: &str| match cmd {
+        "edit.duplicate" => json!({"dx": 5, "dy": 5}),
+        "object.move" => json!({"dx": 12, "dy": -4}),
+        "object.rotate" => json!({"angle": 30}),
+        "object.scale" => json!({"sx": 150}),
+        "object.reflect" => json!({"axis": "vertical"}),
+        "object.shear" => json!({"angle": 20}),
+        _ => json!({}),
+    };
+    for cmd in SELECTS_GIVEN_IDS {
+        for given in [json!([layer]), json!([sub]), json!([ids[0], layer])] {
+            let mut p = params(cmd);
+            p["ids"] = given.clone();
+            let r = s.execute(cmd, &p);
+            let Err(EngineError::BadParams { msg, .. }) = &r else { panic!("{cmd} {given}: {r:?}") };
+            assert!(msg.contains("is a layer, not an object"), "{cmd} {given}: {msg}");
+            assert_eq!(msg.contains("layer.move"), cmd.starts_with("object.arrange."), "{cmd} {given}: {msg}");
+            let st = s.doc().unwrap();
+            assert!(st.doc == before, "{cmd} {given}: the document changed");
+            assert_eq!(st.selection.objects, vec![NodeId(ids[3])], "{cmd} {given}: the selection stays");
+            assert_eq!(st.history.undo.len(), undo, "{cmd} {given}: an undo step was recorded");
+        }
+    }
+    // An unknown id before the layer's is still reported as unknown.
+    let r = s.execute("object.arrange.sendToBack", &json!({"ids": [999, layer]}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "no such object id 999"), "{r:?}");
+}
+
+/// An id that names no object is reported by the command that was run, not by the `select.set`
+/// that checks the ids.
+#[test]
+fn id_errors_name_the_command_run() {
+    let (mut s, ids) = doc();
+    let layer = s.execute("layer.new", &json!({"name": "Top"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [ids[3]]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    for cmd in SELECTS_GIVEN_IDS {
+        for (given, want) in [
+            (json!([999]), "no such object id 999".to_string()),
+            (json!([999, layer]), "no such object id 999".to_string()),
+            (json!([ids[0], ids[1], -1]), "invalid object id -1: expected a non-negative integer".to_string()),
+            (json!(ids[0]), "ids must be an array of non-negative integer object ids".to_string()),
+        ] {
+            let mut p = match *cmd {
+                "edit.duplicate" => json!({"dx": 5, "dy": 5}),
+                "object.move" => json!({"dx": 12, "dy": -4}),
+                "object.rotate" => json!({"angle": 30}),
+                "object.scale" => json!({"sx": 150}),
+                "object.reflect" => json!({"axis": "vertical"}),
+                "object.shear" => json!({"angle": 20}),
+                _ => json!({}),
+            };
+            p["ids"] = given.clone();
+            let r = s.execute(cmd, &p);
+            let Err(EngineError::BadParams { cmd: named, msg }) = &r else { panic!("{cmd} {given}: {r:?}") };
+            assert_eq!((named.as_str(), msg), (*cmd, &want), "{cmd} {given}");
+            assert!(s.doc().unwrap().doc == before, "{cmd} {given}: the document changed");
+            assert_eq!(s.doc().unwrap().selection.objects, vec![NodeId(ids[3])], "{cmd} {given}: the selection stays");
+        }
+    }
+}
+
+#[test]
+fn a_command_that_fails_after_selecting_its_ids_puts_the_selection_back() {
+    let (mut s, ids) = doc();
+    let far = s.execute("shape.rectangle", &json!({"x": 300, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [ids[3]]})).unwrap();
+    let (before, layer) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().active_layer);
+    // The ids are fine, so they are selected; the shapes don't overlap, so Intersect then fails.
+    let e = s.execute("object.pathfinder.intersect", &json!({"ids": [ids[0], far]})).unwrap_err().to_string();
+    assert!(e.contains("empty result"), "{e}");
+    assert!(s.doc().unwrap().doc == before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![NodeId(ids[3])], "the selection stays");
+    assert_eq!(s.doc().unwrap().active_layer, layer);
+    // Without ids the failing command leaves the selection it ran on, as before.
+    s.execute("select.set", &json!({"ids": [ids[0], far]})).unwrap();
+    assert!(s.execute("object.pathfinder.intersect", &json!({})).is_err());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![NodeId(ids[0]), NodeId(far)]);
+}
+
 #[test]
 fn without_ids_the_selection_is_used_as_before() {
     let (mut s, ids) = doc();

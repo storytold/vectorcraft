@@ -362,7 +362,8 @@ impl<'p> Colors<'p> {
         let alt = alt_model(&it.next::<Object<'_>>()?);
         let tint = Function::new(&it.next::<Object<'_>>()?)?;
         let key = debug_text(&tint)?;
-        if names.is_empty() || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
+        // (PDF's limit is 32 colorants; each gets a vector of that length below.)
+        if names.is_empty() || names.len() > MAX_COLORANTS || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
             return None;
         }
         let colorants = names
@@ -521,3 +522,6 @@ fn alt_color(alt: Alt, v: &[f32]) -> Option<Color> {
         Alt::Lab => Color::lab(round3(c(0)?.clamp(0.0, 100.0)), round3(c(1)?.clamp(-128.0, 127.0)), round3(c(2)?.clamp(-128.0, 127.0))),
     })
 }
+
+/// The most colorants of a DeviceN space read.
+const MAX_COLORANTS: usize = 64;

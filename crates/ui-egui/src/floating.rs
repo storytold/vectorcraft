@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 
 use crate::state::{DockTab, FloatingPanels, UiState, all_panels};
 use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, dock, icons, panels};
+use crate::{VectorcraftApp, dock, icons, panels, widgets};
 
 /// Height of a floating group's title bar (its grip and ×).
 pub const TITLE: f32 = 14.0;
@@ -678,7 +678,8 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
 enum Action {
     /// Show the group's `k`th tab.
     Activate(usize, usize),
-    /// A double-click on a tab collapses the group to its tabs, or expands it.
+    /// A double-click on a tab or the strip right of the tabs collapses the group to its tabs, or
+    /// expands it.
     Collapse(usize),
     /// Its × puts the panels of the set's groups back in the dock.
     Close(Vec<usize>),
@@ -911,7 +912,7 @@ pub(crate) fn docked_columns(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> Vec
                 // The open panels share the column's height, each at least `MIN_TALL`: more than fit
                 // scroll, with the column.
                 let tall = ((ui.available_height() - n * STRIP - (n - 1.0) * GAP - 24.0 * open) / open).max(MIN_TALL);
-                egui::ScrollArea::vertical().id_salt(("dock-column-scroll", first)).auto_shrink([false, false]).show(ui, |ui| {
+                widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt(("dock-column-scroll", first)).auto_shrink([false, false]), |ui| {
                     ui.spacing_mut().item_spacing = Vec2::ZERO;
                     let width = ui.available_width();
                     let top = ui.cursor().top();
@@ -1015,9 +1016,9 @@ fn draw_groups(
             ui.painter().rect_filled(gap, 0.0, t.tab_strip);
             gap.top()
         };
-        // Tab strip: a click shows a tab, a double-click collapses the group, a drag out of the
-        // strip floats a tab on its own; a lone tab or the strip right of the tabs moves the group
-        // (out of its set).
+        // Tab strip: a click shows a tab, a double-click on a tab or on the strip right of the tabs
+        // collapses the group, a drag out of the strip floats a tab on its own; a lone tab or the
+        // strip right of the tabs moves the group (out of its set).
         let (strip, _) = ui.allocate_exact_size(vec2(width, STRIP), Sense::hover());
         ui.painter().rect_filled(strip, 0.0, t.panel_darker);
         let lone = g.ids.len() == 1;
@@ -1049,8 +1050,12 @@ fn draw_groups(
         }
         let rest = Rect::from_min_max(pos2(out.right, strip.top()), pos2(menu.left() - 4.0, strip.bottom()));
         if rest.width() > 0.0 {
-            let resp = ui.interact(rest, ui.id().with(("strip", g.gi)), Sense::drag());
-            if resp.drag_started() {
+            // Click as well as drag, so a press there no longer starts the move at once and a
+            // double-click can collapse the group.
+            let resp = ui.interact(rest, ui.id().with(("strip", g.gi)), Sense::click_and_drag());
+            if resp.double_clicked() {
+                *action = Some(Action::Collapse(g.gi));
+            } else if resp.drag_started() {
                 *action = Some(match alone {
                     Some(pos) => Action::Move(g.active, pos),
                     None => Action::Detach(g.gi, strip.left()),
@@ -1775,6 +1780,35 @@ mod tests {
         assert!(h.app.ui.floating_panels[0].collapsed);
         h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
         assert!(!h.app.ui.floating_panels[0].collapsed);
+    }
+
+    /// Illustrator also collapses the group from the blank part of the strip, see
+    /// <https://helpx.adobe.com/illustrator/using/customizing-workspace.html>.
+    #[test]
+    fn a_double_click_on_the_strip_right_of_the_tabs_collapses_a_floating_group_in_place() {
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "layers", "x": 500, "y": 150})).unwrap();
+        h.app.run("window.panel.float", json!({"panel": "stroke", "below": "layers"})).unwrap();
+        h.settle();
+        let owned = |h: &Harness| format!("{:?}", sets(&h.app.ui.floating_panels));
+        let before = owned(&h);
+        let open = h.temp_rect(group_rect_id("layers"));
+        // Left of the panel menu, well right of the lone Layers tab.
+        let blank = pos2(open.right() - 40.0, open.top() + 1.0 + TITLE + STRIP / 2.0);
+        let double = |h: &mut Harness| {
+            h.time += 1.0;
+            h.frame(vec![Event::PointerMoved(blank), button(blank, true)]);
+            h.frame(vec![button(blank, false)]);
+            h.frame(vec![button(blank, true)]);
+            h.frame(vec![button(blank, false)]);
+            h.settle();
+        };
+        double(&mut h);
+        assert!(h.app.ui.floating_panels[0].collapsed, "collapsed");
+        assert_eq!(owned(&h), before, "still in its set");
+        assert_eq!(h.temp_rect(group_rect_id("layers")).min, open.min, "not moved");
+        double(&mut h);
+        assert!(!h.app.ui.floating_panels[0].collapsed, "expanded");
     }
 
     #[test]

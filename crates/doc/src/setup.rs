@@ -154,6 +154,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("Polish", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    ("Turkish", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Japanese", Quotes { double: ['「', '」'], single: ['『', '』'] }),
     ("Chinese", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
 ];

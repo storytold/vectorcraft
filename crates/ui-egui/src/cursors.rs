@@ -409,7 +409,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 78] = [
+const GLYPHS: [Cursor; 79] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -464,6 +464,7 @@ const GLYPHS: [Cursor; 78] = [
     Cursor::MagicWand,
     Cursor::Pencil,
     Cursor::PencilClose,
+    Cursor::PencilStraight,
     Cursor::Paintbrush,
     Cursor::PaintbrushClose,
     Cursor::BlobBrush,
@@ -517,6 +518,11 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             crosshair(ink, p);
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(3.0, HALO));
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(1.2, INK));
+        }
+        // The Pencil's crosshair with a short straight line where the closing ring goes.
+        Cursor::PencilStraight => {
+            crosshair(ink, p);
+            line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
         }
         Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),
@@ -886,6 +892,31 @@ mod tests {
                 // The arms are the crosshair's.
                 assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "{c:?} at {ppp}");
             }
+        }
+    }
+
+    /// The Pencil's straight-line cursor is the crosshair with a short straight line below right,
+    /// through the point where the closing cursor's ring is hollow.
+    #[test]
+    fn the_pencil_straight_line_cursor_is_the_crosshair_with_a_line() {
+        for ppp in [1.0, 2.0] {
+            let cross = rasterize(Cursor::Crosshair, ppp).unwrap();
+            let img = rasterize(Cursor::PencilStraight, ppp).unwrap();
+            let ring = rasterize(Cursor::PencilClose, ppp).unwrap();
+            assert_eq!(img.hotspot, cross.hotspot, "at {ppp}");
+            let at = |img: &CustomCursorImage, dx: f32, dy: f32| {
+                let [hx, hy] = img.hotspot.map(usize::from);
+                let (x, y) = ((hx as f32 + dx * ppp) as usize, (hy as f32 + dy * ppp) as usize);
+                if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y) } else { [0; 4] }
+            };
+            let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+            assert!(inked(at(&img, 8.5, 8.5)), "the line crosses the badge's middle at {ppp}");
+            assert_eq!(at(&ring, 8.5, 8.5)[3], 0, "the closing ring is hollow there at {ppp}");
+            assert_eq!(at(&cross, 8.5, 8.5)[3], 0, "the crosshair has no badge at {ppp}");
+            // Along the line, not across it: no ink off its ends.
+            assert!(!inked(at(&img, 5.0, 5.0)) && !inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
+            assert_ne!(img, ring, "at {ppp}");
+            assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
         }
     }
 

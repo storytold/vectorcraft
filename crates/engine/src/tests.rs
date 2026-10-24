@@ -531,6 +531,29 @@ fn align_and_distribute_refuse_a_boolean_given_as_text() {
     assert_eq!(state(&s).1, [0.0, 0.0]);
 }
 
+/// Align, Distribute and Distribute Spacing to an artboard refuse an `artboard` given as text or as
+/// another value that is not a number, naming the key: nothing moves and no undo step is recorded.
+/// A null is read as the key left out.
+#[test]
+fn align_and_distribute_refuse_an_artboard_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 50.0, 30.0, 10.0, 10.0);
+    let c = rect(&mut s, 70.0, 60.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let calls = [
+        ("object.align", json!({"horizontal": "right", "to": "artboard", "artboard": "0"})),
+        ("object.distribute", json!({"horizontal": "left", "to": "artboard", "artboard": [0]})),
+        ("object.distributeSpacing", json!({"axis": "horizontal", "to": "artboard", "artboard": true})),
+    ]
+    .map(|(cmd, p)| not_a_number(cmd, p, "artboard"));
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("object.align", &json!({"horizontal": "right", "to": "artboard", "artboard": null})).unwrap();
+    let right = |id: NodeId| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x1;
+    assert_eq!([right(a), right(b), right(c)], [s.doc().unwrap().doc.artboards[0].rect.x1; 3]);
+}
+
 /// Align, Distribute and Distribute Spacing return an error that lists the choices of a param
 /// given a value outside them: nothing moves and no undo step is recorded. A null value counts as
 /// not given, and Distribute Spacing without an `axis` spaces the objects horizontally.
@@ -802,10 +825,56 @@ fn selection_tool_drag_is_one_undo_step() {
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap().x0, 100.0);
 }
 
+/// The pointer button is held from a press or a drag until a release or a move. The Dimension
+/// tool stays busy after its first click with the button released, waiting for the second one.
+#[test]
+fn the_pointer_is_held_from_a_press_until_a_release_or_a_move() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("dimension", v).unwrap();
+    let mut held = vec![];
+    for (kind, x) in [(PointerKind::Down, 100.0), (PointerKind::Drag, 100.0), (PointerKind::Up, 100.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 100.0), v).unwrap();
+        held.push(s.pointer_held());
+    }
+    assert!(s.tool_busy(), "the first point waits for the second");
+    for (kind, x) in [(PointerKind::Move, 200.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 310.0), (PointerKind::Move, 320.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 100.0), v).unwrap();
+        held.push(s.pointer_held());
+    }
+    assert_eq!(held, [true, true, false, false, true, true, false]);
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 pub(crate) fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();
     (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+}
+
+/// A call to `cmd` with `p` that must fail with "`key` must be true or false".
+pub(crate) fn not_a_switch(cmd: &str, p: serde_json::Value, key: &str) -> (String, serde_json::Value, String) {
+    (cmd.to_string(), p, format!("`{key}` must be true or false"))
+}
+
+/// A call to `cmd` with `p` that must fail with "`key` must be a number, not <value>", the value
+/// `p` gives for `key`.
+pub(crate) fn not_a_number(cmd: &str, p: serde_json::Value, key: &str) -> (String, serde_json::Value, String) {
+    let msg = format!("`{key}` must be a number, not {}", p[key]);
+    (cmd.to_string(), p, msg)
+}
+
+/// The calls among `calls` (a command, its params and the error it must give) that do not fail
+/// with that error, or that change the document or its history, as "command params".
+pub(crate) fn not_refused(s: &mut Session, calls: &[(String, serde_json::Value, String)]) -> Vec<String> {
+    calls
+        .iter()
+        .filter(|(cmd, p, want)| {
+            let (before, h) = (s.doc().unwrap().doc.clone(), history(s));
+            let r = s.execute(cmd, p);
+            !(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want) && s.doc().unwrap().doc == before && history(s) == h)
+        })
+        .map(|(cmd, p, _)| format!("{cmd} {p}"))
+        .collect()
 }
 
 /// Select `ids` with a move of them left to redo, and mark the document saved.
@@ -1130,6 +1199,99 @@ fn a_boolean_given_as_text_for_a_transform_is_an_error() {
     s.execute("object.scale", &json!({"sx": 200, "strokes": false, "corners": null, "copy": false})).unwrap();
     let (b, w) = (bounds(&s), s.doc().unwrap().doc.node(a).unwrap().appearance.stroke_width());
     assert_eq!((b.width(), w), (100.0, before.2));
+}
+
+/// Object Properties' opacity, Live Shape Properties' corner radius and polygon sides, and the
+/// Transform panel's reference point given as text or as another value that is not a number are an
+/// error naming the key, and so is Live Shape Properties' relative rounding given as anything but
+/// true or false; the objects and the undo history stay as they were. Numbers and null still work.
+#[test]
+fn object_properties_live_shapes_and_bounds_refuse_a_number_or_boolean_given_as_text() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 100, "cy": 100, "radius": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let mut calls = [
+        ("object.setProps", json!({"id": a.0, "opacity": "50"}), "opacity"),
+        ("object.setLiveShape", json!({"ids": [a.0], "radius": "5"}), "radius"),
+        ("object.setLiveShape", json!({"ids": [poly.0], "sides": "8"}), "sides"),
+        ("object.setBounds", json!({"width": 40, "reference": "0"}), "reference"),
+    ]
+    .map(|(cmd, p, key)| not_a_number(cmd, p, key))
+    .to_vec();
+    calls.push(not_a_switch("object.setLiveShape", json!({"ids": [a.0], "radius": 5, "relativeRadii": "true"}), "relativeRadii"));
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 50})).unwrap();
+    s.execute("object.setBounds", &json!({"width": 40, "reference": 0, "x": null})).unwrap();
+    let n = s.doc().unwrap().doc.node(a).unwrap().clone();
+    assert_eq!((n.opacity, n.geometric_bounds().unwrap()), (0.5, vectorcraft_geom::Rect::new(0.0, 0.0, 40.0, 20.0)));
+}
+
+/// The shape tools' commands and the Pen's `path.create` refuse a number or an on/off option given
+/// as text or as another value of the wrong kind, naming the key, and draw nothing; null is read as
+/// the key left out.
+#[test]
+fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
+    let mut s = session();
+    let star = json!({"cx": 100, "cy": 100, "radius1": 20});
+    let flare = json!({"cx": 100, "cy": 100});
+    let spiral = json!({"cx": 100, "cy": 100, "radius": 40});
+    let with = |base: &serde_json::Value, key: &str, v: serde_json::Value| {
+        let mut p = base.clone();
+        p[key] = v;
+        p
+    };
+    let mut calls: Vec<_> = [
+        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10, "radius": "2"}), "radius"),
+        ("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 20, "rotation": "45"}), "rotation"),
+        ("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 20, "sides": "8"}), "sides"),
+        ("shape.star", with(&star, "radius2", json!("10")), "radius2"),
+        ("shape.star", with(&star, "rotation", json!([45])), "rotation"),
+        ("shape.star", with(&star, "points", json!("7")), "points"),
+        ("shape.flare", with(&flare, "diameter", json!("100")), "diameter"),
+        ("shape.flare", with(&flare, "opacity", json!("50")), "opacity"),
+        ("shape.flare", with(&flare, "largest", json!(true)), "largest"),
+        ("shape.flare", with(&flare, "rays", json!("15")), "rays"),
+        ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
+        ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
+        ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
+        ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
+        ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
+    ]
+    .into_iter()
+    .map(|(cmd, p, key)| not_a_number(cmd, p, key))
+    .collect();
+    calls.extend(
+        [
+            ("shape.spiral", with(&spiral, "clockwise", json!("false")), "clockwise"),
+            ("shape.arc", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50, "closed": "true"}), "closed"),
+            ("path.create", json!({"anchors": [{"x": 0, "y": 0}, {"x": 50, "y": 0}], "closed": 1}), "closed"),
+        ]
+        .map(|(cmd, p, key)| not_a_switch(cmd, p, key)),
+    );
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("shape.star", &json!({"cx": 100, "cy": 100, "radius1": 20, "radius2": null, "points": null, "rotation": null})).unwrap();
+    s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "diameter": 50, "x2": null, "seed": 7})).unwrap();
+    s.execute("shape.arc", &json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50, "closed": false})).unwrap();
+}
+
+/// `path.create` given path data (`d`) refuses a `closed` other than true, false or null, as it does
+/// with `anchors`, and draws nothing; with true, false or null it draws the path data, which alone
+/// decides whether the path is closed.
+#[test]
+fn path_create_with_path_data_refuses_closed_given_as_text() {
+    let mut s = session();
+    let d = "M0 0 L10 0 L10 10";
+    let calls = [json!("true"), json!(1), json!([true])].map(|v| not_a_switch("path.create", json!({"d": d, "closed": v}), "closed"));
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    for closed in [json!(true), json!(false), json!(null)] {
+        let id = NodeId(s.execute("path.create", &json!({"d": d, "closed": closed})).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("a path") };
+        assert_eq!((path.subpaths.len(), path.anchor_count(), path.is_closed()), (1, 3, false), "closed: {closed}");
+    }
 }
 
 /// #1824: with anchors selected with Direct Selection, the Transform panel's X/Y/W/H
@@ -2454,6 +2616,156 @@ fn document_find_searches_names_kinds_and_text() {
     assert_eq!(s.execute("document.find", &json!({"kind": "nope"})).unwrap()["total"], 0);
 }
 
+/// `document.find` filters by geometric bounds (inside or touching a rectangle, width, height,
+/// thickness and area) and by anchor count, and `select: true` selects the matches that can be
+/// selected.
+#[test]
+fn document_find_filters_by_geometry_and_selects() {
+    let mut s = session();
+    let big = rect(&mut s, 0.0, 0.0, 100.0, 100.0).0;
+    let sliver = rect(&mut s, 200.0, 0.0, 95.0, 0.9).0;
+    let star = s.execute("shape.star", &json!({"cx": 400, "cy": 50, "radius1": 40, "radius2": 20, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let left = rect(&mut s, 600.0, 0.0, 10.0, 10.0).0;
+    let right = rect(&mut s, 620.0, 0.0, 10.0, 10.0).0;
+    let compound = s.execute("object.compoundPath.make", &json!({"ids": [left, right]})).unwrap()["id"].as_u64().unwrap();
+    let hidden = rect(&mut s, 0.0, 300.0, 5.0, 5.0).0;
+    s.execute("object.hide", &json!({"ids": [hidden]})).unwrap();
+    let locked = rect(&mut s, 20.0, 300.0, 5.0, 5.0).0;
+    s.execute("object.lock", &json!({"ids": [locked]})).unwrap();
+    let dot = rect(&mut s, 40.0, 300.0, 5.0, 5.0).0;
+    let found = |s: &mut Session, p: Value| {
+        let v = s.execute("document.find", &p).unwrap();
+        let mut ids: Vec<u64> = v["matches"].as_array().unwrap().iter().map(|m| m["id"].as_u64().unwrap()).collect();
+        ids.sort_unstable();
+        assert_eq!(v["total"], ids.len(), "{p}");
+        ids
+    };
+    let sorted = |mut v: Vec<u64>| {
+        v.sort_unstable();
+        v
+    };
+
+    // Edges count as inside; a rectangle touching the bounds intersects them.
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 100, 100]})), [big]);
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 99, 100]})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"intersects": [100, 0, 100, 0.5], "kind": "rectangle"})), sorted(vec![big, sliver]));
+    // Size: a thin sliver of either orientation, and the bounds' area.
+    assert_eq!(found(&mut s, json!({"maxThickness": 1})), [sliver]);
+    assert_eq!(found(&mut s, json!({"maxHeight": 1})), [sliver]);
+    assert_eq!(found(&mut s, json!({"minWidth": 90, "maxWidth": 96})), [sliver]);
+    assert_eq!(found(&mut s, json!({"minArea": 9000, "maxArea": 10000})), [big]);
+    assert_eq!(found(&mut s, json!({"maxArea": 30})), sorted(vec![hidden, locked, dot]));
+    // Anchors: a compound path counts its members' together; the layer never matches.
+    assert_eq!(found(&mut s, json!({"minAnchors": 10, "maxAnchors": 10})), [star]);
+    assert_eq!(found(&mut s, json!({"minAnchors": 8, "maxAnchors": 8})), [compound]);
+    let four = sorted(vec![big, sliver, left, right, hidden, locked, dot]);
+    assert_eq!(found(&mut s, json!({"maxAnchors": 4})), four);
+
+    // A find that only reads is not journaled; one that selects is, so an action replays it.
+    let journaled = s.journal.len();
+    s.execute("document.find", &json!({"maxAnchors": 4})).unwrap();
+    assert_eq!(s.journal.len(), journaled);
+    // select: every match except hidden, locked and compound members; the reply counts them.
+    let v = s.execute("document.find", &json!({"maxAnchors": 4, "select": true, "limit": 0})).unwrap();
+    assert_eq!(s.journal_for_action(journaled), [("document.find".to_string(), json!({"maxAnchors": 4, "select": true, "limit": 0}))]);
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(7), json!(3)));
+    let selection = |s: &Session| sorted(s.doc().unwrap().selection.objects.iter().map(|i| i.0).collect());
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // Without select the selection stays, and the reply has no `selected`.
+    let v = s.execute("document.find", &json!({"maxThickness": 1})).unwrap();
+    assert!(v.get("selected").is_none(), "{v}");
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // Select > Reselect repeats the find.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selection(&s), sorted(vec![big, sliver, dot]));
+    // A compound path matched selects as itself.
+    s.execute("document.find", &json!({"minAnchors": 8, "maxAnchors": 8, "select": true})).unwrap();
+    assert_eq!(selection(&s), [compound]);
+    // Inside an isolated compound path its members are what selects.
+    s.execute("object.isolate", &json!({"id": compound})).unwrap();
+    let v = s.execute("document.find", &json!({"maxAnchors": 4, "select": true})).unwrap();
+    assert_eq!(v["selected"], 2);
+    assert_eq!(selection(&s), sorted(vec![left, right]));
+
+    for bad in [
+        json!({"within": [0, 0, -1, 5]}),
+        json!({"within": [0, 0, 1]}),
+        json!({"intersects": "everywhere"}),
+        json!({"minArea": -1}),
+        json!({"maxWidth": "5 pt"}),
+        json!({"minWidth": 5, "maxWidth": 1}),
+        json!({"minAnchors": 1.5}),
+        json!({"maxThickness": 1, "select": "yes"}),
+        json!({"select": true}),
+    ] {
+        assert!(s.execute("document.find", &bad).is_err(), "{bad}");
+    }
+}
+
+/// `document.find {select: true}` counts the objects it selected: a guide path that Lock Guides
+/// leaves out of the selection is a match, not a selected object.
+#[test]
+fn document_find_counts_the_objects_it_selected() {
+    let mut s = session();
+    let guide = rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("select.set", &json!({"ids": [guide.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    rect(&mut s, 20.0, 0.0, 5.0, 5.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let v = s.execute("document.find", &json!({"maxArea": 30, "select": true})).unwrap();
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(2), json!(1)));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+}
+
+/// Select > Object reports the number of objects it selected: a guide path that Lock Guides
+/// leaves out is not counted.
+#[test]
+fn select_object_counts_the_objects_it_selected() {
+    let mut s = session();
+    let line = |s: &mut Session, x: f64| {
+        let id = s.execute("path.create", &json!({"anchors": [{"x": x, "y": 0}, {"x": x + 10.0, "y": 10}]})).unwrap()["id"].as_u64().unwrap();
+        s.execute("brush.apply", &json!({"name": "Charcoal", "ids": [id]})).unwrap();
+        id
+    };
+    let guide = line(&mut s, 0.0);
+    s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    line(&mut s, 20.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for cmd in ["select.object.openPaths", "select.object.brushStrokes"] {
+        let v = s.execute(cmd, &json!({})).unwrap();
+        assert_eq!((v["count"].clone(), s.doc().unwrap().selection.objects.len()), (json!(1), 1), "{cmd}");
+    }
+}
+
+/// The geometric filters of `document.find` match objects only: a layer or sublayer whose bounds
+/// fit is not a match, so `total` counts what `select: true` can select. The text filters still
+/// find layers.
+#[test]
+fn document_find_geometric_filters_leave_out_layers() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 5.0, 5.0).0;
+    let sub = s.execute("layer.newSublayer", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let b = rect(&mut s, 10.0, 0.0, 5.0, 5.0).0;
+    assert_eq!(s.doc().unwrap().doc.parent_of(NodeId(b)), Some(NodeId(sub)));
+    let found = |s: &mut Session, p: Value| {
+        let v = s.execute("document.find", &p).unwrap();
+        let mut ids: Vec<u64> = v["matches"].as_array().unwrap().iter().map(|m| m["id"].as_u64().unwrap()).collect();
+        ids.sort_unstable();
+        assert_eq!(v["total"], ids.len(), "{p}");
+        ids
+    };
+    assert_eq!(found(&mut s, json!({"within": [0, 0, 15, 5]})), [a, b]);
+    assert_eq!(found(&mut s, json!({"intersects": [0, 0, 1, 1]})), [a]);
+    assert_eq!(found(&mut s, json!({"maxArea": 30})), [a, b]);
+    assert_eq!(found(&mut s, json!({"minWidth": 15})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"kind": "layer", "within": [0, 0, 15, 5]})), Vec::<u64>::new());
+    assert_eq!(found(&mut s, json!({"kind": "layer"})).len(), 2);
+    let v = s.execute("document.find", &json!({"within": [0, 0, 15, 5], "select": true})).unwrap();
+    assert_eq!((v["total"].clone(), v["selected"].clone()), (json!(2), json!(2)));
+}
+
 /// Type reports the paint its characters show, and its own object-level paint apart from it.
 #[test]
 fn inspect_reports_the_paint_of_types_characters() {
@@ -3003,7 +3315,7 @@ fn file_list_lists_a_folder_within_the_read_root() {
         json!([{"name": "a.pdf", "kind": "file", "size": 4}, {"name": "b.svg", "kind": "file", "size": 6}, {"name": "sub", "kind": "folder"}])
     );
     assert_eq!(r["truncated"], false);
-    let roots = crate::file_access::AutomationRoots::new(Some(&base.join("in")), None).unwrap().unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
     crate::file_access::confine(Some(&roots), || {
         assert!(s.execute("file.list", &json!({"path": path("in/sub")})).is_ok());
         assert!(s.execute("file.list", &json!({"path": path("outside")})).is_err(), "outside the read root");

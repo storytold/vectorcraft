@@ -433,6 +433,11 @@ pub struct ImageObject {
     /// Links panel → Placement Options: how a file read again takes this image's place.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub placement: crate::links::PlacementOptions,
+    /// The pixels of an image in art made outside a document (type's outlines, a glyph's art),
+    /// which has no [`crate::Document::images`] to keep them in. A document takes them in
+    /// ([`crate::Document::adopt_pixels`]): no image in one holds its own.
+    #[serde(skip)]
+    pub pixels: Option<Arc<crate::ImageBlob>>,
 }
 
 /// Written with its `type` first, then its fields (an internally tagged enum); read by
@@ -523,8 +528,8 @@ pub enum NodeKind {
     Mesh(GradientMesh),
     /// Live Repeat (radial / grid / mirror) of source art.
     Repeat(RepeatSpec),
-    /// A placed document: an artboard of another VectorCraft file, linked and locked (see
-    /// [`crate::placed_document`]).
+    /// A placed document: an artboard of another VectorCraft file, or a page of a PDF or `.ai`
+    /// file, linked and locked (see [`crate::placed_document`]).
     PlacedDocument(Box<crate::placed_document::PlacedDocument>),
     /// Object › Intertwine: the objects keep their own stacking order, except where one of them
     /// is drawn over the others: the area [`NodeExtras::intertwine`] of that member (see
@@ -1227,7 +1232,7 @@ impl Node {
             NodeKind::Mesh(m) => m.bounds(),
             // Each copy is measured where the repeat draws it: `RepeatSpec::transforms` lays the
             // copies out by the source's bounds measured without the document.
-            NodeKind::Repeat(r) => r.copies_bounds(union(&r.source)?),
+            NodeKind::Repeat(r) => r.copies_bounds(union(&r.source)?, symbols.map(|s| s.document())),
             NodeKind::PlacedDocument(p) => Some(p.bounds()),
             // The members drawn over the others are drawn where they are.
             NodeKind::Intertwine { children } => union(children),
@@ -1445,6 +1450,18 @@ impl Node {
     pub fn count(&self) -> usize {
         let mut n = 0;
         self.walk(&mut |_| n += 1);
+        n
+    }
+    /// [`Self::count`], with the art of the opacity masks in the subtree (and theirs): what copying
+    /// and transforming the subtree makes, as [`Self::walk`] doesn't go into masks.
+    pub fn count_with_masks(&self) -> usize {
+        let mut n = 0;
+        self.walk(&mut |c| {
+            n += 1;
+            if let Some(m) = &c.extras().mask {
+                n += m.art.count_with_masks();
+            }
+        });
         n
     }
     /// Fix this node's unplaced gradients to their fit on its current bounds (before a transform
@@ -1800,6 +1817,28 @@ pub struct ObjectAttributes {
     /// the element's event attributes; nothing in VectorCraft runs them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<(String, String)>,
+    /// Attributes in other applications' XML namespaces, in order, kept from SVG import to SVG
+    /// export: what another tool notes on an object (a plotter's pen, a cutter's passes) survives
+    /// a round trip through VectorCraft. Nothing in VectorCraft reads them. They are the object's,
+    /// as `data` is, so copies, duplicates and pastes keep them and a deleted object takes them
+    /// with it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foreign: Vec<ForeignAttribute>,
+}
+
+/// An attribute in another application's XML namespace: `plotter:pen="2"` with `xmlns:plotter=
+/// "https://example.org/plotter"` is `{ns: "https://example.org/plotter", prefix: "plotter", name:
+/// "pen", value: "2"}`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForeignAttribute {
+    /// The namespace's URI, which names it.
+    pub ns: String,
+    /// The prefix the file gave the namespace, which export reuses where it can.
+    pub prefix: String,
+    /// The attribute's local name.
+    pub name: String,
+    /// The attribute's value, as the file had it.
+    pub value: String,
 }
 
 /// The events the SVG Interactivity panel attaches JavaScript to, by the names of the SVG event
@@ -2521,7 +2560,8 @@ mod tests {
     /// A group holding a path, a compound, an image and a nested group, as a file writes it.
     fn nested_group() -> Node {
         let path = |id| Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
-        let image = ImageObject { key: "k".into(), width: 2, height: 3, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+        let image =
+            ImageObject { key: "k".into(), width: 2, height: 3, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
         let inner = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(path(6))], clip: true });
         let compound = Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(path(4))], rule: FillRule::EvenOdd });
         let kids = vec![Arc::new(path(2)), Arc::new(compound), Arc::new(Node::new(NodeId(7), NodeKind::Image(Box::new(image)))), Arc::new(inner)];

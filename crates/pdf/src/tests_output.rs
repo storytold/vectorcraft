@@ -197,7 +197,8 @@ fn png(rgb: [u8; 3]) -> Vec<u8> {
 fn image_doc(bytes: Vec<u8>) -> Document {
     let mut d = Document::new(100.0, 100.0);
     d.images.insert("img".into(), ImageBlob::new("image/png", bytes));
-    let image = ImageObject { key: "img".into(), width: 4, height: 4, xf: Affine::scale(10.0), link: None, placement: Default::default() };
+    let image =
+        ImageObject { key: "img".into(), width: 4, height: 4, xf: Affine::scale(10.0), link: None, placement: Default::default(), pixels: None };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();

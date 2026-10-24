@@ -114,66 +114,69 @@ pub(crate) const CONSTRUCTORS: &[&str] = &[
     "XMPDateTime",
 ];
 
-/// Every feature id a report can list, in the order the report lists them.
-pub const FEATURES: &[&str] = &[
-    "actions",
-    "bridgeTalk",
-    "directive.include",
-    "directive.other",
-    "directive.target",
-    "directive.targetengine",
-    "dollar",
-    "dollar.env",
-    "dollar.evalFile",
-    "dynamicCode",
-    "e4x",
-    "externalObject",
-    "file.dialog",
-    "file.execute",
-    "file.objects",
-    "file.places",
-    "file.read",
-    "file.write",
-    "hostCheck",
-    "localize",
-    "menuCommand",
-    "notify",
-    "operatorOverloading",
-    "preferences",
-    "reflection",
-    "scriptui.dialog",
-    "scriptui.drawing",
-    "scriptui.palette",
-    "scriptui.window",
-    "selectTool",
-    "socket",
-    "unitValue",
-    "xml",
-    "xmp",
-];
-
-/// The need feature `id` sets.
-pub(crate) fn need(id: &str) -> Option<Need> {
-    Some(match id {
-        "directive.target" | "directive.include" | "directive.other" | "dollar" | "dynamicCode" | "notify" | "localize" | "unitValue"
-        | "preferences" | "hostCheck" => Need::Language,
-        "dollar.env" | "dollar.evalFile" | "file.objects" | "file.read" | "file.write" | "file.dialog" | "file.places" | "file.execute" => {
-            Need::Files
+/// Declares [`FeatureId`] from its table: each platform feature a report can list, with its id and
+/// the need it sets. The table is sorted by id, which is the order the report lists them in.
+macro_rules! features {
+    ($($variant:ident $id:literal $need:ident,)*) => {
+        /// A platform feature a report can list ([`crate::Feature::id`] is its [`FeatureId::id`]).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+        pub(crate) enum FeatureId {
+            $($variant),*
         }
-        "menuCommand" => Need::MenuCommands,
-        "scriptui.dialog" | "scriptui.window" | "scriptui.drawing" => Need::Dialogs,
-        "directive.targetengine"
-        | "scriptui.palette"
-        | "bridgeTalk"
-        | "socket"
-        | "externalObject"
-        | "xmp"
-        | "xml"
-        | "e4x"
-        | "operatorOverloading"
-        | "reflection"
-        | "actions"
-        | "selectTool" => Need::HostOnly,
-        _ => return None,
-    })
+
+        impl FeatureId {
+            #[cfg(test)]
+            pub(crate) const ALL: &[FeatureId] = &[$(FeatureId::$variant),*];
+
+            pub(crate) fn id(self) -> &'static str {
+                match self {
+                    $(FeatureId::$variant => $id),*
+                }
+            }
+
+            /// The need the feature sets.
+            pub(crate) fn need(self) -> Need {
+                match self {
+                    $(FeatureId::$variant => Need::$need),*
+                }
+            }
+        }
+    };
+}
+
+features! {
+    Actions "actions" HostOnly,
+    BridgeTalk "bridgeTalk" HostOnly,
+    DirectiveInclude "directive.include" Language,
+    DirectiveOther "directive.other" Language,
+    DirectiveTarget "directive.target" Language,
+    DirectiveTargetengine "directive.targetengine" HostOnly,
+    Dollar "dollar" Language,
+    DollarEnv "dollar.env" Files,
+    DollarEvalFile "dollar.evalFile" Files,
+    DynamicCode "dynamicCode" Language,
+    E4x "e4x" HostOnly,
+    ExternalObject "externalObject" HostOnly,
+    FileDialog "file.dialog" Files,
+    FileExecute "file.execute" Files,
+    FileObjects "file.objects" Files,
+    FilePlaces "file.places" Files,
+    FileRead "file.read" Files,
+    FileWrite "file.write" Files,
+    HostCheck "hostCheck" Language,
+    Localize "localize" Language,
+    MenuCommand "menuCommand" MenuCommands,
+    Notify "notify" Language,
+    OperatorOverloading "operatorOverloading" HostOnly,
+    Preferences "preferences" Language,
+    Reflection "reflection" HostOnly,
+    ScriptuiDialog "scriptui.dialog" Dialogs,
+    ScriptuiDrawing "scriptui.drawing" Dialogs,
+    ScriptuiPalette "scriptui.palette" HostOnly,
+    ScriptuiWindow "scriptui.window" Dialogs,
+    SelectTool "selectTool" HostOnly,
+    Socket "socket" HostOnly,
+    UnitValue "unitValue" Language,
+    Xml "xml" HostOnly,
+    Xmp "xmp" HostOnly,
 }

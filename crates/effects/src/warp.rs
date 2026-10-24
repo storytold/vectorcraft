@@ -10,8 +10,8 @@ use crate::util::*;
 
 pub use vectorcraft_doc::live::{WarpStyle, warp_point};
 
-/// Apply a warp to `path` using box `b`.
-pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value) -> PathData {
+/// Apply a warp to `path` using box `b`, making at most `max` anchors ([`map_nonlinear_within`]).
+pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -> PathData {
     let bend = num(p, "bend", 50.0).clamp(-100.0, 100.0) / 100.0;
     let dh = num(p, "horizontal", 0.0).clamp(-100.0, 100.0) / 100.0;
     let dv = num(p, "vertical", 0.0).clamp(-100.0, 100.0) / 100.0;
@@ -30,5 +30,5 @@ pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value) -> PathData {
         Point::new(c.x + x2 * hw, c.y + y2 * hh)
     };
     let piece = b.width().hypot(b.height()) / 24.0;
-    map_nonlinear(path, piece, f)
+    map_nonlinear_within(path, piece, max, f)
 }

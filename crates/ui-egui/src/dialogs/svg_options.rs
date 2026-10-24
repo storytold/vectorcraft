@@ -92,7 +92,7 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
         .session
         .active()
         .filter(|st| mode != Mode::Export && matches!(st.format, "svg" | "svgz"))
-        .map(|st| Value::Object(st.save_options.clone()));
+        .map(|st| Value::Object(vectorcraft_engine::cmd::fileio::remembered_save_options(st)));
     for last in [&app.ui.svg_options].into_iter().chain(saved.as_ref()) {
         if let Some(o) = last.as_object() {
             fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -414,6 +414,18 @@ mod tests {
         // A native Save As needs no options.
         app.run("file.saveAs", json!({"path": "/tmp/doc.vectorcraft"})).unwrap();
         assert!(vectorcraft_format::sniff(&written.borrow()[3].1));
+    }
+
+    #[test]
+    fn save_as_svg_leaves_out_a_remembered_artboard_the_document_no_longer_has() {
+        let (mut app, written) = app("/tmp/doc.svg");
+        app.run("file.saveAs", json!({"path": "/tmp/doc.svg", "svg": {"artboard": 1}})).unwrap();
+        assert_eq!(app.session.active().unwrap().save_options["artboard"], 1);
+        app.run("artboard.delete", json!({"index": 1})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none());
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
     }
 
     #[test]

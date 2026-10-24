@@ -368,6 +368,8 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.move")?;
+    check_numbers(p, &["dx", "dy"], "artboard.move")?;
+    check_switches(p, &["moveArt", "copy", "patterns"], "artboard.move")?;
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let move_art = bool_or(p, "moveArt", false);
     let copy = bool_or(p, "copy", false);

@@ -95,6 +95,9 @@ impl IccProfile {
     }
 
     pub fn from_bytes(name: Option<String>, bytes: &[u8]) -> Result<Self, CmsError> {
+        if !localized_text_fits(bytes) {
+            return Err(CmsError::BadProfile(format!("its localized names take more than {} KB", MAX_LOCALIZED_TEXT >> 10)));
+        }
         let p = ColorProfile::new_from_slice(bytes).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
         Ok(Self { source: bytes.to_vec(), ..Self::from_profile(name, p)? })
     }
@@ -392,4 +395,37 @@ pub(super) fn gray_profile(name: &str) -> ColorProfile {
     let mut p = ColorProfile::new_gray_with_gamma(2.2);
     p.gray_trc = ColorProfile::new_srgb().red_trc;
     labelled(p, name)
+}
+
+/// Most bytes of UTF-16 the localized names (`mluc` tags) of a profile may take together.
+const MAX_LOCALIZED_TEXT: usize = 1 << 20;
+
+/// Whether the localized-name records of the `mluc` tags in ICC `bytes` take at most
+/// [`MAX_LOCALIZED_TEXT`] together. moxcms copies each record into a string of its own, and records
+/// may all point at the same bytes, so a profile under a megabyte could make it allocate
+/// gigabytes. A table it can't read is left to moxcms to refuse.
+pub(crate) fn localized_text_fits(bytes: &[u8]) -> bool {
+    let be32 = |b: &[u8], at: usize| b.get(at..at.checked_add(4)?).map(|v| u32::from_be_bytes([v[0], v[1], v[2], v[3]]) as usize);
+    let Some(tags) = be32(bytes, 128) else { return true };
+    let mut total = 0usize;
+    for i in 0..tags {
+        let Some(entry) = i.checked_mul(12).and_then(|e| e.checked_add(132)) else { return false };
+        let (Some(offset), Some(size)) = (be32(bytes, entry + 4), be32(bytes, entry + 8)) else { break };
+        let Some(tag) = offset.checked_add(size).and_then(|end| bytes.get(offset..end)) else { continue };
+        if !tag.starts_with(b"mluc") {
+            continue;
+        }
+        let records = be32(tag, 8).unwrap_or(0);
+        for r in 0..records {
+            // Each record's header: language, country, length, offset.
+            let Some(length) = r.checked_mul(12).and_then(|h| be32(tag, h + 16 + 4)) else { break };
+            // Each record counts its 12-byte header too: records of length 0 are not free, so
+            // many tags pointing at one `mluc` can't make this loop quadratic.
+            total = total.saturating_add(length).saturating_add(12);
+            if total > MAX_LOCALIZED_TEXT {
+                return false;
+            }
+        }
+    }
+    true
 }

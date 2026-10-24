@@ -148,6 +148,40 @@ fn done_keeps_the_settings_without_printing_and_bad_settings_keep_the_dialog() {
     assert!(!crate::menus::enabled(&app, "print.printerSetup"), "the mock has no settings to open");
 }
 
+/// A print queue that puts each page on the paper as it is, as `lp` does.
+struct UprightQueue(Jobs);
+
+impl PrintService for UprightQueue {
+    fn printers(&mut self) -> Vec<Printer> {
+        vec![]
+    }
+
+    fn print(&mut self, job: &PrintJob) -> Result<String, String> {
+        MockPrint(self.0.clone()).print(job)
+    }
+
+    fn turns_landscape(&self) -> bool {
+        false
+    }
+}
+
+#[test]
+fn a_landscape_job_goes_upright_to_a_queue_that_does_not_turn_it() {
+    let sizes = |pdf: &[u8]| vectorcraft_pdf::info(pdf, None).unwrap().pages.iter().map(|p| (p.width, p.height)).collect::<Vec<_>>();
+    let landscape = json!({"settings": {"autoRotate": false, "orientation": "landscape", "artboards": "range", "range": "1"}});
+    // The desktop's queue: Letter upright, the art turned on it.
+    let jobs = Jobs::default();
+    let services = Services { print: Some(Box::new(UprightQueue(jobs.clone()))), ..Default::default() };
+    let mut desktop = VectorcraftApp::new(Session::new(), services);
+    desktop.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    desktop.run("file.print", landscape.clone()).unwrap();
+    assert_eq!(sizes(&jobs.borrow()[0].2), [(612.0, 792.0)]);
+    // A service that turns pages itself (the browser's dialog) gets the landscape page.
+    let (mut app, jobs) = app();
+    app.run("file.print", landscape).unwrap();
+    assert_eq!(sizes(&jobs.borrow()[0].2), [(792.0, 612.0)]);
+}
+
 #[test]
 fn without_a_print_service_print_saves_a_pdf() {
     let written: Written = Rc::default();

@@ -49,7 +49,7 @@
 //! doesn't size), transparent image pixels over white. Hidden objects go to a hidden layer of
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
 //! layer they stay where they are). Type that 8-bit text can't hold (characters outside
-//! Windows-1252, vertical type, inline graphics, gradient or pattern fills) is written as its
+//! Windows-1252, vertical type, ruby, inline graphics, gradient or pattern fills) is written as its
 //! outlines, and all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
 //! names and the title are written in Windows-1252 too, and a character outside it is written as
 //! `?`. Two spot colors or two gradients whose names become the same that way are numbered (`? 2`).
@@ -64,8 +64,8 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageObject, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin,
-    Node, NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node,
+    NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
@@ -82,8 +82,8 @@ const MAX_IMAGE_PIXELS: u64 = 1 << 26;
 const HEX_LINE: usize = 60;
 
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
-pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, inline graphics, gradient or pattern fills) is written as outlines";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs) are left out";
+pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
@@ -98,7 +98,10 @@ const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
 const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
-const UNREADABLE_IMAGE: &str = "an image that can't be decoded or is too large was left out";
+/// The warning for an image left out because it can't be decoded: the note raster exports give
+/// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
+const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+const LARGE_IMAGE: &str = "an image that is empty or too large for legacy .ai was left out";
 const ELLIPTICAL: &str = "elliptical radial gradients are written circular";
 
 /// What to write in the header, and how to write what the format can't hold.
@@ -675,7 +678,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                self.image(im);
+                self.image(self.doc.image_blob(im), im.width, im.height, im.xf);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
@@ -1265,7 +1268,8 @@ impl<'a> Writer<'a> {
         self.line("u");
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
-            for g in layout.glyphs.iter().filter(|g| g.run == i) {
+            // Ruby (furigana) glyphs in their base text's run's paint, as the canvas draws them.
+            for g in layout.glyphs.iter().chain(&layout.ruby).filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
             }
             if bp.elements().is_empty() {
@@ -1285,6 +1289,16 @@ impl<'a> Writer<'a> {
             n.appearance = vectorcraft_doc::Appearance { items, ..vectorcraft_doc::Appearance::default() }.into();
             self.shape(&n, &path, FillRule::NonZero);
         }
+        // Colour bitmap glyphs (emoji): their images, which the runs' paint doesn't paint.
+        for g in &layout.glyphs {
+            if let Some((image, to_text)) = g.placed_image() {
+                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text);
+            }
+            // COLR glyphs: their layers, as art.
+            if let Some(art) = g.placed_colour(t.xf) {
+                self.node(&art, false);
+            }
+        }
         self.line("U");
     }
 
@@ -1295,25 +1309,30 @@ impl<'a> Writer<'a> {
     /// operands with `XI`, its RGB samples in hex on comment lines of [`HEX_LINE`] digits,
     /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
     /// can leave out an image in a clipping group and the art after it. No path is open there, so
-    /// the `F` paints nothing.
-    fn image(&mut self, im: &ImageObject) {
+    /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
+    /// by `xf`.
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
-        let m = self.to_art * im.xf * flip;
+        let m = self.to_art * xf * flip;
         if !invertible(m) {
             return;
         }
-        let Some(img) = self.doc.images.get(&im.key).and_then(|b| image::load_from_memory(&b.bytes).ok()) else {
-            self.warn(UNREADABLE_IMAGE);
+        if blob.is_some_and(|b| b.bytes.is_empty()) {
+            self.warn(LARGE_IMAGE);
+            return;
+        }
+        let Some(img) = blob.and_then(|b| image::load_from_memory(&b.bytes).ok()) else {
+            self.warn(UNDECODED);
             return;
         };
         let (w, h) = (img.width(), img.height());
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
-            self.warn(UNREADABLE_IMAGE);
+            self.warn(LARGE_IMAGE);
             return;
         }
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
-        let fit = Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(w), f64::from(im.height.max(1)) / f64::from(h));
-        let m = self.to_art * im.xf * fit * flip;
+        let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
+        let m = self.to_art * xf * fit * flip;
         let rgba = img.to_rgba8();
         let mut hex = String::with_capacity(rgba.len() / 4 * 7);
         hex.push('%');
@@ -1353,11 +1372,13 @@ impl<'a> Writer<'a> {
     }
 }
 
-/// Can type `t` be written as text: horizontal, its runs plain characters (no inline graphics)
-/// that 8-bit text can hold, filled and stroked with colours?
+/// Can type `t` be written as text: horizontal, without ruby (which a text object can't hold), its
+/// runs plain characters (no inline graphics) that 8-bit text can hold, filled and stroked with
+/// colours?
 fn writable(t: &TextObject) -> bool {
     let solid = |p: &Paint| matches!(p, Paint::Solid { .. } | Paint::None);
     !t.vertical
+        && t.ruby.is_empty()
         && t.runs.iter().any(|r| !r.text.is_empty())
         && t.runs.iter().all(|r| {
             r.inline.is_none()
@@ -1378,7 +1399,7 @@ fn lost_attributes(t: &TextObject) -> bool {
             || !s.features.is_empty()
             || !s.font_axes.is_empty()
     };
-    let para_lost = |p: &ParaStyle| p.space_after != 0.0 || !p.tabs.is_empty();
+    let para_lost = |p: &ParaStyle| p.space_after != 0.0 || !p.tabs.is_empty() || p.list.is_some();
     t.runs.iter().any(|r| run_lost(&r.style))
         || t.paragraph_styles().iter().any(para_lost)
         || (matches!(t.kind, TextKind::Area { .. }) && t.area != AreaOptions::default())

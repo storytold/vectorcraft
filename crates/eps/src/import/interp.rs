@@ -567,11 +567,15 @@ impl<'a> Interp<'a> {
                     None => {
                         let (x, y) =
                             (a.as_num().ok_or(PsError::Ps("typecheck", String::new()))?, b.as_num().ok_or(PsError::Ps("typecheck", String::new()))?);
-                        Obj::Real(match op {
+                        let r = match op {
                             Add => x + y,
                             Sub => x - y,
                             _ => x * y,
-                        })
+                        };
+                        if !r.is_finite() {
+                            return ps_err("undefinedresult", "");
+                        }
+                        Obj::Real(r)
                     }
                 };
                 self.push(r)?;
@@ -947,6 +951,7 @@ impl<'a> Interp<'a> {
                 let seek = self.pop_str()?.to_vec();
                 let s = self.pop_str()?;
                 let text = s.to_vec();
+                self.spend((text.len() / 64) as u64)?;
                 let at = if op == Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
                 match at {
                     Some(i) => {

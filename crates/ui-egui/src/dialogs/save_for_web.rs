@@ -68,11 +68,12 @@ const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality steps: (label, quality).
 const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
 
-/// Open the dialog on the remembered settings.
+/// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let n = app.session.active().ok_or("no document")?.doc.artboards.len();
     let mut s = app.session.last_web_settings();
-    // A remembered artboard this document doesn't have: its first.
+    s.artboard = Some(crate::panels::artboards::selected(app, n));
+    // A document with no artboards has no valid index.
     if s.artboard.is_some_and(|a| a >= n) {
         s.artboard = None;
     }
@@ -967,12 +968,12 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         d.fields.insert(key.into(), v);
     };
     widgets::label_row(ui, tl!("W:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::plain_field(ui, "sfw-w", f64::from(w), " px", 0, 80.0) {
-            set(d, "width", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-w", f64::from(w), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "width", json!(v));
         }
         widgets::field_label(ui, tl!("H:"));
-        if let Some(v) = widgets::plain_field(ui, "sfw-h", f64::from(h), " px", 0, 80.0) {
-            set(d, "height", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-h", f64::from(h), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "height", json!(v));
         }
     });
     let percent = region.map_or(100.0, |(_, scale)| (scale * 100.0 * 100.0).round() / 100.0);

@@ -1103,3 +1103,19 @@ fn restore_puts_dictionaries_back() {
     // take, is positive (chapter 8), and programs divide by it.
     super::tests::check("cachestatus 7 1 roll 6 { pop } repeat 0 gt");
 }
+
+/// #3567: what a `filter` decodes counts against the memory budget, not just its input. A
+/// small string that inflates to 16 MiB, decoded over and over (each result dropped), ends
+/// the program; a single one does not.
+#[test]
+fn filter_output_counts_against_the_memory_budget() {
+    fn hex(data: &[u8]) -> String {
+        data.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    let z = hex(&deflate(&vec![0u8; 16 << 20]));
+    let once = import(&file("t", &format!("/z <{z}> def z /FlateDecode filter pop 0 0 1 1 rectfill"))).unwrap();
+    assert!(once.warnings.iter().all(|w| !w.contains("memory")), "{:?}", once.warnings);
+    let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
+    let Err(err) = many else { panic!("the budget ends the program") };
+    assert!(err.contains("too much memory"), "{err}");
+}

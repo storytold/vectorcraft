@@ -130,7 +130,7 @@ look = "Arrow with a type badge (a letter T)."
 id = "LoadedText"
 group = "Selection"
 shown_when = [
-    "The Selection tool after a click on the red out port of selected area type or type on a path whose text overflows: the pointer carries that text until a click threads it into a closed path, area type or type on a path, a click on empty canvas makes a new frame of the same kind and shape there, or a drag draws the new frame. Escape or another tool drops it.",
+    "The Selection tool after a click on the out port or the in port of selected area type or type on a path, threaded, overflowing or not: the pointer carries that text until a click threads it into a closed path, area type or type on a path, a click on empty canvas makes a new frame of the same kind and shape there, or a drag draws the new frame; from the in port the frame placed comes before the clicked one. Escape or another tool drops it.",
 ]
 hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
 look = "A small block of text lines: the overflow text the pointer carries. Until it is drawn it borrows the I-beam (Text)."
@@ -530,15 +530,25 @@ look = "Crosshair with a minus badge."
 [[cursor]]
 id = "Pencil"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Alt while drawing closes the path."]
+shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Shift held at the press, or Alt held at the press when Alt key toggles to Smooth Tool is off, draws a straight line; Alt pressed after the drag starts, when that option is off, closes the path; when it is on, Alt held at the press gives the Smooth tool."]
 hotspot = "The lead tip."
 
 [[cursor]]
 id = "PencilClose"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool with Alt held, before a press and while drawing, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path."]
+shown_when = [
+    "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
+    "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
+
+[[cursor]]
+id = "PencilStraight"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
 
 [[cursor]]
 id = "Paintbrush"
@@ -549,7 +559,10 @@ hotspot = "The bristle tip."
 [[cursor]]
 id = "PaintbrushClose"
 group = "Drawing and editing tools"
-shown_when = ["The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path."]
+shown_when = [
+    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
 hotspot = "The bristle tip."
 look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClose."
 

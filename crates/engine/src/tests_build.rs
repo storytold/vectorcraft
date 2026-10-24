@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
-use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
+use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 use vectorcraft_testkit::pdf::{PdfPage, pdf};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
@@ -49,8 +49,13 @@ fn area(s: &Session, id: NodeId) -> f64 {
 
 /// Rect A (0..100) and rect B (50..150), both 100 tall, selected. A red, B blue.
 fn two(s: &mut Session) -> (NodeId, NodeId) {
+    two_at(s, 50.0)
+}
+
+/// [`two`] with B at `x`..`x`+100.
+fn two_at(s: &mut Session, x: f64) -> (NodeId, NodeId) {
     let a = rect(s, 0.0, 0.0, 100.0, 100.0);
-    let b = rect(s, 50.0, 0.0, 100.0, 100.0);
+    let b = rect(s, x, 0.0, 100.0, 100.0);
     set_fill(s, a, Color::rgb(1.0, 0.0, 0.0));
     set_fill(s, b, Color::rgb(0.0, 0.0, 1.0));
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
@@ -79,6 +84,35 @@ fn shape_builder_drag_merges_touched_regions() {
     // Merged shape takes the fill of the object under the drag start (A, red).
     assert_eq!(node(&s, merged).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
     assert_eq!(layer_children(&s), 2);
+}
+
+#[test]
+fn shape_builder_drag_merges_a_region_thinner_than_the_sampling_step() {
+    let mut s = session();
+    two_at(&mut s, 99.9);
+    assert_eq!(s.execute("shapeBuilder.regions", &json!({})).unwrap()["regions"].as_array().unwrap().len(), 3);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 50], [150, 50]]})).unwrap();
+    assert_eq!(r["regions"], 3, "the 0.1 pt overlap too");
+    let out = ids(&r);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(outline(&node(&s, out[0])).0.subpaths.len(), 1);
+    assert!((area(&s, out[0]) - 19990.0).abs() < 1.0, "{}", area(&s, out[0]));
+}
+
+#[test]
+fn shape_builder_drag_merges_a_narrow_overlap_when_far_art_is_selected() {
+    let mut s = session();
+    let (a, b) = two_at(&mut s, 99.0);
+    // A far square makes the selection 4,010 pt wide.
+    let far = rect(&mut s, 4000.0, 4000.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, far.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50.3, 50], [150.3, 50]]})).unwrap();
+    assert_eq!(r["regions"], 3);
+    let out = ids(&r);
+    assert_eq!(out.len(), 2, "the merged shape and the far square: {out:?}");
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert_eq!(outline(&node(&s, merged)).0.subpaths.len(), 1);
+    assert!((area(&s, merged) - 19900.0).abs() < 1.0, "{}", area(&s, merged));
 }
 
 #[test]
@@ -138,6 +172,131 @@ fn shape_builder_miss_is_an_error_and_undo_restores() {
     assert!(s.doc().unwrap().doc.node(a).is_some() && s.doc().unwrap().doc.node(b).is_some());
     assert!(s.execute("shapeBuilder.merge", &json!({"points": []})).is_err());
     assert!(s.execute("shapeBuilder.merge", &json!({})).is_err());
+}
+
+/// A 3×3 grid of touching 100 pt squares from (0, 0) to (300, 300), each in its own gray, selected.
+fn grid(s: &mut Session) -> Vec<NodeId> {
+    let ids: Vec<NodeId> = (0..9)
+        .map(|k| {
+            let id = rect(s, (k % 3) as f64 * 100.0, (k / 3) as f64 * 100.0, 100.0, 100.0);
+            let gray = k as f32 / 10.0;
+            set_fill(s, id, Color::rgb(gray, gray, gray));
+            id
+        })
+        .collect();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    ids
+}
+
+/// `rect`: the regions a marquee reaches merge into one shape, which takes the look of the square
+/// where the marquee started, else of the square where it ended.
+#[test]
+fn shape_builder_rect_merges_every_region_the_marquee_reaches() {
+    let mut s = session();
+    let squares = grid(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [250, 250, -200, -200]})).unwrap();
+    assert_eq!(r["regions"], 9);
+    let out = ids(&r);
+    assert_eq!(out.len(), 1, "{r}");
+    assert!((area(&s, out[0]) - 90000.0).abs() < 1.0, "{}", area(&s, out[0]));
+    assert_eq!(outline(&node(&s, out[0])).0.subpaths.len(), 1, "one path, no seams");
+    assert_eq!(node(&s, out[0]).appearance.fill_paint(), Paint::solid(Color::rgb(0.8, 0.8, 0.8)), "the bottom-right square's look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": squares.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [50, 50, 200, 200]})).unwrap();
+    assert_eq!(node(&s, ids(&r)[0]).appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 0.0)), "the top-left square's look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Started outside every square: the look of the middle square, where it ended.
+    s.execute("select.set", &json!({"ids": squares.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [-50, -50, 200, 200]})).unwrap();
+    assert_eq!(r["regions"], 4);
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert_eq!(node(&s, merged).appearance.fill_paint(), Paint::solid(Color::rgb(0.4, 0.4, 0.4)), "the middle square's look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Points as well add the regions along them; the marquee touches the left column only.
+    s.execute("select.set", &json!({"ids": squares.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [40, 50, 20, 200], "points": [[150, 50], [250, 50]]})).unwrap();
+    assert_eq!(r["regions"], 5);
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 50000.0).abs() < 1.0, "{}", area(&s, merged));
+}
+
+/// `rect` with `erase`: the regions the marquee reaches are deleted.
+#[test]
+fn shape_builder_rect_with_erase_deletes_the_regions_the_marquee_reaches() {
+    let mut s = session();
+    grid(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [140, 50, 20, 200], "erase": true})).unwrap();
+    assert_eq!((&r["regions"], &r["merged"]), (&json!(3), &Value::Null));
+    let out = ids(&r);
+    assert_eq!(out.len(), 6, "{r}");
+    assert!(out.iter().all(|i| (area(&s, *i) - 10000.0).abs() < 1.0));
+    let outside_the_middle = |i: &NodeId| node(&s, *i).geometric_bounds().is_some_and(|b| b.x1 <= 100.0 + 1e-6 || b.x0 >= 200.0 - 1e-6);
+    assert!(out.iter().all(outside_the_middle), "the middle column is gone");
+}
+
+#[test]
+fn shape_builder_rect_must_be_four_finite_numbers() {
+    let mut s = session();
+    grid(&mut s);
+    let undo_before = s.doc().unwrap().history.undo.len();
+    for rect in [json!([0, 0, 10]), json!("big"), json!([0, 0, 10, f64::MAX]), json!([0, 0, "10", 10])] {
+        let e = s.execute("shapeBuilder.merge", &json!({"rect": rect})).unwrap_err().to_string();
+        assert!(e.contains("rect must be [x, y, width, height]"), "{rect}: {e}");
+    }
+    // Outside every region: nothing to merge.
+    assert!(s.execute("shapeBuilder.merge", &json!({"rect": [400, 400, 50, 50]})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+    // A null rect is left out, and points are needed again.
+    assert!(s.execute("shapeBuilder.merge", &json!({"rect": null})).is_err());
+}
+
+/// With `rect`, `splitStroke` splits nothing, even with one point on a stroke: the marquee's
+/// regions merge.
+#[test]
+fn shape_builder_rect_merges_and_does_not_split_a_stroke() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"rect": [40, -5, 20, 20], "points": [[50, -1]], "splitStroke": true})).unwrap();
+    assert_eq!((r.get("split"), r["regions"].as_u64(), r["edges"].as_u64()), (None, Some(1), Some(0)), "{r}");
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert_eq!(shapes_of(&s, &[merged]), vec![(true, 4, 400.0)]);
+}
+
+/// Past the segment limit only the filled areas count, so a stroke-only line along y = 150 cuts no
+/// square: a marquee above the line merges the three whole squares of the middle row, as a drag
+/// above it does. Under the limit the line cuts the middle row, and both merge only the halves
+/// above it.
+#[test]
+fn shape_builder_rect_past_the_segment_limit_merges_whole_regions_as_a_drag_does() {
+    let merged_area = |segments: usize, params: Value| {
+        let mut s = session();
+        let mut ids = grid(&mut s);
+        let pts: Vec<Point> = (0..=segments).map(|k| Point::new(-10.0 + 320.0 * k as f64 / segments as f64, 150.0)).collect();
+        let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let l = s
+            .edit("t", |d, _| {
+                let id = d.alloc_id();
+                let top = d.children(d.default_layer()).map_or(0, |c| c.len());
+                d.insert(d.default_layer(), top, Node::path(id, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look))?;
+                Ok(id)
+            })
+            .unwrap();
+        ids.push(l);
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        let r = s.execute("shapeBuilder.merge", &params).unwrap();
+        area(&s, NodeId(r["merged"].as_u64().unwrap()))
+    };
+    let past = vectorcraft_pathops::SHAPE_BUILDER_MAX_SEGMENTS;
+    let marquee = json!({"rect": [20, 120, 260, 20]});
+    let drag = json!({"points": [[50, 130], [250, 130]]});
+    for (segments, want) in [(2, 15000.0), (past, 30000.0)] {
+        for params in [&marquee, &drag] {
+            let got = merged_area(segments, params.clone());
+            assert!((got - want).abs() < 1.0, "{segments} segments, {params}: {got}");
+        }
+    }
 }
 
 #[test]
@@ -204,6 +363,54 @@ fn shape_builder_tool_drives_the_command() {
     s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 50.0).with_mods(alt), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0).with_mods(alt), v).unwrap();
     assert_eq!(layer_children(&s), 1);
+}
+
+#[test]
+fn shape_builder_tool_merges_the_narrow_shape_it_highlights_in_a_wide_selection() {
+    let mut s = session();
+    let strip = rect(&mut s, 199.5, 100.0, 1.0, 100.0);
+    // A far square makes the selection 9,800.5 pt wide.
+    let far = rect(&mut s, 9900.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [strip.0, far.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 190.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 150.0), v).unwrap();
+    assert_eq!(s.overlays(v).len(), 3, "the strip's hatch and outline, and the drag path");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 210.0, 150.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert_eq!(layer_children(&s), 2);
+}
+
+#[test]
+fn shape_builder_tool_highlights_and_merges_a_narrow_overlap() {
+    let mut s = session();
+    two_at(&mut s, 99.95);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.3, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.3, 50.0), v).unwrap();
+    assert_eq!(s.overlays(v).len(), 7, "the three regions' hatches and outlines, and the drag path");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.3, 50.0), v).unwrap();
+    assert_eq!(layer_children(&s), 1, "one shape, no leftover strips");
+    let d = &s.doc().unwrap().doc;
+    let merged = d.children(d.default_layer()).unwrap()[0].id;
+    assert_eq!(outline(&node(&s, merged)).0.subpaths.len(), 1);
+}
+
+#[test]
+fn shape_builder_tool_zoomed_out_picks_a_narrow_shape() {
+    let mut s = session();
+    let strip = rect(&mut s, 199.5, 100.0, 1.0, 100.0);
+    let near = rect(&mut s, 300.0, 100.0, 3.0, 100.0);
+    s.execute("select.set", &json!({"ids": [strip.0, near.0]})).unwrap();
+    let v = ViewInfo { zoom: 0.05, ..Default::default() };
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 190.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 150.0), v).unwrap();
+    assert_eq!(s.overlays(v).len(), 3, "the strip's hatch and outline, and the drag path");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 150.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
 }
 
 /// The first and last stop colours of a gradient paint.
@@ -298,6 +505,27 @@ fn shape_builder_click_on_a_side_of_a_line_splits_the_shape() {
     assert_eq!(open_paths(&s, &out), vec![(2, Rect::new(50.0, -20.0, 50.0, 120.0))]);
 }
 
+/// A line that ends inside a shape has the same region on both sides there: a click or a drag
+/// across it, or deleting the region, leaves it whole.
+#[test]
+fn shape_builder_merge_keeps_a_line_that_ends_inside_the_shape() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    set_fill(&mut s, a, Color::rgb(1.0, 0.0, 0.0));
+    let l = line(&mut s, (50.0, -20.0), (50.0, 99.0));
+    s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+    let mut lines = vec![];
+    for params in [json!({"points": [[25, 50]]}), json!({"points": [[25, 50], [75, 50]]}), json!({"points": [[25, 50]], "erase": true})] {
+        let r = s.execute("shapeBuilder.merge", &params).unwrap();
+        assert_eq!(r["regions"], 1, "{params}");
+        let merged = r["merged"].as_u64().map(|m| (area(&s, NodeId(m)) - 10000.0).abs() < 1.0);
+        assert_eq!(merged, params["erase"].is_null().then_some(true), "{params}");
+        lines.push(open_paths(&s, &ids(&r)));
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(lines, vec![vec![(2, Rect::new(50.0, -20.0, 50.0, 99.0))]; 3]);
+}
+
 #[test]
 fn shape_builder_merge_across_a_line_removes_the_piece_between() {
     let mut s = session();
@@ -350,11 +578,11 @@ fn shape_builder_fills_an_area_lines_enclose() {
     let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
     assert_eq!(r["regions"].as_array().unwrap().len(), 1);
     assert_eq!(r["regions"][0]["sources"], json!([]));
+    let top_line = node(&s, l3).appearance.clone();
     let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 70]]})).unwrap();
     let merged = NodeId(r["merged"].as_u64().unwrap());
     assert!((area(&s, merged) - 900.0).abs() < 1e-6, "{}", area(&s, merged));
-    assert_eq!(node(&s, merged).appearance.fill_paint(), s.paint.fill, "the current fill");
-    assert!(!node(&s, merged).appearance.stroke_paint().is_none(), "the lines' stroke");
+    assert_eq!(node(&s, merged).appearance, top_line, "no object at the click: the look of the front-most selected line");
     assert_eq!(ids(&r).len(), 4, "the triangle + the three lines, which only bound it");
 }
 
@@ -467,6 +695,117 @@ fn shape_builder_pick_color_from_swatches_fills_with_the_current_fill() {
     assert!(s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]], "pickColorFrom": "layers"})).is_err());
 }
 
+/// Four #888888 bars round a hole (20..80 on both axes), and in front of them a red square
+/// (90..140 × 30..70) with a 5 pt stroke that overlaps the right bar. Returns the bars, back to
+/// front, and the square.
+fn frame_and_red_square(s: &mut Session) -> (Vec<NodeId>, NodeId) {
+    let gray = Color::from_hex("#888888").unwrap();
+    let mut bars = vec![];
+    for (x, y, w, h) in [(0.0, 0.0, 20.0, 100.0), (80.0, 0.0, 20.0, 100.0), (0.0, 0.0, 100.0, 20.0), (0.0, 80.0, 100.0, 20.0)] {
+        let id = rect(s, x, y, w, h);
+        set_fill(s, id, gray);
+        bars.push(id);
+    }
+    let red = rect(s, 90.0, 30.0, 50.0, 40.0);
+    s.edit("t", |d, _| {
+        let a = &mut d.node_mut(red).unwrap().appearance;
+        a.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+        a.set_stroke(Paint::solid(Color::rgb(0.0, 0.0, 0.0)));
+        a.stroke_mut().unwrap().width = 5.0;
+        Ok(())
+    })
+    .unwrap();
+    (bars, red)
+}
+
+fn select_ids(s: &mut Session, list: &[NodeId]) {
+    s.execute("select.set", &json!({"ids": list.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+}
+
+fn merged_look(s: &Session, r: &Value) -> vectorcraft_doc::Shared<vectorcraft_doc::Appearance> {
+    node(s, NodeId(r["merged"].as_u64().unwrap())).appearance
+}
+
+/// Pick Color From Artwork: the merged shape takes the look of the object where the drag starts,
+/// else of the object where it ends, else of the front-most selected object, as the combine page
+/// states. A drag that starts in an object keeps that object's look.
+#[test]
+fn shape_builder_artwork_takes_the_look_where_the_drag_starts_then_ends_then_the_top_object() {
+    let mut s = session();
+    let (bars, red) = frame_and_red_square(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    let gray = node(&s, bars[3]).appearance.clone();
+    let red_look = node(&s, red).appearance.clone();
+    let all: Vec<NodeId> = bars.iter().copied().chain([red]).collect();
+    let merge = |s: &mut Session, list: &[NodeId], points: Value| {
+        select_ids(s, list);
+        let r = s.execute("shapeBuilder.merge", &json!({ "points": points })).unwrap();
+        let look = merged_look(s, &r);
+        s.execute("edit.undo", &json!({})).unwrap();
+        (r["regions"].as_u64().unwrap(), look)
+    };
+    // A click in the hole, where no object is: the front-most selected object's look, not the
+    // current fill.
+    assert_eq!(merge(&mut s, &bars, json!([[50, 50]])), (1, gray.clone()), "the front bar's look");
+    assert_eq!(merge(&mut s, &all, json!([[50, 50]])), (1, red_look.clone()), "the square is in front");
+    // A drag from the hole across the right bar into the square: the look where it ends, not
+    // the look of the first object it crosses.
+    assert_eq!(merge(&mut s, &all, json!([[50, 50], [120, 50]])), (4, red_look.clone()));
+    // Ending on the right bar, the drag takes the bar's look, though the square is in front.
+    let right_bar = node(&s, bars[1]).appearance.clone();
+    assert_eq!(merge(&mut s, &all, json!([[50, 50], [85, 50]])), (2, right_bar.clone()));
+    // A drag from outside every region: the look where it ends.
+    assert_eq!(merge(&mut s, &all, json!([[-10, 50], [120, 50]])).1, red_look);
+    // A drag that starts on the right bar: the bar's look.
+    assert_eq!(merge(&mut s, &all, json!([[85, 50], [120, 50]])).1, right_bar);
+    // From the square back into the hole: the square's look.
+    assert_eq!(merge(&mut s, &all, json!([[120, 50], [50, 50]])).1, red_look);
+
+    // A drag from blue into red takes blue, where it starts.
+    let mut s = session();
+    let (_, b) = two(&mut s);
+    let blue = node(&s, b).appearance.clone();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[125, 50], [25, 50]]})).unwrap();
+    assert_eq!(merged_look(&s, &r), blue);
+}
+
+/// With Pick Color From Color Swatches, the merged shape takes the current fill, and the rest of
+/// its look from the front-most object over the first region the drag touches that an object
+/// covers.
+#[test]
+fn shape_builder_swatches_keep_the_current_fill_and_the_first_covered_objects_look() {
+    let mut s = session();
+    let (bars, red) = frame_and_red_square(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    let green = s.paint.fill.clone();
+    let bar = node(&s, bars[1]).appearance.clone();
+    select_ids(&mut s, &bars.iter().copied().chain([red]).collect::<Vec<_>>());
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 50], [120, 50]], "pickColorFrom": "swatches"})).unwrap();
+    let look = merged_look(&s, &r);
+    assert_eq!(look.fill_paint(), green);
+    assert_eq!((look.stroke_paint(), look.stroke().map(|k| k.width)), (bar.stroke_paint(), bar.stroke().map(|k| k.width)), "the right bar's stroke");
+}
+
+/// The Shape Builder tool sends the point where the drag started first and the point where it
+/// ended last, so a drag from the hole into the square takes the square's look.
+#[test]
+fn shape_builder_tool_drag_from_the_hole_takes_the_look_where_it_ends() {
+    let mut s = session();
+    let (bars, red) = frame_and_red_square(&mut s);
+    let red_look = node(&s, red).appearance.clone();
+    select_ids(&mut s, &bars.iter().copied().chain([red]).collect::<Vec<_>>());
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 85.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 120.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 120.0, 50.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    let d = &s.doc().unwrap().doc;
+    let kids = d.children(d.default_layer()).unwrap();
+    assert_eq!(kids.iter().filter(|n| n.appearance == red_look).count(), 1, "the merged shape has the square's look");
+}
+
 /// The Shape Builder Tool Options reach what the tool does: Straight Line sends the drag's first
 /// and last points, and the other options go with them to `shapeBuilder.merge`.
 #[test]
@@ -489,6 +828,35 @@ fn shape_builder_tool_options_reach_the_command() {
         (&p["points"], &p["openFilledAsClosed"], &p["pickColorFrom"]),
         (&json!([[25.0, 50.0], [75.0, 50.0]]), &json!(false), &json!("swatches"))
     );
+}
+
+/// A Shift-drag with the tool across the grid merges all nine squares into one shape; a drag along
+/// the middle row without Shift merges the three squares it passes over.
+#[test]
+fn shape_builder_tool_shift_drag_merges_the_grid_into_one_shape() {
+    let v = ViewInfo::default();
+    let drag = |s: &mut Session, mods: Mods, pts: [(f64, f64); 3]| {
+        s.select_tool("shapeBuilder", v).unwrap();
+        for (kind, (x, y)) in [PointerKind::Down, PointerKind::Drag, PointerKind::Up].into_iter().zip(pts) {
+            s.pointer(&PointerEvent::new(kind, x, y).with_mods(mods), v).unwrap();
+        }
+        s.journal.last().unwrap().clone()
+    };
+    let mut s = session();
+    grid(&mut s);
+    let (cmd, p) = drag(&mut s, Mods { shift: true, ..Default::default() }, [(50.0, 50.0), (150.0, 150.0), (250.0, 250.0)]);
+    assert_eq!((cmd.as_str(), &p["rect"]), ("shapeBuilder.merge", &json!([50.0, 50.0, 200.0, 200.0])));
+    assert_eq!(layer_children(&s), 1);
+    let only = {
+        let d = &s.doc().unwrap().doc;
+        d.children(d.default_layer()).unwrap()[0].id
+    };
+    assert!((area(&s, only) - 90000.0).abs() < 1.0, "{}", area(&s, only));
+    let mut s = session();
+    grid(&mut s);
+    let (_, p) = drag(&mut s, Mods::default(), [(50.0, 150.0), (150.0, 150.0), (250.0, 150.0)]);
+    assert_eq!((p.get("rect"), &p["points"]), (None, &json!([[50.0, 150.0], [150.0, 150.0], [250.0, 150.0]])));
+    assert_eq!(layer_children(&s), 7, "the middle row merged, six squares left");
 }
 
 /// Highlight Fill off: hovering a region in merge mode highlights nothing; erase mode still shows
@@ -619,6 +987,21 @@ fn shape_builder_erase_click_on_an_edge_opens_its_path() {
     assert_eq!(shapes_of(&s, &back), vec![(true, 4, 400.0); 2], "one undo step");
 }
 
+/// An even-odd compound path opened by an erase click on one of its edges keeps its fill rule.
+#[test]
+fn shape_builder_erase_click_on_an_edge_keeps_the_fill_rule() {
+    let mut s = session();
+    let c = even_odd_ring(&mut s);
+    let b = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [c.0, b.0]})).unwrap();
+    // A's side inside B (1 pt off it).
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 75]], "erase": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r["edges"].as_u64()), (Some(0), Some(1)));
+    let out = ids(&r);
+    assert_eq!(shapes_of(&s, &out[..1]), vec![(false, 9, 500.0)], "A open where B crosses it, with H");
+    assert_eq!(outline(&node(&s, out[0])).1, FillRule::EvenOdd);
+}
+
 #[test]
 fn shape_builder_erase_drag_along_edges_deletes_each() {
     let mut s = session();
@@ -641,6 +1024,450 @@ fn shape_builder_erase_drag_into_regions_deletes_them_not_the_edges_it_crosses()
     assert!((area(&s, out[0]) - 7500.0).abs() < 1e-6);
     assert!(outline(&node(&s, out[0])).0.is_closed());
     assert_eq!(node(&s, out[0]).appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+}
+
+/// In Merge Mode, Clicking Stroke Splits the Path: a click on a lone rectangle's top side, 1 pt
+/// outside it, splits the rectangle into that side and the rest. Without the option, the same click
+/// is refused as outside every region and leaves the rectangle as it was.
+#[test]
+fn shape_builder_click_on_a_stroke_splits_its_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    set_fill(&mut s, a, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let undo_before = s.doc().unwrap().history.undo.len();
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]]})).is_err());
+    assert!(s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": false})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+    assert_eq!(shapes_of(&s, &[a]), vec![(true, 4, 400.0)]);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!((r["merged"].clone(), r["regions"].as_u64(), r["edges"].as_u64()), (Value::Null, Some(0), Some(1)));
+    // The rest of the outline (open, the other three sides) comes first, then the top side in
+    // front of it; both are red.
+    assert_eq!(shapes_of(&s, &out), vec![(false, 4, 300.0), (false, 2, 100.0)]);
+    let split = NodeId(r["split"].as_u64().unwrap());
+    assert_eq!(split, out[1]);
+    assert_eq!(node(&s, split).geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 0.0));
+    assert!(out.iter().all(|i| node(&s, *i).appearance.fill_paint() == Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
+    assert_eq!(s.doc().unwrap().selection.objects, out);
+    // One undo step puts the rectangle back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 1);
+    assert_eq!(shapes_of(&s, &[a]), vec![(true, 4, 400.0)]);
+}
+
+/// A click on a stroke that is the whole of its path (a lone line, or a filled open path of one
+/// curve) has nothing to split off: with splitStroke it is refused as outside every region, as it
+/// is without the option, and the path keeps its geometry and its stroke.
+#[test]
+fn shape_builder_click_on_a_whole_open_path_does_not_split_it() {
+    let mut s = session();
+    let l = line(&mut s, (0.0, 0.0), (100.0, 0.0));
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 200, "y": 0, "out": [200, -100]}, {"x": 300, "y": 0, "in": [300, -100]}]})).unwrap();
+    let arch = NodeId(r["id"].as_u64().unwrap());
+    set_fill(&mut s, arch, Color::rgb(1.0, 0.0, 0.0));
+    let strokes = |s: &Session| [l, arch].map(|i| node(s, i).appearance.stroke_paint());
+    let before = (shapes_of(&s, &[l, arch]), strokes(&s));
+    let undo_before = s.doc().unwrap().history.undo.len();
+    // The line 0.5 pt off it, then the top of the arch 1 pt above it.
+    for (id, at) in [(l, [50.0, 0.5]), (arch, [250.0, -76.0])] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [at], "splitStroke": true, "fill": "#00ff00"}));
+        let err = r.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(err.contains("no region under the pointer"), "{id:?}: {err}");
+    }
+    assert_eq!(layer_children(&s), 2);
+    assert_eq!((shapes_of(&s, &[l, arch]), strokes(&s)), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+}
+
+/// A click on a stroke whose run would leave no more of the path than the cut tolerance (0.05 pt
+/// for a 100 pt path) does not split it: here the line's last 0.01 pt is all that would be left.
+/// The command refuses the click as outside every region, and the tool shows no scissors and no
+/// highlight there and runs no command on a click.
+#[test]
+fn shape_builder_click_on_a_stroke_does_not_split_off_all_but_a_speck() {
+    let mut s = session();
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100.01, "y": 0}]})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+    let undo_before = s.doc().unwrap().history.undo.len();
+    let err = s.execute("shapeBuilder.merge", &json!({"points": [[50, 1]], "splitStroke": true})).err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(err.contains("no region under the pointer"), "{err}");
+    assert_eq!((layer_children(&s), shapes_of(&s, &[p])), (1, vec![(false, 3, 100.01)]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"clickStrokeSplitsPath": true}})).unwrap();
+    let journal = s.journal.len();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 1.0), v).unwrap();
+    assert!(s.overlays(v).is_empty(), "{:?}", s.overlays(v));
+    assert_eq!(s.cursor(vectorcraft_geom::Point::new(50.0, 1.0), Mods::default(), v), vectorcraft_tools::Cursor::ShapeBuilder);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 1.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 1.0), v).unwrap();
+    assert_eq!((s.journal.len(), layer_children(&s)), (journal, 1), "the click runs no command");
+}
+
+/// The stroke a click splits ends at the points where other paths cross it as well as at the
+/// path's anchors: A's right side inside B, then a line piece inside a square. A click away from
+/// every stroke merges and an erase click deletes, as they do without the option.
+#[test]
+fn shape_builder_stroke_split_stops_at_crossings_and_anchors() {
+    let mut s = session();
+    let (a, b) = corner(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 75]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(shapes_of(&s, &out), vec![(false, 5, 350.0), (false, 2, 50.0), (true, 4, 400.0)]);
+    assert_eq!(node(&s, out[1]).geometric_bounds().unwrap(), Rect::new(100.0, 50.0, 100.0, 100.0));
+    assert_eq!(node(&s, out[2]).appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), "B as it was");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    // A click inside a region away from the strokes merges it; erase mode deletes the edge.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[75, 75]], "splitStroke": true})).unwrap();
+    assert_eq!((r["regions"].as_u64(), r.get("split")), (Some(1), None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 75]], "erase": true, "splitStroke": true})).unwrap();
+    assert_eq!(shapes_of(&s, &ids(&r)), vec![(false, 5, 300.0), (true, 4, 400.0)]);
+
+    // A click on the line inside the square splits off the piece between the square's sides and
+    // leaves the square whole.
+    let mut s = session();
+    square_and_line(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[51, 50]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(r["lines"].as_u64(), Some(1));
+    let split = NodeId(r["split"].as_u64().unwrap());
+    assert_eq!(node(&s, split).geometric_bounds().unwrap(), Rect::new(50.0, 0.0, 50.0, 100.0));
+    let lengths: Vec<f64> = out.iter().map(|i| (outline(&node(&s, *i)).0.length() * 1e6).round() / 1e6).collect();
+    assert_eq!(lengths, vec![400.0, 40.0, 100.0], "the square, the line's two loose ends, the piece");
+}
+
+/// The run a click splits off goes the way its path goes, so arrowheads and the other settings that
+/// follow a stroke's direction stay at the ends they were at: a line and a rectangle, each as drawn
+/// and reversed.
+#[test]
+fn shape_builder_stroke_split_keeps_the_path_direction() {
+    let ends = |s: &Session, id: NodeId| {
+        let (p, _) = outline(&node(s, id));
+        let sp = &p.subpaths[0];
+        (sp.anchors.first().unwrap().p, sp.anchors.last().unwrap().p)
+    };
+    let pt = vectorcraft_geom::Point::new;
+    for reverse in [false, true] {
+        let mut s = session();
+        let (a, l) = square_and_line(&mut s);
+        if reverse {
+            s.execute("path.reverse", &json!({"ids": [l.0]})).unwrap();
+            s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+        }
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [[51, 50]], "splitStroke": true})).unwrap();
+        let split = NodeId(r["split"].as_u64().unwrap());
+        let want = if reverse { (pt(50.0, 100.0), pt(50.0, 0.0)) } else { (pt(50.0, 0.0), pt(50.0, 100.0)) };
+        assert_eq!(ends(&s, split), want, "the line, reversed: {reverse}");
+
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        if reverse {
+            s.execute("path.reverse", &json!({"ids": [a.0]})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        let (p, _) = outline(&node(&s, a));
+        let sp = &p.subpaths[0];
+        let n = sp.anchors.len();
+        // The rectangle's top side, from the anchor the path reaches it at.
+        let want = (0..n).map(|k| (sp.anchors[k].p, sp.anchors[(k + 1) % n].p)).find(|(x, y)| x.y == 0.0 && y.y == 0.0).unwrap();
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+        let split = NodeId(r["split"].as_u64().unwrap());
+        assert_eq!(ends(&s, split), want, "the rectangle, reversed: {reverse}");
+    }
+}
+
+/// A split replaces only the path it splits: the two paths take its place in the stacking order and
+/// in its group, and the other selected objects stay as they are. A path in a Live Paint group does
+/// not split.
+#[test]
+fn shape_builder_stroke_split_leaves_the_other_objects_in_place() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 0.0, 100.0, 100.0);
+    let c = rect(&mut s, 0.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+    let split = NodeId(r["split"].as_u64().unwrap());
+    let order = |s: &Session| -> Vec<NodeId> {
+        let d = &s.doc().unwrap().doc;
+        d.children(d.default_layer()).unwrap().iter().map(|n| n.id).collect()
+    };
+    let o = order(&s);
+    assert_eq!((o.len(), o[1], o[2], o[3]), (4, split, b, c), "the rest and the run where A was, under B and C");
+    assert_eq!(ids(&r), vec![o[0], split, c]);
+    assert_eq!(s.doc().unwrap().selection.objects, ids(&r));
+    // In a group, the two paths stay in the group, and the group stays selected.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+    assert_eq!(ids(&r), vec![g]);
+    assert_eq!(node(&s, g).children().unwrap().len(), 3);
+    assert_eq!(order(&s), vec![b, g]);
+    // A Live Paint group's edge: the click merges as it does without the option.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let lp = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 1]], "splitStroke": true})).unwrap();
+    assert_eq!((r.get("split"), r["regions"].as_u64()), (None, Some(1)));
+    assert!(s.doc().unwrap().doc.node(lp).is_none(), "merged as before");
+}
+
+/// A split and an erase click cut a small path with a tolerance from its own size, however far
+/// away the other selected objects lie.
+#[test]
+fn shape_builder_split_and_erase_cut_a_small_path_beside_a_far_object() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 5.0, 5.0, 10.0, 10.0);
+    let far = rect(&mut s, 1_000_000.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, far.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[5, -0.5]], "splitStroke": true})).unwrap();
+    let split = NodeId(r["split"].as_u64().unwrap_or_else(|| panic!("no split: {r}")));
+    assert_eq!(node(&s, split).geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 10.0, 0.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0, far.0]})).unwrap();
+    // A's side inside B (0.5 pt off it).
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[10.5, 7.5]], "erase": true})).unwrap();
+    assert_eq!(shapes_of(&s, &ids(&r)[..1]), vec![(false, 5, 30.0)], "A open where B crosses it");
+}
+
+/// Pick Color From Color Swatches: the stroke split off takes the current fill as its stroke.
+#[test]
+fn shape_builder_stroke_split_with_swatches_paints_the_stroke() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let before = node(&s, a).appearance.stroke_paint();
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    let green = s.paint.fill.clone();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true, "pickColorFrom": "swatches"})).unwrap();
+    let out = ids(&r);
+    assert_eq!(node(&s, NodeId(r["split"].as_u64().unwrap())).appearance.stroke_paint(), green);
+    assert_eq!(node(&s, out[0]).appearance.stroke_paint(), before, "the rest keeps its stroke");
+}
+
+/// Gives `id` a red-to-blue linear gradient, fitted to its bounds, as its fill and its stroke, and
+/// returns that fill and stroke fixed where they fit `id` now.
+fn paint_with_gradients(s: &mut Session, id: NodeId) -> (Paint, Paint) {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    s.edit("t", |d, _| {
+        let a = &mut d.node_mut(id).unwrap().appearance;
+        a.set_fill(gradient.clone());
+        a.set_stroke(gradient);
+        Ok(())
+    })
+    .unwrap();
+    let mut n = node(s, id);
+    n.pin_gradients();
+    (n.appearance.fill_paint(), n.appearance.stroke_paint())
+}
+
+/// The two paths a split leaves keep the gradients of the path they come from where they were on
+/// it: a gradient fitted to the rectangle's bounds is not fitted again to the side split off or to
+/// what is left.
+#[test]
+fn shape_builder_stroke_split_keeps_the_gradients_where_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let want = paint_with_gradients(&mut s, a);
+    // The rectangle's left side.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[-1, 50]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(node(&s, out[1]).geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 0.0, 100.0));
+    for i in out {
+        let n = node(&s, i);
+        assert_eq!((n.appearance.fill_paint(), n.appearance.stroke_paint()), want, "{i:?}");
+    }
+}
+
+/// A red even-odd compound path, square A (0..100) with the square H (25..75) inside it, selected.
+fn even_odd_ring(s: &mut Session) -> NodeId {
+    let a = rect(s, 0.0, 0.0, 100.0, 100.0);
+    let h = rect(s, 25.0, 25.0, 50.0, 50.0);
+    set_fill(s, a, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [a.0, h.0]})).unwrap();
+    let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("path.setFillRule", &json!({"rule": "evenOdd"})).unwrap();
+    assert_eq!(outline(&node(s, c)).1, FillRule::EvenOdd);
+    c
+}
+
+/// A path split off an even-odd compound path, and the rest of it, keep its fill rule.
+#[test]
+fn shape_builder_stroke_split_keeps_the_fill_rule() {
+    let mut s = session();
+    even_odd_ring(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(shapes_of(&s, &out), vec![(false, 8, 500.0), (false, 2, 100.0)], "A's other three sides with H, then A's top side");
+    assert_eq!(out.iter().map(|i| outline(&node(&s, *i)).1).collect::<Vec<_>>(), vec![FillRule::EvenOdd; 2]);
+}
+
+/// A split, and an Alt-click that opens a path on one of its edges, keep the path's name and opacity
+/// mask on what is left of it.
+#[test]
+fn shape_builder_stroke_split_and_erase_keep_the_name_and_opacity_mask() {
+    let mut s = session();
+    let (a, b) = corner(&mut s);
+    let m = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [a.0, m.0]})).unwrap();
+    s.edit("t", |d, _| {
+        d.node_mut(a).unwrap().name = Some("A".into());
+        Ok(())
+    })
+    .unwrap();
+    let mask = node(&s, a).extras().mask.clone();
+    assert!(mask.is_some());
+    let kept = |s: &Session, ids: &[NodeId]| {
+        ids.iter().all(|i| {
+            let n = node(s, *i);
+            n.name.as_deref() == Some("A") && n.extras().mask == mask
+        })
+    };
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, -1]], "splitStroke": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(out.len(), 2);
+    assert!(kept(&s, &out), "the rest and the run");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 75]], "erase": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(shapes_of(&s, &out[..1]), vec![(false, 5, 300.0)]);
+    assert!(kept(&s, &out[..1]), "A opened where B crosses it");
+}
+
+/// What is left of a path after an Alt-click or a merge, and the pieces of an open path that an
+/// Alt-click leaves, keep the path's gradients where they were on it: A without its region outside
+/// B, B without the regions merged into A, and the line without its piece inside the square.
+#[test]
+fn shape_builder_erase_and_merge_keep_the_gradients_where_they_were() {
+    let mut s = session();
+    let (a, b) = two(&mut s);
+    let want = paint_with_gradients(&mut s, a);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50]], "erase": true})).unwrap();
+    let out = ids(&r);
+    assert_eq!(node(&s, out[0]).geometric_bounds().unwrap(), Rect::new(50.0, 0.0, 100.0, 100.0), "A inside B");
+    assert_eq!((node(&s, out[0]).appearance.fill_paint(), node(&s, out[0]).appearance.stroke_paint()), want);
+
+    let mut s = session();
+    let (a, b) = two(&mut s);
+    let want = paint_with_gradients(&mut s, b);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    let rest = ids(&r).into_iter().find(|i| *i != merged).unwrap();
+    assert_eq!(node(&s, rest).geometric_bounds().unwrap(), Rect::new(100.0, 0.0, 150.0, 100.0), "B outside A");
+    assert_eq!((node(&s, rest).appearance.fill_paint(), node(&s, rest).appearance.stroke_paint()), want);
+
+    let mut s = session();
+    let (a, l) = square_and_line(&mut s);
+    let want = paint_with_gradients(&mut s, l);
+    s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[51, 50]], "erase": true})).unwrap();
+    let ends: Vec<NodeId> = ids(&r).into_iter().filter(|i| !outline(&node(&s, *i)).0.is_closed()).collect();
+    assert_eq!(ends.len(), 2, "the line's two loose ends");
+    for i in ends {
+        let n = node(&s, i);
+        assert_eq!((n.appearance.fill_paint(), n.appearance.stroke_paint()), want, "{i:?}");
+    }
+}
+
+/// The tool with In Merge Mode, Clicking Stroke Splits the Path: over a stroke, the pointer shows
+/// scissors and the run a click splits is drawn in the highlight color (none with Highlight Stroke
+/// When Editable off), and a click splits it. Off, the same click leaves the rectangle as it was.
+#[test]
+fn shape_builder_tool_click_on_a_stroke_splits_with_the_option() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    let o = s.tool_options();
+    assert_eq!((&o["clickStrokeSplitsPath"], &o["highlightStroke"], &o["highlightColor"]), (&json!(false), &json!(true), &json!("#ff4f4f")));
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, -1.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, -1.0), v).unwrap();
+    };
+    let journal = s.journal.len();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, -1.0), v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    click(&mut s);
+    assert_eq!((s.journal.len(), layer_children(&s)), (journal, 1), "off, the click runs no command");
+    s.set_tool_option_cmd(&json!({"values": {"clickStrokeSplitsPath": true, "highlightColor": "Light Blue"}})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, -1.0), v).unwrap();
+    let ov = s.overlays(v);
+    let [vectorcraft_tools::Overlay::Path { path, color: [0x4f, 0x80, 0xff], .. }] = ov.as_slice() else { panic!("{ov:?}") };
+    assert_eq!(vectorcraft_geom::Shape::bounding_box(path), Rect::new(0.0, 0.0, 100.0, 0.0));
+    assert_eq!(s.cursor(vectorcraft_geom::Point::new(50.0, -1.0), Mods::default(), v), vectorcraft_tools::Cursor::Scissors);
+    s.set_tool_option_cmd(&json!({"values": {"highlightStroke": false}})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, -1.0), v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    click(&mut s);
+    let (cmd, p) = s.journal.last().unwrap().clone();
+    assert_eq!((cmd.as_str(), &p["splitStroke"], &p["points"]), ("shapeBuilder.merge", &json!(true), &json!([[50.0, -1.0]])));
+    assert_eq!(layer_children(&s), 2);
+    // The options are kept when another tool is chosen.
+    s.select_tool("selection", v).unwrap();
+    let o = s.tool_options_of("shapeBuilder");
+    assert_eq!((&o["clickStrokeSplitsPath"], &o["highlightStroke"], &o["highlightColor"]), (&json!(true), &json!(false), &json!("#4f80ff")));
+}
+
+/// The tool with In Merge Mode, Clicking Stroke Splits the Path over a lone line, which a click
+/// cannot split: the pointer does not show scissors, the line is not highlighted, and a click runs no
+/// command.
+#[test]
+fn shape_builder_tool_does_not_offer_to_split_a_lone_line() {
+    let mut s = session();
+    let l = line(&mut s, (0.0, 0.0), (100.0, 0.0));
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"clickStrokeSplitsPath": true}})).unwrap();
+    let journal = s.journal.len();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 1.0), v).unwrap();
+    assert!(s.overlays(v).is_empty(), "{:?}", s.overlays(v));
+    assert_eq!(s.cursor(vectorcraft_geom::Point::new(50.0, 1.0), Mods::default(), v), vectorcraft_tools::Cursor::ShapeBuilder);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 1.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 1.0), v).unwrap();
+    assert_eq!((s.journal.len(), layer_children(&s)), (journal, 1), "the click runs no command");
+}
+
+/// The tool over a side shorter than the cut tolerance (0.05 pt for a 100 pt path), which
+/// `shapeBuilder.merge` cannot cut out: the pointer does not show scissors, the side is not
+/// highlighted, and a click outside the path runs no command.
+#[test]
+fn shape_builder_tool_does_not_offer_to_split_a_side_too_short_to_cut() {
+    let mut s = session();
+    let anchors = [(0.0, 0.0), (100.0, 0.0), (100.0, 0.03), (100.0, 100.0), (0.0, 100.0)].map(|(x, y)| json!({"x": x, "y": y}));
+    let r = s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"clickStrokeSplitsPath": true}})).unwrap();
+    let journal = s.journal.len();
+    let at = (101.0, 0.015);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.0, at.1), v).unwrap();
+    assert!(s.overlays(v).is_empty(), "{:?}", s.overlays(v));
+    assert_eq!(s.cursor(vectorcraft_geom::Point::new(at.0, at.1), Mods::default(), v), vectorcraft_tools::Cursor::ShapeBuilder);
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.0, at.1), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, at.0, at.1), v).unwrap();
+    assert_eq!((s.journal.len(), layer_children(&s)), (journal, 1), "the click runs no command");
 }
 
 // ---------- Live Paint ----------
@@ -714,6 +1541,53 @@ fn live_paint_stroke_edge() {
     let bb = e.geometric_bounds().unwrap();
     assert!((bb.x0 - 100.0).abs() < 1e-6 && (bb.x1 - 100.0).abs() < 1e-6, "the vertical edge at x=100: {bb:?}");
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
+}
+
+/// Shape Builder refuses an on/off option that is not true or false and a tolerance or gap that is
+/// not a number, given as text or as another value of the wrong kind, naming the key; the document
+/// and the undo history stay as they were. True, false and null still work.
+#[test]
+fn shape_builder_refuses_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    two(&mut s);
+    let merge = |extra: Value| {
+        let mut p = json!({"points": [[75, 50]]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        p
+    };
+    let calls = [
+        not_a_switch("shapeBuilder.merge", merge(json!({"erase": "true"})), "erase"),
+        not_a_switch("shapeBuilder.merge", merge(json!({"openFilledAsClosed": "false"})), "openFilledAsClosed"),
+        not_a_switch("shapeBuilder.merge", merge(json!({"splitStroke": "true"})), "splitStroke"),
+        not_a_number("shapeBuilder.merge", merge(json!({"erase": true, "tolerance": "2"})), "tolerance"),
+        not_a_number("shapeBuilder.merge", merge(json!({"gap": "5"})), "gap"),
+        not_a_switch("shapeBuilder.regions", json!({"openFilledAsClosed": 1}), "openFilledAsClosed"),
+        not_a_number("shapeBuilder.regions", json!({"gap": [5]}), "gap"),
+    ];
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("shapeBuilder.merge", &merge(json!({"erase": false, "openFilledAsClosed": null}))).unwrap();
+}
+
+/// Live Paint and Image Trace refuse an on/off option that is not true or false and a width or
+/// tolerance that is not a number, given as text or as another value of the wrong kind, naming the
+/// key; the document and the undo history stay as they were. Numbers and null still work.
+#[test]
+fn live_paint_and_image_trace_refuse_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let g = live(&mut s);
+    let calls = [
+        not_a_switch("livePaint.gapOptions", json!({"closeGaps": "true"}), "closeGaps"),
+        not_a_number("livePaint.strokeEdge", json!({"group": g.0, "point": [100, 50], "width": "3"}), "width"),
+        not_a_number("livePaint.strokeEdge", json!({"group": g.0, "point": [100, 50], "tolerance": [4]}), "tolerance"),
+        not_a_switch("imageTrace.make", json!({"enhanced": "true"}), "enhanced"),
+    ];
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "width": 3, "tolerance": null})).unwrap();
+    assert_eq!(node(&s, NodeId(r["edge"].as_u64().unwrap())).appearance.stroke_width(), 3.0);
 }
 
 #[test]
@@ -808,6 +1682,50 @@ fn live_paint_merge_keeps_paint_and_adds_faces() {
     assert_eq!(src.children().unwrap().len(), 3, "the rectangle joined the sources");
     assert_eq!(s.doc().unwrap().doc.parent_of(c), Some(src.id));
     assert_eq!(layer_children(&s), 1);
+}
+
+/// Live Paint builds its faces and edges from path outlines alone, so Merge, Make and the Live
+/// Paint Bucket refuse type, an image, or a group holding type: before, they went into the
+/// group's hidden sources and vanished from the canvas. Nothing changes, not even the undo
+/// history. Paths, and groups of paths, still merge.
+#[test]
+fn live_paint_refuses_type_and_images_and_changes_nothing() {
+    let mut s = session();
+    let g = live(&mut s);
+    let text = NodeId(s.execute("text.create", &json!({"x": 200, "y": 300, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let image = add_image(&mut s, &vectorcraft_trace::Raster::from_fn(4, 4, |_, _| [0, 0, 0, 255]), Affine::translate((300.0, 300.0)));
+    let path = rect(&mut s, 400.0, 20.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [text.0, path.0]})).unwrap();
+    let text_group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let state = |s: &Session| {
+        let d = s.doc().unwrap();
+        (d.doc.clone(), d.selection.clone(), d.history.undo.len())
+    };
+    let want = "Live Paint takes paths and compound paths: convert type, images and other objects to paths first";
+    for other in [text, image, text_group] {
+        let calls = [
+            ("livePaint.merge", json!({"ids": [g.0, other.0]})),
+            ("livePaint.make", json!({"ids": [g.0, other.0]})),
+            ("livePaint.make", json!({"ids": [other.0]})),
+            ("livePaint.fill", json!({"ids": [other.0], "point": [200, 300], "color": "#00ff00"})),
+        ];
+        for (c, p) in calls {
+            s.execute("select.set", &json!({"ids": [g.0, other.0]})).unwrap();
+            let before = state(&s);
+            let r = s.execute(c, &p);
+            assert!(matches!(&r, Err(EngineError::Other(m)) if m == want), "{c} {p}: {r:?}");
+            assert!(state(&s) == before, "{c} {p} changed the document");
+        }
+    }
+    // A group of paths and a path still merge.
+    let (a, b) = (rect(&mut s, 120.0, 20.0, 100.0, 20.0), rect(&mut s, 120.0, 60.0, 100.0, 20.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let paths = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let c = rect(&mut s, 0.0, 120.0, 100.0, 20.0);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0, paths.0, c.0]})).unwrap();
+    assert_eq!(NodeId(r["id"].as_u64().unwrap()), g);
+    assert!(vectorcraft_tools::builder::live_paint_takes(&node(&s, g)));
+    assert!(!vectorcraft_tools::builder::live_paint_takes(&node(&s, text_group)));
 }
 
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
@@ -1017,7 +1935,7 @@ fn a_gradient_face_split_by_a_closed_gap_keeps_one_gradient_across_both_halves()
     let mut s = session();
     let r = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
     s.edit("t", |d, _| {
         d.node_mut(r).unwrap().appearance.set_fill(gradient);
         Ok(())
@@ -1182,6 +2100,105 @@ fn a_line_across_a_live_paint_shape_splits_its_face() {
     assert_eq!(face(80.0), Paint::solid(Color::from_hex("#0000ff").unwrap()));
 }
 
+/// The total length of the stroked paths among `out` that have no fill.
+fn stroked_length(s: &Session, out: &[NodeId]) -> f64 {
+    out.iter()
+        .map(|i| node(s, *i))
+        .filter(|n| n.appearance.fill_paint().is_none() && !n.appearance.stroke_paint().is_none())
+        .map(|n| outline(&n).0.length())
+        .sum()
+}
+
+/// The Shape Builder takes a selected Live Paint group's filled faces as regions and its stroked
+/// edges as lines; its unfilled faces are not regions. The merge replaces the group as it does a
+/// path, and the edges keep their strokes, except those between the merged faces.
+#[test]
+fn shape_builder_uses_the_filled_faces_of_a_live_paint_group() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [125, 50], "none": true})).unwrap();
+    let edges = vectorcraft_tools::builder::edges(&node(&s, g)).len();
+    let c = rect(&mut s, 160.0, 20.0, 100.0, 20.0);
+    set_fill(&mut s, c, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, c.0]})).unwrap();
+    let map = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[25, 50], [75, 50]]})).unwrap();
+    let out = ids(&r);
+    let unfilled_faces =
+        out.iter().map(|i| node(&s, *i)).filter(|n| n.appearance.fill_paint().is_none() && n.appearance.stroke_paint().is_none()).count();
+    assert_eq!(
+        (map["regions"].as_array().unwrap().len(), map["lines"].as_array().unwrap().len() >= edges, unfilled_faces),
+        (4, true, 0),
+        "the two faces, the rectangle and the area the edges enclose; the edges as lines; no unfilled face comes back"
+    );
+    let enclosed: Vec<&Value> = map["regions"].as_array().unwrap().iter().filter(|r| r["sources"].as_array().unwrap().is_empty()).collect();
+    assert_eq!(enclosed.len(), 1, "{map}");
+    let bounds: Vec<f64> = enclosed[0]["bounds"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!(bounds.iter().zip([100.0, 0.0, 150.0, 100.0]).all(|(a, b)| (a - b).abs() < 0.5), "{bounds:?}");
+    assert_eq!(r["regions"], 2);
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!((area(&s, merged) - 10000.0).abs() < 1.0, "{}", area(&s, merged));
+    assert!(s.doc().unwrap().doc.node(g).is_none());
+    // The outline of 0..150 × 0..100 and the edge at x = 100 keep their strokes; the edge at x = 50
+    // between the merged faces is removed.
+    assert!((stroked_length(&s, &out) - 600.0).abs() < 1.0, "{}", stroked_length(&s, &out));
+}
+
+/// An edge that closes on itself is a line around its face, not a second shape over it.
+#[test]
+fn shape_builder_takes_a_closed_live_paint_edge_as_a_line() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    set_fill(&mut s, a, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let group = node(&s, g);
+    let edges = vectorcraft_tools::builder::edges(&group);
+    assert_eq!(edges.len(), 1);
+    assert!(outline(edges[0]).0.subpaths.iter().any(|sp| sp.closed), "the edge closes on itself");
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    // A click on the face keeps its fill on the merged shape and the edge's stroke around it.
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[50, 50]]})).unwrap();
+    let out = ids(&r);
+    let merged = node(&s, NodeId(r["merged"].as_u64().unwrap()));
+    assert_eq!(merged.appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert!((stroked_length(&s, &out) - 400.0).abs() < 1.0, "{}", stroked_length(&s, &out));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let map = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let regions = map["regions"].as_array().unwrap();
+    assert_eq!((regions.len(), map["lines"].as_array().unwrap().len()), (1, 1), "{map}");
+    assert_eq!(regions[0]["sources"].as_array().unwrap().len(), 1, "{map}");
+    // Unfilled, the face is not a region, and the edge still encloses all of it, closing segment
+    // included.
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [50, 50], "none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let map = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let regions = map["regions"].as_array().unwrap();
+    assert_eq!(regions.len(), 1, "{map}");
+    assert!(regions[0]["sources"].as_array().unwrap().is_empty(), "{map}");
+    assert!((regions[0]["area"].as_f64().unwrap() - 10000.0).abs() < 1.0, "{map}");
+}
+
+/// A Live Paint group with no filled face keeps its stroked edges when another selected object is
+/// merged.
+#[test]
+fn shape_builder_keeps_the_edges_of_an_unfilled_live_paint_group() {
+    let mut s = session();
+    let g = live(&mut s);
+    for x in [25, 75, 125] {
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [x, 50], "none": true})).unwrap();
+    }
+    let c = rect(&mut s, 160.0, 20.0, 100.0, 20.0);
+    set_fill(&mut s, c, Color::rgb(0.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, c.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[200, 30]]})).unwrap();
+    let out = ids(&r);
+    assert!(s.doc().unwrap().doc.node(g).is_none());
+    // Every edge of the group: the outline of 0..150 × 0..100 and the edges at x = 50 and 100.
+    assert!((stroked_length(&s, &out) - 700.0).abs() < 1.0, "{}", stroked_length(&s, &out));
+}
+
 // ---------- Image Trace ----------
 
 /// A 100×100 image with a black disc (r = 30 px), placed at (50, 50) scaled ×2.
@@ -1205,7 +2222,15 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
             0,
             Node::new(
                 id,
-                NodeKind::Image(Box::new(ImageObject { key: "img1".into(), width: w, height: h, xf, link: None, placement: Default::default() })),
+                NodeKind::Image(Box::new(ImageObject {
+                    key: "img1".into(),
+                    width: w,
+                    height: h,
+                    xf,
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                })),
             ),
         )?;
         sel.set([id]);
@@ -1244,6 +2269,36 @@ fn a_large_image_traces_with_a_warning() {
     let edge = vectorcraft_trace::Raster::from_fn(1500, 8, |x, _| if x < 700 { [0, 0, 0, 255] } else { [255; 4] });
     add_image(&mut s, &edge, Affine::IDENTITY);
     assert_eq!(s.execute("imageTrace.make", &json!({})).unwrap()["warnings"], json!([]));
+}
+
+#[test]
+fn flat_logo_says_when_it_traces_an_image_averaged_down() {
+    // Flat Logo works at most 1024 px on a side: a 1025 px image is averaged down to 513 px.
+    let params = json!({"params": {"mode": "logo", "logoColors": ["#000000", "#F0F0DC"]}});
+    let warnings = |n: u32| {
+        let art = vectorcraft_trace::Raster::from_fn(n, n, |x, y| {
+            if !(50..n - 50).contains(&x) || !(50..n - 50).contains(&y) {
+                [0, 0, 0, 0]
+            } else if (i64::from(x) - i64::from(y) / 8).rem_euclid(40) < 2 {
+                [0, 0, 0, 255]
+            } else {
+                [240, 240, 220, 255]
+            }
+        });
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let r = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        assert!(r["paths"].as_u64().unwrap() > 0, "{r}");
+        r["warnings"].clone()
+    };
+    let w = warnings(1025);
+    let w = w.as_array().unwrap();
+    assert_eq!(w.len(), 1, "{w:?}");
+    let text = w[0].as_str().unwrap();
+    assert!(text.contains("513 × 513") && text.contains("1025 × 1025"), "{text}");
+    assert_eq!(warnings(1024), json!([]));
+    // Over 1500 px, Flat Logo still traces at its reduced size: no slow-trace warning.
+    assert_eq!(warnings(1600), json!(["Flat Logo traced the image at 800 × 800 pixels, averaged down from 1600 × 1600."]));
 }
 
 #[test]
@@ -1380,6 +2435,40 @@ fn image_trace_gradients_fills_with_a_gradient() {
     assert!((a.x - 50.0).abs() < 3.0 && (b.x - 250.0).abs() < 3.0 && (a.y - b.y).abs() < 2.0, "{geom:?}");
     let flat = make(false);
     assert!(flat.len() > 1 && flat.iter().all(|n| matches!(n.appearance.fill_paint(), Paint::Solid { .. })));
+}
+
+/// A key inside `params` that isn't a setting is refused with the nearest setting, the image is
+/// left as it was, and the error names the command that was run.
+#[test]
+fn image_trace_refuses_an_unknown_setting() {
+    for id in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let e = s.execute(id, &json!({"preset": "6 Colors", "params": {"mode": "color", "colours": 3}})).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{id}`")) && e.contains("unknown parameter `colours`; did you mean `colors`?"), "{e}");
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)));
+        let e = s.execute(id, &json!({"params": {"zz": 1}})).unwrap_err().to_string();
+        assert!(e.contains("unknown parameter `zz`; the command takes: ") && e.contains("colorDetail"), "{e}");
+        let e = s.execute(id, &json!({"enhanced": "yes"})).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{id}`")), "{e}");
+        let library = json!({"preset": "6 Colors", "params": {"palette": "documentLibrary", "library": "No Such Library"}});
+        let e = s.execute(id, &library).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{id}`")) && e.contains("no swatch library"), "{e}");
+    }
+}
+
+/// Every preset's settings, as imageTrace.presets lists them, trace when passed back whole.
+#[test]
+fn image_trace_takes_every_preset_back_as_params() {
+    let list = session().execute("imageTrace.presets", &json!({})).unwrap();
+    for preset in list["presets"].as_array().unwrap() {
+        for params in [&preset["params"], &preset["enhanced"]].into_iter().filter(|p| !p.is_null()) {
+            let mut s = session();
+            image_doc(&mut s);
+            let r = s.execute("imageTrace.make", &json!({"preset": preset["name"], "params": params}));
+            assert!(r.is_ok(), "{}: {r:?}", preset["name"]);
+        }
+    }
 }
 
 /// A preset's enhanced version: the preset with Auto Grouping and Shapes, under the preset's name.

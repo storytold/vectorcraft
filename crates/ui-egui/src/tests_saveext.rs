@@ -396,3 +396,64 @@ fn typed_extensions_are_kept() {
     io::export(&mut app, Some("png"), None, &json!({})).unwrap();
     assert_eq!(last(&w), "/tmp/v1.2.png");
 }
+
+/// A name typed in an export's save panel with the extension of another format than the one the
+/// export writes gets the written format's extension: Export As PNG with `card.svg` typed goes
+/// on to PNG Options with `card.png`, and each export in the table below does the same.
+#[test]
+fn an_export_replaces_a_typed_extension_of_another_format() {
+    let (mut app, _) = saving_app("/tmp/card.svg");
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    dialogs::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.str("path")));
+    assert_eq!(d, Some(("pngOptions".to_string(), "/tmp/card.png".to_string())), "Export As");
+    for (typed, expected, what) in [
+        ("/tmp/card.svg", "/tmp/card.png", "export"),
+        ("/tmp/card.PNG", "/tmp/card.pdf", "Save as PDF"),
+        ("/tmp/card.ai", "/tmp/card.pdf", "Save as PDF"),
+        ("/tmp/card.svg", "/tmp/card.png", "document.exportForOffice"),
+        ("/tmp/sel.png", "/tmp/sel.svg", "document.exportSelection"),
+        ("/tmp/sel.svgz", "/tmp/sel.svg", "document.exportSelection"),
+        ("/tmp/sel", "/tmp/sel.svg", "document.exportSelection"),
+        ("/tmp/art.svg", "/tmp/art.txt", "Text Export Options"),
+        ("/tmp/Brand.svg", "/tmp/Brand.vclibrary", "Export Library…"),
+    ] {
+        let (mut app, w) = saving_app(typed);
+        app.run("select.all", json!({})).unwrap();
+        match what {
+            "export" => io::export(&mut app, Some("png"), None, &json!({})).map(|_| ()),
+            "Save as PDF" => io::export_pdf(&mut app, json!({})).map(|_| ()),
+            "document.exportForOffice" => app.run(what, json!({"ppi": 150})).map(|_| ()),
+            "document.exportSelection" => app.run(what, json!({"format": "svg"})).map(|_| ()),
+            "Text Export Options" => io::save_command_output(&mut app, "document.export", "txt", json!({"format": "txt"})).map(|_| ()),
+            _ => {
+                let id = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
+                io::save_command_output_named(&mut app, "library.export", "Brand.vclibrary", json!({"library": id})).map(|_| ())
+            }
+        }
+        .unwrap();
+        assert_eq!(last(&w), expected, "{what} with {typed}");
+    }
+}
+
+/// A name typed with an extension of the format the export writes stays as typed, in any letter
+/// case (`photo.JPEG` for a JPEG), and `art.svgz` for an SVG export is written compressed. Export
+/// Selection without a `format` writes the format the typed extension names.
+#[test]
+fn an_export_keeps_a_typed_extension_of_the_format_it_writes() {
+    let (mut app, w) = saving_app("/tmp/photo.JPEG");
+    io::export(&mut app, Some("jpg"), None, &json!({})).unwrap();
+    assert_eq!(last(&w), "/tmp/photo.JPEG");
+    let (mut app, _) = saving_app("/tmp/art.svgz");
+    app.run("file.exportAs", json!({"format": "svg"})).unwrap();
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("path")).as_deref(), Some("/tmp/art.svgz"), "Export As SVG");
+    let (mut app, dir) = on_disk("svgz", "art.svgz");
+    io::export(&mut app, Some("svg"), None, &json!({})).unwrap();
+    assert_eq!(std::fs::read(dir.join("art.svgz")).unwrap()[..2], [0x1f, 0x8b], "written compressed");
+    let _ = std::fs::remove_dir_all(&dir);
+    let (mut app, w) = saving_app("/tmp/sel.pdf");
+    app.run("select.all", json!({})).unwrap();
+    app.run("document.exportSelection", json!({})).unwrap();
+    assert_eq!(last(&w), "/tmp/sel.pdf", "Export Selection takes its format from the typed name");
+}

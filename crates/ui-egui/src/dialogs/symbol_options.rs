@@ -116,8 +116,8 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             for (key, text) in SLICE_KEYS.into_iter().zip([tl!("Left:"), tl!("Top:"), tl!("Right:"), tl!("Bottom:")]) {
                 label(ui, text);
                 let v = d.f64(key, 100.0 / 3.0);
-                if let Some(n) = widgets::plain_field(ui, ("dlg-field", key), v, "%", 0, 64.0) {
-                    d.fields.insert(key.into(), json!(n.clamp(0.0, 100.0)));
+                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, 0.0..=100.0, "%", 0, 64.0) {
+                    d.fields.insert(key.into(), json!(n));
                 }
                 ui.end_row();
             }

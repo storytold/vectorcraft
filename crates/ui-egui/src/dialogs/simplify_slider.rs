@@ -2,14 +2,17 @@
 //! the fewest anchor points (left) to the closest fit to the original (right), and More Options,
 //! which opens the Simplify dialog at the slider's tolerance. While the strip is open, the canvas
 //! previews `object.path.simplify {level}`; Enter or a click outside the strip keeps the result as
-//! one undo step, and Escape puts the paths back. The slider opens at level 50, a tolerance of
-//! 1 pt (`vectorcraft_pathops::simplify_level_tolerance` maps levels to tolerances).
+//! one undo step, and Escape puts the paths back. The slider opens at Auto-Simplify's level for
+//! the selection (`vectorcraft_engine::auto_simplify_level`), so the canvas first shows the
+//! auto-simplified paths, as the Simplify help page describes
+//! (https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/manually-simplify-paths.html).
+//! `vectorcraft_pathops::simplify_level_tolerance` maps levels to tolerances.
 //!
 //! Fields: `level` (0..=100, the command's parameter).
 
 use egui::{Color32, CornerRadius, Order, Pos2, Sense, Stroke, vec2};
 use serde_json::{Value, json};
-use vectorcraft_engine::{SIMPLIFY_LEVEL, simplify_level_tolerance};
+use vectorcraft_engine::{SIMPLIFY_LEVEL, auto_simplify_level, simplify_level_tolerance};
 use vectorcraft_geom::Rect;
 
 use super::{DialogResult, DialogSpec, form, modal};
@@ -26,9 +29,10 @@ pub(super) const SPEC: DialogSpec = DialogSpec { window: Some(show), confirm, pr
 const CMD: &str = "object.path.simplify";
 const LABEL: &str = "Simplify";
 
-/// The fields the slider opens with.
-pub(crate) fn fields() -> Value {
-    json!({ "level": SIMPLIFY_LEVEL })
+/// The fields the slider opens with: Auto-Simplify's level for the selection, or
+/// [`SIMPLIFY_LEVEL`] without a document.
+pub(crate) fn fields(app: &VectorcraftApp) -> Value {
+    json!({ "level": auto_simplify_level(&app.session).unwrap_or(SIMPLIFY_LEVEL) })
 }
 
 /// Whether the Simplify slider is open.

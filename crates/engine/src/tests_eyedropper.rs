@@ -160,7 +160,7 @@ fn clicking_an_image_samples_its_pixel() {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
-        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
     })
     .unwrap();
@@ -186,7 +186,7 @@ fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
-        let im = ImageObject { key: "px".into(), width: w, height: 1, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key: "px".into(), width: w, height: 1, xf, link: None, placement: Default::default(), pixels: None };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
     })
     .unwrap();
@@ -407,10 +407,10 @@ fn rgb_gradient_and_mesh_colors_given_to_a_cmyk_document_separate_through_the_co
     assert_eq!(colors(&s)[1], blue);
     // New stops recolor the three points from their CMYK values.
     s.execute("paint.editGradient", &json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#ff0000"}]})).unwrap();
-    let stored = vectorcraft_color::Gradient {
-        kind: Default::default(),
-        stops: vec![vectorcraft_color::GradientStop::new(0.0, managed_cmyk(Color::WHITE)), vectorcraft_color::GradientStop::new(1.0, red)],
-    };
+    let stored = vectorcraft_color::Gradient::new(
+        Default::default(),
+        vec![vectorcraft_color::GradientStop::new(0.0, managed_cmyk(Color::WHITE)), vectorcraft_color::GradientStop::new(1.0, red)],
+    );
     // The points mix in the model the stops share (#2829): CMYK here.
     assert_eq!(colors(&s), [0.0, 0.5, 1.0].map(|t| stored.sample_with(t, Color::lerp_keep_model).0), "{:?}", colors(&s));
 

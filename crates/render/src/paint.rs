@@ -52,6 +52,17 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
     }
 }
 
+/// [`set_paint`] for a fill: a dithered gradient (dither applies to fills only) with stops is
+/// drawn as pixels with fine noise ([`crate::dither`]).
+pub(crate) fn set_fill_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Frame) -> bool {
+    match p {
+        Paint::Gradient(g) if g.gradient.dither && g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty() => {
+            crate::dither::set_dithered_paint(ctx, g, bounds, f.ink)
+        }
+        _ => set_paint(ctx, p, bounds, f),
+    }
+}
+
 /// The most memory decoding one image may take: print rasters run to gigabytes (a 300 ppi roll,
 /// 6614 x 59055 px, is 1.56 GB as RGBA), past the decoder's 512 MB default. The web keeps it.
 const MAX_DECODE_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
@@ -91,7 +102,11 @@ pub(crate) fn decode_within_allowance(bytes: &[u8]) -> image::ImageResult<image:
         Ok(r)
     };
     let (w, h) = reader()?.into_dimensions()?;
-    if u64::from(w) * u64::from(h) > MAX_DECODE_ALLOC / 4 {
+    let bytes = (u64::from(w) * u64::from(h)).saturating_mul(4);
+    // The images paints hold can't be evicted from the cache, so a document of many images held
+    // them all at once: a new one is decoded only while those and it fit twice the allowance.
+    let pinned = crate::images::store().pinned_bytes() as u64;
+    if bytes > MAX_DECODE_ALLOC || bytes.saturating_add(pinned) > 2 * MAX_DECODE_ALLOC {
         return Err(image::ImageError::Limits(image::error::LimitError::from_kind(image::error::LimitErrorKind::InsufficientMemory)));
     }
     reader()?.decode()

@@ -39,7 +39,7 @@ impl Tool for MeasureTool {
             PointerKind::Drag | PointerKind::Up if self.dragging => {
                 if let Some((a, _)) = self.line {
                     let b = if ev.mods.shift {
-                        a + vectorcraft_geom::constrain_angle(ev.pos - a, 45.0)
+                        a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle)
                     } else {
                         crate::guides::snap_draw(cx, ev.pos, &[]).0
                     };

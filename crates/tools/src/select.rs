@@ -17,23 +17,28 @@
 //! scaling its type: the text reflows at its size.
 //! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
 //! E pressed again makes it take the objects it touches.
-//! A click on the red out port of selected area type or type on a path whose text overflows loads
-//! the pointer with that text ([`Cursor::LoadedText`]): the next click threads it into the closed
-//! path, area type or type on a path under the pointer, or into a new frame of the same kind, shape
-//! and size at the click on empty canvas,
-//! and a drag draws a rectangle for the new frame (`text.thread.add`). Escape drops the loaded text.
+//! Selected area type and type on a path show an in port and an out port. A click on the out port
+//! loads the pointer with the text ([`Cursor::LoadedText`]): the next click threads it into the
+//! closed path, area type or type on a path under the pointer, or into a new frame of the same
+//! kind, shape and size at the click on empty canvas, and a drag draws a rectangle for the new
+//! frame (`text.thread.add`), which comes after the clicked one in its thread. A click on the in
+//! port does the same with the new frame put before it: the story then starts there and flows on
+//! into the clicked one. Escape drops the loaded text.
+//! With Smart Guides and Invoke Distance Guides on, Alt/Option held over another object shows how
+//! far the selection is from it, and over an empty part of an artboard how far it is from the
+//! artboard's edges ([`crate::guides::distance_guides`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{hit_test, marquee, objects_at};
+use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
-use crate::guides::{PointSnap, Targets};
+use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -48,6 +53,12 @@ enum State {
     /// Pressed on an object; becomes Moving after the drag threshold.
     Moving {
         start: Point,
+        /// Where the pointer went down: the drag threshold counts from there, not from `start`,
+        /// which may be an anchor or centre the press grabbed a few pixels away (#3716).
+        press: Point,
+        /// The point that snaps, moving with the pointer: `start`, or where a press on a path's
+        /// stroke or beside its edge took hold of the path ([`hold_point`]).
+        hold: Point,
         began: bool,
         /// Shift-pressed on this selected object: released without a drag, it leaves the
         /// selection.
@@ -84,10 +95,12 @@ enum State {
     Mirror(crate::mirror::MirrorDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
-    /// Loaded with the text of area type or type on a path `from` by a click on its out port;
+    /// Loaded with the text of area type or type on a path `from` by a click on its out port, or
+    /// on its in port (`before`: the frame it goes into comes before `from` in its thread);
     /// `press`: where the next press went down and where the pointer is now.
     Loaded {
         from: NodeId,
+        before: bool,
         press: Option<(Point, Point)>,
     },
 }
@@ -105,6 +118,43 @@ pub struct SelectionTool {
     guide: GuideEdit,
     /// Smart Guides: the centre or anchor under the pointer, and its label ([`Self::hover_point`]).
     hover: Option<(Point, &'static str)>,
+    /// Distance Guides: what Alt held over it measures the selection to ([`distance_target`]).
+    distance: Option<DistanceTo>,
+    /// The last hover had Alt held: what it measures depends on what lies under the pointer
+    /// ([`Tool::wants_rehover`]).
+    alt_hover: bool,
+}
+
+/// What Distance Guides measure the selection to.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum DistanceTo {
+    Object(NodeId),
+    /// The artboard at this index.
+    Artboard(usize),
+}
+
+/// Distance Guides: with Smart Guides and Smart Guides → Invoke Distance Guides on, something
+/// selected and Alt held (`m`), the object under `p` unless it is selected, or over no object the
+/// artboard `p` is on.
+fn distance_target(cx: &ToolContext, p: Point, m: Mods) -> Option<DistanceTo> {
+    if !(cx.smart_guides && cx.distance_guides && m.alt) || cx.selection.objects.is_empty() {
+        return None;
+    }
+    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation)) {
+        Some(id) => (!cx.selection.contains(id)).then_some(DistanceTo::Object(id)),
+        None => cx.doc.artboard_at(p).map(DistanceTo::Artboard),
+    }
+}
+
+/// The Distance Guides from the selection to `to` ([`distance_guides`]); none once either is gone.
+fn distance_overlays(cx: &ToolContext, to: DistanceTo) -> Vec<Overlay> {
+    let Some(from) = selection_bounds(cx) else { return vec![] };
+    match to {
+        DistanceTo::Object(id) if !cx.selection.contains(id) => object_bounds(cx, id).map(|r| distance_guides(cx, from, r, false)),
+        DistanceTo::Object(_) => None,
+        DistanceTo::Artboard(i) => cx.doc.artboards.get(i).map(|a| distance_guides(cx, from, a.rect, true)),
+    }
+    .unwrap_or_default()
 }
 
 /// Snapping for the selection moved as a whole, its targets gathered when the move begins: View →
@@ -397,6 +447,14 @@ pub(crate) fn bbox_handle_at(cx: &ToolContext, p: Point) -> bool {
 /// to label it while hovering.
 const HOVER_REACH: f64 = 6.0;
 
+/// Where a press at `p` holds the object it hit (`h`) for a move: the nearest point of the path
+/// hit, when the press is on its stroke or outline or within [`HOVER_REACH`] of it, else `p`
+/// ([`hold_on_path`]). That point snaps, so the path itself lands on a ruler guide (#3701).
+pub(crate) fn hold_point(cx: &ToolContext, h: &Hit, p: Point) -> Point {
+    let reach = if matches!(h.kind, HitKind::Stroke | HitKind::Outline) { f64::INFINITY } else { cx.tol(HOVER_REACH) };
+    cx.doc.node(h.leaf).and_then(|n| n.path_data()).and_then(|pd| hold_on_path(pd, p, reach)).unwrap_or(p)
+}
+
 impl SelectionTool {
     fn drag_threshold(cx: &ToolContext) -> f64 {
         cx.tol(3.0)
@@ -432,20 +490,25 @@ impl SelectionTool {
     }
 
     /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
-    /// a press starts placing it, and its release threads it (`text.thread.add`). None when `from`
-    /// can no longer thread: the press is an ordinary one.
-    fn loaded(&mut self, cx: &ToolContext, ev: &PointerEvent, from: NodeId, press: Option<(Point, Point)>) -> Option<Vec<Action>> {
+    /// a press starts placing it, and its release threads it (`text.thread.add`), into a frame put
+    /// `before` `from` or after it. None when `from` can no longer thread: the press is an
+    /// ordinary one.
+    fn loaded(&mut self, cx: &ToolContext, ev: &PointerEvent, from: NodeId, before: bool, press: Option<(Point, Point)>) -> Option<Vec<Action>> {
         let p = ev.pos;
         match (ev.kind, press) {
             (PointerKind::Down, _) if !cx.doc.node(from).is_some_and(is_threadable) => {
                 self.state = State::Idle;
                 return None;
             }
-            (PointerKind::Down, _) => self.state = State::Loaded { from, press: Some((p, p)) },
-            (PointerKind::Drag, Some((start, _))) => self.state = State::Loaded { from, press: Some((start, p)) },
+            (PointerKind::Down, _) => self.state = State::Loaded { from, before, press: Some((p, p)) },
+            (PointerKind::Drag, Some((start, _))) => self.state = State::Loaded { from, before, press: Some((start, p)) },
             (PointerKind::Up, Some((start, _))) => {
                 self.state = State::Idle;
-                return Some(vec![Action::Exec("text.thread.add".into(), thread_params(cx, from, start, p))]);
+                let mut params = thread_params(cx, from, start, p);
+                if before {
+                    params["before"] = json!(true);
+                }
+                return Some(vec![Action::Exec("text.thread.add".into(), params)]);
             }
             _ => {}
         }
@@ -512,6 +575,17 @@ impl Tool for SelectionTool {
         }
     }
 
+    /// The pointer hovers nothing for the tool: its Smart Guides label and its Distance Guides go.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+        self.distance = None;
+        self.alt_hover = false;
+    }
+
+    fn wants_rehover(&self) -> bool {
+        self.alt_hover
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
@@ -524,8 +598,11 @@ impl Tool for SelectionTool {
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
-        if let State::Loaded { from, press } = self.state
-            && let Some(out) = self.loaded(cx, ev, from, press)
+        let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
+        self.alt_hover = hovering && ev.mods.alt;
+        self.distance = hovering.then(|| distance_target(cx, ev.pos, ev.mods)).flatten();
+        if let State::Loaded { from, before, press } = self.state
+            && let Some(out) = self.loaded(cx, ev, from, before, press)
         {
             return out;
         }
@@ -560,7 +637,8 @@ impl Tool for SelectionTool {
         let m = ev.mods;
         // A press near a centre or an anchor grabs the object by it.
         self.hover = None;
-        let grab = if matches!(ev.kind, PointerKind::Down) { Self::hover_point(cx, p).map_or(p, |(q, _)| q) } else { p };
+        let grabbed = if matches!(ev.kind, PointerKind::Down) { Self::hover_point(cx, p).map(|(q, _)| q) } else { None };
+        let grab = grabbed.unwrap_or(p);
         if matches!(ev.kind, PointerKind::Move) && matches!(self.state, State::Idle) {
             self.hover = Self::hover_point(cx, p);
         }
@@ -597,9 +675,10 @@ impl Tool for SelectionTool {
                 vec![]
             }
             (PointerKind::Down, _) => {
-                // 0. The out port of selected area type: the pointer takes its text.
-                if let Some(from) = crate::text::out_port_at(cx, p) {
-                    self.state = State::Loaded { from, press: None };
+                // 0. A port of selected area type or type on a path: the pointer takes its text,
+                // to thread on from the out port or back from the in port.
+                if let Some((from, port)) = crate::text::port_at(cx, p) {
+                    self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
                     return vec![];
                 }
                 // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
@@ -658,7 +737,7 @@ impl Tool for SelectionTool {
                     && cx.select_behind
                     && let Some(behind) = object_behind(cx, p)
                 {
-                    self.state = State::Moving { start: p, began: false, deselect: None, key: None };
+                    self.state = State::Moving { start: p, press: p, hold: p, began: false, deselect: None, key: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
                 match hit_test(cx.doc, p, cx.selection_hit_options()) {
@@ -679,7 +758,10 @@ impl Tool for SelectionTool {
                         } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
                             key = Some(top);
                         }
-                        self.state = State::Moving { start: grab, began: false, deselect, key };
+                        // Grabbed by no anchor or centre, a press on a path's stroke or beside its
+                        // edge holds the path there, and that point of it snaps (#3701).
+                        let hold = if grabbed.is_some() { grab } else { hold_point(cx, &h, p) };
+                        self.state = State::Moving { start: grab, press: p, hold, began: false, deselect, key };
                         out
                     }
                     None => {
@@ -688,23 +770,23 @@ impl Tool for SelectionTool {
                     }
                 }
             }
-            (PointerKind::Drag, State::Moving { start, began, .. }) => {
+            (PointerKind::Drag, State::Moving { start, press, hold, began, .. }) => {
                 let mut out = vec![];
                 if !began {
-                    if p.distance(start) < Self::drag_threshold(cx) {
+                    if p.distance(press) < Self::drag_threshold(cx) {
                         return out;
                     }
                     out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
                     self.moving = Some(MoveSnap::new(cx));
                 }
-                let mut d = move_delta(start, p, m.shift);
+                let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
                 let unsnapped = d;
                 if let Some(snap) = &self.moving {
-                    (d, self.guides) = if m.shift { snap.snap_along(cx, start, d, m.alt) } else { snap.snap(cx, start, d, m.alt) };
+                    (d, self.guides) = if m.shift { snap.snap_along(cx, hold, d, m.alt) } else { snap.snap(cx, hold, d, m.alt) };
                 }
                 // Shift has already constrained `d`: any change is a snap.
                 self.snapped = (d - unsnapped).hypot() > 1e-9;
-                self.state = State::Moving { start, began: true, deselect: None, key: None };
+                self.state = State::Moving { start, press, hold, began: true, deselect: None, key: None };
                 self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
@@ -829,6 +911,9 @@ impl Tool for SelectionTool {
             if style.labels {
                 o.push(Overlay::Label { p: q, text: label.into(), color: style.color });
             }
+        }
+        if let (Some(to), State::Idle, true, true) = (self.distance, &self.state, cx.smart_guides, cx.distance_guides) {
+            o.extend(distance_overlays(cx, to));
         }
         if let Some((p, t)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: t.clone() });
@@ -1022,6 +1107,31 @@ mod tests {
         assert!((200.0 + x - 350.3).abs() < 1e-9 && (200.0 + y - 250.0).abs() < 1e-9, "the corner lands at ({}, {})", 200.0 + x, 200.0 + y);
     }
 
+    /// #3716: a press a few pixels from an anchor grabs the object by that anchor, but the drag
+    /// threshold counts from where the pointer went down. A click that wobbles by a pixel selects
+    /// the object without moving it, instead of jumping the anchor onto the pointer.
+    #[test]
+    fn a_click_near_an_anchor_selects_without_moving() {
+        let (d, id) = doc_with_rect();
+        let (none, mut picked) = (Selection::default(), Selection::default());
+        picked.add(id);
+        let p = paint();
+        let mut t = SelectionTool::default();
+        // 5.7 px from the corner (200, 200): within reach of it, beyond the drag threshold.
+        let a = t.pointer(&cx(&d, &none, &p), &ev(PointerKind::Down, 196.0, 196.0));
+        assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([id.0]))), "{a:?}");
+        let a = t.pointer(&cx(&d, &picked, &p), &ev(PointerKind::Drag, 197.0, 196.0));
+        assert!(a.is_empty(), "a 1 px wobble moves the object: {a:?}");
+        let a = t.pointer(&cx(&d, &picked, &p), &ev(PointerKind::Up, 197.0, 196.0));
+        assert!(!a.iter().any(|a| matches!(a, Action::Commit)), "{a:?}");
+        // A drag past the threshold from the press still moves it by the corner (#812).
+        let mut t = SelectionTool::default();
+        t.pointer(&cx(&d, &none, &p), &ev(PointerKind::Down, 196.0, 196.0));
+        let a = t.pointer(&cx(&d, &picked, &p), &ev(PointerKind::Drag, 230.0, 196.0));
+        let Some(Action::Preview(_, v)) = a.get(1) else { panic!("{a:?}") };
+        assert_eq!((v["matrix"][4].as_f64(), v["matrix"][5].as_f64()), (Some(30.0), Some(-4.0)), "the corner follows the pointer: {a:?}");
+    }
+
     /// A corner-radius drag is a transform, so the sharp selection box hides while the radius changes.
     #[test]
     fn a_corner_drag_counts_as_transforming_once_it_moves() {
@@ -1100,6 +1210,159 @@ mod tests {
         let mut t = SelectionTool::default();
         t.pointer(&off, &ev(PointerKind::Move, 152.0, 151.0));
         assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Label { .. })));
+    }
+
+    /// [`doc_with_rect`] (100, 100)–(200, 200), selected, and a second rectangle `other`.
+    fn two_rects(other: Rect) -> (vectorcraft_doc::Document, NodeId, NodeId) {
+        let (mut d, a) = doc_with_rect();
+        let l = d.layers[0].id;
+        let b = d.alloc_id();
+        let path = vectorcraft_geom::shapes::rectangle(other);
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(b, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        (d, a, b)
+    }
+
+    fn alt(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
+        ev(kind, x, y).with_mods(Mods { alt: true, ..Mods::default() })
+    }
+
+    /// A Distance Guides measured line: its ends and its label.
+    type DistanceLine = (Point, Point, String);
+
+    /// The Distance Guides overlays: each measured line, and the dashed lines out to it, in order.
+    fn distances(t: &SelectionTool, cx: &ToolContext) -> (Vec<DistanceLine>, Vec<(Point, Point)>) {
+        let o = t.overlays(cx);
+        let lines = o.iter().filter_map(|o| if let Overlay::Distance { a, b, text, .. } = o { Some((*a, *b, text.clone())) } else { None });
+        let dashed = o.iter().filter_map(|o| if let Overlay::Line { a, b, dashed: true, .. } = o { Some((*a, *b)) } else { None });
+        (lines.collect(), dashed.collect())
+    }
+
+    fn line(a: (f64, f64), b: (f64, f64), text: &str) -> DistanceLine {
+        (Point::new(a.0, a.1), Point::new(b.0, b.1), text.to_string())
+    }
+
+    /// Alt held over an object beside the selection shows the horizontal gap between their
+    /// facing edges across the middle of where they overlap, and the vertical offsets of their
+    /// top and bottom edges across the selection's middle, with dashed lines out to the other
+    /// object's edges (helpx: Use Distance Guides for accurate placement).
+    #[test]
+    fn alt_over_an_object_beside_the_selection_measures_the_gap_and_the_edges() {
+        let (d, a, _) = two_rects(Rect::new(300.0, 120.0, 400.0, 180.0));
+        let s = Selection { objects: vec![a], ..Default::default() };
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &alt(PointerKind::Move, 350.0, 150.0));
+        let (lines, dashed) = distances(&t, &cx);
+        assert_eq!(
+            lines,
+            vec![
+                line((200.0, 150.0), (300.0, 150.0), "100.00 pt"),
+                line((150.0, 100.0), (150.0, 120.0), "20.00 pt"),
+                line((150.0, 200.0), (150.0, 180.0), "20.00 pt"),
+            ]
+        );
+        let p = Point::new;
+        assert_eq!(dashed, vec![(p(300.0, 120.0), p(150.0, 120.0)), (p(300.0, 180.0), p(150.0, 180.0))]);
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Distance { color, .. } if *color != cx.smart_guide_color)));
+    }
+
+    /// Below the selection: the vertical gap, and the left and right edges' offsets.
+    #[test]
+    fn alt_over_an_object_below_the_selection_measures_the_vertical_gap() {
+        let (d, a, _) = two_rects(Rect::new(120.0, 300.0, 180.0, 400.0));
+        let s = Selection { objects: vec![a], ..Default::default() };
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &alt(PointerKind::Move, 150.0, 350.0));
+        let (lines, dashed) = distances(&t, &cx);
+        assert_eq!(
+            lines,
+            vec![
+                line((100.0, 150.0), (120.0, 150.0), "20.00 pt"),
+                line((200.0, 150.0), (180.0, 150.0), "20.00 pt"),
+                line((150.0, 200.0), (150.0, 300.0), "100.00 pt"),
+            ]
+        );
+        assert_eq!(dashed.len(), 2, "out to the left and right edges of the object below");
+    }
+
+    /// Alt held over an empty part of the artboard: the selection's distance from the artboard's
+    /// left, right, top and bottom edges, in the General unit.
+    #[test]
+    fn alt_over_the_artboard_measures_to_its_four_edges_in_the_general_unit() {
+        let (d, a, _) = two_rects(Rect::new(300.0, 120.0, 400.0, 180.0));
+        let s = Selection { objects: vec![a], ..Default::default() };
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &alt(PointerKind::Move, 50.0, 450.0));
+        let (lines, dashed) = distances(&t, &cx);
+        assert_eq!(
+            lines,
+            vec![
+                line((100.0, 150.0), (0.0, 150.0), "100.00 pt"),
+                line((200.0, 150.0), (500.0, 150.0), "300.00 pt"),
+                line((150.0, 100.0), (150.0, 0.0), "100.00 pt"),
+                line((150.0, 200.0), (150.0, 500.0), "300.00 pt"),
+            ]
+        );
+        assert!(dashed.is_empty());
+        let mm = ToolContext { unit: vectorcraft_doc::Unit::Millimeters, ..cx };
+        t.pointer(&mm, &alt(PointerKind::Move, 50.0, 450.0));
+        let texts: Vec<String> = distances(&t, &mm).0.into_iter().map(|l| l.2).collect();
+        assert_eq!(texts, ["35.28 mm", "105.83 mm", "35.28 mm", "105.83 mm"]);
+        // Off the artboard, over nothing: no distances.
+        t.pointer(&cx, &alt(PointerKind::Move, 600.0, 600.0));
+        assert!(distances(&t, &cx).0.is_empty());
+    }
+
+    /// No Distance Guides without Alt, with nothing selected, over the selection itself, with
+    /// Smart Guides or Invoke Distance Guides off, or once Alt is let go.
+    #[test]
+    fn distance_guides_need_alt_a_selection_and_smart_guides() {
+        let (d, a, _) = two_rects(Rect::new(300.0, 120.0, 400.0, 180.0));
+        let s = Selection { objects: vec![a], ..Default::default() };
+        let none = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let shown = |cx: &ToolContext, e: PointerEvent| {
+            let mut t = SelectionTool::default();
+            t.pointer(cx, &e);
+            !distances(&t, cx).0.is_empty()
+        };
+        assert!(shown(&cx, alt(PointerKind::Move, 350.0, 150.0)));
+        assert!(!shown(&cx, ev(PointerKind::Move, 350.0, 150.0)), "without Alt");
+        assert!(!shown(&cx, ev(PointerKind::Move, 50.0, 450.0)), "without Alt, over the artboard");
+        assert!(!shown(&crate::testutil::cx(&d, &none, &p), alt(PointerKind::Move, 350.0, 150.0)), "nothing selected");
+        assert!(!shown(&cx, alt(PointerKind::Move, 150.0, 150.0)), "over the selection");
+        assert!(
+            !shown(&ToolContext { smart_guides: false, ..crate::testutil::cx(&d, &s, &p) }, alt(PointerKind::Move, 350.0, 150.0)),
+            "View › Smart Guides off"
+        );
+        assert!(
+            !shown(&ToolContext { distance_guides: false, ..crate::testutil::cx(&d, &s, &p) }, alt(PointerKind::Move, 350.0, 150.0)),
+            "the preference off"
+        );
+        // Letting Alt go (the canvas sends a hover with the new modifiers) takes them away.
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &alt(PointerKind::Move, 350.0, 150.0));
+        t.pointer(&cx, &ev(PointerKind::Move, 350.0, 150.0));
+        assert!(distances(&t, &cx).0.is_empty());
+        // So does the hover ending (the pointer leaving the canvas) with Alt still held.
+        t.pointer(&cx, &alt(PointerKind::Move, 350.0, 150.0));
+        assert!(!distances(&t, &cx).0.is_empty());
+        assert!(t.wants_rehover(), "an Alt hover is hovered again when what lies under it changes");
+        t.hover_ended(&cx);
+        assert!(distances(&t, &cx).0.is_empty());
+        assert!(!t.wants_rehover());
+        t.pointer(&cx, &ev(PointerKind::Move, 350.0, 150.0));
+        assert!(!t.wants_rehover(), "nor without Alt");
+        // A press ends them too.
+        t.pointer(&cx, &alt(PointerKind::Move, 350.0, 150.0));
+        t.pointer(&cx, &alt(PointerKind::Down, 350.0, 150.0));
+        assert!(distances(&t, &cx).0.is_empty());
     }
 
     #[test]
@@ -2316,10 +2579,9 @@ mod tests {
         assert_eq!(a, vec![Action::Exec("view.guides.release".into(), json!({"ids": [id.0]}))]);
     }
 
-    /// Escape drops the loaded text, and the next click is an ordinary one; type that fits its
-    /// frame shows no out port to click.
+    /// Escape drops the loaded text, and the next click is an ordinary one.
     #[test]
-    fn escape_drops_the_loaded_text_and_type_that_fits_has_no_port() {
+    fn escape_drops_the_loaded_text() {
         let (d, id, _, port) = overflowing_area_type();
         let mut s = Selection::default();
         s.set([id]);
@@ -2334,15 +2596,86 @@ mod tests {
         assert_ne!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
         t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+    }
 
+    /// [`doc_with_area_type`], its text fitting its frame; where its in and out ports are.
+    fn fitting_area_type() -> (vectorcraft_doc::Document, NodeId, Point, Point) {
         let (d, id) = doc_with_area_type();
+        let Some(vectorcraft_doc::NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { panic!("not text") };
+        assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).overflow, "the text fits");
+        // On the left side below the top-left corner, on the right side above the bottom-right one.
+        let (input, output) = (t.xf * Point::new(0.0, crate::text::PORT_RISE_PX), t.xf * Point::new(120.0, 40.0 - crate::text::PORT_RISE_PX));
+        (d, id, input, output)
+    }
+
+    /// #2572: selected area type has both ports to click whether its text fits or not; other
+    /// points of its frame, and type that isn't selected, have none.
+    #[test]
+    fn every_selected_area_type_has_an_in_and_an_out_port() {
+        use crate::text::{Port, port_at};
+        let (d, id, input, output) = fitting_area_type();
+        let p = paint();
+        let mut s = Selection::default();
+        assert_eq!(port_at(&cx(&d, &s, &p), output), None, "not selected");
+        s.set([id]);
+        let cx = cx(&d, &s, &p);
+        assert_eq!(port_at(&cx, output), Some((id, Port::Out)));
+        assert_eq!(port_at(&cx, input), Some((id, Port::In)));
+        assert_eq!(port_at(&cx, Point::new(input.x + 4.0, input.y + 4.0)), Some((id, Port::In)), "the box around it");
+        assert_eq!(port_at(&cx, Point::new(input.x + 12.0, input.y)), None);
+        assert_eq!(port_at(&cx, Point::new(output.x, output.y + crate::text::PORT_RISE_PX)), None, "the corner");
+    }
+
+    /// #2572: a click on the out port of type that fits loads its text as well; the next click
+    /// threads it into a new frame after it.
+    #[test]
+    fn a_click_on_the_out_port_of_type_that_fits_starts_threading() {
+        let (d, id, _, output) = fitting_area_type();
         let mut s = Selection::default();
         s.set([id]);
-        let cx = crate::testutil::cx(&d, &s, &p);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
         let mut t = SelectionTool::default();
-        t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
-        t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
-        assert_ne!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, output.x, output.y)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, output.x, output.y)).is_empty());
+        assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+        t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0));
+        assert_eq!(
+            t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)),
+            vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [30.0, 420.0]}))]
+        );
+    }
+
+    /// #2572: a click on the in port loads the text to thread backwards: the next click on empty
+    /// canvas, on a closed path or a drag makes the frame the story flows from into this one
+    /// (`before`). The corner handle above the in port still resizes the frame.
+    #[test]
+    fn a_click_on_the_in_port_threads_into_a_frame_before_it() {
+        let (d, id, input, _) = fitting_area_type();
+        let rect = d.children(Some(d.layers[0].id)).unwrap()[0].id;
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        let thread = |params: Value| vec![Action::Exec("text.thread.add".into(), params)];
+        let load = |t: &mut SelectionTool| {
+            assert!(t.pointer(&cx, &ev(PointerKind::Down, input.x, input.y)).is_empty());
+            assert!(t.pointer(&cx, &ev(PointerKind::Up, input.x, input.y)).is_empty());
+            assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+        };
+        load(&mut t);
+        t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)), thread(json!({"from": id.0, "at": [30.0, 420.0], "before": true})));
+        load(&mut t);
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 150.0, 150.0)), thread(json!({"from": id.0, "to": rect.0, "before": true})));
+        load(&mut t);
+        t.pointer(&cx, &ev(PointerKind::Down, 20.0, 20.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 80.0, 90.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 80.0, 90.0)), thread(json!({"from": id.0, "rect": [20.0, 20.0, 60.0, 70.0], "before": true})));
+        let corner = Point::new(input.x, input.y - crate::text::PORT_RISE_PX);
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Resize Type Area".into())]);
     }
 
     /// The memo answers for the revision, the selected objects and Use Preview Bounds it measured

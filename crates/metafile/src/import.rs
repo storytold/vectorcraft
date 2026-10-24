@@ -788,7 +788,7 @@ impl Player {
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
             return;
         }
-        let im = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         let mut n = Node::new(vectorcraft_doc::NodeId(0), NodeKind::Image(Box::new(im)));
         n.opacity = opacity.clamp(0.0, 1.0) as f32;
         self.push(n);

@@ -125,6 +125,7 @@ fn pdfx_1a_files_have_no_rgb() {
         xf: Affine::translate((150.0, 50.0)) * Affine::scale(5.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     d.insert(Some(l), 0, n).unwrap();

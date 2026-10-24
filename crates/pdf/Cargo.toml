@@ -24,6 +24,7 @@ image = { workspace = true }
 jpeg-encoder = { workspace = true }
 craft-pdf = { workspace = true }
 log = { workspace = true }
+chrono = { workspace = true }
 smallvec = "1"
 weezl = "0.1"
 serde = { workspace = true }

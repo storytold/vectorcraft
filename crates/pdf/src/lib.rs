@@ -5,7 +5,8 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
+//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
 //!   given an output intent as the Output settings say. Hidden objects,
@@ -93,6 +94,8 @@ pub struct PdfOptions {
     pub artboards: Option<Vec<usize>>,
     /// Document title for the metadata; `None` = the document's title.
     pub title: Option<String>,
+    /// Ask PDF viewers to display the document title instead of the file name.
+    pub display_doc_title: bool,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
     /// Modification date as Unix seconds (UTC); `None` = the creation date.
@@ -303,6 +306,8 @@ mod tests_settings;
 mod tests_stroke;
 #[cfg(test)]
 mod tests_strokeout;
+#[cfg(test)]
+mod tests_text_placement;
 #[cfg(test)]
 mod tests_textstroke;
 #[cfg(test)]

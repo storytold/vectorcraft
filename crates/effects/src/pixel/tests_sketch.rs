@@ -1,4 +1,4 @@
-//! Sketch › Bas Relief, Charcoal, Photocopy and Stamp.
+//! Sketch › Bas Relief, Charcoal, Conté Crayon, Photocopy and Stamp.
 
 use serde_json::json;
 use vectorcraft_doc::Effect;
@@ -173,9 +173,123 @@ fn bas_relief_lights_the_surfaces_facing_the_light() {
 
 #[test]
 fn sketch_filters_reach_beyond_nothing_they_do_not_paint() {
-    for id in ["sketch.basRelief", "sketch.charcoal", "sketch.photocopy", "sketch.stamp"] {
+    for id in ["sketch.basRelief", "sketch.charcoal", "sketch.conteCrayon", "sketch.photocopy", "sketch.stamp"] {
         let f = fx(id, json!({}));
         assert_eq!(f.outset(Rect::new(0.0, 0.0, 50.0, 50.0)), 0.0, "{id} keeps the object's coverage");
         assert!(f.reach().is_some_and(|r| r.is_finite() && r > 0.0), "{id} reach");
     }
+}
+
+/// The mean of channel 0 over columns `x0..x1` of every row.
+fn mean(d: &[u8], w: usize, h: usize, x0: usize, x1: usize) -> f64 {
+    let sum: u32 = (0..h).flat_map(|y| (x0..x1).map(move |x| (x, y))).map(|(x, y)| u32::from(at(d, w, x, y))).sum();
+    f64::from(sum) / ((x1 - x0) * h) as f64
+}
+
+/// How many pixels of channel 0 are lighter than 192.
+fn white(d: &[u8]) -> usize {
+    d.as_chunks::<4>().0.iter().filter(|p| p[0] > 192).count()
+}
+
+#[test]
+fn conte_crayon_params_take_defaults_and_stay_in_range() {
+    let defaults = PixelFx::ConteCrayon {
+        foreground: 12.0,
+        background: 10.0,
+        texture: Texture::Canvas,
+        scaling: 1.0,
+        relief: 4.0,
+        light: Light::Top,
+        invert: false,
+    };
+    assert_eq!(fx("sketch.conteCrayon", json!({})), defaults);
+    assert_eq!(
+        fx(
+            "sketch.conteCrayon",
+            json!({"foregroundLevel": -5, "backgroundLevel": 1e308, "texture": "Brick", "scaling": 10, "relief": 99, "lightDirection": "bottomRight", "invert": true})
+        ),
+        PixelFx::ConteCrayon {
+            foreground: 0.0,
+            background: 20.0,
+            texture: Texture::Brick,
+            scaling: 0.5,
+            relief: 50.0,
+            light: Light::BottomRight,
+            invert: true
+        }
+    );
+    for junk in [
+        json!({"foregroundLevel": "NaN", "scaling": "1e999"}),
+        json!({"backgroundLevel": null, "texture": 3, "relief": [1], "lightDirection": "up", "invert": "yes"}),
+    ] {
+        assert_eq!(fx("sketch.conteCrayon", junk.clone()), defaults, "{junk}");
+    }
+    let doc = crate::effect_info("sketch.conteCrayon").unwrap().params;
+    assert!(doc.contains("unverified") && doc.contains("foregroundLevel") && doc.contains("backgroundLevel"), "{doc}");
+}
+
+/// A grey ramp: its shadows in black crayon, its highlights in white crayon, the midtones on grey
+/// paper between them; grey only, coverage kept, the same on every run.
+#[test]
+fn conte_crayon_draws_the_shadows_black_and_the_highlights_white() {
+    let (w, h) = (96, 32);
+    let src = image(w, h, |x, _| grey((x * 255 / (w - 1)) as u8));
+    let out = run("sketch.conteCrayon", json!({"relief": 0}), &src, w, h);
+    for p in out.as_chunks::<4>().0 {
+        assert!(p[0] == p[1] && p[1] == p[2] && p[3] == 255, "{p:?}");
+    }
+    let (shadows, mids, lights) = (mean(&out, w, h, 0, 12), mean(&out, w, h, w / 2 - 6, w / 2 + 6), mean(&out, w, h, w - 12, w));
+    assert!(shadows < 40.0, "shadows {shadows}");
+    assert!(lights > 215.0, "highlights {lights}");
+    assert!(shadows + 30.0 < mids && mids + 30.0 < lights, "{shadows} {mids} {lights}");
+    assert_eq!(out, run("sketch.conteCrayon", json!({"relief": 0}), &src, w, h), "deterministic");
+    // The relief shades the paper but keeps it grey.
+    let lit = run("sketch.conteCrayon", json!({}), &src, w, h);
+    assert_ne!(lit, out);
+    assert!(lit.as_chunks::<4>().0.iter().all(|p| p[0] == p[1] && p[1] == p[2]));
+}
+
+/// Foreground Level spreads the black crayon into the midtones, Background Level the white one.
+#[test]
+fn conte_crayon_levels_spread_each_crayon_into_the_midtones() {
+    let (w, h) = (64, 64);
+    let mid = image(w, h, |_, _| grey(128));
+    let with = |p: serde_json::Value| run("sketch.conteCrayon", p, &mid, w, h);
+    let (few, many) = (with(json!({"foregroundLevel": 0, "relief": 0})), with(json!({"foregroundLevel": 20, "relief": 0})));
+    assert!(black(&many) > black(&few) + w * h / 4, "{} vs {}", black(&many), black(&few));
+    let (few, many) = (
+        with(json!({"foregroundLevel": 0, "backgroundLevel": 0, "relief": 0})),
+        with(json!({"foregroundLevel": 0, "backgroundLevel": 20, "relief": 0})),
+    );
+    assert!(white(&many) > white(&few) + w * h / 4, "{} vs {}", white(&many), white(&few));
+}
+
+/// The paper's texture, scale and inversion break the crayon differently; the relief is lit from
+/// the chosen side.
+#[test]
+fn conte_crayon_texture_options_change_the_paper() {
+    let (w, h) = (64, 64);
+    let mid = image(w, h, |x, y| grey((64 + x + y) as u8));
+    let with = |p: serde_json::Value| run("sketch.conteCrayon", p, &mid, w, h);
+    let canvas = with(json!({"relief": 0}));
+    for other in [
+        json!({"relief": 0, "texture": "brick"}),
+        json!({"relief": 0, "texture": "sandstone"}),
+        json!({"relief": 0, "scaling": 200}),
+        json!({"relief": 0, "invert": true}),
+    ] {
+        assert_ne!(with(other.clone()), canvas, "{other}");
+    }
+    let top = with(json!({"texture": "brick", "relief": 20, "lightDirection": "top"}));
+    let bottom = with(json!({"texture": "brick", "relief": 20, "lightDirection": "bottom"}));
+    assert_ne!(top, bottom);
+    assert_ne!(top, with(json!({"texture": "brick", "relief": 0, "lightDirection": "top"})));
+    survives(
+        "sketch.conteCrayon",
+        &[
+            json!({}),
+            json!({"foregroundLevel": "NaN", "backgroundLevel": 1e308, "scaling": -1e308, "relief": 1e308, "texture": "burlap", "invert": true}),
+            json!({"foregroundLevel": -1e308, "backgroundLevel": [1], "texture": {}, "lightDirection": 3, "relief": "NaN"}),
+        ],
+    );
 }

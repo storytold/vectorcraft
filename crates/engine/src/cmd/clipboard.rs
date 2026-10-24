@@ -10,7 +10,7 @@
 //! text besides it (see `flavours`).
 
 mod flavours;
-mod resources;
+pub(crate) mod resources;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

@@ -82,6 +82,37 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// A `.ai` file opens with the swatches its palette holds, spot colours the art doesn't use and colour
+/// groups included, in place of the default swatches; art painted with Registration (`XZ`) still
+/// opens from the editing data.
+#[test]
+fn an_ai_file_opens_with_the_swatches_of_its_palette() {
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n0.04 0.3 0 0 81.96 21 -8 (Pink ink) 0 2 Xx\n(Pink ink)\nPc\n\
+                   0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\n1 (Inks) 1 Pg\n0.02 0.1 1 0 (Yellow ink) 0 x\n(Yellow ink)\nPc\nPB\n%AI5_EndPalette\n";
+    // The square the page draws, in the red ink, after a stroke colour of Registration.
+    let art = format!("0 0 0 0 0 0 0 ([Registration]) 0 1 XZ\n0.06 0.98 1 0 (Red ink) 0 x\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let data = ai::editing_data(200.0, 100.0, &format!("{palette}{}", ai::layer("Art", &art)));
+    let mut s = Session::new();
+    let r = open(&mut s, "inks.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    assert_eq!(r["format"], json!("ai"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"], "opened from the editing data: {r}");
+    let swatches: Vec<&str> = doc.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White", "Pink ink", "Red ink"]);
+    let pink = doc.swatch("Pink ink").unwrap();
+    assert!(pink.spot && pink.global);
+    assert_eq!(pink.paint.color(), Some(vectorcraft_color::Color::lab(81.96, 21.0, -8.0)), "a Lab ink keeps its Lab values");
+    let groups: Vec<&str> = doc.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["Inks"]);
+    assert!(doc.swatch("Yellow ink").is_some_and(|s| s.spot), "an ink the art doesn't use");
+    let red = &doc.layers[0].children().unwrap()[0];
+    assert!(
+        matches!(red.appearance.fill().map(|f| &f.paint), Some(vectorcraft_color::Paint::Solid { swatch: Some(n), .. }) if n == "Red ink"),
+        "{:?}",
+        red.appearance.fill()
+    );
+}
+
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
 #[test]
 fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {

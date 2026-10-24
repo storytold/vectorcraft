@@ -285,6 +285,7 @@ mod tests {
             xf: Affine::translate(at) * Affine::scale(2.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let mut s = Selection::default();

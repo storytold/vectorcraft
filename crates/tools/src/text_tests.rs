@@ -419,6 +419,36 @@ fn area_and_path_tools_convert_clicked_paths() {
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.createInPath" && p["mode"] == "onPath")), "{acts:?}");
 }
 
+/// Area Type and Type on a Path follow the reference app: click the path outline, not the fill interior
+/// (helpx: add-text-work-with-type-objects, creating-type-path).
+#[test]
+fn area_and_path_tools_hit_path_outline_not_fill_interior() {
+    let (mut d, rect) = crate::testutil::doc_with_rect();
+    if let Some(n) = d.node_mut(rect) {
+        n.appearance.set_stroke(vectorcraft_color::Paint::None);
+    }
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let edge = (100.0, 150.0);
+    let interior = (150.0, 150.0);
+    for tool_id in ["areaType", "typeOnPath"] {
+        let mut tool = TypeTool::new(tool_id);
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, edge.0, edge.1));
+        let acts = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, edge.0, edge.1));
+        assert!(
+            acts.iter().any(|a| matches!(a, Action::Exec(cmd, v) if cmd == "text.createInPath" && v["path"] == json!(rect.0))),
+            "{tool_id} on outline: {acts:?}"
+        );
+        let mut tool = TypeTool::new(tool_id);
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, interior.0, interior.1));
+        let acts = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, interior.0, interior.1));
+        assert!(
+            !acts.iter().any(|a| matches!(a, Action::Exec(cmd, _) if cmd == "text.createInPath")),
+            "{tool_id} in fill interior should not attach to path: {acts:?}"
+        );
+    }
+}
+
 #[test]
 fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
     for id in ["verticalType", "verticalAreaType", "verticalTypeOnPath"] {
@@ -716,20 +746,135 @@ fn a_drag_or_a_click_on_other_type_while_editing_acts_at_once() {
     assert_eq!(tool.editing, Some(other));
 }
 
-/// Selected area type whose text doesn't fit its frame shows the red out port with any tool, not
-/// only the Type tools (#2323); text that fits shows none.
+/// #2572: selected area type shows its in and out ports with any tool, not only the Type tools
+/// (#2323): empty while its text fits and it isn't threaded, the out port's red "+" when the text
+/// doesn't fit, an arrow in the port on the side where it is threaded.
 #[test]
-fn overflowing_selected_type_shows_its_marker_without_the_type_tool() {
+fn selected_type_shows_its_ports_in_each_state() {
     let (mut d, id) = crate::testutil::doc_with_area_type();
     let (mut sel, p) = (Selection::default(), paint());
     sel.set([id]);
-    let mut marks = OverflowMarks::default();
-    assert!(overflow_markers(&mut marks, &cx(&d, &sel, &p)).is_empty(), "the text fits");
+    let mut marks = PortMarks::default();
+    // (white boxes, outlines, glyph strokes, red outlines)
+    let count = |ov: &[Overlay]| {
+        let n = |f: &dyn Fn(&Overlay) -> bool| ov.iter().filter(|o| f(o)).count();
+        (
+            n(&|o| matches!(o, Overlay::Highlight { color: [255, 255, 255, 255], .. })),
+            n(&|o| matches!(o, Overlay::Path { .. })),
+            n(&|o| matches!(o, Overlay::Line { .. })),
+            n(&|o| matches!(o, Overlay::Path { color: [230, 30, 30], .. })),
+        )
+    };
+    assert_eq!(count(&thread_ports(&mut marks, &cx(&d, &sel, &p))), (2, 2, 0, 0), "the text fits: two empty ports");
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { panic!("not text") };
+    let (input, output) = (t.xf * Point::new(0.0, PORT_RISE_PX), t.xf * Point::new(120.0, 40.0 - PORT_RISE_PX));
+    let near = |a: Option<Point>, b: Point| a.is_some_and(|a| a.distance(b) < 1e-9);
+    assert!(near(port_centre(t, Port::In, 1.0), input), "on the left side, below the top-left corner");
+    assert!(near(port_centre(t, Port::Out, 1.0), output), "on the right side, above the bottom-right corner");
+    let ov = thread_ports(&mut marks, &cx(&d, &sel, &p));
+    let box_at = |c: Point| ov.iter().any(|o| matches!(o, Overlay::Highlight { quad, .. } if quad[0].midpoint(quad[2]).distance(c) < 1e-9));
+    assert!(box_at(input) && box_at(output), "{ov:?}");
     if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
         t.runs = vec![TextRun::new("Words that fill more than the frame holds. ".repeat(20), CharStyle { size: 20.0, ..Default::default() })];
     }
-    let ov = overflow_markers(&mut marks, &cx(&d, &sel, &p));
-    assert_eq!(ov.len(), 3, "a box and a plus: {ov:?}");
+    assert_eq!(count(&thread_ports(&mut marks, &cx(&d, &sel, &p))), (2, 2, 2, 1), "an empty in port and the red plus");
+    assert_eq!(port_states(&d, id, true), (PortState::Empty, PortState::Overflow));
+    // Threaded on both sides: arrows (three strokes each), the out port's in place of the plus.
+    let (a, b) = (d.alloc_id(), d.alloc_id());
+    d.text_threads = vec![vec![a, id, b]];
+    assert_eq!(port_states(&d, id, true), (PortState::Threaded, PortState::Threaded));
+    assert_eq!(count(&thread_ports(&mut marks, &cx(&d, &sel, &p))), (2, 2, 6, 0));
+    d.text_threads = vec![vec![id, a]];
+    assert_eq!(port_states(&d, id, false), (PortState::Empty, PortState::Threaded));
+    d.text_threads = vec![vec![a, id]];
+    assert_eq!(port_states(&d, id, false), (PortState::Threaded, PortState::Empty));
+    assert_eq!(port_states(&d, id, true), (PortState::Threaded, PortState::Overflow), "the last frame's text doesn't fit");
     sel.clear();
-    assert!(overflow_markers(&mut marks, &cx(&d, &sel, &p)).is_empty(), "only selected type shows it");
+    assert!(thread_ports(&mut marks, &cx(&d, &sel, &p)).is_empty(), "only selected type shows them");
+}
+
+/// Past [`PORTS_MAX`] selected frames (select all of an opened PDF) no ports are drawn or clicked:
+/// they would bury the canvas in boxes; up to it every frame has its two.
+#[test]
+fn a_huge_selection_of_type_shows_no_ports() {
+    let (mut d, id) = crate::testutil::doc_with_area_type();
+    let node = d.node(id).unwrap().clone();
+    let l = d.layers[0].id;
+    let mut sel = Selection::default();
+    sel.set([id]);
+    for _ in 0..PORTS_MAX {
+        let copy = d.alloc_id();
+        d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
+        sel.add(copy);
+    }
+    let p = paint();
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { panic!("not text") };
+    let out = port_centre(t, Port::Out, 1.0).unwrap();
+    let mut marks = PortMarks::default();
+    assert!(thread_ports(&mut marks, &cx(&d, &sel, &p)).is_empty());
+    assert_eq!(port_at(&cx(&d, &sel, &p), out), None);
+    sel.remove(id);
+    let ports = thread_ports(&mut marks, &cx(&d, &sel, &p));
+    assert_eq!(ports.iter().filter(|o| matches!(o, Overlay::Highlight { .. })).count(), 2 * PORTS_MAX, "at the limit");
+}
+
+/// Type in perspective has no ports, as it can't thread ([`crate::select::is_threadable`]): none
+/// are drawn with any tool, the Type tools included, and it doesn't count toward [`PORTS_MAX`].
+#[test]
+fn type_in_perspective_has_no_ports_and_doesnt_count() {
+    let (mut d, id) = crate::testutil::doc_with_area_type();
+    d.node_mut(id).unwrap().extras_mut().perspective = Some(Box::new(vectorcraft_doc::PerspectiveAttachment::new("left", 0.0)));
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    let mut marks = PortMarks::default();
+    assert!(thread_ports(&mut marks, &cx(&d, &sel, &p)).is_empty(), "no ports on type in perspective");
+    let boxes = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [255, 255, 255, 255], .. })).count();
+    assert_eq!(boxes(&TypeTool::new("type").overlays(&cx(&d, &sel, &p))), 0, "nor with the Type tool");
+    // With PORTS_MAX frames that have ports selected besides it, theirs still show.
+    let mut node = d.node(id).unwrap().clone();
+    node.extras_mut().perspective = None;
+    let l = d.layers[0].id;
+    for _ in 0..PORTS_MAX {
+        let copy = d.alloc_id();
+        d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
+        sel.add(copy);
+    }
+    assert_eq!(boxes(&thread_ports(&mut marks, &cx(&d, &sel, &p))), 2 * PORTS_MAX);
+}
+
+/// The Type tool draws the ports of the type it edits as of the rest of the selection: none past
+/// [`PORTS_MAX`] selected frames, where they can't be clicked either.
+#[test]
+fn the_edited_types_ports_follow_the_limit_too() {
+    let (mut d, id) = crate::testutil::doc_with_area_type();
+    let node = d.node(id).unwrap().clone();
+    let l = d.layers[0].id;
+    let mut sel = Selection::default();
+    sel.set([id]);
+    for _ in 1..PORTS_MAX {
+        let copy = d.alloc_id();
+        d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
+        sel.add(copy);
+    }
+    let p = paint();
+    let mut tool = TypeTool::new("type");
+    tool.start_editing(id, 0);
+    let boxes = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [255, 255, 255, 255], .. })).count();
+    assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 2 * PORTS_MAX, "at the limit, the edited one's included");
+    let copy = d.alloc_id();
+    d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
+    sel.add(copy);
+    assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 0, "past it, not even the edited one's");
+}
+
+/// Type on a path has its in port just before its start bracket and its out port just past its
+/// end bracket, along the path, clear of the brackets.
+#[test]
+fn type_on_a_path_has_its_ports_beyond_its_brackets() {
+    let (d, id) = crate::testutil::doc_with_path_type();
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { panic!("not text") };
+    let near = |a: Option<Point>, b: Point| a.is_some_and(|a| a.distance(b) < 1e-6);
+    assert!(near(port_centre(t, Port::In, 1.0), Point::new(160.0 - PORT_RISE_PX, 300.0)), "{:?}", port_centre(t, Port::In, 1.0));
+    assert!(near(port_centre(t, Port::Out, 1.0), Point::new(400.0 + PORT_RISE_PX, 300.0)), "{:?}", port_centre(t, Port::Out, 1.0));
+    assert!(near(port_centre(t, Port::In, 0.5), Point::new(160.0 - PORT_RISE_PX / 2.0, 300.0)), "screen pixels at 200%");
 }

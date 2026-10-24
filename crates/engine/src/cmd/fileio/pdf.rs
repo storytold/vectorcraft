@@ -243,7 +243,14 @@ pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(cmd, format!("PDF options: {e}")))? } else { ArtboardPick::default() };
     let artboards = pick.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
     let now = vectorcraft_doc::metadata::output_time();
-    Ok(PdfOptions { settings: settings(cmd, p)?, artboards, created: doc.metadata.created.or(now), modified: now, ..Default::default() })
+    Ok(PdfOptions {
+        settings: settings(cmd, p)?,
+        artboards,
+        display_doc_title: bool_or(p, "_displayDocTitle", super::has_own_title(doc)),
+        created: doc.metadata.created.or(now),
+        modified: now,
+        ..Default::default()
+    })
 }
 
 /// Why a PDF of some artboards carries no editing data.
@@ -387,8 +394,15 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let expanded = expand_preset(s, C, p)?;
     let p = &*expanded;
     let st = s.doc()?;
+    let display_doc_title = super::has_own_title(&st.doc);
     let titled = super::titled_for_export(&st.doc, st.path.as_deref(), "pdf");
-    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), p)?;
+    let mut q = p.clone();
+    if let Some(o) = q.as_object_mut() {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    } else {
+        q = json!({ "_displayDocTitle": display_doc_title });
+    }
+    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), &q)?;
     write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
 }
 

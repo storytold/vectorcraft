@@ -283,7 +283,7 @@ fn the_eyedropper_takes_an_image_pixel_into_the_working_rgb_space() {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         let xf = Affine::translate((300.0, 0.0)) * Affine::scale(100.0);
-        let im = ImageObject { key: "px".into(), width: 1, height: 1, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key: "px".into(), width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| vectorcraft_engine::EngineError::Other(e.to_string()))
     })
     .unwrap();

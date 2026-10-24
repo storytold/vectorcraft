@@ -9,7 +9,12 @@ pub fn parse_range(s: &str, count: usize) -> Result<Vec<usize>, String> {
         if t.is_empty() {
             return Ok(open);
         }
-        t.parse().ok().filter(|n| (1..=count).contains(n)).ok_or_else(|| format!("range `{s}`: `{t}` is not a number from 1 to {count}"))
+        t.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| t.parse().ok())
+            .flatten()
+            .filter(|n| (1..=count).contains(n))
+            .ok_or_else(|| format!("range `{s}`: `{t}` is not a number from 1 to {count}"))
     };
     let mut out = vec![];
     for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
@@ -34,4 +39,17 @@ pub fn parse_range(s: &str, count: usize) -> Result<Vec<usize>, String> {
         return Err(format!("range `{s}` is empty"));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_range;
+
+    #[test]
+    fn sign_is_not_part_of_a_page_number() {
+        assert!(parse_range("+2", 5).is_err());
+        assert!(parse_range("1-+3", 5).is_err());
+        assert!(parse_range("-+2", 5).is_err());
+        assert_eq!(parse_range("1-3, 5", 5), Ok(vec![0, 1, 2, 4]));
+    }
 }

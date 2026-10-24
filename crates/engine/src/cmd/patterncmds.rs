@@ -737,7 +737,8 @@ fn repeat_expand(s: &mut Session, _: &Value) -> Result<Value> {
 /// instance node gets a fresh id.
 fn expand_repeat(d: &mut Document, r: NodeId) -> Result<()> {
     let Some(n) = d.node(r).cloned() else { return Ok(()) };
-    let mut g = vectorcraft_doc::live::expanded_group(&n, None);
+    let hooks = vectorcraft_doc::live::Hooks { symbols: Some(d), ..Default::default() };
+    let mut g = vectorcraft_doc::live::expanded_group_hooks(&n, hooks);
     if let Some(ch) = g.children_mut() {
         for c in ch.iter_mut() {
             fix_ids(d, Arc::make_mut(c));

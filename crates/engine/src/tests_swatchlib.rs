@@ -468,6 +468,52 @@ fn copying_a_color_book_from_a_temporary_path_uses_its_title() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Color books in the user library folder and opened by path show the file name as the tab title
+/// (#3395), not only the title stored inside the book.
+#[test]
+fn color_book_tab_titles_use_the_file_name() {
+    fn acb_bytes(title: &str) -> Vec<u8> {
+        fn acb_str(out: &mut Vec<u8>, s: &str) {
+            let units: Vec<u16> = s.encode_utf16().collect();
+            out.extend((units.len() as u32).to_be_bytes());
+            units.iter().for_each(|u| out.extend(u.to_be_bytes()));
+        }
+        let mut bytes = b"8BCB".to_vec();
+        bytes.extend(1u16.to_be_bytes());
+        bytes.extend(3000u16.to_be_bytes());
+        for s in [title, "PANTONE ", " C", ""] {
+            acb_str(&mut bytes, s);
+        }
+        bytes.extend(1u16.to_be_bytes());
+        bytes.extend(7u16.to_be_bytes());
+        bytes.extend(0u16.to_be_bytes());
+        bytes.extend(0u16.to_be_bytes());
+        acb_str(&mut bytes, "185");
+        bytes.extend(b"TST001");
+        bytes.extend([228, 0, 43]);
+        bytes.extend(b"spflspot");
+        bytes
+    }
+    let dir = temp_dir("acb-name");
+    let user = dir.join("user");
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&user).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let on_disk = user.join("PANTONE Solid Coated.acb");
+    std::fs::write(&on_disk, acb_bytes("Internal Book Title")).unwrap();
+    let named = elsewhere.join("Brand Colors.acb");
+    std::fs::write(&named, acb_bytes("Another Internal Title")).unwrap();
+
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(user.to_string_lossy().to_string()));
+    assert_eq!(run(&mut s, "swatch.library.get", json!({ "library": "user/PANTONE Solid Coated.acb" }))["name"], "PANTONE Solid Coated");
+    let loaded = run(&mut s, "swatch.library.load", json!({ "path": named.to_string_lossy() }))["library"].clone();
+    assert_eq!(run(&mut s, "swatch.library.get", json!({ "library": loaded }))["name"], "Brand Colors");
+    let r = run(&mut s, "swatch.library.copyToUser", json!({ "library": loaded }));
+    assert_eq!((r["library"].as_str(), r["name"].as_str(), r["copied"].as_bool()), (Some("user/Brand Colors.acb"), Some("Brand Colors"), Some(true)));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn a_library_group_stays_one_group_when_a_swatch_has_its_name() {
     use vectorcraft_testkit::ase::{Block, ase};

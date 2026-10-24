@@ -806,7 +806,7 @@ fn column_art(
     if length(rect) <= 1e-9 || !length(rect).is_finite() {
         return None;
     }
-    let cost = c.art.count();
+    let cost = c.art.count_with_masks();
     // A copy of the design moved by `a`, the totals left in it showing `value`; a copy fitted to `cell`; and a copy moved
     // by `a` and clipped to what it paints, cut at `at` (an x when `along_x`, else a y) with the side below `at` kept when
     // `keep_low` (two objects more).
@@ -2076,7 +2076,7 @@ fn design(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("a document keeps at most {} graph designs", GraphDesign::MAX)));
         }
         let art = super::brushsym::selection_art(s, p)?.ok_or_else(|| bad(C, "select the art for the design"))?;
-        if art.count() > GraphDesign::MAX_NODES {
+        if art.count_with_masks() > GraphDesign::MAX_NODES {
             return Err(bad(C, format!("a design holds at most {} objects", GraphDesign::MAX_NODES)));
         }
         // A graph saved as a design is kept as the art it draws.

@@ -1,6 +1,7 @@
 //! Recolor Artwork (M3.78) and Edit or Apply Color Group (M3.79), drawn headlessly.
 
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui_kittest::kittest::Queryable;
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_color::recolor::ColorKey;
@@ -355,4 +356,118 @@ fn the_brightness_slider_dragged_to_the_top_stays_there() {
     h.drop_at(top);
     h.run_steps(1);
     assert_eq!(new_hsb(h.state())[0][2], 1.0, "released at the top");
+}
+
+/// #3416: only the chips scroll; the wheel, heading and actions fit after resize or UI scaling.
+#[test]
+fn many_edit_colors_keep_the_dialog_on_screen() {
+    let mut small_layout = None;
+    for count in [5, 20, 200, 400] {
+        let colors: Vec<String> = (1..=count).map(|i| format!("#{:06x}", i * 9973)).collect();
+        let refs: Vec<&str> = colors.iter().map(String::as_str).collect();
+        let mut h = edit_harness(&refs);
+        assert_eq!(field(h.state(), "rows").as_array().unwrap().len(), count);
+        for (physical, zoom) in [
+            (vec2(900.0, 800.0), 1.0),
+            (vec2(800.0, 600.0), 1.0),
+            (vec2(1280.0, 720.0), 1.25),
+            (vec2(1440.0, 900.0), 1.5),
+            (vec2(1920.0, 1200.0), 2.0),
+            (vec2(900.0, 800.0), 1.0),
+        ] {
+            h.ctx.set_zoom_factor(zoom);
+            for _ in 0..12 {
+                h.set_size(physical / zoom);
+                h.run_steps(1);
+            }
+            let screen = h.ctx.content_rect();
+            assert_eq!(screen.size(), physical / zoom, "the requested effective screen size");
+            let dialog = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", "recolor")))).unwrap();
+            assert!(screen.contains_rect(dialog), "{count} colors, {physical:?} at {zoom}: dialog {dialog:?} in {screen:?}");
+            let wheel = widget_of_size(&h, vec2(220.0, 220.0));
+            assert!(screen.contains_rect(wheel), "the wheel is accessible");
+            let heading = h.get_by_role_and_label(egui::accesskit::Role::Label, "Recolor Artwork").rect();
+            assert!(screen.contains_rect(heading), "the heading is accessible");
+            for label in ["OK", "Cancel", "Preview"] {
+                assert!(screen.contains_rect(h.get_by_label(label).rect()), "{label} is accessible");
+            }
+            if count <= 20 {
+                h.ctx.viewport(|vp| {
+                    for w in vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(28.0, 20.0)) {
+                        assert!(screen.contains_rect(w.rect), "a small palette needs no scrolling");
+                    }
+                });
+            }
+            if count <= 20 && physical == vec2(900.0, 800.0) {
+                let layout = (dialog, wheel);
+                assert_eq!(*small_layout.get_or_insert(layout), layout, "a few chips keep the existing tab height and wheel position");
+            }
+        }
+    }
+}
+
+/// Scrolling reaches the last color without moving the wheel or actions; editing still previews,
+/// cancels, and confirms as one undo step through actual egui input.
+#[test]
+fn the_last_edit_color_can_be_selected_edited_and_undone() {
+    let colors: Vec<String> = (1..=400).map(|i| format!("#{:06x}", i * 9973)).collect();
+    let refs: Vec<&str> = colors.iter().map(String::as_str).collect();
+    for confirm in [false, true] {
+        let mut h = edit_harness(&refs);
+        h.set_size(vec2(800.0, 600.0));
+        h.run_steps(12);
+        let before = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        let wheel = widget_of_size(&h, vec2(220.0, 220.0));
+        let chips = |h: &egui_kittest::Harness<'_, VectorcraftApp>| -> Vec<Rect> {
+            h.ctx.viewport(|vp| {
+                vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(28.0, 20.0)).map(|w| w.rect).collect()
+            })
+        };
+        let first = chips(&h)[0];
+        assert!(!h.ctx.content_rect().contains_rect(*chips(&h).last().unwrap()), "the last chip starts out of view");
+        h.input_mut().events.extend([
+            Event::PointerMoved(first.center()),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -10000.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Modifiers::NONE,
+            },
+        ]);
+        h.run_steps(12);
+        let last = *chips(&h).last().unwrap();
+        assert!(h.ctx.content_rect().contains_rect(last), "the last chip is visible after scrolling: {last:?}");
+        assert_eq!(widget_of_size(&h, vec2(220.0, 220.0)), wheel, "scrolling only moves the chips");
+        h.input_mut().events.extend(press(last.center(), 1));
+        h.run_steps(2);
+        assert_eq!(field(h.state(), "__sel"), json!([399]));
+        set(h.state_mut(), "linked", json!(false));
+        let rows = field(h.state(), "rows");
+        let slider = widget_of_size(&h, vec2(220.0, 22.0));
+        h.input_mut().events.extend(press(egui::pos2(slider.left() + 4.0 + 0.25 * (slider.width() - 8.0), slider.center().y), 1));
+        h.run_steps(2);
+        let edited = field(h.state(), "rows");
+        assert_ne!(edited[399]["to"], rows[399]["to"], "the last color changed");
+        assert_eq!(&edited.as_array().unwrap()[..399], &rows.as_array().unwrap()[..399], "unlinked editing preserves the other colors");
+        let after = h.state().session.doc().unwrap().doc.clone();
+        assert_ne!(after, before, "the edit previews on the artwork");
+        h.get_by_label("Preview").click();
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, before, "Preview off restores the artwork");
+        h.get_by_label("Preview").click();
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, after, "Preview on restores the edit");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        if confirm {
+            assert_eq!(h.state().session.doc().unwrap().doc, after);
+            // Creating 400 objects fills the bounded history; one Undo must still restore all the art.
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+        } else {
+            assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo);
+        }
+        assert_eq!(h.state().session.doc().unwrap().doc, before);
+    }
 }

@@ -9,8 +9,8 @@
 //!    English text, clean-room, see `zh-hant.tsv`).
 //! 2. Add one row to [`LANGUAGES`] (code, native name, catalog, plural rule).
 //!
-//! That is all: the Preferences dropdown, the system-locale match and the catalog tests (parse,
-//! placeholders, plural forms, menu coverage) pick it up from the registry.
+//! That is all: the Preferences dropdown, the system-locale match, the catalog tests (parse,
+//! placeholders, plural forms) and the untranslated report pick it up from the registry.
 //!
 //! # Looking strings up
 //! - [`t`] / the `tl!` macro: a plain string in the language the UI is drawn in. [`tr`] takes the
@@ -41,7 +41,7 @@ pub struct LangInfo {
     pub source: &'static str,
     /// Plural form index for a count (English: 0 = one, 1 = other; Chinese: always 0).
     pub plural: fn(u64) -> usize,
-    /// Must the catalog cover every menu string? (checked by the tests)
+    /// Does the catalog aim to cover every menu string? The untranslated report lists what it lacks.
     pub complete_menus: bool,
     catalog: OnceLock<Catalog>,
 }
@@ -94,7 +94,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 24] = [
+pub static LANGUAGES: [LangInfo; 25] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -263,6 +263,10 @@ pub static LANGUAGES: [LangInfo; 24] = [
     // English as Spanish; one/other plurals with the partitive after any number but 1 ("2 tasoa").
     // Every `fi-*` locale resolves here.
     LangInfo { code: "fi", name: "Suomi", source: include_str!("fi.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
+    // Turkish: the whole interface and the status and error messages, keeping the same names in
+    // English as Spanish; a count takes the singular ("3 katman"), so plurals have one form. Every
+    // `tr-*` locale (including `tr-TR` and `tr-CY`) resolves here.
+    LangInfo { code: "tr", name: "Türkçe", source: include_str!("tr.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {

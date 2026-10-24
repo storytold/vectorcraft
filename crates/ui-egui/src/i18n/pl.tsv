@@ -17,7 +17,7 @@
 #
 # Plurals: one (1), few (2–4, 22–24, … but not 12–14), many (0, 5–21, 25–31, …).
 #
-# Coverage: every menu string, tl! literal, plural, status and error message (enforced in tests:
+# Coverage: every menu string, tl! literal, plural, status and error message (`untranslated_report` lists gaps:
 # `complete_menus` and `COMPLETE_MESSAGES`). Left in English on purpose (`MENU_KEEP_AS_IS` in the
 # tests): the product name, language names, OpenType, the built-in workspace names and the
 # bracketed perspective grid preset names. Keep placeholders, ellipses and the leading/trailing
@@ -38,6 +38,11 @@
 	Medium Light	Średnio jasny
 	Light	Jasny
 	Quit VectorCraft	Zakończ VectorCraft
+# Artwork drag between document tabs.
+	Drop Artwork	Upuść kompozycję
+@msg	{key} must be [x, y] with finite coordinates	{key} musi mieć postać [x, y] ze skończonymi współrzędnymi
+@msg	ids must contain 1–10000 object ids	ids musi zawierać od 1 do 10000 identyfikatorów obiektów
+
 	File	Plik
 	New…	Nowy…
 	New Without Dialog	Nowy bez okna dialogowego
@@ -278,6 +283,15 @@
 	Glyphs	Glify
 	Insert Special Character	Wstaw znak specjalny
 	Bullet	Punktor
+	Bullets	Punktory
+	Bullets and Numbering	Punktory i numeracja
+	Apply Bullets	Zastosuj punktory
+	Numbered List	Lista numerowana
+	Apply Numbers	Zastosuj numerację
+	Filled Dot	Pełna kropka
+	Dash	Myślnik
+	Hollow Circle	Pusty okrąg
+	Filled Square	Pełny kwadrat
 	Copyright Symbol	Symbol praw autorskich
 	Ellipsis	Wielokropek
 	Paragraph Symbol	Symbol akapitu
@@ -720,7 +734,7 @@
 	Units	Jednostki
 	Guides & Grid	Linie pomocnicze i siatka
 	Hyphenation	Dzielenie wyrazów
-	Performance & Storage	Wydajność i pamięć
+	Plug-ins & Scratch Disks	Wtyczki i dyski robocze
 	User Interface	Interfejs użytkownika
 	Performance	Wydajność
 	File Handling	Obsługa plików
@@ -1446,7 +1460,7 @@ lighting	Light	Światło
 	Clear History	Wyczyść historię
 	Set History Limit…	Ustaw limit historii…
 	Open a document to see its history.	Otwórz dokument, aby zobaczyć jego historię.
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	Zastosuj zestaw danych
 	Area Type	Tekst akapitowy
 	Cancel Pattern Editing	Anuluj edycję wzorka
@@ -1707,6 +1721,13 @@ lighting	Light	Światło
 	Repeat Pathfinder	Powtórz odnajdywanie ścieżek
 	Repeat {name}	Powtórz {name}
 	Trap…	Zalewka…
+	Trap	Zalewka
+	Height/Width	Wysokość/szerokość
+	Tint Reduction	Redukcja tinty
+	Traps with Process Color	Zalewki kolorami procesowymi
+	Reverse Traps	Odwrócone zalewki
+	Precision	Dokładność
+	Remove Redundant Points	Usuń zbędne punkty
 	Bottom in Front	Dolny na wierzchu
 	Brick by Column	Cegły według kolumn
 	Brick by Row	Cegły według wierszy
@@ -1832,7 +1853,6 @@ lighting	Light	Światło
 	{kind}, {model}	{kind}, {model}
 	No symbols in this document	Brak symboli w tym dokumencie
 	Select art and click New Symbol to make one.	Zaznacz kompozycję i kliknij Nowy symbol, aby go utworzyć.
-	Symbol Libraries (on the roadmap)	Biblioteki symboli (w planach)
 	Align On:	Wyrównaj do:
 	Bottom-Justified Tab	Tabulator dolny
 	Center-Justified Tab	Tabulator środkowy
@@ -2194,12 +2214,14 @@ lighting	Light	Światło
 	Keep selected	Zachowaj zaznaczenie
 	Merge only with selection	Scalaj tylko z zaznaczeniem
 	Consider Open Filled Paths as Closed	Traktuj otwarte wypełnione ścieżki jako zamknięte
+	In Merge Mode, Clicking Stroke Splits the Path	W trybie scalania kliknięcie obrysu dzieli ścieżkę
 	Pick Color From:	Źródło koloru:
 	Artwork	Grafika
 	Cursor Swatch Preview	Podgląd próbek przy kursorze
 	Selection:	Zaznaczanie:
 	Straight Line	Linia prosta
 	Highlight:	Podświetlenie:
+	Stroke When Editable	Obrys, gdy edytowalny
 	The document has no colour swatches.	Dokument nie zawiera próbek kolorów.
 	Style Name:	Nazwa stylu:
 	Crop To	Kadruj do
@@ -2291,11 +2313,11 @@ lighting	Light	Światło
 	Fonts whose licence doesn't allow embedding are not copied.	Czcionki, których licencja nie zezwala na osadzanie, nie są kopiowane.
 	Package collects a saved document with its linked files and fonts.	Pakowanie zbiera zapisany dokument wraz z połączonymi plikami i czcionkami.
 	Package created	Utworzono pakiet
-	Packaged {n} file(s) in {folder}{note}	Spakowane pliki: {n} w {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	Spakowane pliki: {n} w {folder}{note}
 	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 	Relink Linked Files to the Document	Połącz ponownie połączone pliki z dokumentem
 	Save the document first?	Najpierw zapisać dokument?
-	{count} file(s) in {folder}{note}. Show the package folder?	Pliki: {count} w {folder}{note}. Pokazać folder pakietu?
+	{count} file(s) in {folder} {note}. Show the package folder?	Pliki: {count} w {folder}{note}. Pokazać folder pakietu?
 	{count} linked file(s) not found	Nie znaleziono połączonych plików: {count}
 	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Wbudowane ustawienia są tylko do odczytu: Nowe… tworzy edytowalną kopię.
@@ -2342,6 +2364,11 @@ lighting	Light	Światło
 	File Dimensions	Wymiary pliku
 	Transforms	Przekształcenia
 	Background Color:	Kolor tła:
+	Show Center Mark	Pokaż znacznik środka
+	Show Cross Hairs	Pokaż krzyż nitkowy
+	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
+	Video Ruler Pixel Aspect Ratio:	Proporcje piksela linijek wideo:
+	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
 	Lossless (lossy WebP isn't available yet)	Bezstratny (stratny WebP nie jest jeszcze dostępny)
@@ -3364,6 +3391,7 @@ theme	Appearance	Wygląd
 	Size/Leading	Rozmiar/interlinia
 	Snapping Tolerance	Tolerancja przyciągania
 	Spacing Guides	Linie odstępów
+	Invoke Distance Guides	Wywołuj linie odległości
 	Spanish	Hiszpański
 	Subdivisions	Podpodziały
 	Templates Folder	Folder szablonów
@@ -3648,6 +3676,8 @@ effect	Regular	Normalny
 	Put back in the dock	Odłóż z powrotem do doku
 	All Scripts	Wszystkie skrypty
 	Any Kind	Dowolny rodzaj
+	Font Technology	Technologia czcionek
+font-technology	Variable	Zmienne
 	Decorative	Ozdobne
 	Favorites	Ulubione
 	Latin	Łacińskie
@@ -3743,6 +3773,7 @@ effect	Regular	Normalny
 	View:	Widok:
 	Tracing Result	Wynik obrysu
 	Outlines with Source Image	Kontury z obrazem źródłowym
+	Press and hold to view the source image	Przytrzymaj, aby wyświetlić obraz źródłowy
 	SVG Options	Opcje SVG
 	Maximize	Maksymalizuj
 	Restore	Przywróć
@@ -3907,6 +3938,7 @@ imageTrace	Outline	Kontur
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nie udało się umieścić {name}: dokument, na który go upuszczono, został zamknięty
+@msg	Couldn't place {name}: the document it was placed in was closed	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został zamknięty
 @msg	Couldn't read {name}: {e}	Nie udało się odczytać {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
 @msg	Create Outlines: select text objects	Utwórz kontury: zaznacz obiekty tekstowe
@@ -3932,6 +3964,7 @@ imageTrace	Outline	Kontur
 @msg	Installed plug-in {_1}	Zainstalowano wtyczkę {_1}
 @msg	Internal error: {msg} (please report this bug)	Błąd wewnętrzny: {msg} (zgłoś ten błąd)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Scal aktywne malowanie: zaznacz grupę aktywnego malowania i ścieżki do dodania
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Aktywne malowanie przyjmuje ścieżki i ścieżki złożone: najpierw przekształć tekst, obrazy i inne obiekty w ścieżki
 @msg	Live Paint: select paths or compound paths	Aktywne malowanie: zaznacz ścieżki lub ścieżki złożone
 @msg	Live Paint: these paths are too degenerate to paint	Aktywne malowanie: te ścieżki są zbyt zdegenerowane, aby je malować
 @msg	Make Guides: select paths	Utwórz linie pomocnicze: zaznacz ścieżki
@@ -3943,8 +3976,9 @@ imageTrace	Outline	Kontur
 @msg	Opened {url}	Otwarto {url}
 @msg	Outline Stroke: no stroked paths selected	Obrys konturu: nie zaznaczono ścieżek z obrysem
 @msg	PDF settings are not an object	Ustawienia PDF nie są obiektem
+@msg	PDF security settings are not an object	Ustawienia zabezpieczeń PDF nie są obiektem
 @msg	PDF writer error: {0}	Błąd zapisu PDF: {0}
-@msg	Packaged {n} file(s) in {folder}{note}	Spakowane pliki: {n} w {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	Spakowane pliki: {n} w {folder}{note}
 @msg	Packaged {n} file(s){note}	Spakowane pliki: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Podgląd w przeglądarce wymaga aplikacji desktopowej (wersja webowa zamiast tego pobiera pliki)
 @msg	Release Guides: no guides	Uwolnij linie pomocnicze: brak linii pomocniczych
@@ -3996,6 +4030,12 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
 @msg	`{key}` must be one of {_1}	`{key}` musi mieć jedną z wartości: {_1}
 @msg	`{key}` must be true or false	`{key}` musi mieć wartość true lub false
+@msg	`select` must be true or false	`select` musi mieć wartość true lub false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` muszą być liczbami całkowitymi
+@msg	`{key}` must be a number not below 0	`{key}` musi być liczbą nie mniejszą niż 0
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` musi mieć postać [x, y, width, height]: cztery skończone liczby, szerokość i wysokość nieujemne
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` jest większe niż `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	podaj co najmniej jeden z parametrów `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
@@ -4064,6 +4104,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	oś musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
@@ -4114,7 +4155,7 @@ imageTrace	Outline	Kontur
 @msg	give the path `id` and the width point `index`	podaj `id` ścieżki i `index` punktu szerokości
 @msg	guides are locked	linie pomocnicze są zablokowane
 @msg	handle must be in or out	handle musi mieć wartość in lub out
-@msg	image '{key}' has no pixels and was left out	obraz '{key}' nie ma pikseli i został pominięty
+@msg	an image has no pixels and was left out	pominięto obraz bez pikseli
 @msg	image data `{_1}` is missing	brak danych obrazu `{_1}`
 @msg	image would be too large; lower the resolution	obraz byłby zbyt duży; zmniejsz rozdzielczość
 @msg	index must be a number or first, previous, next or last	indeks musi być liczbą lub first, previous, next albo last
@@ -4141,7 +4182,7 @@ imageTrace	Outline	Kontur
 @msg	missing index	brak indeksu
 @msg	missing number `{key}`	brak liczby `{key}`
 @msg	missing integer `{key}`	brak liczby całkowitej `{key}`
-@msg	multiple windows land with M11.5	wiele okien pojawi się w M11.5
+@msg	New Window isn't available yet: a document opens in one window	Nowe okno nie jest jeszcze dostępne: dokument otwiera się w jednym oknie
 @msg	name the file	nadaj nazwę plikowi
 @msg	no CSS to copy: select objects with CSS of their own	brak CSS do skopiowania: zaznacz obiekty z własnym CSS
 @msg	no Live Paint edge near that point	brak krawędzi aktywnego malowania w pobliżu tego punktu
@@ -4180,6 +4221,7 @@ imageTrace	Outline	Kontur
 @msg	no file system here	brak systemu plików
 @msg	no file writer	brak modułu zapisu plików
 @msg	no files to place	brak plików do umieszczenia
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` nie jest dokumentem VectorCraft, plikiem PDF ani plikiem .ai zgodnym z PDF
 @msg	no format to export to	brak formatu eksportu
 @msg	no free recovery area	brak wolnego obszaru odzyskiwania
 @msg	no gradient stop or freeform point is selected	nie zaznaczono punktu koloru gradientu ani dowolnego punktu
@@ -4273,6 +4315,7 @@ imageTrace	Outline	Kontur
 @msg	path is already closed	ścieżka jest już zamknięta
 @msg	paths contain invalid coordinates	ścieżki zawierają nieprawidłowe współrzędne
 @msg	paths: give at least one file	paths: podaj co najmniej jeden plik
+@msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
 @msg	percent must be above 0 and at most 6400, not {p}	procent musi być większy od 0 i nie większy niż 6400, nie {p}
@@ -4433,6 +4476,7 @@ imageTrace	Outline	Kontur
 @msg	unsupported: {0}	nieobsługiwane: {0}
 @msg	variables are locked	zmienne są zablokowane
 @msg	variables that aren't text were left out: {kinds}	pominięto zmienne, które nie są tekstowe: {kinds}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` są sprzeczne: podaj opcję tylko raz
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	plików w wersji {0} nie można kompresować: skompresowane pliki otwierają tylko wersje {COMPRESSED_SINCE} i nowsze
 @msg	width and height are at least 1 pixel	szerokość i wysokość muszą wynosić co najmniej 1 piksel
 @msg	workspace name can't be empty	nazwa obszaru roboczego nie może być pusta
@@ -4444,7 +4488,9 @@ imageTrace	Outline	Kontur
 @msg	{_1} font families available	dostępne rodziny czcionek: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} to efekt na żywo (Efekt › Wtyczki)
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} to wtyczka eksportu (Plik › Eksportuj › Eksportuj jako…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` ma {size} bajtów (limit {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} jest już używany przez {_2}
+@msg	{_1} is reserved by the system	Skrót {_1} jest zarezerwowany przez system
 @msg	{_1} linked file(s) can't be read here: their previews show	połączonych plików nie można tu odczytać ({_1}): wyświetlane są ich podglądy
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	połączone obrazy zmienione na dysku: {_1} — Aktualizuj łącza pokaże nowe wersje
 @msg	{_1}: not saved, so not closed	{_1}: nie zapisano, więc nie zamknięto
@@ -4472,6 +4518,8 @@ imageTrace	Outline	Kontur
 @msg	Saving	Zapisywanie
 @msg	Saving {_1}	Zapisywanie {_1}
 @msg	Exporting {_1}	Eksportowanie {_1}
+@msg	Packaging {_1}	Pakowanie {_1}
+@msg	Placing {_1}	Umieszczanie {_1}
 @msg	Saving recovery data for {_1}	Zapisywanie danych odzyskiwania dla {_1}
 @msg	Discarded {_1} recovered document(s)	Odrzucone odzyskane dokumenty: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Przywrócone odzyskane dokumenty: {_1} — zapisz je, aby je zachować
@@ -4553,10 +4601,14 @@ imageTrace	Outline	Kontur
 @msg	{key} must be an array of non-negative integer object ids	{key} musi być tablicą identyfikatorów obiektów, które są nieujemnymi liczbami całkowitymi
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
+@msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
+@msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do odczytu: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do zapisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	odrzucono ścieżkę automatyzacji: poza katalogiem głównym odczytu {root}: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	odrzucono ścieżkę automatyzacji: poza katalogami głównymi odczytu {roots}: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	odrzucono ścieżkę automatyzacji: poza katalogiem głównym zapisu {root}: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	odrzucono ścieżkę automatyzacji: poza katalogami głównymi zapisu {roots}: {path}
 @msg	automation path rejected: path is empty	odrzucono ścieżkę automatyzacji: ścieżka jest pusta
 @msg	automation path rejected: a link that leads nowhere: {path}	odrzucono ścieżkę automatyzacji: łącze prowadzi donikąd: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	odrzucono ścieżkę automatyzacji: nie można rozwiązać {path}: {e}
@@ -4644,6 +4696,7 @@ imageTrace	Outline	Kontur
 	Logo 1000×1000	Logo 1000×1000
 	Business Card 3.5 × 2 in	Wizytówka 3,5 × 2 cale
 	Business Card 85 × 55 mm	Wizytówka 85 × 55 mm
+	Business Card 91 × 55 mm	Wizytówka 91 × 55 mm
 	Letterhead Letter	Papier firmowy Letter
 	Letterhead A4	Papier firmowy A4
 	Envelope DL	Koperta DL
@@ -5134,6 +5187,10 @@ mark-style	Japanese	Japońskie
 	Halftone Pattern	Wzór rastra
 	Torn Edges…	Postrzępione krawędzie…
 	Torn Edges	Postrzępione krawędzie
+	Conté Crayon…	Kredka Conté…
+	Conté Crayon	Kredka Conté
+	Foreground Level	Poziom pierwszego planu
+	Background Level	Poziom tła
 	Pattern Type	Typ wzoru
 	Dot	Kropka
 # User Interface › Color Scheme
@@ -5185,11 +5242,19 @@ mark-style	Japanese	Japońskie
 @msg	Persistent libraries not found: {files}	Nie znaleziono trwałych bibliotek: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` nie jest panelem biblioteki (zobacz window.swatchLibrary)
 @msg	library panel `{given}` isn't open	panel biblioteki `{given}` nie jest otwarty
+@msg	too many changed shortcuts	zbyt wiele zmienionych skrótów
+@msg	library panel `{given}` isn't missing its library	panelowi biblioteki `{given}` nie brakuje biblioteki
 @msg	too many library panels were opened in this session	w tej sesji otwarto zbyt wiele paneli bibliotek
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Obraz ma {_1} × {_2} pikseli, ponad {LARGE_TRACE_SIDE} na jednym boku: zostanie obrysowany, ale wolniej. Ustawienie wstępne o niższej wierności lub mniejsza kopia obrazu obrysuje się szybciej.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Obraz obrysowano w rozdzielczości {_1} × {_2} pikseli, po zmniejszeniu z {_3} × {_4} (najwyżej {_5} megapikseli).
+	Snapping	Przyciąganie
+	Snap to Tangent	Przyciągaj do stycznych
+	Snap to Perpendicular	Przyciągaj do prostopadłych
+@msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Tryb Płaskie logo obrysował obraz w rozdzielczości {_1} × {_2} pikseli, po zmniejszeniu przez uśrednienie z {_3} × {_4}.
 	Artboard {n} of {total}	Obszar kompozycji {n} z {total}
+	File {n} of {total}	Plik {n} z {total}
 	Encoding and writing the file…	Kodowanie i zapisywanie pliku…
 @plural	{n} more export waiting|{n} more exports waiting	Czeka jeszcze {n} eksport|Czekają jeszcze {n} eksporty|Czeka jeszcze {n} eksportów
 	Continue in Background	Kontynuuj w tle
@@ -5205,6 +5270,14 @@ mark-style	Japanese	Japońskie
 	Full Justify	Pełne justowanie
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum.
 	Justification	Justowanie
+	Add filters from the list above	Dodaj filtry z listy powyżej
+	Add to Stack	Dodaj do stosu
+	Applied Filters	Zastosowane filtry
+	Categories	Kategorie
+	Choose a filter	Wybierz filtr
+	Effect Gallery	Galeria efektów
+	Filters	Filtry
+	Select artwork to apply effects	Wybierz grafikę, aby zastosować efekty
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	zmienne i zestawy danych pliku nie zostały wczytane (zmienne: {variables}, zestawy danych: {data_sets}): panel Zmienne ich nie wyświetla
 # Select by Color (select.color)
 	Select by Color	Zaznacz według koloru
@@ -5230,6 +5303,7 @@ mark-style	Japanese	Japońskie
 	Water Paper	Mokry papier
 	Ruby…	Ruby…
 	Ruby	Ruby
+	Geometric Guides	Geometryczne linie pomocnicze
 	Ease In	Łagodny początek
 	Ease Out	Łagodny koniec
 	Ease In Out	Łagodny początek i koniec
@@ -5244,3 +5318,92 @@ mark-style	Japanese	Japońskie
 	Lock All Except Selected	Zablokuj wszystkie oprócz zaznaczonych
 	Lock All	Zablokuj wszystkie
 	Unlock Selected	Odblokuj zaznaczone
+	Effect Gallery…	Galeria efektów…
+	Effect Gallery Dialog	Okno dialogowe Galeria efektów
+	Arc Segment Tool Options	Opcje narzędzia Segment łuku
+	Base Along:	Podstawa wzdłuż:
+	Closed	Zamknięty
+	Convex	Wypukła
+	Fill Arc	Wypełnij łuk
+	Length X-Axis:	Długość osi X:
+	Length Y-Axis:	Długość osi Y:
+	Slope:	Nachylenie:
+axis	X Axis	Oś X
+axis	Y Axis	Oś Y
+@msg	Packaged {n} file(s) in {folder}	Spakowane pliki: {n} w {folder}
+@msg	Packaged {n} file(s) {note}	Spakowane pliki: {n} {note}
+@msg	Packaged {n} file(s)	Spakowane pliki: {n}
+	Packaged {n} file(s)	Spakowane pliki: {n}
+	Packaged {n} file(s) in {folder}	Spakowane pliki: {n} w {folder}
+	Packaged {n} file(s) {note}	Spakowane pliki: {n} {note}
+	{count} file(s) in {folder}. Show the package folder?	Pliki: {count} w {folder}. Pokazać folder pakietu?
+	Clockwise	Zgodnie z ruchem wskazówek zegara
+	Dither	Rozpraszanie
+	Fine noise hides banding in the gradient fill	Drobny szum ukrywa pasy w wypełnieniu gradientem
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` dotyczy wypełnień gradientem (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
+@msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
+@msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	Zainstalować „{name}”, wtyczkę, która prosi o duży budżet obliczeń?
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Każde uruchomienie może trwać do {minutes} minut i wykonać {times} razy więcej pracy, niż mogą inne wtyczki. Działa w tle i można je anulować.
+	It may take minutes, so it runs in the background, where you can cancel it.	Może to potrwać kilka minut, dlatego działa w tle, gdzie można to anulować.
+	The plug-in is computing…	Wtyczka wykonuje obliczenia…
+	Inspect Plug-in	Sprawdź wtyczkę
+	Cancel Plug-in Run	Anuluj działanie wtyczki
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} zakończył działanie, ale w międzyczasie zmienił się dokument lub wtyczka: uruchom ją ponownie
+@msg	Running “{name}”…	Uruchamianie „{name}”…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): zainstaluj wtyczkę z `allowHeavy: true`, gdy użytkownik się zgodzi
+# Actions panel: action sets (#3712).
+	New Set…	Nowy zestaw…
+	New Set	Nowy zestaw
+	Set Options…	Opcje zestawu…
+	Set Options	Opcje zestawu
+	Create New Set	Utwórz nowy zestaw
+	Stop Global Edit	Zakończ edycję globalną
+	Global Edit Options	Opcje edycji globalnej
+	Match	Dopasowanie
+	On Artboards	Na obszarach kompozycji
+	All Artboards	Wszystkie obszary kompozycji
+	Include Objects On Canvas	Uwzględnij obiekty na płótnie
+	Result(s): {count}	Wyniki: {count}
+@msg	select one object	zaznacz jeden obiekt
+@msg	Global Edit works on paths, compound paths and symbol instances	Edycja globalna działa na ścieżkach, ścieżkach złożonych i wystąpieniach symboli
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
+	Add to Symbols	Dodaj do symboli
+	Basic Shapes	Kształty podstawowe
+	Open Symbol Library	Otwórz bibliotekę symboli
+	Save Symbol Library	Zapisz bibliotekę symboli
+	Save Symbol Library…	Zapisz bibliotekę symboli…
+	Save Symbols…	Zapisz symbole…
+	Selected Symbols Only	Tylko zaznaczone symbole
+	Symbol Libraries Menu	Menu bibliotek symboli
+	Symbol Library	Biblioteka symboli
+	User Symbol Library 1	Biblioteka symboli użytkownika 1
+	User Symbol Library 2	Biblioteka symboli użytkownika 2
+	User Symbol Library 3	Biblioteka symboli użytkownika 3
+	User Symbol Library 4	Biblioteka symboli użytkownika 4
+	User Symbol Library 5	Biblioteka symboli użytkownika 5
+	User Symbol Library 6	Biblioteka symboli użytkownika 6
+	User Symbol Library 7	Biblioteka symboli użytkownika 7
+	User Symbol Library 8	Biblioteka symboli użytkownika 8
+	User Symbol Library 9	Biblioteka symboli użytkownika 9
+	User Symbol Library 10	Biblioteka symboli użytkownika 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	`{_1}` nie ma symboli do umieszczenia
+@msg	missing `library` (see symbol.libraries)	brak `library` (zobacz symbol.libraries)
+@msg	no symbol `{n}`	brak symbolu `{n}`
+@msg	no symbol `{n}` in `{_1}`	brak symbolu `{n}` w `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	brak biblioteki symboli `{key}` (zobacz symbol.libraries)
+@msg	the document has no symbols to save	dokument nie ma symboli do zapisania
+@msg	Trap: select two or more objects filled with solid colours	Zalewka: zaznacz co najmniej dwa obiekty wypełnione kolorem jednolitym
+@msg	Trap: no edges of different colours meet among the selected objects	Zalewka: wśród zaznaczonych obiektów nie stykają się krawędzie różnych kolorów
+@msg	thickness must be from 0.01 to 5000 pt	thickness musi wynosić od 0,01 do 5000 pt
+@msg	heightWidth must be from 1 to 1000 %	heightWidth musi wynosić od 1 do 1000 %
+@msg	tintReduction must be from 0 to 100 %	tintReduction musi wynosić od 0 do 100 %
+	Rectangular Grid Tool Options	Opcje narzędzia Siatka prostokątna
+	Polar Grid Tool Options	Opcje narzędzia Siatka biegunowa
+	Fill Line	Wypełnij odcinek

@@ -112,6 +112,79 @@ fn set_range_style_defaults_to_all_text_and_get_range() {
     assert_eq!(r["length"], json!(3));
 }
 
+/// The type commands refuse a number or an on/off option given as text or as another value of the
+/// wrong kind, naming the key, and leave the document and its undo history as they were; true,
+/// false, numbers and null still work.
+#[test]
+fn type_commands_refuse_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let frame = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let boxed = s.execute("text.create", &json!({"x": 0, "y": 300, "text": "a", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let area = json!({"x": 0, "y": 0, "text": "a", "area": {"width": "200", "height": 100}});
+    let mut calls = vec![("text.create".to_string(), area, "`width` must be a number, not \"200\"".to_string())];
+    let area = json!({"x": 0, "y": 0, "text": "a", "area": {"width": 200, "height": 100, "fit": "shrinkText", "fitMinPercent": "40"}});
+    calls.push(("text.create".to_string(), area, "`fitMinPercent` must be a number, not \"40\"".to_string()));
+    calls.extend(
+        [
+            ("text.create", json!({"x": 0, "y": 0, "text": "a", "size": "12"}), "size"),
+            ("text.createInPath", json!({"path": frame, "text": "a", "size": [12]}), "size"),
+            ("text.createInPath", json!({"path": frame, "mode": "area", "fitMinPercent": "40"}), "fitMinPercent"),
+            ("text.setRangeStyle", json!({"id": id.0, "size": "30"}), "size"),
+            ("text.setRangeStyle", json!({"id": id.0, "tracking": "50"}), "tracking"),
+            ("text.setRangeStyle", json!({"id": id.0, "hScale": true}), "hScale"),
+            ("text.setRangeStyle", json!({"id": id.0, "strokeWidth": "1"}), "strokeWidth"),
+            ("text.setRangeStyle", json!({"id": id.0, "start": "1", "size": 30}), "start"),
+            ("text.setRangeStyle", json!({"id": id.0, "end": [1], "size": 30}), "end"),
+            ("text.editRange", json!({"id": id.0, "start": 0, "end": "1", "insert": "x"}), "end"),
+            ("text.getRange", json!({"id": id.0, "start": "1"}), "start"),
+            ("text.touchType", json!({"id": id.0, "start": 0, "rotation": "10"}), "rotation"),
+            ("text.touchType", json!({"id": id.0, "start": "0", "rotation": 10}), "start"),
+            ("type.step", json!({"attribute": "size", "by": "2"}), "by"),
+            ("type.step", json!({"attribute": "size", "id": id.0, "start": "1"}), "start"),
+            ("type.size.increase", json!({"by": "2"}), "by"),
+            ("type.size.decrease", json!({"by": [2]}), "by"),
+            ("type.ruby", json!({"text": "a", "size": "60"}), "size"),
+            ("text.areaOptions", json!({"ids": [boxed], "width": "200"}), "width"),
+            ("text.areaOptions", json!({"ids": [boxed], "height": [80]}), "height"),
+            ("text.areaOptions", json!({"ids": [boxed], "fit": "shrinkText", "fitMinPercent": "40"}), "fitMinPercent"),
+        ]
+        .map(|(cmd, p, key)| not_a_number(cmd, p, key)),
+    );
+    calls.extend(
+        [
+            ("text.create", json!({"x": 0, "y": 0, "text": "a", "vertical": "true"}), "vertical"),
+            ("text.create", json!({"x": 0, "y": 0, "placeholder": 1}), "placeholder"),
+            ("text.createInPath", json!({"path": frame, "vertical": "true"}), "vertical"),
+            ("text.createInPath", json!({"path": frame, "placeholder": "true"}), "placeholder"),
+            ("text.setRangeStyle", json!({"id": id.0, "underline": "true"}), "underline"),
+            ("text.setRangeStyle", json!({"id": id.0, "allCaps": 1}), "allCaps"),
+            ("text.setRangeStyle", json!({"id": id.0, "noBreak": "true"}), "noBreak"),
+            ("text.setRangeStyle", json!({"id": id.0, "size": 30, "tateChuYoko": 1}), "tateChuYoko"),
+            ("text.getRange", json!({"id": id.0, "effective": "true"}), "effective"),
+            ("type.opticalMarginAlignment", json!({"on": "true"}), "on"),
+            ("type.systemLayout", json!({"on": "true"}), "on"),
+            ("type.fractionalWidths", json!({"on": "false"}), "on"),
+            ("type.ruby", json!({"remove": "true"}), "remove"),
+            ("type.ruby", json!({"text": "a", "overhang": "false"}), "overhang"),
+        ]
+        .map(|(cmd, p, key)| not_a_switch(cmd, p, key)),
+    );
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    let style = json!({"id": id.0, "size": 30, "underline": true, "tracking": null, "start": null, "noBreak": true});
+    s.execute("text.setRangeStyle", &style).unwrap();
+    s.execute("type.size.increase", &json!({"by": null})).unwrap();
+    s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap();
+    s.execute("type.ruby", &json!({"text": "a", "size": null, "overhang": false})).unwrap();
+    let t = obj(&s, id);
+    let st = &t.runs[0].style;
+    assert!(st.underline && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
+    assert!(!t.ruby.is_empty() && t.ruby.iter().all(|r| !r.overhang && r.size_percent == 50.0), "{:?}", t.ruby);
+}
+
 /// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
 fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
     let t = obj(s, id);
@@ -163,6 +236,29 @@ fn touch_type_moves_one_character_and_leaves_the_others_where_they_are() {
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 9, "dy": 1})).is_err(), "no character there");
     // A 32-bit build read 2^32 + 1 as character 1.
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": (1u64 << 32) + 1, "dy": 1})).is_err(), "no character there");
+}
+
+/// Touch Type on the first character of a list item moves that character and leaves the bullet
+/// where it is. The bullet stands for no character, so the first character still moves only up
+/// and down.
+#[test]
+fn touch_type_moves_the_first_character_of_a_list_item_and_not_its_bullet() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "bullet"})).unwrap();
+    let pens = |s: &Session| {
+        let t = obj(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let bullet = lay.glyphs.iter().find(|g| g.len == 0).map(|g| t.xf * (g.xf * Point::ZERO)).unwrap();
+        (bullet, lay.glyphs.iter().filter(|g| g.len > 0).map(|g| (g.byte, t.xf * (g.xf * Point::ZERO))).collect::<Vec<_>>())
+    };
+    let (bullet, before) = pens(&s);
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err(), "no character before it to kern");
+    s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 3})).unwrap();
+    let (bullet_after, after) = pens(&s);
+    assert!(near(moved_by(&before, &after, 0), (0.0, -3.0)), "the T moves 3 pt up: {:?}", moved_by(&before, &after, 0));
+    assert!(near(moved_by(&before, &after, 1), (0.0, 0.0)));
+    assert!((bullet_after - bullet).hypot() < 1e-6, "the bullet stays: {bullet:?} {bullet_after:?}");
 }
 
 /// Raising, scaling or rotating a character leaves it and the characters after it where they
@@ -471,6 +567,62 @@ fn a_cmd_drag_while_typing_moves_the_type_and_keeps_the_typing() {
     assert_eq!(obj(&s, id).plain_text(), "Hello!");
     let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
     assert!((after.x0 - moved.x0).abs() < 1e-6, "and stays where it was moved: {after:?}");
+}
+
+fn cmd_click(s: &mut Session, x: f64, y: f64) {
+    let (v, cmd) = (ViewInfo::default(), Mods { cmd: true, ..Default::default() });
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, x, y).with_mods(cmd), v).unwrap();
+    }
+}
+
+/// #3779: a Cmd/Ctrl click on another object while typing selects it and ends the text edit, so
+/// the keys that follow are shortcuts again and not typing.
+#[test]
+fn a_cmd_click_on_another_object_while_typing_ends_the_text_edit() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("shape.rectangle", &json!({"x": 500, "y": 400, "width": 50, "height": 50})).unwrap();
+    let rect = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    cmd_click(&mut s, 525.0, 425.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the rectangle is selected");
+    assert!(!s.tool_wants_text(), "the text edit ended");
+    s.tool_text("v", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "a later key is not typed into the text");
+    assert_eq!(s.tool_id(), "type", "the Type tool is back");
+}
+
+/// #3779: a Cmd/Ctrl click on empty canvas while typing deselects the text and ends its edit.
+#[test]
+fn a_cmd_click_on_empty_canvas_while_typing_ends_the_text_edit() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    cmd_click(&mut s, 600.0, 450.0);
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing is selected");
+    assert!(!s.tool_wants_text(), "the text edit ended");
+    s.tool_text("v", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "a later key is not typed into the text");
+}
+
+/// #3779: point type a click placed and nothing was typed into goes away on a Cmd/Ctrl click
+/// elsewhere, as it does on Escape.
+#[test]
+fn a_cmd_click_away_from_empty_point_type_discards_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    cmd_click(&mut s, 600.0, 450.0);
+    assert!(s.doc().unwrap().doc.node(id).is_none(), "the empty type is discarded");
 }
 
 #[test]
@@ -1086,4 +1238,34 @@ fn clicking_the_out_port_then_the_canvas_threads_the_text_into_a_new_frame() {
     assert_eq!(thread[0], id);
     assert_eq!(format!("{}{}", obj(&s, id).plain_text(), obj(&s, thread[1]).plain_text()), long);
     assert_eq!(&undo_labels(&s)[steps..], ["Thread Text"]);
+}
+
+/// #2572: with the Selection tool, area type whose text fits shows both ports, and a click on its
+/// in port then on empty canvas makes a new frame the story starts in, flowing on into the frame
+/// clicked, in one undo step; the ports then show the thread's arrows.
+#[test]
+fn clicking_the_in_port_then_the_canvas_threads_a_new_frame_before_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let words = "Words that fit. ";
+    let r = s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "size": 12, "area": {"width": 100, "height": 40}})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    let boxes = |s: &mut Session| {
+        s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Highlight { color: [255, 255, 255, 255], .. })).count()
+    };
+    assert_eq!(boxes(&mut s), 2, "an in port and an out port");
+    let steps = undo_labels(&s).len();
+    click(&mut s, 50.0, 50.0 + vectorcraft_tools::text::PORT_RISE_PX);
+    assert_eq!(s.cursor(Point::new(400.0, 400.0), Mods::default(), v), vectorcraft_tools::Cursor::LoadedText);
+    click(&mut s, 400.0, 400.0);
+    let doc = &s.doc().unwrap().doc;
+    let [thread] = &doc.text_threads[..] else { panic!("one thread: {:?}", doc.text_threads) };
+    assert_eq!(thread[1], id, "the frame clicked comes second");
+    assert_eq!(format!("{}{}", obj(&s, thread[0]).plain_text(), obj(&s, id).plain_text()), words);
+    assert!(!obj(&s, thread[0]).plain_text().is_empty(), "the story starts in the new frame");
+    assert_eq!(&undo_labels(&s)[steps..], ["Thread Text"]);
+    let strokes = s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Line { .. })).count();
+    assert_eq!(strokes, 6, "both frames selected: the first one's out port and the second one's in port show arrows");
 }

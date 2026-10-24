@@ -556,7 +556,7 @@ fn plan(
                         region = path.bounds();
                     }
                     TextKind::OnPath { path: on, .. } => {
-                        *on = path.clone();
+                        *on = closed_where_ends_meet(path.clone());
                         region = path.bounds().map(|r| r.inflate(size * 1.5, size * 1.5));
                     }
                     TextKind::Point => {}
@@ -1401,20 +1401,27 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
     if !has_layers(&data) {
         return (visible, warnings, false);
     }
+    // The PDF part, its pages placed and named as the editing data's artboards are, when the
+    // layers can't be used (`why`).
+    let from_pdf_part = |mut visible: Document, warnings: Vec<String>, why: &str| {
+        place_pages(&ai::artboards(&data), &mut visible, unit);
+        let mut all = unread(warnings, why);
+        all.extend(ai::variables(&data).note());
+        (visible, all, false)
+    };
     match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
+        // An image too large for the editing data's reader would be missing from the layers, while
+        // the PDF part has it: the file comes in as its PDF part instead (#1479).
+        Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
+            from_pdf_part(visible, warnings, "an image is too large to read from them")
+        }
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
             all.extend(notes.into_iter().filter(|n| !all.contains(n)).collect::<Vec<_>>());
             (done, all, true)
         }
-        Err(why) => {
-            let mut visible = visible;
-            place_pages(&ai::artboards(&data), &mut visible, unit);
-            let mut all = unread(warnings, &why);
-            all.extend(ai::variables(&data).note());
-            (visible, all, false)
-        }
+        Err(why) => from_pdf_part(visible, warnings, &why),
     }
 }
 
@@ -1634,6 +1641,7 @@ mod tests {
                 xf: Affine::scale(1.0 / 1.6),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         );
         page.insert(Some(page.layers[0].id), usize::MAX, image).unwrap();
@@ -1649,5 +1657,50 @@ mod tests {
         assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0)).is_err(), "missing artwork remains an error");
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
         assert!(view.difference(&vector, shifted).any > MAX_DIFFERENCE, "wrong framing remains an error");
+    }
+}
+
+/// `path` with each open subpath whose last anchor lies on its first (within a thousandth of a
+/// point) closed there: the object's own path of type round a closed path is written open, ending
+/// on its start, and type on an open path stops at its end, so it had no room to run past it.
+fn closed_where_ends_meet(mut path: PathData) -> PathData {
+    for sp in &mut path.subpaths {
+        let (Some(first), Some(last)) = (sp.anchors.first(), sp.anchors.last()) else { continue };
+        if sp.closed || sp.anchors.len() < 3 || first.p.distance(last.p) >= 1e-3 {
+            continue;
+        }
+        if let Some(l) = sp.anchors.pop()
+            && let Some(a0) = sp.anchors.first_mut()
+        {
+            a0.h_in = l.h_in;
+        }
+        sp.closed = true;
+    }
+    path
+}
+
+#[cfg(test)]
+mod closed_ends_tests {
+    use super::*;
+
+    /// A path drawn round to its start (the last anchor on the first) is closed there, its first
+    /// anchor taking the last one's incoming handle; one whose ends are apart stays open.
+    #[test]
+    fn a_path_ending_on_its_start_is_closed() {
+        let mut bp = kurbo::BezPath::new();
+        bp.move_to((100.0, 0.0));
+        bp.curve_to((100.0, 55.0), (55.0, 100.0), (0.0, 100.0));
+        bp.curve_to((-55.0, 100.0), (-100.0, 55.0), (-100.0, 0.0));
+        bp.curve_to((-100.0, -55.0), (-55.0, -100.0), (0.0, -100.0));
+        bp.curve_to((55.0, -100.0), (100.0, -55.0), (100.0, 0.0001));
+        let closed = closed_where_ends_meet(PathData::from_bezpath(&bp));
+        let sp = &closed.subpaths[0];
+        assert!(sp.closed && sp.anchors.len() == 4, "{sp:?}");
+        assert_eq!(sp.anchors[0].h_in, Point::new(100.0, -55.0));
+        let mut open = kurbo::BezPath::new();
+        open.move_to((0.0, 0.0));
+        open.line_to((50.0, 0.0));
+        open.line_to((50.0, 50.0));
+        assert!(!closed_where_ends_meet(PathData::from_bezpath(&open)).subpaths[0].closed);
     }
 }

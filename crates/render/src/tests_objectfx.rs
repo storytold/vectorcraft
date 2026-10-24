@@ -285,6 +285,7 @@ fn image_doc(effects: Vec<Effect>) -> Document {
             xf: Affine::translate((20.0, 20.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     n.appearance.effects = effects;
@@ -370,7 +371,7 @@ fn type_drawn_through_its_outlines_keeps_its_stroke_weight_when_scaled() {
 #[test]
 fn type_drawn_through_its_outlines_keeps_its_gradients_in_place() {
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     g.angle = 90.0;
     let ramp = Paint::Gradient(Box::new(g));
     // On the characters, the gradient fits the layout box in text space and turns with the type.
@@ -387,7 +388,7 @@ fn type_drawn_through_its_outlines_keeps_its_gradients_in_place() {
 /// that runs left to right (0°) or bottom to top (90°).
 fn gradient_text_doc(angle: f64) -> Document {
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     g.angle = angle;
     styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY)
 }
@@ -443,7 +444,7 @@ fn a_transform_effect_that_scales_type_out_of_proportion_scales_its_radial_and_d
     let mut changed = vec![];
     // A radial gradient turns into an ellipse, and a linear one at 45° turns its isolines.
     for (kind, angle) in [(GradientKind::Radial, 0.0), (GradientKind::Linear, 45.0)] {
-        let mut g = GradientPaint::new(Gradient { kind, stops: stops.clone() });
+        let mut g = GradientPaint::new(Gradient::new(kind, stops.clone()));
         g.angle = angle;
         let d = styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY);
         let id = d.layers[0].children().unwrap()[0].id;
@@ -593,7 +594,7 @@ fn geometry_effects_reshape_type_through_its_outlines() {
     assert!(changed > 100, "{changed} pixels changed");
     // The reshaped art is plain paths painted with the text's fill.
     let n = &d.layers[0].children().unwrap()[0];
-    let art = vectorcraft_effects::reshape(n, None).unwrap();
+    let art = vectorcraft_effects::reshape(None, n, None).unwrap();
     let (mut text, mut black) = (0, 0);
     art.walk(&mut |m| {
         text += usize::from(matches!(m.kind, NodeKind::Text(_)));
@@ -616,7 +617,7 @@ fn outline_object_draws_type_as_its_outlines_and_leaves_its_look() {
     // The type is drawn through its outlines: plain paths painted with the text's fill.
     let d = text_doc(vec![fx("path.outlineObject", json!({}))]);
     let n = &d.layers[0].children().unwrap()[0];
-    let art = vectorcraft_effects::reshape(n, None).unwrap();
+    let art = vectorcraft_effects::reshape(None, n, None).unwrap();
     let (mut text, mut black) = (0, 0);
     art.walk(&mut |m| {
         text += usize::from(matches!(m.kind, NodeKind::Text(_)));
@@ -649,7 +650,7 @@ fn outline_object_leaves_paths_and_images_as_they_are() {
     assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
     // The image is drawn through its frame, as under any geometry effect.
     let d = image_doc(vec![fx("path.outlineObject", json!({}))]);
-    assert!(vectorcraft_effects::reshape(&d.layers[0].children().unwrap()[0], None).is_some());
+    assert!(vectorcraft_effects::reshape(None, &d.layers[0].children().unwrap()[0], None).is_some());
 }
 
 #[test]
@@ -761,7 +762,7 @@ fn a_strokes_own_glow_paints_around_that_stroke_only() {
 fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
     use vectorcraft_color::GradientGeom;
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-    let ramp = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(20.0, 50.0), aspect: 1.0, focal: None };
     // Fitted to the box on each render, and placed on the object.
     for paint in [ramp.clone(), GradientPaint { geom: Some(geom), ..ramp }] {

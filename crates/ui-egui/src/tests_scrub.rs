@@ -290,10 +290,13 @@ fn scrubbing_w_in_the_app_is_one_undo_step() {
 #[test]
 fn a_scrub_leaves_another_documents_undo_group_open() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The second document exists before the group begins, so no group opens in it.
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
     app.session.execute("edit.undoGroup.begin", &json!({})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 50})).unwrap();
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("document.activate", &json!({"index": 1})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
     let ctx = egui::Context::default();
     let other = |app: &VectorcraftApp| (app.session.documents()[0].undo_group.is_some(), objects(&app.session.documents()[0]));
@@ -334,9 +337,12 @@ fn a_scrub_inside_an_open_undo_group_joins_its_step() {
 #[test]
 fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The second document exists before the group begins, so no group opens in it.
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
     app.session.execute("edit.undoGroup.begin", &json!({})).unwrap();
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("document.activate", &json!({"index": 1})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
     let ctx = egui::Context::default();
     let undo = undo_len(&app);

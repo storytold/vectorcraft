@@ -176,7 +176,7 @@ pub(crate) fn parse_mode(m: &str) -> std::result::Result<FreeformMode, String> {
 /// automatic points it shows first, and the stops follow the points' colours.
 fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freeform, Space) -> std::result::Result<R, String>) -> Result<R> {
     let item = item_target(s, p, cmd)?;
-    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active, cmd)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
     if ids.is_empty() {
@@ -308,7 +308,7 @@ fn split_line(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.freeform.splitLine";
     let line = index_param(p, "line", C)?;
     let segment = index_param(p, "segment", C)?;
-    let t = f64_or(p, "t", 0.5);
+    let t = number_or(p, "t", 0.5, C)?;
     let index = edit(s, p, C, |f, _| f.split_line(line, segment, t).ok_or_else(|| format!("no segment {segment} on line {line}")))?;
     s.select_freeform_point(Some(index));
     Ok(json!({ "index": index }))
@@ -332,7 +332,7 @@ fn select_point(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.freeform.get";
-    let stroke = bool_or(p, "stroke", !s.fill_active);
+    let stroke = switch_or(p, "stroke", !s.fill_active, C)?;
     let (f, _) = s.proxy_freeform(stroke).ok_or_else(|| bad(C, NOT_FREEFORM))?;
     let selected = if stroke != s.fill_active { s.selected_freeform_point().filter(|i| *i < f.points.len()) } else { None };
     let mut v = vectorcraft_tools::params::freeform_json(&f);

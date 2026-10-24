@@ -97,6 +97,171 @@ fn type_copied_by_a_transform_effect_is_written_as_text() {
     }
 }
 
+/// Area type 120 points wide holding `text` in `style`, hyphenated (Paragraph panel › Hyphenate)
+/// when `hyphenate` is set.
+fn hyphenated(text: &str, style: CharStyle, hyphenate: bool) -> TextObject {
+    let mut t = TextObject::point(Point::ZERO, text, style);
+    t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(20.0, 20.0, 140.0, 280.0)) };
+    t.xf = Affine::IDENTITY;
+    t.para.hyphenate = hyphenate;
+    t
+}
+
+/// The characters the canvas draws for the type objects of `d`, in layout order (a hyphen for
+/// each glyph that stands for no character), and the origin of each such glyph in document space.
+fn drawn_with_hyphens(d: &Document) -> (String, Vec<Point>) {
+    let (mut drawn, mut hyphens) = (String::new(), vec![]);
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let text = t.plain_text();
+            for g in &vectorcraft_text::layout(FontDb::global(), t).glyphs {
+                if g.len == 0 {
+                    drawn.push('-');
+                    hyphens.push(t.xf * g.origin);
+                } else if let Some(c) = text.get(g.byte..).and_then(|s| s.chars().next()).filter(|c| !c.is_control() && *c != '\u{AD}') {
+                    drawn.push(c);
+                }
+            }
+        }
+    });
+    (drawn, hyphens)
+}
+
+/// The origins in document space of the glyphs of the type objects of `d` that stand for '-'.
+fn hyphen_origins(d: &Document) -> Vec<Point> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let text = t.plain_text();
+            let lay = vectorcraft_text::layout(FontDb::global(), t);
+            out.extend(lay.glyphs.iter().filter(|g| g.len > 0 && text.get(g.byte..).is_some_and(|s| s.starts_with('-'))).map(|g| t.xf * g.origin));
+        }
+    });
+    out
+}
+
+/// The hyphen at the end of a line that area type breaks inside a word (Hyphenate) is written as
+/// text: reopened, the export reads each line's characters and then the hyphen where the canvas
+/// draws one, the hyphen sits where the canvas draws it, and the type's ink bounds match those of
+/// outlined type. Type without paint, written as invisible text, holds the hyphens too.
+#[test]
+fn line_break_hyphens_are_written_as_text_where_the_canvas_draws_them() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    for paint in [Paint::solid(Color::BLACK), Paint::None] {
+        let d = doc(vec![hyphenated(text, CharStyle { fill: paint.clone(), ..style(14.0) }, true)]);
+        let (drawn, hyphens) = drawn_with_hyphens(&d);
+        assert!(!hyphens.is_empty(), "the layout hyphenates: {drawn}");
+        let back = import_as(&pdf(&d, false).bytes, TextAs::Text);
+        let all = texts(&back).concat();
+        let solid = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+        assert_eq!(solid(&all), solid(&drawn), "{paint:?}");
+        // Each hyphen follows its line's last character, with no space between them.
+        assert!(!all.chars().zip(all.chars().skip(1)).any(|(a, b)| a.is_whitespace() && b == '-'), "{paint:?}: {all:?}");
+        let got = hyphen_origins(&back);
+        for p in &hyphens {
+            assert!(got.iter().any(|g| g.distance(*p) < 0.1), "{paint:?}: a hyphen at {p:?}: {got:?}");
+        }
+    }
+    let d = doc(vec![hyphenated(text, style(14.0), true)]);
+    let (real, outlined) = (ink(&import_as(&pdf(&d, false).bytes, TextAs::Outlines)), ink(&import_as(&pdf(&d, true).bytes, TextAs::Outlines)));
+    let off = [real.x0 - outlined.x0, real.y0 - outlined.y0, real.x1 - outlined.x1, real.y1 - outlined.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    assert!(off < 0.5, "{real:?} vs {outlined:?}");
+}
+
+/// Right-to-left area type broken at its soft hyphens writes each hyphen as text where the canvas
+/// draws it, and its letters come back in their order. Skipped without a font that covers Hebrew.
+#[test]
+fn line_break_hyphens_of_right_to_left_lines_are_written_as_text_where_the_canvas_draws_them() {
+    let db = FontDb::global();
+    let Some(face) =
+        ["Arial", "Noto Sans Hebrew", "DejaVu Sans", "Liberation Sans"].into_iter().filter_map(|f| db.face(f, "Regular")).find(|f| f.covers('ש'))
+    else {
+        return;
+    };
+    let text = "שלוםעולם\u{AD}גדולמאוד\u{AD}ומאוד ירושלים\u{AD}שלזהב\u{AD}ובתלאביב";
+    let mut t = hyphenated(text, CharStyle { font_family: face.family.clone(), ..style(14.0) }, true);
+    t.para.justify = vectorcraft_doc::Justify::Auto;
+    let lines = vectorcraft_text::layout(db, &t).lines.len();
+    let d = doc(vec![t]);
+    let (_, hyphens) = drawn_with_hyphens(&d);
+    assert!(!hyphens.is_empty(), "the lines break at soft hyphens");
+    let r = pdf(&d, false);
+    // Each line's letters are still marked as written in reverse (/ReversedChars), the hyphenated
+    // lines too.
+    let reversed = String::from_utf8_lossy(&r.bytes).matches("/ReversedChars").count();
+    assert!(reversed >= lines, "{reversed} reversed runs for {lines} lines");
+    let back = import_as(&r.bytes, TextAs::Text);
+    let got = hyphen_origins(&back);
+    for p in &hyphens {
+        assert!(got.iter().any(|g| g.distance(*p) < 0.1), "a hyphen at {p:?}: {got:?}");
+    }
+    let letters = |s: &str| s.chars().filter(|c| c.is_alphabetic()).collect::<String>();
+    assert_eq!(letters(&texts(&back).concat()), letters(text));
+}
+
+/// The kashidas of justified Arabic type (Insert Kashidas), which stand for no character either,
+/// are drawn as paths: reopened, the type holds its letters and no hyphen or tatweel. Skipped
+/// without an OpenType font that covers Arabic and the tatweel, or when the layout adds no kashida.
+#[test]
+fn kashidas_are_not_written_as_hyphens() {
+    let db = FontDb::global();
+    let Some(face) = ["Noto Sans Arabic", "Arial", "Geeza Pro"]
+        .into_iter()
+        .filter_map(|f| db.face(f, "Regular"))
+        .find(|f| f.covers('ب') && f.covers('د') && f.covers('\u{0640}'))
+    else {
+        return;
+    };
+    let text = "كتب ورد محمد";
+    let mut t = TextObject::point(Point::ZERO, text, CharStyle { font_family: face.family.clone(), ..style(20.0) });
+    t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(20.0, 20.0, 320.0, 280.0)) };
+    t.xf = Affine::IDENTITY;
+    t.para.justify = vectorcraft_doc::Justify::JustifyAll;
+    t.para.kashida = vectorcraft_doc::text::Kashida::Medium;
+    let tatweel = face.glyph_for('\u{0640}');
+    if !vectorcraft_text::layout(db, &t).glyphs.iter().any(|g| g.len == 0 && g.gid == tatweel) {
+        return;
+    }
+    let back = texts(&import_as(&pdf(&doc(vec![t]), false).bytes, TextAs::Text));
+    assert!(!back.concat().contains(['-', '\u{2010}', '\u{0640}']), "{back:?}");
+    // Every letter comes back, at least as often as the text holds it (the justified words may
+    // come back as type objects of their own).
+    let all = back.concat();
+    let count = |s: &str, c: char| s.chars().filter(|&x| x == c).count();
+    for c in text.chars().filter(|c| c.is_alphabetic()) {
+        assert!(count(&all, c) >= count(text, c), "{c}: {back:?}");
+    }
+}
+
+/// Area type without Hyphenate comes back with its characters only, and no hyphen.
+#[test]
+fn type_without_line_break_hyphens_comes_back_without_hyphens() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let d = doc(vec![hyphenated(text, style(14.0), false)]);
+    let (drawn, hyphens) = drawn_with_hyphens(&d);
+    assert!(hyphens.is_empty(), "{drawn}");
+    let all = texts(&import_as(&pdf(&d, false).bytes, TextAs::Text)).concat();
+    assert_eq!(all.split_whitespace().collect::<String>(), text.split_whitespace().collect::<String>());
+}
+
+/// The marker of a hyphenated bulleted list, which stands for no character of the text either, is
+/// not written as a hyphen: reopened, the type holds one hyphen for each line-break hyphen only.
+#[test]
+fn list_markers_are_not_written_as_line_break_hyphens() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    for bullet in [Bullet::Dash, Bullet::Dot] {
+        let mut t = hyphenated(text, style(14.0), true);
+        t.para.list = Some(ParaList::bulleted(bullet));
+        let lay = vectorcraft_text::layout(FontDb::global(), &t);
+        assert!(!lay.markers.is_empty(), "{bullet:?}: the paragraph has a marker");
+        let breaks = lay.glyphs.iter().enumerate().filter(|&(i, g)| g.len == 0 && lay.marker_of(i).is_none()).count();
+        assert!(breaks > 0, "{bullet:?}: the layout hyphenates");
+        let all = texts(&import_as(&pdf(&doc(vec![t]), false).bytes, TextAs::Text)).concat();
+        assert_eq!(all.matches(['-', '\u{2010}']).count(), breaks, "{bullet:?}: {all:?}");
+    }
+}
+
 /// A curve type runs along.
 fn arc() -> PathData {
     let mut p = BezPath::new();
@@ -572,4 +737,26 @@ fn evenly_tracked_type_on_a_path_keeps_its_length() {
     for (g, w) in got.iter().zip(&want) {
         assert!(g.distance(*w) < 0.3, "{got:?}\nvs {want:?}");
     }
+}
+
+/// Type filled with a dithered gradient is an image clipped to its outlines, sampled at the raster
+/// effects resolution on the page however the type is scaled, with its characters under it as
+/// invisible text (rendering mode 3), so they can still be selected and searched.
+#[test]
+fn dithered_type_keeps_its_resolution_when_scaled_and_stays_searchable() {
+    let fill = Paint::Gradient(Box::new(GradientPaint::new(Gradient { dither: true, ..Default::default() })));
+    let big = TextObject::point(Point::new(20.0, 80.0), "Dither", CharStyle { fill: fill.clone(), ..style(40.0) });
+    let mut scaled = TextObject::point(Point::new(5.0, 20.0), "Dither", CharStyle { fill, ..style(10.0) });
+    scaled.xf = Affine::scale(4.0) * scaled.xf;
+    let width = |bytes: &[u8]| -> u32 {
+        let s = String::from_utf8_lossy(bytes);
+        s.split("/Width ").nth(1).and_then(|w| w.split(|c: char| !c.is_ascii_digit()).next()).and_then(|n| n.parse().ok()).unwrap()
+    };
+    let (big, scaled) = (pdf(&doc(vec![big]), false).bytes, pdf(&doc(vec![scaled]), false).bytes);
+    let (wb, ws) = (width(&big), width(&scaled));
+    // At 72 ppi a pixel a point: 40 pt "Dither" is about 100 points wide.
+    assert!(wb >= 80 && wb.abs_diff(ws) <= 2, "40 pt type {wb} pixels wide, 10 pt type scaled 4 times {ws}");
+    let ops = String::from_utf8_lossy(&scaled).split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(ops.contains("3 Tr"), "the characters as invisible text");
+    assert_eq!(texts(&import_as(&scaled, TextAs::Text)), ["Dither"]);
 }

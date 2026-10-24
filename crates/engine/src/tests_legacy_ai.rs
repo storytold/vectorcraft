@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 
-use super::tests_menucmds::place_undecodable_png;
+use super::tests_menucmds::{place_undecodable_png, place_undecodable_png_sized};
 use super::*;
 use crate::tests_links::Folder;
 
@@ -362,6 +362,29 @@ fn a_flattened_image_that_cant_be_decoded_is_noted_once() {
     assert_eq!(undecoded_notes(&r), 1, "{r}");
 }
 
+/// Images that can't be decoded and are written as they are get the same note as one that is
+/// flattened. All of them give one note, and the note names no image's key.
+#[test]
+fn images_written_or_flattened_that_cant_be_decoded_are_noted_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    place_undecodable_png(&mut s);
+    place_undecodable_png_sized(&mut s, 48, 24);
+    let keys: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    assert_eq!(keys.len(), 2);
+    let decode_notes = |r: &Value| warnings(r).iter().filter(|w| w.contains("decoded")).count();
+    let named = |r: &Value| warnings(r).iter().any(|w| keys.iter().any(|k| w.contains(k.as_str())));
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    assert_eq!((undecoded_notes(&r), decode_notes(&r), named(&r)), (1, 1, false), "{r}");
+    // A third image, at 50% opacity, is flattened. The engine's note and the writer's note come out
+    // as one warning.
+    let cut = place_undecodable_png_sized(&mut s, 32, 16);
+    s.execute("transparency.set", &json!({"ids": [cut.0], "opacity": 50})).unwrap();
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    assert!(warnings(&r).iter().any(|w| w.contains("flattened with the art under them")), "{r}");
+    assert_eq!((undecoded_notes(&r), decode_notes(&r), named(&r)), (1, 1, false), "{r}");
+}
+
 #[test]
 fn an_image_that_cant_be_decoded_with_an_expanded_effect_is_noted() {
     let mut s = Session::new();
@@ -475,4 +498,148 @@ fn a_range_saves_those_artboards_and_save_writes_them_again() {
     s.execute("file.saveAs", &json!({"path": path, "format": "ai", "aiVersion": "7", "range": "1-2"})).unwrap();
     let r = s.execute("document.save", &json!({})).unwrap();
     assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
+}
+
+/// A 32×32 PNG checkerboard of 16-pixel squares: `a` top left and bottom right, `b` elsewhere.
+fn checker(a: [u8; 4], b: [u8; 4]) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(32, 32, |x, y| image::Rgba(if (x < 16) == (y < 16) { a } else { b }));
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// A blue square (40–168) under a square at `opacity` filled with a pattern whose 32 pt tile is the
+/// image `tile`, grouped.
+fn pattern_over_blue(tile: &[u8], opacity: f32) -> Session {
+    let href = format!("data:image/png;base64,{}", vectorcraft_format::base64_encode(tile));
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200" viewBox="0 0 200 200"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="32" height="32"><image width="32" height="32" xlink:href="{href}"/></pattern></defs><g><rect x="40" y="40" width="128" height="128" fill="#0000ff"/><rect x="40" y="40" width="128" height="128" fill="url(#p)" opacity="{opacity}"/></g></svg>"##
+    );
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "p.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    s
+}
+
+/// #3666: a pattern fill whose tile is an image, under opacity, is flattened with the art under it
+/// like a transparent image, instead of being written opaque over white.
+#[test]
+fn a_transparent_image_pattern_is_flattened_with_the_art_under_it() {
+    for (tile, what) in
+        [(checker([0, 200, 0, 255], [255, 230, 0, 255]), "opaque tile"), (checker([0, 200, 0, 255], [255, 255, 255, 0]), "see-through tile")]
+    {
+        let mut s = pattern_over_blue(&tile, 0.6);
+        let points = [(72.0, 72.0), (88.0, 72.0), (136.0, 152.0), (152.0, 152.0)];
+        let before: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+        let p = json!({"format": "ai", "aiVersion": "7", "transparentImages": "flatten", "hiddenObjects": "layer"});
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        assert!(warnings(&r).iter().any(|w| w.contains("flattened with the art under them")), "{what}: {:?}", warnings(&r));
+        let r = s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        assert!(!r.to_string().contains("left out"), "{what}: {:?}", warnings(&r));
+        let d = &s.doc().unwrap().doc;
+        let after: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(d, x, y)).collect();
+        for (a, b) in before.iter().zip(&after) {
+            assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "{what}: before {before:?} after {after:?}");
+        }
+    }
+}
+
+/// #3666: an opaque pattern fill whose tile is an opaque image is still written as its tiles by the
+/// writer, not flattened.
+#[test]
+fn an_opaque_image_pattern_is_written_as_its_tiles() {
+    let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 230, 0, 255]), 1.0);
+    let points = [(72.0, 72.0), (88.0, 72.0), (136.0, 152.0), (152.0, 152.0)];
+    let before: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    let p = json!({"format": "ai", "aiVersion": "7", "transparentImages": "flatten", "hiddenObjects": "layer"});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let w = warnings(&r);
+    assert!(w.iter().any(|w| w.contains("pattern fills are written as their tiles")), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("flattened with the art under them")), "{w:?}");
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let after: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    for (a, b) in before.iter().zip(&after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "before {before:?} after {after:?}");
+    }
+}
+
+/// A square (40–168) with two pattern fills of 32 pt image tiles: a red and blue checkerboard,
+/// with a green checkerboard with see-through squares over it.
+fn two_pattern_fills() -> Session {
+    let see_through = vectorcraft_format::base64_encode(&checker([0, 200, 0, 255], [255, 255, 255, 0]));
+    let opaque = vectorcraft_format::base64_encode(&checker([200, 0, 0, 255], [0, 0, 200, 255]));
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200" viewBox="0 0 200 200"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="32" height="32"><image width="32" height="32" xlink:href="data:image/png;base64,{see_through}"/></pattern><pattern id="q" patternUnits="userSpaceOnUse" width="32" height="32"><image width="32" height="32" xlink:href="data:image/png;base64,{opaque}"/></pattern></defs><rect x="40" y="40" width="128" height="128" fill="url(#q)"/><rect x="40" y="40" width="128" height="128" fill="url(#p)"/></svg>"##
+    );
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "p.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    // Move the opaque pattern fill under the see-through one, on the second rectangle.
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    let under = d.node(ids[0]).unwrap().appearance.items.clone();
+    assert!(!under.is_empty());
+    let n = d.node_mut(ids[1]).unwrap();
+    let mut items = under;
+    items.append(&mut n.appearance.items);
+    n.appearance.items = items;
+    let _ = d.remove(ids[0]);
+    s
+}
+
+/// #3666: on a shape with two pattern fills, only the one that paints a transparent image is
+/// flattened; the opaque image pattern under it is still written as its tiles.
+#[test]
+fn only_the_transparent_image_pattern_fill_of_a_shape_is_flattened() {
+    let mut s = two_pattern_fills();
+    let points = [(72.0, 72.0), (88.0, 72.0), (136.0, 152.0), (152.0, 152.0)];
+    let before: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    assert_eq!(before[1], [0, 0, 200], "{before:?}");
+    let p = json!({"format": "ai", "aiVersion": "7", "transparentImages": "flatten", "hiddenObjects": "layer"});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let w = warnings(&r);
+    assert!(w.iter().any(|w| w.contains("flattened with the art under them")), "{w:?}");
+    assert!(w.iter().any(|w| w.contains("pattern fills are written as their tiles")), "{w:?}");
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let after: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    for (a, b) in before.iter().zip(&after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "before {before:?} after {after:?}");
+    }
+}
+
+/// #3666: with `omit`, a pattern fill whose tile image is see-through is not expanded, so its tiles
+/// aren't left out: the writer still draws them.
+#[test]
+fn omit_keeps_a_transparent_image_pattern() {
+    let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 255, 255, 0]), 1.0);
+    let p = json!({"format": "ai", "aiVersion": "7", "transparentImages": "omit", "hiddenObjects": "layer"});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let w = warnings(&r);
+    assert!(w.iter().any(|w| w.contains("pattern fills are written as their tiles")), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("are left out")), "{w:?}");
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    assert!(images(&s.doc().unwrap().doc).0 > 0);
+}
+
+/// #3666: expanding the transparent image patterns of a shape with two pattern fills expands only
+/// the fill that paints a transparent image; the opaque image pattern stays a pattern fill.
+#[test]
+fn only_the_transparent_pattern_fill_of_a_leaf_is_expanded() {
+    let mut s = two_pattern_fills();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let keys = crate::cmd::flatten::see_through_images(d);
+    let layer = d.layers[0].id;
+    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys).unwrap(), 1);
+    let mut patterns = vec![];
+    let mut images = 0;
+    d.walk(|n| {
+        for i in &n.appearance.items {
+            if let vectorcraft_doc::appearance::AppearanceItem::Fill(f) = i
+                && let vectorcraft_color::Paint::Pattern { pattern, .. } = &f.paint
+            {
+                patterns.push(pattern.clone());
+            }
+        }
+        images += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)));
+    });
+    assert_eq!(patterns.len(), 1, "{patterns:?}");
+    assert!(images > 0);
 }

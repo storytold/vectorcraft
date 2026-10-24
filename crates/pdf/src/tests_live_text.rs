@@ -164,6 +164,27 @@ fn evenly_wide_gaps_stay_spaces() {
     }
 }
 
+/// A word set beside a much larger one, apart by a gap and no space glyph (as a browser prints a
+/// margin between two sizes), reads as two words: the gap is measured against the smaller size
+/// (#3623). Set close, the two sizes stay one word.
+#[test]
+fn a_gap_between_two_sizes_is_measured_against_the_smaller() {
+    let font = vectorcraft_text::FontDb::global().find_postscript("SourceSans3-Regular").unwrap();
+    let advance = |c: char, size: f32| font.advance(font.glyph_for(c)) as f32 / font.units_per_em() as f32 * size;
+    // 3.4 pt: 0.17 em of the 20 pt "4", 0.43 em of the 8 pt "hours".
+    for (gap, want) in [(3.4_f32, "4 hours"), (0.4, "4hours")] {
+        let lines = [(20.0, 60.0, 20.0, "4"), (20.0 + advance('4', 20.0) + gap, 60.0, 8.0, "hours")];
+        let d = import_with_report(&text_pdf(&lines, false), &ImportOptions::default()).unwrap().document;
+        let t = texts(&d);
+        assert_eq!(t.len(), 1, "gap {gap} pt: {t:?}");
+        assert_eq!(t[0].plain_text(), want, "gap {gap} pt");
+    }
+    // The small size first.
+    let lines = [(20.0, 60.0, 8.0, "ca"), (20.0 + advance('c', 8.0) + advance('a', 8.0) + 3.4, 60.0, 20.0, "4")];
+    let t = texts(&import_with_report(&text_pdf(&lines, false), &ImportOptions::default()).unwrap().document);
+    assert_eq!(t.iter().map(TextObject::plain_text).collect::<Vec<_>>(), ["ca 4"]);
+}
+
 /// Embedded font data is untrusted: anything that isn't a CID-keyed CFF is no table, never a panic.
 #[test]
 fn cid_tables_ignore_fonts_that_are_not_cid_keyed_cff() {

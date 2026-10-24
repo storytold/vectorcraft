@@ -13,10 +13,11 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind};
+use vectorcraft_doc::live::Hooks;
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, shapes};
 
-use crate::{GeomContext, apply_one, is_geometry, merged_params};
+use crate::{Budget, GeomContext, apply_one, is_geometry, merged_params};
 
 /// Can object-level effects apply to `n` only through [`outline_art`] / an offscreen layer (it is
 /// neither a path nor a container)?
@@ -36,13 +37,33 @@ pub fn needs_outline(n: &Node) -> bool {
 
 /// Is `n` a path or compound path with a visible Transform effect that makes copies and a gradient
 /// in a fill or stroke? Such an object is drawn through its art ([`outline_art`]) so that each copy
-/// paints its gradient by itself ([`copy_with_gradients`]), as a group's copies do.
+/// paints its gradient by itself ([`copy_leaf`]), as a group's copies do.
 pub fn has_gradient_copies(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. })
         && (n.appearance.has_unplaced_gradient() || n.appearance.has_placed_gradient())
         && geometry_effects(n)
             .iter()
             .any(|e| e.id == "distort.transform" && crate::distort::transform_map(Rect::ZERO, &merged_params(&e.id, &e.params), 0).1 > 0)
+}
+
+/// Is `n` a path or compound path with a visible Transform effect whose Transform Patterns or
+/// Scale Strokes & Effects is on (#885)? Such an effect changes the fills and strokes as well as
+/// the geometry, so the object is drawn through its art ([`outline_art`]), each copy an object of
+/// its own with its strokes scaled and its patterns moved ([`transform_leaf`]).
+pub fn has_transform_options(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. })
+        && geometry_effects(n)
+            .iter()
+            // Both options default to off, so the stored params tell without merging the defaults
+            // (this runs for every object drawn).
+            .any(|e| e.id == "distort.transform" && crate::distort::TransformOptions::of(&e.params).reach_appearance())
+}
+
+/// Is `n` a path or compound path that its Transform effects make into art of separate objects
+/// ([`has_gradient_copies`], [`has_transform_options`])? It is drawn, baked and expanded through
+/// that art ([`reshape`]).
+pub fn has_transform_art(n: &Node) -> bool {
+    has_gradient_copies(n) || has_transform_options(n)
 }
 
 /// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
@@ -98,7 +119,7 @@ pub fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
     if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
         return vec![];
     }
-    let Some(art) = reshape(n, None) else { return vec![] };
+    let Some(art) = reshape(None, n, None) else { return vec![] };
     let mut out = vec![];
     art.walk(&mut |c| {
         let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
@@ -120,17 +141,20 @@ pub fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
 /// path per run, and all of them as one.
 pub(crate) fn glyph_outlines(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath) {
-    let (runs, all, _) = laid_out(t);
+    let (runs, all, ..) = laid_out(t);
     (runs, all)
 }
 
-/// [`glyph_outlines`] and the bounds of `t`'s layout in text space.
-fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath, Rect) {
+/// [`glyph_outlines`], the bounds of `t`'s layout in text space, and its colour glyphs, which have
+/// no outlines, placed in the document with their runs: bitmap glyphs (emoji) as images holding
+/// their pixels, then COLR and SVG glyphs as their art, as the renderer paints them.
+fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath, Rect, Vec<(usize, Node)>) {
     let db = vectorcraft_text::FontDb::global();
     let layout = vectorcraft_text::layout(db, t);
     let mut runs = vec![kurbo::BezPath::new(); t.runs.len()];
     let mut all = kurbo::BezPath::new();
-    for g in &layout.glyphs {
+    // Ruby (furigana) glyphs are painted with their base text's run, as the renderer paints them.
+    for g in layout.glyphs.iter().chain(&layout.ruby) {
         if let Some(r) = runs.get_mut(g.run) {
             r.extend(g.outline.iter());
         }
@@ -143,34 +167,37 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
         }
         all.extend(bar.iter());
     }
-    (runs, all, layout.bounds)
+    let images = layout.glyphs.iter().filter_map(|g| Some((g.run, g.placed_image_node(t.xf)?)));
+    let colours = images.chain(layout.glyphs.iter().filter_map(|g| Some((g.run, g.placed_colour(t.xf)?)))).collect();
+    (runs, all, layout.bounds, colours)
 }
 
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
-/// and (when the object has its own fills/strokes) the whole outline with the object's items below
-/// the characters under them and the others over them, as the renderer paints them. Each run's
-/// path is placed by the type's transform, which also scales its stroke weights and dashes and
-/// transforms its pattern tiles; its unplaced gradients are first fixed to the layout's bounds in
-/// text space. The object's own unplaced gradients are fixed to the bounding box of those bounds
-/// in the document. The group is marked as type's outlines
+/// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
+/// outline with the object's items below the characters under them and the others over them, as
+/// the renderer paints them. Each run's path is placed by the type's transform, which also scales its stroke
+/// weights and dashes and transforms its pattern tiles; its unplaced gradients are first fixed to
+/// the layout's bounds in text space. The object's own unplaced gradients are fixed to the
+/// bounding box of those bounds in the document. The group is marked as type's outlines
 /// ([`vectorcraft_doc::NodeExtras::type_outlines`]).
 pub fn outline_text(n: &Node) -> Option<Node> {
     let NodeKind::Text(t) = &n.kind else { return None };
-    let (runs, all, bounds) = laid_out(t);
+    let (runs, all, bounds, colours) = laid_out(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
     let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
-    let mut children: Vec<Arc<Node>> = runs
-        .iter()
-        .zip(&t.runs)
-        .filter(|(bp, _)| !bp.elements().is_empty())
-        .map(|(bp, run)| {
-            let mut ap = run.style.appearance();
-            ap.pin_gradients(bounds);
-            let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
-            piece.transform(t.xf, scaling);
-            Arc::new(piece)
-        })
-        .collect();
+    let mut children: Vec<Arc<Node>> = vec![];
+    for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
+        // Colour glyphs paint themselves, under their run's fill, as the renderer paints them.
+        children.extend(colours.iter().filter(|(r, _)| *r == i).map(|(_, art)| Arc::new(with_id(art, n.id))));
+        if bp.elements().is_empty() {
+            continue;
+        }
+        let mut ap = run.style.appearance();
+        ap.pin_gradients(bounds);
+        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
+        piece.transform(t.xf, scaling);
+        children.push(Arc::new(piece));
+    }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();
         let tb = t.xf.transform_rect_bbox(bounds);
@@ -191,12 +218,23 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     Some(g)
 }
 
+/// `art` with `id` for it and all its members, as the other pieces of outlined type have the type's
+/// (Expand Appearance gives them ids of their own).
+fn with_id(art: &Node, id: NodeId) -> Node {
+    let mut art = art.clone();
+    art.id = id;
+    for c in art.children_mut().into_iter().flatten() {
+        *c = Arc::new(with_id(c, id));
+    }
+    art
+}
+
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform. `None` for other kinds (images, paths, containers).
-pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
+/// the instance's transform. `None` for other kinds (images, paths, containers). A Repeat counts
+/// the Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
+pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     let mut art = match &n.kind {
         NodeKind::Text(_) => outline_text(n)?,
         NodeKind::SymbolInstance { xf, .. } => {
@@ -205,7 +243,7 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
-        _ if has_gradient_copies(n) => {
+        _ if has_transform_art(n) => {
             let mut one = n.clone();
             one.opacity = 1.0;
             one.blend = Default::default();
@@ -214,7 +252,7 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
             one.appearance.effects.clear();
             Node::group(n.id, vec![Arc::new(one)])
         }
-        _ if vectorcraft_doc::live::is_live(n) => vectorcraft_doc::live::expand_deep(n, Some(hook)),
+        _ if vectorcraft_doc::live::is_live(n) => evaluated(doc, n),
         _ => return None,
     };
     outline_nested_text(&mut art, false);
@@ -228,6 +266,14 @@ pub fn outline_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     Some(art)
 }
 
+/// `n` with every live object in it evaluated, type inside them outlined ([`outline_text`]). The
+/// Repeats among them count the Repeats in the art of `doc`'s symbols that their instances show
+/// toward their instance budget ([`vectorcraft_doc::RepeatSpec::expand`]).
+pub(crate) fn evaluated(doc: Option<&Document>, n: &Node) -> Node {
+    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
+    vectorcraft_doc::live::expand_deep_hooks(n, Hooks { outline: Some(hook), symbols: doc, ..Default::default() })
+}
+
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
 /// its plain outlines ([`outline_text`]) with its visibility, which is what
@@ -239,7 +285,7 @@ pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
         let clipping = clipping || (clips && i == 0);
         let art = match &c.kind {
             NodeKind::Text(_) if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
-            NodeKind::Text(_) => as_art(c, None),
+            NodeKind::Text(_) => as_art(None, c, None),
             _ => None,
         };
         if let Some(o) = art {
@@ -259,21 +305,22 @@ pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
 /// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
 /// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
 /// or has no art (a symbol instance without `symbol_art`).
-pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !(needs_outline(n) || has_gradient_copies(n)) {
+pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    if (geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !(needs_outline(n) || has_transform_art(n)) {
         return None;
     }
-    as_art(n, symbol_art)
+    as_art(doc, n, symbol_art)
 }
 
-/// `n` (see [`needs_outline`], or a path with [`has_gradient_copies`]) as plain art for Expand
+/// `n` (see [`needs_outline`], or a path with [`has_transform_art`]) as plain art for Expand
 /// Appearance: [`reshape`]d when it has
 /// geometry effects, else type with fills or strokes of its own outlined, or an image with fills
 /// or strokes of its own that paint a shape, in the same form. `None` when it has none of these.
-pub fn expand_outlined(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    // A path whose Transform effect copies it with a gradient: each copy an object of its own.
-    if has_gradient_copies(n) {
-        return as_art(n, symbol_art);
+pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
+    // patterns: each copy an object of its own.
+    if has_transform_art(n) {
+        return as_art(doc, n, symbol_art);
     }
     let own_paint = match n.kind {
         NodeKind::Text(_) => !n.appearance.items.is_empty(),
@@ -282,11 +329,11 @@ pub fn expand_outlined(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     if !needs_outline(n) || (geometry_effects(n).is_empty() && !own_paint) {
         return None;
     }
-    as_art(n, symbol_art)
+    as_art(doc, n, symbol_art)
 }
 
 /// [`reshape`] without its checks (no geometry effects: just the art).
-pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
@@ -314,7 +361,7 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
                 Node::group(n.id, rows(below).into_iter().chain([Arc::new(image)]).chain(rows(above)).collect())
             }
         }
-        _ => outline_art(n, symbol_art)?,
+        _ => outline_art(doc, n, symbol_art)?,
     };
     reshape_leaves(&mut art, &fx);
     // Type and symbols in perspective: the art projected onto their plane.
@@ -372,65 +419,146 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 /// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
 /// its reference box and the art's seed (a random Transform moves the pieces together). Images and
 /// symbol instances follow a Transform effect the same way ([`transform_placed`]); other geometry
-/// effects leave them as they are (a raster follows a non-affine map only as a mesh warp).
+/// effects leave them as they are (a raster follows a non-affine map only as a mesh warp). The
+/// paths keep to one [`Budget::EFFECTS`] together (or to what they cost, when that is more): a path
+/// whose effect would pass what the others leave of it keeps its shape.
 pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
+    reshape_leaves_within(art, fx, Budget::EFFECTS);
+}
+
+/// [`reshape_leaves`] whose paths keep to `budget` together, or to what they cost.
+pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget) {
+    if fx.is_empty() {
+        return;
+    }
     let seed = art.id.0;
     // The placed gradients of type's outlines in `art` (`outline_text`) move and scale with the
     // pieces, from the outlines' bounds before the effects to their bounds after them.
     let mut outlines = vec![];
     type_outline_bounds(art, &mut outlines);
+    let mut used = art_cost(art);
+    let max = budget.at_least(used);
     for e in fx {
         let Some(bounds) = art.geometric_bounds() else { break };
         let params = merged_params(&e.id, &e.params);
-        let transform = (e.id == "distort.transform").then(|| crate::distort::transform_map(bounds, &params, seed));
+        let transform = (e.id == "distort.transform").then(|| {
+            let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
+            let options = crate::distort::TransformOptions::of(&params);
+            (m, copies, options, crate::distort::transform_affine(bounds, &params, seed))
+        });
         for_each_leaf(art, &mut |leaf| {
             let Some((path, rule)) = leaf_geometry(leaf) else { return };
-            // A gradient paints each copy by itself, not the one piece the copies make together.
-            if let Some((m, copies)) = transform
-                && copies > 0
-                && (leaf.appearance.has_unplaced_gradient() || leaf.appearance.has_placed_gradient())
-            {
-                copy_with_gradients(leaf, &path, m, copies);
-                return;
+            // What the other paths leave of the budget.
+            let before = Budget::of(&path);
+            let room = max.minus(used.minus(before));
+            if let Some((m, copies, options, map)) = transform {
+                // Transform Patterns and Scale Strokes & Effects change each copy's fills and
+                // strokes; a gradient paints each copy by itself, not the one piece the copies
+                // make together.
+                let gradient = copies > 0 && (leaf.appearance.has_unplaced_gradient() || leaf.appearance.has_placed_gradient());
+                if options.reach_appearance() {
+                    let made = transform_leaf(leaf, &path, map, copies, options, room);
+                    used = used.minus(before).plus(made);
+                    return;
+                }
+                if gradient {
+                    let made = copy_leaf(leaf, &path, m, copies, vectorcraft_doc::Scaling::default(), room);
+                    used = used.minus(before).plus(made);
+                    return;
+                }
             }
-            let out = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) });
+            let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) }, room) else { return };
+            used = used.minus(before).plus(Budget::of(&out));
             set_geometry(leaf, out, rule);
         });
-        if let Some((m, copies)) = transform {
+        if let Some((m, copies, options, _)) = transform
+            && options.objects
+        {
             transform_placed(art, m, copies);
         }
     }
-    if !fx.is_empty() && outlines.iter().any(Option::is_some) {
+    if outlines.iter().any(Option::is_some) {
         rebase_type_outlines(art, &mut outlines.into_iter());
     }
 }
 
+/// Largest factor a Transform effect's Scale Strokes & Effects scales one object's strokes by
+/// (its copies stop before one would take more), so stroke weights stay finite where the geometry
+/// doesn't grow with them (a horizontal line stretched vertically).
+const MAX_STROKE_SCALE: f64 = 1.0e6;
+
+/// A Transform effect whose Transform Patterns or Scale Strokes & Effects is on (`options`), with
+/// map `m` and `copies`, applied to `leaf` (a path or compound path with geometry `path`) as Object
+/// › Transform with those options transforms an object (#885): the strokes' weights and dashes
+/// and the distances of the effects on its fills and strokes scale by `m`'s mean scale, and its
+/// pattern paints transform by `m`. With copies, the original keeps them and copy `k` takes them
+/// `k` times, each copy an object of its own ([`copy_leaf`], within `budget`). With Transform
+/// Objects off the geometry stays and the options apply once. Returns what the leaf costs after.
+fn transform_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, options: crate::distort::TransformOptions, budget: Budget) -> Budget {
+    let scaling = vectorcraft_doc::Scaling {
+        strokes: options.strokes,
+        effects: options.strokes.then_some(crate::scale_effect as fn(&mut Effect, f64)),
+        patterns: options.patterns,
+        ..Default::default()
+    };
+    if !options.objects {
+        if options.strokes
+            && let Some(k) = vectorcraft_doc::Scaling::factor(m).filter(|k| k.is_finite() && *k > 0.0)
+        {
+            leaf.appearance.scale_strokes(k);
+            leaf.appearance.scale_effects(k, crate::scale_effect);
+        }
+        if options.patterns {
+            vectorcraft_doc::pattern::transform_pattern_paints(leaf, m);
+        }
+        return Budget::of(path);
+    }
+    if copies == 0 {
+        // A path scaled up is drawn with more lines; past the budget it keeps its shape.
+        let moved = path.transformed(m);
+        if !budget.fits(Budget::of(&moved)) {
+            return Budget::of(path);
+        }
+        leaf.transform(m, scaling);
+        return Budget::of(&moved);
+    }
+    copy_leaf(leaf, path, m, copies, scaling, budget)
+}
+
 /// Replace `leaf` (a path or compound path with geometry `path`) by a group of it and `copies`
-/// more, each mapped once more by `m` than the last, as a Transform effect copies an object. Each
-/// copy is an object of its own, so its gradients fit it (a placed gradient moves with it) rather
-/// than spanning every copy. The copies stop where [`crate::distort::transform_within`]'s would.
-fn copy_with_gradients(leaf: &mut Node, path: &PathData, m: Affine, copies: usize) {
-    let each = path.anchor_count();
-    let mut anchors = each;
+/// more, each mapped once more by `m` than the last (with `scaling`), as a Transform effect copies
+/// an object. Each copy is an object of its own, so its gradients fit it (a placed gradient moves
+/// with it) rather than spanning every copy, and its strokes and patterns can differ from the
+/// others'. The copies stop where [`crate::distort::transform_within`]'s would, before they pass
+/// `budget`, and before one's strokes would scale past [`MAX_STROKE_SCALE`]. Returns what the
+/// copies cost, the original included.
+fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
+    let mut made = Budget::of(path);
     let mut placements: Vec<Arc<Node>> = vec![Arc::new(leaf.clone())];
     let mut xf = Affine::IDENTITY;
     for _ in 0..copies {
-        anchors = anchors.saturating_add(each);
-        if anchors > crate::distort::MAX_COPY_ANCHORS {
+        xf *= m;
+        // A copy scaled up is drawn with more lines.
+        let cost = Budget::of(&path.transformed(xf));
+        if !budget.fits(made.plus(cost)) {
             break;
         }
-        xf *= m;
+        if scaling.strokes && vectorcraft_doc::Scaling::factor(xf).is_some_and(|k| !(k.is_finite() && k <= MAX_STROKE_SCALE)) {
+            break;
+        }
         let mut copy = leaf.clone();
-        copy.transform(xf, vectorcraft_doc::Scaling::default());
+        copy.transform(xf, scaling);
         if !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
             break;
         }
         placements.push(Arc::new(copy));
+        made = made.plus(cost);
     }
     // The copies become nodes of their own under a group with the object's id and name.
     let mut g = Node::group(leaf.id, placements);
     g.name = leaf.name.clone();
     *leaf = g;
+    made
 }
 
 /// The bounds of each group of type's outlines under `n` ([`outline_text`]), `n` included, in
@@ -577,9 +705,8 @@ fn placed_count(n: &Node) -> usize {
 
 /// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on
 /// it reach every member.
-pub(crate) fn outlined_members(n: &Node) -> Node {
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-    let mut art = vectorcraft_doc::live::expand_deep(n, Some(hook));
+pub(crate) fn outlined_members(doc: Option<&Document>, n: &Node) -> Node {
+    let mut art = evaluated(doc, n);
     outline_nested_text(&mut art, false);
     art
 }
@@ -594,6 +721,18 @@ fn for_each_leaf(n: &mut Node, f: &mut dyn FnMut(&mut Node)) {
             }
         }
         _ => {}
+    }
+}
+
+/// What the paths under `n` that [`for_each_leaf`] visits cost together, as [`leaf_geometry`]
+/// gives them.
+fn art_cost(n: &Node) -> Budget {
+    let none = Budget { anchors: 0, lines: 0 };
+    match &n.kind {
+        NodeKind::Path { guide: false, path, .. } => Budget::of(path),
+        NodeKind::Compound { children, .. } => children.iter().filter_map(|c| c.path_data()).map(Budget::of).fold(none, Budget::plus),
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().map(|c| art_cost(c)).fold(none, Budget::plus),
+        _ => none,
     }
 }
 

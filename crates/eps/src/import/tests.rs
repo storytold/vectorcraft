@@ -324,6 +324,36 @@ fn shadings_become_gradients() {
     assert!(near(stops[1].1.to_rgb(), blue.to_rgb()), "{stops:?}");
 }
 
+/// #3585: arithmetic that overflows to infinity or NaN is an `undefinedresult` error, so a
+/// non-finite number never reaches a shading function's `Domain` (where it used to panic).
+#[test]
+fn non_finite_arithmetic_is_undefinedresult() {
+    let errs = |body: &str| {
+        let r = read(&format!("0 0 10 10 rectfill {body}"));
+        assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
+        r.warnings.iter().any(|w| w.contains("undefinedresult"))
+    };
+    for body in [
+        "1.7e308 1.7e308 add pop",
+        "-1.7e308 1.7e308 sub pop",
+        "1e300 1e300 mul pop",
+        "-1 ln pop",
+        "0 ln pop",
+        "-1 log pop",
+        "-1 sqrt pop",
+        "10 400 exp pop",
+    ] {
+        assert!(errs(body), "{body}");
+    }
+    let axial =
+        "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function << /FunctionType 2 /Domain [n n] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >>";
+    assert!(errs(&format!("/n 1e300 1e300 mul dup sub def 0 0 100 100 rectclip {axial} shfill")));
+    // A sampled function with a Size below 1 is a rangecheck, not a panic.
+    let sampled = "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function << /FunctionType 0 /Domain [0 1] /Range [0 1 0 1 0 1] /Size [0.5] /BitsPerSample 8 /DataSource (abc) >> >>";
+    let r = read(&format!("0 0 10 10 rectfill gsave 0 0 100 100 rectclip {sampled} shfill grestore"));
+    assert!(!objects(&r.document).is_empty(), "{:?}", r.warnings);
+}
+
 /// Tiling patterns and spot inks are found again through a hash of what tells them apart, so a
 /// program that makes 200,000 patterns and 200,001 inks reads within [`read_soon`]'s 20 seconds.
 /// Patterns are named Pattern 1, Pattern 2 and so on in the order they are made. A pattern made
@@ -568,6 +598,7 @@ fn rich_doc() -> Document {
         xf: Affine::new([10.0, 0.0, 0.0, 10.0, 110.0, 110.0]),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     add(&mut d, n);
@@ -631,6 +662,46 @@ fn blue(body: &str) {
 /// Check that PostScript `cond` leaves `true`.
 pub(super) fn check(cond: &str) {
     blue(&format!("{cond} {{ 0 0 1 setrgbcolor }} {{ 1 0 0 setrgbcolor }} ifelse"));
+}
+
+/// #3547: a line before counted metadata ends in CR/LF. Leaving LF unread shifts the
+/// metadata by one byte and makes its final `>` look like PostScript instead of data.
+#[test]
+fn readline_keeps_counted_metadata_aligned_for_every_line_ending() {
+    let tiff = crate::tiff::encode(&Raster { width: 4, height: 4, rgba: [0, 128, 0, 255].repeat(16) }, false, false).unwrap();
+    for eol in ["\n", "\r", "\r\n"] {
+        let ps = eps(&format!(
+            "/consume {{ currentfile 80 string readline pop pop currentfile 4 string readstring pop pop }} bind def\n\
+             consume\nheader{eol}<x/>\n0 0 1 setrgbcolor 10 20 30 40 rectfill"
+        ));
+        for bytes in [ps.clone(), crate::dos_eps(&ps, &tiff).unwrap()] {
+            let r = import(&bytes).unwrap();
+            assert!(!r.preview, "valid art must not become the low-resolution TIFF preview");
+            assert!(r.warnings.is_empty(), "{eol:?}: {:?}", r.warnings);
+            let art = objects(&r.document);
+            assert_eq!(art.len(), 1);
+            assert!(matches!(art[0].kind, NodeKind::Path { .. }));
+            assert_eq!(fill(&art[0]), Some(&Paint::solid(Color::rgb(0.0, 0.0, 1.0))));
+        }
+    }
+}
+
+/// CR/LF is one terminator in buffered and decoded streams too; lone CR never consumes
+/// the next payload byte, EOF is safe, and ordinary `readstring` preserves binary CR/LF.
+#[test]
+fn readline_streams_preserve_the_next_payload_byte() {
+    for eol in ["\n", "\r", "\r\n"] {
+        let bytes = format!("header{eol}XY");
+        let hex: String = bytes.bytes().map(|b| format!("{b:02x}")).collect();
+        for source in [format!("<{hex}> /ReusableStreamDecode filter"), format!("({hex}>) /ASCIIHexDecode filter")] {
+            check(&format!(
+                "/f {source} def f 32 string readline exch (header) eq and \
+                 f 2 string readstring exch (XY) eq and and"
+            ));
+        }
+    }
+    check("/f <6865616465720d> /ReusableStreamDecode filter def f 32 string readline exch (header) eq and f read not and");
+    check("/f <0d0a5859> /ReusableStreamDecode filter def f 4 string readstring exch <0d0a5859> eq and");
 }
 
 #[test]
@@ -795,16 +866,24 @@ fn hostile_executable_files_and_type_loops_are_refused() {
 /// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading takes
 /// more than 20 s.
 fn read_soon(body: &str) -> crate::Imported {
+    read_within(body, 20)
+}
+
+/// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading takes
+/// more than `secs` seconds.
+fn read_within(body: &str, secs: u64) -> crate::Imported {
     let (tx, rx) = std::sync::mpsc::channel();
     let ps = eps(body);
     std::thread::spawn(move || tx.send(import(&ps)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("reading {body} did not finish")).unwrap()
+    rx.recv_timeout(std::time::Duration::from_secs(secs)).unwrap_or_else(|_| panic!("reading {body} did not finish")).unwrap()
 }
 
-/// Reads `body` after a square through [`read_soon`]: the square stays, and the program runs out
-/// of the operation budget.
+/// Reads `body` after a square: the square stays, and the program runs out of the operation
+/// budget. Running to the end of the budget can take over 20 s on a slow CI runner
+/// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
+/// limit here only catches a program that never stops.
 fn runs_out_of_budget(body: &str) {
-    let r = read_soon(&format!("0 0 10 10 rectfill {body}"));
+    let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
 }
@@ -829,7 +908,7 @@ fn paths_made_in_a_loop_run_out_of_the_budget() {
 /// A loop of operators that read or copy the whole current path or clip path runs out of the
 /// operation budget (PLRM 3rd ed., chapter 8): `pathbbox`, `clip`, `clippath`, `shfill` (which
 /// reads the clip path for the area it paints), `pathforall` (which copies the path before it runs
-/// a procedure), `gstate`, `currentgstate` and `setgstate`.
+/// a procedure) and `setgstate`. `gstate` and `currentgstate` run out of memory first.
 #[test]
 fn paths_read_or_copied_in_a_loop_run_out_of_the_budget() {
     // 10,001 elements reaching 10,000,000 points to the right: what `shfill` paints in a clip of
@@ -843,8 +922,6 @@ fn paths_read_or_copied_in_a_loop_run_out_of_the_budget() {
         "clip newpath { clippath } loop",
         "clip newpath { sh shfill } loop",
         "{ { pop pop exit } { } { } { } pathforall } loop",
-        "{ gstate pop } loop",
-        "/g gstate def { g currentgstate pop } loop",
         "/g gstate def { g setgstate } loop",
     ] {
         runs_out_of_budget(&format!("{sh} {path} {body}"));
@@ -1050,5 +1127,56 @@ fn a_damaged_palette_preview_is_refused_without_panicking() {
     for t in [&tiff[..tiff.len() / 2], b"II*\0garbage", &[0; 64]] {
         let e = import(&crate::dos_eps(&ps, t).unwrap()).unwrap_err();
         assert!(e.contains("can't be read"), "{e}");
+    }
+}
+
+/// #3582: `search` in a loop on multi-megabyte strings, with a needle half as
+/// long as the string that differs in its last byte, finish quickly and run out of the operation
+/// budget.
+#[test]
+fn search_in_a_loop_runs_out_of_the_budget() {
+    let make = "/h 4194304 string def /n 2097152 string def n 2097152 1 sub 1 put";
+    runs_out_of_budget(&format!("{make} {{ h n search {{ pop pop pop }} {{ pop }} ifelse }} loop"));
+}
+
+/// #3568: an image dictionary with more data sources than colour components is a `rangecheck`.
+#[test]
+fn an_image_with_more_data_sources_than_components_is_refused() {
+    let sources = "<80> ".repeat(64);
+    let e = import(&eps(&format!(
+        "/DeviceGray setcolorspace << /ImageType 1 /Width 64 /Height 64 /BitsPerComponent 8 /MultipleDataSources true \
+         /ImageMatrix [64 0 0 64 0 0] /DataSource [{sources}] >> image"
+    )))
+    .unwrap_err();
+    assert!(e.contains("rangecheck") && e.contains("DataSource"), "{e}");
+}
+
+/// #3568: every data source's plane is charged against the memory budget, not only the RGBA
+/// output: two large four-source images together go over it.
+#[test]
+fn the_planes_of_multi_source_images_are_charged() {
+    let image = "/DeviceCMYK setcolorspace << /ImageType 1 /Width 8192 /Height 8192 /BitsPerComponent 8 \
+                 /MultipleDataSources true /ImageMatrix [8192 0 0 8192 0 0] /DataSource [<80> <80> <80> <80>] >> image\n";
+    let r = import(&eps(&image.repeat(2))).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+}
+
+/// #3568: a single sample plane over the data limit is refused.
+#[test]
+fn an_oversized_image_plane_is_refused() {
+    let e = import(&eps("/DeviceCMYK setcolorspace << /ImageType 1 /Width 8192 /Height 8192 /BitsPerComponent 16 \
+         /ImageMatrix [8192 0 0 8192 0 0] /DataSource <80> >> image"))
+    .unwrap_err();
+    assert!(e.contains("too large"), "{e}");
+}
+
+/// Graphics states kept with `gstate` or `currentgstate` each hold a copy of the current path, and
+/// the copies count against the memory budget as `gsave` does.
+#[test]
+fn stored_graphics_states_use_up_the_memory_budget() {
+    let path = "newpath 0 0 moveto 0 1 1000000 { pop 1 0 rlineto } for";
+    for body in ["30 { gstate } repeat", "30 { 0 currentgstate } repeat"] {
+        let r = read_soon(&format!("0 0 10 10 rectfill {path} {body}"));
+        assert!(r.warnings.iter().any(|w| w.contains("uses too much memory")), "{body}: {:?}", r.warnings);
     }
 }

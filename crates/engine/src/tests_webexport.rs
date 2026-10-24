@@ -343,6 +343,28 @@ fn an_export_says_when_an_image_could_not_be_decoded() {
 }
 
 #[test]
+fn explicit_artboards_and_unclipped_art_keep_their_pixels_and_dimensions() {
+    let mut s = session(60.0, 40.0);
+    rect(&mut s, [0.0, 0.0, 60.0, 40.0], "#ff0000");
+    run(&mut s, "artboard.new", json!({"x": 100, "y": 0, "width": 32, "height": 24}));
+    rect(&mut s, [100.0, 0.0, 32.0, 24.0], "#0000ff");
+    for (params, size, color) in [
+        (json!({"format": "png24", "artboard": 0}), (60, 40), [255, 0, 0, 255]),
+        (json!({"format": "png24", "artboard": 1}), (32, 24), [0, 0, 255, 255]),
+        (json!({"format": "png24"}), (60, 40), [255, 0, 0, 255]),
+    ] {
+        let image = pixels(&one(&mut s, params));
+        assert_eq!(image.dimensions(), size);
+        assert_eq!(image.get_pixel(8, 8).0, color);
+    }
+    let full = pixels(&one(&mut s, json!({"format": "png24", "artboard": 1, "clipToArtboard": false})));
+    assert_eq!(full.dimensions(), (132, 40));
+    assert_eq!(full.get_pixel(8, 8).0, [255, 0, 0, 255]);
+    assert_eq!(full.get_pixel(108, 8).0, [0, 0, 255, 255]);
+    assert_eq!(full.get_pixel(80, 8).0, [0, 0, 0, 0]);
+}
+
+#[test]
 fn image_size_region_and_metadata() {
     let mut s = two_colours();
     let size = |s: &mut Session, p: Value| pixels(&one(s, p)).dimensions();

@@ -2,8 +2,8 @@
 //! Poster Edges, Rough Pastels, Smudge Stick, Sponge and Watercolor, Blur › Radial Blur and Smart Blur, Brush Strokes › Accented Edges, Angled Strokes,
 //! Crosshatch, Dark Strokes, Ink Outlines, Spatter, Sprayed Strokes and Sumi-e, Distort › Diffuse
 //! Glow, Glass and Ocean Ripple, Pixelate › Color Halftone, Crystallize, Mezzotint and Pointillize,
-//! Sharpen › Unsharp Mask, Sketch › Bas Relief, Chalk & Charcoal, Charcoal, Graphic Pen, Halftone Pattern, Note Paper, Photocopy, Plaster,
-//! Reticulation, Stamp and Torn Edges, Stylize ›
+//! Sharpen › Unsharp Mask, Sketch › Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Graphic Pen, Halftone Pattern,
+//! Note Paper, Photocopy, Plaster, Reticulation, Stamp, Torn Edges and Water Paper, Stylize ›
 //! Glowing Edges, Texture
 //! › Craquelure, Grain, Mosaic Tiles, Patchwork, Stained Glass and Texturizer, and Video ›
 //! De-Interlace and NTSC Colors): filters over premultiplied RGBA8 pixels.
@@ -44,7 +44,7 @@ pub use sketch::{HALFTONE_TYPES, HalftonePattern};
 pub use texture::{GRAIN_TYPES, Grain, LIGHT_DIRECTIONS, Light, TEXTURES, TEXTURES_LOADED, Texture};
 
 /// The Photoshop-style effect ids (all raster effects, see [`crate::is_raster`]).
-pub const PIXEL_EFFECTS: [&str; 55] = [
+pub const PIXEL_EFFECTS: [&str; 56] = [
     "artistic.coloredPencil",
     "artistic.cutout",
     "artistic.dryBrush",
@@ -82,6 +82,7 @@ pub const PIXEL_EFFECTS: [&str; 55] = [
     "sketch.chalkCharcoal",
     "sketch.charcoal",
     "sketch.chrome",
+    "sketch.conteCrayon",
     "sketch.graphicPen",
     "sketch.halftonePattern",
     "sketch.notePaper",
@@ -210,6 +211,11 @@ pub enum PixelFx {
     ChalkCharcoal { chalk: f64, charcoal: f64, pressure: f64 },
     /// Sketch › Chrome: polished chrome relief with `detail` (0..10) and `smoothness` (0..10).
     Chrome { detail: f64, smoothness: f64 },
+    /// Sketch › Conté Crayon: dark areas in a black crayon, light areas in a white one, on mid-grey
+    /// paper; `foreground` and `background` (0..20) set how far each crayon reaches into the
+    /// midtones, and the paper is a `texture` surface scaled by `scaling` (0.5..2), in relief as
+    /// strong as `relief` (0..50), lit from `light`, its heights turned over when `invert`.
+    ConteCrayon { foreground: f64, background: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
     /// Sketch › Graphic Pen: fine linear ink strokes along `dir`, each `length` (1..15) points long
     /// on white paper; `balance` (0..100) sets how much of the tone range becomes black ink.
     GraphicPen { length: f64, balance: f64, direction: StrokeDirection },
@@ -483,6 +489,15 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             pressure: num(p, "strokePressure", 2.0).clamp(0.0, 5.0),
         },
         "sketch.chrome" => PixelFx::Chrome { detail: num(p, "detail", 4.0).clamp(0.0, 10.0), smoothness: num(p, "smoothness", 4.0).clamp(0.0, 10.0) },
+        "sketch.conteCrayon" => PixelFx::ConteCrayon {
+            foreground: num(p, "foregroundLevel", 12.0).clamp(0.0, 20.0),
+            background: num(p, "backgroundLevel", 10.0).clamp(0.0, 20.0),
+            texture: Texture::parse(text(p, "texture", "canvas")),
+            scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
+            relief: num(p, "relief", 4.0).clamp(0.0, 50.0),
+            light: Light::parse(text(p, "lightDirection", "top")),
+            invert: flag(p, "invert", false),
+        },
         "sketch.graphicPen" => PixelFx::GraphicPen {
             length: num(p, "strokeLength", 5.0).clamp(1.0, 15.0),
             balance: num(p, "lightDarkBalance", 50.0).clamp(0.0, 100.0),
@@ -617,6 +632,7 @@ impl PixelFx {
             PixelFx::UnsharpMask { .. }
             | PixelFx::ChalkCharcoal { .. }
             | PixelFx::Chrome { .. }
+            | PixelFx::ConteCrayon { .. }
             | PixelFx::HalftonePattern { .. }
             | PixelFx::NotePaper { .. }
             | PixelFx::Plaster { .. }
@@ -692,6 +708,7 @@ impl PixelFx {
             PixelFx::ColoredPencil { width, .. } => Some(artistic::colored_pencil_reach(width)),
             PixelFx::ChalkCharcoal { .. } => Some(sketch::CHALK_CHARCOAL_REACH),
             PixelFx::Chrome { smoothness, .. } => Some(sketch::chrome_reach(smoothness)),
+            PixelFx::ConteCrayon { .. } => Some(sketch::CONTE_REACH),
             PixelFx::FilmGrain { .. }
             | PixelFx::Mezzotint { .. }
             | PixelFx::HalftonePattern { .. }
@@ -778,6 +795,9 @@ impl PixelFx {
             PixelFx::UnsharpMask { amount, radius, threshold } => sharpen::unsharp(px, w, h, amount, to_px(radius), threshold),
             PixelFx::ChalkCharcoal { chalk, charcoal, pressure } => sketch::chalk_charcoal(px, w, h, space, chalk, charcoal, pressure),
             PixelFx::Chrome { detail, smoothness } => sketch::chrome(px, w, h, space, detail, smoothness),
+            PixelFx::ConteCrayon { foreground, background, ref texture, scaling, relief, light, invert } => {
+                sketch::conte_crayon(px, w, h, space, foreground, background, texture, scaling, relief, light, invert)
+            }
             PixelFx::GraphicPen { length, balance, direction } => brushstrokes::graphic_pen(px, w, h, space, length, balance, direction),
             PixelFx::HalftonePattern { size, contrast, kind } => sketch::halftone_pattern(px, w, h, space, size, contrast, kind),
             PixelFx::NotePaper { balance, graininess, relief } => sketch::note_paper(px, w, h, space, balance, graininess, relief),
@@ -912,19 +932,38 @@ pub fn dilate_plane(a: &mut Vec<f32>, w: usize, h: usize, radius: f64) {
 /// One horizontal pass of [`dilate_plane`] over the rows of `w` values of a plane: the largest
 /// value within `whole`, blended by `frac` towards the largest within `whole + 1`.
 fn max_plane(src: &[f32], dst: &mut [f32], w: usize, whole: usize, frac: f32) {
+    let (mut inner, mut ring) = (vec![0.0f32; w], vec![0.0f32; w]);
     for (row, out) in src.chunks_exact(w).zip(dst.chunks_exact_mut(w)) {
-        for (x, o) in out.iter_mut().enumerate() {
-            let lo = x.saturating_sub(whole + 1);
-            let hi = (x + whole + 1).min(w - 1);
-            let (mut inner, mut ring) = (row[x], row[x]);
-            for (j, v) in row[lo..=hi].iter().enumerate() {
-                if (lo + j).abs_diff(x) <= whole {
-                    inner = inner.max(*v);
-                }
-                ring = ring.max(*v);
-            }
-            *o = inner + (ring - inner) * frac;
+        window_max(row, whole, &mut inner);
+        window_max(row, whole + 1, &mut ring);
+        for ((o, i), r) in out.iter_mut().zip(&inner).zip(&ring) {
+            *o = i + (r - i) * frac;
         }
+    }
+}
+
+/// For each `x`, the largest of `row[x - radius..=x + radius]` (cut at the row's ends) into `out`,
+/// in time linear in the row (a sliding window, not a scan of the window for each `x`).
+fn window_max(row: &[f32], radius: usize, out: &mut [f32]) {
+    use std::collections::VecDeque;
+    // Indices of the window's values that can still be its largest, falling in value.
+    let mut keep: VecDeque<usize> = VecDeque::new();
+    let mut next = 0;
+    for (x, o) in out.iter_mut().enumerate().take(row.len()) {
+        let hi = x.saturating_add(radius).min(row.len().saturating_sub(1));
+        while next <= hi {
+            let v = row[next];
+            while keep.back().is_some_and(|&b| row[b] <= v) {
+                keep.pop_back();
+            }
+            keep.push_back(next);
+            next += 1;
+        }
+        let lo = x.saturating_sub(radius);
+        while keep.front().is_some_and(|&f| f < lo) {
+            keep.pop_front();
+        }
+        *o = keep.front().map_or(row[x], |&f| row[f]);
     }
 }
 
@@ -1041,3 +1080,22 @@ mod tests;
 mod tests_paint;
 #[cfg(test)]
 mod tests_sketch;
+
+#[cfg(test)]
+mod window_max_tests {
+    use super::window_max;
+
+    #[test]
+    fn the_sliding_maximum_matches_a_scan_of_each_window() {
+        let row: Vec<f32> = (0..40u32).map(|i| ((i * 7919) % 31) as f32).collect();
+        for radius in [0, 1, 2, 5, 39, 100] {
+            let mut out = vec![0.0; row.len()];
+            window_max(&row, radius, &mut out);
+            for (x, got) in out.iter().enumerate() {
+                let (lo, hi) = (x.saturating_sub(radius), (x + radius).min(row.len() - 1));
+                let want = row[lo..=hi].iter().copied().fold(f32::MIN, f32::max);
+                assert_eq!(*got, want, "radius {radius} at {x}");
+            }
+        }
+    }
+}

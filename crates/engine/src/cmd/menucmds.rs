@@ -353,6 +353,7 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let random = switch_or(p, "random", false, "object.transformEach")?;
     let refi = whole_or(p, "reference", 4, "object.transformEach")?.min(8) as usize;
     let copy = switch_or(p, "copy", false, "object.transformEach")?;
+    check_switches(p, &["strokes", "corners", "objects", "patterns"], "object.transformEach")?;
     let objects = super::object::transforms_objects(p);
     if sh == 0.0 || sv == 0.0 {
         return Err(bad("object.transformEach", "scale must be non-zero"));
@@ -468,7 +469,7 @@ impl Rasterized {
         let key = unique_key(d, "raster");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", self.png));
         let id = d.alloc_id();
-        let image = ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default() };
+        let image = ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default(), pixels: None };
         let node = Node::new(id, NodeKind::Image(Box::new(image)));
         match self.clip {
             Some((path, rule)) => super::rasterfx::clip_group(d, path, rule, node),
@@ -720,6 +721,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
                 xf: Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             }));
         }
         Ok(())
@@ -787,6 +789,7 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
                 xf: im.xf * Affine::translate((f64::from(x0), f64::from(y0))),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             }));
         }
         Ok(())
@@ -966,14 +969,18 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
             if b.width() <= 0.0 || b.height() <= 0.0 {
                 continue;
             }
+            // Named one past the highest artboard id the document has, whatever id it is given.
+            let number = d.artboards.iter().map(|a| a.id).max().map_or(1, |m| m.saturating_add(1));
             let aid = d.next_artboard_id();
             d.artboards.push(vectorcraft_doc::Artboard {
                 id: aid,
-                name: format!("Artboard {aid}"),
+                name: format!("Artboard {number}"),
                 rect: b,
                 locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                show_video_safe_areas: false,
+                video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
             });
             converted.push(id);
@@ -1018,6 +1025,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["spacing"], CMD)?;
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
+    check_switches(p, &["patterns"], CMD)?;
     let locked_and_hidden = s.prefs.move_locked_with_artboard;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();

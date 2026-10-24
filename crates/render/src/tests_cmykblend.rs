@@ -154,7 +154,7 @@ fn busy_page() -> Document {
     shadowed.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
     add(&mut d, shadowed);
     let stops = vec![GradientStop::new(0.0, CYAN), GradientStop { opacity: 0.3, ..GradientStop::new(1.0, MAGENTA) }];
-    let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+    let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
     let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 90.0, 120.0, 130.0)), Appearance::basic(ramp, Paint::None, 0.0));
     add(&mut d, n);
     let mut over = rect(&mut d, Rect::new(100.0, 80.0, 160.0, 120.0), Color::cmyk(0.0, 0.0, 1.0, 0.0));
@@ -222,6 +222,7 @@ fn placed_images_are_separated_not_blackened() {
             xf: Affine::IDENTITY,
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     add(&mut d, n);
@@ -256,7 +257,7 @@ fn rich_black_shows_black_ink_alone_as_rgb_black() {
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
-    let im = ImageObject { key: "red".into(), width: 20, height: 20, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+    let im = ImageObject { key: "red".into(), width: 20, height: 20, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     add(&mut d, n);
     assert_eq!(centre_with(&d, true), centre_with(&d, false), "an image shows as it is");

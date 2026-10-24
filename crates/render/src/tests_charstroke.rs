@@ -7,6 +7,7 @@ use vectorcraft_doc::{AppearanceItem, Dash, LineJoin, Node, NodeKind};
 use vectorcraft_geom::Point;
 
 use super::*;
+use crate::tests_fontchange::fonts_steady;
 
 const SIZE: u32 = 200;
 
@@ -102,4 +103,87 @@ fn aligned_character_strokes_keep_to_their_side_of_the_glyphs() {
     let mid = ((glyph.0 + glyph.2) / 2, (glyph.1 + glyph.3) / 2);
     assert!(!dark(&outside, mid.0, mid.1), "an outside stroke leaves the glyph itself unpainted");
     assert!(dark(&inside, mid.0, mid.1), "an inside stroke paints into the glyph");
+}
+
+/// A document with 60 pt `text` without a fill and with a 1 pt character stroke, and the type's id.
+fn stroked_text_doc(text: &str) -> (Document, NodeId) {
+    let mut d = Document::new(SIZE as f64, SIZE as f64);
+    let style = CharStyle { size: 60.0, fill: Paint::None, stroke: Paint::solid(Color::BLACK), stroke_width: 1.0, ..Default::default() };
+    let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 120.0), text, style))));
+    n.id = d.alloc_id();
+    let id = n.id;
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    (d, id)
+}
+
+/// The character stroke outlines that `r` keeps and that its last frame made or used.
+fn character_outlines(r: &Renderer) -> Vec<Arc<BezPath>> {
+    r.char_strokes.used_in(r.stamp).map(|(_, outline)| outline.clone()).collect()
+}
+
+/// The outlines of type that changes in every frame (an animation) go within a few frames: the
+/// renderer keeps no more than the last few frames' strokes, however long it runs.
+#[test]
+fn the_character_strokes_of_type_that_changes_in_every_frame_go() {
+    let _fonts = fonts_steady();
+    let (mut d, id) = stroked_text_doc("Type");
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    for i in 0..40 {
+        if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+            t.xf = Affine::translate((f64::from(i), 0.0));
+        }
+        r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    }
+    assert!(r.char_strokes.len() <= 4, "{} outlines kept", r.char_strokes.len());
+}
+
+/// A character stroke is expanded once: the next frame of the same view draws the outline the
+/// first made. A change of the zoom level or of the text expands it again.
+#[test]
+fn character_stroke_outlines_are_kept_between_frames() {
+    let _fonts = fonts_steady();
+    let (mut d, id) = stroked_text_doc("Type");
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let first = character_outlines(&r);
+    assert_eq!(first.len(), 1, "the outline of the one run's stroke");
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let again = character_outlines(&r);
+    assert!(again.len() == 1 && Arc::ptr_eq(&again[0], &first[0]), "the second frame draws the outline the first made");
+    r.render(&d, SIZE, SIZE, Affine::translate((-40.0, -300.0)) * Affine::scale(4.0), &opts);
+    let zoomed = character_outlines(&r);
+    assert!(zoomed.len() == 1 && !Arc::ptr_eq(&zoomed[0], &first[0]), "zoomed in 4×, it is expanded again");
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.runs[0].text = "Typo".into();
+    }
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let changed = character_outlines(&r);
+    assert!(changed.len() == 1 && !Arc::ptr_eq(&changed[0], &first[0]), "the changed text is expanded again");
+}
+
+/// Frames that draw character strokes from the cache draw the same pixels, and what a renderer
+/// draws whose glyph cache has no room, so that it expands them in every frame: exactly at 100%,
+/// where both take a tolerance of 1/4 device pixel, and within antialiasing at 105% and 150%,
+/// where the cache takes 1/8 device pixel and the frames without it about 1/4 and 1/6.
+#[test]
+fn cached_character_strokes_draw_what_uncached_ones_draw() {
+    let _fonts = fonts_steady();
+    let (d, _) = stroked_text_doc("Type");
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    for (zoom, most) in [(1.0, 0), (1.05, 24), (1.5, 24)] {
+        let view = Affine::scale(zoom);
+        let mut r = Renderer::new();
+        let first = r.render(&d, SIZE, SIZE, view, &opts).pixels;
+        assert!(r.render(&d, SIZE, SIZE, view, &opts).pixels == first, "{zoom}×: the cached frames match");
+        let mut uncached = Renderer::new();
+        uncached.texts = FrameCache::new(0, 0);
+        let plain = uncached.render(&d, SIZE, SIZE, view, &opts).pixels;
+        assert!(character_outlines(&uncached).is_empty());
+        let diff = first.iter().zip(&plain).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        assert!(diff <= most, "{zoom}×: cached and uncached frames differ by {diff}");
+        assert!(plain.iter().any(|&c| c < 128), "{zoom}×: the strokes show");
+    }
 }

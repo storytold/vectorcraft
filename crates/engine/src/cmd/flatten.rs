@@ -11,7 +11,8 @@
 //! effects reach there is no single colour: those regions are rendered into one image per group,
 //! clipped to them with Clip Complex Regions (else the image is a rectangle that takes in the
 //! regions it overlaps). The raster/vector balance rasterizes whole groups that split into more
-//! regions than it allows (all of them at 0).
+//! regions than it allows (all of them at 0). For files without transparency (PDF/X-1a, PDF/X-3)
+//! a CMYK document's images are opaque CMYK: its colours keep their inks there too.
 //!
 //! Edit → Transparency Flattener Presets: the built-in presets plus the user's, saved with the
 //! preferences ([`crate::Prefs::flattener_presets`]); a `preset` named anywhere options are taken
@@ -28,6 +29,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::blend::{cmyk_planes, composite, planes_cmyk};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer};
+use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{Appearance, ColorMode, Document, Effect, ImageBlob, ImageObject, Knockout, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 use vectorcraft_pathops as po;
@@ -45,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flatten Transparency…",
             ["Object"],
             None,
-            "{preset?: \"high\"|\"medium\"|\"low\" or a saved preset's name (see flattener.presets.list; default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?|id?} overlapping transparent objects become one group of flat-colour regions (CMYK colours composited ink by ink in CMYK documents), plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{preset?: \"high\"|\"medium\"|\"low\" or a saved preset's name (see flattener.presets.list; default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?|id?} overlapping transparent objects become one group of flat-colour regions (CMYK colours composited ink by ink in CMYK documents), plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay; a frame of threaded text that is outlined or flattened leaves its thread with the text it shows → {ids, rasterized: images made, vector: regions made, options, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             has_doc,
             flatten
         ),
@@ -132,8 +134,8 @@ pub struct FlattenOptions {
     pub preserve_overprints: bool,
     /// Flattening for files without any transparency (PDF/X-1a, PDF/X-3): images with
     /// see-through pixels (these keys, [`see_through_images`]) count as transparency, and
-    /// rasterized areas clipped to their regions are opaque. `None` for ordinary flattening. Not a
-    /// preset option.
+    /// rasterized areas clipped to their regions are opaque (in a CMYK document, images of ink
+    /// amounts). `None` for ordinary flattening. Not a preset option.
     #[serde(skip)]
     pub no_transparency: Option<BTreeSet<String>>,
 }
@@ -266,7 +268,14 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     if plan.flat.is_empty() && !plan.kept.iter().any(|id| src.node(*id).is_some_and(|n| kept_work(n, &o))) {
         return Ok(json!({ "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": 0, "vector": 0, "options": options }));
     }
-    let (ids, vector, rasterized) = s.edit("Flatten Transparency", |d, sel| apply(d, sel, plan, &o))?;
+    let (ids, vector, rasterized) = s.edit("Flatten Transparency", |d, sel| {
+        let threaded = super::threads::frames(d);
+        let out = apply(d, sel, plan, &o)?;
+        // Frames of threaded text that were outlined or flattened leave their threads with the
+        // text they show.
+        super::threads::leave_threads(d, &threaded);
+        Ok(out)
+    })?;
     let mut out = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": rasterized, "vector": vector, "options": options });
     if let Some(w) = warning {
         out["warning"] = json!(w);
@@ -805,7 +814,7 @@ struct RegionFill {
 
 /// A rendered image of complex regions, clipped to them or not.
 struct Raster {
-    png: Vec<u8>,
+    blob: ImageBlob,
     width: u32,
     height: u32,
     xf: Affine,
@@ -945,7 +954,9 @@ fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool
 
 /// `art` rendered over `rect` at `ppi`: over white with the white the art doesn't cover taken out
 /// again (so blend modes see the white page), or over nothing with Preserve Alpha. The image and
-/// its `clip` reach a pixel further. Fails when the image can't be encoded.
+/// its `clip` reach a pixel further. An opaque image in a CMYK document holds the art's ink
+/// amounts (a CMYK TIFF), so its CMYK colours keep their numbers (#2160); other images are PNGs.
+/// Fails when the image can't be encoded.
 fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Option<PathData>, o: &FlattenOptions) -> Result<Raster> {
     let mut scale = ppi / 72.0;
     scale = scale.min((MAX_PIXELS / (rect.width() * rect.height()).max(1.0)).sqrt());
@@ -958,11 +969,26 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
         rect.x0 + (rect.width() * scale).ceil().max(1.0) / scale,
         rect.y0 + (rect.height() * scale).ceil().max(1.0) / scale,
     );
+    let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
+    let tmp = isolated_doc(doc, art.to_vec());
     let mut r = vectorcraft_render::Renderer::new();
-    let mut img = r.render_region(&isolated_doc(doc, art.to_vec()), region, scale, !o.preserve_alpha);
+    let no_alpha = o.no_transparency.is_some() && clip.is_some() && !o.preserve_alpha;
+    if no_alpha && doc.color_mode == ColorMode::Cmyk {
+        // Drawn as inks over the paper: as screen colours, the file would separate them again,
+        // and a CMYK colour comes back with other inks (K moves into C, M and Y).
+        let opts = vectorcraft_render::RenderOptions { background: Some([255; 4]), skip_templates: true, ..Default::default() };
+        let inks = r.render_region_inks(&tmp, region, scale, &opts);
+        vectorcraft_doc::cancel::check()?;
+        let (width, height) = vectorcraft_render::region_pixels(region, scale);
+        // Past the size of a CMYK image: drawn in screen colours, below.
+        if let Some(blob) = Inks::new(width, height, inks).and_then(|i| ImageBlob::cmyk_tiff(&i)) {
+            return Ok(Raster { blob, width, height, xf, clip });
+        }
+    }
+    let mut img = r.render_region(&tmp, region, scale, !o.preserve_alpha);
     // The drawing stops early when cancelled: this image is not whole.
     vectorcraft_doc::cancel::check()?;
-    if o.no_transparency.is_some() && clip.is_some() && !o.preserve_alpha {
+    if no_alpha {
         // Without transparency the clip alone shapes the image: it is opaque, over white (its
         // edge pixels too).
         for p in img.pixels.as_chunks_mut::<4>().0 {
@@ -1002,9 +1028,8 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
             }
         }
     }
-    let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let png = img.to_png().map_err(|e| EngineError::Other(format!("Flatten Transparency: {e}")))?;
-    Ok(Raster { png, width: img.width, height: img.height, xf, clip })
+    Ok(Raster { blob: ImageBlob::new("image/png", png), width: img.width, height: img.height, xf, clip })
 }
 
 /// `n` at full opacity with Normal blending throughout (objects, fills and strokes).
@@ -1115,10 +1140,18 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
 /// An image of `r` (in a clip group when it is clipped).
 fn raster_node(d: &mut Document, r: Raster) -> Node {
     let key = unique_key(d, "flattened");
-    d.images.insert(key.clone(), ImageBlob::new("image/png", r.png));
+    d.images.insert(key.clone(), r.blob);
     let image = Node::new(
         d.alloc_id(),
-        NodeKind::Image(Box::new(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None, placement: Default::default() })),
+        NodeKind::Image(Box::new(ImageObject {
+            key,
+            width: r.width,
+            height: r.height,
+            xf: r.xf,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
     );
     let Some(path) = r.clip else { return image };
     super::rasterfx::clip_group(d, path, FillRule::NonZero, image)
@@ -1208,13 +1241,14 @@ impl Scratch {
             NodeKind::Text(_) => outlined_text(n),
             NodeKind::SymbolInstance { symbol, .. } => {
                 let art = self.doc.symbols.iter().find(|s| &s.name == symbol).map(|s| vectorcraft_render::instance_art(&s.art, n));
-                art.and_then(|a| effects::outline_art(n, Some(&a))).map(|g| carry(n, g))
+                art.and_then(|a| effects::outline_art(Some(&self.doc), n, Some(&a))).map(|g| carry(n, g))
             }
             // A placed document stays one: its art's resources aren't the document's.
             NodeKind::PlacedDocument(_) => None,
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
                 let hook: &dyn Fn(&Node) -> Option<Node> = &effects::outline_text;
-                Some(carry(n, vectorcraft_doc::live::expanded_group(n, Some(hook))))
+                let hooks = vectorcraft_doc::live::Hooks { outline: Some(hook), symbols: Some(&self.doc), ..Default::default() };
+                Some(carry(n, vectorcraft_doc::live::expanded_group_hooks(n, hooks)))
             }
             NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => outline_strokes(&mut self.doc, &self.brushes, n),
             _ => None,

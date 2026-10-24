@@ -77,6 +77,8 @@ pub struct Background {
     /// Jobs in the order they were started (the worker runs them in that order).
     pub jobs: Vec<Job>,
     next_id: u64,
+    /// Work started while this is set runs at once, whatever the preferences ([`in_foreground`]).
+    foreground: bool,
 }
 
 impl Background {
@@ -159,7 +161,7 @@ pub fn run_with_progress(
     then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
     let mut work: Work = Box::new(work);
-    let shared = app.services.write_shared.clone().filter(|_| enabled && app.services.download.is_none());
+    let shared = app.services.write_shared.clone().filter(|_| enabled && !app.background.foreground && app.services.download.is_none());
     if let Some(write) = shared {
         let id = app.background.next_id;
         if let Some(tx) = app.background.worker() {
@@ -186,6 +188,18 @@ pub fn run_with_progress(
     let services = &mut app.services;
     let r = work(&mut |p: &str, b: &[u8]| crate::io::write_to(services, p, b));
     then(app, r)
+}
+
+/// Run `f` with every save and export it starts written at once, as with the preferences off, so
+/// its result is the written file or the error (a control client's `wait: true`). The jobs already
+/// running finish first, so none of them writes over its files afterwards.
+pub fn in_foreground<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp) -> T) -> T {
+    wait_all(app);
+    let was = std::mem::replace(&mut app.background.foreground, true);
+    // A panic caught further up (a control request's guard) still turns the setting back.
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(app)));
+    app.background.foreground = was;
+    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
 }
 
 /// Apply the results that arrived (each frame).

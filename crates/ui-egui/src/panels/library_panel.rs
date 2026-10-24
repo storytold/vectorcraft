@@ -1,12 +1,13 @@
-//! Library panels: read-only views of one library each (swatch and graphic style libraries; any
-//! kind of library implementing [`LibraryKind`]) with thumbnail and list views, a find field, the
-//! libraries menu and previous / next arrows. A plain click on an item adds it to the document and
-//! applies it; Shift and Cmd/Ctrl-clicks select items (and folders) for Add to ….
+//! Library panels: read-only views of one library each (swatch, graphic style and symbol
+//! libraries; any kind of library implementing [`LibraryKind`]) with thumbnail and list views, a
+//! find field, the libraries menu and previous / next arrows. A plain click on an item adds it to
+//! the document and applies it; Shift and Cmd/Ctrl-clicks select items (and folders) for Add to ….
+//! A kind whose items drag ([`LibraryKind::drag`]) lets them be dragged out of the panel.
 //!
 //! As in Illustrator (<https://helpx.adobe.com/illustrator/using/using-creating-swatches.html>,
 //! "Swatch libraries"), each open library is a panel of its own, `library:<kind>:<library id>`
 //! ([`panel_id`]), that floats, tabs, docks and closes as any panel of the shared docking system:
-//! `window.swatchLibrary` and `window.graphicStyleLibrary` open one, or bring it forward when it is
+//! `window.swatchLibrary`, `window.graphicStyleLibrary` and `window.symbolLibrary` open one, or bring it forward when it is
 //! open. `UiState::library_panels` keeps each one's view, Show Find Field and Persistent
 //! (`ui.libraryPanel`); a persistent panel reopens when the app starts ([`restore`]). A persistent
 //! panel whose library can't be found shows the library as missing, with its file and Locate
@@ -17,13 +18,15 @@ use std::sync::{Mutex, PoisonError};
 use egui::{Rect, Sense, Ui};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
+use vectorcraft_doc::style_libs::STYLES_EXT;
+use vectorcraft_engine::cmd::fileio;
+use vectorcraft_engine::cmd::swatchlib::{self, LibraryInfo};
 
 use super::swatches::{View, click_selection, folder_tile, list_row, list_row_name, tile_grid};
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::state::UiState;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, PanelDrag, menu_item};
 
 /// What every library panel's id starts with.
 pub const PREFIX: &str = "library:";
@@ -113,6 +116,10 @@ pub(crate) trait LibraryKind {
     fn click(app: &mut VectorcraftApp, ui: &Ui, id: &str, name: &str);
     /// Add the items and folders `names` of library `id` to the document.
     fn add(app: &mut VectorcraftApp, id: &str, names: Vec<String>);
+    /// What dragging item `name` of library `id` out of the panel carries, if it drags.
+    fn drag(_id: &str, _name: &str) -> Option<PanelDrag> {
+        None
+    }
     /// Items heading the libraries menu.
     fn menu_head(_app: &mut VectorcraftApp, _ui: &mut Ui) {}
     /// Items closing the libraries menu.
@@ -152,7 +159,13 @@ fn kind_of<K: LibraryKind>() -> Kind {
 
 /// The kind of library `kind` names.
 fn kind(kind: &str) -> Option<Kind> {
-    [kind_of::<super::swatches::SwatchLibraries>(), kind_of::<super::graphic_styles::GraphicStyleLibraries>()].into_iter().find(|k| k.kind == kind)
+    [
+        kind_of::<super::swatches::SwatchLibraries>(),
+        kind_of::<super::graphic_styles::GraphicStyleLibraries>(),
+        kind_of::<super::symbols::SymbolLibraries>(),
+    ]
+    .into_iter()
+    .find(|k| k.kind == kind)
 }
 
 /// The id of the panel of library `id` of `kind` (`library:swatches:pastels`).
@@ -242,9 +255,17 @@ fn missing_file(app: &VectorcraftApp, k: Kind, id: &str) -> Option<String> {
     (k.name)(app, id).is_none().then(|| s.path.clone().unwrap_or_else(|| id.to_string()))
 }
 
-/// The name of missing library `id` of `k` ([`missing_file`]): its file's name without the extension.
+/// The file of library `id` of `k` when its panel is open and the library can't be found,
+/// Persistent or not (a panel whose Persistent a command turned off stays open until [`tidy`]).
+fn open_missing_file(app: &VectorcraftApp, k: Kind, id: &str) -> Option<String> {
+    let s = settings(&app.ui, k.kind, id).filter(|_| is_open(&app.ui, &panel_id(k.kind, id)))?;
+    (k.name)(app, id).is_none().then(|| s.path.clone().unwrap_or_else(|| id.to_string()))
+}
+
+/// The name of missing library `id` of `k` ([`missing_file`], or [`open_missing_file`]): its file's
+/// name without the extension.
 fn missing_name(app: &VectorcraftApp, k: Kind, id: &str) -> Option<String> {
-    let file = missing_file(app, k, id)?;
+    let file = missing_file(app, k, id).or_else(|| open_missing_file(app, k, id))?;
     Some(std::path::Path::new(&file).file_stem().map_or_else(|| file.clone(), |s| s.to_string_lossy().into_owned()))
 }
 
@@ -391,9 +412,10 @@ pub(crate) fn library_name<'a>(id: &str, name: &'a str) -> &'a str {
 }
 
 /// The opener of library `K`'s libraries (`window.swatchLibrary {library}`): open library `library`
-/// (an id or a name, or the id of a missing library's persistent panel, [`missing_file`]) in its
-/// own panel, floating, or bring its panel forward when it is open; `null` closes every panel of
-/// `K`'s libraries. → {open, panel, name, count} (a missing library: its [`missing_name`], count 0)
+/// (an id or a name, or the id of a missing library's persistent or open panel, [`missing_name`])
+/// in its own panel, floating, or bring its panel forward when it is open; `null` closes every
+/// panel of `K`'s libraries. → {open, panel, name, count} (a missing library: its
+/// [`missing_name`], count 0)
 pub(crate) fn open_command<K: LibraryKind>(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let Some(key) = p.get("library").filter(|v| !v.is_null()) else {
         for panel in open_panels(&app.ui).into_iter().filter(|p| parse(p).is_some_and(|(k, _)| k.kind == K::KIND)) {
@@ -486,20 +508,25 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     }))
 }
 
-/// `ui.libraryPanel.locate {panel, path?}`: Locate Library… of a library panel whose library is
-/// missing. Load the library at `path`, else one picked in an open dialog (on the web the picked
-/// file arrives later and opens in a panel of its own, as Other Library…'s does), and show it in
-/// open panel `panel`, which keeps its view, Show Find Field and Persistent. When the file's
-/// library has a panel open already, `panel` closes and is forgotten, and that panel is brought
-/// forward, made persistent when `panel` was. → what `ui.libraryPanel` answers
+/// `ui.libraryPanel.locate {panel, path?}`: Locate Library… of a library panel whose library can't
+/// be found, Persistent or not (any other panel is an error). Load the library at `path`, else one
+/// picked in an open dialog (on the web the picked file arrives later and opens in a panel of its
+/// own, as Other Library…'s does), and show it in open panel `panel`, which keeps its view, Show
+/// Find Field and Persistent. When the file's library has a panel open already, `panel` closes and
+/// is forgotten, and that panel is brought forward, made persistent when `panel` was. → what
+/// `ui.libraryPanel` answers
 pub(crate) fn locate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let given = p.get("panel").and_then(Value::as_str).unwrap_or_default();
     let (k, id) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
     if !is_open(&app.ui, given) {
         return Err(format!("library panel `{given}` isn't open"));
     }
+    if (k.name)(app, id).is_some() {
+        return Err(format!("library panel `{given}` isn't missing its library"));
+    }
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    let Some(path) = pick_library_file(app, path)? else { return Ok(Value::Null) };
+    let filters = library_pick_filters(k.kind);
+    let Some(path) = pick_library_file(app, path, filters)? else { return Ok(Value::Null) };
     let r = app.run(k.load, json!({ "path": path }))?;
     let next = r["library"].as_str().unwrap_or_default().to_string();
     let to = panel_id(k.kind, &next);
@@ -525,9 +552,23 @@ fn set(app: &mut VectorcraftApp, panel: &str, mut params: Value) {
     }
 }
 
+/// Open-dialog filters for Other Library… / Locate Library… of library panels of kind `kind`
+/// (symbol libraries: any document).
+pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&'static str])> {
+    match kind {
+        super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_EXTS).collect(),
+        super::graphic_styles::GraphicStyleLibraries::KIND => fileio::library_open_filters("Graphic Style Libraries", &[STYLES_EXT]).collect(),
+        _ => fileio::open_filters().collect(),
+    }
+}
+
 /// Other Library…: the library file at `path`, else one picked in an open dialog; `None` when the
 /// pick is asynchronous (on the web the picked file arrives later through [`crate::io::open_bytes`]).
-pub(crate) fn pick_library_file(app: &mut VectorcraftApp, path: Option<String>) -> Result<Option<String>, String> {
+pub(crate) fn pick_library_file(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    filters: Vec<(&'static str, &'static [&'static str])>,
+) -> Result<Option<String>, String> {
     if path.is_none()
         && let Some(f) = app.services.open_async.as_mut()
     {
@@ -535,7 +576,7 @@ pub(crate) fn pick_library_file(app: &mut VectorcraftApp, path: Option<String>) 
         return Ok(None);
     }
     path.or_else(|| {
-        let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::open_filters()), ..Default::default() };
+        let pick = crate::FilePick { filters: crate::FilePick::filters(filters), ..Default::default() };
         crate::picks::open(app, &pick)
     })
     .map(Some)
@@ -599,16 +640,18 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         None => super::swatches::draw_folder(ui, chip),
                     }
                     list_row_name(ui, r, chip, row.name);
+                    drag_out::<K>(ui, &resp, id, row);
                     let tip = || row.item.map_or_else(|| row.name.to_string(), |i| format!("{} ({})", row.name, K::describe(i)));
                     click(ui, resp, row, &tip);
                 }
             } else {
                 for (row, cell) in tile_grid(ui, &rows, view, |r| r.item.is_none()) {
-                    let resp = ui.interact(cell, tile_id(&panel, row.name), Sense::click());
+                    let resp = ui.interact(cell, tile_id(&panel, row.name), Sense::click_and_drag());
                     match row.item {
                         Some(item) => K::draw(app, ui, cell, item, is_sel(row.name), resp.hovered()),
                         None => folder_tile(ui, cell, is_sel(row.name)),
                     }
+                    drag_out::<K>(ui, &resp, id, row);
                     click(ui, resp, row, &|| row.name.to_string());
                 }
             }
@@ -625,6 +668,16 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         }
     }
     bottom::<K>(app, ui, id);
+}
+
+/// An item of library `id` dragged out of its tile or row `resp` carries what `K` says it does.
+fn drag_out<K: LibraryKind>(ui: &Ui, resp: &egui::Response, id: &str, row: &Row<K::Item>) {
+    if row.item.is_some()
+        && resp.drag_started()
+        && let Some(drag) = K::drag(id, row.name)
+    {
+        egui::DragAndDrop::set_payload(ui.ctx(), drag);
+    }
 }
 
 /// The body of the panel of library `id` when the library is missing ([`missing_file`]): its file,
@@ -1290,6 +1343,78 @@ mod tests {
         assert_eq!((r["panel"].as_str(), r["persistent"].as_bool()), (Some(other.as_str()), Some(true)));
         assert!(!is_open(&next.ui, &brand) && is_open(&next.ui, &other));
         assert!(next.ui.library_panels.iter().all(|p| p.panel() != brand), "the missing panel is forgotten");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn locate_library_leaves_a_panel_whose_library_is_there_alone() {
+        let dir = std::env::temp_dir().join(format!("vc-locate-found-library-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gpl = dir.join("Brand.gpl");
+        std::fs::write(&gpl, "GIMP Palette\nName: Brand\n#\n255   0   0\tRed\n").unwrap();
+        let mut app = app();
+        let pastels = panel_of(app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap());
+        for persistent in [false, true] {
+            app.run("ui.libraryPanel", json!({"panel": pastels, "persistent": persistent})).unwrap();
+            let e = app.run("ui.libraryPanel.locate", json!({"panel": pastels, "path": gpl.to_string_lossy()})).unwrap_err();
+            assert!(e.contains("isn't missing its library"), "{e}");
+            assert!(is_open(&app.ui, &pastels), "persistent: {persistent}");
+            assert_eq!(settings(&app.ui, "swatches", "pastels").map(|s| s.persistent), Some(persistent));
+        }
+        assert!(SwatchLibraries::get(&app, &format!("loaded/{}", gpl.to_string_lossy())).is_none(), "the file isn't loaded");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn locate_library_reads_a_missing_library_whose_panel_is_no_longer_persistent() {
+        let dir = std::env::temp_dir().join(format!("vc-locate-not-persistent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("moved")).unwrap();
+        let palette = "GIMP Palette\nName: Brand\n#\n255   0   0\tRed\n";
+        let gpl = dir.join("Brand.gpl");
+        std::fs::write(&gpl, palette).unwrap();
+        let mut app = app();
+        let brand = panel_of(app.run("window.swatchLibrary.other", json!({"path": gpl.to_string_lossy()})).unwrap());
+        app.run("ui.libraryPanel", json!({"panel": brand, "persistent": true})).unwrap();
+        std::fs::remove_file(&gpl).unwrap();
+        let mut next = restarted(&app);
+        // After a command turns Persistent off, the panel stays open on its missing library until the next frame's tidy.
+        next.run("ui.libraryPanel", json!({"panel": brand, "persistent": false})).unwrap();
+        assert!(is_open(&next.ui, &brand));
+        let moved = dir.join("moved").join("Brand.gpl");
+        std::fs::write(&moved, palette).unwrap();
+        let r = next.run("ui.libraryPanel.locate", json!({"panel": brand, "path": moved.to_string_lossy()})).unwrap();
+        let located = panel_id("swatches", &format!("loaded/{}", moved.to_string_lossy()));
+        assert_eq!((r["panel"].as_str(), r["persistent"].as_bool()), (Some(located.as_str()), Some(false)));
+        assert!(!is_open(&next.ui, &brand) && is_open(&next.ui, &located), "{}", next.ui.status);
+        let (_, id) = parse(&located).unwrap();
+        assert!(SwatchLibraries::get(&next, id).is_some_and(|(_, lib)| lib.swatch("Red").is_some()));
+        tidy(&mut next);
+        assert!(is_open(&next.ui, &located), "its library is there now");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_open_panel_whose_library_is_missing_is_brought_forward_by_its_id_when_not_persistent() {
+        let dir = std::env::temp_dir().join(format!("vc-open-not-persistent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gpl = dir.join("Brand.gpl");
+        std::fs::write(&gpl, "GIMP Palette\nName: Brand\n#\n255   0   0\tRed\n").unwrap();
+        let mut app = app();
+        let brand = panel_of(app.run("window.swatchLibrary.other", json!({"path": gpl.to_string_lossy()})).unwrap());
+        app.run("ui.libraryPanel", json!({"panel": brand, "persistent": true})).unwrap();
+        std::fs::remove_file(&gpl).unwrap();
+        let mut next = restarted(&app);
+        // After a command turns Persistent off, the panel stays open on its missing library until the next frame's tidy.
+        next.run("ui.libraryPanel", json!({"panel": brand, "persistent": false})).unwrap();
+        let (_, gone) = parse(&brand).unwrap();
+        let r = next.run("window.swatchLibrary", json!({"library": gone})).unwrap();
+        assert_eq!((r["panel"].as_str(), r["name"].as_str(), r["count"].as_u64()), (Some(brand.as_str()), Some("Brand"), Some(0)));
+        assert!(is_open(&next.ui, &brand));
+        tidy(&mut next);
+        assert!(!is_open(&next.ui, &brand), "a panel that isn't persistent still closes");
         let _ = std::fs::remove_dir_all(dir);
     }
 

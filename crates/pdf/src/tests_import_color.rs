@@ -105,7 +105,7 @@ fn gray_imports_as_gray_and_rgb_documents_stay_rgb() {
 fn shading_stops_keep_cmyk_and_spot_tints() {
     let mut d = Document::new_with_mode(100.0, 50.0, ColorMode::Cmyk);
     d.swatches.push(spot("Ink A", Color::cmyk(0.0, 0.5, 1.0, 0.0)));
-    let grad = |stops: Vec<GradientStop>| Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+    let grad = |stops: Vec<GradientStop>| Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
     add(&mut d, grad(vec![GradientStop::new(0.0, Color::cmyk(1.0, 0.0, 0.0, 0.0)), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 1.0, 0.2))]));
     let ink = d.global_color("Ink A").unwrap();
     let linked = |offset: f32, tint: f32| GradientStop { swatch: Some("Ink A".into()), tint, ..GradientStop::new(offset, ink.tinted(tint)) };

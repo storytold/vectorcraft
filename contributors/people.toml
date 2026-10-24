@@ -154,3 +154,8 @@ display_name = "Don Omondi"
 
 [people.alpha-rock]
 display_name = "Aditya Sisodiya"
+
+[people.Ronfo2013]
+real_name = "Angelo Bernardini"
+display_name = "Angelo Bernardini"
+sync_github_name = false

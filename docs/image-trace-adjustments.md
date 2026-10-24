@@ -36,7 +36,14 @@ its own palettes are chosen; this is VectorCraft's own method (see
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)
 page describes the same warning for images over 1500 px). An image of more than 64 megapixels (up to
-192) is traced from a copy scaled down to 64 megapixels, and the trace says that too. A trace that would
+192) is traced from a copy scaled down to 64 megapixels, and the trace says that too. Flat Logo traces at
+most 1024 pixels on a side: a larger decoded raster is averaged down in whole-number blocks first (a 1025-pixel
+image is traced at 513, and a 16,000 × 12,000 image, decoded at 9,459 × 7,094, is traced at 946 × 710), and the trace names both sizes in `warnings`. Flat Logo gives that note in place
+of the slower-trace note for an image over 1500 pixels and in place of the 64-megapixel note. An image at most
+1024 pixels on a side is traced at its own size, also when the named `logoColors` differ slightly from the
+image's colors. Only an image with more than 150,000 different pixel values that are not exactly one traced
+color is averaged down further: the factor doubles until at most 150,000 remain or the working copy has at
+most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps
 about 90 bytes an anchor; a 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million.

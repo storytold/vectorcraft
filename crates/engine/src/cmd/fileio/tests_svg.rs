@@ -162,6 +162,48 @@ fn saving_several_artboards_as_plain_svg_warns_they_are_lost() {
     assert_eq!(artboards(&session(1).execute("document.save", &json!({"format": "svg"})).unwrap()), 0);
 }
 
+/// #3867: a Preserve Editing SVG opened from disk and saved with plain Save keeps the full
+/// document (every artboard), not just the artwork of the first.
+#[test]
+fn reopened_preserve_editing_svg_saves_as_the_full_document() {
+    let dir = tmp_dir("reopen");
+    let path = dir.join("keep.svg").to_string_lossy().to_string();
+    session(3).execute("document.save", &json!({"path": path, "svg": {"preserveEditing": true}})).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 3);
+    s.execute("document.save", &json!({})).unwrap();
+    let mut t = Session::new();
+    let r = t.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(t.doc().unwrap().doc.artboards.len(), 3, "every artboard survives open and Save");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// #3869: small capitals, superscript and subscript, and tab leaders, which SVG text can't draw,
+/// are written as outlines (as vertical type and ruby are) rather than as plain text at full size;
+/// type without them stays text.
+#[test]
+fn type_svg_text_cant_draw_is_written_as_outlines() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 500, "height": 200})).unwrap();
+    s.execute("text.create", &json!({"x": 50, "y": 100, "text": "Small caps x2 H2O", "size": 30})).unwrap();
+    let plain = svg(&mut s, json!({}));
+    assert!(plain.contains("<text"), "plain type stays text: {plain}");
+    for style in [json!({"smallCaps": true}), json!({"position": "superscript"}), json!({"position": "subscript"})] {
+        let mut t = Session::new();
+        t.execute("file.new", &json!({"width": 500, "height": 200})).unwrap();
+        let id = t.execute("text.create", &json!({"x": 50, "y": 100, "text": "Small caps x2 H2O", "size": 30})).unwrap()["id"].clone();
+        let mut p = style.clone();
+        p["id"] = id;
+        p["start"] = json!(0);
+        p["end"] = json!(5);
+        t.execute("text.setRangeStyle", &p).unwrap();
+        let out = svg(&mut t, json!({}));
+        assert!(!out.contains("<text") && out.contains("<path"), "{style}: {out}");
+    }
+}
+
 #[test]
 fn save_writes_svg_and_remembers_its_options() {
     let mut s = session(1);

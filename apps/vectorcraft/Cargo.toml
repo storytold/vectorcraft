@@ -27,6 +27,7 @@ eframe = { workspace = true, features = ["default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+chrono = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = { workspace = true }
@@ -50,8 +51,10 @@ winsafe = { version = "0.0.29", default-features = false, features = ["user"], o
 
 # DirectWrite's system font collection (src/system_fonts.rs): fonts that font services such as
 # Adobe Fonts load in place (#579). MIT OR Apache-2.0, already in the build through accesskit.
+# Win32_UI_WindowsAndMessaging has `MSG` and `WM_POINTERDOWN`, which src/windows_stylus.rs uses to
+# read a pen's barrel button from its pointer messages.
 [target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
-windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
+windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # The macOS menu bar (src/mac_menu.rs): Tauri's menu crate, AppKit menus behind a safe API (no GTK
@@ -59,8 +62,8 @@ windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
 muda = { version = "=0.21.1", default-features = false }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "NSApplication", "NSButton", "NSColor", "NSColorSampler", "NSColorSpace", "NSControl", "NSMenu", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSTextField", "NSTextInputContext", "NSView", "NSWindow"] }
-# Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit, muda and rfd.
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSGeometry", "NSNotification", "NSOperation", "NSString", "NSURL"] }
+# Files opened from Finder and the Dock (src/open_documents.rs), pasted bitmaps (src/clipboard.rs) and the control channel's App Nap activity (src/control_server.rs); both already come with winit, muda and rfd.
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSGeometry", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL"] }
 block2 = "0.6"
 # The window's AppKit view, to centre its buttons on the app bar (src/mac_window.rs). MIT OR
 # Apache-2.0 OR Zlib, already in the build through eframe and winit.
@@ -77,6 +80,10 @@ pollster = "1"
 [target.'cfg(target_os = "linux")'.dependencies]
 # GNOME/Wayland needs client-side window controls without a bundled title font.
 winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita-notitle"] }
+# A drawing tablet's pen pressure under X11 and XWayland (src/tablet.rs): XInput2 raw events on a
+# second X connection, x11rb's pure-Rust `RustConnection`. MIT OR Apache-2.0, already in the build
+# through winit with the `xinput` feature.
+x11rb = { version = "0.13", default-features = false, features = ["xinput"] }
 
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one. Both are already in the build through winit.

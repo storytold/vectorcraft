@@ -14,7 +14,8 @@ use vectorcraft_doc::Document;
 
 use super::super::*;
 use super::{
-    ArtboardPick, Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, with_compression_pref, write_encoded,
+    ARTBOARD_PARAMS, ArtboardPick, Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, with_compression_pref,
+    write_encoded,
 };
 use crate::{DocState, Prefs};
 
@@ -94,6 +95,9 @@ pub struct SavePlan {
     /// The `modified` param (as `date_param` reads it): the File Info date a Save or Save As to a file
     /// stamps; `None`: the time it is written.
     pub modified: Option<Option<i64>>,
+    /// Warnings about the params themselves: each native option (`compress`, `version`,
+    /// `preview`) given beside the path that the format doesn't read.
+    pub notes: Vec<String>,
 }
 
 impl SavePlan {
@@ -233,6 +237,14 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         (_, None, None) => checked(cmd, st.format)?,
     };
     let path = if mode == SaveMode::Template { path.map(|p| template_path(&p, format)) } else { path };
+    if let Some((key, top, inner)) = disagreeing_option(p, is_svg(format)).map_err(|e| bad(cmd, e))? {
+        return Err(bad(cmd, format!("`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once")));
+    }
+    let notes = NATIVE_OPTIONS
+        .iter()
+        .filter(|k| p.get(**k).is_some_and(|v| !v.is_null()) && !reads_option(format, k))
+        .map(|k| format!("`{k}` was not used: {} files don't read it", format.label))
+        .collect();
     let mut given: Map<String, Value> = match p.get("options") {
         Some(Value::Object(o)) => o.iter().filter(|(k, _)| reads_option(format, k)).map(|(k, v)| (k.clone(), v.clone())).collect(),
         None | Some(Value::Null) => Map::new(),
@@ -253,7 +265,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         }
     }
     // None given: the ones the document was last saved with in this format.
-    let options = if given.is_empty() && format.id == st.format { st.save_options.clone() } else { given };
+    let options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
     // Save writes the document's own file; the other modes only where they are told to.
     let path =
         path.or_else(|| (mode == SaveMode::Save && !st.converted && !st.recovered && format.id == st.format).then(|| st.path.clone()).flatten());
@@ -272,12 +284,141 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     if let Some(path) = &path {
         super::check_not_lossy_overwrite(st, path, p, cmd)?;
     }
-    Ok(SavePlan { mode, path, format, options, name, folder, modified })
+    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes })
+}
+
+/// The native save options, which a save also takes beside the path.
+const NATIVE_OPTIONS: [&str; 3] = ["compress", "version", "preview"];
+
+/// The first option `p` gives both beside the path and in `options` with different values, as
+/// `(key, top-level value, options value)`. For an SVG save (`svg`), an SVG option's value on
+/// either side is the one its `svg: {…}` object gives, else the flat one.
+fn disagreeing_option(p: &Value, svg: bool) -> std::result::Result<Option<(String, Value, Value)>, String> {
+    let Some(inner) = p.get("options").filter(|o| o.is_object()) else { return Ok(None) };
+    let given = |m: &Value| -> std::result::Result<Map<String, Value>, String> {
+        let mut out: Map<String, Value> = m
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(k, v)| !v.is_null() && !matches!(k.as_str(), "path" | "format" | "options") && !(svg && k.as_str() == "svg"))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if svg {
+            out.extend(super::svg_options(m)?);
+        }
+        Ok(out)
+    };
+    let top = given(p)?;
+    Ok(given(inner)?.into_iter().find_map(|(k, v)| {
+        let t = top.get(&k).filter(|t| !same_value(t, &v))?.clone();
+        Some((k, t, v))
+    }))
+}
+
+/// `a == b`, with a whole number and a float of the same value (`3` and `3.0`) the same.
+fn same_value(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => x == y || ((x.is_f64() || y.is_f64()) && x.as_f64() == y.as_f64()),
+        _ => a == b,
+    }
+}
+
+/// The options `st` was last saved with, their artboards (`artboard`, `artboards` and `range`)
+/// following the artboards they named ([`DocState::save_artboards`]): an artboard deleted since is
+/// left out, and one that moved is named by its new number. When none of the artboards the save
+/// used is left, the pick is left out, and a save without options writes the artboards it writes
+/// when none is named. `range` `"all"` stays as it is. Artboards given to a save are still checked.
+pub fn remembered_save_options(st: &DocState) -> Map<String, Value> {
+    let mut options = st.save_options.clone();
+    let ids: Vec<u32> = st.doc.artboards.iter().map(|a| a.id).collect();
+    // The encoders refuse a document without artboards themselves.
+    if ids.is_empty() {
+        return options;
+    }
+    // Artboard `i` of the save, where it is now (by number when the save's artboards are unknown).
+    let then = &st.save_artboards;
+    let count = if then.is_empty() { ids.len() } else { then.len() };
+    let now = |i: usize| match then.get(i) {
+        Some(id) => ids.iter().position(|x| x == id),
+        None => (then.is_empty() && i < ids.len()).then_some(i),
+    };
+    // Each pick that names artboards: `Some` of where they are now (empty: all gone).
+    let mut moved: Vec<(&str, Option<Vec<usize>>)> = vec![];
+    for k in ARTBOARD_PARAMS {
+        let named = match (k, options.get(k)) {
+            ("range", Some(Value::String(r))) if r.trim().is_empty() || r.trim().eq_ignore_ascii_case("all") => continue,
+            ("range", Some(Value::String(r))) => match vectorcraft_doc::range::parse_range(r, count) {
+                Ok(v) => v,
+                Err(_) => {
+                    moved.push((k, Some(vec![])));
+                    continue;
+                }
+            },
+            ("artboards", Some(v @ Value::Array(_))) => match serde_json::from_value::<Vec<usize>>(v.clone()) {
+                Ok(v) => v,
+                Err(_) => continue,
+            },
+            ("artboard", Some(v)) => match v.as_u64().and_then(|i| usize::try_from(i).ok()) {
+                Some(i) => vec![i],
+                None => continue,
+            },
+            _ => continue,
+        };
+        let there: Vec<usize> = named.iter().filter_map(|i| now(*i)).collect();
+        // A range that reads differently against the artboards there are now (`"2-"` once one
+        // was added) is written out as the artboards it named.
+        let reads = match (k, options.get(k)) {
+            ("range", Some(Value::String(r))) => vectorcraft_doc::range::parse_range(r, ids.len()).ok(),
+            _ => Some(named),
+        };
+        moved.push((k, (reads.as_ref() != Some(&there)).then_some(there)));
+    }
+    // The pick a save uses (as `ArtboardPick::resolve` reads it: `range`, then `artboards`, then
+    // `artboard`) is gone: so is the rest.
+    let used = ["range", "artboards", "artboard"].into_iter().find(|k| match options.get(*k) {
+        Some(Value::String(r)) => !r.trim().is_empty(),
+        Some(v) => !v.is_null(),
+        None => false,
+    });
+    let gone = |k: &str| moved.iter().any(|(m, there)| *m == k && there.as_ref().is_some_and(Vec::is_empty));
+    if used.is_some_and(gone) {
+        for k in ARTBOARD_PARAMS {
+            options.remove(k);
+        }
+        return options;
+    }
+    for (k, there) in moved {
+        let Some(there) = there else { continue };
+        let value = match (k, there.first()) {
+            (_, None) => None,
+            ("range", Some(_)) => Some(json!(range_text(&there))),
+            ("artboards", Some(_)) => Some(json!(there)),
+            (_, Some(i)) => Some(json!(i)),
+        };
+        match value {
+            Some(v) => _ = options.insert(k.into(), v),
+            None => _ = options.remove(k),
+        }
+    }
+    options
+}
+
+/// 0-based artboard indices as a 1-based range in the same order, runs joined (`"1-2, 5"`).
+fn range_text(picked: &[usize]) -> String {
+    let mut runs: Vec<(usize, usize)> = vec![];
+    for &i in picked {
+        match runs.last_mut() {
+            Some((_, end)) if *end + 1 == i => *end = i,
+            _ => runs.push((i, i)),
+        }
+    }
+    let run = |&(a, b): &(usize, usize)| if a == b { format!("{}", a + 1) } else { format!("{}-{}", a + 1, b + 1) };
+    runs.iter().map(run).collect::<Vec<_>>().join(", ")
 }
 
 /// Does a save in `f` read option `key`? PDF (and a .ai file, a PDF) also reads its General
-/// settings (`createLayers`…) and presets.
-fn reads_option(f: &Format, key: &str) -> bool {
+/// settings (`createLayers`…) and presets. A save drops each option its format doesn't read.
+pub fn reads_option(f: &Format, key: &str) -> bool {
     f.options.iter().any(|o| o.name == key) || (is_pdf(f) && (super::pdf::OPTIONS.iter().any(|o| o.name == key) || super::pdf::is_setting(key)))
 }
 
@@ -385,22 +526,27 @@ fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<V
 pub(super) fn artboard_doc(doc: &Document, i: usize) -> Document {
     let mut d = doc.clone();
     let Some(a) = doc.artboards.get(i) else { return d };
-    let r = a.rect;
     d.artboards = vec![a.clone()];
-    // It opens fitted to its artboard, not at the master file's view.
+    keep_art_on(&mut d, a.rect);
+    d
+}
+
+/// Reduce `d` to the objects touching `r`, in their layers (resources are kept), opening
+/// fitted to its artboard rather than at the master file's view.
+pub(super) fn keep_art_on(d: &mut Document, r: vectorcraft_geom::Rect) {
     d.last_view = None;
     d.layers_open = None;
     for layer in &mut d.layers {
         keep_on(layer, r);
     }
-    d
 }
 
-/// Keep in layer `n` (and its sublayers) only the objects touching `r`.
+/// Keep in layer `n` (and its sublayers) only the objects touching `r`, and those without bounds.
 fn keep_on(n: &mut Arc<vectorcraft_doc::Node>, r: vectorcraft_geom::Rect) {
     let touches = |b: vectorcraft_geom::Rect| b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0;
     if let Some(children) = Arc::make_mut(n).children_mut() {
-        children.retain(|c| c.is_layer() || c.visual_bounds().is_some_and(touches));
+        // An object whose bounds can't be measured (type in a missing font) stays: dropping it loses art.
+        children.retain(|c| c.is_layer() || c.visual_bounds().is_none_or(touches));
         for c in children.iter_mut().filter(|c| c.is_layer()) {
             keep_on(c, r);
         }
@@ -420,6 +566,15 @@ fn blank_pages(doc: &Document) -> Document {
 
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
+
+/// `e`, an error of the export encoders, under the save command `cmd` instead of
+/// `document.export`.
+fn named_for_save(cmd: &str, e: crate::EngineError) -> crate::EngineError {
+    match e {
+        crate::EngineError::BadParams { cmd: c, msg } if c == "document.export" => bad(cmd, msg),
+        e => e,
+    }
+}
 
 /// The shared Save and Export encoder for PDF-compatible `.ai` files (and `.ait` templates, the
 /// same file).
@@ -504,7 +659,7 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     if matches!(plan.format.id, "vectorcraft" | "template") {
         // Not remembered with the options: the preference decides each time it isn't given.
         params = with_compression_pref(&s.prefs, &params);
-        super::native::save_options(cmd, plan.format, &doc, &params)?;
+        super::native::save_options(cmd, plan.format, &doc, &params).map_err(|e| named_for_save(cmd, e))?;
     }
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
@@ -542,24 +697,38 @@ impl SaveJob {
 
     /// Encode the file → it (and, with `separateArtboards`, a file per artboard after it), with
     /// the warnings (what the format loses first, then the encoder's own notes: PDF options not
-    /// applied yet…).
+    /// applied yet…, then the plan's notes on its params).
     pub fn encode(&self) -> Result<Encoded> {
         let mut enc = self.encode_one(&self.doc)?;
         for &b in &self.boards {
             let one = self.encode_one(&artboard_doc(&self.doc, b))?;
             enc.files.extend(one.files.into_iter().map(|(_, bytes)| (Some(b), bytes)));
         }
-        // Lost artboards first: the status bar shows only the first warning.
+        enc.warnings.splice(0..0, self.format_losses());
+        enc.warnings.extend(self.plan.notes.iter().cloned());
+        Ok(enc)
+    }
+
+    /// What the file loses against the document: the artboards an SVG file leaves out first (the
+    /// status bar shows only the first warning), then what the format loses.
+    fn format_losses(&self) -> impl Iterator<Item = String> {
         let f = self.plan.format;
         let lost = if is_svg(f) { super::svg::lost_artboards_warning(&self.doc, &self.params, f.label) } else { None };
-        enc.warnings.splice(0..0, lost.into_iter().chain(fidelity_warning(f)));
-        Ok(enc)
+        lost.into_iter().chain(fidelity_warning(f))
+    }
+
+    /// The warnings known before the file is encoded, in the order a written file's reply gives
+    /// them: what the format loses, then the plan's notes on its params (a reply sent before the
+    /// file is written, as Background Save's, gives these).
+    pub fn known_warnings(&self) -> Vec<String> {
+        self.format_losses().chain(self.plan.notes.iter().cloned()).collect()
     }
 
     /// Encode one file of `doc` in the job's format.
     fn encode_one(&self, doc: &Document) -> Result<Encoded> {
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
-        let enc = if matches!(f.id, "ai" | "ait") { encode_ai(cmd, f, doc, &self.params)? } else { encode_all(doc, f.id, &self.params)? };
+        let enc = if matches!(f.id, "ai" | "ait") { encode_ai(cmd, f, doc, &self.params) } else { encode_all(doc, f.id, &self.params) }
+            .map_err(|e| named_for_save(cmd, e))?;
         // A legacy .ai file per artboard.
         let per_artboard = f.id == "ai" && super::legacy_ai::wanted(cmd, f, &self.params)?;
         if enc.files.len() != 1 && !per_artboard {
@@ -645,8 +814,7 @@ impl SaveJob {
         };
         let r = stream(path, &mut fill);
         r.map_err(|e| failed.take().unwrap_or(e))?;
-        let warnings: Vec<String> = fidelity_warning(f).into_iter().collect();
-        Ok(json!({ "path": path, "bytes": written, "format": f.id, "warnings": warnings }))
+        Ok(json!({ "path": path, "bytes": written, "format": f.id, "warnings": self.known_warnings() }))
     }
 
     /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
@@ -659,6 +827,7 @@ impl SaveJob {
             st.path = Some(path);
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;
+            st.save_artboards = self.snapshot.artboards.iter().map(|a| a.id).collect();
             st.converted = false;
             st.recovered = false;
             if let Some(at) = self.stamped {
@@ -751,14 +920,14 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     let f = format(id)
         .filter(|f| f.write || SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id))
         .ok_or_else(|| bad(C, format!("`{id}` is no writable format (see document.formats)")))?;
-    let saved = st.filter(|d| d.format == f.id).map(|d| &d.save_options);
+    let saved = st.filter(|d| d.format == f.id).map(remembered_save_options);
     // A native save compresses as Use Compression says, unless told otherwise.
     let prefs = with_compression_pref(&s.prefs, &json!({}));
     let mut v = f.to_json();
     if let Some(options) = v["options"].as_object_mut() {
         for (name, o) in options.iter_mut() {
             let default = prefs.get(name).filter(|_| matches!(f.id, "vectorcraft" | "template")).unwrap_or(&o["default"]);
-            o["value"] = saved.and_then(|m| m.get(name)).unwrap_or(default).clone();
+            o["value"] = saved.as_ref().and_then(|m| m.get(name)).unwrap_or(default).clone();
         }
     }
     v["saveFormats"] =
@@ -773,7 +942,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead, compress?: bool (native, also in options: gzip; default: the useCompression preference), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings say when the format doesn't read compress, version or preview given flat), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

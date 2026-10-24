@@ -276,7 +276,7 @@ impl Tool for ReshapeTool {
                 let Some((id, at)) = self.grab else { return vec![] };
                 let mut d: Vec2 = ev.pos - at;
                 if ev.mods.shift {
-                    d = vectorcraft_geom::constrain_angle(d, 45.0);
+                    d = vectorcraft_geom::constrain_angle_from(d, 45.0, cx.constrain_angle);
                 }
                 let mut out = vec![];
                 if !self.began {

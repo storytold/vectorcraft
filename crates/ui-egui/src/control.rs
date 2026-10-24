@@ -17,18 +17,22 @@
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?}`: render an artboard headlessly (`artboard`: its
-//!   0-based index, default the first; PNG; without a path, or with `data: true`, as `pngBase64`)
+//!   0-based index, default the first; PNG with the pixels of a PNG export on white; without a
+//!   path, or with `data: true`, as `pngBase64`)
 //! - `app.open {path}` (any readable format) / `app.save {path?, svg?: {…SVG options}}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
 //! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
 //!   the host; the document keeps its path. No path → `{dataBase64, format, bytes}` (as headless)
+//! - `wait: true` on `app.save` and `app.export`: the file is written before the reply, even with
+//!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::VectorcraftApp;
@@ -162,6 +166,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "background": app.background.jobs.iter().filter(|j| !j.label.is_empty()).map(|j| j.label.as_str()).collect::<Vec<_>>(),
         // Documents still being read off the UI thread (File › Open, Open Recent): their paths.
         "opening": app.opening.pending.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(),
+        // Files still being read off the UI thread for Place (the Place dialog's OK, drops): their
+        // names, in the order they are placed.
+        "placing": app.placing.pending.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
         // The screen color sampler is shown, waiting for the person at the computer
         // (`ui.sampleScreenColor`).
         "screenSampler": app.screen_sampler.is_some(),
@@ -376,6 +383,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             if let Some(v) = p.get("controlBar").and_then(Value::as_bool) {
                 app.ui.control_bar = v;
             }
+            if let Some(v) = p.get("imageTracePreview").and_then(Value::as_bool) {
+                app.ui.image_trace_preview = v;
+            }
             if p.get("closePanel").is_some() {
                 app.ui.open_panel = None;
             }
@@ -425,7 +435,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             if let Err(e) = vectorcraft_render::raster_size(r, scale) {
                 return err(e);
             }
-            let img = app.canvas.renderer.render_region(&doc, r, scale, true);
+            // Rendered with the options of a PNG export on white, so its pixels are the exported file's.
+            let opts = RasterExportOptions { background: Some([255; 3]), ..Default::default() }.render_options(RasterFormat::Png);
+            let img = app.canvas.renderer.render_region_with(&doc, r, scale, &opts);
             let png = match img.to_png() {
                 Ok(png) => png,
                 Err(e) => return err(e),
@@ -443,16 +455,37 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             }
         }
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
-        "app.save" => wrap(app.run("file.save", if p.is_object() { p.clone() } else { json!({}) })),
-        "app.export" => match s("path") {
-            Some(path) => wrap(crate::io::export(app, s("format"), Some(path.to_string()), p)),
-            // No save dialog for an agent: the bytes come back, as in headless mode.
-            None => wrap(app.run("document.export", p.clone())),
-        },
+        "app.save" | "app.export" => {
+            let mut p = if p.is_object() { p.clone() } else { json!({}) };
+            // `wait: true`: the file is written before the reply, whatever Background Save and
+            // Background Export are set to, so the reply is the written file or the error.
+            let wait = match crate::menus::opt_bool(&p, "wait") {
+                Ok(w) => w == Some(true),
+                Err(e) => return err(e),
+            };
+            if let Some(o) = p.as_object_mut() {
+                o.remove("wait");
+            }
+            let method = req.method.as_str();
+            wrap(if wait { crate::background::in_foreground(app, |app| save_or_export(app, method, &p)) } else { save_or_export(app, method, &p) })
+        }
         // As the menu's Quit: `{"pending": "saveChanges"}` while a modified document is asked
         // about; otherwise null, and the host closes the window (#830).
         "app.quit" => wrap(app.run("app.quit", json!({}))),
         other => err(format!("unknown method `{other}`")),
+    }
+}
+
+/// `app.save` (`method`) or `app.export` with params `p`.
+fn save_or_export(app: &mut VectorcraftApp, method: &str, p: &Value) -> Result<Value, String> {
+    if method == "app.save" {
+        return app.run("file.save", p.clone());
+    }
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    match s("path") {
+        Some(path) => crate::io::export(app, s("format"), Some(path.to_string()), p),
+        // No save dialog for an agent: the bytes come back, as in headless mode.
+        None => app.run("document.export", p.clone()),
     }
 }
 
@@ -502,6 +535,17 @@ mod tests {
         let (req, _) = ControlRequest::new(method, params);
         let Outcome::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
         r
+    }
+
+    #[test]
+    fn ui_set_turns_the_image_trace_preview_off_and_on() {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        assert!(app.ui.image_trace_preview);
+        for on in [false, true] {
+            let r = input_request(&mut app, "ui.set", json!({"imageTracePreview": on}));
+            assert_eq!(r["ok"], true, "{r}");
+            assert_eq!(app.ui.image_trace_preview, on);
+        }
     }
 
     #[test]

@@ -558,8 +558,8 @@ fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayer
 fn whole(ui: &mut egui::Ui, d: &mut Dialog, path: &str, range: std::ops::RangeInclusive<f64>, enabled: bool) {
     let v = get(d, path).as_f64().unwrap_or(*range.start());
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(x) = widgets::plain_field(ui, path, v, "", 0, 56.0) {
-            set(d, path, json!(x.round().clamp(*range.start(), *range.end()) as u64));
+        if let Some(x) = widgets::range_field(ui, path, v, range, "", 0, 56.0) {
+            set(d, path, json!(x as u64));
         }
     });
 }

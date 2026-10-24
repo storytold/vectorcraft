@@ -141,3 +141,17 @@ fn the_option_round_trips_with_the_preferences() {
     let old: Prefs = serde_json::from_value(json!({"keyboardIncrement": 2})).unwrap();
     assert!(old.new_art_basic);
 }
+
+/// Line Segment Tool Options' Fill Line: `shape.line {fill: true}` gives the line the current
+/// fill; without it a new line has none.
+#[test]
+fn fill_line_gives_a_new_line_the_current_fill() {
+    let mut s = session();
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let plain = NodeId(run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 200, "y2": 80}))["id"].as_u64().unwrap());
+    let filled = NodeId(run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 200, "y2": 80, "fill": true}))["id"].as_u64().unwrap());
+    assert_eq!(node(&s, plain).appearance.fill_paint(), Paint::None);
+    assert_eq!(node(&s, filled).appearance.fill_paint(), s.paint.fill);
+    assert_ne!(s.paint.fill, Paint::None);
+    assert!(s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 1, "y2": 1, "fill": "yes"})).is_err());
+}

@@ -5,23 +5,17 @@
 # on GitHub Actions' native windows-11-arm runner.
 name: Windows ARM64
 
+# Nightly on main and on pushes to `release` (dependency and runner-image drift shows up within a
+# day, and always before a release ships), and on PRs that change the Windows packaging itself.
 on:
+  schedule:
+    - cron: "3 5 * * *"
   push:
-    branches: [main]
-    paths:
-      - ".github/workflows/windows-arm64.yml"
-      - "packaging/windows/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+    branches: [release]
   pull_request:
-    branches: [main]
     paths:
-      - ".github/workflows/windows-arm64.yml"
-      - "packaging/windows/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+      - .github/workflows/windows-arm64.yml
+      - packaging/windows/**
   workflow_dispatch:
 
 concurrency:

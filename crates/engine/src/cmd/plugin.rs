@@ -4,21 +4,30 @@
 //! [`Session::attach_plugin_store`]) or from every `*.wasm` in the Additional Plug-ins Folder
 //! preference, and listed with `plugin.list` / `plugin.info`. Object filters run
 //! with `plugin.run` on the selected paths and compound paths (one undo step, transactional: a
-//! plug-in that fails leaves the document untouched); live-effect plug-ins are applied like any
-//! effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`; exporters
-//! add a file format that `document.export` writes (`fileio::plugin_formats`).
+//! plug-in that fails leaves the document untouched), and read and write the data they keep with
+//! the document ([`vectorcraft_doc::plugin_data`], theirs alone); live-effect plug-ins are applied
+//! like any effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`;
+//! exporters add a file format that `document.export` writes (`fileio::plugin_formats`).
+//!
+//! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
+//! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
+//! which loading a folder doesn't ask, so folders skip it; the app runs it in the background with
+//! Cancel ([`FilterRun`]).
 
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Kind, Plugin, effect, export, objects, registry};
+use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
 
 use super::*;
 
-/// What a plug-in error looks like to the user.
+/// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
-    EngineError::Other(e.to_string())
+    match e {
+        vectorcraft_plugins::Error::Cancelled => EngineError::Cancelled,
+        e => EngineError::Other(e.to_string()),
+    }
 }
 
 /// JSON description of an installed plug-in.
@@ -36,6 +45,9 @@ pub fn describe(p: &Plugin) -> Value {
             v["extensions"] = json!(m.extensions);
         }
         Kind::Filter => {}
+    }
+    if m.budget == Budget::Heavy {
+        v["budget"] = json!("heavy");
     }
     v
 }
@@ -59,42 +71,145 @@ fn plugin_by_id(cmd: &str, p: &Value) -> Result<Arc<Plugin>> {
     registry::get(id).ok_or_else(|| err(vectorcraft_plugins::Error::NotFound(id.into())))
 }
 
-/// `plugin.run`: runs filter `id` on `ids` (else the selected paths and compound paths) with its
-/// parameters and `_context`, and applies its output as one undo step ([`objects::apply_output`];
-/// effect records as [`admit_effects`] admits them). → `{plugin, ids}`: what it made or changed,
-/// which is then selected.
-fn run(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "plugin.run";
-    let plugin = plugin_by_id(C, p)?;
-    let m = plugin.manifest();
-    match m.kind {
-        Kind::Filter => {}
-        Kind::Effect => {
-            return Err(bad(C, format!("`{}` is a live effect: apply it with effect.apply {{\"effect\": \"{}\"}}", m.id, effect::effect_id(&m.id))));
+/// One run of an object filter, split so the plug-in can compute away from the session: made from
+/// the active document ([`FilterRun::prepare`]), run on any thread ([`FilterRun::run`] touches no
+/// document), then handed in ([`FilterRun::hand_in`]) for `plugin.run` to apply instead of running
+/// the plug-in again. The app runs a heavy filter ([`Budget::Heavy`]) this way, in the background
+/// with Cancel, and the edit itself stays a `plugin.run`: journaled, guarded and undone as one step
+/// like any other command.
+pub struct FilterRun {
+    plugin: Arc<Plugin>,
+    input: Vec<u8>,
+    params: Vec<u8>,
+    /// The objects the plug-in is given, and the container new objects go in.
+    inputs: Vec<NodeId>,
+    parent: Option<NodeId>,
+    /// The document it was made from, and that document's revision then.
+    document: (u64, u64),
+}
+
+/// A filter's output handed in by a [`FilterRun`] made away from `plugin.run`, with what the run
+/// was made of: only a run of the same installation of the plug-in on the same input with the same
+/// parameters takes it (a plug-in's output depends on nothing else).
+pub(crate) struct HandedIn {
+    serial: u64,
+    input: Vec<u8>,
+    params: Vec<u8>,
+    output: Vec<u8>,
+}
+
+impl FilterRun {
+    /// The run `plugin.run`'s params `p` ask for, on the active document: the plug-in (a filter),
+    /// its checked parameters and `_context`, and the selection's objects.
+    pub fn prepare(s: &Session, p: &Value) -> Result<FilterRun> {
+        const C: &str = "plugin.run";
+        let plugin = plugin_by_id(C, p)?;
+        let m = plugin.manifest();
+        match m.kind {
+            Kind::Filter => {}
+            Kind::Effect => {
+                return Err(bad(
+                    C,
+                    format!("`{}` is a live effect: apply it with effect.apply {{\"effect\": \"{}\"}}", m.id, effect::effect_id(&m.id)),
+                ));
+            }
+            Kind::Exporter => {
+                return Err(bad(
+                    C,
+                    format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id)),
+                ));
+            }
         }
-        Kind::Exporter => {
-            return Err(bad(C, format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id))));
-        }
+        // Bad parameters fail before anything runs.
+        let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
+        let st = s.doc()?;
+        let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
+        let inputs = objects::filter_targets(&st.doc, &selected);
+        let parent = st.insertion_parent();
+        let bounds = st.doc.bounds_of(&inputs, false);
+        let board = bounds.and_then(|b| st.doc.artboard_at(b.center())).and_then(|i| st.doc.artboards.get(i)).or(st.doc.artboards.first());
+        let rect = |r: vectorcraft_geom::Rect| json!([r.x0, r.y0, r.x1, r.y1]);
+        // What the plug-in keeps with the document, as it last wrote it.
+        let data = st.doc.plugin_data(&m.id).cloned().unwrap_or(Value::Null);
+        params["_context"] = json!({"mode": "filter", "bounds": bounds.map(rect), "artboard": board.map(|a| rect(a.rect)), "documentData": data});
+        let input = objects::encode_input(&st.doc, &inputs);
+        let params = serde_json::to_vec(&params).map_err(|e| bad(C, e.to_string()))?;
+        let document = (st.uid, st.revision);
+        Ok(FilterRun { plugin, input, params, inputs, parent, document })
     }
-    // Bad parameters fail before anything runs.
-    let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
-    let st = s.doc()?;
-    let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
-    let inputs = objects::filter_targets(&st.doc, &selected);
-    let parent = st.insertion_parent();
-    let bounds = st.doc.bounds_of(&inputs, false);
-    let board = bounds.and_then(|b| st.doc.artboard_at(b.center())).and_then(|i| st.doc.artboards.get(i)).or(st.doc.artboards.first());
-    let rect = |r: vectorcraft_geom::Rect| json!([r.x0, r.y0, r.x1, r.y1]);
-    params["_context"] = json!({"mode": "filter", "bounds": bounds.map(rect), "artboard": board.map(|a| rect(a.rect))});
-    let input = objects::encode_input(&st.doc, &inputs);
-    let params = serde_json::to_vec(&params).map_err(|e| bad(C, e.to_string()))?;
-    let out = objects::decode(&plugin.run(&input, &params).map_err(err)?).map_err(err)?;
-    let ids = s.edit(m.name.trim_end_matches('…'), |d, sel| {
-        let ids = objects::apply_output(d, &inputs, out, parent, &admit_effects).map_err(err)?;
-        sel.set(ids.iter().copied());
-        Ok(ids)
-    })?;
-    Ok(json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+
+    /// The plug-in, for its name and budget.
+    pub fn plugin(&self) -> &Arc<Plugin> {
+        &self.plugin
+    }
+
+    /// The objects it gives the plug-in: `plugin.run`'s `ids` that make this same run again.
+    pub fn inputs(&self) -> &[NodeId] {
+        &self.inputs
+    }
+
+    /// The document it was made from (`DocState::uid`).
+    pub fn document(&self) -> u64 {
+        self.document.0
+    }
+
+    /// Does it still apply: is the active document the one it was made from, unchanged since, and
+    /// the plug-in still installed as it was?
+    pub fn current(&self, s: &Session) -> bool {
+        let installed = registry::get(self.plugin.id()).is_some_and(|p| p.serial() == self.plugin.serial());
+        installed && s.active().is_some_and(|st| (st.uid, st.revision) == self.document)
+    }
+
+    /// Runs the plug-in → its output, or why it failed or stopped. It touches no document, so it
+    /// can run on any thread; inside a [`vectorcraft_doc::cancel::scope`] Cancel stops it between
+    /// two slices of its budget.
+    pub fn run(&self) -> Result<Vec<u8>> {
+        self.plugin.run(&self.input, &self.params).map_err(err)
+    }
+
+    /// Hands in `output`, which [`FilterRun::run`] returned: the next `plugin.run` that makes this
+    /// same run (same plug-in, `ids` and parameters, the document unchanged) applies it instead of
+    /// running the plug-in. Any other run drops it.
+    pub fn hand_in(self, s: &mut Session, output: Vec<u8>) {
+        s.plugin_output = Some(HandedIn { serial: self.plugin.serial(), input: self.input, params: self.params, output });
+    }
+
+    /// Applies the plug-in's `output` to the active document as one undo step: its objects, and what
+    /// it keeps with the document from now on.
+    fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
+        let m = self.plugin.manifest();
+        let out = objects::decode_output(output).map_err(err)?;
+        let (inputs, parent) = (self.inputs, self.parent);
+        let ids = s.edit(m.name.trim_end_matches('…'), |d, sel| {
+            let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
+            if let Some(data) = out.document_data {
+                d.set_plugin_data(&m.id, data);
+            }
+            sel.set(ids.iter().copied());
+            Ok(ids)
+        })?;
+        Ok(json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+    }
+}
+
+/// `plugin.run`: runs filter `id` on `ids` (else the selected paths and compound paths) with its
+/// parameters and `_context` (what it keeps with the document included), and applies its output as
+/// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
+/// what it keeps with the document from now on: the output handed in for this very run when there
+/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
+/// changed, which is then selected.
+fn run(s: &mut Session, p: &Value) -> Result<Value> {
+    // An output handed in is for this run only (the app hands it in just before), whatever it does.
+    let handed = s.plugin_output.take();
+    let r = FilterRun::prepare(s, p)?;
+    // Handed in for this very run (the app ran it in the background), it is what running the
+    // plug-in again would return.
+    let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
+    let output = match handed {
+        Some(h) => h.output,
+        None => r.run()?,
+    };
+    r.finish(s, &output)
 }
 
 /// Admits the effect records a filter returned for object `n` (written, its effects still its own)
@@ -147,30 +262,55 @@ const MAX_DATA_CHARS: usize = (32 << 20) / 3 * 4 + 4;
 /// The `.wasm` extension plug-in files have (File › Open installs them).
 pub const EXTS: &[&str] = &["wasm"];
 
-fn install(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "plugin.install";
-    let (plugin, bytes) = match (str_param(p, "path").filter(|s| !s.is_empty()), str_param(p, "dataBase64")) {
+/// The plug-in module command `c`'s params give, loaded and checked, and its bytes: `path` (a
+/// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source).
+fn load_given(c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
+    match (str_param(p, "path").filter(|s| !s.is_empty()), str_param(p, "dataBase64")) {
         (_, Some(data)) => {
             if data.len() > MAX_DATA_CHARS {
-                return Err(bad(C, "`dataBase64` is larger than the module limit"));
+                return Err(bad(c, "`dataBase64` is larger than the module limit"));
             }
-            let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(C, "`dataBase64` is not valid base64"))?;
+            let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(c, "`dataBase64` is not valid base64"))?;
             let plugin = Plugin::load(&bytes, vectorcraft_plugins::Limits::default()).map_err(err)?;
             let plugin = match str_param(p, "name") {
                 Some(name) => plugin.with_source(name),
                 None => plugin,
             };
-            (plugin, bytes)
+            Ok((plugin, bytes))
         }
-        (Some(path), None) => load_path(path)?,
-        (None, None) => return Err(bad(C, "give `path` (a .wasm file) or `dataBase64` (the module)")),
-    };
+        (Some(path), None) => load_path(path),
+        (None, None) => Err(bad(c, "give `path` (a .wasm file) or `dataBase64` (the module)")),
+    }
+}
+
+/// `plugin.install`: loads and checks the module, refuses one that asks for a heavy budget unless
+/// `allowHeavy` says the user agreed, keeps it for the next start and installs it → its
+/// `plugin.list` entry.
+fn install(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "plugin.install";
+    let (plugin, bytes) = load_given(C, p)?;
     if !p.get("replace").and_then(Value::as_bool).unwrap_or(true) && registry::get(plugin.id()).is_some() {
         return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
+    }
+    // A heavy plug-in is installed once the user agrees: whoever installs it asks them first.
+    if plugin.manifest().budget == Budget::Heavy && !p.get("allowHeavy").and_then(Value::as_bool).unwrap_or(false) {
+        let (minutes, times) = vectorcraft_plugins::heavy_terms();
+        return Err(bad(
+            C,
+            format!(
+                "“{}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees",
+                plugin.manifest().name
+            ),
+        ));
     }
     // Installed plug-ins stay installed after a restart (#2541).
     s.store_plugin(plugin.id(), &bytes);
     Ok(describe(&registry::install(plugin)))
+}
+
+/// `plugin.inspect`: what installing the module would install, without installing it.
+fn inspect(_: &mut Session, p: &Value) -> Result<Value> {
+    load_given("plugin.inspect", p).map(|(plugin, _)| describe(&plugin))
 }
 
 /// The plug-in in the `.wasm` file `path`, and its module.
@@ -210,7 +350,12 @@ fn load_folder(folder: &str) -> Value {
         return json!({"folder": folder, "error": e});
     }
     // A file in it may be a link to one elsewhere.
-    match registry::load_folder_where(std::path::Path::new(folder), |f| crate::file_access::check_read(&f.to_string_lossy())) {
+    match registry::load_folder_where(std::path::Path::new(folder), |f| match f.to_str() {
+        Some(f) => crate::file_access::check_read(f),
+        // A lossy name would check another file than the one loaded.
+        None if crate::file_access::current().is_none() => Ok(()),
+        None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+    }) {
         Ok(r) => {
             json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>()})
         }
@@ -230,7 +375,7 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
         None => s.prefs.plugins_folder.trim().to_string(),
     };
     if folder.is_empty() {
-        return Err(bad(C, "no folder: pass `path` or set Preferences › Performance & Storage › Additional Plug-ins Folder"));
+        return Err(bad(C, "no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder"));
     }
     let report = load_folder(&folder);
     if let Some(e) = report.get("error").and_then(Value::as_str) {
@@ -260,6 +405,8 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     if registry::remove(id) { Ok(json!({"removed": id})) } else { Err(err(vectorcraft_plugins::Error::NotFound(id.into()))) }
 }
 
+/// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove` and
+/// `.reload`.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -267,7 +414,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), size, source}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
             always,
             list
         ),
@@ -294,9 +441,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
+        ),
+        cmd!(
+            query "plugin.inspect",
+            "Inspect Plug-in",
+            [],
+            None,
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have",
+            always,
+            inspect
         ),
         cmd!(query "plugin.remove", "Remove Plug-in", [], None, "{id} uninstall a plug-in (its live effects then leave the geometry as it is) → {removed}", always, remove),
         cmd!(

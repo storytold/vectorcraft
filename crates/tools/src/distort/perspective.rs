@@ -549,6 +549,11 @@ impl PerspectiveGrid {
         let Some(h) = self.homography(plane) else { return vec![] };
         let d = self.domain(plane);
         let mut out = vec![];
+        // A stored grid is not checked: no spacing, or an extent that isn't a number, has no lines.
+        let (w, h_len) = (d.width(), d.height());
+        if !(self.cell.is_finite() && self.cell > 0.0 && w.is_finite() && h_len.is_finite()) {
+            return out;
+        }
         let step = |len: f64| {
             let mut s = self.cell;
             while len / s > 120.0 {
@@ -556,20 +561,22 @@ impl PerspectiveGrid {
             }
             s
         };
-        let (su, sv) = (step(d.width()), step(d.height()));
-        let mut u = 0.0;
-        while u <= d.width() + 1e-9 {
-            if let (Some(a), Some(b)) = (h.apply(Point::new(u, 0.0)), h.apply(Point::new(u, d.height()))) {
+        let (su, sv) = (step(w), step(h_len));
+        // Counted, not summed: a count in whole lines (at most 121 a way). The fixed 1e-9
+        // tolerance can inflate the count when the whole domain is far smaller than it, so the
+        // bound is capped on its own, before any loop runs.
+        let count = |len: f64, s: f64| ((len + 1e-9) / s).floor().clamp(0.0, 120.0) as usize;
+        for i in 0..=count(w, su) {
+            let u = i as f64 * su;
+            if let (Some(a), Some(b)) = (h.apply(Point::new(u, 0.0)), h.apply(Point::new(u, h_len))) {
                 out.push((a, b));
             }
-            u += su;
         }
-        let mut v = 0.0;
-        while v <= d.height() + 1e-9 {
-            if let (Some(a), Some(b)) = (h.apply(Point::new(0.0, v)), h.apply(Point::new(d.width(), v))) {
+        for i in 0..=count(h_len, sv) {
+            let v = i as f64 * sv;
+            if let (Some(a), Some(b)) = (h.apply(Point::new(0.0, v)), h.apply(Point::new(w, v))) {
                 out.push((a, b));
             }
-            v += sv;
         }
         out
     }

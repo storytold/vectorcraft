@@ -184,9 +184,14 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
         row: u64,
     }
     let mut chains: Vec<Chain> = vec![];
-    let mut y = y0 + step / 2.0;
     let mut row = 0u64;
-    while y < y1 {
+    // Rows are counted, not summed: adding a step that is below the spacing of the numbers at `y`
+    // would never move it.
+    while row <= 2001 {
+        let y = y0 + step / 2.0 + row as f64 * step;
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
+            break;
+        }
         let mut xs: Vec<f64> = vec![];
         for pl in &polys {
             for w in pl.windows(2) {
@@ -225,7 +230,6 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
             }
         }
         row += 1;
-        y += step;
     }
     let lines: Vec<SubPath> = chains
         .into_iter()

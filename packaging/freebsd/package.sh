@@ -19,7 +19,7 @@ LINUX="$ROOT/packaging/linux"
 APP_ID=ai.storyteller.vectorcraft
 
 SKIP_BUILD=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1; shift ;;
     -h | --help) sed -n '2,13p' "$0"; exit 0 ;;
@@ -37,7 +37,7 @@ BASENAME="vectorcraft-$VERSION-freebsd-$ARCH"
 
 echo "==> VectorCraft $VERSION for FreeBSD $ARCH"
 
-if [ "$SKIP_BUILD" = 0 ]; then
+if [[ "$SKIP_BUILD" = 0 ]]; then
   (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli)
 fi
 BIN="$CARGO_TARGET_DIR/release"
@@ -58,7 +58,7 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$VECTORCRAFT_BUILD_DATE/g" \
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/share/icons/"
 copy_docs "$STAGE/share/doc/vectorcraft"
 for f in NOTICE ASSETS.md; do
-  if [ -f "$ROOT/$f" ]; then cp "$ROOT/$f" "$STAGE/share/doc/vectorcraft/"; fi
+  if [[ -f "$ROOT/$f" ]]; then cp "$ROOT/$f" "$STAGE/share/doc/vectorcraft/"; fi
 done
 
 # ---- .tar.gz -------------------------------------------------------------------------------------

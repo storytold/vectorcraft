@@ -1,11 +1,12 @@
 //! Exporter plug-ins in File › Export › Export As: listed after the built-in formats, written
 //! whole (Use Artboards is not theirs to apply), and their parameters asked for once the file is
-//! picked. Each test installs exporters of its own: plug-ins are process-wide.
+//! picked. Each test installs exporters of its own and removes them: plug-ins are process-wide, and
+//! a format left installed would show in other tests' Export As.
 
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{app, frame, kind, names, set};
+use super::tests_export::{app, app_saving, frame, kind, names, set};
 use super::*;
 
 fn install(app: &mut VectorcraftApp, src: &str) {
@@ -13,6 +14,8 @@ fn install(app: &mut VectorcraftApp, src: &str) {
     app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
 }
 
+/// Export As lists an exporter after the built-in formats and writes its file of the whole
+/// document (Use Artboards greyed out), with the exporter's warnings in the status bar.
 #[test]
 fn export_as_lists_exporters_and_writes_their_file_whole() {
     let (mut app, written) = app(2);
@@ -37,8 +40,10 @@ fn export_as_lists_exporters_and_writes_their_file_whole() {
     assert_eq!(names(&written), ["/out/Untitled-1.tuw"]);
     assert_eq!(written.borrow()[0].1, b"Hi");
     assert!(app.ui.status.contains("a note"), "{}", app.ui.status);
+    app.run("plugin.remove", json!({"id": "test.ui.whole"})).unwrap();
 }
 
+/// An exporter with parameters asks for them once the file is picked, and writes with them.
 #[test]
 fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     let (mut app, written) = app(1);
@@ -59,6 +64,7 @@ fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     assert_eq!(names(&written), ["/out/Untitled-1.tup"]);
     let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
     assert_eq!(sent, json!({"density": 7.0, "_context": {"mode": "export", "extension": "tup", "name": "Untitled-1"}}));
+    app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
 }
 
 /// `CRAFT_UI_PLUGIN_EXPORT_SHOT=<folder>` saves the pictures of the dialogs to that folder: Export As
@@ -113,4 +119,18 @@ fn a_declining_exporter_writes_nothing() {
     assert!(written.borrow().is_empty());
     let said = r.err().unwrap_or_default() + &app.ui.status;
     assert!(said.contains("Nothing to plot."), "{said}");
+    app.run("plugin.remove", json!({"id": "test.ui.declines"})).unwrap();
+}
+
+/// Export options that aren't an object are none: the exporter is still told the file it writes,
+/// by its name and extension (here the second it lists), not the document's name and its first.
+#[test]
+fn an_exporter_is_told_its_file_whatever_the_options_are() {
+    let (mut app, written) = app_saving(1, |_| "/out/plotter-job.tnb".into());
+    install(&mut app, &tpl::echo_exporter(&tpl::exporter("test.ui.nulloptions", r#"["tna","tnb"]"#, "{}"), Echo::Params));
+    crate::io::export(&mut app, Some("plugin.test.ui.nulloptions"), None, &Value::Null).unwrap();
+    assert_eq!(names(&written), ["/out/plotter-job.tnb"]);
+    let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
+    assert_eq!(sent, json!({"_context": {"mode": "export", "extension": "tnb", "name": "plotter-job"}}));
+    app.run("plugin.remove", json!({"id": "test.ui.nulloptions"})).unwrap();
 }

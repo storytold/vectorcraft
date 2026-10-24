@@ -80,8 +80,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// Pathfinder panel › Trap…: the Trap dialog (`object.pathfinder.trap`'s options) for two or more
+/// objects.
+pub fn open_trap(app: &mut VectorcraftApp) {
+    let params = vectorcraft_effects::trap::command_defaults();
+    let _ = app.run("ui.paramDialog", json!({"command": "object.pathfinder.trap", "label": "Trap", "params": params}));
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    menu_item(ui, tl!("Trap…"), false, false);
+    if menu_item(ui, tl!("Trap…"), operands(app) >= 2, false) {
+        open_trap(app);
+    }
     let last: Option<(String, String)> = pstate(ui.ctx(), "pf-last");
     let label =
         last.as_ref().map(|(_, l)| crate::i18n::fmt(tl!("Repeat {name}"), &[("name", tl!(l))])).unwrap_or_else(|| tl!("Repeat Pathfinder").into());
@@ -141,5 +150,42 @@ mod tests {
             assert_eq!(node.role(), egui::accesskit::Role::Button, "{label}");
             assert!(!node.is_disabled(), "{label}");
         }
+    }
+
+    /// The panel menu's Trap… is enabled for two objects and opens the Trap options; OK adds the
+    /// trap above them as one selected group in one undo step.
+    #[test]
+    fn trap_opens_its_options_and_ok_traps_the_selection() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut rect = |x: f64, color: &str| {
+            let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+            app.run("paint.setFill", json!({"color": color})).unwrap();
+            id
+        };
+        let (a, b) = (rect(10.0, "#ffff00"), rect(60.0, "#0000ff"));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        // Menu rows pad their label where a check mark would go.
+        let one = tree(|ui| menu(&mut app, ui));
+        assert!(named(&one, "   Trap…").is_disabled(), "one object has nothing to trap with");
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        let two = tree(|ui| menu(&mut app, ui));
+        assert!(!named(&two, "   Trap…").is_disabled());
+        open_trap(&mut app);
+        let d = app.ui.dialog.as_mut().expect("the Trap options");
+        assert_eq!(d.str("__command"), "object.pathfinder.trap");
+        for key in ["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"] {
+            assert!(d.fields.contains_key(key), "{key}");
+        }
+        d.fields.insert("thickness".into(), json!(2));
+        let undo = app.session.doc().unwrap().history.undo.len();
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.history.undo.len(), undo + 1);
+        let group = st.doc.node(*st.selection.objects.first().unwrap()).unwrap();
+        let trap = &group.children().unwrap()[0];
+        let bb = trap.geometric_bounds().unwrap();
+        assert!((bb.x0 - 60.0).abs() < 0.02 && (bb.x1 - 62.0).abs() < 0.02, "2 pt into the blue: {bb:?}");
+        assert!(trap.appearance.fill().is_some_and(|f| f.overprint));
     }
 }

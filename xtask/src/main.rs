@@ -27,10 +27,13 @@ commands:
   assets          check that every icon/image/font/asset is attributed in ASSETS.md
   brands          check that user-visible text (labels, params docs, MCP, docs, packaging) names no other vendor's products
   cursors         warn about Cursor values with no entry in crates/tools/src/cursors.toml (never fails)
+  i18n-report     list the strings each language's catalog lacks, shown in English (fails only on a
+                  broken scan; ci runs it too)
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
-  ci              fmt --check, clippy -D warnings, test, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), layers, wasm (stops at first failure)
+  test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
+  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -49,9 +52,11 @@ fn main() -> ExitCode {
         Some("assets") => assets::run(&root()),
         Some("brands") => brands::run(&root()),
         Some("cursors") => cursors::run(&root()),
+        Some("i18n-report") => cmd_i18n_report(),
         Some("layers") => cmd_layers(),
         Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
+        Some("test") => cmd_test().and_then(|()| cmd_doctests()),
         Some("ci") => cmd_ci(),
         Some("corpus") if rest.contains(&"--affinity") => affinity_corpus::fetch(),
         Some("corpus") => cmd_corpus(rest.contains(&"--download")),
@@ -201,21 +206,43 @@ fn wasm_set() -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
+/// reports every crate that fails rather than only the first.
 fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
-    let mut results = Vec::new();
+    let mut c = cargo();
+    c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
     for pkg in &set {
-        let mut c = cargo();
-        c.args(["check", "--target", "wasm32-unknown-unknown", "-p", pkg]);
-        let ok = run(c, &format!("cargo check --target wasm32-unknown-unknown -p {pkg}")).is_ok();
-        results.push((pkg.clone(), ok));
+        c.args(["-p", pkg]);
     }
-    println!("\nwasm32-unknown-unknown check:");
-    for (p, ok) in &results {
-        println!("  {:<6} {p}", if *ok { "ok" } else { "FAIL" });
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+}
+
+/// Whether `cargo nextest` is installed.
+fn has_nextest() -> bool {
+    cargo().args(["nextest", "--version"]).output().is_ok_and(|o| o.status.success())
+}
+
+/// The workspace's unit and integration tests, without examples (clippy still checks those).
+/// nextest runs each test in its own process, in parallel across all test binaries.
+fn cmd_test() -> Result<(), String> {
+    const TARGETS: [&str; 3] = ["--lib", "--bins", "--tests"];
+    let mut c = cargo();
+    if has_nextest() {
+        c.args(["nextest", "run", "--workspace"]).args(TARGETS);
+        run(c, "cargo nextest run --workspace --lib --bins --tests")
+    } else {
+        eprintln!("note: cargo-nextest is not installed; running cargo test (cargo install cargo-nextest for faster runs)");
+        c.args(["test", "--workspace"]).args(TARGETS);
+        run(c, "cargo test --workspace --lib --bins --tests")
     }
-    let failed = results.iter().filter(|r| !r.1).count();
-    if failed == 0 { Ok(()) } else { Err(format!("{failed} crate(s) failed the wasm check")) }
+}
+
+/// The doctests, which nextest doesn't run.
+fn cmd_doctests() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "--workspace", "--doc"]);
+    run(c, "cargo test --workspace --doc")
 }
 
 /// `cargo xtask ci`: each step in turn, stopping at the first that fails; the summary names the
@@ -235,18 +262,12 @@ fn cmd_ci() -> Result<(), String> {
             "clippy",
             Box::new(|| {
                 let mut c = cargo();
-                c.args(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]);
-                run(c, "cargo clippy --workspace --all-targets -- -D warnings")
+                c.args(["clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]);
+                run(c, "cargo clippy --workspace --all-targets --keep-going -- -D warnings")
             }),
         ),
-        (
-            "test",
-            Box::new(|| {
-                let mut c = cargo();
-                c.args(["test", "--workspace"]);
-                run(c, "cargo test --workspace")
-            }),
-        ),
+        ("test", Box::new(cmd_test)),
+        ("doctests", Box::new(cmd_doctests)),
         (
             "no-bundled-fonts",
             Box::new(|| {
@@ -256,13 +277,22 @@ fn cmd_ci() -> Result<(), String> {
                 run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts")?;
                 // The egui panels and the MCP server as such an embedder builds them: nothing turns
                 // the fonts back on.
-                libraries_without_bundled_fonts()
+                libraries_without_bundled_fonts()?;
+                // The panels without their interface faces lint clean and still bind every family
+                // they draw in.
+                let mut c = cargo();
+                c.args(["clippy", "-p", "vectorcraft-ui-egui", "--no-default-features", "--all-targets", "--", "-D", "warnings"]);
+                run(c, "cargo clippy -p vectorcraft-ui-egui --no-default-features --all-targets -- -D warnings")?;
+                let mut c = cargo();
+                c.args(["test", "-p", "vectorcraft-ui-egui", "--no-default-features", "--test", "install_fonts"]);
+                run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts")
             }),
         ),
         ("pdf-deps", Box::new(|| pdf_deps::run(&root()))),
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
+        ("i18n-report", Box::new(cmd_i18n_report)),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];
@@ -308,4 +338,12 @@ Tests that use a corpus skip cleanly when it is absent.
         return Ok(());
     }
     pngsuite::fetch()
+}
+
+/// Prints the strings each language's catalog has no row for (`i18n::tests::untranslated_report`).
+/// The interface shows them in English, so a gap never fails it; only a scan that finds nothing does.
+fn cmd_i18n_report() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "-p", "vectorcraft-ui-egui", "--lib", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, "cargo test -p vectorcraft-ui-egui --lib -- i18n::tests::untranslated_report --exact --nocapture")
 }

@@ -602,6 +602,8 @@ mod tests {
             locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
+            show_video_safe_areas: false,
+            video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
         });
         d.guides = vec![Guide { artboard: Some(id), ..Guide::new(false, 150.0) }];
@@ -916,6 +918,8 @@ mod tests {
             locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
+            show_video_safe_areas: false,
+            video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
         });
         doc.ruler_origin = Point::new(5.0, 5.0);

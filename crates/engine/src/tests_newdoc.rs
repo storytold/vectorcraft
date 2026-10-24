@@ -174,6 +174,20 @@ fn categories_list_generated_presets_with_neutral_names() {
     assert!(s.execute("file.newPresets", &json!({"category": "Furniture"})).is_err());
 }
 
+/// Branding has the Japanese business card, 91 × 55 mm, after the 85 × 55 mm one (#3828).
+#[test]
+fn branding_has_the_japanese_business_card() {
+    let mut s = Session::new();
+    let branding = presets(&mut s, "Branding");
+    let names: Vec<&str> = branding.iter().map(|p| p["name"].as_str().unwrap()).collect();
+    let at = names.iter().position(|n| *n == "Business Card 91 × 55 mm").unwrap_or_else(|| panic!("{names:?}"));
+    assert_eq!(names[at - 1], "Business Card 85 × 55 mm");
+    s.execute("file.new", &json!({"preset": "Business Card 91 × 55 mm"})).unwrap();
+    let b = boards(&s)[0];
+    let mm = 72.0 / 25.4;
+    assert!((b.width() - 91.0 * mm).abs() < 1e-6 && (b.height() - 55.0 * mm).abs() < 1e-6, "{b:?}");
+}
+
 #[test]
 fn recent_remembers_the_last_sizes() {
     let mut s = Session::new();

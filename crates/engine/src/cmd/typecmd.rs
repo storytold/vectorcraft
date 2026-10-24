@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph) → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows → {ids}",
             has_selection,
             create_outlines
         ),
@@ -150,7 +150,7 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
         Some(NodeKind::Text(t)) => Some(t.optical_margin),
         _ => None,
     });
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!first.unwrap_or(false));
+    let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
     s.edit("Optical Margin Alignment", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -168,7 +168,7 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
 /// setting) on the document and every text object, in one undo step. Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!current);
+    let on = switch_or(p, "on", !current, "type.systemLayout")?;
     s.edit("System Layout", |d, _| {
         d.setup.system_layout = on;
         let mut ids = vec![];
@@ -198,7 +198,7 @@ fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
         Some(NodeKind::Text(t)) => Some(t.fractional_widths),
         _ => None,
     });
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!first.unwrap_or(true));
+    let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
     s.edit("Fractional Widths", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -219,7 +219,7 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.ruby";
     let ids = text_targets(s, p, C)?;
     let range = TextRange::parse(p, C)?;
-    let remove = p.get("remove").and_then(Value::as_bool).unwrap_or(false);
+    let remove = switch_or(p, "remove", false, C)?;
     let reading = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
     if !remove && reading.is_none() {
         return Err(bad(C, "give `text` (the reading) or `remove`"));
@@ -235,11 +235,11 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
         Some("end") | Some("right") | Some("bottom") => RubyAlign::End,
         Some(_) => return Err(bad(C, "`align` is start, center or end")),
     };
-    let size = p.get("size").and_then(Value::as_f64).unwrap_or(50.0);
+    let size = number_or(p, "size", 50.0, C)?;
     if !size.is_finite() || !(1.0..=100.0).contains(&size) {
         return Err(bad(C, "`size` is a percentage of the base text's size, 1 to 100"));
     }
-    let overhang = p.get("overhang").and_then(Value::as_bool).unwrap_or(true);
+    let overhang = switch_or(p, "overhang", true, C)?;
     let mut first: Option<Value> = None;
     s.edit("Ruby", |d, _| {
         for id in &ids {
@@ -544,21 +544,53 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         }
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
+        let threaded = super::threads::frames(d);
         for tid in texts {
             let Some(n) = d.node(tid).cloned() else { continue };
             let NodeKind::Text(t) = &n.kind else { continue };
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
             let mut children = vec![];
+            // Where each run's glyphs end among `children`: the canvas paints a run's ruby with the
+            // run, before the runs after it, so its outlines go there too.
+            let mut run_end: std::collections::BTreeMap<usize, usize> = Default::default();
             for (gi, g) in lay.glyphs.iter().enumerate() {
-                // Inline graphics become instances of their symbols, in place.
-                if let Some(ig) = lay.inlines.iter().find(|i| i.glyph == gi)
-                    && let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref())
-                {
-                    let id = d.alloc_id();
-                    let xf = t.xf * ig.xf * d.symbol_natural_xf(&art.symbol);
-                    children.push(Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf })));
-                    continue;
+                'glyph: {
+                    // Inline graphics become instances of their symbols, in place.
+                    if let Some(ig) = lay.inlines.iter().find(|i| i.glyph == gi)
+                        && let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref())
+                    {
+                        let id = d.alloc_id();
+                        let xf = t.xf * ig.xf * d.symbol_natural_xf(&art.symbol);
+                        children.push(Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf })));
+                        break 'glyph;
+                    }
+                    // Colour bitmap glyphs (emoji) become embedded images, in place, their pixels
+                    // taken into the document: glyphs that show the same image share them.
+                    if let Some(image) = g.placed_image_node(t.xf) {
+                        children.push(Arc::new(d.reid(&image)));
+                        break 'glyph;
+                    }
+                    // COLR glyphs become groups of their layers, in place, with ids of the document's.
+                    if let Some(art) = g.placed_colour(t.xf) {
+                        children.push(Arc::new(d.reid(&art)));
+                        break 'glyph;
+                    }
+                    let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
+                    if path.is_empty() {
+                        break 'glyph;
+                    }
+                    let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+                    let mut node = shape_node(d, path, None);
+                    node.appearance = st.appearance().into();
+                    children.push(Arc::new(node));
                 }
+                run_end.insert(g.run, children.len());
+            }
+            // Ruby (furigana) glyphs, where the layout put them, in their base text's run's paint,
+            // right after that run's glyphs, as the canvas draws them (colour glyphs in ruby draw
+            // nothing there either).
+            let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
+            for g in &lay.ruby {
                 let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
                 if path.is_empty() {
                     continue;
@@ -566,8 +598,21 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, path, None);
                 node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                // After the glyphs of its run and of the runs before it.
+                let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
+                ruby.push((at, Arc::new(node)));
             }
+            ruby.sort_by_key(|(at, _)| *at);
+            let mut ruby = ruby.into_iter().peekable();
+            let mut placed = Vec::with_capacity(children.len() + ruby.len());
+            for (i, c) in children.into_iter().enumerate() {
+                while let Some((_, r)) = ruby.next_if(|(at, _)| *at == i) {
+                    placed.push(r);
+                }
+                placed.push(c);
+            }
+            placed.extend(ruby.map(|(_, r)| r));
+            let mut children = placed;
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
@@ -591,6 +636,8 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
+        // Outlined frames of threaded text leave their threads with the text they show.
+        super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);
         Ok(out)
     })?;
@@ -890,6 +937,7 @@ fn size_area(t: &mut TextObject, w: Option<f64>, h: Option<f64>) -> bool {
 /// `fitMinPercent`), starting from `cur`. None when `p` sets neither (or only `fitMinPercent`
 /// while the fit isn't Shrink Text).
 pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaFit>> {
+    check_numbers(p, &["fitMinPercent"], c)?;
     let min = p.get("fitMinPercent").and_then(Value::as_f64);
     let cur_min = match cur {
         AreaFit::ShrinkText { min_percent } => Some(min_percent),
@@ -942,6 +990,7 @@ const AREA_KEYS: [&str; 7] = ["rows", "columns", "gutter", "inset", "firstBaseli
 
 fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.areaOptions";
+    check_numbers(p, &["width", "height"], C)?;
     let ids: Vec<NodeId> = {
         let d = &s.doc()?.doc;
         text_targets(s, p, C)?.into_iter().filter(|i| area_text(d.node(*i)).is_some()).collect()
@@ -1236,8 +1285,10 @@ mod area_tests {
         // New type inherits the document's setting.
         let made = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Z"})).unwrap()["id"].as_u64().unwrap();
         assert!(text(&s, made).system_layout);
-        // A boolean given as text is ignored, so the setting toggles off.
-        assert_eq!(s.execute("type.systemLayout", &json!({"on": "no"})).unwrap()["on"], false);
+        // A boolean given as text is an error, and the setting stays on.
+        assert!(s.execute("type.systemLayout", &json!({"on": "no"})).is_err());
+        assert!(setup(&s).system_layout && text(&s, id).system_layout);
+        assert_eq!(s.execute("type.systemLayout", &json!({"on": false})).unwrap()["on"], false);
         assert!(!setup(&s).system_layout && !text(&s, id).system_layout && !text(&s, made).system_layout);
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(setup(&s).system_layout && text(&s, id).system_layout);
@@ -1282,8 +1333,10 @@ mod area_tests {
         assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
         assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
         assert_eq!(serde_json::to_value(text(&s)).unwrap()["fractionalWidths"], false);
-        // A boolean given as text is ignored, so the flag toggles back on.
-        assert_eq!(s.execute("type.fractionalWidths", &json!({"on": "no"})).unwrap()["on"], true);
+        // A boolean given as text is an error, and the flag stays off.
+        assert!(s.execute("type.fractionalWidths", &json!({"on": "no"})).is_err());
+        assert!(!text(&s).fractional_widths);
+        assert_eq!(s.execute("type.fractionalWidths", &json!({})).unwrap()["on"], true);
         assert!(text(&s).fractional_widths);
         assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
         assert!(!text(&s).fractional_widths);
@@ -1414,6 +1467,165 @@ mod area_tests {
         s.execute("paraStyle.new", &json!({"name": "Stretched", "attrs": {"kashida": "stylistic"}})).unwrap();
         s.execute("paraStyle.apply", &json!({"name": "Stretched", "id": id})).unwrap();
         assert_eq!(text(&s).para_at(1).kashida, Kashida::Stylistic);
+    }
+
+    /// Paragraph panel › Bullets: `text.setFormat {list, bullet}` makes the paragraphs it touches a
+    /// bulleted list and refuses unknown values. A paragraph that joins a list with no left or
+    /// first-line indent gets 18 pt and -18 pt, unless the call sets an indent, and one with indents
+    /// keeps them. The list is saved only when set and opens with the file, Return continues it,
+    /// "none" turns it off, and paragraph styles set it and turn it off.
+    #[test]
+    fn bulleted_lists_are_set_per_paragraph_saved_and_continued() {
+        use vectorcraft_doc::text::{Bullet, ParaList};
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id =
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+                .as_u64()
+                .unwrap();
+        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (**t).clone(),
+            _ => panic!("text"),
+        };
+        let list = |s: &Session, i: usize| text(s).para_at(i).list;
+        let indents = |s: &Session, i: usize| (text(s).para_at(i).left_indent, text(s).para_at(i).first_line_indent);
+        let dot = Some(ParaList::bulleted(Bullet::Dot));
+        assert_eq!(list(&s, 0), None);
+        assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("list").is_none(), "no list is saved without one");
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("text.setFormat", &json!({"start": 4, "end": 4, "leftIndent": 30, "firstLineIndent": 5})).unwrap();
+        // The first two paragraphs: the first gets the hanging indent, the second keeps its indents.
+        s.execute("text.setFormat", &json!({"list": "bullet", "start": 0, "end": 4})).unwrap();
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (dot, dot, None));
+        assert_eq!((indents(&s, 0), indents(&s, 1), indents(&s, 2)), ((18.0, -18.0), (30.0, 5.0), (0.0, 0.0)));
+        // `bullet` picks the bullet, and `list: "bullet"` keeps it; the indents stay as they are.
+        s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+        s.execute("text.setFormat", &json!({"list": "bullet", "start": 0, "end": 0})).unwrap();
+        let square = Some(ParaList::bulleted(Bullet::Square));
+        assert_eq!((list(&s, 0), indents(&s, 0)), (square, (18.0, -18.0)));
+        for bad in [json!({"list": "numbers"}), json!({"bullet": "star"}), json!({"list": 1}), json!({"bullet": true})] {
+            assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+        }
+        assert_eq!((list(&s, 0), list(&s, 2)), (square, None), "an unknown value changes nothing");
+        assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square"}));
+        // A saved list reads the fields it leaves out as their defaults and ignores those it doesn't know.
+        let read = |v: serde_json::Value| serde_json::from_value::<vectorcraft_doc::ParaStyle>(json!({ "list": v })).unwrap().list;
+        assert_eq!((read(json!({})), read(json!({"bullet": "dash", "level": 2}))), (dot, Some(ParaList::bulleted(Bullet::Dash))));
+        let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        assert_eq!((back.para_at(0).list, back.para_at(1).list, back.para_at(2).list), (square, dot, None));
+        // Return at the end of a list item starts another one.
+        s.execute("text.editRange", &json!({"id": id, "start": 3, "end": 3, "insert": "\nOne more"})).unwrap();
+        assert_eq!((list(&s, 1), indents(&s, 1)), (square, (18.0, -18.0)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        // "none" turns the list off and leaves the indents.
+        s.execute("text.setFormat", &json!({"bullet": "none", "start": 0, "end": 0})).unwrap();
+        assert_eq!((list(&s, 0), indents(&s, 0)), (None, (18.0, -18.0)));
+        s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+        assert_eq!(list(&s, 1), None);
+        // Indents the call sets win over the hanging indent.
+        s.execute("text.setFormat", &json!({"list": "bullet", "leftIndent": 0, "firstLineIndent": 0, "start": 8, "end": 8})).unwrap();
+        assert_eq!((list(&s, 2), indents(&s, 2)), (dot, (0.0, 0.0)));
+        // A style that holds a list sets it; a style captured from a paragraph without one turns it off.
+        s.execute("paraStyle.new", &json!({"name": "Listed", "attrs": {"list": {"bullet": "dash"}}})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": "Listed", "id": id})).unwrap();
+        let dash = Some(ParaList::bulleted(Bullet::Dash));
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (dash, dash, dash));
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paraStyle.new", &json!({"name": "Plain", "id": plain})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+    }
+
+    /// Numbered lists: `list: "number"` numbers the paragraphs 1, 2, 3 and `number` picks the
+    /// style; a list switched between bullets and numbers keeps its bullet and its indents; an
+    /// unknown value is an error; the list is saved, reopened and carried by paragraph styles.
+    #[test]
+    fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
+        use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id =
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+                .as_u64()
+                .unwrap();
+        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (**t).clone(),
+            _ => panic!("text"),
+        };
+        let list = |s: &Session, i: usize| text(s).para_at(i).list;
+        let numbers = |s: &Session| {
+            vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+        };
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("text.setFormat", &json!({"list": "number"})).unwrap();
+        let arabic = Some(ParaList::numbered(NumberStyle::Arabic));
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (arabic, arabic, arabic));
+        assert_eq!((text(&s).para_at(0).left_indent, text(&s).para_at(0).first_line_indent), (18.0, -18.0));
+        assert_eq!(numbers(&s), ["1.", "2.", "3."]);
+        // `number` picks the style, `list: "number"` keeps it, and the count runs on through both.
+        s.execute("text.setFormat", &json!({"number": "upperRoman", "start": 0, "end": 0})).unwrap();
+        s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 0})).unwrap();
+        let roman = Some(ParaList::numbered(NumberStyle::UpperRoman));
+        assert_eq!(list(&s, 0), roman);
+        assert_eq!(numbers(&s), ["I.", "2.", "3."]);
+        // A bullet makes it bulleted, a number style numbered again, and `list: "bullet"` brings
+        // back the bullet it had; the indents stay as they are.
+        s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+        assert_eq!(list(&s, 0), Some(ParaList::bulleted(Bullet::Square)));
+        s.execute("text.setFormat", &json!({"number": "lowerLetters", "start": 0, "end": 0})).unwrap();
+        let letters = Some(ParaList { bullet: Bullet::Square, number: Some(NumberStyle::LowerLetters) });
+        assert_eq!(list(&s, 0), letters);
+        assert_eq!(numbers(&s), ["a.", "2.", "3."]);
+        assert_eq!((text(&s).para_at(0).left_indent, text(&s).para_at(0).first_line_indent), (18.0, -18.0));
+        for bad in [json!({"number": "roman"}), json!({"number": 1}), json!({"list": "numbered"}), json!({"number": true})] {
+            assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+        }
+        assert_eq!((list(&s, 0), list(&s, 1)), (letters, arabic), "an unknown value changes nothing");
+        assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square", "number": "lowerLetters"}));
+        let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        assert_eq!((back.para_at(0).list, back.para_at(1).list, back.para_at(2).list), (letters, arabic, arabic));
+        // Return at the end of a numbered item starts the next number.
+        s.execute("text.editRange", &json!({"id": id, "start": 13, "end": 13, "insert": "\nFour"})).unwrap();
+        assert_eq!(numbers(&s), ["a.", "2.", "3.", "4."]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        // "none" turns the list off; the next numbered paragraph starts again at 1.
+        s.execute("text.setFormat", &json!({"number": "none", "start": 4, "end": 4})).unwrap();
+        assert_eq!(list(&s, 1), None);
+        assert_eq!(numbers(&s), ["a.", "1."]);
+        // A style that holds a numbered list sets it, a style captured from a numbered paragraph
+        // carries its list, and one captured from a paragraph without a list turns it off.
+        s.execute("paraStyle.new", &json!({"name": "Roman", "attrs": {"list": {"number": "upperRoman"}}})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": "Roman", "id": id})).unwrap();
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (roman, roman, roman));
+        assert_eq!(numbers(&s), ["I.", "II.", "III."]);
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paraStyle.new", &json!({"name": "Plain", "id": plain})).unwrap();
+        s.execute("paraStyle.new", &json!({"name": "Captured", "id": id})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": "Captured", "id": plain})).unwrap();
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(plain)).map(|n| &n.kind) else { panic!("text") };
+        assert_eq!(t.para_at(0).list, roman);
+        s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
+        assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+    }
+
+    /// Type › Create Outlines makes a path of a list item's bullet as well as of its characters.
+    #[test]
+    fn create_outlines_makes_a_path_of_the_bullet() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let outlined = |s: &mut Session, list: bool| {
+            let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One"})).unwrap()["id"].as_u64().unwrap();
+            if list {
+                s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet"})).unwrap();
+            }
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+            s.doc().unwrap().doc.node(NodeId(g)).unwrap().children().unwrap().len()
+        };
+        let plain = outlined(&mut s, false);
+        assert_eq!(outlined(&mut s, true), plain + 1, "one more path: the bullet");
     }
 
     /// Paragraph panel menu › Justification…: `text.setFormat` sets each paragraph's word and
@@ -1764,6 +1976,7 @@ mod area_tests {
     /// when set, each value clamped to its axis's range, and cleared by another font or style.
     #[test]
     fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
+        let _fonts = crate::adding_fonts();
         use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY as FAMILY, two_axis_font};
         vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
         let mut s = Session::new();
@@ -2070,6 +2283,72 @@ mod ruby_tests {
         // Setting all the text drops the old ruby (it isn't the same text any more).
         s.execute("text.setText", &json!({"id": id, "text": "新しい"})).unwrap();
         assert!(text_of(&s, id).ruby.is_empty());
+    }
+
+    /// Create Outlines keeps the ruby: one path per inked glyph of the base text and of the
+    /// reading, each where the layout (and so the canvas) puts it.
+    #[test]
+    fn create_outlines_keeps_the_ruby_where_it_is_laid_out() {
+        use kurbo::Shape;
+        let (mut s, id) = session_with_text();
+        s.execute("type.ruby", &json!({"text": "かんじ", "start": 0, "end": 6})).unwrap();
+        let t = text_of(&s, id).clone();
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let inked = |gs: &[vectorcraft_text::PositionedGlyph]| -> Vec<kurbo::Rect> {
+            gs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf.transform_rect_bbox(g.outline.bounding_box())).collect()
+        };
+        let (base, ruby) = (inked(&lay.glyphs), inked(&lay.ruby));
+        assert_eq!(ruby.len(), 3, "the reading's three kana have ink");
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let paths: Vec<kurbo::Rect> = d.node(NodeId(g)).unwrap().children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        assert_eq!(paths.len(), base.len() + ruby.len(), "a path per glyph, the reading's included: {paths:?}");
+        let near = |a: &kurbo::Rect, b: &kurbo::Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < 0.05);
+        for r in &ruby {
+            assert!(paths.iter().any(|p| near(p, r)), "the kana at {r:?} among {paths:?}");
+        }
+        // Undo brings the type back with its ruby.
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(text_of(&s, id).ruby.len(), 1);
+    }
+
+    /// The outlines stack as the canvas paints type, run by run (`render`'s `TextGeom::run`): a
+    /// run's reading goes right after its base glyphs, below the glyphs of the runs after it. Here
+    /// the red 漢's wide reading hangs over the big blue 字.
+    #[test]
+    fn create_outlines_stacks_each_reading_with_its_run() {
+        use kurbo::Shape;
+        let (mut s, id) = session_with_text();
+        s.execute("text.setText", &json!({"id": id, "text": "漢字"})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "fill": "#ff0000"})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "size": 60, "fill": "#0000ff"})).unwrap();
+        s.execute("type.ruby", &json!({"text": "かんじかんじ", "start": 0, "end": 3, "size": 100})).unwrap();
+        let t = text_of(&s, id).clone();
+        assert_eq!(t.runs.len(), 2, "{:?}", t.runs);
+        let (red, blue) = (t.runs[0].style.fill.clone(), t.runs[1].style.fill.clone());
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let ink = |gs: &mut dyn Iterator<Item = &vectorcraft_text::PositionedGlyph>| {
+            gs.filter(|g| !g.outline.elements().is_empty()).map(|g| g.outline.bounding_box()).reduce(|a, b| a.union(b)).unwrap()
+        };
+        let (reading, big) = (ink(&mut lay.ruby.iter()), ink(&mut lay.glyphs.iter().filter(|g| g.run == 1)));
+        assert!(reading.intersect(big).area() > 0.0, "the reading {reading:?} hangs over 字 {big:?}");
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let paints: Vec<String> = d
+            .node(NodeId(g))
+            .unwrap()
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.appearance.fill().map(|f| &f.paint) {
+                Some(p) if *p == red => "red".into(),
+                Some(p) if *p == blue => "blue".into(),
+                p => format!("{p:?}"),
+            })
+            .collect();
+        // 漢 and its six kana, then 字 over them.
+        let want: Vec<String> = ["red"; 7].into_iter().chain(["blue"]).map(String::from).collect();
+        assert_eq!(paints, want);
     }
 
     /// Ruby is written to SVG and PDF with its text: SVG outlines the type where ruby is present

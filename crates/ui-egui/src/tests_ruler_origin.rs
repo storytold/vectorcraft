@@ -284,3 +284,63 @@ fn change_to_global_rulers_menu_item_toggles_and_names_the_other_mode() {
     let spec = vectorcraft_engine::command_specs().iter().find(|c| c.id == "view.globalRulers").unwrap();
     assert_eq!(spec.shortcut, Some("Cmd+Alt+R"));
 }
+
+/// The top ruler's labels and where each starts on screen.
+fn top_labels(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, f32)> {
+    frame(app, ctx, vec![], canvas::show).into_iter().filter(|(_, r)| r.min.y < 4.0 && r.min.x > 16.0).map(|(t, r)| (t, r.min.x)).collect()
+}
+
+/// Where the top ruler's label `text` starts, if it shows.
+fn label_x(labels: &[(String, f32)], text: &str) -> Option<f32> {
+    labels.iter().find(|(t, _)| t == text).map(|(_, x)| *x)
+}
+
+/// #2849: View › Rulers › Show Video Rulers shows the rulers counting the active artboard in video
+/// pixels from its top-left corner, whatever the ruler origin, a pixel as wide as the artboard's
+/// Video Ruler Pixel Aspect Ratio: at 0.5 the 400 pt artboard reads 800 at its right edge. The
+/// item then reads Hide Video Rulers, which puts the rulers back in points from the ruler origin;
+/// they follow the active artboard, and hiding the rulers names the item Show Video Rulers again.
+#[test]
+fn show_video_rulers_counts_the_active_artboard_in_pixels() {
+    let (mut app, _) = two_boards();
+    let ctx = context();
+    let tree = format!("{:?}", crate::menus::menu_tree().iter().find(|(title, _)| *title == "View").unwrap().1);
+    assert!(tree.contains("\"Show Video Rulers\", \"view.videoRulers\"") && !tree.contains("Todo(\"Show Video Rulers\""), "{tree}");
+    app.run("artboard.setProps", json!({"index": 0, "videoRulerPixelAspectRatio": 0.5})).unwrap();
+    app.run("document.setRulerOrigin", json!({"x": 100, "y": 50, "artboard": 0})).unwrap();
+    app.ui.view.rulers = false;
+    let label = |app: &VectorcraftApp| crate::menus::dynamic_label(app, "view.videoRulers", "Show Video Rulers");
+    assert_eq!(label(&app), "Show Video Rulers");
+    assert_eq!(app.run("view.videoRulers", json!({})).unwrap(), json!(true));
+    assert!(app.ui.view.rulers && app.ui.view.video_rulers, "the rulers show");
+    assert_eq!(label(&app), "Hide Video Rulers");
+    let at_100 = |app: &mut VectorcraftApp, center: Point| {
+        let v = app.view_mut().unwrap();
+        (v.zoom, v.center, v.fitted, v.rotation) = (1.0, center, true, 0.0);
+    };
+    at_100(&mut app, Point::new(200.0, 150.0));
+    // How far label `text` of `labels` starts right of `zero`, to within a hundredth of a point.
+    let from = |labels: &[(String, f32)], text: &str, zero: f32, want: f32| label_x(labels, text).is_some_and(|x| (x - zero - want).abs() < 0.01);
+    let video = top_labels(&mut app, &ctx);
+    let zero = label_x(&video, "0").unwrap();
+    assert!(from(&video, "800", zero, 400.0), "800 pixels at the right edge: {video:?}");
+    assert!(from(&video, "100", zero, 50.0), "{video:?}");
+    // Hide Video Rulers: points from the ruler origin, 100 pt in from the artboard's left edge.
+    assert_eq!(app.run("view.videoRulers", json!({})).unwrap(), json!(false));
+    assert!(app.ui.view.rulers && !app.ui.view.video_rulers, "the rulers stay");
+    assert_eq!(label(&app), "Show Video Rulers");
+    let points = top_labels(&mut app, &ctx);
+    assert!(from(&points, "0", zero, 100.0), "{points:?}");
+    assert!(from(&points, "300", zero, 400.0), "{points:?}");
+    // The second artboard (square pixels, 200 pt wide at x = 700) once it is the active one.
+    app.run("view.videoRulers", json!({})).unwrap();
+    app.view_mut().unwrap().artboard = 1;
+    at_100(&mut app, Point::new(800.0, -175.0));
+    let second = top_labels(&mut app, &ctx);
+    let zero = label_x(&second, "0").unwrap();
+    assert!(from(&second, "200", zero, 200.0), "{second:?}");
+    // Hidden with Show Rulers, the item offers to show them again.
+    app.run("view.rulers", json!({})).unwrap();
+    assert_eq!(label(&app), "Show Video Rulers");
+    assert!(top_labels(&mut app, &ctx).is_empty());
+}

@@ -415,7 +415,7 @@ pub fn adjust_in_document(d: &mut Document, n: &Node) -> Option<Node> {
     let src = match &n.kind {
         NodeKind::SymbolInstance { symbol, .. } if has_adjustment(n) => {
             let symbol = d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone());
-            art = crate::reshape::as_art(n, symbol.as_deref())?;
+            art = crate::reshape::as_art(Some(d), n, symbol.as_deref())?;
             &art
         }
         _ => n,

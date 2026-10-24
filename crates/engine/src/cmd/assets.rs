@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// `e` as an error of command `cmd` (for errors of the export underneath).
-fn of_cmd(cmd: &str, e: EngineError) -> EngineError {
+pub(crate) fn of_cmd(cmd: &str, e: EngineError) -> EngineError {
     match e {
         EngineError::BadParams { msg, .. } => bad(cmd, msg),
         e => e,

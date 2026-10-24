@@ -478,8 +478,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     set_pstate(ui.ctx(), "ab-anchor", Some(from));
                 } else if resp.clicked() {
                     set_pstate(ui.ctx(), "ab-anchor", Some(i));
+                    // The second click of a Ctrl/Cmd double-click leaves the row's artboard
+                    // selected. On the name, the double-click then opens the field for the
+                    // selection with it.
                     if tool && m.command {
-                        toggle(app, i, abs.len());
+                        if !(resp.double_clicked() && picked(app, abs.len()).contains(&i)) {
+                            toggle(app, i, abs.len());
+                        }
                     } else {
                         select(app, i);
                     }
@@ -553,7 +558,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete_selected(app);
     }
     if menu_item(ui, tl!("Rename"), n > 0, false) {
-        start_rename(ui.ctx(), app, sel);
+        // When the active artboard is selected, the field opens on its row; otherwise it opens on the
+        // first selected row.
+        let all = picked(app, n);
+        start_rename(ui.ctx(), app, if all.contains(&sel) { sel } else { all.first().copied().unwrap_or(sel) });
     }
     menu_item(ui, tl!("Delete Empty Artboards"), false, false);
     ui.separator();
@@ -889,9 +897,141 @@ mod tests {
         assert_eq!(names(&app), ["Artboard 1", "Solo", "Artboard 3", "Artboard 4"]);
     }
 
+    /// Paste run on the session alone (`session.execute`, which leaves the view as it is) with the
+    /// Artboard tool selects the pasted artboard and leaves the active artboard where it was. The
+    /// panel menu's Rename then opens the name field on the selected artboard's row and renames
+    /// that artboard, not the active one.
+    #[test]
+    fn the_panel_menus_rename_opens_on_a_selected_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        app.session.execute("edit.copy", &json!({})).unwrap();
+        app.session.execute("edit.paste", &json!({})).unwrap();
+        assert_eq!((selected(&app, 3), picked(&app, 3)), (1, vec![2]), "Artboard 2 is active, and the pasted Artboard 3 is selected");
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let raw = |events| egui::RawInput { events, screen_rect: screen, ..Default::default() };
+        let mut out = ctx.run_ui(raw(vec![]), |ui| menu(&mut app, ui));
+        out.textures_delta.clear();
+        let item = out
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == "Rename" => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        ctx.run_ui(raw(vec![egui::Event::PointerMoved(item), button(true), button(false)]), |ui| menu(&mut app, ui)).textures_delta.clear();
+        assert_eq!(pstate::<Option<usize>>(&ctx, "ab-edit"), Some(2), "the field opens on Artboard 3's row");
+        let mut frame = |events| ctx.run_ui(raw(events), |ui| show(&mut app, ui)).textures_delta.clear();
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        frame(vec![]);
+        frame(vec![]);
+        frame(vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Pasted".into())]);
+        frame(vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+        frame(vec![]);
+        let names: Vec<String> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+        assert_eq!(names, ["Artboard 1", "Artboard 2", "Pasted"]);
+    }
+
+    /// With the Artboard tool, Paste and Paste in Place make the pasted artboard the active one
+    /// (the navigator's and the panel's), and Cut makes the artboard before the cut one active, the
+    /// one the tool then has active.
+    #[test]
+    fn paste_and_cut_with_the_artboard_tool_make_its_artboard_active() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        let active = |app: &VectorcraftApp| (app.view().unwrap().artboard, app.session.tool_options()["active"].clone());
+        app.run("edit.copy", json!({})).unwrap();
+        app.run("edit.paste", json!({})).unwrap();
+        assert_eq!(active(&app), (3, json!(3)), "Paste: the pasted Artboard 4");
+        app.run("edit.pasteInPlace", json!({})).unwrap();
+        assert_eq!(active(&app), (4, json!(4)), "Paste in Place: the pasted Artboard 5");
+        select(&mut app, 2);
+        app.run("edit.cut", json!({})).unwrap();
+        assert_eq!(active(&app), (1, json!(1)), "Cut Artboard 3: Artboard 2");
+    }
+
+    /// `tool.setOption` with the Artboard tool's `selected` or `active` makes the artboard the tool
+    /// then has active the active one.
+    #[test]
+    fn the_artboard_tools_options_make_its_artboard_active() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        app.run("tool.setOption", json!({"key": "selected", "value": [2, 0]})).unwrap();
+        assert_eq!((app.view().unwrap().artboard, picked(&app, 3)), (2, vec![0, 2]));
+        app.run("tool.setOption", json!({"tool": "artboard", "values": {"active": 1}})).unwrap();
+        assert_eq!((app.view().unwrap().artboard, picked(&app, 3)), (1, vec![1]));
+    }
+
+    /// With the Artboard tool, a `command.batch` that stays in the document makes the artboard the
+    /// tool then has active the active one, as its steps do on their own: a batch that leaves the
+    /// tool's artboards keeps the active artboard, and Copy and Paste make the pasted one active.
+    #[test]
+    fn a_batch_in_one_document_makes_the_artboard_tools_artboard_active() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        let active = |app: &VectorcraftApp| (app.view().unwrap().artboard, app.session.tool_options()["active"].clone());
+        app.run("command.batch", json!({"commands": [{"command": "object.unlockAll", "params": {}}]})).unwrap();
+        assert_eq!(active(&app), (1, json!(1)));
+        let steps = [json!({"command": "edit.copy", "params": {}}), json!({"command": "edit.paste", "params": {}})];
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert_eq!(active(&app), (3, json!(3)), "the pasted Artboard 4");
+    }
+
+    /// With the Artboard tool, `document.activate` makes the active artboard of the document it
+    /// switches to the tool's, as choosing the document's tab does.
+    #[test]
+    fn switching_documents_with_the_artboard_tool_keeps_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 2);
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!((app.view().unwrap().artboard, app.session.tool_options()["selected"].clone()), (2, json!([2])));
+    }
+
+    /// With the Artboard tool, a `command.batch` that switches to another document and back keeps
+    /// the active artboard, and the tool starts on it. When a later step of the batch pastes an
+    /// artboard, the pasted one becomes active, as Paste on its own makes it. A later Cut of the
+    /// tool's artboard 1 makes the new first artboard active, as Cut on its own makes it.
+    #[test]
+    fn a_batch_that_switches_documents_and_back_keeps_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 2);
+        let step = |command: &str, params: Value| json!({"command": command, "params": params});
+        let back = [step("document.activate", json!({"index": 1})), step("document.activate", json!({"index": 0}))];
+        app.run("command.batch", json!({"commands": back})).unwrap();
+        assert_eq!((app.view().unwrap().artboard, app.session.tool_options()["selected"].clone()), (2, json!([2])));
+        app.run("edit.copy", json!({})).unwrap();
+        let mut steps = back.to_vec();
+        steps.push(step("edit.paste", json!({})));
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert_eq!((app.view().unwrap().artboard, app.session.tool_options()["selected"].clone()), (3, json!([3])), "the pasted Artboard 4");
+        let mut steps = back.to_vec();
+        steps.push(step("edit.cut", json!({})));
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 3, "Artboard 1 cut");
+        assert_eq!((app.view().unwrap().artboard, app.session.tool_options()["selected"].clone()), (0, json!([0])), "the new first artboard");
+    }
+
     /// With the Artboard tool, a double-click on a name with Shift or Ctrl/Cmd held that leaves
-    /// several artboards selected opens the name field for all of them. A plain double-click
-    /// selects the row's artboard alone and opens the field for it.
+    /// several artboards selected opens the name field for all of them. A Ctrl/Cmd double-click on
+    /// an unselected row's name adds its artboard to the selection, and the second click leaves it
+    /// selected. A plain double-click selects the row's artboard alone and opens the field for it.
     #[test]
     fn a_shift_or_ctrl_double_click_on_a_name_renames_every_selected_artboard() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -939,6 +1079,8 @@ mod tests {
         frame(&mut app, 1.0, click(1, egui::Modifiers::NONE));
         assert_eq!(double_click(&mut app, 2.0, 3, egui::Modifiers::SHIFT), (Some(2), vec![0, 1, 2]), "Shift: Artboards 1 to 3");
         assert_eq!(double_click(&mut app, 4.0, 2, egui::Modifiers::COMMAND), (Some(1), vec![0, 1, 2]), "Ctrl/Cmd on a selected one");
+        assert_eq!(double_click(&mut app, 5.0, 4, egui::Modifiers::COMMAND), (Some(3), vec![0, 1, 2, 3]), "Ctrl/Cmd on another one");
+        assert_eq!(picked(&app, 4), [0, 1, 2, 3], "which stays selected");
         assert_eq!(double_click(&mut app, 6.0, 4, egui::Modifiers::NONE), (Some(3), vec![3]), "a plain double-click");
     }
 
@@ -1230,11 +1372,14 @@ mod tests {
         bar_frame_in(&mut app, &ctx, vec![], width);
         let texts = bar_frame_in(&mut app, &ctx, vec![], width);
         assert!(has(&texts, "Scale Artwork with Artboard") && !has(&texts, "X:") && !has(&texts, "W:"), "{texts:?}");
+        // The Snapping menu sits first on a wide bar and leaves the narrow bar to the artboard controls.
+        assert!(has(&bar_texts(&mut app, &ctx), "Snapping"));
         // In the app's narrowest window, 800 points wide, the name and the Transform link still fit,
         // and a click on the link shows the artboard's X, Y, W and H in the Transform panel's popover.
         let narrow = |app: &mut VectorcraftApp, events| bar_frame_in(app, &ctx, events, 800.0);
         narrow(&mut app, vec![]);
         let texts = narrow(&mut app, vec![]);
+        assert!(!has(&texts, "Snapping"), "{texts:?}");
         let link = text_rect(&texts, "Transform");
         assert!(link.right() < 790.0 && text_rect(&texts, "Artboard 1").right() < link.left(), "{texts:?}");
         // Move and Scale Artwork with Artboard show as their boxes alone, inside the window, and the

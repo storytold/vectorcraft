@@ -269,3 +269,25 @@ fn bad_stroke_styles_and_effect_records_are_refused() {
         assert!(decode_json(json!({"objects": [{"id": a, "effects": bad}]})).is_err(), "{bad}");
     }
 }
+
+/// A filter's `documentData`: absent keeps what the plug-in keeps, `null` forgets it, any other JSON
+/// of at most [`MAX_DOCUMENT_DATA`] bytes is kept, and more refuses the whole output.
+#[test]
+fn document_data_is_kept_forgotten_or_refused() {
+    let out = |data: Option<Value>| {
+        let mut v = json!({"objects": []});
+        if let Some(data) = data {
+            v["documentData"] = data;
+        }
+        decode_output(v.to_string().as_bytes()).map(|o| o.document_data)
+    };
+    assert_eq!(out(None).unwrap(), None);
+    assert_eq!(out(Some(Value::Null)).unwrap(), Some(None));
+    assert_eq!(out(Some(json!({"pens": 2}))).unwrap(), Some(Some(json!({"pens": 2}))));
+    // A string's quotes count: this one is the limit exactly, and one more byte refuses it.
+    let at = json!("x".repeat(MAX_DOCUMENT_DATA - 2));
+    assert_eq!(out(Some(at.clone())).unwrap(), Some(Some(at)));
+    assert!(matches!(out(Some(json!("x".repeat(MAX_DOCUMENT_DATA - 1)))), Err(Error::Output(_))));
+    // A decline is still a decline.
+    assert!(matches!(decode_output(br#"{"error": "No pens.", "documentData": 1}"#), Err(Error::Failed(_))));
+}

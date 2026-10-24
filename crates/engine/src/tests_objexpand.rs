@@ -197,6 +197,8 @@ fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [
         json!({"kind": "linear", "angle": 30, "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 0.4, "color": "#00ff00", "midpoint": 0.3}, {"offset": 1, "color": "#0000ff"}]}),
         json!({"kind": "radial", "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ff00ff"}, {"offset": 1, "color": "#004080"}]}),
+        // Perceptual: the mesh follows the OKLab curve between the stops, not a straight RGB mix.
+        json!({"kind": "linear", "method": "perceptual", "stops": [{"offset": 0, "color": "#2050f0"}, {"offset": 1, "color": "#f5d020"}]}),
     ] {
         let mut s = session();
         gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient.clone(), false);

@@ -609,7 +609,11 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
         },
         PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| super::graphic_styles::paint_style(app, ui, r, name)),
         PanelDrag::Symbol(name) => match app.session.active() {
-            Some(st) => return pointer_chip(ctx, |ui, r| super::symbols::chip(ui, &st.doc, r, name)),
+            Some(st) => return pointer_chip(ctx, |ui, r| super::symbols::chip(ui, &st.doc, super::symbols::resources_key(&st.doc), r, name)),
+            None => return,
+        },
+        PanelDrag::LibrarySymbol { library, name } => match vectorcraft_engine::cmd::symbollib::library(&app.session, library) {
+            Some((_, lib)) => return pointer_chip(ctx, |ui, r| super::symbols::chip(ui, &lib.doc, super::symbols::resources_key(&lib.doc), r, name)),
             None => return,
         },
         PanelDrag::Brush { def, .. } => return pointer_chip(ctx, |ui, r| super::brushes::chip(ui, r, def)),
@@ -683,7 +687,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     widgets::subheader(ui, tl!("Swatch Tiles"));
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);
-    let active_swatch = active_swatch(app);
+    let active_swatch = kept_swatch(app, ui, active_swatch(app));
     let focus = focus_swatch(app, ui, active_swatch.as_deref());
     let selected = selection(app, ui);
     // Without a selection the swatch of the active paint is highlighted.
@@ -768,6 +772,29 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
 
 /// The document and the objects selected in it.
 type SelectedArt = (u64, Vec<u64>);
+
+/// The swatch highlighted for the active paint (`active`): with art selected, its swatch; once the
+/// art is deselected, still that swatch, until another document shows or the paints for new art
+/// change (a swatch or colour picked with nothing selected). Deselecting doesn't jump to the
+/// swatch of the paint new art gets (White).
+fn kept_swatch(app: &VectorcraftApp, ui: &Ui, active: Option<String>) -> Option<String> {
+    let Some(st) = app.session.active() else { return active };
+    let p = &app.session.paint;
+    // The document, and the paints new art gets, which picking with nothing selected changes.
+    let defaults = format!("{}|{:?}|{:?}|{}", st.uid, p.fill, p.stroke, app.session.fill_active);
+    if !st.selection.objects.is_empty() {
+        set_pstate(ui.ctx(), "swatch-kept", Some((defaults, active.clone())));
+        return active;
+    }
+    match pstate::<Option<(String, Option<String>)>>(ui.ctx(), "swatch-kept") {
+        Some((d, kept)) if d == defaults => kept,
+        Some(_) => {
+            set_pstate(ui.ctx(), "swatch-kept", None::<(String, Option<String>)>);
+            active
+        }
+        None => active,
+    }
+}
 
 /// The swatch the tiles scroll to this frame, once: the active paint's swatch when it changed, or
 /// when other art was selected. Selecting other art also clears the panel's own selection, so its
@@ -1214,7 +1241,7 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// Other Library…: load the library (or document) at `path`, else one picked in an open dialog
 /// (on the web the picked file arrives later and opens through [`crate::io::open_bytes`]).
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    match library_panel::pick_library_file(app, path)? {
+    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SwatchLibraries::KIND))? {
         Some(path) => load_library(app, json!({ "path": path })),
         None => Ok(Value::Null),
     }
@@ -1763,7 +1790,7 @@ mod tests {
         let grad = |c: &str| {
             let stops =
                 vec![vectorcraft_color::GradientStop::new(0.0, Color::from_hex(c).unwrap()), vectorcraft_color::GradientStop::new(1.0, Color::WHITE)];
-            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient { kind: GradientKind::Radial, stops })))
+            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::new(GradientKind::Radial, stops))))
         };
         let drop_on = |app: &mut VectorcraftApp, name: &str, paint: Paint, m: Modifiers, time: f64| {
             let at = tile_center(&ctx, name);
@@ -1899,6 +1926,38 @@ mod tests {
         assert!(selected(&ctx).is_empty(), "the art's swatch is highlighted");
         // Once: later frames leave the scroll where the user puts it.
         assert_eq!(focus_swatch(&app, &egui::Ui::new(ctx.clone(), egui::Id::new("t"), egui::UiBuilder::new()), Some("Last Ink")), None);
+    }
+
+    /// Deselecting art keeps its swatch highlighted (not the White new art gets) until the paints for
+    /// new art change; selecting other art highlights its swatch.
+    #[test]
+    fn deselecting_keeps_the_arts_swatch_highlighted() {
+        let mut app = app();
+        app.run("swatch.new", json!({"name": "Ink 185", "color": "#e4002b", "spot": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "swatch": "Ink 185"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        // New art's paints back to the defaults, as for art that came in with a file.
+        app.run("paint.default", json!({})).unwrap();
+        let ctx = context();
+        let ui = egui::Ui::new(ctx.clone(), egui::Id::new("t"), egui::UiBuilder::new());
+        let shown = |app: &VectorcraftApp| kept_swatch(app, &ui, active_swatch(app));
+        assert_ne!(shown(&app).as_deref(), Some("Ink 185"), "nothing selected yet: new art's paint");
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(shown(&app).as_deref(), Some("Ink 185"));
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(shown(&app).as_deref(), Some("Ink 185"), "kept after deselecting");
+        assert_eq!(shown(&app).as_deref(), Some("Ink 185"), "and on later frames");
+        // A colour picked with nothing selected is new art's: its swatch shows.
+        app.run("paint.setFill", json!({"swatch": "Black"})).unwrap();
+        assert_eq!(shown(&app).as_deref(), Some("Black"));
+        // Other art selected (a white one) shows its swatch, and keeps it once deselected.
+        let white = app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [white.clone()], "swatch": "White"})).unwrap();
+        app.run("select.set", json!({"ids": [white]})).unwrap();
+        assert_eq!(shown(&app).as_deref(), Some("White"));
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(shown(&app).as_deref(), Some("White"));
     }
 
     /// A selected image, or text in a colour no swatch has, highlights no swatch (not None); text in

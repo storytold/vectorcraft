@@ -19,8 +19,15 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
-    let doc = &*source(s, f, &p, "document.serialize")?;
-    let enc = encode_all(doc, f.id, &p)?;
+    let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -53,8 +60,15 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
-    let doc = &*source(s, f, &p, "document.export")?;
-    let enc = encode_all(doc, f.id, &p)?;
+    let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
@@ -154,13 +168,16 @@ fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Va
 
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
-fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
+fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(Cow<'a, Document>, bool)> {
     if f.id == "txt" && bool_or(p, "selectionOnly", false) {
-        return Ok(Cow::Owned(selection(s, cmd)?.0));
+        let doc = selection(s, cmd)?.0;
+        let display_doc_title = super::has_own_title(&doc);
+        return Ok((Cow::Owned(doc), display_doc_title));
     }
     let st = s.doc()?;
     let doc = export_source(st, p)?;
-    Ok(super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned))
+    let display_doc_title = super::has_own_title(&doc);
+    Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
 
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their

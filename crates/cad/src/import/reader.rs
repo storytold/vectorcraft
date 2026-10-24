@@ -421,20 +421,34 @@ fn font_family(g: &[Pair<'_>]) -> String {
 
 /// Model space, then each paper layout (its LAYOUT object, in tab order); a file without layout
 /// objects but with paper-space art has one paper layout.
+/// The most bytes of layout and block names the layouts keep together. Each layout keeps its own
+/// copy of its block's name, so many layouts naming one long block name multiplied it; real
+/// drawings have a few dozen layouts with short names.
+const MAX_LAYOUT_NAME_BYTES: usize = 4 << 20;
+
 fn layouts(objects: &[Record<'_>], block_records: &HashMap<String, String>, entities: &[Record<'_>]) -> Vec<LayoutDef> {
     let mut paper: Vec<(i64, LayoutDef)> = vec![];
+    let mut seen = std::collections::HashSet::new();
+    let mut name_bytes = 0usize;
     for r in objects.iter().filter(|r| r.kind == "LAYOUT") {
         // The layout's own groups follow its subclass marker.
         let own = r.g.iter().position(|p| p.code == 100 && p.value.trim() == "AcDbLayout").and_then(|i| r.g.get(i + 1..)).unwrap_or(&[]);
         let Some(name) = own.name(1) else { continue };
-        let block = own.name(330).and_then(|h| block_records.get(&h.to_uppercase())).cloned();
-        if name.eq_ignore_ascii_case(MODEL) || block.as_deref() == Some(MODEL_BLOCK) {
+        let block = own.name(330).and_then(|h| block_records.get(&h.to_uppercase()));
+        if name.eq_ignore_ascii_case(MODEL) || block.map(String::as_str) == Some(MODEL_BLOCK) {
             continue;
         }
         let Some(block) = block else { continue };
-        if !paper.iter().any(|(_, l)| l.name.eq_ignore_ascii_case(name)) {
-            paper.push((own.int_or(71, i64::MAX), LayoutDef { name: name.to_string(), block: Some(block) }));
+        let key = name.to_ascii_lowercase();
+        let cost = name.len() + block.len();
+        // A layout past the allowance is skipped alone: a later short one is still offered, and a
+        // skipped one reserves neither its name nor its bytes.
+        if seen.contains(&key) || name_bytes.saturating_add(cost) > MAX_LAYOUT_NAME_BYTES {
+            continue;
         }
+        seen.insert(key);
+        name_bytes += cost;
+        paper.push((own.int_or(71, i64::MAX), LayoutDef { name: name.to_string(), block: Some(block.clone()) }));
     }
     paper.sort_by_key(|(order, _)| *order);
     if paper.is_empty() && groups(entities).any(in_paper_space) {

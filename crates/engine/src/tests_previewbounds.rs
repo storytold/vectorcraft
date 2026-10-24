@@ -96,7 +96,7 @@ fn outlined_type(s: &mut Session, x: f64, text: &str) -> NodeId {
 /// The box of the glyph outlines that type `id` with Outline Object is drawn as.
 fn glyphs(s: &Session, id: NodeId) -> Rect {
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();
-    vectorcraft_render::effects::reshape(&n, None).unwrap().geometric_bounds().unwrap()
+    vectorcraft_render::effects::reshape(None, &n, None).unwrap().geometric_bounds().unwrap()
 }
 
 fn near(a: Rect, b: Rect, tolerance: f64) -> bool {

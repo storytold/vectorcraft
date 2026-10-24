@@ -21,9 +21,10 @@ use vectorcraft_geom::{Affine, Vec2};
 /// (filters composite normally; the mode comes back on import).
 pub(crate) const BLEND: &str = "data-vc-blend";
 
-/// The blend modes our export recorded ([`BLEND`]), by filter id.
-pub(super) fn blends(xml: &roxmltree::Document) -> HashMap<String, String> {
-    if !xml.input_text().contains(BLEND) {
+/// The blend modes our export recorded ([`BLEND`]), by filter id. `markers` is the text with its
+/// data URLs left out ([`super::depth::prescan`]).
+pub(super) fn blends(xml: &roxmltree::Document, markers: &str) -> HashMap<String, String> {
+    if !markers.contains(BLEND) {
         return HashMap::new();
     }
     xml.descendants()
@@ -82,7 +83,16 @@ enum V {
     Stack(Vec<V>),
 }
 
+/// The most layers a filter result may stack: a result combined with itself again and again
+/// would otherwise double each time. A filter past it is left as it is (not editable).
+const MAX_LAYERS: usize = 64;
+
 impl V {
+    /// `layers` stacked, `None` past [`MAX_LAYERS`].
+    fn stack(layers: Vec<V>) -> Option<V> {
+        (layers.len() <= MAX_LAYERS).then_some(V::Stack(layers))
+    }
+
     fn layers(self) -> Vec<V> {
         match self {
             V::Stack(l) => l,
@@ -206,7 +216,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 } else if transparent(&a) {
                     b_in
                 } else if b.mode() == usvg::BlendMode::Normal {
-                    V::Stack(b_in.layers().into_iter().chain(a.layers()).collect())
+                    V::stack(b_in.layers().into_iter().chain(a.layers()).collect())?
                 } else {
                     return None;
                 }
@@ -222,7 +232,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                         } else if transparent(&a) {
                             b
                         } else {
-                            V::Stack(b.layers().into_iter().chain(a.layers()).collect())
+                            V::stack(b.layers().into_iter().chain(a.layers()).collect())?
                         }
                     }
                     _ => return None,
@@ -241,7 +251,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 match layers.len() {
                     0 => return None,
                     1 => layers.remove(0),
-                    _ => V::Stack(layers),
+                    _ => V::stack(layers)?,
                 }
             }
             Kind::ColorMatrix(c) => match c.kind() {

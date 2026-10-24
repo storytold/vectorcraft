@@ -1,8 +1,6 @@
 //! The paste chords (egui reports every Cmd+V chord as a paste, not as its key) and the default
 //! shortcuts (no chord does two things).
 
-use std::collections::BTreeMap;
-
 use egui::{Event, Key, Modifiers};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -71,7 +69,7 @@ fn a_paste_takes_the_command_of_the_v_chord_held() {
 
 #[test]
 fn no_two_commands_tools_or_panels_share_a_default_shortcut() {
-    assert_eq!(shortcut_editor::all_conflicts(&BTreeMap::new()), vec![]);
+    assert_eq!(shortcut_editor::all_conflicts(&craft_keymap::Overrides::new()), vec![]);
 }
 
 /// egui-winit reports every Cmd+C chord as a Copy, Shift and Alt held too, never as its key: the

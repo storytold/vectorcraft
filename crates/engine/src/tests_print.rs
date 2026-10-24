@@ -212,3 +212,15 @@ fn type_that_does_not_fit_its_frame_is_named() {
     let (_, v) = print(&mut s, json!({}));
     assert_eq!(over(&v), Vec::<String>::new());
 }
+
+#[test]
+fn for_a_printer_a_landscape_page_is_written_upright() {
+    let (mut s, _) = session();
+    let size = |pdf: &[u8]| vectorcraft_pdf::info(pdf, None).unwrap().pages.iter().map(|p| (p.width, p.height)).collect::<Vec<_>>();
+    let settings = json!({"autoRotate": false, "orientation": "landscape"});
+    let (saved, _) = print(&mut s, json!({"settings": settings}));
+    assert_eq!(size(&saved), [(792.0, 612.0)]);
+    let (spooled, v) = print(&mut s, json!({"settings": settings, "forPrinter": true}));
+    assert_eq!(size(&spooled), [(612.0, 792.0)]);
+    assert_eq!(v["pages"], 1);
+}

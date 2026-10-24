@@ -12,6 +12,30 @@ fn key(k: egui::Key) -> Vec<egui::Event> {
     [true, false].map(|pressed| egui::Event::Key { key: k, physical_key: None, pressed, repeat: false, modifiers: Default::default() }).to_vec()
 }
 
+/// Recently used means applied, including an edited character range, never just hovered.
+#[test]
+fn recent_fonts_follow_committed_choices_and_the_count_preference() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Recent fonts", "font": "Inter"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Preview("Source Serif 4".into(), None));
+    assert!(app.recent_fonts().is_empty());
+    crate::font_menu::apply(&mut app, &ctx, FontPick::EndPreview);
+    assert!(app.recent_fonts().is_empty());
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Chosen("Source Serif 4".into(), None));
+    app.run("text.setStyle", json!({"font": "Inter"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 6, "font": "Source Serif 4"})).unwrap();
+    assert_eq!(app.recent_fonts(), ["Source Serif 4", "Inter"]);
+    // A failed command must leave history alone.
+    assert!(app.run("text.setRangeStyle", json!({"id": 999999, "font": "Missing"})).is_err());
+    assert_eq!(app.recent_fonts(), ["Source Serif 4", "Inter"]);
+    app.run("prefs.set", json!({"values": {"recentFontsCount": 1}})).unwrap();
+    assert_eq!(MenuLook::of(&app).recent, ["Source Serif 4"]);
+    let restored: crate::state::UiState = serde_json::from_str(&serde_json::to_string(&app.ui).unwrap()).unwrap();
+    assert_eq!(restored.recent_fonts, ["Source Serif 4", "Inter"]);
+}
+
 #[test]
 fn arrows_preview_the_next_family_and_enter_applies_it() {
     let ctx = egui::Context::default();

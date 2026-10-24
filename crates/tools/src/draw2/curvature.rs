@@ -376,8 +376,8 @@ impl CurvatureTool {
     /// and the segment to it: the path being drawn, or the selected one whose end is current.
     fn leave(&self, cx: &ToolContext) -> Option<(NodeId, Leave)> {
         match self.active(cx) {
-            Some(id) => self.pts.last().map(|(p, _)| (id, Leave::segment(cx, *p, false))),
-            None => current_end(cx).map(|e| (e.id, Leave::segment(cx, e.p, false))),
+            Some(id) => self.pts.last().map(|(p, _)| (id, Leave::segment(cx, *p, false).without_contact())),
+            None => current_end(cx).map(|e| (e.id, Leave::segment(cx, e.p, false).without_contact())),
         }
     }
 
@@ -420,7 +420,7 @@ impl CurvatureTool {
             return Some(out);
         }
         if let Some(e) = end {
-            let q = self.snap.press(cx, p, &[e.id], Some(&Leave::segment(cx, e.p, false)));
+            let q = self.snap.press(cx, p, &[e.id], Some(&Leave::segment(cx, e.p, false).without_contact()));
             let how = self.how(&e);
             self.placed = Some(Placed { id: e.id, si: e.si, start: e.start, anchors: e.anchors + 1, corner: ev.mods.alt });
             let v = json!({"id": e.id.0, "subpath": e.si, "op": "extend", "end": e.name(), "x": q.x, "y": q.y, "from": how.name(), "corner": ev.mods.alt});

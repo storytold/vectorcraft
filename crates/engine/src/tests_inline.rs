@@ -167,6 +167,23 @@ fn inline_graphics_follow_their_symbol() {
     let _ = s.execute("document.serialize", &json!({"format": "pdf"})).unwrap();
 }
 
+/// A list paragraph that starts with an inline graphic draws its bullet before the graphic, and
+/// live SVG text writes the bullet.
+#[test]
+fn a_list_paragraph_starting_with_an_inline_graphic_keeps_its_bullet() {
+    let mut s = session();
+    circle_symbol(&mut s, "Dot", 10.0);
+    let id = text(&mut s, "ab");
+    s.execute("text.insertInline", &json!({"id": id.0, "at": 0, "symbol": "Dot", "scale": 1})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "bullet"})).unwrap();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id));
+    assert_eq!(lay.markers.len(), 1);
+    let bullet = &lay.glyphs[lay.markers[0].glyphs.start];
+    assert!(bullet.origin.x < lay.inlines[0].bounds.x0, "the bullet comes before the graphic");
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap()["text"].as_str().unwrap().to_string();
+    assert!(svg.contains('\u{2022}'), "{svg}");
+}
+
 #[test]
 fn saved_documents_keep_inline_graphics() {
     let mut s = session();

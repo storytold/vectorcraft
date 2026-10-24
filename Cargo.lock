@@ -713,6 +713,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono"
+version = "0.4.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -865,9 +874,19 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=82a24b006eefa036b43c09a67fb9a3fbd17ffe63#82a24b006eefa036b43c09a67fb9a3fbd17ffe63"
 
 [[package]]
+name = "craft-keymap"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
+dependencies = [
+ "egui",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "craft-pdf"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "hayro-interpret",
  "hayro-syntax",
@@ -1835,8 +1854,7 @@ checksum = "9f4d0e94ddd48749f06bbe4e5389fb9799a0c45bcaf00495042076ef05e3241a"
 [[package]]
 name = "hayro-cmap"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d285dc30731c8485de5fa732fbdf2b3affdf01e4da7c2135022ca6fa664bf6"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "brotli",
  "hayro-postscript",
@@ -1845,7 +1863,7 @@ dependencies = [
 [[package]]
 name = "hayro-interpret"
 version = "0.7.0"
-source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "bitflags 2.13.2",
  "hayro-cmap",
@@ -1863,7 +1881,7 @@ dependencies = [
 [[package]]
 name = "hayro-jbig2"
 version = "0.3.0"
-source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
@@ -1881,13 +1899,12 @@ dependencies = [
 [[package]]
 name = "hayro-postscript"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "885c5ef0654933139a9b9546fc2c69e18d37f38aa2520f079092b1be18f1fcaa"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 
 [[package]]
 name = "hayro-syntax"
 version = "0.7.2"
-source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "flate2",
  "hayro-ccitt",
@@ -2287,7 +2304,7 @@ dependencies = [
 [[package]]
 name = "krilla"
 version = "0.8.2"
-source = "git+https://github.com/storytold/craft-libs?rev=ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d#ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d"
+source = "git+https://github.com/storytold/craft-libs?rev=2eca9b3a53a98ac52efed2a27353c6a6927ead10#2eca9b3a53a98ac52efed2a27353c6a6927ead10"
 dependencies = [
  "base64 0.22.1",
  "bumpalo",
@@ -4565,10 +4582,11 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "arboard",
  "block2 0.6.2",
+ "chrono",
  "clipboard-win",
  "craft-print",
  "craft-window",
@@ -4598,12 +4616,13 @@ dependencies = [
  "winit",
  "winresource",
  "winsafe",
+ "x11rb",
  "zbus",
 ]
 
 [[package]]
 name = "vectorcraft-affinity"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -4614,7 +4633,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-brush"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "kurbo 0.13.1",
  "serde",
@@ -4626,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cad"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4642,7 +4661,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cli"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "log",
  "objc2-core-foundation",
@@ -4664,7 +4683,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-color"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "kurbo 0.13.1",
  "moxcms",
@@ -4676,8 +4695,9 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-doc"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
+ "chrono",
  "hayro-ccitt",
  "image",
  "jpeg-encoder",
@@ -4694,7 +4714,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-effects"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4710,7 +4730,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-engine"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "craft-docpath",
  "crc32fast",
@@ -4720,6 +4740,7 @@ dependencies = [
  "log",
  "proptest",
  "roxmltree 0.21.1",
+ "rustix 1.1.5",
  "ruzstd",
  "serde",
  "serde_json",
@@ -4748,13 +4769,14 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-eps"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "fax",
  "flate2",
  "hayro-ccitt",
  "image",
  "kurbo 0.13.1",
+ "memchr",
  "ruzstd",
  "serde_json",
  "vectorcraft-brush",
@@ -4771,7 +4793,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-format"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "flate2",
  "proptest",
@@ -4786,7 +4808,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-geom"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "kurbo 0.13.1",
  "proptest",
@@ -4798,7 +4820,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-mcp"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "log",
@@ -4817,7 +4839,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-metafile"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4831,7 +4853,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pathops"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "kurbo 0.13.1",
  "linesweeper",
@@ -4843,9 +4865,10 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pdf"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "aes",
+ "chrono",
  "craft-pdf",
  "flate2",
  "image",
@@ -4873,7 +4896,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-plugins"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4887,7 +4910,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-render"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "flate2",
  "gif",
@@ -4914,14 +4937,14 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-scriptcheck"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "vectorcraft-svg"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "craft-docpath",
  "flate2",
@@ -4946,7 +4969,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-testkit"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "fax",
  "image",
@@ -4964,7 +4987,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-text"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "harfrust 0.13.3",
  "icu_segmenter",
@@ -4978,13 +5001,14 @@ dependencies = [
  "unicode-segmentation",
  "vectorcraft-doc",
  "vectorcraft-geom",
+ "vello_cpu 0.2.0",
  "windows-registry",
  "write-fonts",
 ]
 
 [[package]]
 name = "vectorcraft-three-d"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "vectorcraft-geom",
  "vectorcraft-pathops",
@@ -4992,7 +5016,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-tools"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -5008,7 +5032,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-trace"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -5020,9 +5044,10 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-ui-egui"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "bytemuck",
+ "craft-keymap",
  "craft-ui",
  "egui",
  "egui_extras",
@@ -5056,7 +5081,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-web"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "eframe",
  "egui",
@@ -6094,7 +6119,7 @@ checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 
 [[package]]
 name = "xtask"
-version = "0.14.0"
+version = "0.16.0"
 dependencies = [
  "serde_json",
 ]

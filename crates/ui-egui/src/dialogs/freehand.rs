@@ -56,8 +56,8 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, (key, label): (&str, &str), suffix:
     let label_w = label_w(d);
     let v = d.f64(key, 0.0);
     widgets::label_row(ui, label, label_w, |ui| {
-        if let Some(x) = widgets::plain_field(ui, ("freehand-field", key), v, suffix, decimals, 72.0) {
-            d.fields.insert(key.into(), json!(x.clamp(range.0, range.1)));
+        if let Some(x) = widgets::range_field(ui, ("freehand-field", key), v, range.0..=range.1, suffix, decimals, 72.0) {
+            d.fields.insert(key.into(), json!(x));
         }
     });
 }
@@ -75,8 +75,8 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), at, form::SLIDER_WIDTH, &|_| t.input_border);
         new = x.map(|x| ((min + x as f64 * (max - min)) * 10.0).round() / 10.0).or(keyed);
-        if let Some(x) = widgets::plain_field(ui, "freehand-fidelity-field", v, "pt", 1, 64.0) {
-            new = Some(x.clamp(0.05, 100.0));
+        if let Some(x) = widgets::range_field(ui, "freehand-fidelity-field", v, 0.05..=100.0, "pt", 1, 64.0) {
+            new = Some(x);
         }
     });
     if let Some(n) = new.filter(|n| *n != v) {

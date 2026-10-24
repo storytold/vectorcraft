@@ -34,9 +34,9 @@ fn export_as_eps_shows_eps_options_then_writes_and_remembers_them() {
     set(&mut app, "flattenerPreset", json!("High Resolution"));
     let r = confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
-    // One file per artboard, named with an underscore.
-    assert_eq!(names(&written), ["/out/Untitled-1_Artboard-1.eps", "/out/Untitled-1_Artboard-2.eps"]);
-    assert_eq!(r["files"].as_array().map(Vec::len), Some(2));
+    // The central file, then one file per artboard, named with an underscore.
+    assert_eq!(names(&written), ["/out/Untitled-1.eps", "/out/Untitled-1_Artboard-1.eps", "/out/Untitled-1_Artboard-2.eps"]);
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(3));
     let bytes = &written.borrow()[0].1;
     let (text, tiff) = vectorcraft_eps::sections(bytes).unwrap();
     assert!(tiff.is_some() && String::from_utf8_lossy(text).contains("%%LanguageLevel: 2"));

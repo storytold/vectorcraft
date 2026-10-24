@@ -1,9 +1,10 @@
 //! Export for Screens, drawn headlessly: the fields it opens on (defaults, then the document's last
 //! settings, and the artboards the Artboard tool has selected), the artboard choice, Format
-//! Settings, desktop folders and web downloads.
+//! Settings, desktop folders, the export on the background thread and web downloads.
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -13,6 +14,8 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 use super::tests_export::{frame, kind, set};
 use super::*;
 use crate::Services;
+use crate::background;
+use crate::tests_background::{Files, Gate, written};
 
 type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
@@ -212,6 +215,202 @@ fn exports_into_the_folder_and_shows_it() {
     assert_eq!(field(&app, "formats")[1]["scale"], json!("120w"));
     assert_eq!((field(&app, "subfolders"), field(&app, "folder")), (json!(true), json!(folder)));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// [`app`] on the desktop with Background Export's thread-safe writer, which records the files it
+/// is given once `gate` opens.
+fn app_with_worker(artboards: usize, gate: &Gate) -> (VectorcraftApp, Log, Files) {
+    let (mut app, log) = app(artboards, false);
+    let (files, g) = (Files::default(), gate.clone());
+    let recorded = files.clone();
+    app.services.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| {
+        g.wait();
+        recorded.lock().unwrap().push((p.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    (app, log, files)
+}
+
+fn background_export(app: &mut VectorcraftApp, on: bool) {
+    app.session.execute("prefs.set", &json!({"values": {"backgroundExport": on}})).unwrap();
+}
+
+/// The files reply `r` names (its `files`, else the ZIP at its `path`) as they are on disk.
+fn on_disk(r: &Value) -> Vec<(String, Vec<u8>)> {
+    let paths: Vec<&str> = match r["path"].as_str() {
+        Some(zip) => vec![zip],
+        None => r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect(),
+    };
+    paths.into_iter().map(|p| (p.to_string(), std::fs::read(p).unwrap())).collect()
+}
+
+/// With Background Export on, OK closes the dialog with nothing written, and the background thread
+/// writes the files OK writes at once with it off: the same names (`-2` included), sub-folders and
+/// bytes, and the same status; Open Location shows the first file once it is written. The same
+/// holds for one ZIP in the folder.
+#[test]
+fn the_files_are_written_in_the_background_as_at_once() {
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "png", "scale": "2x", "suffix": "@2x"}, {"format": "svg", "scale": "1x", "suffix": ""}]);
+    let dir = temp_folder("background");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    for zip in [false, true] {
+        let gate = Gate::default();
+        let (mut app, log, files) = app_with_worker(2, &gate);
+        app.run("artboard.setProps", json!({"index": 0, "name": "Icon"})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "name": "icon"})).unwrap();
+        let export = |app: &mut VectorcraftApp| {
+            if zip {
+                let p = json!({"folder": folder, "zip": true, "folders": "rows", "name": "<name>", "formats": rows, "openLocation": true});
+                return app.run("file.exportForScreens", p);
+            }
+            open(app);
+            set(app, "folder", json!(folder));
+            set(app, "folders", json!("rows"));
+            set(app, "name", json!("<name>"));
+            set(app, "formats", rows.clone());
+            confirm(app)
+        };
+        background_export(&mut app, false);
+        let r = export(&mut app).unwrap();
+        let want = on_disk(&r);
+        if !zip {
+            assert_eq!(want.len(), 6, "{r}");
+            assert_eq!(want[3].0, format!("{folder}/1x/icon-2.png"));
+        }
+        let (status, shown) = (app.ui.status.clone(), log.borrow().clone());
+        assert_eq!(shown.len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+        log.borrow_mut().clear();
+        background_export(&mut app, true);
+        let r = export(&mut app).unwrap();
+        assert_eq!(r["background"], true, "{r}");
+        assert!(app.ui.dialog.is_none(), "closed");
+        assert_eq!(app.ui.status, format!("Exporting {}…", dir.file_name().unwrap().to_string_lossy()));
+        assert!(written(&files).is_empty() && log.borrow().is_empty(), "nothing written yet");
+        gate.open();
+        background::wait_all(&mut app);
+        assert_eq!(*files.lock().unwrap(), want, "zip: {zip}");
+        assert_eq!((app.ui.status.clone(), log.borrow().clone()), (status, shown));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn the_asset_export_panel_writes_in_the_background_as_at_once() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    app.run("select.all", json!({})).unwrap();
+    app.run("assets.add", json!({"multiple": false})).unwrap();
+    let dir = temp_folder("assets-background");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let p = json!({"folder": folder, "formats": [{"format": "png", "scale": "2x", "suffix": "@2x"}, {"format": "svg"}]});
+    background_export(&mut app, false);
+    let want = on_disk(&crate::io::export_files(&mut app, "assets.export", p.clone()).unwrap());
+    assert_eq!(want.len(), 2);
+    let status = app.ui.status.clone();
+    std::fs::remove_dir_all(&dir).unwrap();
+    background_export(&mut app, true);
+    assert_eq!(crate::io::export_files(&mut app, "assets.export", p).unwrap()["background"], true);
+    assert!(written(&files).is_empty(), "nothing written yet");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!((files.lock().unwrap().clone(), app.ui.status.clone()), (want, status));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn edits_after_ok_do_not_reach_the_files() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    let dir = temp_folder("snapshot");
+    let p = json!({"folder": dir.to_string_lossy().replace('\\', "/"), "formats": [{"format": "svg"}]});
+    background_export(&mut app, false);
+    let want = on_disk(&app.run("file.exportForScreens", p.clone()).unwrap());
+    std::fs::remove_dir_all(&dir).unwrap();
+    background_export(&mut app, true);
+    assert_eq!(app.run("file.exportForScreens", p).unwrap()["background"], true);
+    app.run("select.all", json!({})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(*files.lock().unwrap(), want, "the document as it was at OK");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Cancel stops the export before its next file; the file being written when it came stays.
+#[test]
+fn cancel_stops_the_export_before_its_next_file() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let (mut app, _) = app(3, false);
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    app.services.write_shared = Some(Arc::new(move |p: &str, b: &[u8]| {
+        w.open();
+        g.wait();
+        f.lock().unwrap().push((p.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    let dir = temp_folder("cancel");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let r = app.run("file.exportForScreens", json!({"folder": folder, "formats": [{"format": "svg"}]})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    writing.wait();
+    assert_eq!(app.run("file.cancelExport", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), [format!("{folder}/Artboard-1.svg")]);
+    assert_eq!(app.ui.status, crate::io::EXPORT_CANCELLED);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// With Background Export turned off, an export into the same folder is written after the one in
+/// the background.
+#[test]
+fn an_export_made_at_once_waits_for_one_in_the_background() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    let dir = temp_folder("twice");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let p = json!({"folder": folder, "formats": [{"format": "svg"}]});
+    assert_eq!(app.run("file.exportForScreens", p.clone()).unwrap()["background"], true);
+    background_export(&mut app, false);
+    let opener = gate.clone();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        opener.open();
+    });
+    let r = app.run("file.exportForScreens", p).unwrap();
+    assert!(app.background.jobs.is_empty(), "the export in the background was written first");
+    release.join().unwrap();
+    let file = format!("{folder}/Artboard-1.svg");
+    assert_eq!((written(&files), r["files"].clone()), (vec![file.clone()], json!([file])));
+    assert_eq!(app.ui.status, format!("Exported 1 file(s) to {folder}"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Without a folder (a script or an agent on the desktop) the files come back in the reply at once,
+/// with Background Export on too.
+#[test]
+fn an_export_without_a_folder_replies_with_its_files() {
+    let (mut app, _, files) = app_with_worker(1, &Gate::default());
+    let r = app.run("file.exportForScreens", json!({"formats": [{"format": "svg"}]})).unwrap();
+    assert!(r.get("background").is_none(), "{r}");
+    assert_eq!(r["files"][0]["name"], "Artboard-1.svg");
+    assert!(app.background.jobs.is_empty() && written(&files).is_empty());
+}
+
+/// The command's refusal keeps the dialog open and starts nothing, as at once.
+#[test]
+fn a_refused_export_keeps_the_dialog_open_with_background_export_on() {
+    let (mut app, _, files) = app_with_worker(2, &Gate::default());
+    open(&mut app);
+    set(&mut app, "folder", json!(temp_folder("refused").to_string_lossy().replace('\\', "/")));
+    set(&mut app, "formats", json!([{"format": "dxf", "scale": "1x", "suffix": ""}]));
+    let e = confirm(&mut app).unwrap_err();
+    assert!(e.contains("Export for Screens writes png"), "{e}");
+    assert_eq!((kind(&app), app.ui.status.as_str()), (Some(export_for_screens::KIND), e.as_str()));
+    assert!(app.background.jobs.is_empty() && written(&files).is_empty());
 }
 
 #[test]

@@ -265,6 +265,52 @@ fn artboard_copies_refuse_an_index_that_names_no_artboard() {
     assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
 }
 
+/// Artboard Options, Move Artboard, Duplicate Artboards, Copy Artboard and Cut Artboard refuse an
+/// option given as text or as another value that is not true or false, such as "true", and
+/// Artboard Options and Move Artboard a position, size or move given as text, such as "10". The
+/// artboards, the art, the undo history and the clipboard stay as they were; a null reads as the
+/// option left out.
+#[test]
+fn artboard_commands_refuse_a_boolean_or_number_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let r = rect(&mut s);
+    s.execute("artboard.new", &json!({})).unwrap();
+    let mut calls: Vec<_> = [
+        ("artboard.setProps", "scaleArt", json!({"index": 0, "width": 400, "scaleArt": "true"})),
+        ("artboard.setProps", "strokes", json!({"index": 0, "width": 400, "scaleArt": true, "strokes": "false"})),
+        ("artboard.setProps", "corners", json!({"index": 0, "width": 400, "scaleArt": true, "corners": 1})),
+        ("artboard.setProps", "patterns", json!({"index": 0, "x": 50, "moveArt": true, "patterns": "true"})),
+        ("artboard.setProps", "moveArt", json!({"index": 0, "x": 50, "moveArt": "true"})),
+        ("artboard.setProps", "lockedAndHidden", json!({"index": 0, "x": 50, "moveArt": true, "lockedAndHidden": [true]})),
+        ("artboard.setProps", "locked", json!({"artboards": [{"index": 1, "locked": "true"}]})),
+        ("artboard.move", "moveArt", json!({"index": 0, "dx": 10, "moveArt": "true"})),
+        ("artboard.move", "copy", json!({"index": 0, "dx": 10, "copy": 1})),
+        ("artboard.move", "patterns", json!({"index": 0, "dx": 10, "moveArt": true, "patterns": "false"})),
+        ("artboard.duplicate", "patterns", json!({"index": 0, "patterns": "true"})),
+        ("artboard.duplicate", "art", json!({"index": 0, "art": "false"})),
+        ("artboard.copy", "art", json!({"index": 0, "art": "true"})),
+        ("artboard.cut", "art", json!({"index": 1, "art": 0})),
+    ]
+    .into_iter()
+    .map(|(cmd, key, p)| not_a_switch(cmd, p, key))
+    .collect();
+    for (cmd, key, p) in [
+        ("artboard.setProps", "x", json!({"index": 0, "x": "50"})),
+        ("artboard.setProps", "height", json!({"index": 1, "height": [300]})),
+        ("artboard.move", "dx", json!({"index": 0, "dx": "10"})),
+        ("artboard.move", "dy", json!({"index": 0, "dx": 10, "dy": "5"})),
+    ] {
+        calls.push(not_a_number(cmd, p, key));
+    }
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
+    let p = json!({"index": 0, "dx": 10, "dy": null, "moveArt": true, "copy": null, "patterns": false});
+    s.execute("artboard.move", &p).unwrap();
+    assert_eq!(node(&s, r).geometric_bounds().map(|b| b.x0), Some(20.0));
+}
+
 /// Artboards 1 and 2, each with a square on it, and an artboard 3 below artboard 1 with a square on
 /// it, with the Artboard tool selecting artboards 1 and 2 → the squares' ids, artboard by artboard.
 fn two_selected_artboards(s: &mut Session) -> [u64; 3] {
@@ -304,6 +350,28 @@ fn duplicate_artboards_copies_every_selected_artboard_in_one_step() {
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!((boards(&s), objects(&s)), before, "{p}: one undo step");
     }
+}
+
+/// #2103: with the Artboard tool, an arrow key moves the selected artboards and the art on them by
+/// the keyboard increment (Shift: ten times as far) in one undo step each; the selected art
+/// doesn't move on its own.
+#[test]
+fn artboard_tool_arrow_keys_move_the_selected_artboards_with_their_art() {
+    use vectorcraft_tools::{Mods, ToolKey};
+    let mut s = session();
+    let [a, b, c] = two_selected_artboards(&mut s);
+    s.execute("prefs.set", &json!({"key": "keyboardIncrement", "value": 4})).unwrap();
+    let v = ViewInfo::default();
+    assert!(s.tool_claims_key(ToolKey::Right, v));
+    let undo = s.doc().unwrap().history.undo.len();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    let xs = |s: &Session| boards(s).into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+    assert_eq!(xs(&s), [44.0, 1044.0, 0.0]);
+    assert_eq!([left(&s, a), left(&s, b), left(&s, c)], [54.0, 1054.0, 10.0], "the art moves with its artboard");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 2, "one step per press");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((xs(&s), left(&s, a)), (vec![4.0, 1004.0, 0.0], 14.0));
 }
 
 /// With the Artboard tool, Copy takes every selected artboard and the art on each (the public Cut,
@@ -758,6 +826,235 @@ fn artboard_lock_round_trips_through_the_native_format() {
     assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
     s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
     assert_eq!(save(&s), before);
+}
+
+/// Artboard Options' Show Center Mark and Show Cross Hairs: `artboard.setProps {showCenterMark,
+/// showCrossHairs}` sets and clears each on that artboard only, in one undo step, also for a
+/// locked artboard and in an `artboards` list. A change without them leaves them, a duplicate
+/// keeps them, `artboard.new` takes them, `inspect_document` reports them, and a value that isn't
+/// true or false is refused.
+#[test]
+fn artboard_display_marks_are_set_and_cleared_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let marks = |s: &Session, i: usize| {
+        let a = &s.doc().unwrap().doc.artboards[i];
+        (a.show_center_mark, a.show_cross_hairs)
+    };
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let u0 = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "showCenterMark": true})).unwrap();
+    assert_eq!((marks(&s, 0), marks(&s, 1)), ((false, false), (true, false)), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "showCrossHairs": true, "showCenterMark": false})).unwrap();
+    assert_eq!(marks(&s, 1), (false, true));
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Marked"})).unwrap();
+    assert_eq!(marks(&s, 1), (false, true), "a change without them leaves them");
+    assert_eq!(undo(&s), u0 + 3, "one undo step each");
+    for was in [(false, true), (true, false), (false, false)] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(marks(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(marks(&s, 1), (true, false));
+    // A locked artboard keeps its rectangle, not its display marks.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "showCrossHairs": true})).unwrap();
+    assert_eq!(marks(&s, 0), (false, true));
+    let u = undo(&s);
+    s.execute(
+        "artboard.setProps",
+        &json!({"artboards": [{"index": 0, "showCenterMark": true}, {"index": 1, "showCenterMark": false, "showCrossHairs": true}]}),
+    )
+    .unwrap();
+    assert_eq!((marks(&s, 0), marks(&s, 1)), ((true, true), (false, true)), "each listed artboard takes its own");
+    assert_eq!(undo(&s), u + 1, "in one undo step");
+    let doc = crate::inspect::document(&s);
+    assert_eq!((doc["artboards"][0]["showCenterMark"].clone(), doc["artboards"][1]["showCrossHairs"].clone()), (json!(true), json!(true)));
+    assert!(doc["artboards"][1].get("showCenterMark").is_none(), "{doc}");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 1})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(marks(&s, copy), (false, true), "a duplicate keeps them");
+    let made = s.execute("artboard.new", &json!({"showCenterMark": true})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(marks(&s, made), (true, false), "a new artboard takes them too");
+    let plain = s.execute("artboard.new", &json!({})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(marks(&s, plain), (false, false));
+    let before = s.doc().unwrap().doc.clone();
+    assert!(s.execute("artboard.setProps", &json!({"index": 1, "showCenterMark": "yes"})).is_err());
+    assert!(
+        s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "showCenterMark": false}, {"index": 1, "showCrossHairs": 1}]})).is_err()
+    );
+    assert!(s.execute("artboard.new", &json!({"showCrossHairs": "yes"})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad value changes nothing");
+}
+
+/// The native format keeps Show Center Mark and Show Cross Hairs. A document that never shows them
+/// is written byte for byte as before they could be set, and a file written without the two keys
+/// opens with both off.
+#[test]
+fn artboard_display_marks_round_trip_through_the_native_format() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let save = |s: &Session| vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let before = save(&s);
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "showCenterMark": true}, {"index": 1, "showCrossHairs": true}]})).unwrap();
+    let bytes = save(&s);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let ab = |i: usize| saved["document"]["artboards"][i].clone();
+    assert_eq!((ab(0)["show_center_mark"].clone(), ab(0)["show_cross_hairs"].clone()), (json!(true), json!(false)));
+    assert_eq!((ab(1)["show_center_mark"].clone(), ab(1)["show_cross_hairs"].clone()), (json!(false), json!(true)));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "showCenterMark": false}, {"index": 1, "showCrossHairs": false}]})).unwrap();
+    assert_eq!(save(&s), before, "off again, the file is as it was");
+    // A file whose artboards have no such keys (older writers) opens with both off.
+    let mut old: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for a in old["document"]["artboards"].as_array_mut().unwrap() {
+        let a = a.as_object_mut().unwrap();
+        a.remove("show_center_mark");
+        a.remove("show_cross_hairs");
+    }
+    let back = vectorcraft_format::load(&serde_json::to_vec(&old).unwrap()).unwrap();
+    assert!(back.artboards.iter().all(|a| !a.show_center_mark && !a.show_cross_hairs));
+}
+
+/// Show Center Mark, Show Cross Hairs, Show Video Safe Areas and the Video Ruler Pixel Aspect Ratio
+/// are screen-only: SVG and PDF exports (and print, which prints the PDF) come out the same with
+/// them on as with them off.
+#[test]
+fn artboard_display_marks_stay_out_of_exports() {
+    let mut s = session();
+    rect(&mut s);
+    let doc = |s: &Session| (*s.doc().unwrap().doc).clone();
+    let off = doc(&s);
+    s.execute(
+        "artboard.setProps",
+        &json!({"index": 0, "showCenterMark": true, "showCrossHairs": true, "showVideoSafeAreas": true, "videoRulerPixelAspectRatio": 2}),
+    )
+    .unwrap();
+    let on = doc(&s);
+    assert_ne!(on.artboards, off.artboards);
+    assert_eq!(vectorcraft_svg::export(&on, &Default::default()), vectorcraft_svg::export(&off, &Default::default()));
+    assert_eq!(crate::export_pdf(&on, &Default::default()).unwrap(), crate::export_pdf(&off, &Default::default()).unwrap());
+}
+
+/// Artboard Options' video display options: `artboard.setProps {showVideoSafeAreas,
+/// videoRulerPixelAspectRatio}` sets each on that artboard only, in one undo step, also for a
+/// locked artboard and in an `artboards` list. A change without them leaves them, a duplicate
+/// keeps them, `artboard.new` takes them, `inspect_document` reports them, and a value that isn't
+/// true or false, or a ratio outside 0.1–10, is refused and changes nothing.
+#[test]
+fn artboard_video_display_options_are_set_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let video = |s: &Session, i: usize| {
+        let a = &s.doc().unwrap().doc.artboards[i];
+        (a.show_video_safe_areas, a.video_ruler_pixel_aspect_ratio)
+    };
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert_eq!((video(&s, 0), video(&s, 1)), ((false, 1.0), (false, 1.0)), "off and square by default");
+    let u0 = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "showVideoSafeAreas": true})).unwrap();
+    assert_eq!((video(&s, 0), video(&s, 1)), ((false, 1.0), (true, 1.0)), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "videoRulerPixelAspectRatio": 0.9})).unwrap();
+    assert_eq!(video(&s, 1), (true, 0.9));
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Video"})).unwrap();
+    assert_eq!(video(&s, 1), (true, 0.9), "a change without them leaves them");
+    assert_eq!(undo(&s), u0 + 3, "one undo step each");
+    for was in [(true, 0.9), (true, 1.0), (false, 1.0)] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(video(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(video(&s, 1), (true, 1.0));
+    // A locked artboard keeps its rectangle, not its video display options.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "videoRulerPixelAspectRatio": 2})).unwrap();
+    assert_eq!(video(&s, 0), (false, 2.0));
+    let u = undo(&s);
+    s.execute(
+        "artboard.setProps",
+        &json!({"artboards": [{"index": 0, "showVideoSafeAreas": true}, {"index": 1, "showVideoSafeAreas": false, "videoRulerPixelAspectRatio": 1.2}]}),
+    )
+    .unwrap();
+    assert_eq!((video(&s, 0), video(&s, 1)), ((true, 2.0), (false, 1.2)), "each listed artboard takes its own");
+    assert_eq!(undo(&s), u + 1, "in one undo step");
+    let doc = crate::inspect::document(&s);
+    assert_eq!(doc["artboards"][0]["showVideoSafeAreas"], json!(true));
+    assert_eq!(
+        (doc["artboards"][0]["videoRulerPixelAspectRatio"].clone(), doc["artboards"][1]["videoRulerPixelAspectRatio"].clone()),
+        (json!(2.0), json!(1.2))
+    );
+    assert!(doc["artboards"][1].get("showVideoSafeAreas").is_none(), "{doc}");
+    s.execute("artboard.setProps", &json!({"index": 1, "videoRulerPixelAspectRatio": 1})).unwrap();
+    assert!(crate::inspect::document(&s)["artboards"][1].get("videoRulerPixelAspectRatio").is_none(), "square pixels aren't reported");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 0})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(video(&s, copy), (true, 2.0), "a duplicate keeps them");
+    let made = s.execute("artboard.new", &json!({"showVideoSafeAreas": true, "videoRulerPixelAspectRatio": 0.1})).unwrap()["index"].as_u64().unwrap()
+        as usize;
+    assert_eq!(video(&s, made), (true, 0.1), "a new artboard takes them too");
+    let before = s.doc().unwrap().doc.clone();
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("artboard.setProps", &json!({"index": 1, "showVideoSafeAreas": bad})).is_err());
+        assert!(s.execute("artboard.new", &json!({"showVideoSafeAreas": bad})).is_err());
+    }
+    for bad in [json!(0.09), json!(10.5), json!(0), json!(-1), json!("2"), json!(null)] {
+        assert!(s.execute("artboard.setProps", &json!({"index": 1, "videoRulerPixelAspectRatio": bad})).is_err(), "{bad}");
+        assert!(s.execute("artboard.new", &json!({"videoRulerPixelAspectRatio": bad})).is_err(), "{bad}");
+    }
+    assert!(
+        s.execute(
+            "artboard.setProps",
+            &json!({"artboards": [{"index": 0, "showVideoSafeAreas": false}, {"index": 1, "videoRulerPixelAspectRatio": 11}]})
+        )
+        .is_err()
+    );
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad value changes nothing");
+    s.execute("artboard.setProps", &json!({"index": 1, "videoRulerPixelAspectRatio": 10})).unwrap();
+    assert_eq!(video(&s, 1), (false, 10.0), "10 is in range");
+}
+
+/// The native format keeps Show Video Safe Areas and the Video Ruler Pixel Aspect Ratio. A
+/// document whose artboards hide the safe areas and have square pixels is written byte for byte as
+/// before they could be set, a file written without the two keys opens with the safe areas off
+/// and square pixels, and a file's ratio outside 0.1–10 opens brought into that range.
+#[test]
+fn artboard_video_display_options_round_trip_through_the_native_format() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let save = |s: &Session| vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let before = save(&s);
+    s.execute(
+        "artboard.setProps",
+        &json!({"artboards": [{"index": 0, "showVideoSafeAreas": true}, {"index": 1, "videoRulerPixelAspectRatio": 0.9}]}),
+    )
+    .unwrap();
+    let bytes = save(&s);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let ab = |i: usize| saved["document"]["artboards"][i].clone();
+    assert_eq!(ab(0)["show_video_safe_areas"], json!(true));
+    assert!(ab(0).get("video_ruler_pixel_aspect_ratio").is_none(), "square pixels aren't written: {}", ab(0));
+    assert_eq!(ab(1)["video_ruler_pixel_aspect_ratio"], json!(0.9));
+    assert!(ab(1).get("show_video_safe_areas").is_none(), "hidden safe areas aren't written: {}", ab(1));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+    assert_eq!((back.artboards[0].show_video_safe_areas, back.artboards[1].video_ruler_pixel_aspect_ratio), (true, 0.9));
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "showVideoSafeAreas": false}, {"index": 1, "videoRulerPixelAspectRatio": 1}]}))
+        .unwrap();
+    assert_eq!(save(&s), before, "off and square again, the file is as it was");
+    // A file whose artboards have no such keys (older writers) opens with them off and square.
+    let mut old: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for a in old["document"]["artboards"].as_array_mut().unwrap() {
+        let a = a.as_object_mut().unwrap();
+        a.remove("show_video_safe_areas");
+        a.remove("video_ruler_pixel_aspect_ratio");
+    }
+    let back = vectorcraft_format::load(&serde_json::to_vec(&old).unwrap()).unwrap();
+    assert!(back.artboards.iter().all(|a| !a.show_video_safe_areas && a.video_ruler_pixel_aspect_ratio == 1.0));
+    for (written, opens) in [(json!(0), 0.1), (json!(-3), 0.1), (json!(1e9), 10.0), (json!(2.5), 2.5)] {
+        let mut file: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        file["document"]["artboards"][1]["video_ruler_pixel_aspect_ratio"] = written.clone();
+        let back = vectorcraft_format::load(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(back.artboards[1].video_ruler_pixel_aspect_ratio, opens, "{written}");
+    }
 }
 
 #[test]

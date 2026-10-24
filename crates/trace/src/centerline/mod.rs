@@ -65,6 +65,9 @@ pub(crate) fn lines(
     let mask = |i: usize| labels.get(i) == Some(&label);
     let mut seen = vec![false; w * h];
     let mut stack = vec![];
+    // Thin shapes nested in one another have overlapping boxes: the cells of all of them together
+    // are bounded, so the work is too (a component past it stays as it is, not a line).
+    let mut cells_left = n.saturating_mul(8).max(1 << 22);
     for start in 0..w * h {
         if !mask(start) || seen.get(start).copied().unwrap_or(false) {
             continue;
@@ -86,6 +89,8 @@ pub(crate) fn lines(
             }
         }
         let Some(g) = Grid::from_component(&comp, w) else { continue };
+        let Some(left) = cells_left.checked_sub(g.w.saturating_mul(g.h)) else { break };
+        cells_left = left;
         let Some(dt) = distance::squared(&g.on, g.w, g.h) else { continue };
         let widest = 2.0 * f64::from(dt.iter().copied().fold(0.0f32, f32::max)).sqrt() - 1.0;
         if widest > max_width {

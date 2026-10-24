@@ -161,6 +161,31 @@ fn pdf_compatible_files_carry_a_pdf() {
 }
 
 #[test]
+fn save_option_errors_name_the_save_command() {
+    let mut s = three_boards();
+    for (cmd, p) in [
+        ("file.saveCopy", json!({"format": "pdf", "range": "5"})),
+        ("file.saveCopy", json!({"format": "svg", "artboard": 5})),
+        ("file.saveAs", json!({"format": "svg", "range": "4"})),
+        ("document.save", json!({"format": "pdf", "artboards": [3]})),
+        ("file.saveCopy", json!({"format": "ai", "compress": "yes"})),
+        ("file.saveCopy", json!({"format": "ai", "pdfCompatible": false, "artboard": "B"})),
+        ("file.saveCopy", json!({"format": "ai", "aiVersion": 7, "artboard": "B"})),
+        ("file.saveCopy", json!({"format": "ait", "compress": "yes"})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{cmd}`")) && !e.contains("document.export"), "{p}: {e}");
+    }
+    // A native file written to a path.
+    let dir = Folder::new("save-errors");
+    for (cmd, name) in [("document.save", "a.vectorcraft"), ("file.saveAs", "b.vectorcraft"), ("file.saveCopy", "c.vectorcraft")] {
+        let p = json!({"path": dir.file(name), "compress": "yes"});
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{cmd}`")) && !e.contains("document.export"), "{p}: {e}");
+    }
+}
+
+#[test]
 fn ai_without_pdf_content_and_compression() {
     let mut s = three_boards();
     let ai = |s: &mut Session, p: Value| -> (Vec<u8>, Value) {
@@ -186,6 +211,130 @@ fn ai_without_pdf_content_and_compression() {
     let (packed, _) = ai(&mut s, json!({"compress": true}));
     let (loose, _) = ai(&mut s, json!({"compress": false}));
     assert!(loose.len() > packed.len(), "{} vs {}", loose.len(), packed.len());
+}
+
+#[test]
+fn a_remembered_artboard_the_document_no_longer_has_is_dropped() {
+    let dir = Folder::new("remembered-artboards");
+    for (name, p) in [
+        ("legacy.ai", json!({"aiVersion": "7", "range": "3"})),
+        ("separate.ai", json!({"separateArtboards": true, "range": "3"})),
+        ("separate.vectorcraft", json!({"separateArtboards": true, "range": "1, 3"})),
+        ("doc.pdf", json!({"range": "3"})),
+        ("doc.svg", json!({"artboard": 2})),
+    ] {
+        let mut s = three_boards();
+        let mut first = p.clone();
+        first["path"] = json!(dir.file(name));
+        s.execute("file.saveAs", &first).unwrap_or_else(|e| panic!("{name}: {e}"));
+        s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+        let v = s.execute("file.formatOptions", &json!({})).unwrap();
+        for k in ["artboard", "range"].iter().filter(|k| p.get(**k).is_some()) {
+            assert_ne!(v["options"][*k]["value"], p[*k], "{name}: Save no longer uses {k}");
+        }
+        s.execute("document.save", &json!({})).unwrap_or_else(|e| panic!("{name}: {e}"));
+        // Given to the save, it is still refused.
+        let e = s.execute("document.save", &p).unwrap_err().to_string();
+        assert!(e.contains("from 1 to 2") || e.contains("no artboard 2"), "{name}: {e}");
+    }
+    // A remembered artboard that is still there is kept.
+    let mut s = three_boards();
+    s.execute("file.saveAs", &json!({"path": dir.file("kept.ai"), "aiVersion": "7", "range": "2"})).unwrap();
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    let v = s.execute("file.formatOptions", &json!({})).unwrap();
+    assert_eq!(v["options"]["range"]["value"], json!("2"));
+    let r = s.execute("document.save", &json!({})).unwrap();
+    assert!(r["path"].as_str().is_some_and(|p| p.ends_with("kept.ai")), "{r}");
+}
+
+#[test]
+fn a_remembered_artboard_pick_follows_the_artboards_it_named() {
+    let dir = Folder::new("remembered-pick");
+    // Save each artboard of A, B and C to a file with `range`, change the artboards, then save
+    // without options: the range Save now uses and the artboards it writes, by file name.
+    let save = |range: &str, change: &[(&str, Value)]| -> (Value, Vec<String>) {
+        let mut s = three_boards();
+        let path = dir.file("x.ai");
+        s.execute("file.saveAs", &json!({"path": path, "separateArtboards": true, "range": range})).unwrap();
+        for (cmd, p) in change {
+            s.execute(cmd, p).unwrap();
+        }
+        let range = s.execute("file.formatOptions", &json!({})).unwrap()["options"]["range"]["value"].clone();
+        let r = s.execute("document.save", &json!({})).unwrap();
+        let files = r["files"].as_array().unwrap().iter().skip(1).map(|f| f.as_str().unwrap().rsplit(['/', '\\']).next().unwrap().to_string());
+        (range, files.collect())
+    };
+    let delete = |i: usize| ("artboard.delete", json!({"index": i}));
+    assert_eq!(save("1, 3", &[delete(2)]), (json!("1"), vec!["x-A.ai".to_string()]));
+    assert_eq!(save("1, 3", &[delete(0)]), (json!("2"), vec!["x-C.ai".to_string()]));
+    assert_eq!(save("1-3", &[delete(1)]), (json!("1-2"), vec!["x-A.ai".to_string(), "x-C.ai".to_string()]));
+    let (range, mut files) = save("1, 3", &[("artboard.reorder", json!({"index": 2, "to": 0}))]);
+    files.sort();
+    assert_eq!((range, files), (json!("2, 1"), vec!["x-A.ai".to_string(), "x-C.ai".to_string()]));
+    // None of them left: every artboard, as when none is named.
+    assert_eq!(save("1, 3", &[delete(2), delete(0)]), (Value::Null, vec!["x-B.ai".to_string()]));
+    assert_eq!(save("all", &[delete(0)]), (json!("all"), vec!["x-B.ai".to_string(), "x-C.ai".to_string()]));
+    // An artboard made after one was deleted is not taken for it.
+    let new = ("artboard.new", json!({"x": 600, "y": 0, "width": 100, "height": 100, "name": "D"}));
+    let all = ["x-A.ai", "x-B.ai", "x-D.ai"].map(String::from).to_vec();
+    assert_eq!(save("3", &[delete(2), new.clone()]), (Value::Null, all));
+    assert_eq!(save("1, 3", &[delete(2), new.clone()]), (json!("1"), vec!["x-A.ai".to_string()]));
+    // A range open at its end keeps to the artboards it named.
+    assert_eq!(save("2-", std::slice::from_ref(&new)), (json!("2-3"), vec!["x-B.ai".to_string(), "x-C.ai".to_string()]));
+    // Nor is one made after undoing the artboard (and the three rectangles made after it).
+    let undo = ("edit.undo", json!({}));
+    let undone = [undo.clone(), undo.clone(), undo.clone(), undo, new];
+    assert_eq!(save("1, 3", &undone), (json!("1"), vec!["x-A.ai".to_string()]));
+
+    // The other saves that remember a pick: a PDF's range, an SVG's artboard, a legacy .ai's
+    // range and a native file's separate files.
+    for (name, p, gone, after) in [
+        ("doc.pdf", json!({"range": "1, 3"}), 0, json!({"range": "2"})),
+        // `range` wins over `artboard`, which a save then does not use.
+        ("unused.pdf", json!({"artboard": 0, "range": "3"}), 0, json!({"range": "2"})),
+        ("doc.svg", json!({"artboard": 2}), 0, json!({"artboard": 1})),
+        ("legacy.ai", json!({"aiVersion": "7", "range": "1, 3"}), 2, json!({"range": "1"})),
+        ("doc.vectorcraft", json!({"separateArtboards": true, "range": "1, 3"}), 0, json!({"range": "2"})),
+    ] {
+        let mut s = three_boards();
+        let mut first = p.clone();
+        first["path"] = json!(dir.file(name));
+        s.execute("file.saveAs", &first).unwrap();
+        s.execute("artboard.delete", &json!({"index": gone})).unwrap();
+        let v = s.execute("file.formatOptions", &json!({})).unwrap();
+        for (k, value) in after.as_object().unwrap() {
+            assert_eq!(&v["options"][k]["value"], value, "{name}: {k}");
+        }
+        s.execute("document.save", &json!({})).unwrap_or_else(|e| panic!("{name}: {e}"));
+        if name.ends_with(".pdf") {
+            let bytes = std::fs::read(dir.file(name)).unwrap();
+            let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+            assert_eq!(info["pages"], 1, "only the artboard that was 3");
+        }
+    }
+
+    // File > Revert: a PDF holds only the pages it was saved with, so its pick is left out; a
+    // native file keeps every artboard, and the pick stays.
+    let mut s = three_boards();
+    s.execute("file.saveAs", &json!({"path": dir.file("revert.pdf"), "range": "1, 3"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 50, "width": 30, "height": 30})).unwrap();
+    s.execute("file.revert", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 2);
+    assert_eq!(s.execute("file.formatOptions", &json!({})).unwrap()["options"]["range"]["value"], Value::Null);
+    // A PDF without the editable document reads back with new ids in page order: after a reorder,
+    // the pick is left out, not taken for another reorder.
+    let mut s = three_boards();
+    s.execute("artboard.reorder", &json!({"index": 2, "to": 0})).unwrap();
+    s.execute("file.saveAs", &json!({"path": dir.file("reordered.pdf"), "range": "1-3", "preserveEditing": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 50, "width": 30, "height": 30})).unwrap();
+    s.execute("file.revert", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), [1, 2, 3]);
+    assert_eq!(s.execute("file.formatOptions", &json!({})).unwrap()["options"]["range"]["value"], Value::Null);
+    let mut s = three_boards();
+    s.execute("file.saveAs", &json!({"path": dir.file("revert.vectorcraft"), "separateArtboards": true, "range": "1, 3"})).unwrap();
+    s.execute("artboard.delete", &json!({"index": 0})).unwrap();
+    s.execute("file.revert", &json!({})).unwrap();
+    assert_eq!(s.execute("file.formatOptions", &json!({})).unwrap()["options"]["range"]["value"], json!("1, 3"));
 }
 
 #[test]

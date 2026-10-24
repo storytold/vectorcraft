@@ -192,6 +192,28 @@ fn reshaping_the_path_of_type_on_a_path_changes_where_its_letters_were_and_are()
     redraw(&old, &new);
 }
 
+/// Stroked type with sharp corners: the miter spikes of its characters' strokes reach past half
+/// the weight, and change where they were and where they are.
+#[test]
+fn moving_type_with_mitred_strokes_changes_where_its_spikes_reach() {
+    let mut old = Document::new(110.0, 80.0);
+    let l = old.layers[0].id;
+    let style = vectorcraft_doc::text::CharStyle {
+        size: 30.0,
+        stroke: Paint::solid(Color::BLACK),
+        stroke_width: 10.0,
+        stroke_join: vectorcraft_doc::LineJoin::Miter,
+        stroke_miter_limit: 10.0,
+        ..Default::default()
+    };
+    let mut t = vectorcraft_doc::text::TextObject::point(Point::new(10.0, 50.0), "VAWV", style);
+    t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).bounds);
+    let text = old.insert(Some(l), 0, Node::new(NodeId(0), NodeKind::Text(Box::new(t)))).unwrap();
+    let mut new = old.clone();
+    new.node_mut(text).unwrap().transform(Affine::translate((9.0, 7.0)), false);
+    redraw(&old, &new);
+}
+
 #[test]
 fn an_unchanged_document_changes_nothing_and_a_new_symbol_everything() {
     let (old, _) = document();
@@ -212,4 +234,27 @@ fn an_edit_while_a_pattern_is_edited_changes_everything() {
     let mut new = old.clone();
     new.node_mut(loose).unwrap().transform(Affine::translate((7.0, 3.0)), false);
     assert_eq!(changed(&old, &new), Changed::Everything);
+}
+
+/// Type stretched more on one axis than its area grows: its characters' strokes stretch with it.
+#[test]
+fn moving_stretched_type_changes_where_its_stretched_strokes_reach() {
+    let mut old = Document::new(110.0, 80.0);
+    let l = old.layers[0].id;
+    let style = vectorcraft_doc::text::CharStyle {
+        size: 4.0,
+        stroke: Paint::solid(Color::BLACK),
+        stroke_width: 1.0,
+        stroke_join: vectorcraft_doc::LineJoin::Miter,
+        stroke_miter_limit: 10.0,
+        ..Default::default()
+    };
+    let mut t = vectorcraft_doc::text::TextObject::point(Point::ZERO, "VAWV", style);
+    t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).bounds);
+    // Its area stays, so its scale factor is 1, while it grows ten times as wide.
+    t.xf = Affine::translate((10.0, 40.0)) * Affine::scale_non_uniform(10.0, 0.1);
+    let text = old.insert(Some(l), 0, Node::new(NodeId(0), NodeKind::Text(Box::new(t)))).unwrap();
+    let mut new = old.clone();
+    new.node_mut(text).unwrap().transform(Affine::translate((9.0, 7.0)), false);
+    area(redraw(&old, &new));
 }

@@ -153,9 +153,9 @@ fn selected_guides_align_to_a_clicked_key_object() {
     assert_eq!(guides(&s), [140.0, 110.0], "horizontal alignment moves only the vertical guide");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(guides(&s), [120.0, 110.0], "one undo step");
-    // Aligning to the artboard leaves the guides alone.
+    // Aligning to the artboard moves the vertical guide to the artboard's left edge.
     s.execute("object.align", &json!({"horizontal": "left", "to": "artboard"})).unwrap();
-    assert_eq!(guides(&s), [120.0, 110.0]);
+    assert_eq!(guides(&s), [0.0, 110.0]);
     // Deselecting the guides lets the lone key go.
     s.execute("guide.select", &json!({"indexes": [0, 1], "toggle": true})).unwrap();
     assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
@@ -308,6 +308,18 @@ fn select_with_guides(s: &mut Session, ids: &[NodeId], guides: &[usize]) {
 
 fn positions(s: &Session) -> Vec<f64> {
     s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect()
+}
+
+#[test]
+fn guides_selected_alone_align_to_artboard() {
+    let mut s = guides_alone(&[100.0, 400.0], &[50.0, 300.0]);
+    s.execute("object.align", &json!({"horizontal": "left", "to": "artboard", "artboard": 0})).unwrap();
+    assert_eq!(positions(&s), [0.0, 0.0, 50.0, 300.0]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.align", &json!({"horizontal": "right", "to": "artboard", "artboard": 0})).unwrap();
+    assert_eq!(&positions(&s)[..2], [800.0, 800.0]);
+    s.execute("object.align", &json!({"vertical": "top", "to": "artboard", "artboard": 0})).unwrap();
+    assert_eq!(positions(&s), [800.0, 800.0, 0.0, 0.0]);
 }
 
 #[test]

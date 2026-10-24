@@ -297,3 +297,31 @@ fn home_scrolls_in_a_short_window() {
     visible_home_texts(&mut app, &ctx, size, 4.1, vec![press(false)]);
     assert_eq!(app.session.documents().len(), 1, "the card opened its preset");
 }
+
+/// Home › Recent Files and File › Open Recent focus an open tab instead of opening a second copy
+/// (#3455); `document.open` is unchanged.
+#[test]
+fn home_recent_reopen_focuses_an_already_open_document() {
+    let services = crate::Services {
+        read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    let d = std::env::temp_dir().join(format!("vc-home-reopen-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("doc.vectorcraft").to_string_lossy().to_string();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 1, "y": 2, "width": 10, "height": 10})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    assert_eq!(app.session.documents().len(), 2);
+    assert_eq!(app.session.active_index(), Some(1));
+    let r = crate::io::open_recent_reporting(&mut app, &path).unwrap();
+    assert_eq!(r["activated"], true);
+    assert_eq!(app.session.documents().len(), 2);
+    assert_eq!(app.session.active_index(), Some(0));
+    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(d);
+}

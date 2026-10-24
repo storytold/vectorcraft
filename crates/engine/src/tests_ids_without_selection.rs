@@ -53,6 +53,139 @@ fn only_an_ids_key_counts() {
     // A word in what the description says about another key isn't the key.
     assert_eq!(given_ids("{name: of the swatch the ids of the selection take}", &p), None);
     assert_eq!(given_ids("{ids?: [id]}", &json!({"ids": []})), None);
+    // `id` is `ids` of one where the description names both keys, and `ids` aren't given.
+    let one = json!({"id": 3});
+    assert_eq!(given_ids("{ids?|id?}", &one), Some(vec![NodeId(3)]));
+    assert_eq!(given_ids("{id?, ids?: [id…] (instead of id)}", &one), Some(vec![NodeId(3)]));
+    assert_eq!(given_ids("{ids?: [id…]}", &one), None, "a description without `id`");
+    assert_eq!(given_ids("{id?: dimension id}", &one), None, "a description without `ids`");
+    assert_eq!(given_ids("{ids?|id?}", &json!({"id": "a1"})), None, "not an object id");
+    assert_eq!(given_ids("{ids?|id?}", &json!({"id": 3, "ids": [4]})), Some(vec![NodeId(4)]), "`ids` first");
+    assert_eq!(given_ids("{ids?|id?}", &json!({"id": 3, "ids": null})), Some(vec![NodeId(3)]));
+    // A required `id` beside `ids` is something else (`plugin.run`'s plug-in); `{id} or {ids}` is
+    // one object or several.
+    assert_eq!(given_ids("{id, params?: {…}, ids?: [..]}", &one), None, "a plug-in's id");
+    assert!(!cmd::params::id_stands_for_ids("{id, params?: {…}, ids?: [..]}"));
+    assert!(cmd::params::id_stands_for_ids("{id} or {ids: [id…]}: toggles them"));
+    assert!(cmd::params::id_stands_for_ids("{ids|id, target}"));
+}
+
+/// `{"id": x}` with params besides it, and the same as `{"ids": [x]}`.
+fn id_and_ids(cmd: &str, x: u64, d: u64) -> (serde_json::Value, serde_json::Value) {
+    let (mut one, mut list) = (params_for(cmd, d), params_for(cmd, d));
+    one["id"] = json!(x);
+    list["ids"] = json!([x]);
+    (one, list)
+}
+
+/// [`doc_with_nested_groups`] with point type `Ab` added, nothing selected → its session and the
+/// type's id.
+fn doc_with_type() -> (Session, [u64; 4], u64) {
+    let (mut s, ids) = doc_with_nested_groups();
+    let t = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Ab", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    (s, ids, t)
+}
+
+/// What `cmd` gives in a fresh [`doc_with_type`] (nothing selected) with `params`: its result or
+/// error, and the document after it.
+fn run_fresh(
+    cmd: &str,
+    params: &serde_json::Value,
+) -> (std::result::Result<serde_json::Value, String>, Option<std::sync::Arc<vectorcraft_doc::Document>>) {
+    let (mut s, ..) = doc_with_type();
+    let r = s.execute(cmd, params).map_err(|e| e.to_string());
+    (r, s.doc().ok().map(|d| d.doc.clone()))
+}
+
+/// Every command whose params description names both `id` and `ids` (`{ids?|id?}`, `{id?, ids?:
+/// … (instead of id)}`), with nothing selected: `id` does what `ids` of that one object does (the
+/// same result or the same error, and the same document), for objects of the document and for an
+/// id the document doesn't have. Before, the commands that need a selection refused `id` as
+/// "nothing selected" and took `ids`.
+#[test]
+fn id_does_what_ids_of_one_does_with_nothing_selected() {
+    let (fresh, [a, inner, _, d], t) = doc_with_type();
+    let (mut checked, mut failures, mut refused, mut refused_ran) = (vec![], vec![], vec![], vec![]);
+    for spec in command_specs() {
+        if !cmd::params::id_stands_for_ids(spec.params) {
+            continue;
+        }
+        // Those the menus refuse with nothing selected are the ones that refused `id`.
+        if (spec.enabled)(&fresh).is_err() {
+            refused.push(spec.id);
+        }
+        // A rectangle, a group, type, and an id the document doesn't have.
+        for x in [a, inner, t, 999_999] {
+            let (one, list) = id_and_ids(spec.id, x, d);
+            let (with_id, with_ids) = (run_fresh(spec.id, &one), run_fresh(spec.id, &list));
+            if with_id != with_ids {
+                failures.push(format!("{} {x}: with id {:.160}; with ids {:.160}", spec.id, format!("{:?}", with_id.0), format!("{:?}", with_ids.0)));
+            } else if refused.last() == Some(&spec.id) && x != 999_999 && with_id.0.is_ok() && !refused_ran.contains(&spec.id) {
+                refused_ran.push(spec.id);
+            }
+        }
+        checked.push(spec.id);
+    }
+    assert!(failures.is_empty(), "{} differ:\n{}", failures.len(), failures.join("\n"));
+    // The commands that refused `id` with nothing selected (29), and those of them that run on
+    // these objects (14: the rest need other art, as with `ids`).
+    assert!(refused.len() >= 26 && refused_ran.len() >= 14, "{refused_ran:?} ran of {refused:?}; checked {}", checked.len());
+}
+
+/// Every command that takes `id` as `ids` of one ([`cmd::params::id_stands_for_ids`]), with an
+/// object selected: an `id` that is malformed (a string, negative, a fraction, an object) or names
+/// no object is refused under the command's id, as the same value in `ids` is, and the document
+/// and the selection stay as they were. It never stands for the selection instead. (A string `id`
+/// given to `effect.apply` without `effect` names the effect, which "bad" isn't: refused too.)
+#[test]
+fn a_bad_id_is_refused_as_the_same_ids_are_and_changes_nothing() {
+    let (_, [.., d], _) = doc_with_type();
+    let (mut failures, mut checked) = (vec![], 0);
+    for spec in command_specs() {
+        if !cmd::params::id_stands_for_ids(spec.params) {
+            continue;
+        }
+        checked += 1;
+        for bad in [json!("bad"), json!(-1), json!(1.5), json!({"id": 1}), json!(999_999)] {
+            let run = |key: &str, value: serde_json::Value| {
+                let (mut s, ..) = doc_with_type();
+                s.execute("select.set", &json!({ "ids": [d] })).unwrap();
+                let before = s.doc().unwrap().doc.clone();
+                let mut p = params_for(spec.id, d);
+                p[key] = value;
+                let r = s.execute(spec.id, &p).map_err(|e| e.to_string());
+                let st = s.doc().unwrap();
+                (r, st.doc == before && st.selection.objects == vec![NodeId(d)])
+            };
+            let (with_id, with_ids) = (run("id", bad.clone()), run("ids", json!([bad.clone()])));
+            let effect_named = spec.id == "effect.apply" && bad.is_string();
+            if with_id.0.is_ok() || !with_id.1 || (with_id != with_ids && !effect_named) {
+                failures.push(format!(
+                    "{} {bad}: with id {:.160} (unchanged: {}); with ids {:.160}",
+                    spec.id,
+                    format!("{:?}", with_id.0),
+                    with_id.1,
+                    format!("{:?}", with_ids.0)
+                ));
+            }
+        }
+        // A step reference no batch resolved is refused under this command's id too.
+        let (mut s, ..) = doc_with_type();
+        s.execute("select.set", &json!({ "ids": [d] })).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let mut p = params_for(spec.id, d);
+        p["id"] = json!("$missing");
+        match s.execute(spec.id, &p) {
+            Err(EngineError::BadParams { cmd, msg }) if cmd == spec.id && msg.contains("step reference") => {}
+            r => failures.push(format!("{} \"$missing\": {r:?}", spec.id)),
+        }
+        if s.doc().unwrap().doc != before {
+            failures.push(format!("{} \"$missing\": the document changed", spec.id));
+        }
+    }
+    assert!(failures.is_empty(), "{} fail:\n{}", failures.len(), failures.join("\n"));
+    assert!(checked >= 100, "{checked} commands");
 }
 
 /// Every command that names `ids` and is refused with nothing selected: given the object as `ids`

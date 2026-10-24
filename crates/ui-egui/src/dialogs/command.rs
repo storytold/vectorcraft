@@ -13,8 +13,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |d| tl!(&d.str("__label")).to_string(),
     body: |app, ui, d| {
         let command = d.str("__command");
-        let lengths = lengths(&command);
-        form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &|_| 0, app.session.general_unit());
+        let (lengths, order) = (lengths(&command), order(&command));
+        let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
+        form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
         false
     },
     confirm,
@@ -30,6 +31,17 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
         "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
         "type.pathOptions" => &["spacing"],
+        "object.pathfinder.trap" => &["thickness"],
+        _ => &[],
+    }
+}
+
+/// The order the fields of the commands this dialog edits come in, where the order of their
+/// names isn't it (the rest follow, by name).
+fn order(command: &str) -> &'static [&'static str] {
+    match command {
+        // The public Trap options' order.
+        "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         _ => &[],
     }
 }

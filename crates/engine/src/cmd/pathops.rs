@@ -2,12 +2,13 @@
 //! `vectorcraft-pathops`: Offset Path, Outline Stroke, Simplify, Add Anchor Points, Split Into Grid,
 //! Clean Up and Divide Objects Below.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
 use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{AnchorRef, Appearance, Document, Node, NodeId, NodeKind, SegmentRef, TextObject};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
@@ -108,6 +109,15 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, _| run_pf(s, PathfinderOp::MinusBack)
         ),
         cmd!(
+            "object.pathfinder.trap",
+            "Trap…",
+            ["Window", "Pathfinder"],
+            None,
+            "{ids?: [id…] (selected first; default: the selection), thickness?: pt 0.01..5000 (0.25; how far the lighter colour reaches into the darker one across vertical edges), heightWidth?: % 1..1000 (100; the reach across horizontal edges as a percentage of the vertical one), tintReduction?: % 0..100 (40; the trap paints the lighter colour at this percentage of its tint), trapsWithProcessColor?: bool (false; a swatch (spot) colour's trap is painted with its CMYK process equivalent), reverseTraps?: bool (false; the darker colour spreads into the lighter one, except a rich black)} adds overprinting traps where the selected objects' visible areas of different solid colours meet, grouped directly above the topmost selected object and selected; the objects stay as they are → {ids}",
+            has_selection,
+            trap
+        ),
+        cmd!(
             "object.path.outlineStroke",
             "Outline Stroke",
             ["Object", "Path"],
@@ -130,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Simplify…",
             ["Object", "Path"],
             None,
-            "{tolerance?: pt (1), level?: 0..100 (the Simplify slider, in place of tolerance: 0 fewest anchor points, 50 is 1 pt, every 10 levels halves or doubles it), auto?: bool (Auto-Simplify: the lowest level whose tolerance is at most 1/400 of the selection's longer side, or 100 when that side is under 12.5 pt), cornerAngle?: deg (30), straightLines?: bool} → {ids, before, after} anchor counts, and the level used with level or auto",
+            "{tolerance?: pt (1), level?: 0..100 (the Simplify slider, in place of tolerance: 0 fewest anchor points, 50 is 1 pt, every 10 levels halves or doubles it), auto?: bool (Auto-Simplify: the lowest level whose tolerance is at most 1/400 of the selection's longer side, or 100 when that side is under 12.5 pt), cornerAngle?: deg (30), straightLines?: bool, wholePaths?: bool (false: a path with segments direct-selected, or between direct-selected anchors, simplifies only each run of them between its end anchors, which stay as they are, and keeps the runs selected; true simplifies those paths whole)} → {ids, before, after} anchor counts, and the level used with level or auto",
             has_selection,
             simplify
         ),
@@ -499,6 +509,68 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+// ---------- Trap ----------
+
+/// Pathfinder panel › Trap ([`vectorcraft_render::effects::trap`]): the traps between the selected
+/// objects' leaf shapes, as one group of overprinting paths above the topmost selected object.
+fn trap(s: &mut Session, p: &Value) -> Result<Value> {
+    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, traps};
+    const ID: &str = "object.pathfinder.trap";
+    let mut q = p.clone();
+    if let Some(t) = len_param(p, "thickness") {
+        if !(po::TRAP_MIN_WIDTH..=po::TRAP_MAX_WIDTH).contains(&t) {
+            return Err(bad(ID, "thickness must be from 0.01 to 5000 pt"));
+        }
+        q["thickness"] = json!(t);
+    }
+    if num_param(p, "heightWidth").is_some_and(|v| !(1.0..=1000.0).contains(&v)) {
+        return Err(bad(ID, "heightWidth must be from 1 to 1000 %"));
+    }
+    if num_param(p, "tintReduction").is_some_and(|v| !(0.0..=100.0).contains(&v)) {
+        return Err(bad(ID, "tintReduction must be from 0 to 100 %"));
+    }
+    // The effect-only settings stay at their defaults.
+    if let Some(o) = q.as_object_mut() {
+        o.remove("precision");
+        o.remove("removeRedundantPoints");
+    }
+    let options = TrapOptions::from_params(&q);
+    let roots = selected_roots(s)?;
+    if roots.is_empty() {
+        return Err(EngineError::Other("nothing selected".into()));
+    }
+    let ids = s.edit(TRAP_LABEL, |d, sel| {
+        let mut sources = vec![];
+        for id in &roots {
+            let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
+            each_leaf(n, &mut |l| {
+                if let Some((path, rule)) = node_path(l) {
+                    sources.push(TrapSource { path, rule, fill: style_of(l).appearance.fill_paint() });
+                }
+            });
+        }
+        if sources.iter().filter(|s| s.fill.color().is_some()).count() < 2 {
+            return Err(EngineError::Other("Trap: select two or more objects filled with solid colours".into()));
+        }
+        let made = traps(&sources, &options);
+        if made.is_empty() {
+            return Err(EngineError::Other("Trap: no edges of different colours meet among the selected objects".into()));
+        }
+        let mut children = Vec::with_capacity(made.len());
+        for piece in made {
+            let mut n = shape_node(d, piece.path, None);
+            n.appearance = trap_appearance(piece.paint).into();
+            children.push(Arc::new(n));
+        }
+        let gid = d.alloc_id();
+        let top = *roots.last().ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+        d.insert_beside(vec![(top, vec![Node::group(gid, children)])], false)?;
+        sel.set([gid]);
+        Ok(vec![gid])
+    })?;
+    Ok(ids_json(&ids))
+}
+
 // ---------- Offset Path ----------
 
 fn join_param(p: &Value, key: &str) -> po::Join {
@@ -635,7 +707,7 @@ pub(crate) fn outlined_stroke(
         blend: st.blend,
         effects: st.effects.clone(),
         overprint: st.overprint,
-        ..vectorcraft_doc::appearance::FillLayer::new(st.paint.clone())
+        ..vectorcraft_doc::appearance::FillLayer::new(st.paint.stroke_as_fill())
     };
     n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() }.into();
     Some(n)
@@ -761,12 +833,23 @@ fn path_ids(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
     out
 }
 
-/// Replace each path under the selection ([`path_ids`]) by what `f` makes of it: → (their ids, how
+/// The direct selection a path keeps after an edit of part of it: (its selected anchors, and its
+/// selected segments when they were picked as segments). `None` selects the path whole.
+type PartSelection = Option<(BTreeSet<AnchorRef>, Option<BTreeSet<SegmentRef>>)>;
+
+/// Replace each path under the selection ([`path_ids`]) by what `f` makes of it, given its
+/// direct-selected anchors and picked segments (none when it is selected whole): → (their ids, how
 /// many anchors they have before and after). A path that `f` would empty or returns unchanged is
-/// left as it is, with its live shape and its direct-selected anchors; a replaced path loses both.
-fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -> Result<(Vec<NodeId>, usize, usize)> {
+/// left as it is, with its live shape and its direct selection; a replaced path loses its live
+/// shape and has the direct selection `f` gives it.
+fn edit_paths(
+    s: &mut Session,
+    label: &str,
+    f: impl Fn(&PathData, Option<&BTreeSet<AnchorRef>>, Option<&BTreeSet<SegmentRef>>) -> (PathData, PartSelection),
+) -> Result<(Vec<NodeId>, usize, usize)> {
     let roots = selected_roots(s)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let (d, sel) = (&st.doc, &st.selection);
     let ids = path_ids(d, &roots);
     if ids.is_empty() {
         return Err(EngineError::Other(format!("{label}: select paths")));
@@ -775,22 +858,29 @@ fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -
     for id in &ids {
         let Some(NodeKind::Path { path, .. }) = d.node(*id).map(|n| &n.kind) else { continue };
         before += path.anchor_count();
-        let np = f(path);
+        let (np, part) = f(path, sel.anchors.get(id), sel.segments.get(id));
         if (np.is_empty() && !path.is_empty()) || np == *path {
             after += path.anchor_count();
             continue;
         }
         after += np.anchor_count();
-        changed.push((*id, np));
+        changed.push((*id, np, part));
     }
     // When no path changes, the document and its undo history stay as they are.
     if !changed.is_empty() {
         s.edit(label, |d, sel| {
-            for (id, np) in changed {
+            for (id, np, part) in changed {
                 if let Some(NodeKind::Path { path, live, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
-                    // Refit and subdivision change what the old component indexes refer to.
-                    // Keep the object selected whole so its new points remain editable.
+                    // Refit and subdivision change what the old component indexes refer to: the
+                    // path is selected whole, or with the part `f` says.
                     sel.anchors.remove(&id);
+                    sel.segments.remove(&id);
+                    if let Some((anchors, segments)) = part.filter(|(a, _)| a.len() < np.anchor_count()) {
+                        sel.anchors.insert(id, anchors);
+                        if let Some(segments) = segments {
+                            sel.segments.insert(id, segments);
+                        }
+                    }
                     *path = np;
                     *live = None;
                 }
@@ -801,12 +891,44 @@ fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -
     Ok((ids, before, after))
 }
 
+/// The segments of `path` a direct selection picks: the `segments` picked as such, or else every
+/// segment with both its anchors among `anchors`. `None` when the path is selected whole, or when
+/// no segment of it is selected.
+fn selected_segments(
+    path: &PathData,
+    anchors: Option<&BTreeSet<AnchorRef>>,
+    segments: Option<&BTreeSet<SegmentRef>>,
+) -> Option<BTreeSet<SegmentRef>> {
+    let anchors = anchors?;
+    let picked: BTreeSet<SegmentRef> = match segments {
+        Some(segs) => segs.iter().copied().filter(|&(si, i)| path.subpaths.get(si).is_some_and(|sp| i < sp.segment_count())).collect(),
+        None => path
+            .subpaths
+            .iter()
+            .enumerate()
+            .flat_map(|(si, sp)| {
+                (0..sp.segment_count())
+                    .filter(move |&i| anchors.contains(&(si, i)) && anchors.contains(&(si, (i + 1) % sp.anchors.len())))
+                    .map(move |i| (si, i))
+            })
+            .collect(),
+    };
+    (!picked.is_empty()).then_some(picked)
+}
+
+/// Auto-Simplify's level for the selection: [`po::auto_simplify_level`] for the longer side of the
+/// selected objects' bounds. Object › Path › Simplify's slider opens at it, and
+/// `object.path.simplify {auto: true}` simplifies at it.
+pub fn auto_simplify_level(s: &Session) -> Result<f64> {
+    let roots = selected_roots(s)?;
+    let size = s.doc()?.doc.bounds_of(&roots, false).map_or(0.0, |b| b.width().max(b.height()));
+    Ok(po::auto_simplify_level(size))
+}
+
 fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     // With auto, the slider's level is Auto-Simplify's for the selection's size; otherwise it is the level given.
     let level = if bool_or(p, "auto", false) {
-        let roots = selected_roots(s)?;
-        let size = s.doc()?.doc.bounds_of(&roots, false).map_or(0.0, |b| b.width().max(b.height()));
-        Some(po::auto_simplify_level(size))
+        Some(auto_simplify_level(s)?)
     } else {
         num_param(p, "level").map(|l| if l.is_finite() { l.round().clamp(0.0, 100.0) } else { po::SIMPLIFY_LEVEL })
     };
@@ -819,7 +941,22 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
         straight_lines: bool_or(p, "straightLines", false),
     };
-    let (ids, before, after) = edit_paths(s, "Simplify", |path| po::simplify_with(path, &opts))?;
+    let whole = bool_or(p, "wholePaths", false);
+    // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
+    // other anchors it had selected) direct-selected.
+    let (ids, before, after) = edit_paths(s, "Simplify", |path, anchors, segments| {
+        let Some(picked) = selected_segments(path, anchors, segments).filter(|_| !whole) else {
+            return (po::simplify_with(path, &opts), None);
+        };
+        let part = po::simplify_part(path, &picked, &opts);
+        let mut kept: BTreeSet<AnchorRef> = anchors.into_iter().flatten().filter_map(|a| part.anchors.get(a).copied()).collect();
+        for &(si, i) in &part.segments {
+            let m = part.path.subpaths.get(si).map_or(1, |sp| sp.anchors.len().max(1));
+            kept.extend([(si, i), (si, (i + 1) % m)]);
+        }
+        let segs = segments.map(|_| part.segments.clone());
+        (part.path, Some((kept, segs)))
+    })?;
     let mut out = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after });
     if let Some(l) = level {
         out["level"] = json!(l);
@@ -828,7 +965,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn add_anchor_points(s: &mut Session, _: &Value) -> Result<Value> {
-    let (ids, before, after) = edit_paths(s, "Add Anchor Points", po::add_anchor_points)?;
+    let (ids, before, after) = edit_paths(s, "Add Anchor Points", |path, _, _| (po::add_anchor_points(path), None))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after }))
 }
 

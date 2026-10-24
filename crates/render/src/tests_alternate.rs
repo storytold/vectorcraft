@@ -80,6 +80,8 @@ fn glyphs(t: &vectorcraft_doc::text::TextObject) -> Vec<(usize, usize, u32)> {
 /// required shaping, not alternates, so ordinary Arabic text shows no pink.
 #[test]
 fn arabic_joining_forms_are_not_alternates() {
+    // Looking up an installed font loads it, which changes the fonts.
+    let _adding = crate::tests_fontchange::adding_fonts();
     let Some(style) = arabic_style("arabic_joining_forms_are_not_alternates") else { return };
     let t = text("خلطة مبتكرة من اللومي الحساوي", style);
     // The words are shaped: most glyphs are not their letter's cmap glyph.
@@ -90,6 +92,8 @@ fn arabic_joining_forms_are_not_alternates() {
 /// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either.
 #[test]
 fn lam_alef_is_not_an_alternate() {
+    // Looking up an installed font loads it, which changes the fonts.
+    let _adding = crate::tests_fontchange::adding_fonts();
     let Some(style) = arabic_style("lam_alef_is_not_an_alternate") else { return };
     for s in ["لا", "سلام", "الاسم"] {
         assert_eq!(alternates(&text(s, style.clone())), 0, "{s}");
@@ -100,6 +104,8 @@ fn lam_alef_is_not_an_alternate() {
 /// discretionary alternate…) is highlighted on the glyphs it changes, and only on those.
 #[test]
 fn optional_features_on_arabic_flag_only_the_glyphs_they_change() {
+    // Looking up an installed font loads it, which changes the fonts.
+    let _adding = crate::tests_fontchange::adding_fonts();
     let db = vectorcraft_text::FontDb::global();
     let s = "خلطة مبتكرة من اللومي الحساوي";
     // Arabic fonts that may have optional features; the first installed one with a feature that

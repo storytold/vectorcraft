@@ -42,6 +42,7 @@ fn red_image(s: &mut Session) -> NodeId {
             xf: vectorcraft_geom::Affine::scale(10.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
         sel.set([id]);

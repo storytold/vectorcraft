@@ -314,15 +314,15 @@ impl PressureProfile {
     pub fn at(&self, t: f64) -> f64 {
         let p = &self.points;
         let (Some(first), Some(last)) = (p.first(), p.last()) else { return Self::MID };
+        // (Positions go forward; a profile read from a file is searched as if they do, in log time.)
         let v = if t <= first.0 {
             first.1
         } else {
-            p.windows(2)
-                .find_map(|w| match w {
-                    [a, b] if t <= b.0 => Some(a.1 + (b.1 - a.1) * ((t - a.0) / (b.0 - a.0).max(1e-9)).clamp(0.0, 1.0)),
-                    _ => None,
-                })
-                .unwrap_or(last.1)
+            let i = p.partition_point(|q| q.0 < t);
+            match (i.checked_sub(1).and_then(|j| p.get(j)), p.get(i)) {
+                (Some(a), Some(b)) => a.1 + (b.1 - a.1) * ((t - a.0) / (b.0 - a.0).max(1e-9)).clamp(0.0, 1.0),
+                _ => last.1,
+            }
         };
         if v.is_finite() { v.clamp(0.0, 1.0) } else { Self::MID }
     }

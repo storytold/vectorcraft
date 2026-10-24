@@ -306,7 +306,15 @@ fn all_images(d: &Document) -> Vec<&ImageBlob> {
 fn image_doc(blob: ImageBlob, w: u32, h: u32) -> Document {
     let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
     d.images.insert("img".into(), blob);
-    let image = ImageObject { key: "img".into(), width: w, height: h, xf: Affine::scale(40.0 / w as f64), link: None, placement: Default::default() };
+    let image = ImageObject {
+        key: "img".into(),
+        width: w,
+        height: h,
+        xf: Affine::scale(40.0 / w as f64),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
@@ -383,6 +391,7 @@ fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Optio
             xf: Affine::scale(20.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         }))
     };
     let mut mask = vectorcraft_doc::OpacityMask::new(Node::new(d.alloc_id(), image("alpha")), clip);

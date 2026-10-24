@@ -22,7 +22,7 @@ use super::*;
 use crate::EngineError;
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
-const CURRENT_SYMBOL: &str = "currentSymbol";
+pub(crate) const CURRENT_SYMBOL: &str = "currentSymbol";
 /// Half the instance box `Node::geometric_bounds` uses for symbol instances.
 const HALF: f64 = vectorcraft_doc::SYMBOL_HALF;
 
@@ -727,7 +727,7 @@ fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- symbols ----------
 
-fn natural_size(d: &Document, name: &str) -> (f64, f64) {
+pub(crate) fn natural_size(d: &Document, name: &str) -> (f64, f64) {
     d.unknown
         .get(SIZES_KEY)
         .and_then(|m| m.get(name))
@@ -735,7 +735,7 @@ fn natural_size(d: &Document, name: &str) -> (f64, f64) {
         .unwrap_or((2.0 * HALF, 2.0 * HALF))
 }
 
-fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {
+pub(crate) fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {
     let m = d.unknown.entry(SIZES_KEY.to_string()).or_insert_with(|| json!({}));
     if let Some(o) = m.as_object_mut() {
         match size {
@@ -746,7 +746,7 @@ fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {
 }
 
 /// Instance transform for a symbol of natural size `(w, h)` whose registration point is at `at`.
-fn place_xf(at: Point, (w, h): (f64, f64), reg: SymbolRegistration) -> Affine {
+pub(crate) fn place_xf(at: Point, (w, h): (f64, f64), reg: SymbolRegistration) -> Affine {
     let c = at - reg.offset_from_center(w, h);
     Affine::translate(c.to_vec2()) * Affine::scale_non_uniform(w / (2.0 * HALF), h / (2.0 * HALF))
 }
@@ -806,7 +806,7 @@ fn rename_natural_size(d: &mut Document, from: &str, to: &str) {
 }
 
 /// Normalise art for a symbol definition: returns (art, natural size, centre in the document).
-fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
+pub(crate) fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
     let b = art.geometric_bounds().ok_or_else(|| EngineError::Other("the art has no bounds".into()))?;
     let (w, h) = (b.width().max(1.0), b.height().max(1.0));
     let c = b.center();
@@ -970,7 +970,7 @@ fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let name = resolve_symbol(d, p, "symbol.place")?;
     let centre = d.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
-    let at = Point::new(f64_or(p, "x", centre.x), f64_or(p, "y", centre.y));
+    let at = Point::new(number_or(p, "x", centre.x, "symbol.place")?, number_or(p, "y", centre.y, "symbol.place")?);
     let size = natural_size(d, &name);
     let reg = d.symbol_registration(&name);
     let parent = s.doc()?.target_parent()?;
@@ -1099,7 +1099,7 @@ fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
     if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
         return Err(bad(C, format!("no symbol named `{name}`")));
     }
-    let expand = bool_or(p, "expandInstances", true);
+    let expand = switch_or(p, "expandInstances", true, C)?;
     s.edit("Delete Symbol", |d, _| {
         let inst = instances_of(d, Some(&name));
         if expand {
@@ -1216,10 +1216,10 @@ fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
     let pts = points(p, C)?;
     let st = s.doc()?;
     let name = resolve_symbol(&st.doc, p, C)?;
-    let radius = f64_or(p, "radius", 40.0).clamp(1.0, 2000.0);
-    let density = f64_or(p, "density", 5.0).clamp(1.0, 10.0);
-    let scale = f64_or(p, "scale", 1.0).clamp(0.01, 100.0);
-    let alt = bool_or(p, "alt", false);
+    let radius = number_or(p, "radius", 40.0, C)?.clamp(1.0, 2000.0);
+    let density = number_or(p, "density", 5.0, C)?.clamp(1.0, 10.0);
+    let scale = number_or(p, "scale", 1.0, C)?.clamp(0.01, 100.0);
+    let alt = switch_or(p, "alt", false, C)?;
     let size = natural_size(&st.doc, &name);
     let set = st.selection.objects.first().copied().filter(|id| st.selection.len() == 1 && st.doc.node(*id).is_some_and(is_symbol_set));
     // Only a new Symbol Set needs a layer that takes new art.
@@ -1303,9 +1303,9 @@ fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     }
     super::paint::check_keep_model(p, C)?;
     let pts = points(p, C)?;
-    let radius = f64_or(p, "radius", 40.0).clamp(1.0, 2000.0);
-    let intensity = f64_or(p, "intensity", 5.0).clamp(1.0, 10.0) / 10.0;
-    let alt = bool_or(p, "alt", false);
+    let radius = number_or(p, "radius", 40.0, C)?.clamp(1.0, 2000.0);
+    let intensity = number_or(p, "intensity", 5.0, C)?.clamp(1.0, 10.0) / 10.0;
+    let alt = switch_or(p, "alt", false, C)?;
     let st = s.doc()?;
     let color = match p.get("color").and_then(color_value) {
         Some(c) => super::paint::new_color(s, p, c),

@@ -11,12 +11,14 @@
 //! stroke only, open). Everything else in the document sees a plain group of paths, so rendering,
 //! export, transforms and undo need no special cases.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Paint, Swatch};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
-use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Shape as _};
+use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Shape as _, SubPath};
 use vectorcraft_pathops as po;
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
@@ -37,6 +39,19 @@ pub const HIGHLIGHT_RED: [u8; 3] = [0xff, 0x2a, 0x2a];
 /// Is `n` a Live Paint group?
 pub fn is_live_paint(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.name.as_deref().is_some_and(|s| s.starts_with(LIVE_PAINT_PREFIX))
+}
+
+/// Whether Live Paint can take `n` as it is: a Live Paint group, a path or compound path, or a
+/// group of those. Type, images, symbols, blends, meshes and the rest have to be converted to
+/// paths first (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/create-live-paint-groups.html>);
+/// Make and Merge refuse them rather than hide them among the group's sources.
+pub fn live_paint_takes(n: &Node) -> bool {
+    is_live_paint(n)
+        || match &n.kind {
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => true,
+            NodeKind::Group { children, .. } => children.iter().all(|c| live_paint_takes(c)),
+            _ => false,
+        }
 }
 
 fn named(n: &Node, name: &str) -> bool {
@@ -121,23 +136,33 @@ pub fn live_paint_at(doc: &Document, p: Point) -> Option<NodeId> {
 }
 
 /// Paths, compound paths (as one shape) of a subtree in paint order; guides, clipping paths and
-/// hidden objects are skipped. Live Paint groups contribute their faces.
+/// hidden objects are skipped. Live Paint groups contribute their faces and edges.
 pub fn leaf_shapes<'a>(n: &'a Node, out: &mut Vec<&'a Node>) {
+    collect_leaves(n, false, out);
+}
+
+/// [`leaf_shapes`]; with `filled_faces`, a Live Paint group contributes only its filled faces and
+/// its stroked edges.
+fn collect_leaves<'a>(n: &'a Node, filled_faces: bool, out: &mut Vec<&'a Node>) {
     if !n.visible {
         return;
     }
     if n.extras().shaper.is_some() {
         for c in n.children().into_iter().flatten().skip(1) {
-            leaf_shapes(c, out);
+            collect_leaves(c, filled_faces, out);
         }
         return;
     }
     match &n.kind {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
         NodeKind::Path { .. } | NodeKind::Compound { .. } => out.push(n),
+        NodeKind::Group { .. } if filled_faces && is_live_paint(n) => {
+            out.extend(faces(n).into_iter().filter(|f| f.visible && !f.appearance.fill_paint().is_none()).map(|f| &**f));
+            out.extend(edges(n).into_iter().filter(|e| e.visible && !e.appearance.stroke_paint().is_none()).map(|e| &**e));
+        }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
-                leaf_shapes(c, out);
+                collect_leaves(c, filled_faces, out);
             }
         }
         _ => {}
@@ -156,13 +181,43 @@ pub fn node_outline(n: &Node) -> Option<(PathData, FillRule)> {
     }
 }
 
+/// How far (pt) a piece of the planar map may lie from `outline`, the outline it follows, to be
+/// matched to it or cut out of it: a ten-thousandth of the outline's larger side, at least 0.05.
+/// The map's pieces follow the outlines to within a few hundredths of a point.
+pub fn outline_snap(outline: &PathData) -> f64 {
+    outline.bounds().map_or(0.05, |b| (b.width().max(b.height()) / 2000.0).max(0.25) * 0.2)
+}
+
+/// The outlines of `leaves` as they are drawn ([`node_outline`]), in their order, for
+/// [`BuilderMap::stroke_at`]. A leaf without an outline, and one inside a Live Paint group or a
+/// Shaper Group (which make their own paths), gets an empty outline, so no stroke of it splits.
+pub fn drawn_outlines(doc: &Document, leaves: &[&Node]) -> Vec<PathData> {
+    let in_live_group = |id: NodeId| {
+        let mut up = doc.parent_of(id);
+        while let Some(p) = up {
+            if doc.node(p).is_some_and(|n| is_live_paint(n) || n.extras().shaper.is_some()) {
+                return true;
+            }
+            up = doc.parent_of(p);
+        }
+        false
+    };
+    leaves.iter().map(|l| if in_live_group(l.id) { None } else { node_outline(l) }.map_or_else(PathData::default, |o| o.0)).collect()
+}
+
 /// Pathfinder shapes for the given roots (back → front by the order given), keyed by leaf index,
 /// with the leaves they came from.
 pub fn shapes_for<'a>(doc: &'a Document, roots: &[NodeId]) -> (Vec<po::Shape>, Vec<&'a Node>) {
+    shapes_of(doc, roots, false)
+}
+
+/// [`shapes_for`]; with `filled_faces`, a Live Paint group contributes only its filled faces and
+/// its stroked edges.
+fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], filled_faces: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let mut lv = vec![];
     for id in roots {
         if let Some(n) = doc.node(*id) {
-            leaf_shapes(n, &mut lv);
+            collect_leaves(n, filled_faces, &mut lv);
         }
     }
     let mut shapes = vec![];
@@ -182,10 +237,18 @@ pub fn shapes_for<'a>(doc: &'a Document, roots: &[NodeId]) -> (Vec<po::Shape>, V
 /// Shape Builder inputs: [`shapes_for`], with the open subpaths of filled paths closed where that
 /// encloses an area (the fill bounds a region, as if an invisible edge closed it) when
 /// `open_filled_as_closed`. Unfilled open paths and straight lines stay open and cut the regions
-/// they cross, and so do filled open paths without `open_filled_as_closed`.
+/// they cross, and so do filled open paths without `open_filled_as_closed`. A Live Paint group
+/// contributes its filled faces as shapes and its stroked edges as open lines; its unfilled faces
+/// and its edges without a stroke are left out.
 fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
-    let (mut shapes, leaves) = shapes_for(doc, roots);
+    let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
+        if named(l, EDGE_NAME) && doc.parent_of(l.id).and_then(|p| doc.node(p)).is_some_and(is_live_paint) {
+            // A closed edge opens at its first anchor and keeps its closing segment.
+            let start = BTreeSet::from([0]);
+            s.path.subpaths = s.path.subpaths.iter().flat_map(|sp| sp.cut_at(&start)).collect();
+            continue;
+        }
         if !open_filled_as_closed || l.appearance.fill_paint().is_none() {
             continue;
         }
@@ -249,9 +312,9 @@ fn piece_near(pieces: &[(po::Shape, Rect)], p: Point, tol: f64) -> Option<(f64, 
 
 impl BuilderMap {
     /// The map of `roots` (sorted back → front), with the leaves the inputs came from; the outline
-    /// edges only `with_edges` (they cost a planar map of their own when no open path is in). With
-    /// `open_filled_as_closed` (Consider Open Filled Paths as Closed), a filled open path bounds a
-    /// region as if an invisible edge closed it; without it, the path cuts like a line.
+    /// edges only `with_edges`. With `open_filled_as_closed` (Consider Open Filled Paths as
+    /// Closed), a filled open path bounds a region as if an invisible edge closed it; without it,
+    /// the path cuts like a line.
     pub fn new<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool, open_filled_as_closed: bool) -> (Self, Vec<&'a Node>) {
         Self::with_gap(doc, roots, with_edges, open_filled_as_closed, 0.0)
     }
@@ -259,8 +322,14 @@ impl BuilderMap {
     /// The same arrangement with Gap Detection, using the shared Live Paint gap finder.
     pub fn with_gap<'a>(doc: &'a Document, roots: &[NodeId], with_edges: bool, open_filled_as_closed: bool, gap: f64) -> (Self, Vec<&'a Node>) {
         let (shapes, leaves) = shape_builder_shapes(doc, roots, open_filled_as_closed);
+        (Self::of_shapes(shapes, with_edges, gap), leaves)
+    }
+
+    /// The map of `shapes` (the inputs, back → front), with the outline edges only `with_edges`,
+    /// closing gaps up to `gap`.
+    fn of_shapes(shapes: Vec<po::Shape>, with_edges: bool, gap: f64) -> Self {
         if shapes.is_empty() {
-            return (Self::default(), leaves);
+            return Self::default();
         }
         let arr = po::shape_builder_with_gap(&shapes, with_edges, gap);
         let bounded = |pieces: Vec<po::Shape>| {
@@ -272,12 +341,33 @@ impl BuilderMap {
                 })
                 .collect()
         };
-        (Self { shapes, regions: faces_of(arr.regions), lines: bounded(arr.lines), edges: bounded(arr.edges) }, leaves)
+        Self { shapes, regions: faces_of(arr.regions), lines: bounded(arr.lines), edges: bounded(arr.edges) }
     }
 
     /// The region containing `p`.
     pub fn region_at(&self, p: Point) -> Option<usize> {
         self.regions.iter().position(|(_, bp, b)| b.contains(p) && bp.winding(p) != 0)
+    }
+
+    /// The regions a rectangular marquee from `from` (where the drag started) to `to` touches: each
+    /// region whose outline crosses the rectangle or has an anchor inside it, and the region the
+    /// whole rectangle lies in. Of those, the region under `from` comes first, then the one under
+    /// `to`, then the others in map order. A marquee of no size touches the region under `from`.
+    pub fn regions_in_marquee(&self, from: Point, to: Point) -> Vec<usize> {
+        let r = Rect::from_points(from, to);
+        if r.width() <= 0.0 && r.height() <= 0.0 {
+            return self.region_at(from).into_iter().collect();
+        }
+        let c = r.center();
+        let touches = |(reg, bp, b): &Face| (b.contains(c) && bp.winding(c) != 0) || vectorcraft_geom::hit::intersects_rect(&reg.path, r);
+        let mut out: Vec<usize> = self.regions.iter().enumerate().filter(|(_, f)| touches(f)).map(|(i, _)| i).collect();
+        for p in [to, from] {
+            if let Some(k) = self.region_at(p).and_then(|i| out.iter().position(|&j| j == i)) {
+                let i = out.remove(k);
+                out.insert(0, i);
+            }
+        }
+        out
     }
 
     /// What a gesture at `p` touches: with `piece_tol` (erasing), the line piece or edge that
@@ -289,6 +379,117 @@ impl BuilderMap {
             (None, e) => e.map(|e| Hit::Edge(e.1)),
         });
         piece.or_else(|| self.region_at(p).map(Hit::Region))
+    }
+
+    /// The stroke a click at `p` splits with In Merge Mode, Clicking Stroke Splits the Path: the
+    /// line piece or edge nearest `p` within `tol` (as [`BuilderMap::hit`] finds it), from the
+    /// anchor or crossing point before `p` to the one after it on the path it lies on. `outlines`
+    /// are the inputs' outlines as they are drawn (a filled open path without the edge that closes
+    /// it in the map). Returns the input's index and the run, going the way the path goes; None
+    /// when no piece is that close, when the run is not on the outline as drawn, when it would be a
+    /// whole closed subpath, when it is too short to cut out (see [`po::cut_out`]), or when it is
+    /// all of the path (a lone line) or leaves no more of it than [`outline_snap`], which leaves
+    /// nothing to split off.
+    pub fn stroke_at(&self, outlines: &[PathData], p: Point, tol: f64) -> Option<(usize, SubPath)> {
+        use kurbo::ParamCurve as _;
+        let piece = match self.hit(p, Some(tol))? {
+            Hit::Line(i) => self.lines.get(i),
+            Hit::Edge(i) => self.edges.get(i),
+            Hit::Region(_) => None,
+        }?;
+        let i = piece.0.key as usize;
+        let drawn = outlines.get(i)?;
+        let stops: Vec<Point> = drawn.anchors().map(|(.., a)| a.p).collect();
+        let snap = outline_snap(drawn);
+        let mut run = po::run_around(piece.0.path.subpaths.first()?, &stops, p, snap)?;
+        let n = run.segment_count();
+        if n == 0 {
+            return None;
+        }
+        let mid = run.segment(n / 2).eval(0.5);
+        drawn.nearest(mid).filter(|n| n.4 <= snap)?;
+        // A run that cannot be cut out, or that is all of the path (such as a lone line) or all
+        // but a speck of it, leaves nothing to split off.
+        if !po::cut_out(drawn, &run, false, snap).is_some_and(|rest| rest.length() > snap) {
+            return None;
+        }
+        // Reverse the run when the path's parameter goes down along it.
+        let seg = run.segment(n / 2);
+        if let (Some(a), Some(b)) = (drawn.nearest(seg.eval(0.25)), drawn.nearest(seg.eval(0.75)))
+            && a.0 == b.0
+            && (b.1 as f64 + b.2) < (a.1 as f64 + a.2)
+        {
+            run.reverse();
+        }
+        Some((i, run))
+    }
+
+    /// What a gesture along the polyline `pts` touches, in order: [`Self::hit`] at each vertex and
+    /// at the points [`Self::probes`] picks between them, so it touches every region it crosses,
+    /// however narrow.
+    pub fn hits_along(&self, pts: &[Point], piece_tol: Option<f64>) -> Touched {
+        let mut touched = Touched::default();
+        let mut last: Option<Point> = None;
+        for &p in pts {
+            if let Some(a) = last {
+                for q in self.probes(a, p, piece_tol) {
+                    touched.add(self.hit(q, piece_tol));
+                }
+            }
+            touched.add(self.hit(p, piece_tol));
+            last = Some(p);
+        }
+        touched
+    }
+
+    /// The points strictly between `a` and `b`, in order, that [`Self::hits_along`] tests: the
+    /// middle of each stretch between two places where the segment crosses a region's outline, and
+    /// with `piece_tol` (erasing) those crossings, the places where it crosses a line piece or an
+    /// edge, and points `piece_tol / 2` apart (at most 4,000 per segment), so the line pieces and
+    /// edges the segment crosses or passes close to are touched too.
+    fn probes(&self, a: Point, b: Point, piece_tol: Option<f64>) -> Vec<Point> {
+        let len = a.distance(b);
+        if !(len.is_finite() && len > 0.0) {
+            return vec![];
+        }
+        let line = kurbo::Line::new(a, b);
+        let lb = Rect::from_points(a, b);
+        let mut cross: Vec<f64> = vec![];
+        for (_, bp, rb) in &self.regions {
+            if rb.x0 > lb.x1 || rb.x1 < lb.x0 || rb.y0 > lb.y1 || rb.y1 < lb.y0 {
+                continue;
+            }
+            for seg in bp.segments() {
+                cross.extend(seg.intersect_line(line).iter().map(|x| x.line_t));
+            }
+        }
+        cross.retain(|t| t.is_finite() && *t > 0.0 && *t < 1.0);
+        cross.sort_by(f64::total_cmp);
+        // Crossings closer than this along the segment are one place.
+        let gap = 1e-9 / len;
+        let mut ts: Vec<f64> = vec![];
+        let mut from = 0.0;
+        for &t in cross.iter().chain([1.0].iter()) {
+            if t - from > gap {
+                ts.push((from + t) / 2.0);
+                from = t;
+            }
+        }
+        if let Some(tol) = piece_tol {
+            ts.extend(cross.iter().copied());
+            for (piece, pb) in self.lines.iter().chain(&self.edges) {
+                if pb.x0 > lb.x1 || pb.x1 < lb.x0 || pb.y0 > lb.y1 || pb.y1 < lb.y0 {
+                    continue;
+                }
+                for seg in piece.path.to_bezpath().segments() {
+                    ts.extend(seg.intersect_line(line).iter().map(|x| x.line_t).filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0));
+                }
+            }
+            let n = ((len / (tol / 2.0).max(1e-3)).ceil() as usize).min(4000);
+            ts.extend((1..n).map(|k| k as f64 / n as f64));
+            ts.sort_by(f64::total_cmp);
+        }
+        ts.into_iter().map(|t| a.lerp(b, t)).collect()
     }
 
     /// The regions just either side of the middle of `piece` (None: outside every region).
@@ -310,10 +511,11 @@ impl BuilderMap {
         [m + off, m - off].map(|q| self.region_at(q))
     }
 
-    /// Does line piece `i` run between two of `regions` (an edge that merging or deleting them
-    /// removes)?
+    /// Does line piece `i` run between two different regions of `regions` (an edge that merging or
+    /// deleting them removes)? A piece with the same region on both sides, such as the end of a
+    /// line inside a shape, bounds nothing and stays.
     pub fn line_between(&self, i: usize, regions: &[usize]) -> bool {
-        self.lines.get(i).is_some_and(|(l, _)| self.sides(l).iter().all(|r| r.is_some_and(|r| regions.contains(&r))))
+        self.lines.get(i).is_some_and(|(l, _)| matches!(self.sides(l), [Some(a), Some(b)] if a != b && regions.contains(&a) && regions.contains(&b)))
     }
 
     /// The edges `touched` deletes: those that bound none of its regions (deleting a region takes
@@ -342,6 +544,14 @@ impl Touched {
         };
         if !list.contains(&i) {
             list.push(i);
+        }
+    }
+
+    /// Adds what `other` touched, in its order.
+    pub fn extend(&mut self, other: &Touched) {
+        let regions = other.regions.iter().map(|&i| Hit::Region(i));
+        for hit in regions.chain(other.lines.iter().map(|&i| Hit::Line(i))).chain(other.edges.iter().map(|&i| Hit::Edge(i))) {
+            self.add(Some(hit));
         }
     }
 
@@ -437,44 +647,194 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
     out
 }
 
-/// The planar map of the current selection, cached by document identity, selection and whether
-/// filled open paths count as closed.
+/// What a [`RegionCache`] map was built for: the document's address and revision, the selected ids
+/// and whether filled open paths count as closed.
+type CacheKey = (usize, (u64, u64), Vec<NodeId>, bool);
+
+/// Hovering builds the map of inputs with more segments than this on another thread
+/// ([`RegionCache::ready`]); smaller maps are built on the calling thread.
+const BACKGROUND_SEGMENTS: usize = 128;
+
+/// A map being built on another thread: the key it is for, the drawn outlines of its inputs, and
+/// the channel it arrives on.
+struct Pending {
+    key: CacheKey,
+    outlines: Vec<PathData>,
+    done: Receiver<BuilderMap>,
+}
+
+/// The planar map of the current selection, cached by document identity, revision, selection and
+/// whether filled open paths count as closed.
 #[derive(Default)]
 struct RegionCache {
-    key: Option<(usize, Vec<NodeId>, bool)>,
+    key: Option<CacheKey>,
     map: BuilderMap,
     /// Live Paint faces (every path an edge, filled or not) rather than Shape Builder regions.
     live: bool,
-    /// The map has the Shape Builder's outline edges.
-    edges: bool,
     /// Gap Detection distance; changing tool options invalidates the cache.
     gap: f64,
+    /// The outlines of the Shape Builder's inputs as they are drawn (see [`BuilderMap::stroke_at`]).
+    outlines: Vec<PathData>,
+    /// The map being built on another thread, if any.
+    pending: Option<Pending>,
+    /// The key of the last map whose build on another thread failed.
+    failed: Option<CacheKey>,
+    /// How many times the map has been built.
+    #[cfg(test)]
+    builds: usize,
+    /// How many of those builds ran on another thread.
+    #[cfg(test)]
+    background: usize,
+}
+
+/// The map of `shapes`: Live Paint faces with `live`, else the Shape Builder map with its edges,
+/// closing gaps up to `gap`.
+fn build_map(shapes: Vec<po::Shape>, live: bool, gap: f64) -> BuilderMap {
+    if live {
+        let regions = if shapes.is_empty() { vec![] } else { faces_of(po::live_paint(&shapes).0) };
+        BuilderMap { regions, ..Default::default() }
+    } else {
+        BuilderMap::of_shapes(shapes, true, gap)
+    }
+}
+
+/// Builds the map of `shapes` ([`build_map`]) on a new thread; None when no thread starts.
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_build(shapes: Vec<po::Shape>, live: bool, gap: f64) -> Option<Receiver<BuilderMap>> {
+    let (tx, done) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new().name("vectorcraft-region-map".into()).spawn(move || {
+        // The tool may have dropped the receiver meanwhile (another tool, another selection).
+        let _ = tx.send(build_map(shapes, live, gap));
+    });
+    spawned.is_ok().then_some(done)
+}
+
+/// The web build has no threads.
+#[cfg(target_arch = "wasm32")]
+fn spawn_build(_shapes: Vec<po::Shape>, _live: bool, _gap: f64) -> Option<Receiver<BuilderMap>> {
+    None
 }
 
 impl RegionCache {
     fn live_paint() -> Self {
         Self { live: true, ..Default::default() }
     }
-    /// The map, with the outline edges when `edges` (built the first time they're wanted), and
-    /// filled open paths closed when `open_filled_as_closed` (Shape Builder only).
-    fn get(&mut self, cx: &ToolContext, edges: bool, open_filled_as_closed: bool) -> &BuilderMap {
-        let key = (cx.doc as *const Document as usize, cx.selection.objects.clone(), open_filled_as_closed);
-        if self.key.as_ref() != Some(&key) || (edges && !self.edges) {
-            let roots = sorted_roots(cx.doc, &cx.selection.objects);
-            self.map = if self.live {
-                let (shapes, _) = shapes_for(cx.doc, &roots);
-                let regions = if shapes.is_empty() { vec![] } else { faces_of(po::live_paint(&shapes).0) };
-                BuilderMap { regions, ..Default::default() }
-            } else {
-                BuilderMap::with_gap(cx.doc, &roots, edges, open_filled_as_closed, self.gap).0
+
+    fn key_for(cx: &ToolContext, open_filled_as_closed: bool) -> CacheKey {
+        (cx.doc as *const Document as usize, cx.revision, cx.selection.objects.clone(), open_filled_as_closed)
+    }
+
+    /// The inputs of the selection's map, back → front, and their drawn outlines (Shape Builder
+    /// only).
+    fn inputs(&self, cx: &ToolContext, open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<PathData>) {
+        let roots = sorted_roots(cx.doc, &cx.selection.objects);
+        if self.live {
+            (shapes_for(cx.doc, &roots).0, vec![])
+        } else {
+            let (shapes, leaves) = shape_builder_shapes(cx.doc, &roots, open_filled_as_closed);
+            let outlines = drawn_outlines(cx.doc, &leaves);
+            (shapes, outlines)
+        }
+    }
+
+    fn install(&mut self, key: CacheKey, map: BuilderMap, outlines: Vec<PathData>) {
+        self.map = map;
+        self.outlines = outlines;
+        self.key = Some(key);
+        #[cfg(test)]
+        {
+            self.builds += 1;
+        }
+    }
+
+    /// Forgets the map and any map being built (the tool options changed).
+    fn clear(&mut self) {
+        self.key = None;
+        self.pending = None;
+        self.failed = None;
+    }
+
+    /// Is a map being built on another thread?
+    fn waiting(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// The map, built again only when the key changes, with filled open paths closed when
+    /// `open_filled_as_closed` (Shape Builder only). A Shape Builder map has the outline edges too,
+    /// so hovering and erasing use the same map. Waits for a map being built on another thread for
+    /// the same key.
+    fn get(&mut self, cx: &ToolContext, open_filled_as_closed: bool) -> &BuilderMap {
+        let key = Self::key_for(cx, open_filled_as_closed);
+        if self.key.as_ref() != Some(&key) {
+            let built = self.pending.take().filter(|p| p.key == key).and_then(|p| Some((p.done.recv().ok()?, p.outlines)));
+            let (map, outlines) = match built {
+                Some(b) => {
+                    #[cfg(test)]
+                    {
+                        self.background += 1;
+                    }
+                    b
+                }
+                None => {
+                    let (shapes, outlines) = self.inputs(cx, open_filled_as_closed);
+                    (build_map(shapes, self.live, self.gap), outlines)
+                }
             };
-            self.key = Some(key);
-            self.edges = edges;
+            self.install(key, map, outlines);
         }
         &self.map
     }
+
+    /// Takes the map being built on another thread once it has arrived, or with `wait` once it
+    /// arrives, as the map for the key it was built for.
+    fn settle(&mut self, wait: bool) {
+        let Some(p) = self.pending.take() else { return };
+        let got = if wait { p.done.recv().map_err(|_| TryRecvError::Disconnected) } else { p.done.try_recv() };
+        match got {
+            Ok(map) => {
+                #[cfg(test)]
+                {
+                    self.background += 1;
+                }
+                self.install(p.key, map, p.outlines);
+            }
+            // The build failed (a bug in the planar map): hovering does not build it again, and a
+            // gesture builds it on the calling thread, which reports the failure.
+            Err(TryRecvError::Disconnected) => self.failed = Some(p.key),
+            Err(TryRecvError::Empty) => self.pending = Some(p),
+        }
+    }
+
+    /// The map as [`Self::get`] gives it, without waiting: when the key changes and the inputs have
+    /// more than [`BACKGROUND_SEGMENTS`] segments, the map is built on another thread, and this is
+    /// None until it arrives ([`Self::waiting`] holds meanwhile). A map being built for an earlier
+    /// key is let finish before the next one starts.
+    fn ready(&mut self, cx: &ToolContext, open_filled_as_closed: bool) -> Option<&BuilderMap> {
+        self.settle(false);
+        let key = Self::key_for(cx, open_filled_as_closed);
+        if self.key.as_ref() == Some(&key) {
+            return Some(&self.map);
+        }
+        if self.pending.is_some() || self.failed.as_ref() == Some(&key) {
+            return None;
+        }
+        let (shapes, outlines) = self.inputs(cx, open_filled_as_closed);
+        let segments: usize = shapes.iter().map(|s| s.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>()).sum();
+        if segments > BACKGROUND_SEGMENTS && cfg!(not(target_arch = "wasm32")) {
+            if let Some(done) = spawn_build(shapes, self.live, self.gap) {
+                self.pending = Some(Pending { key, outlines, done });
+                return None;
+            }
+            // No thread started: build here.
+            return Some(self.get(cx, open_filled_as_closed));
+        }
+        let map = build_map(shapes, self.live, self.gap);
+        self.install(key, map, outlines);
+        Some(&self.map)
+    }
+
     fn at(&mut self, cx: &ToolContext, p: Point) -> Option<usize> {
-        self.get(cx, false, true).region_at(p)
+        self.get(cx, true).region_at(p)
     }
 }
 
@@ -495,7 +855,8 @@ pub struct ShapeBuilderOptions {
     /// Pick Color From Color Swatches (`pickColorFrom: "swatches"`; off: `"artwork"`): a merge
     /// fills the new shape with the current fill, and the Left and Right arrow keys step the current
     /// fill through the document's color swatches. With Artwork, the shape takes the look of the
-    /// art it is merged from.
+    /// object where the drag starts, else of the one where it ends, else of the front-most selected
+    /// object.
     pub swatches: bool,
     /// Cursor Swatch Preview (`cursorSwatchPreview`, off): with Color Swatches, the current fill
     /// and the swatches before and after it show as chips above the pointer while no drag is on.
@@ -511,7 +872,20 @@ pub struct ShapeBuilderOptions {
     pub gap_detection: bool,
     /// Gap Length in points (at most [`SHAPE_BUILDER_MAX_GAP`]).
     pub gap_length: f64,
+    /// In Merge Mode, Clicking Stroke Splits the Path (`clickStrokeSplitsPath`, off): in merge mode,
+    /// a click on a stroke splits its path into the run under the pointer
+    /// ([`BuilderMap::stroke_at`]) and the rest, and the pointer shows scissors over such a stroke.
+    pub click_stroke_splits: bool,
+    /// Highlight Stroke When Editable (`highlightStroke`, on): with `click_stroke_splits`, the run
+    /// of stroke a click would split is drawn in `stroke_color` while the pointer is over it.
+    pub highlight_stroke: bool,
+    /// The color of that highlight (`highlightColor`: `#rrggbb` or a layer color's name; the layer
+    /// color Red by default).
+    pub stroke_color: [u8; 3],
 }
+
+/// The color Highlight Stroke When Editable draws in by default: the layer color Red.
+pub const STROKE_HIGHLIGHT: [u8; 3] = [0xff, 0x4f, 0x4f];
 
 impl Default for ShapeBuilderOptions {
     fn default() -> Self {
@@ -523,6 +897,9 @@ impl Default for ShapeBuilderOptions {
             highlight_fill: true,
             gap_detection: false,
             gap_length: GAP_LENGTHS[0],
+            click_stroke_splits: false,
+            highlight_stroke: true,
+            stroke_color: STROKE_HIGHLIGHT,
         }
     }
 }
@@ -561,7 +938,9 @@ fn step_swatch(list: &[&Swatch], fill: &Paint, last: Option<usize>, forward: boo
 /// Shape Builder tool: drag across regions to merge them. Holding Alt (Option) switches to erase
 /// mode while it is held: the pointer shows a minus, what a click or drag would delete highlights in
 /// red, and the gesture deletes the regions it touches, the pieces of open paths and the edges
-/// (outline pieces between the points where paths meet) it passes over. Its options are
+/// (outline pieces between the points where paths meet) it passes over. With Shift held at the
+/// press, the drag draws a rectangular marquee and touches the regions it reaches (see
+/// [`BuilderMap::regions_in_marquee`]): they merge, or with Alt they are deleted. Its options are
 /// [`ShapeBuilderOptions`].
 #[derive(Default)]
 pub struct ShapeBuilderTool {
@@ -570,6 +949,8 @@ pub struct ShapeBuilderTool {
     points: Vec<Point>,
     touched: Touched,
     dragging: bool,
+    /// A Shift-drag's marquee: where the drag started and where the pointer is.
+    marquee: Option<(Point, Point)>,
     /// Erase mode: Alt held while hovering, or when the drag started.
     alt: bool,
     /// Where the pointer last moved (the cursor swatch preview sits above it).
@@ -577,30 +958,62 @@ pub struct ShapeBuilderTool {
     /// The index in [`color_swatches`] of the swatch the arrow keys picked last.
     picked: Option<usize>,
     opts: ShapeBuilderOptions,
+    /// With In Merge Mode, Clicking Stroke Splits the Path: the run of stroke under the pointer,
+    /// which a click splits off.
+    stroke: Option<SubPath>,
+    /// The pointer went more than [`CLICK_TOL_PX`] from the press during the drag, so the gesture
+    /// is not a click.
+    far: bool,
 }
 
 /// How close (screen px) the pointer must come to a line piece or an edge to delete it.
 const LINE_TOL_PX: f64 = 4.0;
+
+/// How far (screen px) the pointer may move between press and release for the gesture to be a
+/// click, which with In Merge Mode, Clicking Stroke Splits the Path splits the stroke at the press.
+const CLICK_TOL_PX: f64 = 3.0;
 
 impl ShapeBuilderTool {
     fn gap(&self) -> f64 {
         if self.opts.gap_detection { self.opts.gap_length } else { 0.0 }
     }
 
+    /// With In Merge Mode, Clicking Stroke Splits the Path and not in erase mode (`alt`): the run of
+    /// stroke a click at `p` splits off ([`BuilderMap::stroke_at`]).
+    fn stroke_at(&mut self, cx: &ToolContext, p: Point, alt: bool) -> Option<SubPath> {
+        if alt || !self.opts.click_stroke_splits {
+            return None;
+        }
+        self.cache.get(cx, self.opts.open_filled_as_closed);
+        self.cache.map.stroke_at(&self.cache.outlines, p, cx.tol(LINE_TOL_PX)).map(|(_, run)| run)
+    }
+
+    /// What the pointer at `p` is over: a stroke a click would split, else what a gesture there
+    /// touches. While the map of a large selection is being built on another thread, nothing.
+    fn hover_at(&mut self, cx: &ToolContext, p: Point) {
+        if self.cache.ready(cx, self.opts.open_filled_as_closed).is_none() {
+            self.stroke = None;
+            self.hover = None;
+            return;
+        }
+        // Over a stroke a click would split, the tool highlights the stroke and not the region.
+        self.stroke = self.stroke_at(cx, p, self.alt);
+        self.hover = match self.stroke {
+            Some(_) => None,
+            None => self.cache.get(cx, self.opts.open_filled_as_closed).hit(p, Self::line_tol(cx, self.alt)),
+        };
+    }
+
     fn line_tol(cx: &ToolContext, alt: bool) -> Option<f64> {
         alt.then(|| cx.tol(LINE_TOL_PX))
     }
 
+    /// Adds what the drag from `from` to `to` touches, picked as `shapeBuilder.merge` picks it.
     fn touch(&mut self, cx: &ToolContext, from: Option<Point>, to: Point) {
-        let pts = match from {
-            Some(a) => sample_polyline(&[a, to], cx.tol(2.0)),
-            None => vec![to],
-        };
+        let pts: Vec<Point> = from.into_iter().chain([to]).collect();
         let tol = Self::line_tol(cx, self.alt);
-        let map = self.cache.get(cx, self.alt, self.opts.open_filled_as_closed);
-        for p in pts {
-            self.touched.add(map.hit(p, tol));
-        }
+        let touched = self.cache.get(cx, self.opts.open_filled_as_closed).hits_along(&pts, tol);
+        self.touched.extend(&touched);
     }
 
     /// Selection Straight Line: the drag touches what the line from its first point to `p` crosses.
@@ -613,6 +1026,19 @@ impl ShapeBuilderTool {
         } else {
             self.points = vec![start, p];
             self.touch(cx, Some(start), p);
+        }
+    }
+
+    /// A Shift-drag: the drag touches the regions the marquee from where it started to `p` reaches;
+    /// while the pointer is where the drag started, what a click there touches.
+    fn marquee_to(&mut self, cx: &ToolContext, p: Point) {
+        let Some((start, _)) = self.marquee else { return };
+        self.marquee = Some((start, p));
+        self.touched = Touched::default();
+        if start == p {
+            self.touch(cx, None, start);
+        } else {
+            self.touched.regions = self.cache.get(cx, self.opts.open_filled_as_closed).regions_in_marquee(start, p);
         }
     }
 
@@ -647,7 +1073,7 @@ impl Tool for ShapeBuilderTool {
             PointerKind::Move => {
                 self.alt = ev.mods.alt;
                 self.at = Some(p);
-                self.hover = self.cache.get(cx, self.alt, self.opts.open_filled_as_closed).hit(p, Self::line_tol(cx, self.alt));
+                self.hover_at(cx, p);
                 vec![]
             }
             PointerKind::Down => {
@@ -656,13 +1082,22 @@ impl Tool for ShapeBuilderTool {
                 }
                 self.dragging = true;
                 self.alt = ev.mods.alt;
+                self.marquee = ev.mods.shift.then_some((p, p));
                 self.points = vec![p];
+                self.far = false;
                 self.touched = Touched::default();
                 self.touch(cx, None, p);
                 vec![]
             }
             PointerKind::Drag if self.dragging => {
                 self.at = Some(p);
+                if self.points.first().is_some_and(|s| s.distance(p) > cx.tol(CLICK_TOL_PX)) {
+                    self.far = true;
+                }
+                if self.marquee.is_some() {
+                    self.marquee_to(cx, p);
+                    return vec![];
+                }
                 if self.opts.straight_line {
                     self.straight_to(cx, p);
                     return vec![];
@@ -676,7 +1111,9 @@ impl Tool for ShapeBuilderTool {
             }
             PointerKind::Up if self.dragging => {
                 self.dragging = false;
-                if self.opts.straight_line {
+                if self.marquee.is_some() {
+                    self.marquee_to(cx, p);
+                } else if self.opts.straight_line {
                     self.straight_to(cx, p);
                 } else if self.points.last().is_none_or(|q| *q != p) {
                     let last = self.points.last().copied();
@@ -684,17 +1121,34 @@ impl Tool for ShapeBuilderTool {
                     self.points.push(p);
                 }
                 let points = std::mem::take(&mut self.points);
-                if std::mem::take(&mut self.touched).is_empty() {
-                    return vec![];
-                }
-                self.cache.key = None;
-                let roots = sorted_roots(cx.doc, &cx.selection.objects);
-                let pts: Vec<Value> = points.iter().map(|q| json!([q.x, q.y])).collect();
                 // The mode the drag started in, which its highlight showed.
                 let erase = self.alt;
+                // A marquee of no size is a click.
+                let marquee = self.marquee.take().filter(|(a, b)| a != b);
+                // With In Merge Mode, Clicking Stroke Splits the Path, a click on a stroke splits it
+                // where the press was; a marquee splits nothing.
+                let press = points.first().copied().filter(|s| marquee.is_none() && !self.far && s.distance(p) <= cx.tol(CLICK_TOL_PX));
+                let split = press.filter(|q| self.stroke_at(cx, *q, erase).is_some());
+                if std::mem::take(&mut self.touched).is_empty() && split.is_none() {
+                    return vec![];
+                }
+                self.stroke = None;
+                let roots = sorted_roots(cx.doc, &cx.selection.objects);
+                let points = split.map_or(points, |q| vec![q]);
+                let pts: Vec<Value> = points.iter().map(|q| json!([q.x, q.y])).collect();
                 let mut params = json!({ "ids": json_ids(&roots), "points": pts, "erase": erase, "gap": self.gap() });
+                if let Some((a, b)) = marquee
+                    && let Some(o) = params.as_object_mut()
+                {
+                    o.remove("points");
+                    o.insert("rect".into(), json!([a.x, a.y, b.x - a.x, b.y - a.y]));
+                }
                 if let Some(t) = Self::line_tol(cx, erase) {
                     params["tolerance"] = json!(t);
+                }
+                if split.is_some() {
+                    params["splitStroke"] = json!(true);
+                    params["tolerance"] = json!(cx.tol(LINE_TOL_PX));
                 }
                 if !self.opts.open_filled_as_closed {
                     params["openFilledAsClosed"] = json!(false);
@@ -737,6 +1191,11 @@ impl Tool for ShapeBuilderTool {
                 }
             }
         }
+        if self.dragging
+            && let Some((a, b)) = self.marquee.filter(|(a, b)| a != b)
+        {
+            out.push(Overlay::Marquee(Rect::from_points(a, b)));
+        }
         if self.dragging && self.points.len() > 1 {
             let mut bp = BezPath::new();
             bp.move_to(self.points[0]);
@@ -748,17 +1207,51 @@ impl Tool for ShapeBuilderTool {
         if self.opts.swatches && self.opts.cursor_swatch_preview && !self.dragging {
             out.extend(self.swatch_chips(cx));
         }
+        // Highlight Stroke When Editable draws the stroke a click would split.
+        if let Some(run) = self.stroke.as_ref().filter(|_| self.opts.highlight_stroke && !self.dragging) {
+            let mut path = BezPath::new();
+            run.to_bezpath_into(&mut path);
+            out.push(Overlay::Path { path, color: self.opts.stroke_color, width: 3.0, dashed: false });
+        }
         out
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
         // A drag keeps the mode it started in; hovering follows the key.
         let erase = if self.dragging { self.alt } else { m.alt };
-        if erase { Cursor::ShapeBuilderErase } else { Cursor::ShapeBuilder }
+        if erase {
+            Cursor::ShapeBuilderErase
+        } else if self.stroke.is_some() && !self.dragging {
+            // Over a stroke a click splits.
+            Cursor::Scissors
+        } else {
+            Cursor::ShapeBuilder
+        }
     }
 
     fn busy(&self) -> bool {
         self.dragging
+    }
+
+    fn waiting(&self) -> bool {
+        self.cache.waiting()
+    }
+
+    fn poll(&mut self, cx: &ToolContext, wait: bool) {
+        if !self.cache.waiting() || self.dragging {
+            return;
+        }
+        // The map that arrives may be for an earlier revision; the hover then starts the current
+        // one's, which `wait` waits for too.
+        loop {
+            self.cache.settle(wait);
+            if let Some(p) = self.at {
+                self.hover_at(cx, p);
+            }
+            if !wait || !self.cache.waiting() {
+                break;
+            }
+        }
     }
 
     /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch
@@ -782,6 +1275,7 @@ impl Tool for ShapeBuilderTool {
 
     fn options(&self) -> Value {
         let o = &self.opts;
+        let [r, g, b] = o.stroke_color;
         json!({
             "openFilledAsClosed": o.open_filled_as_closed,
             "pickColorFrom": if o.swatches { "swatches" } else { "artwork" },
@@ -790,6 +1284,9 @@ impl Tool for ShapeBuilderTool {
             "highlightFill": o.highlight_fill,
             "gapDetection": o.gap_detection,
             "gapLength": o.gap_length,
+            "clickStrokeSplitsPath": o.click_stroke_splits,
+            "highlightStroke": o.highlight_stroke,
+            "highlightColor": format!("#{r:02x}{g:02x}{b:02x}"),
         })
     }
 
@@ -807,9 +1304,13 @@ impl Tool for ShapeBuilderTool {
                     o.gap_length = n.clamp(0.0, SHAPE_BUILDER_MAX_GAP);
                 }
             }
+            "clickStrokeSplitsPath" => o.click_stroke_splits = v.as_bool().unwrap_or(o.click_stroke_splits),
+            "highlightStroke" => o.highlight_stroke = v.as_bool().unwrap_or(o.highlight_stroke),
+            "highlightColor" => o.stroke_color = lp_color(v).unwrap_or(o.stroke_color),
             _ => {}
         }
-        self.cache.key = None;
+        self.stroke = None;
+        self.cache.clear();
         self.cache.gap = self.gap();
     }
 }
@@ -853,12 +1354,15 @@ fn lp_part_at(doc: &Document, p: Point, tol: f64, edge: bool) -> Option<(NodeId,
     best.map(|(_, g, e)| (g, Some(e)))
 }
 
-fn lp_hover(cx: &ToolContext, cache: &mut RegionCache, p: Point, edge: bool) -> LpHover {
+/// What the Live Paint tools highlight at `p`: the part of a Live Paint group ([`lp_part_at`]), else
+/// with `cache` the region of the selection under `p`. A large selection's regions are found on
+/// another thread ([`RegionCache::ready`]), and until they are, no region is highlighted.
+fn lp_hover(cx: &ToolContext, cache: Option<&mut RegionCache>, p: Point, edge: bool) -> LpHover {
     if let Some((_, part)) = lp_part_at(cx.doc, p, cx.tol(4.0), edge) {
         return part.and_then(|n| n.path_data()).map(|pd| LpHover::Part(pd.to_bezpath())).unwrap_or_default();
     }
     let sel_is_live = cx.selection.objects.iter().any(|id| cx.doc.node(*id).is_some_and(is_live_paint));
-    if !sel_is_live && let Some(i) = cache.at(cx, p) {
+    if !sel_is_live && let Some(i) = cache.and_then(|c| c.ready(cx, true)).and_then(|m| m.region_at(p)) {
         return LpHover::Region(i);
     }
     LpHover::None
@@ -881,11 +1385,13 @@ fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32) -> 
 pub struct LivePaintBucketTool {
     cache: RegionCache,
     hover: LpHover,
+    /// Where the pointer last moved, and whether Shift was held.
+    at: Option<(Point, bool)>,
 }
 
 impl Default for LivePaintBucketTool {
     fn default() -> Self {
-        Self { cache: RegionCache::live_paint(), hover: LpHover::None }
+        Self { cache: RegionCache::live_paint(), hover: LpHover::None, at: None }
     }
 }
 
@@ -898,7 +1404,8 @@ impl Tool for LivePaintBucketTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Move => {
-                self.hover = lp_hover(cx, &mut self.cache, p, ev.mods.shift);
+                self.at = Some((p, ev.mods.shift));
+                self.hover = lp_hover(cx, Some(&mut self.cache), p, ev.mods.shift);
                 vec![]
             }
             PointerKind::Down => {
@@ -916,7 +1423,6 @@ impl Tool for LivePaintBucketTool {
                     return vec![Action::Exec("livePaint.fill".into(), json!({ "group": g.0, "point": point }))];
                 }
                 if self.cache.at(cx, p).is_some() {
-                    self.cache.key = None;
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
                     return vec![Action::Exec("livePaint.fill".into(), json!({ "ids": json_ids(&roots), "point": point }))];
                 }
@@ -932,6 +1438,27 @@ impl Tool for LivePaintBucketTool {
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         Cursor::LivePaintBucket
+    }
+
+    fn waiting(&self) -> bool {
+        self.cache.waiting()
+    }
+
+    fn poll(&mut self, cx: &ToolContext, wait: bool) {
+        if !self.cache.waiting() {
+            return;
+        }
+        // As the Shape Builder's: the map that arrives may be for an earlier revision. Over a part
+        // of a Live Paint group the hover takes no map.
+        loop {
+            self.cache.settle(wait);
+            if let Some((p, shift)) = self.at {
+                self.hover = lp_hover(cx, Some(&mut self.cache), p, shift);
+            }
+            if !wait || !self.cache.waiting() {
+                break;
+            }
+        }
     }
 }
 
@@ -995,7 +1522,8 @@ impl Tool for LivePaintSelectionTool {
         let edge = self.picks_edge(ev.mods.alt);
         match ev.kind {
             PointerKind::Move => {
-                self.hover = match edge.map(|e| lp_hover(cx, &mut self.cache, p, e)) {
+                // Only the parts of Live Paint groups highlight, so no map of the selection is built.
+                self.hover = match edge.map(|e| lp_hover(cx, None, p, e)) {
                     Some(h @ LpHover::Part(_)) => h,
                     _ => LpHover::None,
                 };
@@ -1065,12 +1593,17 @@ mod tests {
     use vectorcraft_geom::shapes;
 
     fn two_rects() -> (Document, NodeId, NodeId) {
+        two_rects_at(0.0)
+    }
+
+    /// Squares A (`x`..`x`+100) and B (`x`+50..`x`+150), 100 pt tall, overlapping by half.
+    fn two_rects_at(x: f64) -> (Document, NodeId, NodeId) {
         let mut d = Document::new(500.0, 500.0);
         let l = d.layers[0].id;
         let a = d.alloc_id();
-        d.insert(Some(l), 0, Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), 0, Node::path(a, shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0)), Appearance::default_art())).unwrap();
         let b = d.alloc_id();
-        d.insert(Some(l), 1, Node::path(b, shapes::rectangle(Rect::new(50.0, 0.0, 150.0, 100.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), 1, Node::path(b, shapes::rectangle(Rect::new(x + 50.0, 0.0, x + 150.0, 100.0)), Appearance::default_art())).unwrap();
         (d, a, b)
     }
 
@@ -1114,6 +1647,132 @@ mod tests {
         assert_eq!(v["erase"], false);
         assert_eq!(v["ids"], json!([a.0, b.0]), "sorted back to front");
         assert!(v["points"].as_array().unwrap().len() >= 2);
+    }
+
+    #[test]
+    fn shape_builder_rebuilds_its_map_for_a_new_revision_at_the_same_address() {
+        let (mut d, a, b) = two_rects();
+        let mut s = Selection::default();
+        s.set([a, b]);
+        let p = paint();
+        let mut t = ShapeBuilderTool::default();
+        let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 50.0));
+        // A later revision of the document, with the squares 300 pt to the right, at the same address.
+        d = two_rects_at(300.0).0;
+        let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+        t.pointer(&cx2, &ev(PointerKind::Down, 325.0, 50.0));
+        t.pointer(&cx2, &ev(PointerKind::Drag, 375.0, 50.0));
+        let acts = t.pointer(&cx2, &ev(PointerKind::Up, 375.0, 50.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    }
+
+    #[test]
+    fn shape_builder_builds_its_map_once_for_hover_alt_hover_and_a_merge() {
+        let (d, s) = corner_rects();
+        let p = paint();
+        let mut t = ShapeBuilderTool::default();
+        let alt = Mods { alt: true, ..Default::default() };
+        let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        t.pointer(&cx1, &ev(PointerKind::Move, 101.0, 75.0));
+        assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+        // Alt hovering over an edge uses the same map.
+        t.pointer(&cx1, &ev(PointerKind::Move, 101.0, 75.0).with_mods(alt));
+        assert!(matches!(t.hover, Some(Hit::Edge(_))), "{:?}", t.hover);
+        assert_eq!(t.cache.builds, 1, "a hover then an Alt hover");
+        t.pointer(&cx1, &ev(PointerKind::Down, 25.0, 25.0));
+        t.pointer(&cx1, &ev(PointerKind::Drag, 75.0, 75.0));
+        let acts = t.pointer(&cx1, &ev(PointerKind::Up, 75.0, 75.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+        // The merge left the document as it was (it failed, say): the map still fits it.
+        t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 75.0));
+        assert_eq!(t.cache.builds, 1, "a hover after a merge that changed nothing");
+        let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+        t.pointer(&cx2, &ev(PointerKind::Move, 75.0, 75.0));
+        assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    }
+
+    /// A row of `n` selected squares 20 pt wide, each overlapping the next by half: 4 segments each.
+    fn square_row(n: usize) -> (Document, Selection) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let mut s = Selection::default();
+        for k in 0..n {
+            let x = k as f64 * 10.0;
+            let id = d.alloc_id();
+            d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default_art())).unwrap();
+            s.add(id);
+        }
+        (d, s)
+    }
+
+    /// Polls `t`, as the desktop app does each frame, until it stops waiting.
+    fn poll_until_ready(t: &mut dyn Tool, cx: &ToolContext) {
+        let start = std::time::Instant::now();
+        while t.waiting() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(60), "the tool is still waiting");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            t.poll(cx, false);
+        }
+    }
+
+    #[test]
+    fn shape_builder_hover_builds_a_large_map_on_another_thread() {
+        let (d, s) = square_row(40);
+        let p = paint();
+        let mut t = ShapeBuilderTool::default();
+        let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        let hover = ev(PointerKind::Move, 15.0, 10.0);
+        t.pointer(&cx1, &hover);
+        assert_eq!(t.cache.builds, 0, "the first hover returns before the map is built");
+        assert!(t.waiting() && t.hover.is_none() && t.overlays(&cx1).is_empty(), "{:?}", t.hover);
+        poll_until_ready(&mut t, &cx1);
+        assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (1, 1));
+        assert_eq!(t.overlays(&cx1).len(), 2, "the region's hatch and outline");
+        // A new revision while the map of the one before it is being built: only the newer one's
+        // map is used.
+        let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+        let cx3 = ToolContext { revision: (1, 3), ..cx(&d, &s, &p) };
+        t.pointer(&cx2, &hover);
+        t.pointer(&cx3, &hover);
+        poll_until_ready(&mut t, &cx3);
+        assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (3, 3), "the earlier revision's map, then the newer one's");
+        assert_eq!(t.cache.key.as_ref().map(|k| k.1), Some((1, 3)));
+        // A host without frames waits for the map.
+        let cx4 = ToolContext { revision: (1, 4), ..cx(&d, &s, &p) };
+        t.pointer(&cx4, &hover);
+        assert!(t.waiting() && t.hover.is_none());
+        t.poll(&cx4, true);
+        assert!(!t.waiting());
+        assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (4, 4));
+        // A press while the map is being built waits for it, and the drag merges.
+        let cx5 = ToolContext { revision: (1, 5), ..cx(&d, &s, &p) };
+        t.pointer(&cx5, &hover);
+        t.pointer(&cx5, &ev(PointerKind::Down, 15.0, 10.0));
+        t.pointer(&cx5, &ev(PointerKind::Drag, 35.0, 10.0));
+        let acts = t.pointer(&cx5, &ev(PointerKind::Up, 35.0, 10.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+        assert_eq!((t.cache.builds, t.cache.background), (5, 5));
+        assert!(!t.waiting());
+        // Changing an option forgets a map being built with the old one.
+        let cx6 = ToolContext { revision: (1, 6), ..cx(&d, &s, &p) };
+        t.pointer(&cx6, &hover);
+        t.set_option("gapDetection", &json!(true));
+        assert!(!t.waiting());
+    }
+
+    #[test]
+    fn shape_builder_hover_builds_a_small_map_at_once() {
+        let (d, s) = square_row(3);
+        let p = paint();
+        let mut t = ShapeBuilderTool::default();
+        let cx = cx(&d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+        assert!(!t.waiting() && matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (1, 0));
     }
 
     #[test]
@@ -1217,6 +1876,220 @@ mod tests {
         assert_eq!(colors(&t.overlays(&cx)), [HIGHLIGHT_RED; 5]);
     }
 
+    /// A 3×3 grid of touching 100 pt squares from (0, 0) to (300, 300), selected.
+    fn grid() -> (Document, Selection) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let mut s = Selection::default();
+        for k in 0..9 {
+            let (x, y) = ((k % 3) as f64 * 100.0, (k / 3) as f64 * 100.0);
+            let id = d.alloc_id();
+            d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, y, x + 100.0, y + 100.0)), Appearance::default_art())).unwrap();
+            s.add(id);
+        }
+        (d, s)
+    }
+
+    /// The paths of an overlay list (a shaded region draws two: its mesh and its outline), and its
+    /// marquees.
+    fn paths_and_marquees(ov: &[Overlay]) -> (usize, Vec<Rect>) {
+        let paths = ov.iter().filter(|o| matches!(o, Overlay::Path { .. })).count();
+        (paths, ov.iter().filter_map(|o| if let Overlay::Marquee(r) = o { Some(*r) } else { None }).collect())
+    }
+
+    #[test]
+    fn shape_builder_shift_drag_highlights_and_merges_every_region_in_its_marquee() {
+        let (d, s) = grid();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        let shift = Mods { shift: true, ..Default::default() };
+        t.pointer(&cx, &ev(PointerKind::Down, 250.0, 250.0).with_mods(shift));
+        // Shift may be let go once the drag is on.
+        t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 150.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+        assert_eq!(t.touched.regions.len(), 9, "{:?}", t.touched);
+        assert_eq!(t.touched.regions[0], t.cache.map.region_at(Point::new(250.0, 250.0)).unwrap(), "where the drag started comes first");
+        assert_eq!(paths_and_marquees(&t.overlays(&cx)), (18, vec![Rect::new(50.0, 50.0, 250.0, 250.0)]), "nine regions, no trail");
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0));
+        let Action::Exec(id, v) = &acts[0] else { panic!("{acts:?}") };
+        assert_eq!((id.as_str(), &v["rect"], &v["erase"]), ("shapeBuilder.merge", &json!([250.0, 250.0, -200.0, -200.0]), &json!(false)));
+        assert!(v.get("points").is_none(), "{v}");
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))), "the marquee goes with the drag");
+    }
+
+    #[test]
+    fn shape_builder_alt_shift_drag_marks_the_regions_in_its_marquee_for_deleting() {
+        let (d, s) = grid();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        let alt_shift = Mods { alt: true, shift: true, ..Default::default() };
+        // A narrow marquee down the middle column.
+        t.pointer(&cx, &ev(PointerKind::Down, 140.0, 50.0).with_mods(alt_shift));
+        t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 250.0).with_mods(alt_shift));
+        assert_eq!(t.touched.regions.len(), 3);
+        let ov = t.overlays(&cx);
+        assert!(ov.iter().all(|o| matches!(o, Overlay::Marquee(_) | Overlay::Path { color: HIGHLIGHT_RED, .. })), "{ov:?}");
+        assert_eq!(paths_and_marquees(&ov).0, 6, "three regions");
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 250.0).with_mods(alt_shift));
+        let Action::Exec(_, v) = &acts[0] else { panic!("{acts:?}") };
+        assert_eq!((&v["rect"], &v["erase"]), (&json!([140.0, 50.0, 20.0, 200.0]), &json!(true)));
+    }
+
+    /// Without Shift a drag still touches what the pointer passes over; a Shift-click that does not
+    /// move is a click.
+    #[test]
+    fn shape_builder_drag_without_shift_and_shift_click_send_points() {
+        let (d, s) = grid();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 250.0, 250.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 150.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+        assert_eq!(t.touched.regions.len(), 3, "the diagonal");
+        let (paths, marquees) = paths_and_marquees(&t.overlays(&cx));
+        assert_eq!((paths, marquees.len()), (7, 0), "three regions and the trail");
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0));
+        let Action::Exec(_, v) = &acts[0] else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[250.0, 250.0], [150.0, 150.0], [50.0, 50.0]]));
+        assert!(v.get("rect").is_none(), "{v}");
+        let shift = Mods { shift: true, ..Default::default() };
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0).with_mods(shift));
+        assert_eq!(t.touched.regions.len(), 1);
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 150.0, 150.0).with_mods(shift));
+        let Action::Exec(_, v) = &acts[0] else { panic!("{acts:?}") };
+        assert_eq!((&v["points"], v.get("rect")), (&json!([[150.0, 150.0]]), None));
+    }
+
+    #[test]
+    fn marquee_regions_touch_crossed_outlines_held_anchors_and_the_region_around_it() {
+        let (d, s) = grid();
+        let (map, _) = BuilderMap::new(&d, &sorted_roots(&d, &s.objects), false, true);
+        let at = |x: f64, y: f64| map.region_at(Point::new(x, y)).unwrap();
+        // Wholly inside the middle square, then crossing into the one to its right.
+        assert_eq!(map.regions_in_marquee(Point::new(120.0, 120.0), Point::new(180.0, 180.0)), [at(150.0, 150.0)]);
+        assert_eq!(map.regions_in_marquee(Point::new(120.0, 120.0), Point::new(220.0, 180.0)), [at(150.0, 150.0), at(250.0, 150.0)]);
+        // Ending on a shared side does not reach the square past it.
+        assert_eq!(map.regions_in_marquee(Point::new(120.0, 120.0), Point::new(200.0, 180.0)), [at(150.0, 150.0)]);
+        // Around the whole grid, from outside it: every square, with no region under either corner.
+        assert_eq!(map.regions_in_marquee(Point::new(-10.0, -10.0), Point::new(310.0, 310.0)).len(), 9);
+        assert!(map.regions_in_marquee(Point::new(400.0, 400.0), Point::new(450.0, 450.0)).is_empty());
+        // Where the drag started first, then where it ends, whichever way it runs.
+        for (a, b) in [((50.0, 50.0), (250.0, 250.0)), ((250.0, 250.0), (50.0, 50.0)), ((250.0, 50.0), (50.0, 250.0))] {
+            let got = map.regions_in_marquee(a.into(), b.into());
+            assert_eq!((got.len(), got[0], got[1]), (9, at(a.0, a.1), at(b.0, b.1)), "{a:?} to {b:?}");
+        }
+    }
+
+    /// With In Merge Mode, Clicking Stroke Splits the Path on, a Shift-drag that starts on a stroke
+    /// sends its marquee and no split, however little it moves; a Shift-click there splits the
+    /// stroke as a click does.
+    #[test]
+    fn shape_builder_shift_drag_on_a_stroke_merges_and_a_shift_click_splits() {
+        let (d, s) = corner_rects();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.set_option("clickStrokeSplitsPath", &json!(true));
+        let shift = Mods { shift: true, ..Default::default() };
+        // 1 pt outside A's left side, a move of less than 3 pixels, and one across the art.
+        for (to, rect) in [((0.5, 26.0), json!([-1.0, 25.0, 1.5, 1.0])), ((75.0, 75.0), json!([-1.0, 25.0, 76.0, 50.0]))] {
+            t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0));
+            t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0).with_mods(shift));
+            t.pointer(&cx, &ev(PointerKind::Drag, to.0, to.1).with_mods(shift));
+            let acts = t.pointer(&cx, &ev(PointerKind::Up, to.0, to.1).with_mods(shift));
+            let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+            assert_eq!((&v["rect"], v.get("points"), v.get("splitStroke")), (&rect, None, None), "{v}");
+        }
+        t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0));
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0).with_mods(shift));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, -1.0, 25.0).with_mods(shift));
+        let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+        assert_eq!((&v["splitStroke"], &v["points"], v.get("rect")), (&json!(true), &json!([[-1.0, 25.0]]), None), "{v}");
+    }
+
+    /// While a Shift-drag that started over a stroke a click would split draws its marquee, the
+    /// pointer shows the Shape Builder, not the scissors, and the stroke is not highlighted.
+    #[test]
+    fn shape_builder_shift_drag_shows_no_scissors_or_stroke_highlight() {
+        let (d, s) = corner_rects();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.set_option("clickStrokeSplitsPath", &json!(true));
+        let shift = Mods { shift: true, ..Default::default() };
+        let highlighted = |ov: &[Overlay]| ov.iter().any(|o| matches!(o, Overlay::Path { color: STROKE_HIGHLIGHT, width: 3.0, .. }));
+        t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0));
+        assert_eq!(t.cursor(&cx, Point::new(-1.0, 25.0), shift), Cursor::Scissors);
+        assert!(highlighted(&t.overlays(&cx)));
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0).with_mods(shift));
+        t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 75.0).with_mods(shift));
+        let ov = t.overlays(&cx);
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Marquee(_))) && !highlighted(&ov), "{ov:?}");
+        assert_eq!(t.cursor(&cx, Point::new(75.0, 75.0), shift), Cursor::ShapeBuilder);
+    }
+
+    #[test]
+    fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer() {
+        let (d, s) = corner_rects();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        let o = t.options();
+        assert_eq!((&o["clickStrokeSplitsPath"], &o["highlightStroke"], &o["highlightColor"]), (&json!(false), &json!(true), &json!("#ff4f4f")));
+        // With the option off, the pointer 1 pt outside A's left side highlights nothing.
+        t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0));
+        assert!(t.overlays(&cx).is_empty());
+        assert_eq!(t.cursor(&cx, Point::new(-1.0, 25.0), Mods::default()), Cursor::ShapeBuilder);
+        t.set_option("clickStrokeSplitsPath", &json!(true));
+        t.set_option("highlightColor", &json!("#00ff00"));
+        // A value that is not a color or not a switch is ignored.
+        t.set_option("highlightColor", &json!("nope"));
+        t.set_option("highlightStroke", &json!("off"));
+        let o = t.options();
+        assert_eq!((&o["clickStrokeSplitsPath"], &o["highlightStroke"], &o["highlightColor"]), (&json!(true), &json!(true), &json!("#00ff00")));
+        // On, the tool draws A's left side from corner to corner in the highlight color and shows the scissors.
+        t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0));
+        let ov = t.overlays(&cx);
+        let [Overlay::Path { path, color: [0, 0xff, 0], width: 3.0, .. }] = ov.as_slice() else { panic!("{ov:?}") };
+        assert_eq!(path.bounding_box(), Rect::new(0.0, 0.0, 0.0, 100.0));
+        assert_eq!(t.cursor(&cx, Point::new(-1.0, 25.0), Mods::default()), Cursor::Scissors);
+        // With Alt the tool is in erase mode, which deletes edges and does not split them.
+        let alt = Mods { alt: true, ..Default::default() };
+        t.pointer(&cx, &ev(PointerKind::Move, -1.0, 25.0).with_mods(alt));
+        assert_eq!(t.cursor(&cx, Point::new(-1.0, 25.0), alt), Cursor::ShapeBuilderErase);
+        assert!(t.stroke.is_none());
+        // A click splits; the command gets the point, the switch and the tolerance.
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, -1.0, 25.0));
+        let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+        assert_eq!((id.as_str(), &v["splitStroke"], &v["erase"], &v["tolerance"]), ("shapeBuilder.merge", &json!(true), &json!(false), &json!(4.0)));
+        // A release up to 3 pixels from the press is still a click, which splits where the press was.
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, -1.5, 26.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 0.5, 27.0));
+        let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+        assert_eq!((&v["splitStroke"], &v["points"]), (&json!(true), &json!([[-1.0, 25.0]])));
+        // A release farther away is a drag, which splits nothing.
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)).is_empty());
+        // So is a Straight Line drag that goes away and ends back near the press.
+        t.set_option("selection", &json!("straightLine"));
+        t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 30.0, 25.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, -0.5, 25.5));
+        assert!(!acts.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("splitStroke").is_some())), "{acts:?}");
+        t.set_option("selection", &json!("freeform"));
+        // A drag merges as before and sends no switch.
+        t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 75.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 75.0));
+        let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+        assert!(v.get("splitStroke").is_none(), "{v}");
+    }
+
     #[test]
     fn hatch_stays_inside_region() {
         let bp = shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)).to_bezpath();
@@ -1302,6 +2175,85 @@ mod tests {
         let Action::Exec(id, v) = &acts[0] else { panic!() };
         assert_eq!(id, "livePaint.fill");
         assert_eq!(v["ids"], json!([a.0, b.0]));
+    }
+
+    #[test]
+    fn bucket_rebuilds_its_map_for_a_new_revision_at_the_same_address() {
+        let (mut d, a, b) = two_rects();
+        let mut s = Selection::default();
+        s.set([a, b]);
+        let p = paint();
+        let mut t = LivePaintBucketTool::default();
+        let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 50.0));
+        // A later revision of the document, with the squares 300 pt to the right, at the same address.
+        d = two_rects_at(300.0).0;
+        let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+        let acts = t.pointer(&cx2, &ev(PointerKind::Down, 375.0, 50.0));
+        assert_eq!(acts, vec![Action::Exec("livePaint.fill".into(), json!({ "ids": [a.0, b.0], "point": [375.0, 50.0] }))]);
+    }
+
+    #[test]
+    fn bucket_keeps_its_map_while_the_document_is_unchanged() {
+        let (d, a, b) = two_rects();
+        let mut s = Selection::default();
+        s.set([a, b]);
+        let p = paint();
+        let mut t = LivePaintBucketTool::default();
+        let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 50.0));
+        let acts = t.pointer(&cx1, &ev(PointerKind::Down, 75.0, 50.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "livePaint.fill"), "{acts:?}");
+        // The fill left the document as it was: the map still fits it.
+        t.pointer(&cx1, &ev(PointerKind::Move, 25.0, 50.0));
+        assert_eq!(t.cache.builds, 1, "a hover after a fill that changed nothing");
+        let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+        t.pointer(&cx2, &ev(PointerKind::Move, 25.0, 50.0));
+        assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    }
+
+    #[test]
+    fn bucket_hover_builds_a_large_map_on_another_thread() {
+        let (d, s) = square_row(40);
+        let p = paint();
+        let mut t = LivePaintBucketTool::default();
+        let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+        let hover = ev(PointerKind::Move, 15.0, 10.0);
+        t.pointer(&cx, &hover);
+        assert_eq!(t.cache.builds, 0, "the first hover returns before the map is built");
+        assert!(t.waiting() && t.hover == LpHover::None, "{:?}", t.hover);
+        poll_until_ready(&mut t, &cx);
+        assert!(matches!(t.hover, LpHover::Region(_)), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (1, 1));
+        assert_eq!(t.overlays(&cx).len(), 1);
+    }
+
+    #[test]
+    fn bucket_takes_the_map_it_waits_for_while_hovering_a_live_paint_group() {
+        let (mut d, s) = square_row(40);
+        live_square(&mut d, Rect::new(100.0, 100.0, 200.0, 200.0));
+        let p = paint();
+        let mut t = LivePaintBucketTool::default();
+        let cx = cx(&d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+        assert!(t.waiting());
+        t.pointer(&cx, &ev(PointerKind::Move, 150.0, 150.0));
+        assert!(matches!(t.hover, LpHover::Part(_)), "{:?}", t.hover);
+        poll_until_ready(&mut t, &cx);
+        assert!(matches!(t.hover, LpHover::Part(_)), "{:?}", t.hover);
+        assert_eq!((t.cache.builds, t.cache.background), (1, 1));
+    }
+
+    #[test]
+    fn live_paint_selection_hover_builds_no_map_of_the_selection() {
+        let (d, s) = square_row(3);
+        let p = paint();
+        let mut t = LivePaintSelectionTool::default();
+        let cx = cx(&d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+        assert_eq!(t.hover, LpHover::None);
+        assert_eq!(t.cache.builds, 0);
+        assert!(!t.waiting());
     }
 
     #[test]

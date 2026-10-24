@@ -536,6 +536,7 @@ impl Interp<'_> {
                             break;
                         }
                         Some(b'\r') => {
+                            self.skip_lf(&f);
                             ended = true;
                             break;
                         }
@@ -688,6 +689,25 @@ impl Interp<'_> {
         })
     }
 
+    /// After `readline` consumes CR, consume only an immediately following LF. PostScript
+    /// treats CR/LF as one line ending (PLRM §3.8); raw reads must keep every other byte.
+    /// The preceding `read` has already materialized any pending filter.
+    fn skip_lf(&mut self, f: &Rc<RefCell<Stream>>) {
+        match &mut *f.borrow_mut() {
+            Stream::Current => {
+                if self.lex.rest().first() == Some(&b'\n') {
+                    self.lex.advance(1);
+                }
+            }
+            Stream::Buf { data, pos, .. } => {
+                if data.get(*pos) == Some(&b'\n') {
+                    *pos += 1;
+                }
+            }
+            Stream::Pending(_) => {}
+        }
+    }
+
     /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped).
     fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         let mut out = Vec::with_capacity(n);
@@ -709,6 +729,12 @@ impl Interp<'_> {
             return ps_err("rangecheck", "");
         }
         self.push_interval(Obj::Str(s), 0, got.len())
+    }
+
+    /// Count `n` decoded bytes against the memory budget, and the time to decode them.
+    fn charge_decoded(&mut self, n: usize) -> Res {
+        self.alloc(n)?;
+        self.spend((n / 4096) as u64)
     }
 
     /// `filter`: a file that decodes its source. Over the program's own data it decodes when
@@ -755,6 +781,7 @@ impl Interp<'_> {
                         let mut b = f.borrow_mut();
                         let Stream::Buf { data, pos, .. } = &mut *b else { return io("filter") };
                         let (out, used, rgb) = decode(&spec, data.get(*pos..).unwrap_or_default())?;
+                        self.charge_decoded(out.len())?;
                         *pos = pos.saturating_add(used);
                         Stream::Buf { data: out, pos: 0, rgb }
                     }
@@ -763,11 +790,13 @@ impl Interp<'_> {
             Obj::Str(s) => {
                 self.alloc(s.borrow().len())?;
                 let (data, _, rgb) = decode(&spec, &s.borrow())?;
+                self.charge_decoded(data.len())?;
                 Stream::Buf { data, pos: 0, rgb }
             }
             p @ Obj::Array { .. } => {
                 let raw = self.gather(&p, MAX_DATA)?;
                 let (data, _, rgb) = decode(&spec, &raw)?;
+                self.charge_decoded(data.len())?;
                 Stream::Buf { data, pos: 0, rgb }
             }
             _ => return ps_err("typecheck", "filter"),
@@ -810,13 +839,13 @@ impl Interp<'_> {
                 None => {
                     let raw = self.lex.data();
                     let (data, used, rgb) = decode(spec, raw)?;
-                    self.alloc(data.len())?;
+                    self.charge_decoded(data.len())?;
                     self.lex.advance(used);
                     (data, rgb)
                 }
                 Some((prev, was)) => {
                     let (data, _, rgb) = decode(spec, &prev)?;
-                    self.alloc(data.len())?;
+                    self.charge_decoded(data.len())?;
                     (data, rgb.or(was))
                 }
             });
@@ -1064,6 +1093,11 @@ impl Interp<'_> {
         let row = row_bits.div_ceil(8);
         // Several sources are read in turn, a row at a time each (zeros past their ends).
         let sources = if multi { &s.sources[..] } else { s.sources.get(..1).ok_or(PsError::Ps("undefined", "DataSource".into()))? };
+        if sources.len() > n {
+            return ps_err("rangecheck", "DataSource");
+        }
+        let plane = row.checked_mul(s.h).filter(|p| *p <= MAX_DATA).ok_or(PsError::Limit("decoded data is too large"))?;
+        self.alloc(plane.saturating_mul(sources.len()))?;
         let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
         for p in &mut planes {
             p.resize(row * s.h, 0);
@@ -1191,7 +1225,7 @@ impl Interp<'_> {
     fn add_image(&mut self, blob: ImageBlob, w: u32, h: u32, xf: Affine, mask: Option<OpacityMask>) -> Res {
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);
-        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
         let clips = self.g.clips.clone();
         self.out.push(Node::new(NodeId(0), NodeKind::Image(Box::new(im))).with_mask(mask.map(Box::new)), &clips);
         Ok(())
@@ -1208,7 +1242,7 @@ impl Interp<'_> {
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);
-        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
         Some(OpacityMask::new(Node::new(self.out.doc.alloc_id(), NodeKind::Image(Box::new(im))), true))
     }
 }

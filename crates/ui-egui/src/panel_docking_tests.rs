@@ -1012,6 +1012,27 @@ fn a_double_click_on_a_dock_tab_collapses_its_group_to_its_tabs_and_another_expa
     assert!(valid(h.state().ui.docking.as_ref().unwrap()));
 }
 
+/// A double-click on a tab of a group beside another does nothing, and leaves no error in the
+/// status bar: that group doesn't collapse (`a_group_beside_another_does_not_collapse`).
+#[test]
+fn a_double_click_on_a_tab_of_a_group_beside_another_does_nothing() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("window.panel.move", json!({"panel":"swatches", "anchor":"layers", "zone":"left"})).unwrap();
+    let saved = app.ui.docking.clone();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let status = h.state().ui.status.clone();
+    let shown: Vec<&str> = root_groups(&h).iter().map(|g| g.shown).collect();
+    assert_eq!(shown.len(), 2, "{shown:?}");
+    for panel in shown {
+        let at = tab_center(&h, panel);
+        double_click(&mut h, at);
+        assert_eq!(h.state().ui.status, status, "no error: {panel}");
+        assert!(h.state().ui.docking_collapsed.is_empty(), "{panel}");
+        assert_eq!(h.state().ui.docking, saved, "{panel}");
+    }
+}
+
 /// A double-click on a tab of the legacy dock collapses the tabbed group to its tabs.
 #[test]
 fn a_double_click_on_a_legacy_dock_tab_collapses_the_tabbed_group() {
@@ -1029,6 +1050,55 @@ fn a_double_click_on_a_legacy_dock_tab_collapses_the_tabbed_group() {
     double_click(&mut h, tab);
     assert!(h.state().ui.docking_collapsed.is_empty());
     assert!(layers_drawn(&h), "Layers shows again");
+}
+
+/// Illustrator also collapses the group from the blank part of the strip, see
+/// <https://helpx.adobe.com/illustrator/using/customizing-workspace.html>. The legacy dock's strip right of its tabs collapses the tabbed group, and floats nothing.
+#[test]
+fn a_double_click_on_the_legacy_dock_strip_right_of_the_tabs_collapses_the_tabbed_group() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let libraries = h.query_all_by_label("Libraries").find(|node| node.rect().height() <= 45.0).unwrap().rect();
+    let dock = h.ctx.data(|d| d.get_temp::<egui::Rect>(crate::floating::dock_rect_id())).unwrap();
+    let blank = pos2(libraries.right() + 12.0, libraries.center().y);
+    assert!(blank.x < dock.right() - 30.0, "left of the panel menu: {libraries:?} {dock:?}");
+    let tab = h.query_all_by_label("Layers").find(|node| node.rect().height() <= 45.0).unwrap().rect().center();
+    click(&mut h, tab);
+    h.run_steps(45);
+    assert!(layers_drawn(&h), "Layers shows");
+    double_click(&mut h, blank);
+    assert!(h.state().ui.docking.is_none() && h.state().ui.floating_panels.is_empty(), "nothing floats");
+    assert!(h.state().ui.docking_collapsed.contains("layers"));
+    assert!(!layers_drawn(&h), "no Layers body");
+    double_click(&mut h, blank);
+    assert!(h.state().ui.docking_collapsed.is_empty());
+    assert!(layers_drawn(&h), "Layers shows again");
+}
+
+/// The shared dock's strip right of a group's tabs, and the grip beside its panel menu, collapse
+/// the group to its tabs and expand it, without floating it.
+#[test]
+fn a_double_click_on_the_shared_dock_strip_right_of_the_tabs_collapses_its_group() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("window.panel.move", json!({"panel":"swatches", "anchor":"layers", "zone":"top"})).unwrap();
+    let saved = app.ui.docking.clone();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let strip = root_groups(&h)[0].strip;
+    let tab = h.ctx.read_response(egui::Id::new("vectorcraft-panel-docking").with(("tab", &"swatches".to_string()))).unwrap().rect;
+    // Between the tab and the group's header (80 wide), and on the header's grip.
+    let gap = pos2(tab.right() + 10.0, strip.center().y);
+    assert!(gap.x < strip.right() - 80.0, "{tab:?} {strip:?}");
+    let grip = pos2(strip.right() - 50.0, strip.center().y);
+    for at in [gap, grip] {
+        double_click(&mut h, at);
+        assert!(h.state().ui.docking_collapsed.contains("swatches"), "{at:?}");
+        assert!(root_groups(&h)[0].rect.height() < 40.0, "{at:?}");
+        double_click(&mut h, at);
+        assert!(h.state().ui.docking_collapsed.is_empty(), "{at:?}");
+        assert_eq!(h.state().ui.docking, saved, "nothing floats: {at:?}");
+    }
 }
 
 /// `window.panel.collapse` checks its parameters, and a collapsed group survives a reload.
@@ -1129,4 +1199,24 @@ fn a_group_beside_another_does_not_collapse() {
     app.ui.docking_collapsed.insert("swatches".into());
     crate::panel_docking::prune_collapsed(&mut app.ui);
     assert!(app.ui.docking_collapsed.is_empty());
+}
+
+/// A double-click on the strip of a group beside another does nothing, and leaves no error in the
+/// status bar.
+#[test]
+fn a_double_click_on_the_strip_of_a_group_beside_another_does_nothing() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("window.panel.move", json!({"panel":"swatches", "anchor":"layers", "zone":"left"})).unwrap();
+    let saved = app.ui.docking.clone();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let status = h.state().ui.status.clone();
+    let strip = root_groups(&h).into_iter().find(|g| g.shown == "swatches").unwrap().strip;
+    let tab = h.ctx.read_response(egui::Id::new("vectorcraft-panel-docking").with(("tab", &"swatches".to_string()))).unwrap().rect;
+    let gap = pos2(tab.right() + 4.0, strip.center().y);
+    assert!(gap.x < strip.right() - 24.0, "{tab:?} {strip:?}");
+    double_click(&mut h, gap);
+    assert_eq!(h.state().ui.status, status, "no error");
+    assert!(h.state().ui.docking_collapsed.is_empty());
+    assert_eq!(h.state().ui.docking, saved);
 }

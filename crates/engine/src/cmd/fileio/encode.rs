@@ -340,7 +340,17 @@ pub(super) fn single_artboard(doc: &Document, rect: Rect, name: &str) -> Documen
 
 /// `d` with one artboard, `rect`.
 pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> Document {
-    d.artboards = vec![Artboard { id: 1, name: name.into(), rect, locked: false, show_center_mark: false, show_cross_hairs: false, color: None }];
+    d.artboards = vec![Artboard {
+        id: 1,
+        name: name.into(),
+        rect,
+        locked: false,
+        show_center_mark: false,
+        show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
+    }];
     d
 }
 

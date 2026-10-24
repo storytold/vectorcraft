@@ -80,8 +80,13 @@ fn use_artboards_writes_a_file_per_artboard_named_with_an_underscore() {
     let r = s.execute("document.export", &json!({"format": "eps", "useArtboards": true, "previewFormat": "none"})).unwrap();
     let files = r["files"].as_array().unwrap();
     let names: Vec<&str> = files.iter().map(|f| f["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Untitled-1_Artboard-1.eps", "Untitled-1_Artboard-2.eps"]);
-    for f in files {
+    assert_eq!(names, ["Untitled-1.eps", "Untitled-1_Artboard-1.eps", "Untitled-1_Artboard-2.eps"]);
+    // The central file comes first: the whole document, bounded by the visible art of both artboards.
+    let central = b64(&files[0]);
+    assert_eq!(dsc(&postscript(&central), "BoundingBox").as_deref(), Some(format!("10 60 {} 90", second + 40.0).as_str()));
+    let native = vectorcraft_format::load(&vectorcraft_eps::native(&central).unwrap()).unwrap();
+    assert_eq!((native.artboards.len(), native.layers[0].children().unwrap().len()), (2, 2));
+    for f in &files[1..] {
         let bytes = b64(f);
         let ps = postscript(&bytes);
         assert_eq!(dsc(&ps, "BoundingBox").as_deref(), Some("0 0 100 100"));
@@ -89,6 +94,10 @@ fn use_artboards_writes_a_file_per_artboard_named_with_an_underscore() {
         let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
         assert_eq!(native.artboards.len(), 1);
     }
+    // Named artboards, two or more, get the central file too.
+    let r = s.execute("document.exportEps", &json!({"artboards": [1, 0], "previewFormat": "none"})).unwrap();
+    let names: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Untitled-1.eps", "Untitled-1_Artboard-2.eps", "Untitled-1_Artboard-1.eps"]);
     // A range names the artboards (useArtboards implied); one file keeps the path's name.
     let r = s.execute("document.exportEps", &json!({"range": "2", "previewFormat": "none"})).unwrap();
     assert!(r.get("files").is_none());
@@ -97,6 +106,30 @@ fn use_artboards_writes_a_file_per_artboard_named_with_an_underscore() {
     // Without art there is nothing to bound.
     let mut empty = session(100.0, 100.0, 1);
     assert!(empty.execute("document.exportEps", &json!({})).unwrap_err().to_string().contains("nothing to export"));
+    // Artboards without art still get their files, but no central file.
+    let mut empty = session(100.0, 100.0, 2);
+    let r = empty.execute("document.exportEps", &json!({"useArtboards": true, "previewFormat": "none"})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
+}
+
+#[test]
+fn use_artboards_writes_the_central_file_beside_the_artboard_files() {
+    let mut s = session(100.0, 100.0, 2);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-epsboards-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("logo.eps").to_string_lossy().to_string();
+    s.execute("document.exportEps", &json!({"path": path, "useArtboards": true, "previewFormat": "none"})).unwrap();
+    let mut written: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    written.sort();
+    assert_eq!(written, ["logo.eps", "logo_Artboard-1.eps", "logo_Artboard-2.eps"]);
+    let central = std::fs::read(&path).unwrap();
+    assert_eq!(dsc(&postscript(&central), "BoundingBox").as_deref(), Some("10 60 40 90"));
+    let _ = std::fs::remove_dir_all(dir);
+    // Export for Screens still writes one EPS per artboard, with no central file.
+    let rows = json!({"formats": [{"format": "eps", "useArtboards": true}], "settings": {"eps": {"useArtboards": true}}});
+    let r = s.execute("document.exportForScreens", &rows).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
 }
 
 #[test]
@@ -154,6 +187,23 @@ fn placed_images_are_written_and_previews_are_black_and_white_on_request() {
     assert_eq!((tiff_tag(tiff, 258), tiff_tag(tiff, 277), tiff_tag(tiff, 262)), (Some(1), Some(1), Some(0)));
     let l3 = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
     assert!(l3.contains("/FlateDecode filter >> image"));
+}
+
+/// Two placed images whose pixel data can't be decoded are left out of the EPS, and `warnings`
+/// holds the note raster exports give, once, without naming either image's key.
+#[test]
+fn images_that_cant_be_decoded_give_the_raster_note_once() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut s = session(200.0, 100.0, 1);
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    crate::tests_menucmds::place_undecodable_png_sized(&mut s, 32, 16);
+    let keys: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    assert_eq!(keys.len(), 2);
+    let r = s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap();
+    let w = warnings(&r);
+    assert_eq!(w.iter().filter(|w| *w == NOTE).count(), 1, "{w:?}");
+    assert!(!w.iter().any(|w| keys.iter().any(|k| w.contains(k.as_str()))), "{w:?}");
+    assert!(!postscript(&b64(&r)).contains("filter >> image"), "no image is written");
 }
 
 #[test]

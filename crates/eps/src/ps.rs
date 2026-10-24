@@ -187,6 +187,10 @@ pub(crate) fn ascii85(bytes: &[u8]) -> String {
     }
     raw.push_str("~>");
     let mut out = String::with_capacity(raw.len() + raw.len() / LINE + 2);
+    if raw.starts_with('%') {
+        // Whitespace is ignored by readers, and keeps the first line from starting with `%`.
+        out.push(' ');
+    }
     let mut col = 0;
     for ch in raw.chars() {
         if col >= LINE && ch != '%' {
@@ -287,7 +291,15 @@ pub(crate) fn inflate(data: &[u8], max: u64) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::num;
+    use super::{ascii85, ascii85_decode, num};
+
+    #[test]
+    fn ascii85_first_line_never_starts_with_percent() {
+        let data = [0x0C, 0x80, 0, 0, 1, 2, 3, 4];
+        let s = ascii85(&data);
+        assert!(s.lines().all(|l| !l.starts_with('%')), "got {s:?}");
+        assert_eq!(ascii85_decode(&s).as_deref(), Some(&data[..]));
+    }
 
     #[test]
     fn huge_finite_numbers_are_valid_postscript() {

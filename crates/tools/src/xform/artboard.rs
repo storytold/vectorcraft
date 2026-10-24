@@ -12,13 +12,15 @@
 //! leaves the artboard where it was), drag a handle resizes it
 //! (Shift proportional, Alt from centre; with the `scaleArt` option on, Scale Artwork with Artboard,
 //! always proportional, and the art fully inside scales with it), drag on the pasteboard draws a new artboard, Delete removes
-//! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`) and Escape returns to
+//! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`), the arrow keys move the
+//! selected artboards by the keyboard increment (Shift ten times as far; with their artwork when
+//! `moveArt` is on) and Escape returns to
 //! the Selection tool (during a drag it only cancels the drag). Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
 //! objects (never to the dragged artboard or the art moving or scaling with it); the artboard's own bleed edges
 //! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]). A locked artboard (the
-//! Artboards panel's lock column) is selected by a click, but a drag doesn't move it or copy it,
-//! it shows no handles, and Delete leaves it.
+//! Artboards panel's lock column) is selected by a click, but a drag or an arrow key doesn't move it
+//! or copy it, it shows no handles, and Delete leaves it.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
@@ -457,6 +459,10 @@ impl Tool for ArtboardTool {
                     Some(a) => {
                         let mut v = rect_json(self.active, a.rect);
                         v["name"] = json!(a.name);
+                        v["showCenterMark"] = json!(a.show_center_mark);
+                        v["showCrossHairs"] = json!(a.show_cross_hairs);
+                        v["showVideoSafeAreas"] = json!(a.show_video_safe_areas);
+                        v["videoRulerPixelAspectRatio"] = json!(a.video_ruler_pixel_aspect_ratio);
                         vec![Action::Dialog("artboardOptions".into(), v)]
                     }
                     None => vec![],
@@ -469,12 +475,13 @@ impl Tool for ArtboardTool {
     /// Escape owns the request to return to Selection (or cancel an active drag), so the UI
     /// applies the tool's request instead of falling through to its general Escape behaviour.
     /// Delete/Backspace belong to the artboards even when deletion is protected or a drag is
-    /// active: falling through to Clear would delete selected artwork instead.
+    /// active: falling through to Clear would delete selected artwork instead. So do the arrows:
+    /// they nudge the artboards, never the selected art on its own (#2103).
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Escape | ToolKey::Delete | ToolKey::Backspace)
+        matches!(key, ToolKey::Escape | ToolKey::Delete | ToolKey::Backspace | ToolKey::Left | ToolKey::Right | ToolKey::Up | ToolKey::Down)
     }
 
-    fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         match key {
             ToolKey::Delete | ToolKey::Backspace => {
                 // A locked artboard isn't deleted.
@@ -507,6 +514,28 @@ impl Tool for ArtboardTool {
                 } else {
                     vec![Action::SwitchTool("selection".into())]
                 }
+            }
+            ToolKey::Left | ToolKey::Right | ToolKey::Up | ToolKey::Down => {
+                // The selected artboards that aren't locked move by the keyboard increment (Shift:
+                // ten times as far, as object.nudge moves art), with their art when Move Artwork
+                // with Artboard is on, as a drag moves them: one step per press.
+                let moving: Vec<usize> = self.selected(cx).into_iter().filter(|i| cx.doc.artboards.get(*i).is_some_and(|a| !a.locked)).collect();
+                if self.drag.is_some() || moving.is_empty() {
+                    return vec![];
+                }
+                let step = cx.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+                let (dx, dy) = match key {
+                    ToolKey::Left => (-step, 0.0),
+                    ToolKey::Right => (step, 0.0),
+                    ToolKey::Up => (0.0, -step),
+                    _ => (0.0, step),
+                };
+                let mut v = json!({ "dx": dx, "dy": dy, "moveArt": self.move_art });
+                match moving.as_slice() {
+                    [i] => v["index"] = json!(i),
+                    _ => v["indices"] = json!(moving),
+                }
+                vec![Action::Exec("artboard.move".into(), v)]
             }
             _ => vec![],
         }
@@ -821,6 +850,42 @@ mod tests {
         assert_eq!(t.options()["selected"], json!([0, 1]));
         click(&mut t, 100.0, 700.0, Mods::default());
         assert_eq!(t.options()["selected"], json!([2]));
+    }
+
+    /// The arrow keys move the selected artboards by the keyboard increment, Shift ten times as far,
+    /// with their art when Move Artwork with Artboard is on (#2103): the tool claims them, so they
+    /// no longer fall through to object.nudge and move only the selected art. A locked artboard
+    /// stays, and during a drag the arrows do nothing.
+    #[test]
+    fn arrow_keys_nudge_the_selected_artboards() {
+        let mut d = two_boards();
+        let mut third = d.artboards[0].clone();
+        third.rect = Rect::new(0.0, 600.0, 200.0, 800.0);
+        third.locked = true;
+        d.artboards.push(third);
+        let (s, p) = (Selection::default(), paint());
+        let mut c = cx(&d, &s, &p);
+        c.keyboard_increment = 2.0;
+        let shift = Mods { shift: true, ..Default::default() };
+        let mut t = ArtboardTool { active: 1, ..Default::default() };
+        let moved = |p: Value| vec![Action::Exec("artboard.move".into(), p)];
+        for key in [ToolKey::Left, ToolKey::Right, ToolKey::Up, ToolKey::Down] {
+            assert!(t.claims_key(&c, key), "{key:?}");
+        }
+        assert_eq!(t.key(&c, ToolKey::Right, Mods::default()), moved(json!({"index": 1, "dx": 2.0, "dy": 0.0, "moveArt": true})));
+        assert_eq!(t.key(&c, ToolKey::Up, shift), moved(json!({"index": 1, "dx": 0.0, "dy": -20.0, "moveArt": true})));
+        t.move_art = false;
+        t.set_option("selected", &json!([0, 1, 2]));
+        assert_eq!(
+            t.key(&c, ToolKey::Left, Mods::default()),
+            moved(json!({"indices": [0, 1], "dx": -2.0, "dy": 0.0, "moveArt": false})),
+            "the locked artboard stays"
+        );
+        t.set_option("selected", &json!([2]));
+        assert_eq!(t.key(&c, ToolKey::Down, Mods::default()), vec![], "only a locked artboard selected");
+        t.set_option("selected", &json!([1]));
+        t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+        assert_eq!(t.key(&c, ToolKey::Down, Mods::default()), vec![], "not during a drag");
     }
 
     /// A click selects a locked artboard, but a drag neither moves it nor copies it (Alt), a press

@@ -14,6 +14,20 @@ pub const ABI_VERSION: i32 = 1;
 /// Fuel handed out per slice; between slices the host checks the deadline.
 const FUEL_SLICE: u64 = 20_000_000;
 
+/// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
+/// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
+/// the host learns that only once the run has ended.
+pub const HEAVY_FUEL: u64 = 1_000_000_000;
+
+/// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
+pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
+
+/// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
+/// run gets).
+pub fn heavy_terms() -> (u64, u64) {
+    (HEAVY_WALL_TIME_MS / 60_000, HEAVY_FUEL / Limits::default().fuel_base.max(1))
+}
+
 /// Resource limits for running plug-ins.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Limits {
@@ -32,6 +46,11 @@ pub struct Limits {
     /// Wall-clock budget for one run, in milliseconds. Native builds only: the web build has no
     /// monotonic clock in `std`, so the fuel budget alone bounds it there.
     pub wall_time_ms: u64,
+    /// The most a heavy filter ([`crate::Budget::Heavy`]) is given instead of `fuel_base` and
+    /// `wall_time_ms`: what the host allows, which the module's manifest can ask for but never
+    /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
+    pub heavy_fuel: u64,
+    pub heavy_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -44,6 +63,8 @@ impl Default for Limits {
             fuel_per_byte: 4_000,
             max_recursion_depth: 1024,
             wall_time_ms: 60_000,
+            heavy_fuel: HEAVY_FUEL,
+            heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
         }
     }
 }
@@ -156,6 +177,12 @@ impl Plugin {
             e => e,
         })?;
         p.manifest = Manifest::parse(&text)?;
+        // A heavy filter's runs get the larger budget the host allows for one, which the host
+        // lets the user allow or refuse before installing it.
+        if p.manifest.budget == crate::Budget::Heavy {
+            p.limits.fuel_base = p.limits.fuel_base.max(p.limits.heavy_fuel);
+            p.limits.wall_time_ms = p.limits.wall_time_ms.max(p.limits.heavy_wall_time_ms);
+        }
         // The other exports must exist with the right types.
         live.func::<i32, i32>("vc_alloc")?;
         live.func::<RunArgs, i64>("vc_run")?;
@@ -197,8 +224,9 @@ impl Plugin {
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
         let mut store = Store::new(&self.engine, limits);
         store.limiter(|l| l);
-        // The start function (if any) runs on this fuel.
-        store.set_fuel(self.limits.fuel_base).map_err(wasm_err)?;
+        // The start function (if any) runs on one slice of fuel: it runs before `call` can check
+        // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
+        store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
         let linker = Linker::<StoreLimits>::new(&self.engine);
         let instance = linker.instantiate_and_start(&mut store, &self.module).map_err(wasm_err)?;
         let memory =

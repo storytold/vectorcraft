@@ -152,6 +152,8 @@
 	Anti-aliased Artwork	消除鋸齒的圖稿
 	Anti-aliasing:	消除鋸齒：
 	Any Kind	所有類型
+	Font Technology	字體技術
+font-technology	Variable	可變
 	Appearance	外觀
 	Appearance Attribute	外觀屬性
 	Appearance Item	外觀項目
@@ -236,6 +238,11 @@
 	Average…	平均…
 	Axis:	軸：
 	Background Color:	背景顏色：
+	Show Center Mark	顯示中心標記
+	Show Cross Hairs	顯示十字線
+	Show Video Safe Areas	顯示視訊安全區域
+	Video Ruler Pixel Aspect Ratio:	視訊尺標像素長寬比：
+	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
 	Background Contents:	背景內容：
 	Background:	背景：
@@ -307,6 +314,15 @@
 	Built-in presets don't change: New… starts an editable copy.	內建預設集不會變動：「新增…」會建立可編輯的複本。
 	Bulge…	鼓起…
 	Bullet	項目符號
+	Bullets	項目符號
+	Bullets and Numbering	項目符號與編號
+	Apply Bullets	套用項目符號
+	Numbered List	編號清單
+	Apply Numbers	套用編號
+	Filled Dot	實心圓點
+	Dash	短破折號
+	Hollow Circle	空心圓
+	Filled Square	實心方塊
 	Butt Cap	平端點
 	Byte Order:	位元組順序：
 	Calligraphic	書法
@@ -1033,6 +1049,11 @@
 	Fidelity:	精確度：
 	Figure Space	數字空格
 	Figure:	數字：
+# Artwork drag between document tabs.
+	Drop Artwork	放置圖稿
+@msg	{key} must be [x, y] with finite coordinates	{key} 必須是具有有限座標的 [x, y]
+@msg	ids must contain 1–10000 object ids	ids 必須包含 1–10000 個物件 ID
+
 	File	檔案
 	File Dimensions	檔案尺寸
 	File Format:	檔案格式：
@@ -1056,6 +1077,7 @@
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
 	Consider Open Filled Paths as Closed	將有填色的開放路徑視為封閉路徑
+	In Merge Mode, Clicking Stroke Splits the Path	在合併模式下，按一下筆畫可分割路徑
 	Pick Color From:	顏色來源：
 	Artwork	圖稿
 	Cursor Swatch Preview	在指標旁預覽色票
@@ -1063,6 +1085,7 @@
 	Freeform	自由
 	Straight Line	直線
 	Highlight:	強調顯示：
+	Stroke When Editable	可編輯時的筆畫
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
@@ -1349,7 +1372,7 @@ file-filter	Templates	範本
 	Clear History	清除步驟記錄
 	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	套用資料集
 	Area Type	區域文字
 	Bloat	膨脹
@@ -1573,7 +1596,7 @@ file-filter	Templates	範本
 	Keyboard Shortcuts…	鍵盤快速鍵…
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
-# (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
+# (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Traditional Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list; 「」 around the name of
@@ -1612,7 +1635,7 @@ file-filter	Templates	範本
 @msg	the scale is not a usable number	比例不是可用的數字
 @msg	the drawing is too large to open	圖面過大，無法開啟
 @msg	scale must be a number from {_1} to {_2}, not {_3}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
-@msg	image '{key}' has no pixels and was left out	影像 '{key}' 沒有像素，已略過
+@msg	an image has no pixels and was left out	已略過沒有像素的影像
 @msg	Embedded {n} image(s)	已內嵌 {n} 個影像
 @msg	object {0} cannot have children	物件 {0} 不能有子物件
 @msg	range `{s}` is empty	範圍 `{s}` 是空的
@@ -1631,6 +1654,7 @@ file-filter	Templates	範本
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	即時上色只接受路徑和複合路徑：請先將文字、影像和其他物件轉換為路徑
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
@@ -1955,6 +1979,7 @@ file-filter	Templates	範本
 @msg	invalid image data for `{0}`	`{0}` 的影像資料無效
 @msg	not a VectorCraft file: {0}	不是 VectorCraft 檔案：{0}
 @msg	the compressed file unpacks to more than {_1} MB	壓縮檔解壓縮後超過 {_1} MB
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` 與 `options.{key}: {inner}` 不一致：該選項只能指定一次
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	版本 {0} 的檔案無法壓縮：只有版本 {COMPRESSED_SINCE} 及更新版本才能開啟壓縮檔
 @msg	a bitmap is empty	有一個點陣圖是空的
 @msg	a bitmap is too large to read	有一個點陣圖過大，無法讀取
@@ -2005,6 +2030,8 @@ file-filter	Templates	範本
 @msg	SVG parse error: {0}	SVG 剖析錯誤：{0}
 @msg	decimals must be {_1}–{_2} (got {_3})	小數位數必須為 {_1}–{_2} (收到 {_3})
 @msg	Exporting {_1}	正在匯出 {_1}
+@msg	Packaging {_1}	正在封裝 {_1}
+@msg	Placing {_1}	正在置入 {_1}
 @msg	Exported {what}	已匯出 {what}
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" 不是顏色：請寫成 #rrggbb
 @msg	could not decode image: {0}	無法解碼影像：{0}
@@ -2018,6 +2045,7 @@ file-filter	Templates	範本
 @msg	{label}…	{label}…
 @msg	no blend options	沒有漸變選項
 @msg	bad color {v}	顏色 {v} 無效
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必須是 0.1 到 10 之間的數字
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
 @msg	the Simplify slider is not open	「簡化」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
@@ -2047,7 +2075,7 @@ file-filter	Templates	範本
 @msg	{_1} linked file(s) can't be read here: their previews show	此處無法讀取 {_1} 個連結檔案：顯示的是其預覽
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	有 {_1} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msg	pick a colour, gradient or pattern to save as a swatch	請挑選要儲存為色票的顏色、漸層或圖樣
-@msg	Packaged {n} file(s) in {folder}{note}	已將 {n} 個檔案封裝到 {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	已將 {n} 個檔案封裝到 {folder}{note}
 @msg	Packaged {n} file(s){note}	已封裝 {n} 個檔案{note}
 @msg	choose a location for the package	請選擇封裝的位置
 @msg	missing `folder`	未提供 `folder`
@@ -2060,6 +2088,7 @@ file-filter	Templates	範本
 @msg	no plug-in {id} is installed	未安裝增效模組 {id}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} 是即時效果 (效果 › 增效模組)
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是匯出增效模組 (檔案 › 匯出 › 匯出為…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 為 {size} 位元組（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名為 `{_1}` 的預設集已存在
 @msg	a swatch or color group named `{n}` exists	名為 `{n}` 的色票或顏色群組已存在
 @msg	no print preset named `{base}`	沒有名為 `{base}` 的列印預設集
@@ -2077,6 +2106,7 @@ file-filter	Templates	範本
 @msg	name the file	請為檔案命名
 @msg	unknown format	未知的格式
 @msg	PDF settings are not an object	PDF 設定不是物件
+@msg	PDF security settings are not an object	PDF 安全性設定不是物件
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	沒有名為 `{name}` 的已儲存 PDF 預設集 (內建預設集為唯讀：請以它們為基礎新增一個)
 @msg	Saved to User Defined: {_1}	已儲存至「使用者定義」：{_1}
 @msg	choose a direction to divide in	請選擇分割方向
@@ -2117,6 +2147,12 @@ file-filter	Templates	範本
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必須是選單項目會開啟對話框的指令 (請參閱 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
+@msg	`select` must be true or false	`select` 必須是 true 或 false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必須是整數
+@msg	`{key}` must be a number not below 0	`{key}` 必須是不小於 0 的數字
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` 必須是 [x, y, width, height]：四個有限數字，寬度和高度不能為負
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` 大於 `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	請至少提供下列其中之一：`name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness 必須是 dark|mediumDark|mediumLight|light
 @msg	index must be a number or first, previous, next or last	index 必須是數字，或 first、previous、next 或 last
 @msg	index must be a number or first, previous, next or last, not `{other}`	index 必須是數字，或 first、previous、next 或 last，而非 `{other}`
@@ -2124,7 +2160,7 @@ file-filter	Templates	範本
 @msg	missing `name`	未提供 `name`
 @msg	missing `tool`	未提供 `tool`
 @msg	missing index	未提供 index
-@msg	multiple windows land with M11.5	多個視窗將於 M11.5 推出
+@msg	New Window isn't available yet: a document opens in one window	新增視窗尚無法使用：文件會在一個視窗中開啟
 @msg	no PNG encoder	沒有 PNG 編碼器
 @msg	no document open	沒有開啟的文件
 @msg	no effect applied yet	尚未套用任何效果
@@ -2166,8 +2202,11 @@ file-filter	Templates	範本
 @msg	no swatch library `{l}` (see swatch.library.list)	沒有色票資料庫 `{l}` (請參閱 swatch.library.list)
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
+@msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
 @msg	no files to place	沒有要置入的檔案
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
+@msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
@@ -2191,6 +2230,7 @@ file-filter	Templates	範本
 @msg	unknown preset (one of {_1})	未知的預設集 (應為 {_1} 其中之一)
 @msg	unknown tool or command `{key}`	未知的工具或指令 `{key}`
 @msg	{_1} is already used by {_2}	{_1} 已由 {_2} 使用
+@msg	{_1} is reserved by the system	{_1} 已被系統保留
 @msg	Couldn't copy to the system clipboard: {e}	無法複製到系統剪貼簿：{e}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	nothing selected	未選取任何物件
@@ -2234,7 +2274,9 @@ file-filter	Templates	範本
 @msg	automation filesystem access is not granted: read authority is absent: {path}	未授予自動化檔案系統存取權：沒有讀取權限：{path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自動化檔案系統存取權：沒有寫入權限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒絕自動化路徑：位於讀取根目錄 {root} 之外：{path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	已拒絕自動化路徑：位於所有讀取根目錄 {roots} 之外：{path}
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
 @msg	automation path rejected: a link that leads nowhere: {path}	已拒絕自動化路徑：連結指向不存在的位置：{path}
 @msg	automation path rejected: cannot resolve {path}: {e}	已拒絕自動化路徑：無法解析 {path}：{e}
@@ -2329,9 +2371,12 @@ file-filter	Templates	範本
 @msg	Persistent libraries not found: {files}	找不到持久資料庫：{files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` 不是資料庫面板 (請參閱 window.swatchLibrary)
 @msg	library panel `{given}` isn't open	資料庫面板 `{given}` 未開啟
+@msg	too many changed shortcuts	已變更的快速鍵過多
+@msg	library panel `{given}` isn't missing its library	資料庫面板 `{given}` 的資料庫未遺失
 @msg	too many library panels were opened in this session	本次工作階段開啟的資料庫面板過多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	影像為 {_1} × {_2} 像素，有一邊超過 {LARGE_TRACE_SIDE}：仍會描圖，但速度較慢。使用精確度較低的預設集或較小的影像拷貝，描圖會較快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	影像已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 縮小而來 (最多 {_5} 百萬像素)。
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	「扁平標誌」模式已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 平均縮小而來。
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	只有 http、https 和 mailto URL 會在瀏覽器中開啟，「{url}」不會
@@ -2984,7 +3029,7 @@ file-filter	Templates	範本
 	Package	封裝
 	Package collects a saved document with its linked files and fonts.	封裝會將已儲存的文件連同其連結檔案與字體一併收集。
 	Package created	已建立封裝
-	Packaged {n} file(s) in {folder}{note}	已將 {n} 個檔案封裝於 {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	已將 {n} 個檔案封裝於 {folder}{note}
 	Packaged {n} file(s){note}	已封裝 {n} 個檔案{note}
 	Package…	封裝…
 	Page	頁面
@@ -3048,7 +3093,7 @@ file-filter	Templates	範本
 	Performance	效能
 diagnostics	render	繪製
 diagnostics	ui	介面
-	Performance & Storage	效能與儲存空間
+	Plug-ins & Scratch Disks	增效模組 & 暫存磁碟
 	Permissions	權限
 	Permissions password:	權限密碼：
 	Perspective	透視
@@ -3840,6 +3885,7 @@ font-script	Japanese	漢字
 	Outlines	外框
 	Outlines with Source Image	外框（含來源影像）
 	Source Image	來源影像
+	Press and hold to view the source image	按住以檢視來源影像
 	Image Trace View	影像描圖檢視
 	Snap Options	靠齊選項
 	Snap to Glyph	靠齊字符
@@ -3862,6 +3908,7 @@ font-script	Japanese	漢字
 	Space Before Paragraph	段前間距
 	Spaces	空格
 	Spacing Guides	間距參考線
+	Invoke Distance Guides	叫用距離參考線
 	Spacing:	間距：
 	Spanish	西班牙文
 	Specified Distance	指定距離
@@ -3999,7 +4046,6 @@ font-script	Japanese	漢字
 	Show all open documents	顯示所有開啟的文件
 	Symbol Instance	符號範例
 	Symbol Libraries	符號資料庫
-	Symbol Libraries (on the roadmap)	符號資料庫 (已列入路線圖)
 	Symbol Screener Tool	符號濾色器工具
 	Symbol Scruncher Tool	符號緊縮器工具
 	Symbol Shifter Tool	符號移位器工具
@@ -4131,6 +4177,13 @@ font-script	Japanese	漢字
 	Transparent Background	透明背景
 	Transverse (the page a quarter turn on the paper)	橫向轉置 (頁面在紙張上轉四分之一圈)
 	Trap…	補漏白…
+	Trap	補漏白
+	Height/Width	高度/寬度
+	Tint Reduction	色調減淡
+	Traps with Process Color	使用印刷色補漏白
+	Reverse Traps	反向補漏白
+	Precision	精確度
+	Remove Redundant Points	移除多餘的點
 	Trim	剪裁
 	Trim mark weight:	剪裁標記寬度：
 	Trim marks	剪裁標記
@@ -4371,7 +4424,7 @@ font-script	Japanese	漢字
 	Zoom Tool	縮放工具
 	Zoom with Mouse Wheel	使用滑鼠滾輪縮放
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
-	{count} file(s) in {folder}{note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
+	{count} file(s) in {folder} {note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
 	{count} linked file(s) not found	找不到 {count} 個連結檔案
 	fonts not copied: {fonts}	未複製的字體：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	自儲存此文件後，有 {count} 個連結影像已變更。要顯示新版本嗎？
@@ -4927,6 +4980,10 @@ lighting	Light	光源
 	Halftone Pattern	半色調圖樣
 	Torn Edges…	撕裂邊緣…
 	Torn Edges	撕裂邊緣
+	Conté Crayon…	孔特蠟筆…
+	Conté Crayon	孔特蠟筆
+	Foreground Level	前景層級
+	Background Level	背景層級
 	Pattern Type	圖樣類型
 	Dot	網點
 # User Interface › Color Scheme
@@ -4964,8 +5021,13 @@ lighting	Light	光源
 	Persistent	持久
 	Locate Library…	尋找資料庫…
 	Library Panel Options	資料庫面板選項
+	Snapping	靠齊
+	Snap to Tangent	靠齊切線
+	Snap to Perpendicular	靠齊垂線
+@msg	unknown snap option `{key}` (use {options})	未知的靠齊選項 `{key}`（可用：{options}）
 	Gap Length:	間隙長度：
 	Artboard {n} of {total}	工作區域 {n} / {total}
+	File {n} of {total}	檔案 {n} / {total}
 	Encoding and writing the file…	正在編碼並寫入檔案…
 @plural	{n} more export waiting|{n} more exports waiting	另有 {n} 個匯出等待中
 	Continue in Background	在背景繼續
@@ -4982,6 +5044,14 @@ lighting	Light	光源
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
 	Minimum	最小值
 	Justification	對齊設定
+	Add filters from the list above	從上方清單新增濾鏡
+	Add to Stack	加入堆疊
+	Applied Filters	已套用的濾鏡
+	Categories	類別
+	Choose a filter	選擇濾鏡
+	Effect Gallery	效果庫
+	Filters	濾鏡
+	Select artwork to apply effects	選取要套用效果的圖稿
 # Select by Color (select.color)
 	Select by Color	依顏色選取
 @msg	missing integer `{key}`	未提供整數 `{key}`
@@ -4990,6 +5060,8 @@ lighting	Light	光源
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
+@msg	id {value} is a layer, not an object	id {value} 是圖層，不是物件
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層
 	Move Anchor Point	移動錨點
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文件 {n} 個工作區域中的 1 個：檔案重新開啟時只有一個。開啟「保留編輯功能」可全部保留。
 	Chalk & Charcoal…	粉筆和炭筆…
@@ -5012,6 +5084,7 @@ lighting	Light	光源
 	Water Paper	水彩畫紙
 	Ruby…	注音…
 	Ruby	注音
+	Geometric Guides	幾何參考線
 	Ease In	緩入
 	Ease Out	緩出
 	Ease In Out	緩入緩出
@@ -5026,3 +5099,94 @@ lighting	Light	光源
 	Lock All Except Selected	鎖定所選以外的全部
 	Lock All	全部鎖定
 	Unlock Selected	解除鎖定所選
+	Effect Gallery…	效果庫…
+	Effect Gallery Dialog	效果庫對話框
+	Arc Segment Tool Options	弧段工具選項
+	Base Along:	基線方向:
+	Closed	封閉
+	Concave	凹
+	Convex	凸
+	Fill Arc	填色弧形
+	Length X-Axis:	X 軸長度:
+	Length Y-Axis:	Y 軸長度:
+	Slope:	斜率:
+axis	X Axis	X 軸
+axis	Y Axis	Y 軸
+@msg	Packaged {n} file(s) in {folder}	已將 {n} 個檔案封裝到 {folder}
+@msg	Packaged {n} file(s) {note}	已封裝 {n} 個檔案 {note}
+@msg	Packaged {n} file(s)	已封裝 {n} 個檔案
+	Packaged {n} file(s)	已封裝 {n} 個檔案
+	Packaged {n} file(s) in {folder}	已將 {n} 個檔案封裝到 {folder}
+	Packaged {n} file(s) {note}	已封裝 {n} 個檔案 {note}
+	{count} file(s) in {folder}. Show the package folder?	{folder} 中有 {count} 個檔案。要顯示封裝資料夾嗎？
+	Clockwise	順時針
+	Dither	仿色
+	Fine noise hides banding in the gradient fill	細微雜色可隱藏漸層填色中的色帶
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` 適用於漸層填色 (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
+@msg	`dither` must be true or false	`dither` 必須是 true 或 false
+	Perceptual	感知
+@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	要安裝需要大量運算預算的「{name}」嗎？
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次執行最多可能需要 {minutes} 分鐘，並可完成其他增效模組所允許工作量的 {times} 倍。它會在背景執行，您可以隨時取消。
+	It may take minutes, so it runs in the background, where you can cancel it.	這可能需要數分鐘，因此會在背景執行，您可以在執行時取消。
+	The plug-in is computing…	增效模組正在運算…
+	Inspect Plug-in	檢查增效模組
+	Cancel Plug-in Run	取消執行增效模組
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文件或增效模組在此期間已變更：請重新執行
+@msg	Running “{name}”…	正在執行「{name}」…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+# Actions panel: action sets (#3712).
+	New Set…	新增組…
+	New Set	新增組
+	Set Options…	組選項…
+	Set Options	組選項
+	Create New Set	建立新組
+	Stop Global Edit	停止整體編輯
+	Global Edit Options	整體編輯選項
+	Match	符合
+	On Artboards	在工作區域上
+	All Artboards	所有工作區域
+	Include Objects On Canvas	包含畫布上的物件
+	Result(s): {count}	結果：{count}
+@msg	select one object	請選取一個物件
+@msg	Global Edit works on paths, compound paths and symbol instances	整體編輯適用於路徑、複合路徑和符號實體
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
+	Add to Symbols	新增至符號
+	Basic Shapes	基本形狀
+	Open Symbol Library	開啟符號資料庫
+	Save Symbol Library	儲存符號資料庫
+	Save Symbol Library…	儲存符號資料庫…
+	Save Symbols…	儲存符號…
+	Selected Symbols Only	僅限選取的符號
+	Symbol Libraries Menu	符號資料庫選單
+	Symbol Library	符號資料庫
+	User Symbol Library 1	使用者符號資料庫 1
+	User Symbol Library 2	使用者符號資料庫 2
+	User Symbol Library 3	使用者符號資料庫 3
+	User Symbol Library 4	使用者符號資料庫 4
+	User Symbol Library 5	使用者符號資料庫 5
+	User Symbol Library 6	使用者符號資料庫 6
+	User Symbol Library 7	使用者符號資料庫 7
+	User Symbol Library 8	使用者符號資料庫 8
+	User Symbol Library 9	使用者符號資料庫 9
+	User Symbol Library 10	使用者符號資料庫 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	`{_1}` 中沒有可置入的符號
+@msg	missing `library` (see symbol.libraries)	未提供 `library`（請參閱 symbol.libraries）
+@msg	no symbol `{n}`	沒有符號 `{n}`
+@msg	no symbol `{n}` in `{_1}`	`{_1}` 中沒有符號 `{n}`
+@msg	no symbol library `{key}` (see symbol.libraries)	沒有符號資料庫 `{key}`（請參閱 symbol.libraries）
+@msg	the document has no symbols to save	文件中沒有可儲存的符號
+@msg	Trap: select two or more objects filled with solid colours	補漏白：請選取兩個或更多以實色填色的物件
+@msg	Trap: no edges of different colours meet among the selected objects	補漏白：所選物件中沒有不同顏色相接的邊緣
+@msg	thickness must be from 0.01 to 5000 pt	thickness 必須介於 0.01 到 5000 pt 之間
+@msg	heightWidth must be from 1 to 1000 %	heightWidth 必須介於 1 到 1000 % 之間
+@msg	tintReduction must be from 0 to 100 %	tintReduction 必須介於 0 到 100 % 之間
+	Rectangular Grid Tool Options	矩形格線工具選項
+	Polar Grid Tool Options	極座標格點工具選項
+	Fill Line	填色線段

@@ -138,3 +138,45 @@ fn schemas_list_the_options() {
         assert_eq!(v["result"]["isError"], false, "{tool}: {v}");
     }
 }
+
+/// A paint the engine refuses (a fill or stroke it can't read, a swatch the document lacks) fails
+/// the whole call: no object, no undo step, nothing in the SVG (#3545).
+#[test]
+fn a_bad_paint_draws_nothing() {
+    let mut h = headless();
+    let (before, undo, svg) =
+        (objects(&h), h.session.doc().unwrap().history.undo.len(), vectorcraft_svg::export(&h.session.doc().unwrap().doc, &Default::default()));
+    for bad in [
+        json!({"stroke": "currentColor"}),
+        json!({"fill": "currentColor"}),
+        json!({"fill": "#550505", "stroke": "not-a-colour"}),
+        json!({"fill": {"swatch": "No Such Swatch"}}),
+        json!({"stroke": "#000000", "strokeWidth": "thick"}),
+    ] {
+        for (tool, base) in
+            [("draw_path", json!({"d": "M0 0 L10 10"})), ("draw_shape", json!({"shape": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10}))]
+        {
+            let mut args = base.clone();
+            for (k, v) in bad.as_object().unwrap() {
+                args[k] = v.clone();
+            }
+            let r = call_tool(&mut h, tool, &args);
+            assert!(r.is_error, "{tool} {args} must fail");
+            let st = h.session.doc().unwrap();
+            assert_eq!(objects(&h), before, "{tool} {args} drew something");
+            assert_eq!(st.history.undo.len(), undo, "{tool} {args} left an undo step");
+            assert_eq!(vectorcraft_svg::export(&st.doc, &Default::default()), svg, "{tool} {args} changed the SVG");
+        }
+    }
+    // A good call is one undo step, named as the drawing command names its own.
+    for (tool, args, label) in [
+        ("draw_path", json!({"d": "M0 0 L10 10", "stroke": "#c19a4b", "strokeWidth": 2, "opacity": 50}), "Pen"),
+        ("draw_shape", json!({"shape": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10, "fill": "#000000", "stroke": "none"}), "Rectangle"),
+    ] {
+        let undo = h.session.doc().unwrap().history.undo.len();
+        draw(&mut h, tool, args);
+        let history = &h.session.doc().unwrap().history.undo;
+        assert_eq!(history.len(), undo + 1, "{tool}");
+        assert_eq!(history.last().unwrap().label, label);
+    }
+}

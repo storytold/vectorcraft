@@ -37,6 +37,194 @@ fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
     (app, log)
 }
 
+/// Two distinct export regions: 60×40 red and 32×24 blue, with no antialiased edges at the sample.
+fn two_artboards(dir: &std::path::Path) -> VectorcraftApp {
+    let (mut app, _) = app(dir, false);
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    app.run("artboard.new", json!({"x": 100, "y": 0, "width": 32, "height": 24})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 0, "width": 32, "height": 24})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app
+}
+
+#[test]
+fn opens_on_the_artboard_tools_active_artboard_and_exports_it() {
+    let mut outputs = Vec::new();
+    for remembered in [false, true] {
+        let dir = vectorcraft_testkit::temp_dir(if remembered { "sfw-active-remembered" } else { "sfw-active-default" });
+        let mut app = two_artboards(&dir);
+        if remembered {
+            app.run("webExport.settings", json!({"artboard": 0, "quality": 70})).unwrap();
+        }
+        app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+        app.run("tool.setOption", json!({"key": "active", "value": 1})).unwrap();
+        assert_eq!(app.view().unwrap().artboard, 1);
+        app.run("file.saveForWeb", json!({})).unwrap();
+        let initial = app.ui.dialog.as_ref().unwrap().fields["artboard"].clone();
+        set(&mut app, "format", json!("png24"));
+        frame(&mut app);
+        let result = confirm(&mut app).unwrap();
+        let image = image::open(result["path"].as_str().unwrap()).unwrap().to_rgba8();
+        outputs.push((remembered, initial, image.dimensions(), image.get_pixel(8, 8).0));
+    }
+    assert_eq!(outputs, [(false, json!(1), (32, 24), [0, 0, 255, 255]), (true, json!(1), (32, 24), [0, 0, 255, 255]),]);
+}
+
+#[test]
+fn opens_on_the_active_artboard_with_the_selection_tool_and_exports_it() {
+    for (active, size, color) in [(1, (32, 24), [0, 0, 255, 255]), (0, (60, 40), [255, 0, 0, 255])] {
+        let dir = vectorcraft_testkit::temp_dir(&format!("sfw-selection-active-{active}"));
+        let mut app = two_artboards(&dir);
+        app.run("webExport.settings", json!({"artboard": 1 - active, "format": "png24", "quality": 73})).unwrap();
+        let saved = app.session.last_web_settings().to_json();
+        app.run("tool.select", json!({"tool": "selection"})).unwrap();
+        app.run("view.goToArtboard", json!({"index": active})).unwrap();
+        assert_eq!(app.session.tool_id(), "selection");
+        assert_eq!(app.view().unwrap().artboard, active);
+        app.run("file.saveForWeb", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["artboard"], json!(active));
+        assert_eq!(app.session.last_web_settings().to_json(), saved, "opening does not overwrite the remembered settings");
+        frame(&mut app);
+        let result = confirm(&mut app).unwrap();
+        let image = image::open(result["path"].as_str().unwrap()).unwrap().to_rgba8();
+        assert_eq!(image.dimensions(), size);
+        assert_eq!(image.get_pixel(8, 8).0, color);
+    }
+}
+
+#[test]
+fn explicit_artboard_changes_update_the_preview_and_saved_pixels() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-explicit-artboard");
+    let mut app = two_artboards(&dir);
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    app.run("tool.setOption", json!({"key": "active", "value": 1})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    for (index, size, color) in [(0, [60, 40], [255, 0, 0, 255]), (1, [32, 24], [0, 0, 255, 255])] {
+        set(&mut app, "artboard", json!(index));
+        let mut out = ctx.run_ui(Default::default(), |ui| show(&mut app, ui.ctx()));
+        let previews: Vec<_> = out
+            .textures_delta
+            .set
+            .values()
+            .flatten()
+            .filter(|delta| delta.image.size() == size)
+            .map(|delta| {
+                let egui::ImageData::Color(image) = &delta.image;
+                image.pixels.iter().flat_map(|p| p.to_srgba_unmultiplied()).collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(previews.len(), 2, "original and optimized, artboard {index}");
+        assert!(previews.iter().all(|p| p.as_chunks::<4>().0.iter().all(|pixel| *pixel == color)));
+        out.textures_delta.clear();
+        // Save through the same dialog while keeping the egui context (and its cache) alive.
+        let result = confirm(&mut app).unwrap();
+        let image = image::open(result["path"].as_str().unwrap()).unwrap().to_rgba8();
+        assert_eq!(image.dimensions(), (size[0] as u32, size[1] as u32));
+        assert!(previews.iter().all(|p| *p == image.as_raw().as_slice()));
+        if index == 0 {
+            app.run("file.saveForWeb", json!({})).unwrap();
+        }
+    }
+}
+
+#[test]
+fn choosing_the_second_artboard_in_the_dropdown_exports_its_pixels() {
+    use egui_kittest::kittest::{By, Queryable};
+    let dir = vectorcraft_testkit::temp_dir("sfw-dropdown-artboard");
+    let mut app = two_artboards(&dir);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 1200.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    h.get(By::new().role(egui::accesskit::Role::ComboBox).value("Artboard 1")).click();
+    h.run();
+    h.get_by_label("Artboard 2").click();
+    h.run();
+    assert_eq!(h.state().ui.dialog.as_ref().unwrap().fields["artboard"], json!(1));
+    let result = confirm(h.state_mut()).unwrap();
+    let image = image::open(result["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!(image.dimensions(), (32, 24));
+    assert_eq!(image.get_pixel(8, 8).0, [0, 0, 255, 255]);
+}
+
+#[test]
+fn opening_uses_the_active_artboard_in_a_multiselection_and_preserves_other_settings() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-settings-artboard");
+    let mut app = two_artboards(&dir);
+    app.run("webExport.settings", json!({"preset": "JPEG, quality 50", "artboard": 0, "quality": 73, "width": 96, "metadata": "all"})).unwrap();
+    let saved = app.session.last_web_settings().to_json();
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    app.run("tool.setOption", json!({"key": "selected", "value": [1, 0]})).unwrap();
+    assert_eq!(app.view().unwrap().artboard, 1);
+    assert_eq!(crate::panels::artboards::picked(&app, 2), [0, 1]);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let fields = &app.ui.dialog.as_ref().unwrap().fields;
+    let mut expected = saved.clone();
+    expected["artboard"] = json!(1);
+    for (key, value) in expected.as_object().unwrap() {
+        assert_eq!(&fields[key], value, "{key}");
+    }
+    assert_eq!(app.session.last_web_settings().to_json(), saved, "opening does not overwrite the remembered settings");
+    app.ui.dialog = None;
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    assert_eq!(app.view().unwrap().artboard, 1);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (key, value) in expected.as_object().unwrap() {
+        assert_eq!(&app.ui.dialog.as_ref().unwrap().fields[key], value, "Selection tool keeps {key}");
+    }
+    assert_eq!(app.session.last_web_settings().to_json(), saved, "opening still does not overwrite the remembered settings");
+}
+
+#[test]
+fn a_remembered_artboard_missing_from_another_document_falls_back_to_its_first() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-other-document");
+    let mut app = two_artboards(&dir);
+    app.run("webExport.settings", json!({"artboard": 1, "format": "png24"})).unwrap();
+    app.run("file.new", json!({"width": 20, "height": 12})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 12})).unwrap();
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["artboard"], json!(0));
+    frame(&mut app);
+    let result = confirm(&mut app).unwrap();
+    let image = image::open(result["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!(image.dimensions(), (20, 12));
+    assert_eq!(image.get_pixel(8, 8).0, [0, 255, 0, 255]);
+}
+
+#[test]
+fn explicit_command_artboards_override_the_ui_active_artboard() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-api-artboard");
+    let mut app = two_artboards(&dir);
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    for (active, explicit, size, color) in [(0, 1, (32, 24), [0, 0, 255, 255]), (1, 0, (60, 40), [255, 0, 0, 255])] {
+        app.run("tool.setOption", json!({"key": "active", "value": active})).unwrap();
+        assert_eq!(app.view().unwrap().artboard, active);
+        for command in ["file.saveForWeb", "document.exportForWeb"] {
+            let path = dir.join("explicit.png").to_string_lossy().replace('\\', "/");
+            app.run(command, json!({"format": "png24", "artboard": explicit, "path": path})).unwrap();
+            let image = image::open(&path).unwrap().to_rgba8();
+            assert_eq!(image.dimensions(), size, "{command}: UI active {active}, explicit {explicit}");
+            assert_eq!(image.get_pixel(8, 8).0, color);
+            assert!(app.ui.dialog.is_none());
+        }
+    }
+}
+
 #[test]
 fn every_view_and_format_draws() {
     let dir = vectorcraft_testkit::temp_dir("sfw-views");

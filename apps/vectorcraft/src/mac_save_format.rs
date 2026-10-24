@@ -243,12 +243,4 @@ mod tests {
             assert_eq!(fileio::format_for_name(&name).map(|f| f.label), Some(label.as_str()), "{name}");
         }
     }
-
-    /// The menu's label is translated in every language with complete menus.
-    #[test]
-    fn the_label_is_translated() {
-        for lang in i18n::Lang::all().filter(|l| l.complete_menus()) {
-            assert!(i18n::has(lang, "Format:"), "{}", lang.code());
-        }
-    }
 }

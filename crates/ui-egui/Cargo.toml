@@ -9,14 +9,19 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 workspace = true
 
 [features]
-default = ["bundled-fonts"]
+default = ["bundled-fonts", "interface-fonts"]
 # The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`. Off, for
 # an embedder that supplies every document font at run time (`vectorcraft_text::FontDb::add_font`);
-# the interface's own faces are separate copies in theme.rs and stay either way.
+# the interface's own faces are `interface-fonts`.
 bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
+# The interface's own faces (theme.rs: Inter, Source Sans 3, JetBrains Mono, about 2 MB). Off, the
+# panels and dialogs draw in egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓);
+# `theme::install_fonts` binds their families either way.
+interface-fonts = []
 
 [dependencies]
 craft-ui = { workspace = true }
+craft-keymap = { workspace = true, features = ["egui"] }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

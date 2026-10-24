@@ -395,6 +395,112 @@ fn compact(mut labels: Vec<u16>, palette: Vec<[u8; 3]>) -> Quantized {
     Quantized { labels, palette: out }
 }
 
+/// `q` with the semi-transparent pixels along the cut edge of `img` given the color beside them,
+/// and the colors that leaves unused dropped.
+///
+/// A traced pixel with an alpha of 128 to 254 and a pixel above, below, left or right of it with an
+/// alpha under 128 is on the cut edge. When its color is the color of a fully opaque pixel within
+/// two pixels of it, or a darker shade of that color (see [`edge_blend_of`]), it is that color
+/// blended with the transparent background, and its own color can lie nearest to an unrelated
+/// palette color, which would trace as a sliver of that color along the edge. Such a pixel takes
+/// the color that most of those opaque pixels have, and of colors that tie, the one nearest to its
+/// own color. Only the pixels it reaches through pixels of an alpha of 128 or more, going up, down,
+/// left or right, count, so that art across a transparent gap is left out. It keeps its own color
+/// when one of the fully opaque pixels it reaches has it, or when its color is a blend of none of
+/// them, as with a thin semi-transparent outline of another color. Pixels outside the image do not
+/// count as transparent. With `gray` (Grayscale), a pixel's color is its gray (see [`luma`]).
+pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) {
+    let (w, h) = (img.width as usize, img.height as usize);
+    let px = img.rgba.as_chunks::<4>().0;
+    if q.labels.len() != w * h || px.len() != w * h {
+        return;
+    }
+    let alpha = |j: usize| px.get(j).map_or(0, |p| p[3]);
+    let color = |p: &[u8; 4]| if gray { [luma(*p); 3] } else { [p[0], p[1], p[2]] };
+    let mut changed = false;
+    let mut stack: Vec<(usize, usize)> = Vec::new();
+    for i in 0..w * h {
+        let mine = q.labels[i];
+        if mine == TRANSPARENT || !(128..=254).contains(&alpha(i)) {
+            continue;
+        }
+        let (x, y) = (i % w, i / w);
+        let cut =
+            (x > 0 && alpha(i - 1) < 128) || (x + 1 < w && alpha(i + 1) < 128) || (y > 0 && alpha(i - w) < 128) || (y + 1 < h && alpha(i + w) < 128);
+        if !cut {
+            continue;
+        }
+        let Some(p) = px.get(i) else { continue };
+        let own = oklab(color(p).map(f64::from));
+        // The colors of the fully opaque pixels within two pixels that it reaches and is a blend
+        // of, and how many have each.
+        let (x0, y0, x1, y1) = (x.saturating_sub(2), y.saturating_sub(2), (x + 2).min(w - 1), (y + 2).min(h - 1));
+        let mut reached = [[false; 5]; 5];
+        let mut near: Vec<(u16, usize)> = Vec::new();
+        let mut keep = false;
+        stack.clear();
+        stack.push((x, y));
+        if let Some(r) = reached.get_mut(y - y0).and_then(|row| row.get_mut(x - x0)) {
+            *r = true;
+        }
+        while let Some((cx, cy)) = stack.pop() {
+            let j = cy * w + cx;
+            let l = q.labels[j];
+            if alpha(j) == 255 && l != TRANSPARENT {
+                keep |= l == mine;
+                if px.get(j).is_some_and(|b| edge_blend_of(own, color(b), p[3])) {
+                    match near.iter_mut().find(|n| n.0 == l) {
+                        Some(n) => n.1 += 1,
+                        None => near.push((l, 1)),
+                    }
+                }
+            }
+            for (nx, ny) in [(cx.wrapping_sub(1), cy), (cx + 1, cy), (cx, cy.wrapping_sub(1)), (cx, cy + 1)] {
+                if nx < x0 || nx > x1 || ny < y0 || ny > y1 || alpha(ny * w + nx) < 128 {
+                    continue;
+                }
+                let Some(r) = reached.get_mut(ny - y0).and_then(|row| row.get_mut(nx - x0)) else { continue };
+                if !*r {
+                    *r = true;
+                    stack.push((nx, ny));
+                }
+            }
+        }
+        if keep || near.is_empty() {
+            continue;
+        }
+        let most = near.iter().map(|n| n.1).max().unwrap_or(0);
+        let tied: Vec<(u16, [f64; 3])> =
+            near.iter().filter(|n| n.1 == most).filter_map(|n| Some((n.0, oklab(q.palette.get(n.0 as usize)?.map(f64::from))))).collect();
+        let tied_labs: Vec<[f64; 3]> = tied.iter().map(|t| t.1).collect();
+        let Some(&(to, _)) = tied.get(nearest_lab(&tied_labs, own)) else { continue };
+        q.labels[i] = to;
+        changed = true;
+    }
+    if changed {
+        *q = compact(std::mem::take(&mut q.labels), std::mem::take(&mut q.palette));
+    }
+}
+
+/// How far (Oklab × 100) the color of a pixel on a cut edge may lie from the color beside it, or
+/// from a darker shade of that color, and still count as a blend of it with the transparent
+/// background.
+const EDGE_BLEND: f64 = 8.0;
+
+/// Whether `own` (Oklab), the color of a pixel with an alpha of `alpha`, is `beside` (sRGB) blended
+/// with the transparent background: whether it lies within [`EDGE_BLEND`] of the line in Oklab from
+/// `beside` to `beside` with each channel scaled by `alpha` / 510.
+fn edge_blend_of(own: [f64; 3], beside: [u8; 3], alpha: u8) -> bool {
+    let to = oklab(beside.map(f64::from));
+    let k = f64::from(alpha) / 510.0;
+    let from = oklab(beside.map(|v| f64::from(v) * k));
+    let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+    let len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let t = if len2 > 0.0 { ((0..3).map(|c| (own[c] - from[c]) * d[c]).sum::<f64>() / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let off2: f64 = (0..3).map(|c| (own[c] - from[c] - t * d[c]).powi(2)).sum();
+    off2 <= EDGE_BLEND * EDGE_BLEND
+}
+
 #[derive(Clone, Copy, Default)]
 struct Bin {
     n: u64,

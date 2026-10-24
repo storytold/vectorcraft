@@ -86,13 +86,25 @@ pub fn hash_bytes(bytes: &[u8]) -> String {
 }
 
 /// [`hash_bytes`] of everything `r` reads, read 64 KB at a time.
-pub fn hash_reader(mut r: impl std::io::Read) -> std::io::Result<String> {
+pub fn hash_reader(r: impl std::io::Read) -> std::io::Result<String> {
+    hash_reader_within(r, u64::MAX).map(|(hash, _)| hash)
+}
+
+/// [`hash_reader`] of at most `max` bytes, and how many it read: `max` + 1 when there were more (the
+/// hash then covers only the first `max` + 1). A file that grew since its size was looked at isn't
+/// read to its new end.
+pub fn hash_reader_within(r: impl std::io::Read, max: u64) -> std::io::Result<(String, u64)> {
+    use std::io::Read;
+    let mut r = r.take(max.saturating_add(1));
     let mut buf = vec![0; 1 << 16];
-    let mut h = FNV_BASIS;
+    let (mut h, mut read) = (FNV_BASIS, 0u64);
     loop {
         match r.read(&mut buf) {
-            Ok(0) => return Ok(format!("img{h:016x}")),
-            Ok(n) => h = fnv1a(h, buf.get(..n).unwrap_or_default()),
+            Ok(0) => return Ok((format!("img{h:016x}"), read)),
+            Ok(n) => {
+                h = fnv1a(h, buf.get(..n).unwrap_or_default());
+                read = read.saturating_add(n as u64);
+            }
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
             Err(e) => return Err(e),
         }
@@ -377,6 +389,7 @@ mod tests {
                     xf: Affine::IDENTITY,
                     link,
                     placement: Default::default(),
+                    pixels: None,
                 })),
             ),
         )
@@ -404,6 +417,9 @@ mod tests {
         let bytes: Vec<u8> = (0..200_000u32).map(|i| (i * 7 % 251) as u8).collect();
         assert_eq!(hash_reader(&bytes[..]).unwrap(), hash_bytes(&bytes));
         assert_eq!((hash_reader(&b""[..]).unwrap(), hash_bytes(b"")), ("imgcbf29ce484222325".to_string(), "imgcbf29ce484222325".to_string()));
+        // Within a size: the whole file at that size; one byte past it when it is longer.
+        assert_eq!(hash_reader_within(&bytes[..], bytes.len() as u64).unwrap(), (hash_bytes(&bytes), bytes.len() as u64));
+        assert_eq!(hash_reader_within(&bytes[..], 3).unwrap().1, 4);
     }
 
     #[test]

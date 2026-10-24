@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -227,15 +227,64 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<()> {
                 next.moved = None;
             }
         }
-        if next != old || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next) {
+        // A new document colour mode (Document Color Mode) redraws every dimension in it.
+        if next != old
+            || before.color_mode != doc.color_mode
+            || before.node(id).and_then(|n| n.extras().dimension.as_deref()).is_some_and(|d| d != &next)
+        {
             replace(doc, id, next)?;
         }
     }
     Ok(())
 }
 
-fn paint(c: [u8; 3]) -> Paint {
-    Paint::solid(Color::rgb8(c[0], c[1], c[2]))
+/// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved
+/// before dimensions followed the colour mode have RGB dimensions in CMYK documents. A dimension
+/// that can't be redrawn keeps the art it has.
+pub(crate) fn conform(doc: &mut Document) {
+    if !doc.dimensions {
+        return;
+    }
+    let mode = doc.color_mode;
+    let off_mode = |c: &Color| match mode {
+        ColorMode::Rgb => matches!(c, Color::Cmyk { .. }),
+        ColorMode::Cmyk => matches!(c, Color::Rgb { .. }),
+    };
+    let mut stale = Vec::new();
+    doc.walk(|n| {
+        if let Some(d) = &n.extras().dimension {
+            let mut off = false;
+            n.walk(&mut |c| {
+                off |= [c.appearance.fill_paint(), c.appearance.stroke_paint()].iter().filter_map(|p| p.color()).any(|c| off_mode(&c));
+                // The label's characters carry their own fill.
+                if let NodeKind::Text(t) = &c.kind {
+                    off |= t.runs.iter().filter_map(|r| r.style.fill.color()).any(|c| off_mode(&c));
+                }
+            });
+            if off {
+                stale.push((n.id, (**d).clone()));
+            }
+        }
+    });
+    for (id, d) in stale {
+        // An error leaves this dimension as it was; the others are still redrawn.
+        let _ = replace(doc, id, d);
+    }
+}
+
+/// Option colour `c` as a paint in the document's colour model: in a CMYK document black is K
+/// only (a rich four-ink black would print a black dimension in every plate) and other colours
+/// convert through the active colour settings.
+fn paint(c: [u8; 3], mode: ColorMode) -> Paint {
+    let rgb = Color::rgb8(c[0], c[1], c[2]);
+    Paint::solid(match mode {
+        ColorMode::Rgb => rgb,
+        ColorMode::Cmyk if c == [0, 0, 0] => Color::cmyk(0.0, 0.0, 0.0, 1.0),
+        ColorMode::Cmyk => {
+            let cms = vectorcraft_color::cms::active();
+            cms.convert(&rgb, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent)
+        }
+    })
 }
 fn line(a: Point, b: Point) -> BezPath {
     let mut p = BezPath::new();
@@ -244,10 +293,10 @@ fn line(a: Point, b: Point) -> BezPath {
     p
 }
 
-fn appearance(o: &DimensionOptions, ext: bool, arrows: bool) -> Appearance {
+fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) -> Appearance {
     let (color, width, kind) =
         if ext { (o.extension_color, o.extension_weight, o.extension_type) } else { (o.line_color, o.line_weight, o.line_type) };
-    let mut a = Appearance::basic(Paint::None, paint(color), width);
+    let mut a = Appearance::basic(Paint::None, paint(color, mode), width);
     if let Some(st) = a.stroke_mut() {
         st.dash = match kind {
             LineType::Dashed => Some(Dash { pattern: vec![width * 5.0, width * 3.0], ..Default::default() }),
@@ -285,6 +334,7 @@ fn along(o: &DimensionOptions) -> f64 {
 fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<Node>>> {
     d.validate().map_err(error)?;
     let o = &d.options;
+    let mode = doc.color_mode;
     let label = d.label().map_err(error)?;
     let mut paths: Vec<(BezPath, Appearance)> = Vec::new();
     let mut angle = 0.0;
@@ -301,11 +351,11 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         for i in 1..=64 {
             arc.line_to(on(i as f64 / 64.0));
         }
-        paths.push((arc, appearance(o, false, true)));
+        paths.push((arc, appearance(o, mode, false, true)));
         if !o.hide_extensions {
             for p in [d.a, d.b] {
                 let dir = (p - d.vertex) / (p - d.vertex).hypot();
-                paths.push((line(d.vertex + dir * o.extension_offset, d.vertex + dir * (r + o.extension_length)), appearance(o, true, false)));
+                paths.push((line(d.vertex + dir * o.extension_offset, d.vertex + dir * (r + o.extension_length)), appearance(o, mode, true, false)));
             }
         }
         let dir = Vec2::from_angle(start + sweep * along(o));
@@ -333,7 +383,7 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         };
         if d.mode == DimensionMode::Linear && !o.hide_extensions {
             for (p, q) in [(d.a, a), (d.b, b)] {
-                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, true, false)));
+                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, mode, true, false)));
             }
         }
         angle = u.atan2();
@@ -342,13 +392,13 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         }
         let shift = o.text_offset + o.font_size * 0.5;
         text_at = a.lerp(b, along(o)) + outward * if away { shift } else { -shift };
-        paths.push((line(a, b), appearance(o, false, true)));
+        paths.push((line(a, b), appearance(o, mode, false, true)));
     }
     let style = CharStyle {
         font_family: o.font_family.clone(),
         font_style: o.font_style.clone(),
         size: o.font_size,
-        fill: paint(o.text_color),
+        fill: paint(o.text_color, mode),
         ..Default::default()
     };
     let mut text = TextObject::point(Point::ZERO, &label, style);
@@ -366,7 +416,7 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
     }
     let id = old.get(children.len()).copied().unwrap_or_else(|| doc.alloc_id());
     let mut node = Node::new(id, NodeKind::Text(Box::new(text)));
-    node.appearance = Appearance::basic(paint(o.text_color), Paint::None, 0.0).into();
+    node.appearance = Appearance::basic(paint(o.text_color, mode), Paint::None, 0.0).into();
     children.push(Arc::new(node));
     Ok(children)
 }

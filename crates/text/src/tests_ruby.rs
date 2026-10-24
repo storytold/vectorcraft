@@ -68,6 +68,23 @@ fn horizontal_ruby_sits_above_the_base_and_grows_the_line() {
     assert!(above.y1 <= below.y0 - 1.0, "a gap between ruby and base ink: {} vs {}", above.y1, below.y0);
 }
 
+/// Bullets: a reading over a list paragraph's first characters is centered over those characters,
+/// not over the bullet and the gap before them.
+#[test]
+fn ruby_over_a_list_item_leaves_out_its_bullet() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut t = ruby_text("漢字", 6, "かんじ", 20.0);
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let lay = layout(db(), &t);
+    assert_eq!(lay.markers.len(), 1);
+    let above = ruby_ink(&lay);
+    let base = union_rect(lay.glyphs.iter().filter(|g| g.len > 0)).expect("base ink");
+    let (centre, base_centre) = ((above.x0 + above.x1) * 0.5, (base.x0 + base.x1) * 0.5);
+    assert!((centre - base_centre).abs() < 1.0, "{centre} vs {base_centre}");
+}
+
 #[test]
 fn ruby_below_grows_the_descent() {
     let mut t = ruby_text("漢字", 6, "かんじ", 20.0);

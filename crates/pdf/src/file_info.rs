@@ -234,14 +234,8 @@ fn pdf_date(d: DateTime) -> Option<i64> {
 
 /// Whether `day` is a day of `month` (1 to 12) in `year` (proleptic Gregorian).
 fn in_month(year: i64, month: i64, day: i64) -> bool {
-    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let last = match month {
-        2 if leap => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    };
-    (1..=last).contains(&day)
+    let ymd = i32::try_from(year).ok().zip(u32::try_from(month).ok()).zip(u32::try_from(day).ok());
+    ymd.is_some_and(|((y, m), d)| chrono::NaiveDate::from_ymd_opt(y, m, d).is_some())
 }
 
 /// An XMP date (ISO 16684-1: `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, then optionally `Thh:mm`, `:ss` with
@@ -282,13 +276,16 @@ fn xmp_date(s: &str) -> Option<i64> {
 }
 
 /// `[year, month, day, hour, minute, second]` at a UTC offset of `offset` minutes → Unix seconds
-/// (days-from-civil, proleptic Gregorian: the inverse of [`vectorcraft_doc::metadata::civil`]).
+/// (the inverse of [`vectorcraft_doc::metadata::civil`]). The date has already passed [`in_month`],
+/// so it is a real day; an impossible one reads as the epoch rather than panicking.
 fn unix([year, month, day, hour, minute, second]: [i64; 6], offset: i64) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let doy = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
+    let days = i32::try_from(year)
+        .ok()
+        .zip(u32::try_from(month).ok())
+        .zip(u32::try_from(day).ok())
+        .and_then(|((y, m), d)| chrono::NaiveDate::from_ymd_opt(y, m, d))
+        .zip(chrono::NaiveDate::from_ymd_opt(1970, 1, 1))
+        .map(|(date, epoch)| (date - epoch).num_days())
+        .unwrap_or(0);
     days * 86_400 + hour * 3600 + minute * 60 + second - offset * 60
 }

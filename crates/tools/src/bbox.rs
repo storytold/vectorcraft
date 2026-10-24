@@ -117,10 +117,12 @@ pub fn rotate_for_drag(center: Point, from: Point, to: Point, snap: bool) -> (Af
     (Affine::translate(center.to_vec2()) * Affine::rotate(a) * Affine::translate(-center.to_vec2()), -a.to_degrees())
 }
 
-/// Move constrained to 45° multiples when `shift`.
-pub fn move_delta(from: Point, to: Point, shift: bool) -> Vec2 {
+/// Move constrained to 45° multiples when `shift`, counted from `base` degrees (General ›
+/// Constrain Angle, [`crate::ToolContext::constrain_angle`]): Shift holds a drag to the rotated x
+/// and y axes and their diagonals.
+pub fn move_delta(from: Point, to: Point, shift: bool, base: f64) -> Vec2 {
     let d = to - from;
-    if shift { vectorcraft_geom::constrain_angle(d, 45.0) } else { d }
+    if shift { vectorcraft_geom::constrain_angle_from(d, 45.0, base) } else { d }
 }
 
 #[cfg(test)]

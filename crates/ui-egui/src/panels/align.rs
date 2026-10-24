@@ -223,6 +223,8 @@ fn align_to(app: &VectorcraftApp) -> AlignTo {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
+    let guides = selected_guides(app);
+    let can_align = n + guides >= 1;
     let to = align_to(app);
     // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
     // buttons send it while there is a key object or a key guide (#2143).
@@ -236,12 +238,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         for (i, (icon, tip, axis, v)) in ALIGN.iter().enumerate() {
             if i == 3 {
                 ui.add_space(6.0);
-                if widgets::icon_button_enabled(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, n >= 1, 32.0).clicked() {
+                if widgets::icon_button_enabled(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, can_align, 32.0).clicked() {
                     run_button(app, Button::AlignCenters).ok();
                 }
                 ui.add_space(6.0);
             }
-            if widgets::icon_button_enabled(ui, icon, tl!(tip), false, n >= 1, 32.0).clicked() {
+            if widgets::icon_button_enabled(ui, icon, tl!(tip), false, can_align, 32.0).clicked() {
                 run_button(app, Button::Align(axis, v)).ok();
             }
         }
@@ -881,6 +883,29 @@ mod tests {
         assert_eq!(sent(&app), ("object.distributeSpacing".to_string(), json!("key"), Some(json!(15.0))));
         assert_eq!(lefts(&app), [10.0, 45.0, 115.0], "{}", app.ui.status);
         assert_eq!(app.session.active().unwrap().doc.guides[0].pos, 100.0, "the guide stays put");
+    }
+
+    /// Three vertical ruler guides selected without objects: Align Objects buttons are on, and
+    /// Horizontal Align Left puts every guide on the artboard's left edge (#3463).
+    #[test]
+    fn the_align_buttons_align_guides_selected_alone_to_artboard() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        for pos in [20, 50, 180] {
+            app.run("guide.add", json!({"vertical": true, "pos": pos})).unwrap();
+        }
+        app.run("guide.select", json!({"indexes": [0, 1, 2]})).unwrap();
+        app.ui.align_to = AlignTo::Artboard;
+        let ctx = egui::Context::default();
+        frame_events(&ctx, &mut app, vec![], show);
+        let row = widget_rects(&ctx, egui::vec2(32.0, 32.0));
+        let top = row.iter().map(|r| r.top()).fold(f32::MAX, f32::min);
+        let mut row: Vec<egui::Rect> = row.into_iter().filter(|r| r.top() == top).collect();
+        row.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        assert!(row[0].width() > 0.0, "Horizontal Align Left is enabled");
+        click(&ctx, &mut app, row[0].center(), show);
+        let pos = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>();
+        assert_eq!(pos(&app), [0.0, 0.0, 0.0], "{}", app.ui.status);
     }
 
     /// Three vertical ruler guides selected without objects: the Distribute buttons are on, and

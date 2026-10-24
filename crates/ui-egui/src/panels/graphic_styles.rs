@@ -213,7 +213,7 @@ fn paint_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paints: Paints, g: &Graph
 }
 
 /// Outline thumbnail `r`: in the accent colour when selected (`on`), brighter when hovered.
-fn outline(ui: &Ui, r: Rect, on: bool, hovered: bool) {
+pub(super) fn outline(ui: &Ui, r: Rect, on: bool, hovered: bool) {
     let t = Tokens::get(ui.ctx());
     let color = if on {
         t.accent
@@ -353,6 +353,7 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         PanelDrag::Appearance(id) => (None, Some(*id)),
         PanelDrag::Paint { .. }
         | PanelDrag::Symbol(_)
+        | PanelDrag::LibrarySymbol { .. }
         | PanelDrag::Brush { .. }
         | PanelDrag::LibraryGraphic { .. }
         | PanelDrag::LibraryItem { .. }
@@ -767,7 +768,7 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 
 /// Other Library…: load the library (or document) at `path`, else one picked in an open dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    match library_panel::pick_library_file(app, path)? {
+    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(GraphicStyleLibraries::KIND))? {
         Some(path) => load_library(app, json!({ "path": path })),
         None => Ok(Value::Null),
     }

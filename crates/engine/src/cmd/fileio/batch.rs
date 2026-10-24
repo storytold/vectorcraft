@@ -11,8 +11,8 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     // The active artboard the app passes, for the steps that act on it.
     let artboard = p.get("artboard").and_then(Value::as_u64);
     // What an error rolls back besides the documents: session-level state a step may change
-    // (paint defaults, drawing mode, clipboard, the Untitled-N count).
-    let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter);
+    // (paint defaults, drawing mode, clipboard, the Untitled-N count, a begun undo group).
+    let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
     // A drag or typing still in progress is a step of its own, as before Undo: the batch's steps
     // would otherwise run inside it and take its baseline as theirs (#1697).
     if s.active().is_some() {
@@ -30,7 +30,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         Err(e) => {
             roll_back(s, start, &stash);
             s.active = active;
-            (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter) = saved;
+            (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
             s.pending_paint = None;
             return Err(e);
         }
@@ -99,7 +99,8 @@ fn run_steps(s: &mut Session, label: &str, artboard: Option<u64>, cmds: &mut [Va
 /// ones close, closed or replaced ones (`stash`) come back, and each has its art, selection,
 /// history, file, format and saved state again (#1697: undoing the batch's interaction alone left
 /// a Save As step's new file and an Undo step's history in place). Files the steps wrote stay
-/// written. Lock Guides stays as the steps left it, and while it is on the guides are deselected.
+/// written. Lock Guides, Lock Slices and Hide Slices stay as the steps left them, and the guides
+/// and slices they keep from being selected are deselected.
 fn roll_back(s: &mut Session, start: Vec<DocState>, stash: &[DocState]) {
     let open = std::mem::take(&mut s.docs);
     s.docs = start;
@@ -107,8 +108,6 @@ fn roll_back(s: &mut Session, start: Vec<DocState>, stash: &[DocState]) {
         // Past the newest revision the document reached, so the restored one redraws.
         let newest = open.iter().chain(stash).filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
         st.revision = newest.saturating_add(1);
-        if s.menu.guides_locked {
-            crate::deselect_guides(&st.doc, &mut st.selection);
-        }
+        crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
     }
 }

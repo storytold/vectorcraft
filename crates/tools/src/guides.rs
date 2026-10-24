@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use vectorcraft_doc::hit::{HitOptions, hit_test};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, OrientedBox, Selection};
-use vectorcraft_geom::kurbo::ParamCurveNearest;
-use vectorcraft_geom::{Affine, Line, ParamCurve, PathSeg, Point, Rect, Shape, SubPath, Vec2, constrain_angle_from};
+use vectorcraft_geom::kurbo::{ParamCurveDeriv, ParamCurveNearest};
+use vectorcraft_geom::{Affine, BezPath, Line, ParamCurve, PathSeg, Point, Rect, Shape, SubPath, Vec2, constrain_angle_from};
 use vectorcraft_text::{FontDb, layout as layout_text};
 
 use crate::bbox::Handle;
@@ -89,6 +89,10 @@ pub struct Targets {
     /// it ends, as the end that stays put and the unit direction towards the dragged one
     /// ([`Self::for_anchor_drag`]).
     extensions: Vec<(Point, Vec2)>,
+    /// Snap to Tangent and Snap to Perpendicular: a drawn line from an anchor lands where it
+    /// grazes a curve, or meets a segment square ([`Self::touching`]).
+    tangent: bool,
+    perpendicular: bool,
     /// How the guides these targets produce look.
     style: GuideStyle,
 }
@@ -560,6 +564,11 @@ impl Targets {
         if let Some(q) = self.crossing(p, tol) {
             return (q, self.label(q, "intersect").into_iter().collect());
         }
+        if let Some(f) = from.filter(|f| f.contact)
+            && let Some((q, perpendicular, dir)) = self.touching(f.at, p, tol)
+        {
+            return (q, self.touch_guides(f.at, q, perpendicular, dir, tol));
+        }
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
         }
@@ -600,6 +609,52 @@ impl Targets {
             ov.extend(self.label(out, "align"));
         }
         (out, ov)
+    }
+
+    /// Where a line from `at` through a point near `p` touches a target segment: square to it
+    /// (`perpendicular`, the foot of the perpendicular from `at`) or just grazing a curve
+    /// (`tangent`), within `tol` of `p`. The point, whether it is the perpendicular one, and the
+    /// segment's direction there. Targets gather segments for drawn points and dragged anchors only.
+    fn touching(&self, at: Point, p: Point, tol: f64) -> Option<(Point, bool, Vec2)> {
+        if !(self.tangent || self.perpendicular) || ![at.x, at.y, p.x, p.y, tol].iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let mut best: Option<(f64, Point, bool, Vec2)> = None;
+        // Every segment in reach is tried: their order is the document's, not the distance.
+        for (_, seg) in self.segments.iter().filter(|(b, _)| b.inflate(tol, tol).contains(p)) {
+            let curved = !matches!(seg, PathSeg::Line(_));
+            for (perpendicular, wanted) in [(true, self.perpendicular && !curved), (false, self.tangent && curved)] {
+                if !wanted {
+                    continue;
+                }
+                for t in touch_params(seg, at, perpendicular) {
+                    let (q, d) = (seg.eval(t), seg_direction(seg, t));
+                    let dist = q.distance(p);
+                    if dist <= tol && q.distance(at) > tol && best.is_none_or(|b| dist < b.0) {
+                        best = Some((dist, q, perpendicular, d));
+                    }
+                }
+            }
+        }
+        best.map(|(_, q, perpendicular, d)| (q, perpendicular, d))
+    }
+
+    /// The guides of a point landed where the line from `at` touches a segment at `q` running
+    /// along `dir`: the line itself, a square corner mark for the perpendicular, and the label.
+    fn touch_guides(&self, at: Point, q: Point, perpendicular: bool, dir: Vec2, tol: f64) -> Vec<Overlay> {
+        let mut out: Vec<Overlay> = self.line(at, q).into_iter().collect();
+        let (u, v) = (at - q, dir);
+        if perpendicular && self.style.lines && u.hypot2() > 1e-18 && v.hypot2() > 1e-18 {
+            let (u, v) = (u / u.hypot(), v / v.hypot());
+            let s = tol * 1.5;
+            let mut mark = BezPath::new();
+            mark.move_to(q + u * s);
+            mark.line_to(q + u * s + v * s);
+            mark.line_to(q + v * s);
+            out.push(Overlay::Path { path: mark, color: self.style.color, width: 1.0, dashed: false });
+        }
+        out.extend(self.label(q, if perpendicular { "perpendicular" } else { "tangent" }));
+        out
     }
 
     /// The segment extension nearest `p`, within `tol` of it (and `p` farther than that from the
@@ -1123,6 +1178,71 @@ fn meeting(a: &PathSeg, b: &PathSeg, p: Point) -> Option<Point> {
     None
 }
 
+/// The direction of `seg` at `t` (not normalised; zero in a cusp).
+fn seg_direction(seg: &PathSeg, t: f64) -> Vec2 {
+    match seg {
+        PathSeg::Line(l) => l.p1 - l.p0,
+        PathSeg::Quad(q) => q.deriv().eval(t).to_vec2(),
+        PathSeg::Cubic(c) => c.deriv().eval(t).to_vec2(),
+    }
+}
+
+/// The parameters in (0, 1) where the line from `at` to `seg` is square to it (`perpendicular`)
+/// or grazes it, found by sampling the curve for a change of sign and bisecting.
+fn touch_params(seg: &PathSeg, at: Point, perpendicular: bool) -> Vec<f64> {
+    const STEPS: usize = 24;
+    let f = |t: f64| {
+        let (v, d) = (seg.eval(t) - at, seg_direction(seg, t));
+        if perpendicular { v.dot(d) } else { v.cross(d) }
+    };
+    let mut out = vec![];
+    let mut prev = (0.0, f(0.0));
+    for i in 1..=STEPS {
+        let t = i as f64 / STEPS as f64;
+        let cur = (t, f(t));
+        if prev.1.is_finite() && cur.1.is_finite() && prev.1 * cur.1 < 0.0 {
+            let (mut lo, mut hi) = (prev, cur);
+            for _ in 0..40 {
+                let mid = 0.5 * (lo.0 + hi.0);
+                let m = (mid, f(mid));
+                if lo.1 * m.1 <= 0.0 {
+                    hi = m;
+                } else {
+                    lo = m;
+                }
+            }
+            let t = 0.5 * (lo.0 + hi.0);
+            // A jump through a cusp changes sign without crossing zero: the line must really
+            // run along (or square to) the curve there.
+            let (v, d) = (seg.eval(t) - at, seg_direction(seg, t));
+            let scale = v.hypot() * d.hypot();
+            if scale > 1e-12 && f(t).abs() <= 1e-3 * scale {
+                out.push(t);
+            }
+        }
+        prev = cur;
+    }
+    out
+}
+
+/// Where a press at `p` takes hold of `path` by its outline: the point of the path nearest `p`,
+/// when it is within `reach`, and on a straight segment exactly on its line. A path dragged by a
+/// press on its stroke or beside its edge snaps by that point of the path, so it is the path that
+/// lands on a ruler guide or lines up, not the pressed spot a few pixels beside it (#3701).
+pub(crate) fn hold_on_path(path: &vectorcraft_geom::PathData, p: Point, reach: f64) -> Option<Point> {
+    let (si, seg, _, q, d) = path.nearest(p)?;
+    if d > reach {
+        return None;
+    }
+    let sp = path.subpaths.get(si)?;
+    if !sp.segment_is_line(seg) {
+        return Some(q);
+    }
+    let c = sp.segment(seg);
+    let line = Line::new(c.p0, c.p3);
+    Some(line.eval(line.nearest(p, 0.0).t))
+}
+
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
 pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<Overlay>) {
     snap_with(cx, p, || Targets::collect(cx.doc, exclude, None))
@@ -1148,7 +1268,8 @@ impl PointSnap {
             None
         } else if cx.smart_guides {
             // Snap to Point keeps pulling points onto the ruler guides with Smart Guides on (#812).
-            let t = targets().styled(cx);
+            let mut t = targets().styled(cx);
+            (t.tangent, t.perpendicular) = (cx.snap_tangent, cx.snap_perpendicular);
             Some((if cx.snap_to_point { t.with_rulers(cx) } else { t }, cx.snapping_tolerance))
         } else if cx.snap_to_point {
             Some((targets().for_snap_to_point(cx), cx.snap_tolerance))
@@ -1247,6 +1368,8 @@ pub struct Leave {
     shift: Option<Keep>,
     /// The angles of the construction guides through `at` (none with them off).
     angles: &'static [f64],
+    /// A drawn segment: it may land square to a segment or grazing a curve (a box does not).
+    contact: bool,
 }
 
 impl Leave {
@@ -1257,14 +1380,21 @@ impl Leave {
             at,
             shift: shift.then_some(Keep::Angle { step: 45.0, base: cx.constrain_angle }),
             angles: if cx.smart_guides { cx.construction_angles } else { &[] },
+            contact: true,
         }
+    }
+
+    /// A curved source cannot make a line-to-line perpendicular or line-to-curve tangent contact.
+    pub fn without_contact(mut self) -> Self {
+        self.contact = false;
+        self
     }
 
     /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids, and
     /// Artboard, which passes no Shift): Shift keeps the dragged corner on a diagonal, the box a
     /// square.
     pub fn diagonal(at: Point, shift: bool) -> Self {
-        Self { at, shift: shift.then_some(Keep::Square), angles: &[] }
+        Self { at, shift: shift.then_some(Keep::Square), angles: &[], contact: false }
     }
 
     /// Where Shift puts `p`: none without it.
@@ -1324,7 +1454,7 @@ struct SnapKey {
     revision: (u64, u64),
     exclude: Vec<NodeId>,
     screen: Option<ScreenFrame>,
-    view: [bool; 5],
+    view: [bool; 7],
     snap_to_glyph: bool,
     style: GuideStyle,
     tolerances: [f64; 2],
@@ -1336,7 +1466,7 @@ impl SnapKey {
             revision: cx.revision,
             exclude: exclude.to_vec(),
             screen: cx.screen,
-            view: [cx.smart_guides, cx.snap_to_point, cx.snap_to_pixel, cx.snap_to_grid, cx.guides],
+            view: [cx.smart_guides, cx.snap_to_point, cx.snap_to_pixel, cx.snap_to_grid, cx.guides, cx.snap_tangent, cx.snap_perpendicular],
             snap_to_glyph: cx.snap_to_glyph && cx.alignment_guides,
             style: GuideStyle::of(cx),
             tolerances: [cx.snapping_tolerance, cx.snap_tolerance],
@@ -1442,6 +1572,49 @@ pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
     roots.extend(hit_test(cx.doc, p, HitOptions { tol, skip_guides: false, ..cx.hit_options() }).map(|h| h.leaf));
     let near = Rect::new(p.x - tol, p.y - tol, p.x + tol, p.y + tol);
     Targets::points_near(cx.doc, &roots, near).styled(cx).snap_point(p, tol)
+}
+
+/// Distance Guides (Smart Guides → Invoke Distance Guides): how far the selection's bounds `from`
+/// lie from `to` along each axis, as measured lines ([`Overlay::Distance`]) labelled with their
+/// lengths in the General unit. Along an axis on which the two lie apart, one line spans the gap
+/// between their facing edges; along one on which they overlap, or one holds the other, one line
+/// runs between their left (top) edges and one between their right (bottom) edges. An artboard
+/// (`artboard`) is always measured edge to edge: the selection's distance from its left, right,
+/// top and bottom edges. Each line runs across the middle of where the two overlap on the other
+/// axis, else across the selection's middle, with a dashed line from `to`'s edge out to it when it
+/// passes beside `to`. Lines of no length are left out.
+pub fn distance_guides(cx: &ToolContext, from: Rect, to: Rect, artboard: bool) -> Vec<Overlay> {
+    let finite = |r: &Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite());
+    if !finite(&from) || !finite(&to) {
+        return vec![];
+    }
+    let color = cx.smart_guide_color;
+    let mut out = Vec::new();
+    for x in [true, false] {
+        let ((f0, f1), (t0, t1)) = (span(&from, x), span(&to, x));
+        let ((g0, g1), (u0, u1)) = (span(&from, !x), span(&to, !x));
+        let (lo, hi) = (g0.max(u0), g1.min(u1));
+        let across = if lo <= hi { (lo + hi) / 2.0 } else { (g0 + g1) / 2.0 };
+        let pt = |u: f64, c: f64| if x { Point::new(u, c) } else { Point::new(c, u) };
+        // Each measured line: from the selection's edge to `to`'s.
+        let lines: Vec<(f64, f64)> = match (artboard, f1 <= t0, t1 <= f0) {
+            (false, true, _) => vec![(f1, t0)],
+            (false, _, true) => vec![(f0, t1)],
+            _ => vec![(f0, t0), (f1, t1)],
+        };
+        for (fu, tu) in lines {
+            let length = (tu - fu).abs();
+            if length <= 1e-9 {
+                continue;
+            }
+            out.push(Overlay::Distance { a: pt(fu, across), b: pt(tu, across), text: cx.len(length), color });
+            let on_edge = across.clamp(u0, u1);
+            if on_edge != across {
+                out.push(Overlay::Line { a: pt(tu, on_edge), b: pt(tu, across), color, dashed: true });
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1866,6 +2039,104 @@ mod tests {
         // An anchor in reach wins, and a path alone is still "path".
         assert_eq!(labels(&t.snap_from(Point::new(146.0, 91.0), None, 4.0).1), ["anchor"]);
         assert_eq!(labels(&t.snap_from(Point::new(170.0, 201.0), None, 4.0).1), ["path"]);
+    }
+
+    #[test]
+    fn perpendicular_snapping_rejects_a_curved_target() {
+        let (mut d, _) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(
+            Some(layer),
+            1,
+            vectorcraft_doc::Node::path(
+                id,
+                vectorcraft_geom::shapes::ellipse(Rect::new(450.0, 450.0, 550.0, 550.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            ),
+        )
+        .unwrap();
+        let targets = Targets { tangent: false, perpendicular: true, ..Targets::for_drawing(&d, &[], None, false) };
+        assert!(targets.touching(Point::new(400.0, 500.0), Point::new(450.0, 500.0), 4.0).is_none());
+        assert!(targets.touching(Point::new(300.0, 160.0), Point::new(200.0, 160.0), 4.0).is_some());
+    }
+
+    /// A line drawn from an anchor lands square to a segment (the foot of its perpendicular) and
+    /// just grazing a curve, with a guide and a label; the options switch each off, and the
+    /// result is the same each time and survives non-finite input.
+    #[test]
+    fn drawn_lines_land_perpendicular_to_segments_and_tangent_to_curves() {
+        use vectorcraft_doc::{Appearance, Node};
+        use vectorcraft_geom::shapes;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(l), 1, Node::path(id, shapes::ellipse(Rect::new(450.0, 450.0, 550.0, 550.0)), Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let snap = |c: &ToolContext, from: Point, to: Point| {
+            let leave = Leave::segment(c, from, false);
+            PointSnap::new(c, || Targets::for_drawing(&d, &[], None, false)).snap_from(c, to, Some(&leave))
+        };
+        // From (300, 160) the rect's right side (x = 200) is square at (200, 160).
+        let (q, ov) = snap(&c, Point::new(300.0, 160.0), Point::new(202.0, 163.0));
+        assert!((q - Point::new(200.0, 160.0)).hypot() < 1e-6, "{q:?}");
+        assert_eq!(labels(&ov), ["perpendicular"]);
+        assert_eq!(lines(&ov), vec![(Point::new(300.0, 160.0), q)]);
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "the square corner mark: {ov:?}");
+        assert_eq!(snap(&c, Point::new(300.0, 160.0), Point::new(202.0, 163.0)).0, q, "deterministic");
+        // Off, the point only lands on the path, where the pointer is.
+        let curved = Leave::segment(&c, Point::new(300.0, 160.0), false).without_contact();
+        let (_, ov) = PointSnap::new(&c, || Targets::for_drawing(&d, &[], None, false)).snap_from(&c, Point::new(202.0, 163.0), Some(&curved));
+        assert!(!labels(&ov).contains(&"perpendicular"));
+        let off = ToolContext { snap_perpendicular: false, ..cx(&d, &s, &p) };
+        let (q, ov) = snap(&off, Point::new(300.0, 160.0), Point::new(202.0, 163.0));
+        assert_eq!((q, labels(&ov)), (Point::new(200.0, 163.0), vec!["path"]));
+        // The circle (centre (500, 500), radius 50) seen from (400, 500): the tangent points are 60°
+        // round from the way back, at (475, 456.7) and (475, 543.3).
+        let (q, ov) = snap(&c, Point::new(400.0, 500.0), Point::new(477.0, 459.0));
+        assert_eq!(labels(&ov), ["tangent"]);
+        assert!((q - Point::new(475.0, 500.0 - 1875f64.sqrt())).hypot() < 0.1, "{q:?}");
+        assert!(((q - Point::new(400.0, 500.0)).dot(q - Point::new(500.0, 500.0))).abs() < 20.0, "{q:?}");
+        let none = ToolContext { snap_tangent: false, ..cx(&d, &s, &p) };
+        assert!(!labels(&snap(&none, Point::new(400.0, 500.0), Point::new(477.0, 459.0)).1).contains(&"tangent"));
+        // Out of reach, or with nothing finite to go on: left alone, no panic.
+        assert_eq!(snap(&c, Point::new(300.0, 160.0), Point::new(250.0, 175.0)).0, Point::new(250.0, 175.0));
+        let t = Targets::for_drawing(&d, &[], None, false);
+        let t = Targets { tangent: true, perpendicular: true, ..t };
+        for bad in [f64::NAN, f64::INFINITY] {
+            assert!(t.touching(Point::new(bad, 1.0), Point::new(200.0, 160.0), 4.0).is_none());
+            assert!(t.touching(Point::new(300.0, 160.0), Point::new(bad, 1.0), 4.0).is_none());
+            assert!(t.touching(Point::new(300.0, 160.0), Point::new(200.0, 160.0), bad).is_none());
+        }
+    }
+
+    /// A box dragged from a corner (Rectangle, Ellipse, ...) never snaps square to a segment, and
+    /// a busy spot does not hide the contact: every segment in reach is tried.
+    #[test]
+    fn contact_snaps_only_for_segments_and_in_busy_spots() {
+        use vectorcraft_geom::kurbo::Line;
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let snap = |t: &Targets, leave: &Leave| t.snap_from(Point::new(202.0, 163.0), Some(leave), 4.0);
+        let t = Targets { tangent: true, perpendicular: true, ..Targets::for_drawing(&d, &[], None, false) };
+        let (_, ov) = snap(&t, &Leave::segment(&c, Point::new(300.0, 160.0), false));
+        assert_eq!(labels(&ov), ["perpendicular"]);
+        let (_, ov) = snap(&t, &Leave::diagonal(Point::new(300.0, 160.0), false));
+        assert!(!labels(&ov).contains(&"perpendicular"), "{ov:?}");
+        // 70 short segments near the pointer, none square to the leave point, then the rect's side.
+        let mut busy = t;
+        let mut segments: Vec<(Rect, PathSeg)> = (0..70)
+            .map(|i| {
+                let y = 160.0 + f64::from(i) * 0.01;
+                (Rect::new(199.0, y, 205.0, y + 0.001), PathSeg::Line(Line::new((199.0, y), (205.0, y + 0.001))))
+            })
+            .collect();
+        segments.extend(busy.segments.iter().cloned());
+        busy.segments = segments;
+        let (_, ov) = snap(&busy, &Leave::segment(&c, Point::new(300.0, 160.0), false));
+        assert_eq!(labels(&ov), ["perpendicular"]);
     }
 
     /// The angle sets of Preferences › Smart Guides › Construction Guides.

@@ -153,9 +153,12 @@ fn group_open_in_another_document() -> (Session, String, String, String) {
     run(&mut s, "select.set", json!({"ids": [t]}));
     let char_style = run(&mut s, "library.add", json!({"library": lib, "kind": "charStyle"}))["name"].as_str().unwrap().to_string();
     let para_style = run(&mut s, "library.add", json!({"library": lib, "kind": "paraStyle"}))["name"].as_str().unwrap().to_string();
+    // The second document exists before the group begins, so no group opens in it.
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut s, "document.activate", json!({"index": 0}));
     run(&mut s, "edit.undoGroup.begin", json!({}));
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
-    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut s, "document.activate", json!({"index": 1}));
     let u = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
     run(&mut s, "select.set", json!({"ids": [u]}));
     (s, lib, char_style, para_style)

@@ -372,8 +372,10 @@ pub(crate) fn count_changed(d: &vectorcraft_doc::Document, before: &vectorcraft_
 }
 
 /// Whether an edit aimed at `item` changes a stroke: the `stroke` param, else the kind of the
-/// targeted item (on the first target object), else `default`.
-pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bool) -> Result<bool> {
+/// targeted item (on the first target object), else `default`. A `stroke` other than true, false or
+/// null is an error of command `cmd`.
+pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bool, cmd: &str) -> Result<bool> {
+    check_switches(p, &["stroke"], cmd)?;
     if let Some(b) = p.get("stroke").and_then(Value::as_bool) {
         return Ok(b);
     }
@@ -486,7 +488,7 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
     if source == target {
         return Err(bad(C, "`source` and `target` are the same object"));
     }
-    let copy = bool_or(p, "copy", false);
+    let copy = switch_or(p, "copy", false, C)?;
     // When both objects come out as they were, the document and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
     super::overprint::edit_counted(s, if copy { "Copy Appearance" } else { "Move Appearance" }, |d| {
@@ -549,6 +551,8 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = index_param(p, "index", "appearance.setItem")?;
     super::paint::check_keep_model(p, "appearance.setItem")?;
+    check_numbers(p, &["weight", "opacity"], "appearance.setItem")?;
+    check_switches(p, &["visible"], "appearance.setItem")?;
     let paint = paint_from(s, p)?;
     let ids = appearance_targets(s, p)?;
     if ids.is_empty() {
@@ -762,7 +766,7 @@ fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.copyFrom";
     let clicked = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
-    let (reverse, append) = (bool_or(p, "reverse", false), bool_or(p, "append", false));
+    let (reverse, append) = (switch_or(p, "reverse", false, C)?, switch_or(p, "append", false, C)?);
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
     let range = if !reverse && !append && p.get("ids").is_none() { super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b) } else { None };
     let selected = match ids_param(p, "ids") {

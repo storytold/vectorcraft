@@ -48,8 +48,10 @@ fn image_doc(img: image::RgbaImage, frame: Rect) -> Option<Document> {
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
     let xf = Affine::scale_non_uniform(frame.width() / f64::from(w), frame.height() / f64::from(h));
-    let mut n =
-        Node::new(doc.alloc_id(), NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })));
+    let mut n = Node::new(
+        doc.alloc_id(),
+        NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
+    );
     n.name = Some("Preview".into());
     let layer = doc.layers.first().map(|l| l.id)?;
     doc.insert(Some(layer), 0, n).ok()?;

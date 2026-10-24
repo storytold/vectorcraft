@@ -1,6 +1,8 @@
 //! Preferences: `prefs.get` / `prefs.set` / `prefs.reset` / `prefs.list`.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::NodeKind;
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use super::*;
 use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
@@ -461,11 +463,11 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     }
 }
 
-/// With Alt held, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors turns those into
-/// a crosshair too.
+/// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors
+/// turns those into a crosshair too.
 #[test]
 fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
-    use vectorcraft_tools::{Cursor, Mods};
+    use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind};
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
     let at = vectorcraft_geom::Point::new(300.0, 300.0);
@@ -474,7 +476,10 @@ fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
         s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
         for (tool, c) in [("pencil", Cursor::PencilClose), ("paintbrush", Cursor::PaintbrushClose)] {
             s.select_tool(tool, ViewInfo::default()).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 250.0), ViewInfo::default()).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), ViewInfo::default()).unwrap();
             assert_eq!(s.cursor(at, alt, ViewInfo::default()), if precise { Cursor::Crosshair } else { c }, "{tool}, precise {precise}");
+            s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), ViewInfo::default()).unwrap();
         }
     }
 }
@@ -612,6 +617,30 @@ fn spacing_guides_space_a_dragged_square_like_its_row() {
     assert!(marks >= 2, "both gaps marked");
     set_pref(&mut s, "spacingGuides", json!(false));
     assert_eq!(drag(&mut s), (161.0, 0), "off: where it was dragged");
+}
+
+/// Smart Guides › Invoke Distance Guides: with a square selected, Alt held over another square to
+/// its right shows the gap between them in the document's General unit; with the preference or
+/// View › Smart Guides off, nothing.
+#[test]
+fn invoke_distance_guides_measures_the_selection_to_the_object_under_alt() {
+    use vectorcraft_tools::{Mods, Overlay, PointerKind::Move};
+    let mut s = new_doc();
+    let a = square(&mut s, 100.0, 100.0);
+    square(&mut s, 250.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let shown = |s: &mut Session, v: ViewInfo| {
+        s.pointer(&PointerEvent::new(Move, 275.0, 125.0).with_mods(Mods { alt: true, ..Mods::default() }), v).unwrap();
+        s.overlays(v).into_iter().filter_map(|o| if let Overlay::Distance { text, .. } = o { Some(text) } else { None }).collect::<Vec<_>>()
+    };
+    assert_eq!(shown(&mut s, v), ["100.00 pt"], "the 100 pt gap; the tops and bottoms are level");
+    s.execute("document.setUnits", &json!({"units": "Millimeters"})).unwrap();
+    assert_eq!(shown(&mut s, v), ["35.28 mm"]);
+    assert!(shown(&mut s, ViewInfo { smart_guides: false, ..v }).is_empty(), "View › Smart Guides off");
+    set_pref(&mut s, "distanceGuides", json!(false));
+    assert!(shown(&mut s, v).is_empty(), "Invoke Distance Guides off");
 }
 
 /// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
@@ -1058,6 +1087,38 @@ fn type_increments_step_the_type() {
     assert_eq!((style_at(&s, id, 0).size, style_at(&s, id, 6).size), (22.0, 25.0));
 }
 
+/// Auto leading steps from the leading its paragraph's Justification › Auto Leading sets, which
+/// is what the layout shows; a run spanning paragraphs with different Auto Leading is split.
+/// Fill with Placeholder Text counts lines at that leading too.
+#[test]
+fn auto_leading_steps_and_fills_from_the_paragraph_auto_leading() {
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "One\nTwo", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setFormat", &json!({"ids": [id.0], "autoLeading": 200, "start": 5, "end": 5})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let lead = |s: &Session, byte| style_at(s, id, byte).leading.unwrap();
+    assert!((lead(&s, 0) - (20.0 * 1.2 + 2.0)).abs() < 1e-9, "default Auto Leading 120%");
+    assert!((lead(&s, 3) - (20.0 * 1.2 + 2.0)).abs() < 1e-9, "the line break is the first paragraph's");
+    assert!((lead(&s, 5) - (20.0 * 2.0 + 2.0)).abs() < 1e-9, "Auto Leading 200%");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((style_at(&s, id, 0).leading, style_at(&s, id, 5).leading), (None, None), "one undo step");
+
+    let area = |s: &mut Session, x: f64| {
+        let r = s.execute("text.create", &json!({"x": x, "y": 10, "text": "x", "size": 10, "area": {"width": 100, "height": 200}})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let (normal, airy) = (area(&mut s, 10.0), area(&mut s, 200.0));
+    s.execute("text.setFormat", &json!({"ids": [airy.0], "autoLeading": 240})).unwrap();
+    s.execute("type.fillPlaceholder", &json!({"ids": [normal.0, airy.0]})).unwrap();
+    let len = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).map(|n| &n.kind) {
+        Some(vectorcraft_doc::NodeKind::Text(t)) => t.plain_text().len(),
+        _ => panic!("not text"),
+    };
+    let (n, a) = (len(&s, normal), len(&s, airy));
+    assert!(a * 3 < n * 2 && a * 3 > n, "half as many lines at twice the leading: {a} vs {n}");
+}
+
 /// Cmd/Ctrl+Alt+Shift+. and , step the font size by five times the Size/Leading increment, on
 /// the selected type objects and on the Type tool's selected text.
 #[test]
@@ -1393,6 +1454,141 @@ fn highlight_alternate_glyphs_preference_is_off_by_default() {
     assert!(!s.prefs.highlight_alternate_glyphs);
 }
 
+/// Preferences › Performance › Real-time Drawing and Editing (#394): off, the document isn't
+/// previewed while dragging but the pending shape still shows as a canvas overlay until commit.
+#[test]
+fn real_time_drawing_off_skips_tool_previews_until_commit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let paths = |s: &Session| {
+        s.doc()
+            .unwrap()
+            .doc
+            .layers
+            .first()
+            .and_then(|l| l.children())
+            .map_or(0, |c| c.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).count())
+    };
+    let rev = s.doc().unwrap().revision;
+    assert_eq!(paths(&s), 0);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 150.0), v).unwrap();
+    assert_eq!(s.doc().unwrap().revision, rev, "no preview steps");
+    assert_eq!(paths(&s), 0, "the rectangle isn't in the document yet");
+    assert!(s.overlays(v).iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Path { .. })), "the deferred rectangle shows as an outline");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 150.0), v).unwrap();
+    assert!(s.doc().unwrap().revision > rev, "commit applies the shape");
+    assert_eq!(paths(&s), 1);
+    set_pref(&mut s, "realTimeDrawing", json!(true));
+    let rev = s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 120.0), v).unwrap();
+    assert!(s.doc().unwrap().revision > rev, "on again: previews run while dragging");
+}
+
+/// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
+#[test]
+fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let paths = |s: &Session| {
+        s.doc()
+            .unwrap()
+            .doc
+            .layers
+            .first()
+            .and_then(|l| l.children())
+            .map_or(0, |c| c.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).count())
+    };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 150.0), v).unwrap();
+    assert_eq!(paths(&s), 0);
+    set_pref(&mut s, "realTimeDrawing", json!(true));
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 150.0), v).unwrap();
+    assert_eq!(paths(&s), 1, "the deferred rectangle is committed");
+}
+
+/// Repeated overlay redraws with Real-time Drawing off reuse the cached deferred feedback.
+#[test]
+fn deferred_preview_overlays_are_cached_across_redraws() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 150.0), v).unwrap();
+    let rev = s.doc().unwrap().revision;
+    let count = |s: &mut Session| s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Path { .. })).count();
+    let first = count(&mut s);
+    assert!(first > 0);
+    assert_eq!(s.doc().unwrap().revision, rev);
+    let second = count(&mut s);
+    assert_eq!(first, second);
+    assert_eq!(s.doc().unwrap().revision, rev, "the preview command is not run again");
+}
+
+/// A deferred commit that fails its preview cancels the interaction instead of leaving it open.
+#[test]
+fn deferred_commit_preview_failure_cancels_interaction() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.begin_interaction("Bad").unwrap();
+    s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("no.such.command".into(), json!({})));
+    s.apply_actions(vec![vectorcraft_tools::Action::Commit]).unwrap();
+    assert!(s.doc().unwrap().interaction.is_none());
+}
+
+/// A deferred commit applies preview warnings to the UI, as live previews do.
+#[test]
+fn deferred_commit_forwards_preview_warnings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Hi"})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect["id"], text["id"]]})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.begin_interaction("Bloat").unwrap();
+    let p = json!({"tool": "bloat", "points": [[290.0, 200.0]], "width": 200.0, "height": 200.0});
+    s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
+    let ui = s.apply_actions(vec![vectorcraft_tools::Action::Commit]).unwrap();
+    assert!(ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type"))), "{ui:?}");
+}
+
+/// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
+/// not replace full-resolution pixels already in the document.
+#[test]
+fn low_res_proxy_eps_preference_does_not_swap_full_resolution_pixels() {
+    use crate::tests_links::{Folder, RED, place, png, save, write};
+    let dir = Folder::new("eps-proxy-pref");
+    let pic = dir.file("photo.eps");
+    write(&pic, &png(600, 300, RED));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(!s.prefs.low_res_proxy_eps);
+    let id = place(&mut s, &pic);
+    let doc_path = dir.file("doc.vectorcraft");
+    save(&mut s, &doc_path);
+    s.execute("links.update", &json!({})).unwrap();
+    let key = {
+        let st = s.doc().unwrap();
+        let NodeKind::Image(im) = &st.doc.node(id).unwrap().kind else { panic!("image") };
+        im.key.clone()
+    };
+    assert!(!s.doc().unwrap().doc.images[&key].is_proxy());
+    set_pref(&mut s, "lowResProxyEps", json!(true));
+    assert!(!s.doc().unwrap().doc.images[&key].is_proxy(), "full pixels stay in the document");
+    set_pref(&mut s, "lowResProxyEps", json!(false));
+    assert!(!s.prefs.low_res_proxy_eps);
+}
+
 /// Preferences › Hyphenation › Exceptions (#394): `prefs.set` pushes the list into the hyphenator
 /// and bumps open documents so type reflows. Parsing of the list is covered in `vectorcraft-text`.
 #[test]
@@ -1462,5 +1658,67 @@ fn snap_to_point_cues_anchors_and_lands_pen_clicks_on_them() {
         assert_eq!((p.x, p.y), first, "{v:?}");
         s.execute("edit.undo", &json!({})).unwrap();
         s.execute("select.none", &json!({})).unwrap();
+    }
+}
+
+/// A millimetre document with a rectangle (100, 100)–(300, 250) stroked 1 pt and a vertical
+/// ruler guide at no whole number of millimetres or points (62.31 mm): the rectangle and the
+/// guide's x.
+fn stroked_rect_and_guide() -> (Session, NodeId, f64) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600, "units": "Millimeters"})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+    s.execute("stroke.set", &json!({"weight": 1})).unwrap();
+    let g = 62.31 / 25.4 * 72.0;
+    s.execute("guide.add", &json!({"vertical": true, "pos": g})).unwrap();
+    (s, id, g)
+}
+
+/// #3701: at 3,891%, the Selection tool pressed on a rectangle's 1 pt stroke inside its left edge,
+/// or on its fill 3 px inside it, and dragged until the edge is 1 px from a ruler guide lands the
+/// edge on the guide exactly, with "align". The pressed spot used to be what snapped, so the edge
+/// stopped that far beside the guide however far one zoomed in.
+#[test]
+fn a_move_held_by_a_paths_stroke_lands_the_path_on_a_ruler_guide() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let (mut s, id, g) = stroked_rect_and_guide();
+    let v = ViewInfo { zoom: 38.91, ..ViewInfo::default() };
+    s.select_tool("selection", v).unwrap();
+    // 0.3 pt (12 px) into the stroke, and 3 px into the fill.
+    for x in [100.3, 100.0 + 3.0 / v.zoom] {
+        s.execute("select.none", &json!({})).unwrap();
+        let to = x + g + 1.0 / v.zoom - 100.0;
+        gesture(&mut s, v, &[(Down, x, 175.0), (Drag, (x + to) / 2.0, 175.0), (Drag, to, 175.0)]);
+        let align = s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
+        gesture(&mut s, v, &[(Up, to, 175.0)]);
+        let edge = top_left(&s, id).0;
+        assert!((edge - g).abs() < 1e-9 && align, "pressed at {x}: the edge is {} pt off the guide (align: {align})", edge - g);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// #3701: at 28,757%, Direct Selection pressed 1.5 px beside a rectangle's straight left side and
+/// dragged until the side is 1 px from a ruler guide lands both its anchors on the guide; so does
+/// the same press and drag on the rectangle selected whole, which moves it.
+#[test]
+fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let (mut s, id, g) = stroked_rect_and_guide();
+    let v = ViewInfo { zoom: 287.57, ..ViewInfo::default() };
+    s.select_tool("directSelection", v).unwrap();
+    for whole in [false, true] {
+        s.execute("select.set", &json!({"ids": if whole { vec![id.0] } else { vec![] }})).unwrap();
+        let x = 100.0 + 1.5 / v.zoom;
+        let to = x + g + 1.0 / v.zoom - 100.0;
+        gesture(&mut s, v, &[(Down, x, 175.0), (Drag, (x + to) / 2.0, 175.0), (Drag, to, 175.0), (Up, to, 175.0)]);
+        let mut xs: Vec<f64> = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p.x).collect();
+        xs.sort_by(f64::total_cmp);
+        assert!(
+            xs[..2].iter().all(|x| (x - g).abs() < 1e-9),
+            "whole: {whole}, the side's anchors are {:?} pt off the guide",
+            xs[..2].iter().map(|x| x - g).collect::<Vec<_>>()
+        );
+        s.execute("edit.undo", &json!({})).unwrap();
     }
 }

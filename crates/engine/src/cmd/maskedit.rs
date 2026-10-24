@@ -140,6 +140,8 @@ pub(crate) fn begin(d: &mut Document, sel: &mut Selection, id: NodeId) -> Result
         let copy = d.reid(part);
         ids.push(d.insert(Some(layer), usize::MAX, copy)?);
     }
+    // Copied type whose layout caches `reid` dropped has them again.
+    super::typecmd::refresh_bounds_of(d, &ids);
     d.mask_edit = Some(MaskEdit { object: id, layer });
     sel.set(ids);
     Ok(layer)

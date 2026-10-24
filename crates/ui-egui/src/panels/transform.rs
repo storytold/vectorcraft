@@ -308,8 +308,8 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Sides:"));
-        if let Some(s) = widgets::plain_field(ui, (id, "sides"), f64::from(*sides), "", 0, fw) {
-            set = Some(("sides", json!(s.round().max(3.0) as u64)));
+        if let Some(s) = widgets::range_field(ui, (id, "sides"), f64::from(*sides), 3.0..=f64::INFINITY, "", 0, fw) {
+            set = Some(("sides", json!(s as u64)));
         }
         ui.end_row();
         widgets::dim_label(ui, tl!("Angle:"));
@@ -503,6 +503,24 @@ mod tests {
         assert!(!live(&app).polygon_sides_equal());
         app.run("object.setLiveShape", json!({"makeSidesEqual": true})).unwrap();
         assert!(live(&app).polygon_sides_equal());
+    }
+
+    /// #3451: a live ellipse shows pie start/end angles and Invert Pie in the Transform panel and
+    /// the Properties panel's Transform section; typed angles update the shape.
+    #[test]
+    fn an_ellipse_shows_its_pie_properties() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+            let shown = texts(&mut app, draw);
+            for t in ["Ellipse Properties:", "Pie Start Angle:", "0°", "Pie End Angle:", "360°", "Invert Pie"] {
+                assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+            }
+        }
+        app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
     }
 
     #[test]

@@ -108,3 +108,39 @@ fn a_chosen_artboard_s_svg_keeps_an_object_whose_shadow_reaches_it() {
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 20, "y": 0, "blur": 0}})).unwrap();
     assert_eq!(paths(&mut s), 1, "its shadow reaches 10 pt onto the artboard");
 }
+
+/// #3544: an SVG of one artboard on its own (an `artboard` or `range`, Export for Screens, an asset)
+/// has the artboard's (or asset's) name as `<title>`; Save's SVG and Export for Screens' Full
+/// Document keep the document's.
+#[test]
+fn an_svg_of_one_artboard_is_titled_after_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"name": "Icons", "width": 24, "height": 24, "artboards": 2})).unwrap();
+    for (index, name) in [(0, "arrow-left"), (1, "arrow-right")] {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let square = s.execute("shape.rectangle", &json!({"x": 4, "y": 4, "width": 16, "height": 16})).unwrap()["id"].clone();
+    let title = |svg: &str| svg.lines().find_map(|l| l.trim().strip_prefix("<title>")?.strip_suffix("</title>")).map(str::to_string);
+    let serialize = |s: &mut Session, p: serde_json::Value| s.execute("document.serialize", &p).unwrap()["text"].as_str().unwrap().to_string();
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg", "artboard": 1}))).as_deref(), Some("arrow-right"));
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg", "artboard": 0}))).as_deref(), Some("arrow-left"));
+    assert_eq!(title(&serialize(&mut s, json!({"format": "svg"}))).as_deref(), Some("Icons"), "Save's SVG");
+    let all = s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "all"})).unwrap();
+    let titles: Vec<_> = all["files"].as_array().unwrap().iter().map(|f| title(f["text"].as_str().unwrap())).collect();
+    assert_eq!(titles, [Some("arrow-left".into()), Some("arrow-right".into())]);
+    // Export for Screens: each artboard, an asset, and the Full Document.
+    let screens = |s: &mut Session, p: serde_json::Value| -> Vec<Option<String>> {
+        let r = s.execute("document.exportForScreens", &p).unwrap();
+        r["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| title(&String::from_utf8(vectorcraft_format::base64_decode(f["dataBase64"].as_str().unwrap()).unwrap()).unwrap()))
+            .collect()
+    };
+    let svg = json!([{"format": "svg"}]);
+    assert_eq!(screens(&mut s, json!({"formats": svg})), [Some("arrow-left".into()), Some("arrow-right".into())]);
+    let asset = s.execute("assets.add", &json!({"ids": [square], "name": "Square"})).unwrap()["assets"][0].clone();
+    assert_eq!(screens(&mut s, json!({"assets": [asset], "formats": svg})), [Some("Square".into())]);
+    assert_eq!(screens(&mut s, json!({"fullDocument": true, "formats": svg})), [Some("Icons".into())]);
+}

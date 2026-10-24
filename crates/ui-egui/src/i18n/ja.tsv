@@ -11,13 +11,15 @@
 	Smoothness	滑らかさ
 #
 # Coverage: the whole interface — every menu string and every `tl!` literal (`complete_menus`,
-# tested) — and the status and error messages (`@msg` rows at the end, `COMPLETE_MESSAGES`, tested).
+# `untranslated_report` lists gaps) — and the status and error messages (`@msg` rows at the end, `COMPLETE_MESSAGES`, `untranslated_report` lists gaps).
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 	About VectorCraft	VectorCraft について
 	All Scripts	すべての文字
 	Anchors:	アンカー:
 	Any Kind	すべての種類
+	Font Technology	フォントテクノロジー
+font-technology	Variable	バリアブル
 	Ascender	アセンダ
 	Baseline	ベースライン
 	Bottom-to-Bottom Leading	欧文ベースライン基準の行送り
@@ -75,6 +77,11 @@
 	Medium Light	やや明るい
 	Light	明るい
 	Quit VectorCraft	VectorCraft を終了
+# Artwork drag between document tabs.
+	Drop Artwork	アートワークをドロップ
+@msg	{key} must be [x, y] with finite coordinates	{key} は有限の座標を持つ [x, y] である必要があります
+@msg	ids must contain 1–10000 object ids	ids には 1～10000 個のオブジェクト ID を指定してください
+
 	File	ファイル
 	New…	新規…
 	New Without Dialog	ダイアログなしで新規
@@ -305,6 +312,15 @@
 	Glyphs	字形
 	Insert Special Character	特殊文字を挿入
 	Bullet	箇条書き記号
+	Bullets	箇条書き
+	Bullets and Numbering	箇条書きと番号付け
+	Apply Bullets	箇条書きを適用
+	Numbered List	番号付きリスト
+	Apply Numbers	番号付けを適用
+	Filled Dot	黒丸
+	Dash	ダッシュ
+	Hollow Circle	白丸
+	Filled Square	黒四角
 	Copyright Symbol	著作権記号
 	Ellipsis	省略記号
 	Paragraph Symbol	段落記号
@@ -931,6 +947,11 @@
 	Average	平均
 	BLANK DOCUMENT PRESETS	空白のドキュメントプリセット
 	Background Color:	背景色:
+	Show Center Mark	中心マークを表示
+	Show Cross Hairs	十字線を表示
+	Show Video Safe Areas	ビデオセーフエリアを表示
+	Video Ruler Pixel Aspect Ratio:	ビデオ定規のピクセル縦横比:
+	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
 	Background Contents:	背景のカラー:
 	Background:	背景:
@@ -1494,6 +1515,7 @@
 	Keep selected	選択を保持
 	Merge only with selection	選択範囲とのみ結合
 	Consider Open Filled Paths as Closed	塗りのある開いたパスを閉じたパスとみなす
+	In Merge Mode, Clicking Stroke Splits the Path	結合モードで線をクリックするとパスを分割
 	Pick Color From:	色の取得元:
 	Artwork	アートワーク
 	Cursor Swatch Preview	ポインター横のスウォッチプレビュー
@@ -1501,6 +1523,7 @@
 	Freeform	自由形状
 	Straight Line	直線
 	Highlight:	強調表示:
+	Stroke When Editable	編集可能な線
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索
@@ -1628,7 +1651,7 @@
 	Clear History	ヒストリーを消去
 	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	データセットを適用
 	Area Type	エリア内文字
 	Bloat	膨張
@@ -2337,7 +2360,7 @@
 	Performance	パフォーマンス
 diagnostics	render	描画
 diagnostics	ui	UI
-	Performance & Storage	パフォーマンスとストレージ
+	Plug-ins & Scratch Disks	プラグイン & 仮想記憶ディスク
 	Permissions	権限
 	Permissions password:	権限パスワード:
 	Perspective Grid Options	遠近グリッドオプション
@@ -2868,6 +2891,7 @@ mark-style	Japanese	日本式
 	Outlines	アウトライン
 	Outlines with Source Image	アウトライン（元画像付き）
 	Source Image	元画像
+	Press and hold to view the source image	押している間、元画像を表示
 	Image Trace View	画像トレースの表示
 	Snap Options	スナップオプション
 	Snap to Unit	単位にスナップ
@@ -2882,6 +2906,7 @@ mark-style	Japanese	日本式
 	Space Before Paragraph	段落前のアキ
 	Spaces	スペース
 	Spacing Guides	間隔ガイド
+	Invoke Distance Guides	距離ガイドを呼び出す
 	Spacing:	間隔:
 	Spanish	スペイン語
 	Specify:	指定:
@@ -2975,7 +3000,6 @@ mark-style	Japanese	日本式
 	Use Library Item	ライブラリ項目を使用
 	Graphic	グラフィック
 	Show all open documents	開いているすべてのドキュメントを表示
-	Symbol Libraries (on the roadmap)	シンボルライブラリ (今後対応予定)
 	Symbol Screener Tool	シンボルスクリーナーツール
 	Symbol Scruncher Tool	シンボルスクランチャーツール
 	Symbol Shifter Tool	シンボルシフターツール
@@ -3060,6 +3084,13 @@ mark-style	Japanese	日本式
 	Transparent Background	背景を透明にする
 	Transverse (the page a quarter turn on the paper)	横向き回転 (用紙上でページを 90 度回転)
 	Trap…	トラップ…
+	Trap	トラップ
+	Height/Width	高さ/幅
+	Tint Reduction	色合いの軽減
+	Traps with Process Color	プロセスカラーでトラップ
+	Reverse Traps	トラップを反転
+	Precision	精度
+	Remove Redundant Points	余分なポイントを削除
 	Trim mark weight:	トリムマークの線幅:
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	True Color にはバージョン 2004 以降が必要です。256 色のうち最も近い色で書き出します。
 	Turn off Data Recovery for complex documents	複雑なドキュメントではデータ復帰をオフにする
@@ -3204,7 +3235,7 @@ mark-style	Japanese	日本式
 	the preset	プリセット
 	tile {number}	タイル {number}
 	to	→
-	{count} file(s) in {folder}{note}. Show the package folder?	{folder} に {count} 個のファイル{note}。パッケージフォルダーを表示しますか？
+	{count} file(s) in {folder} {note}. Show the package folder?	{folder} に {count} 個のファイル{note}。パッケージフォルダーを表示しますか？
 	{count} linked file(s) not found	リンクファイルが {count} 個見つかりません
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	保存後に {count} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
@@ -3481,7 +3512,7 @@ file-filter	Templates	テンプレート
 	Output Black	出力ブラック
 	Output White	出力ホワイト
 	Output › Mode	出力 › モード
-	Packaged {n} file(s) in {folder}{note}	{folder} に {n} 個のファイルをパッケージしました{note}
+	Packaged {n} file(s) in {folder} {note}	{folder} に {n} 個のファイルをパッケージしました{note}
 	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 	Page information	ページ情報
 	Paragraph Style	段落スタイル
@@ -3796,7 +3827,7 @@ theme	Appearance	外観
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
-# (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
+# (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Japanese: no final 。 (these are status lines, and reasons that follow a colon), unless the English ends
 # with a period; a space between Japanese text and an adjacent Latin word, number or {placeholder}.
@@ -3879,7 +3910,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the scale is not a usable number	縮尺が有効な数値ではありません
 @msg	the drawing is too large to open	図面が大きすぎて開けません
 @msg	scale must be a number from {_1} to {_2}, not {_3}	縮尺は {_1} から {_2} までの数値にしてください ({_3} は指定できません)
-@msg	image '{key}' has no pixels and was left out	画像「{key}」はピクセルがないため省略しました
+@msg	an image has no pixels and was left out	ピクセルがない画像を省略しました
 @msg	Embedded {n} image(s)	画像を {n} 枚埋め込みました
 @msg	object {0} cannot have children	オブジェクト {0} には子オブジェクトを含められません
 @msg	range `{s}` is empty	範囲 `{s}` が空です
@@ -3898,6 +3929,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the art has no bounds	アートに境界がありません
 @msg	Image Trace: the traced image is missing	画像トレース: トレース元の画像が見つかりません
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ライブペイントの結合: ライブペイントグループと、追加するパスを選択してください
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	ライブペイントで扱えるのはパスと複合パスです: テキスト、画像、その他のオブジェクトは先にパスに変換してください
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
@@ -4237,6 +4269,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	invalid image data for `{0}`	`{0}` の画像データが正しくありません
 @msg	not a VectorCraft file: {0}	VectorCraft ファイルではありません: {0}
 @msg	the compressed file unpacks to more than {_1} MB	圧縮ファイルを展開すると {_1} MB を超えます
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` と `options.{key}: {inner}` が一致しません: オプションは 1 回だけ指定してください
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	バージョン {0} のファイルは圧縮できません: 圧縮ファイルを開けるのはバージョン {COMPRESSED_SINCE} 以降のみです
 @msg	a bitmap is empty	ビットマップが空です
 @msg	a bitmap is too large to read	ビットマップが大きすぎて読み込めません
@@ -4288,6 +4321,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	SVG parse error: {0}	SVG を解析できませんでした: {0}
 @msg	decimals must be {_1}–{_2} (got {_3})	小数点以下の桁数は {_1} から {_2} までにしてください (指定値: {_3})
 @msg	Exporting {_1}	{_1} を書き出し中
+@msg	Packaging {_1}	{_1} をパッケージ中
+@msg	Placing {_1}	{_1} を配置中
 @msg	Exported {what}	{what} を書き出しました
 @msg	"{0}" is not a colour: write it as #rrggbb	「{0}」はカラーではありません: #rrggbb の形式で指定してください
 @msg	could not decode image: {0}	画像をデコードできませんでした: {0}
@@ -4302,6 +4337,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{label}…	{label}…
 @msg	no blend options	ブレンドオプションがありません
 @msg	bad color {v}	カラー {v} が正しくありません
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio には 0.1 〜 10 の数値を指定してください
 @msg	the Color Picker is not open	カラーピッカーが開いていません
 @msg	the Simplify slider is not open	単純化スライダーが開いていません
 @msg	the screen color sampler is already open	画面のカラーサンプラーはすでに開いています
@@ -4334,7 +4370,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
-@msg	Packaged {n} file(s) in {folder}{note}	{n} 個のファイルを {folder} にパッケージしました{note}
+@msg	Packaged {n} file(s) in {folder} {note}	{n} 個のファイルを {folder} にパッケージしました{note}
 @msg	Packaged {n} file(s){note}	{n} 個のファイルをパッケージしました{note}
 @msg	choose a location for the package	パッケージの保存場所を選択してください
 @msg	missing `folder`	`folder` が指定されていません
@@ -4347,6 +4383,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no plug-in {id} is installed	プラグイン {id} はインストールされていません
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} はライブ効果です (「効果 › プラグイン」から使用してください)
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} は書き出しプラグインです (「ファイル › 書き出し › 形式を指定して書き出し…」から使用してください)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` は {size} バイトです (上限 {MAX_DOCUMENT_DATA})
 @msg	a preset named `{_1}` exists	`{_1}` という名前のプリセットはすでに存在します
 @msg	a swatch or color group named `{n}` exists	`{n}` という名前のスウォッチまたはカラーグループはすでに存在します
 @msg	no print preset named `{base}`	`{base}` という名前のプリントプリセットが見つかりません
@@ -4364,6 +4401,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	name the file	ファイル名を入力してください
 @msg	unknown format	不明な形式です
 @msg	PDF settings are not an object	PDF 設定がオブジェクト形式ではありません
+@msg	PDF security settings are not an object	PDF のセキュリティ設定がオブジェクト形式ではありません
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	`{name}` という名前の保存済み PDF プリセットが見つかりません (組み込みのプリセットは読み取り専用です: それを元に新しいプリセットを作成してください)
 @msg	Saved to User Defined: {_1}	「ユーザー定義」に保存しました: {_1}
 @msg	choose a direction to divide in	分割する方向を選択してください
@@ -4404,6 +4442,12 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
+@msg	`select` must be true or false	`select` には true または false を指定してください
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` と `maxAnchors` は整数にしてください
+@msg	`{key}` must be a number not below 0	`{key}` には 0 以上の数値を指定してください
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` は [x, y, width, height] の形式で指定してください: 有限の数値 4 つで、幅と高さは負の値にできません
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` が `{max_key}` より大きくなっています
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	次のうち少なくとも 1 つを指定してください: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness には dark|mediumDark|mediumLight|light のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last	index には数値、または first、previous、next、last のいずれかを指定してください
 @msg	index must be a number or first, previous, next or last, not `{other}`	index には数値、または first、previous、next、last のいずれかを指定してください (`{other}` は指定できません)
@@ -4414,7 +4458,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	missing index	index が指定されていません
 @msg	missing number `{key}`	数値 `{key}` が指定されていません
 @msg	missing integer `{key}`	整数 `{key}` が指定されていません
-@msg	multiple windows land with M11.5	複数ウィンドウは M11.5 で対応予定です
+@msg	New Window isn't available yet: a document opens in one window	新規ウィンドウはまだ使用できません: ドキュメントは 1 つのウィンドウで開きます
 @msg	no PNG encoder	PNG エンコーダーがありません
 @msg	no document open	ドキュメントが開かれていません
 @msg	no effect applied yet	まだ効果を適用していません
@@ -4456,8 +4500,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
+@msg	Couldn't place {name}: the document it was placed in was closed	{name} を配置できませんでした: 配置先のドキュメントは閉じられています
 @msg	no files to place	配置するファイルがありません
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
+@msg	replace: the object to replace was changed or deleted	replace: 置き換えるオブジェクトは変更または削除されています
 @msg	Couldn't place {name}: {e}	{name} を配置できませんでした: {e}
 @msg	no print service	プリントサービスがありません
 @msg	the print job has no data	プリントジョブにデータがありません
@@ -4482,6 +4529,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown preset (one of {_1})	不明なプリセットです ({_1} のいずれかを指定してください)
 @msg	unknown tool or command `{key}`	`{key}` は不明なツールまたはコマンドです
 @msg	{_1} is already used by {_2}	{_1} はすでに {_2} で使用されています
+@msg	{_1} is reserved by the system	{_1} はシステムで予約されています
 @msg	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした: {e}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
 @msg	nothing selected	何も選択されていません
@@ -4527,10 +4575,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{key} must be an array of non-negative integer object ids	{key} にはオブジェクト ID (0 以上の整数) の配列を指定してください
 @msg	invalid object id {value}: expected a non-negative integer	オブジェクト ID {value} は正しくありません: 0 以上の整数を指定してください
 @msg	no such object id {value}	ID が {value} のオブジェクトは見つかりません
+@msg	id {value} is a layer, not an object	ID {value} はオブジェクトではなくレイヤーです
+@msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} はオブジェクトではなくレイヤーです。レイヤーは layer.move で移動してください
 @msg	automation filesystem access is not granted: read authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 読み込み権限がありません: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	自動化のパスを拒否しました: 読み込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
 @msg	automation path rejected: a link that leads nowhere: {path}	自動化のパスを拒否しました: リンク先が存在しません: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	自動化のパスを拒否しました: {path} を解決できません: {e}
@@ -4634,7 +4686,7 @@ effect	Vertical	垂直
 	Define a variable first	先に変数を定義してください
 	Text	テキスト
 	Visibility	表示状態
-# tested). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
+# `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # Shared panel docking
 	Activate Panel	パネルをアクティブにする
 	Change Panel Layout	パネルの配置を変更
@@ -4936,6 +4988,10 @@ lighting	Light	ライト
 	Halftone Pattern	ハーフトーンパターン
 	Torn Edges…	破れたエッジ…
 	Torn Edges	破れたエッジ
+	Conté Crayon…	コンテ…
+	Conté Crayon	コンテ
+	Foreground Level	前景レベル
+	Background Level	背景レベル
 	Pattern Type	パターンタイプ
 	Dot	ドット
 # User Interface › Color Scheme
@@ -4987,11 +5043,19 @@ lighting	Light	ライト
 @msg	Persistent libraries not found: {files}	永続ライブラリが見つかりません: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` はライブラリパネルではありません (window.swatchLibrary を参照)
 @msg	library panel `{given}` isn't open	ライブラリパネル `{given}` は開いていません
+@msg	too many changed shortcuts	変更したショートカットが多すぎます
+@msg	library panel `{given}` isn't missing its library	ライブラリパネル `{given}` のライブラリは欠落していません
 @msg	too many library panels were opened in this session	このセッションで開いたライブラリパネルが多すぎます
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	画像は {_1} × {_2} ピクセルで、一辺が {LARGE_TRACE_SIDE} を超えています。トレースはできますが、時間がかかります。忠実度の低いプリセットや画像の小さいコピーを使うと速くなります。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	画像は {_3} × {_4} から縮小した {_1} × {_2} ピクセルでトレースされました (最大 {_5} メガピクセル)。
+	Snapping	スナップ
+	Snap to Tangent	接線にスナップ
+	Snap to Perpendicular	垂線にスナップ
+@msg	unknown snap option `{key}` (use {options})	不明なスナップオプション `{key}` ({options} を使用してください)
 	Gap Length:	ギャップの長さ:
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	フラットロゴモードは画像を {_3} × {_4} から平均化して縮小した {_1} × {_2} ピクセルでトレースしました。
 	Artboard {n} of {total}	アートボード {n} / {total}
+	File {n} of {total}	ファイル {n} / {total}
 	Encoding and writing the file…	ファイルをエンコードして書き込み中…
 @plural	{n} more export waiting|{n} more exports waiting	待機中の書き出し: あと {n} 件
 	Continue in Background	バックグラウンドで続行
@@ -5008,6 +5072,14 @@ lighting	Light	ライト
 	Minimum must not exceed Desired, nor Desired Maximum.	最小値は最適値を、最適値は最大値を超えることはできません。
 	Minimum	最小
 	Justification	文字組み
+	Add filters from the list above	上のリストからフィルターを追加
+	Add to Stack	スタックに追加
+	Applied Filters	適用したフィルター
+	Categories	カテゴリ
+	Choose a filter	フィルターを選択
+	Effect Gallery	効果ギャラリー
+	Filters	フィルター
+	Select artwork to apply effects	効果を適用するグラフィックを選択してください
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
@@ -5040,6 +5112,7 @@ lighting	Light	ライト
 	Yonroku-ban	四六判
 	Ruby…	ルビ…
 	Ruby	ルビ
+	Geometric Guides	幾何ガイド
 	Ease In	イーズイン
 	Ease Out	イーズアウト
 	Ease In Out	イーズインアウト
@@ -5054,3 +5127,109 @@ lighting	Light	ライト
 	Lock All Except Selected	選択以外をすべてロック
 	Lock All	すべてをロック
 	Unlock Selected	選択のロックを解除
+
+# Keyboard Shortcuts editor (File › Keyboard Shortcuts…) and the Print dialog's overprint note.
+	Keyboard Shortcuts	キーボードショートカット
+	Set:	セット:
+	Reset to Defaults	初期設定に戻す
+	All shortcuts reset to defaults.	すべてのショートカットを初期設定に戻しました。
+	Command	コマンド
+	Tool	ツール
+	Press keys…	キーを押してください…
+	Click, then press the new shortcut (Esc cancels)	クリックしてから、新しいショートカットを押します (Esc でキャンセル)
+	Go to Conflict	競合箇所へ移動
+	Remove the shortcut	ショートカットを削除
+	Use Default	初期設定を使用
+	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} は {names} で使用済みのため、そちらから削除しました。
+	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	シミュレートでは、オーバープリントプレビューと同じ見え方でオーバープリントを印刷します。分版では常にオーバープリントが保持されます。プリセットを選ぶと、印刷前に透明が分割・統合されます (PostScript ファイルでは常に分割・統合されます)。
+	Effect Gallery…	効果ギャラリー…
+	Effect Gallery Dialog	効果ギャラリーダイアログ
+	Arc Segment Tool Options	円弧セグメントツールオプション
+	Base Along:	基準方向:
+	Closed	閉じる
+	Concave	凹
+	Convex	凸
+	Fill Arc	円弧を塗りつぶす
+	Length X-Axis:	X 軸の長さ:
+	Length Y-Axis:	Y 軸の長さ:
+	Slope:	勾配:
+axis	X Axis	X 軸
+axis	Y Axis	Y 軸
+@msg	Packaged {n} file(s) in {folder}	{n} 個のファイルを {folder} にパッケージしました
+@msg	Packaged {n} file(s) {note}	{n} 個のファイルをパッケージしました {note}
+@msg	Packaged {n} file(s)	{n} 個のファイルをパッケージしました
+	Packaged {n} file(s)	{n} 個のファイルをパッケージしました
+	Packaged {n} file(s) in {folder}	{n} 個のファイルを {folder} にパッケージしました
+	Packaged {n} file(s) {note}	{n} 個のファイルをパッケージしました {note}
+	{count} file(s) in {folder}. Show the package folder?	{folder} に {count} 個のファイル。パッケージフォルダーを表示しますか？
+	Clockwise	時計回り
+	Dither	ディザ
+	Fine noise hides banding in the gradient fill	細かいノイズでグラデーションの塗りの縞を目立たなくします
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` はグラデーションの塗りに適用されます (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
+@msg	`dither` must be true or false	`dither` には true または false を指定してください
+	Perceptual	知覚的
+@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	大きな計算予算を求める「{name}」をインストールしますか？
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	1 回の実行に最大 {minutes} 分かかり、ほかのプラグインに許される {times} 倍の処理を行うことがあります。バックグラウンドで実行され、キャンセルできます。
+	It may take minutes, so it runs in the background, where you can cancel it.	数分かかることがあるため、バックグラウンドで実行されます。実行中はキャンセルできます。
+	The plug-in is computing…	プラグインが計算中…
+	Inspect Plug-in	プラグインを検査
+	Cancel Plug-in Run	プラグインの実行をキャンセル
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} は完了しましたが、その間にドキュメントまたはプラグインが変更されました。もう一度実行してください
+@msg	Running “{name}”…	「{name}」を実行中…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
+@msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。ユーザーが同意したら `allowHeavy: true` を指定してインストールしてください
+# Actions panel: action sets (#3712).
+	New Set…	新規セット…
+	New Set	新規セット
+	Set Options…	セットオプション…
+	Set Options	セットオプション
+	Create New Set	新規セットを作成
+	Stop Global Edit	グローバル編集を終了
+	Global Edit Options	グローバル編集オプション
+	Match	一致
+	On Artboards	アートボード上
+	All Artboards	すべてのアートボード
+	Include Objects On Canvas	カンバス上のオブジェクトを含める
+	Result(s): {count}	結果: {count}
+@msg	select one object	オブジェクトを 1 つ選択してください
+@msg	Global Edit works on paths, compound paths and symbol instances	グローバル編集はパス、複合パス、シンボルインスタンスに使用できます
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
+	Add to Symbols	シンボルに追加
+	Basic Shapes	基本シェイプ
+	Open Symbol Library	シンボルライブラリを開く
+	Save Symbol Library	シンボルライブラリを保存
+	Save Symbol Library…	シンボルライブラリを保存…
+	Save Symbols…	シンボルを保存…
+	Selected Symbols Only	選択したシンボルのみ
+	Symbol Libraries Menu	シンボルライブラリメニュー
+	Symbol Library	シンボルライブラリ
+	User Symbol Library 1	ユーザーシンボルライブラリ 1
+	User Symbol Library 2	ユーザーシンボルライブラリ 2
+	User Symbol Library 3	ユーザーシンボルライブラリ 3
+	User Symbol Library 4	ユーザーシンボルライブラリ 4
+	User Symbol Library 5	ユーザーシンボルライブラリ 5
+	User Symbol Library 6	ユーザーシンボルライブラリ 6
+	User Symbol Library 7	ユーザーシンボルライブラリ 7
+	User Symbol Library 8	ユーザーシンボルライブラリ 8
+	User Symbol Library 9	ユーザーシンボルライブラリ 9
+	User Symbol Library 10	ユーザーシンボルライブラリ 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	`{_1}` に配置できるシンボルがありません
+@msg	missing `library` (see symbol.libraries)	`library` がありません (symbol.libraries を参照)
+@msg	no symbol `{n}`	シンボル `{n}` がありません
+@msg	no symbol `{n}` in `{_1}`	`{_1}` にシンボル `{n}` がありません
+@msg	no symbol library `{key}` (see symbol.libraries)	シンボルライブラリ `{key}` がありません (symbol.libraries を参照)
+@msg	the document has no symbols to save	ドキュメントに保存するシンボルがありません
+@msg	Trap: select two or more objects filled with solid colours	トラップ: 単色で塗りつぶした 2 つ以上のオブジェクトを選択してください
+@msg	Trap: no edges of different colours meet among the selected objects	トラップ: 選択したオブジェクトに異なる色が接する辺がありません
+@msg	thickness must be from 0.01 to 5000 pt	thickness は 0.01～5000 pt にしてください
+@msg	heightWidth must be from 1 to 1000 %	heightWidth は 1～1000 % にしてください
+@msg	tintReduction must be from 0 to 100 %	tintReduction は 0～100 % にしてください
+	Rectangular Grid Tool Options	長方形グリッドツールオプション
+	Polar Grid Tool Options	同心円グリッドツールオプション
+	Fill Line	線を塗りつぶす

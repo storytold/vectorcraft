@@ -72,8 +72,8 @@ fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     egui::Grid::new("dlg").num_columns(4).spacing([10.0, 8.0]).show(ui, |ui| {
         for (number, label, ..) in axes {
             form::row_label(ui, label);
-            if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", number), d.f64(number, 2.0), "", 0, WIDTH) {
-                d.fields.insert(number.into(), json!(v.round().clamp(1.0, 500.0)));
+            if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
+                d.fields.insert(number.into(), json!(v));
             }
         }
         ui.end_row();

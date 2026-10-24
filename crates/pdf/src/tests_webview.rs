@@ -28,6 +28,8 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
             locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
+            show_video_safe_areas: false,
+            video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
         });
     }
@@ -49,7 +51,7 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
         .unwrap();
         if image && (i > 0 || on_first) {
             let xf = Affine::translate((x + 60.0, 60.0)) * Affine::scale(4.0);
-            let img = ImageObject { key: "img".into(), width: 8, height: 8, xf, link: None, placement: Default::default() };
+            let img = ImageObject { key: "img".into(), width: 8, height: 8, xf, link: None, placement: Default::default(), pixels: None };
             let id = d.alloc_id();
             d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(img)))).unwrap();
         }

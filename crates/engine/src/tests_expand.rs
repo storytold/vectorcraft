@@ -159,9 +159,10 @@ fn expanded_art_keeps_the_random_transforms_the_canvas_drew() {
     assert_eq!(differ, RANDOM_CASES.map(|case| (case, 0)));
 }
 
-/// The reply lists each object whose appearance expanded once, by the id it has in the document.
-/// In "group copies" the two copies of the square share an id until Expand Appearance gives them
-/// ids of their own, and the reply names the group, then each copy by its new id.
+/// The reply lists each object whose appearance expanded once, by the id it has in the document,
+/// starting with the selected object. In "group copies" the two copies of the square share an id
+/// until Expand Appearance gives them ids of their own, and the reply names the group, then each
+/// copy by its new id.
 #[test]
 fn the_reply_names_each_expanded_copy_by_its_own_id() {
     for case in RANDOM_CASES {
@@ -169,6 +170,7 @@ fn the_reply_names_each_expanded_copy_by_its_own_id() {
         let id = random_transforms(&mut s, case);
         let r = run(&mut s, "effect.expandAppearance", json!({}));
         let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        assert_eq!(ids.first(), Some(&id.0), "{case}: {ids:?}");
         let unique: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), ids.len(), "{case}: {ids:?}");
         assert!(ids.iter().all(|&i| s.doc().unwrap().doc.node(NodeId(i)).is_some()), "{case}: {ids:?}");

@@ -113,6 +113,13 @@ impl SecuritySettings {
                 standard.label()
             )));
         }
+        // Revision 2 has one printing bit: it can't say "low resolution only".
+        if revision(c) == 2 && self.printing == Printing::Low && !self.permissions_password.is_empty() {
+            return Err(PdfError::BadSetting(format!(
+                "{} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing",
+                c.label()
+            )));
+        }
         if self.open_password == self.permissions_password {
             return Err(PdfError::BadSetting("the open and permissions passwords must differ".into()));
         }
@@ -145,6 +152,12 @@ pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
     let mut out = vec![];
     if s.protected() && s.plaintext_metadata && revision(set.compatibility) <= 3 {
         out.push(format!("{} encryption covers the metadata too: plaintext metadata needs PDF 1.5 or later", set.compatibility.label()));
+    }
+    if s.protected() && set.compatibility == Compatibility::Pdf13 {
+        out.push(format!(
+            "{} encrypts with a 40-bit key, which can be searched in minutes: choose PDF 1.6 or later for stronger protection",
+            set.compatibility.label()
+        ));
     }
     out
 }

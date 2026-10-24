@@ -162,7 +162,7 @@ fn built_in_effect(id: &str) -> bool {
 
 /// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
 /// effect's id wins over the plain row of its English label), a plug-in's as it is.
-fn shown_effect_label(id: &str) -> String {
+pub(crate) fn shown_effect_label(id: &str) -> String {
     match catalog().iter().find(|c| c.0 == id) {
         Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
         None => effect_label(id),
@@ -1277,14 +1277,16 @@ mod tests {
     }
 
     /// Those choices read as their dialogs show them in the UI language: in French, the channel's
-    /// RGB is RVB, and in Spanish, Extrude & Bevel's Rounded is the "3d" row's Redondeado, not the
-    /// plain row's Redondeada. Rasterize names the document's color mode.
+    /// RGB as the "effect" row translates it, and in Spanish, Extrude & Bevel's Rounded as the "3d"
+    /// row does, not the plain row. Rasterize names the document's color mode.
     #[test]
     fn the_effect_editor_shows_those_choices_as_their_dialogs_do() {
-        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let fr = crate::i18n::Lang::from_code("fr").unwrap();
+        crate::i18n::set_current(fr);
         let (mut app, ctx, _) = editing("adjust.levels");
         let texts = shown_texts(&mut app, &ctx);
-        assert!(texts.iter().any(|s| s == "RVB"), "{texts:?}");
+        let rgb = crate::i18n::tr_ctx(fr, "effect", "RGB");
+        assert!(texts.iter().any(|s| s == rgb), "{rgb}: {texts:?}");
         let es = crate::i18n::Lang::from_code("es").unwrap();
         crate::i18n::set_current(es);
         let (mut app, ctx, _) = editing("threeD.extrude");

@@ -113,7 +113,7 @@ fn links_out_of_the_folder_and_the_automation_read_root_keep_reads_inside() {
     assert_eq!(statuses(&r), ["notFollowed", "checked"]);
     assert_eq!(r["outside"], json!([]));
     // Under a read root, the script and its includes are read inside it, and a script outside isn't.
-    let roots = crate::file_access::AutomationRoots::new(Some(&dir.join("scripts")), None).unwrap().unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&dir.join("scripts")], &[]).unwrap().unwrap();
     let mut s = Session::new();
     let r = crate::file_access::confine(Some(&roots), || s.execute("script.check", &json!({"path": main, "includes": true}))).unwrap();
     assert_eq!(statuses(&r), ["notFollowed", "checked"]);

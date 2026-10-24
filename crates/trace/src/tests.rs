@@ -222,6 +222,128 @@ fn transparent_pixels_are_not_traced() {
     assert!((net_area(&res.paths[0].path) - 800.0).abs() < 1.0);
 }
 
+/// A light square cut out of a transparent background, with a blue and a black block on it and a
+/// semi-transparent tan pixel row and column along two of its cut edges. `alpha` is the tan pixels'
+/// alpha.
+fn cut_out_with_edge(alpha: u8) -> Raster {
+    Raster::from_fn(200, 200, |x, y| {
+        if (60..140).contains(&x) && (40..90).contains(&y) {
+            [40, 120, 240, 255]
+        } else if (60..140).contains(&x) && (110..150).contains(&y) {
+            BLACK
+        } else if (20..180).contains(&x) && (20..180).contains(&y) {
+            [240, 240, 220, 255]
+        } else if (y == 180 && (30..170).contains(&x)) || (x == 180 && (30..110).contains(&y)) {
+            [160, 120, 80, alpha]
+        } else {
+            [0, 0, 0, 0]
+        }
+    })
+}
+
+#[test]
+fn a_cut_out_edge_traces_as_the_color_beside_it() {
+    // The tan of the edge pixels is nearer to the blue than to the light color beside them, but
+    // it is a darker shade of the light color, blended with the transparent background.
+    for mode in [Mode::Color, Mode::Grayscale] {
+        let params = TraceParams {
+            mode,
+            palette: Palette::Limited,
+            colors: 3,
+            paths: 90.0,
+            corners: 60.0,
+            noise: 25,
+            method: Method::Abutting,
+            ..TraceParams::default()
+        };
+        let res = trace(&cut_out_with_edge(192), &params);
+        // The blue block's color: that of the smallest path around the block's center.
+        let around = |p: &&TracedPath| p.path.bounds().is_some_and(|b| b.x0 < 100.0 && b.x1 > 100.0 && b.y0 < 65.0 && b.y1 > 65.0);
+        let size = |p: &TracedPath| p.path.bounds().map_or(f64::INFINITY, |b| b.width() * b.height());
+        let block = res.paths.iter().filter(around).min_by(|a, b| size(a).total_cmp(&size(b))).unwrap().color;
+        for p in res.paths.iter().filter(|p| p.color == block) {
+            let b = p.path.bounds().unwrap();
+            assert!(b.x0 > 59.0 && b.y0 > 39.0 && b.x1 < 141.0 && b.y1 < 91.0, "{mode:?}: a path of the blue block's color reaches {b:?}");
+        }
+    }
+}
+
+#[test]
+fn an_opaque_edge_keeps_its_own_color() {
+    // The same art with the edge pixels opaque: they are a tan line of their own, and stay so.
+    let img = cut_out_with_edge(255);
+    for mode in [Mode::Color, Mode::Grayscale] {
+        let q = quantize(&img, &TraceParams { mode, colors: 3, ..TraceParams::default() });
+        let mut settled = q.clone();
+        crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
+        assert_eq!(settled, q, "{mode:?}");
+    }
+}
+
+#[test]
+fn a_cut_out_edge_in_grayscale_ties_by_its_gray() {
+    // A red edge pixel between two opaque red pixels, one in a dark and one in a light gray of the
+    // palette: its gray (76) is nearer to the dark one, though its color looks nearer to the light
+    // one.
+    let img = Raster::from_fn(3, 2, |x, y| match (x, y) {
+        (0, 0) | (2, 0) => [255, 0, 0, 255],
+        (1, 0) => [255, 0, 0, 192],
+        _ => [0, 0, 0, 0],
+    });
+    let t = TRANSPARENT;
+    let q = Quantized { labels: vec![0, 2, 1, t, t, t], palette: vec![[50, 50, 50], [150, 150, 150], [90, 90, 90]] };
+    let mut gray = q.clone();
+    crate::quantize::settle_cut_edges(&mut gray, &img, true);
+    assert_eq!(gray.palette.get(gray.labels[1] as usize), Some(&[50, 50, 50]));
+    let mut color = q;
+    crate::quantize::settle_cut_edges(&mut color, &img, false);
+    assert_eq!(color.palette.get(color.labels[1] as usize), Some(&[150, 150, 150]));
+}
+
+#[test]
+fn a_semi_transparent_line_across_a_gap_keeps_its_own_color() {
+    // A light block, a transparent column, then a semi-transparent tan line: the block lies within
+    // two pixels of the line, but across the gap, so the line is no edge of it.
+    let img = Raster::from_fn(20, 10, |x, _| match x {
+        0..=9 => [240, 240, 220, 255],
+        11 => [160, 120, 80, 192],
+        _ => [0, 0, 0, 0],
+    });
+    let labels = (0..200).map(|i| match i % 20 {
+        0..=9 => 0,
+        11 => 1,
+        _ => TRANSPARENT,
+    });
+    let q = Quantized { labels: labels.collect(), palette: vec![[240, 240, 220], [160, 120, 80]] };
+    let mut settled = q.clone();
+    crate::quantize::settle_cut_edges(&mut settled, &img, false);
+    assert_eq!(settled, q);
+}
+
+#[test]
+fn a_thin_semi_transparent_outline_keeps_its_own_color() {
+    // A blue square on a transparent background with a one-pixel, partly transparent yellow
+    // outline around it: the yellow is no shade of the blue, so the outline stays yellow.
+    for alpha in [128, 192, 254] {
+        let img = Raster::from_fn(60, 60, |x, y| {
+            if (10..50).contains(&x) && (10..50).contains(&y) {
+                [40, 120, 240, 255]
+            } else if (9..51).contains(&x) && (9..51).contains(&y) {
+                [250, 200, 40, alpha]
+            } else {
+                [0, 0, 0, 0]
+            }
+        });
+        for mode in [Mode::Color, Mode::Grayscale] {
+            let q = quantize(&img, &TraceParams { mode, colors: 3, ..TraceParams::default() });
+            assert_ne!(q.labels[9 * 60 + 30], q.labels[30 * 60 + 30], "{mode:?}, alpha {alpha}: the outline has a color of its own");
+            let mut settled = q.clone();
+            crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
+            assert_eq!(settled, q, "{mode:?}, alpha {alpha}");
+        }
+    }
+}
+
 #[test]
 fn threshold_controls_black_and_white() {
     let img = Raster::from_fn(40, 40, |x, _| if x < 20 { [100, 100, 100, 255] } else { WHITE });
@@ -1126,6 +1248,111 @@ fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
         (0..sp.segment_count())
             .all(|i| (sp.segment(i).p3.y - sp.segment(i).p0.y).abs() > 1.0 && (sp.segment(i).p3.x - sp.segment(i).p0.x).abs() > 1.0)
     );
+}
+
+#[test]
+fn snap_curves_to_lines_leaves_out_a_sliver_it_flattens() {
+    // A light rectangle on a transparent background, with a blue and a black block on it and a
+    // one-pixel row of a blue-gray along its lower edge: the row is traced in the blue.
+    let img = Raster::from_fn(200, 120, |x, y| {
+        if (60..140).contains(&x) && (30..60).contains(&y) {
+            [40, 120, 240, 255]
+        } else if (60..140).contains(&x) && (70..90).contains(&y) {
+            BLACK
+        } else if (20..180).contains(&x) && (20..100).contains(&y) {
+            [240, 240, 220, 255]
+        } else if y == 100 && (30..170).contains(&x) {
+            [120, 130, 160, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::Limited,
+        colors: 3,
+        paths: 90.0,
+        corners: 60.0,
+        noise: 25,
+        method: Method::Abutting,
+        ..TraceParams::default()
+    };
+    let on_the_row = |p: &&TracedPath| p.path.bounds().is_some_and(|b| b.y0 > 99.0 && b.y1 < 102.0);
+    // Left alone, the row is a path of its own.
+    let res = trace(&img, &params);
+    let row: Vec<_> = res.paths.iter().filter(on_the_row).collect();
+    assert_eq!(row.len(), 1, "{:?}", res.paths.iter().map(|p| p.path.bounds()).collect::<Vec<_>>());
+    assert!(net_area(&row[0].path) > 100.0, "{:?}", row[0].path.bounds());
+    // Snapped, both sides of the row straighten onto one line: no path is left there, and every
+    // path keeps an area.
+    let res = trace(&img, &TraceParams { snap_curves_to_lines: true, ..params.clone() });
+    assert_eq!(res.paths.iter().filter(on_the_row).count(), 0, "{:?}", res.paths.iter().map(|p| p.path.bounds()).collect::<Vec<_>>());
+    for p in &res.paths {
+        assert!(p.path.subpaths.iter().all(|s| s.area().abs() > 1e-6), "{:?} {:?}", p.color, p.path.bounds());
+    }
+    // Without Fills, the areas are outlined with a 1 px stroke, which draws the flattened row: it
+    // stays. (Lines no wider than 0.5 px are traced as center lines, so the row is an area.)
+    let res = trace(&img, &TraceParams { snap_curves_to_lines: true, fills: false, strokes: true, stroke_width: 0.5, ..params });
+    let row: Vec<_> = res.paths.iter().filter(on_the_row).collect();
+    assert_eq!(row.len(), 1, "{:?}", res.paths.iter().map(|p| p.path.bounds()).collect::<Vec<_>>());
+    assert_eq!(row[0].stroke, Some(1.0));
+    assert!(row[0].path.bounds().is_some_and(|b| b.width() > 100.0), "{:?}", row[0].path.bounds());
+}
+
+#[test]
+fn a_traced_pixel_that_straightens_to_no_area_is_left_out_of_fills_and_kept_as_an_outline() {
+    // Overlapping anti-aliased ellipses, 4 x 4 samples a pixel. Where the green, the blue and the
+    // light meet, a single pixel of their blend at (50, 42) is traced as a color of its own, and
+    // the two pieces of its outline straighten onto one line in every trace, with or without Snap
+    // Curves To Lines.
+    let palette: [[f64; 3]; 6] =
+        [[240.0, 240.0, 220.0], [40.0, 120.0, 240.0], [0.0; 3], [200.0, 40.0, 40.0], [120.0, 130.0, 160.0], [30.0, 160.0, 60.0]];
+    let ellipses = [
+        (66.37, 47.61, 32.7, 26.4, 1),
+        (-1.63, -3.39, 46.2, 30.6, 0),
+        (43.37, 30.61, 12.0, 17.3, 4),
+        (32.37, 73.61, 43.5, 6.8, 3),
+        (34.37, 54.61, 42.6, 13.8, 1),
+        (27.37, 37.61, 23.7, 22.2, 5),
+    ];
+    let img = Raster::from_fn(100, 90, |x, y| {
+        let mut sum = [0.0f64; 3];
+        for i in 0..16 {
+            let (px, py) = (f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            let k = ellipses.iter().rev().find(|&&(cx, cy, rx, ry, _)| ((px - cx) / rx).powi(2) + ((py - cy) / ry).powi(2) <= 1.0).map_or(0, |e| e.4);
+            for (s, c) in sum.iter_mut().zip(palette[k]) {
+                *s += c / 16.0;
+            }
+        }
+        [sum[0].round() as u8, sum[1].round() as u8, sum[2].round() as u8, 255]
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::Limited,
+        colors: 6,
+        paths: 90.0,
+        corners: 60.0,
+        noise: 1,
+        method: Method::Abutting,
+        stroke_width: 1.0,
+        ..TraceParams::default()
+    };
+    let at_the_pixel = |p: &&TracedPath| p.path.bounds().is_some_and(|b| b.x0 >= 50.0 && b.x1 <= 51.0 && b.y0 >= 42.0 && b.y1 <= 43.0);
+    for snap in [false, true] {
+        // Filled, the pixel's loop would paint nothing: no path is left there, and every path
+        // keeps an area.
+        let res = trace(&img, &TraceParams { snap_curves_to_lines: snap, ..params.clone() });
+        assert_eq!(res.paths.iter().filter(at_the_pixel).count(), 0, "snap {snap}");
+        for p in &res.paths {
+            assert!(p.path.subpaths.iter().all(|s| s.area().abs() > 1e-6), "snap {snap}: {:?} {:?}", p.color, p.path.bounds());
+        }
+        // Without Fills, its outline is stroked, which draws it: it stays.
+        let res = trace(&img, &TraceParams { snap_curves_to_lines: snap, fills: false, strokes: true, ..params.clone() });
+        let pixel: Vec<_> = res.paths.iter().filter(at_the_pixel).collect();
+        assert_eq!(pixel.len(), 1, "snap {snap}: {:?}", res.paths.iter().map(|p| p.path.bounds()).collect::<Vec<_>>());
+        assert_eq!(pixel[0].stroke, Some(1.0), "snap {snap}");
+        assert!(pixel[0].path.subpaths.iter().all(|s| s.area().abs() < 1e-6), "snap {snap}: {:?}", pixel[0].path.bounds());
+    }
 }
 
 #[test]

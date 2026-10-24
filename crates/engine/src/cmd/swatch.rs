@@ -138,6 +138,7 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.new";
     let mode = str_param(p, "mode");
     super::paint::check_keep_model(p, C)?;
+    check_switches(p, &["spot", "global"], C)?;
     let paints = match (p.get("colors").and_then(Value::as_array), str_param(p, "pattern")) {
         (Some(cs), _) => {
             let stored = |c: Color| if mode.is_some() { c } else { super::paint::new_color(s, p, c) };
@@ -229,6 +230,7 @@ pub(super) fn names_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
 fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.delete";
     let names = names_param(p, C)?;
+    check_switches(p, &["unlink"], C)?;
     let d = &s.doc()?.doc;
     // Global swatches going away (named ones and those in named groups): their links are dropped.
     let mut global: Vec<String> = vec![];
@@ -304,6 +306,7 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.newGroup";
     let mut names = str_list(p, "swatches");
     super::paint::check_keep_model(p, C)?;
+    check_switches(p, &["fromArtwork", "toGlobal", "includeTints"], C)?;
     let colors: Vec<Color> = p
         .get("colors")
         .and_then(Value::as_array)
@@ -365,6 +368,7 @@ fn insert_before<T>(list: &mut Vec<T>, items: Vec<T>, anchor: Option<&str>, name
 
 fn swatch_move(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.move";
+    check_numbers(p, &["to"], C)?;
     let names = names_param(p, C)?;
     let to = p.get("to").and_then(Value::as_u64).map(index);
     let group = str_param(p, "group").map(str::to_string);
@@ -530,6 +534,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     if sw.is_reserved() {
         return Err(bad(C, format!("`{name}` can't be edited")));
     }
+    check_switches(p, &["spot", "global"], C)?;
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
     let solid = sw.paint.color();
     if solid.is_none() && (given("color") || given("mode") || bool_or(p, "spot", false)) {
@@ -649,8 +654,8 @@ fn swatch_sort(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.addUsedColors";
-    let global = bool_or(p, "global", false);
-    let only_selection = bool_or(p, "selection", false);
+    let global = switch_or(p, "global", false, C)?;
+    let only_selection = switch_or(p, "selection", false, C)?;
     let (added, linked) = s.edit("Add Used Colors", |d, sel| {
         let ids: Vec<NodeId> = if only_selection { sel.objects.clone() } else { d.layers.iter().map(|l| l.id).collect() };
         if only_selection && ids.is_empty() {
@@ -824,6 +829,11 @@ impl GroupEdit {
     /// Apply the link changes to the default fill and stroke for new art.
     pub(super) fn defaults(&self, s: &mut Session) {
         self.relinks.iter().for_each(|r| r.defaults(s));
+    }
+
+    /// How many paints linked to the group's swatches the rewrite changed.
+    pub(super) fn relinked(&self) -> usize {
+        self.relinked
     }
 }
 

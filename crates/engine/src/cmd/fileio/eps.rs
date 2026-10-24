@@ -1,6 +1,7 @@
 //! EPS export for every EPS path (`document.export {format: eps}`, `document.exportEps`, Export As
 //! → EPS Options): the options parsed from the params, transparency flattened with a flattener
-//! preset, one file of the art's bounds or one per artboard, the preview and thumbnail rendered,
+//! preset, one file of the art's bounds or one per artboard (with a central file of the whole
+//! document when there are several), the preview and thumbnail rendered,
 //! and the native document embedded for reopening.
 
 use std::borrow::Cow;
@@ -28,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export EPS",
         [],
         None,
-        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard) | false (default: one file, the bounding box the visible art, y up from the first artboard's bottom-left corner), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (with useArtboards: the artboards written)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}",
+        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard; with two or more, also the central file {stem}.eps first: the whole document, the bounding box the visible art) | false (default: one file, the bounding box the visible art, y up from the first artboard's bottom-left corner), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (with useArtboards: the artboards written)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}",
         has_doc,
         export_eps
     )]
@@ -43,7 +44,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "useArtboards",
         ty: "boolean",
         default: "null",
-        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps; false or absent: one file of the visible art (naming artboards also uses them)",
+        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps, and with two or more a central <file>.eps of the whole document; false or absent: one file of the visible art (naming artboards also uses them)",
     },
     FormatOption { name: "level", ty: "integer", default: "3", description: "PostScript language level, 2 or 3" },
     FormatOption {
@@ -197,7 +198,8 @@ fn expanded(cmd: &str, p: &Value, saved: &[super::super::FlattenerPreset]) -> Re
 }
 
 /// The files to write: `(artboard, region, origin)` each — every chosen artboard with its corner
-/// as the origin, or the visible art's bounds with the first artboard's corner.
+/// as the origin, or the visible art's bounds with the first artboard's corner. With two or more
+/// chosen artboards, a central file of the visible art comes first (none when no art shows).
 fn pages(doc: &Document, set: &Settings) -> Result<Vec<(Option<usize>, Rect, Point)>> {
     let n = doc.artboards.len();
     let named = set.boards.resolve(n).map_err(|e| bad(C, e))?;
@@ -208,14 +210,18 @@ fn pages(doc: &Document, set: &Settings) -> Result<Vec<(Option<usize>, Rect, Poi
         (None, None) => None,
     };
     let corner = |r: Rect| Point::new(r.x0, r.y1);
+    let art = |art: Rect| (None, art, doc.artboards.first().map_or(corner(art), |a| corner(a.rect)));
     match boards {
-        Some(boards) => boards
-            .into_iter()
-            .map(|b| doc.artboards.get(b).map(|a| (Some(b), a.rect, corner(a.rect))).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))))
-            .collect(),
+        Some(boards) => {
+            let central = (boards.len() > 1).then(|| vectorcraft_render::encode::art_bounds(doc).map(art)).flatten();
+            let each = boards
+                .into_iter()
+                .map(|b| doc.artboards.get(b).map(|a| (Some(b), a.rect, corner(a.rect))).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))));
+            central.map(Ok).into_iter().chain(each).collect()
+        }
         None => {
-            let art = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
-            Ok(vec![(None, art, doc.artboards.first().map_or(corner(art), |a| corner(a.rect)))])
+            let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
+            Ok(vec![art(bounds)])
         }
     }
 }
@@ -251,8 +257,8 @@ fn native(doc: &Document, board: Option<usize>, include_linked: bool) -> Vec<u8>
 }
 
 /// Encode `doc` as EPS: one file of the visible art, or with Use Artboards one per chosen
-/// artboard. Transparency is flattened first (once for all of them); the previews show `doc`
-/// itself.
+/// artboard (after a central file of the whole document when there are several). Transparency is
+/// flattened first (once for all of them); the previews show `doc` itself.
 pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     let set = parse(p)?;
     let original = doc;

@@ -1,9 +1,10 @@
 //! Paragraph panel menu › Justification… (or `ui.justification`): Word Spacing, Letter Spacing and
 //! Glyph Scaling (each Minimum, Desired and Maximum, in percent), Auto Leading and Single Word
 //! Justification of the paragraphs the Paragraph panel acts on. The dialog opens on the values the
-//! Paragraph panel shows and previews them on the canvas. OK runs `text.setFormat` with the values
-//! that changed, as one undo step; paragraphs that differ keep the values left alone. OK is
-//! disabled while a row's Minimum exceeds its Desired value or Desired its Maximum.
+//! Paragraph panel shows (blank fields where paragraphs in scope differ) and previews them on the
+//! canvas. OK runs `text.setFormat` with the values that changed, as one undo step; paragraphs
+//! that differ keep the values left alone. OK is disabled while a row's Minimum exceeds its Desired
+//! value or Desired its Maximum.
 //!
 //! Fields: `wordMin`, `wordDesired`, `wordMax` (0..1000), `letterMin`, `letterDesired`,
 //! `letterMax` (-100..500), `glyphMin`, `glyphDesired`, `glyphMax` (50..200), `autoLeading`
@@ -65,22 +66,32 @@ fn single_word_name(s: SingleWordJustify) -> &'static str {
 
 /// Open Justification on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let (_, para) = crate::panels::character::text_style(app).ok_or("select some type first")?;
+    crate::panels::character::text_style(app).ok_or("select some type first")?;
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
     if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
         crate::panels::character::end_typing(app);
         targets = json!({"ids": [id.0], "start": a, "end": b});
     }
-    let j = &para.justification;
     let mut values = Map::new();
-    for ((_, prefix, _), v) in ROWS.iter().zip([j.word_spacing, j.letter_spacing, j.glyph_scaling]) {
-        for ((suffix, _), x) in COLUMNS.iter().zip(v) {
-            values.insert(format!("{prefix}{suffix}"), json!(x));
+    for (_, prefix, _) in ROWS {
+        for (i, (suffix, _)) in COLUMNS.iter().enumerate() {
+            let key = format!("{prefix}{suffix}");
+            if let Some(v) = crate::panels::paragraph::shared_justification_f64(app, |j| match prefix {
+                "word" => j.word_spacing[i],
+                "letter" => j.letter_spacing[i],
+                _ => j.glyph_scaling[i],
+            }) {
+                values.insert(key, json!(v));
+            }
         }
     }
-    values.insert("autoLeading".into(), json!(j.auto_leading));
-    values.insert("singleWord".into(), json!(single_word_name(j.single_word)));
+    if let Some(v) = crate::panels::paragraph::shared_justification_f64(app, |j| j.auto_leading) {
+        values.insert("autoLeading".into(), json!(v));
+    }
+    if let Some(s) = crate::panels::paragraph::shared_single_word_justify(app) {
+        values.insert("singleWord".into(), json!(single_word_name(s)));
+    }
     let mut fields = Value::Object(values.clone());
     fields[INITIAL] = Value::Object(values);
     fields[TARGETS] = targets;
@@ -92,7 +103,11 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// Why OK can't apply the dialog: a row whose values are out of order.
 fn problem(d: &Dialog) -> Option<&'static str> {
     let out_of_order = ROWS.iter().any(|(_, prefix, _)| {
-        let [min, desired, max] = COLUMNS.map(|(suffix, _)| d.f64(&format!("{prefix}{suffix}"), 0.0));
+        let keys = COLUMNS.map(|(suffix, _)| format!("{prefix}{suffix}"));
+        if !keys.iter().all(|k| d.fields.contains_key(k)) {
+            return false;
+        }
+        let [min, desired, max] = keys.map(|k| d.f64(&k, 0.0));
         !(min <= desired && desired <= max)
     });
     out_of_order.then(|| tl!("Minimum must not exceed Desired, nor Desired Maximum."))
@@ -110,7 +125,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             label(ui, text);
             for (suffix, _) in COLUMNS {
                 let key = format!("{prefix}{suffix}");
-                if let Some(v) = widgets::range_field(ui, ("justification", key.as_str()), d.f64(&key, 0.0), *lo..=*hi, "%", 0, 70.0) {
+                let value = d.fields.get(&key).and_then(|v| v.as_f64());
+                if let Some(v) = widgets::range_field(ui, ("justification", key.as_str()), value, *lo..=*hi, "%", 0, 70.0) {
                     d.fields.insert(key, json!(v));
                 }
             }
@@ -121,14 +137,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     egui::Grid::new("justification-more").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         label(ui, tl!("Auto Leading:"));
         let (lo, hi) = JustificationOptions::AUTO_LEADING;
-        if let Some(v) = widgets::range_field(ui, ("justification", "autoLeading"), d.f64("autoLeading", 120.0), lo..=hi, "%", 0, 64.0) {
+        let leading = d.fields.get("autoLeading").and_then(|v| v.as_f64());
+        if let Some(v) = widgets::range_field(ui, ("justification", "autoLeading"), leading, lo..=hi, "%", 0, 64.0) {
             d.fields.insert("autoLeading".into(), json!(v));
         }
         ui.end_row();
         label(ui, tl!("Single Word Justification:"));
         let choices = single_word_choices();
-        let current = d.str("singleWord");
-        let shown = choices.iter().find(|(v, _)| *v == current).map_or(choices[0].1, |(_, l)| *l);
+        let current = d.fields.get("singleWord").and_then(|v| v.as_str());
+        let shown = current.and_then(|current| choices.iter().find(|(v, _)| *v == current).map(|(_, l)| *l)).unwrap_or("");
         let labels = choices.map(|(_, l)| l);
         if let Some(i) = widgets::dropdown(ui, ("justification", "singleWord"), shown, &labels, 140.0)
             && let Some((v, _)) = choices.get(i)
@@ -157,6 +174,9 @@ fn params(d: &Dialog) -> Map<String, Value> {
         let mut changed = Map::new();
         for (suffix, name) in COLUMNS {
             let key = format!("{prefix}{suffix}");
+            if !d.fields.contains_key(&key) {
+                continue;
+            }
             let v = d.f64(&key, 0.0);
             if was(&key) != Some(v) {
                 changed.insert(name.into(), json!(v));
@@ -166,12 +186,15 @@ fn params(d: &Dialog) -> Map<String, Value> {
             p.insert(param.into(), Value::Object(changed));
         }
     }
-    let leading = d.f64("autoLeading", 120.0);
-    if was("autoLeading") != Some(leading) {
-        p.insert("autoLeading".into(), json!(leading));
+    if d.fields.contains_key("autoLeading") {
+        let leading = d.f64("autoLeading", 120.0);
+        if was("autoLeading") != Some(leading) {
+            p.insert("autoLeading".into(), json!(leading));
+        }
     }
-    let single = d.str("singleWord");
-    if initial.and_then(|m| m.get("singleWord")).and_then(Value::as_str) != Some(single.as_str()) {
+    if let Some(single) = d.fields.get("singleWord").and_then(|v| v.as_str())
+        && initial.and_then(|m| m.get("singleWord")).and_then(Value::as_str) != Some(single)
+    {
         p.insert("singleWordJustification".into(), json!(single));
     }
     p
@@ -307,5 +330,22 @@ mod tests {
         super::super::cancel(&mut app);
         assert!(app.ui.dialog.is_none());
         assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+    }
+
+    /// When paragraphs in scope disagree, only shared justification values are filled in.
+    #[test]
+    fn justification_dialog_mixed_paragraph_fields_show_blank() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"ids": [id], "wordSpacing": [70, 100, 200], "start": 5, "end": 5})).unwrap();
+        app.run("ui.justification", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert!(!d.fields.contains_key("wordMin"));
+        assert!(!d.fields.contains_key("wordMax"));
+        assert_eq!(d.f64("wordDesired", 0.0), 100.0);
+        set(&mut app, "wordMin", json!(75.0));
+        super::super::confirm(&mut app).unwrap();
+        let (first, second) = paras(&app, id);
+        assert_eq!(first.justification.word_spacing, [75.0, 100.0, 133.0]);
+        assert_eq!(second.justification.word_spacing, [75.0, 100.0, 200.0]);
     }
 }

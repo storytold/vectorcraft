@@ -97,6 +97,31 @@ fn saves_for_older_versions() {
 }
 
 #[test]
+fn an_older_version_is_pretty_only_when_its_own_json_fits() {
+    // One path whose anchors fit the pretty size limit in the current version but not as
+    // version 1 writes them (both handles of every anchor as `{x, y}` maps).
+    use vectorcraft_geom::Point;
+    use vectorcraft_geom::path::{PathData, SubPath};
+    let path_doc = |anchors: usize| {
+        let mut b = vectorcraft_testkit::fixtures::DocBuilder::new(1000.0, 1000.0);
+        let points: Vec<Point> = (0..anchors).map(|j| Point::new(j as f64, (j % 2) as f64)).collect();
+        let node = b.path_node(PathData::single(SubPath::polyline(&points, false)), Default::default());
+        b.add(node);
+        b.doc
+    };
+    let per_anchor = serde_json::to_vec_pretty(&path_doc(1000)).unwrap().len() / 1000;
+    let d = path_doc(vectorcraft_format::PRETTY_MAX_BYTES / 2 / per_anchor);
+    let mut s = Session::new();
+    open(&mut s, "traced.vectorcraft", &vectorcraft_format::save_file(&d));
+    let is_pretty = |bytes: &[u8]| bytes.windows(3).any(|w| w == b"\n  ");
+    assert!(is_pretty(&saved(&mut s, json!({"compress": false}))));
+    let old = saved(&mut s, json!({"version": 1}));
+    assert!(!is_pretty(&old), "{} bytes", old.len());
+    open(&mut s, "old.drawcraft", &old);
+    assert_eq!(s.doc().unwrap().doc.node_count(), 2);
+}
+
+#[test]
 fn preview_is_at_most_256_pixels() {
     let mut s = session();
     let bytes = saved(&mut s, json!({"preview": true, "compress": true}));

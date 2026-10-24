@@ -192,8 +192,10 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     if !area.is_finite() {
         return None;
     }
-    // Whole pixels, and no larger than 64 Mpx.
-    let scale = scale.min((64.0e6 / area.max(1.0)).sqrt());
+    // Whole pixels, no larger than 64 Mpx, and no side longer than the renderer can address
+    // (a long thin object stays within the area but not within a side).
+    let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
+    let scale = scale.min((64.0e6 / area.max(1.0)).sqrt()).min(side / b.width().max(b.height()).max(1.0));
     if !(scale.is_finite() && scale > 0.0) {
         return None;
     }
@@ -223,7 +225,15 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let mut image = Node::new(
         id,
-        NodeKind::Image(Box::new(ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() })),
+        NodeKind::Image(Box::new(ImageObject {
+            key,
+            width: img.width,
+            height: img.height,
+            xf,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
     );
     image.name = Some("Raster effect".into());
     Some(image)

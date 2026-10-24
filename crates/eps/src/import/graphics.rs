@@ -15,7 +15,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, FillLayer, Lin
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
 use super::interp::{Interp, MAX_GSAVE, matrix_obj};
-use super::obj::{DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
+use super::obj::{DictRef, Key, Obj, Op, PsError, Res, Shared, clamp_between, ps_err};
 
 /// Most objects one file makes.
 const MAX_NODES: usize = 1 << 20;
@@ -1144,7 +1144,7 @@ impl Interp<'_> {
         } else {
             (GradientKind::Linear, GradientGeom { start: m * Point::new(c(0), c(1)), end: m * Point::new(c(2), c(3)), aspect: 1.0, focal: None })
         };
-        let mut g = GradientPaint::new(Gradient { kind: gk, stops });
+        let mut g = GradientPaint::new(Gradient::new(gk, stops));
         g.geom = Some(geom);
         Ok(Some(g))
     }
@@ -1192,7 +1192,7 @@ impl Interp<'_> {
         let domain = nums(get("Domain"));
         let t = x.first().copied().unwrap_or(0.0);
         let t = match domain.as_slice() {
-            [a, b, ..] => t.clamp(a.min(*b), a.max(*b)),
+            [a, b, ..] => clamp_between(t, *a, *b),
             _ => t,
         };
         match get("FunctionType").and_then(|o| o.as_num()) {
@@ -1330,11 +1330,13 @@ impl Interp<'_> {
             }
             GStateNew => {
                 self.spend_elements(self.g.path.elements().len())?;
+                self.alloc(std::mem::size_of_val(self.g.path.elements()))?;
                 self.push(Obj::GState(Rc::new(self.g.clone())))?;
             }
             CurrentGState => {
                 self.pop()?;
                 self.spend_elements(self.g.path.elements().len())?;
+                self.alloc(std::mem::size_of_val(self.g.path.elements()))?;
                 self.push(Obj::GState(Rc::new(self.g.clone())))?;
             }
             SetGState => match self.pop()? {

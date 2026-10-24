@@ -158,7 +158,15 @@ fn group_geometry_effects_move_and_copy_images_too() {
     image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let b = rect(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), solid(0.0, 0.0, 1.0));
-    let im = ImageObject { key: "red".into(), width: 30, height: 30, xf: Affine::translate((10.0, 30.0)), link: None, placement: Default::default() };
+    let im = ImageObject {
+        key: "red".into(),
+        width: 30,
+        height: 30,
+        xf: Affine::translate((10.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
     let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
     let mut g = Node::group(d.alloc_id(), vec![b, image]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 50, "copies": 1})));

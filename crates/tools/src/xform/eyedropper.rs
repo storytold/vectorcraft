@@ -317,6 +317,7 @@ mod tests {
             xf: vectorcraft_geom::Affine::scale(10.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let (s, p) = (Selection::default(), paint());
@@ -353,6 +354,7 @@ mod tests {
             xf: vectorcraft_geom::Affine::scale(10.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let (s, p) = (Selection::default(), paint());

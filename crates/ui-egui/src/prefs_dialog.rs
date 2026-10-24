@@ -423,6 +423,20 @@ mod tests {
     use crate::Services;
     use vectorcraft_engine::Session;
 
+    #[test]
+    fn geometric_snapping_is_a_saved_smart_guides_preference() {
+        let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut a, Some("Smart Guides"));
+        let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+        assert!(text.contains("Geometric Guides") && text.contains("Snap to Perpendicular") && text.contains("Snap to Tangent"), "{text}");
+        a.ui.dialog.as_mut().unwrap().fields.insert("snapPerpendicular".into(), json!(false));
+        confirm(&mut a).unwrap();
+        assert!(!a.session.prefs.snap_perpendicular && a.session.prefs.snap_tangent);
+        let saved: Prefs = serde_json::from_value(a.ui.engine_prefs.clone()).unwrap();
+        assert!(!saved.snap_perpendicular && saved.snap_tangent);
+        assert!(a.run("view.snapping", json!({})).is_err());
+    }
+
     /// A resting checkbox must have a visible outline in both states and every brightness.
     #[test]
     fn preference_checkboxes_draw_outlines_without_hover() {

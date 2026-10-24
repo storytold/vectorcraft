@@ -1,12 +1,16 @@
 //! Image Trace panel: preset, view, mode, palette (Color), threshold or colour count, and the
 //! Advanced section (open or closed as it was last left): fidelity, method, and Create: Fills /
-//! Strokes with the widest line stroked. With an Image Trace object selected, changing a setting
-//! re-traces it (one undo step per change; sliders apply when released) and changing the view
-//! redraws it without tracing again. With an image selected, Trace makes a new Image Trace object.
+//! Strokes with the widest line stroked. With an Image Trace object selected and Preview on (the
+//! default, kept with the UI preferences), changing a setting re-traces it (one undo step per
+//! change; sliders apply when released); with Preview off, the changes wait in the panel until
+//! Trace applies them, or until Preview is turned on again. Changing the view redraws the object
+//! without tracing again. With an image selected, Trace makes a new Image Trace object.
+//! The public documentation of the panel describes Preview as showing the result of the current
+//! settings (<https://web.archive.org/web/20250831090623/https://helpx.adobe.com/illustrator/using/image-trace.html>).
 
 use egui::Ui;
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind, TraceView};
+use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
 use super::{first_selected, library_panel, pstate, set_pstate, swatches};
@@ -66,6 +70,10 @@ struct TraceUi {
     /// The selected Image Trace object's stored settings last adopted (so edits in progress
     /// aren't overwritten until the object changes).
     synced: Value,
+    /// The document and object `synced` came from.
+    object: Option<(u64, NodeId)>,
+    /// Preview was off at the panel's last frame.
+    preview_off: bool,
 }
 
 /// Each preset: its name, its parameters, and those of its enhanced version (null if it has none).
@@ -82,6 +90,11 @@ pub(crate) fn is_trace(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. })
         && n.name.as_deref() == Some("Image Trace")
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
+}
+
+/// The active document and the first selected object.
+fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
+    Some((app.session.active()?.uid, first_selected(app)?.id))
 }
 
 /// What the selection is: an Image Trace object (with its stored settings), a plain image, or neither.
@@ -119,6 +132,25 @@ fn view_dropdown(ui: &mut Ui, current: TraceView, width: f32) -> Option<TraceVie
 fn set_view(app: &mut VectorcraftApp, view: TraceView) {
     if let Err(e) = app.run("imageTrace.setView", json!({ "view": view.id() })) {
         app.ui.status = e;
+    }
+}
+
+/// While `down`, the selected Image Trace objects show their source image on the canvas, whatever
+/// their View. The document and the undo history stay as they are. The panel's eye button next to
+/// View calls it; per the public documentation of the panel, that control is pressed and held to
+/// view the source image
+/// (<https://web.archive.org/web/20250831090623/https://helpx.adobe.com/illustrator/using/image-trace.html>).
+fn hold_source(app: &mut VectorcraftApp, ctx: &egui::Context, down: bool) {
+    let ids = app
+        .session
+        .active()
+        .filter(|_| down)
+        .map(|st| st.selection.objects.iter().copied().filter(|id| st.doc.node(*id).is_some_and(is_trace)).collect::<Vec<_>>())
+        .filter(|ids| !ids.is_empty())
+        .map(std::sync::Arc::new);
+    if ids != app.ui.trace_hold_source {
+        app.ui.trace_hold_source = ids;
+        ctx.request_repaint();
     }
 }
 
@@ -217,6 +249,7 @@ fn trace(app: &mut VectorcraftApp, st: &mut TraceUi) {
             // still be recognized as a change, even when it returns to the previous settings.
             if let Some(stored) = target(app).2 {
                 st.synced = stored;
+                st.object = target_key(app);
             }
         }
         Err(e) => app.ui.status = e,
@@ -248,11 +281,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
     }
     let (is_trace, is_image, stored) = target(app);
-    if let Some(t) = stored.filter(|t| *t != st.synced) {
-        st.preset = t["preset"].as_str().unwrap_or("Custom").to_string();
-        st.params = t["params"].clone();
+    let object = target_key(app);
+    if let Some(t) = stored.filter(|t| *t != st.synced || object != st.object) {
+        // A change of the object's view alone (here or in the Control bar) keeps the settings that
+        // wait in the panel with Preview off.
+        if object != st.object || t["preset"] != st.synced["preset"] || t["params"] != st.synced["params"] {
+            st.preset = t["preset"].as_str().unwrap_or("Custom").to_string();
+            st.params = t["params"].clone();
+        }
         st.view = TraceView::of(&t);
         st.synced = t;
+        st.object = object;
     }
     let mut retrace = false;
 
@@ -275,12 +314,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("View:"));
-        if let Some(v) = view_dropdown(ui, st.view, 170.0) {
+        let eye = 24.0;
+        if let Some(v) = view_dropdown(ui, st.view, (ui.available_width() - eye - ui.spacing().item_spacing.x).min(170.0)) {
             st.view = v;
             if is_trace {
                 set_view(app, v);
             }
         }
+        let held = app.ui.trace_hold_source.is_some();
+        let r = widgets::icon_button_enabled(ui, "eye", tl!("Press and hold to view the source image"), held, is_trace, eye);
+        if cfg!(test) {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("trace-hold-source"), r.rect));
+        }
+        hold_source(app, ui.ctx(), is_trace && r.is_pointer_button_down_on());
     });
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Mode:"));
@@ -447,6 +493,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         );
     }
     ui.horizontal(|ui| {
+        let preview = app.ui.image_trace_preview;
+        if widgets::check(ui, tl!("Preview"), preview, true) {
+            app.ui.image_trace_preview = !preview;
+        }
         let r = ui.add_enabled_ui(is_trace || is_image, |ui| widgets::flat_button(ui, tl!("Trace"), 80.0)).inner;
         if r.on_disabled_hover_text(tl!("Select an image to trace")).clicked() {
             trace(app, &mut st);
@@ -455,7 +505,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("imageTrace.expand", json!({})).ok();
         }
     });
-    if retrace && is_trace {
+    // Preview turned on (the checkbox, or `ui.set`): the selected object shows the settings that
+    // waited in the panel. With no Image Trace object selected, they wait until it is selected again.
+    let preview = app.ui.image_trace_preview;
+    retrace |= preview && st.preview_off && is_trace && st.params != st.synced["params"];
+    if is_trace || !preview {
+        st.preview_off = !preview;
+    }
+    if retrace && is_trace && preview {
         trace(app, &mut st);
     }
     set_pstate(ui.ctx(), "image-trace", st);
@@ -531,6 +588,20 @@ mod tests {
         trace_with(&mut app, "Default");
         assert!(target(&app).2.is_some(), "the image is traced");
         assert!(app.ui.status.contains("1601 × 12") && app.ui.status.contains("more slowly"), "{}", app.ui.status);
+    }
+
+    #[test]
+    fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let img = image::RgbaImage::from_fn(1602, 1602, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+        let mut png = vec![];
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let data = vectorcraft_format::base64_encode(&png);
+        app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
+        trace_with(&mut app, "Flat Logo");
+        assert!(target(&app).2.is_some(), "the image is traced: {}", app.ui.status);
+        assert_eq!(app.ui.status, "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.");
     }
 
     #[test]
@@ -630,6 +701,148 @@ mod tests {
     }
 
     #[test]
+    fn with_preview_off_a_slider_change_waits_for_trace() {
+        let mut app = traced_app_with_ink(100);
+        trace_and_open(&mut app, "Sketched Art");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        assert!(app.ui.image_trace_preview, "on at first");
+        click(&mut app, &ctx, "Preview");
+        assert!(!app.ui.image_trace_preview);
+        let steps = app.session.active().unwrap().history.undo.len();
+        let rail = ctx.data(|d| d.get_temp::<Rect>(egui::Id::new(("trace-slider", "Threshold")))).unwrap();
+        let at = rail.left_center() + vec2(20.0, 0.0);
+        for pressed in [true, false] {
+            frame(
+                &mut app,
+                &ctx,
+                vec![
+                    Event::PointerMoved(at),
+                    Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() },
+                ],
+            );
+        }
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no trace while Preview is off");
+        assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 2, "source and ink path, as before");
+        let draft: TraceUi = pstate(&ctx, "image-trace");
+        assert_ne!(draft.params["threshold"], target(&app).2.unwrap()["params"]["threshold"], "the change waits in the panel");
+        click(&mut app, &ctx, "Trace");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "Trace applies it as one undo step");
+        assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 1, "only the source remains below the ink's luminance");
+        assert_eq!(target(&app).2.unwrap()["params"], pstate::<TraceUi>(&ctx, "image-trace").params);
+        assert!(!app.ui.image_trace_preview, "Trace leaves Preview off");
+    }
+
+    #[test]
+    fn turning_preview_on_traces_the_changes_that_waited() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let strokes = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["strokes"].clone());
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let steps = undo(&app);
+        click(&mut app, &ctx, "Preview");
+        click(&mut app, &ctx, "Preview");
+        assert!(app.ui.image_trace_preview);
+        assert_eq!(undo(&app), steps, "nothing waited, so nothing is traced");
+        click(&mut app, &ctx, "Preview");
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(strokes(&app), Some(json!(false)));
+        assert_eq!(undo(&app), steps);
+        click(&mut app, &ctx, "Preview");
+        assert_eq!(strokes(&app), Some(json!(true)), "traced again with strokes");
+        assert_eq!(undo(&app), steps + 1);
+        // A change of view keeps the settings that wait, and Preview turned on with `ui.set` traces them.
+        click(&mut app, &ctx, "Preview");
+        click(&mut app, &ctx, "Fills");
+        assert_eq!(target(&app).2.unwrap()["params"]["fills"], json!(true));
+        click(&mut app, &ctx, "Tracing Result");
+        click(&mut app, &ctx, "Outlines");
+        assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines));
+        assert_eq!(undo(&app), steps + 2, "the view changes without a trace");
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["fills"], json!(false), "the change still waits");
+        app.ui.image_trace_preview = true;
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(target(&app).2.unwrap()["params"]["fills"], json!(false), "traced with the waiting change");
+        assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines), "in the view chosen");
+        assert_eq!(undo(&app), steps + 3);
+    }
+
+    #[test]
+    fn preview_turned_on_with_nothing_selected_traces_when_the_object_is_selected_again() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let a = first_selected(&app).unwrap().id;
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        click(&mut app, &ctx, "Preview");
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "the change waits");
+        app.run("select.none", json!({})).unwrap();
+        let steps = undo(&app);
+        click(&mut app, &ctx, "Preview");
+        assert!(app.ui.image_trace_preview);
+        assert_eq!(undo(&app), steps, "nothing to trace with nothing selected");
+        app.run("select.set", json!({"ids": [a.0]})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(true), "traced with the change that waited");
+        assert_eq!(undo(&app), steps + 1);
+    }
+
+    #[test]
+    fn settings_that_wait_stay_with_their_object() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let a = first_selected(&app).unwrap().id;
+        app.run("edit.duplicate", json!({})).unwrap();
+        let b = first_selected(&app).unwrap().id;
+        assert_ne!(a, b);
+        assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "the copy has the same settings");
+        app.run("select.set", json!({"ids": [a.0]})).unwrap();
+        click(&mut app, &ctx, "Preview");
+        click(&mut app, &ctx, "Strokes");
+        assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(true), "the change waits for A");
+        app.run("select.set", json!({"ids": [b.0]})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(false), "the panel shows B's own settings");
+        click(&mut app, &ctx, "Trace");
+        assert_eq!(target(&app).2.unwrap()["params"]["strokes"], json!(false), "B is traced with its own settings");
+    }
+
+    #[test]
+    fn preview_is_kept_with_the_preferences_and_reset_to_default_leaves_it() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click(&mut app, &ctx, "Preview");
+        let menu_frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+        };
+        let texts = menu_frame(&mut app, vec![]);
+        // Menu items draw their label after the check mark's column.
+        let at = texts.iter().find(|(t, _)| t.trim() == "Reset to Default").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{texts:?}"));
+        for pressed in [true, false] {
+            menu_frame(
+                &mut app,
+                vec![
+                    Event::PointerMoved(at),
+                    Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() },
+                ],
+            );
+        }
+        assert!(pstate::<TraceUi>(&ctx, "image-trace").params.is_null(), "the panel's settings were reset");
+        assert!(!app.ui.image_trace_preview, "Reset to Default leaves Preview");
+        let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert!(!saved.image_trace_preview);
+        let old: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
+        assert!(old.image_trace_preview, "on for preferences saved before Preview existed");
+    }
+
+    #[test]
     fn sketch_adjustment_sliders_retrace_on_release() {
         let mut app = traced_app();
         trace_and_open(&mut app, "Sketched Art");
@@ -662,6 +875,39 @@ mod tests {
             let state: TraceUi = pstate(&ctx, "image-trace");
             assert_eq!(state.params, stored["params"], "{label} survives the next frame");
         }
+    }
+
+    /// Holding the eye button next to View down lists the selected Image Trace object for the
+    /// canvas to draw with its source image; releasing it shows the object's View again. The
+    /// document, its View and the undo history stay as they were. With a plain image selected the
+    /// button is disabled.
+    #[test]
+    fn holding_the_eye_button_shows_the_source_image_until_released() {
+        let mut app = traced_app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, vec![]);
+        let id = first_selected(&app).unwrap().id;
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
+        let (steps, rev) = (undo(&app), revision(&app));
+        let at = ctx.data(|d| d.get_temp::<Rect>(egui::Id::new("trace-hold-source"))).unwrap().center();
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
+        assert_eq!(app.ui.trace_hold_source.as_deref(), Some(&vec![id]), "held: the object shows its source image");
+        frame(&mut app, &ctx, vec![]);
+        assert!(app.ui.trace_hold_source.is_some(), "still held on the next frame");
+        frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.ui.trace_hold_source, None, "released: the object shows its View again");
+        assert_eq!(undo(&app), steps, "no undo step");
+        assert_eq!(revision(&app), rev, "the document is unchanged");
+        assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Result), "its View is unchanged");
+        app.run("imageTrace.release", json!({})).unwrap();
+        assert!(matches!(first_selected(&app).unwrap().kind, NodeKind::Image(_)));
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
+        assert_eq!(app.ui.trace_hold_source, None, "a plain image has no source image to show");
+        frame(&mut app, &ctx, vec![press(false)]);
     }
 
     #[test]

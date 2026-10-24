@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 use vectorcraft_color::cms::Cms;
 use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType};
 use vectorcraft_doc::{Document, Node};
-use vectorcraft_geom::{Affine, Rect, Shape};
+use vectorcraft_geom::{Affine, Rect, Shape, Vec2};
 use vello_cpu::peniko::{Extend, ImageQuality, ImageSampler};
 use vello_cpu::{Pixmap, RenderContext};
 
@@ -205,10 +205,18 @@ fn with_tile_renderer<T>(f: impl FnOnce(&mut Renderer) -> T) -> Option<T> {
         }))
     })?;
     let mut r = r;
+    // Restores the depth even if `f` panics and the panic is caught (the renderer is then dropped).
+    struct Restore;
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CACHE.with(|c| c.borrow_mut().depth -= 1);
+        }
+    }
+    let guard = Restore;
     let out = f(&mut r);
+    drop(guard);
     CACHE.with(|c| {
         let mut c = c.borrow_mut();
-        c.depth -= 1;
         if c.renderer.is_none() {
             c.renderer = Some(r);
         }
@@ -299,6 +307,22 @@ pub fn render_pattern_swatch(doc: &Document, name: &str, size: u32) -> Option<Re
 }
 
 impl Renderer {
+    /// Dimmed pattern-editing preview copies at `offsets`.
+    fn draw_dimmed_pattern_copies(&mut self, ctx: &mut RenderContext, f: &Frame, dim: f32, offsets: &[Vec2], children: &[Arc<Node>]) {
+        if offsets.is_empty() {
+            return;
+        }
+        let comp = crate::group::Composite { opacity: dim, ..Default::default() };
+        self.group(ctx, f, comp, &mut |r, c, fr| {
+            for o in offsets {
+                let frame = Frame { view: fr.view * Affine::translate(*o), visible: fr.visible - *o, ..*fr };
+                for a in children {
+                    r.draw_arc(c, &frame, a);
+                }
+            }
+        });
+    }
+
     /// Pattern editing mode: draw the tile layer, its dimmed copies and the tile edge instead of
     /// the document. Returns false when not in pattern editing mode.
     pub(crate) fn draw_pattern_edit(&mut self, ctx: &mut RenderContext, f: &Frame) -> bool {
@@ -308,17 +332,13 @@ impl Renderer {
         let children: Vec<Arc<Node>> = layer.children().cloned().unwrap_or_default();
         if layer.visible && !children.is_empty() {
             let dim = (def.dim_copies / 100.0).clamp(0.0, 1.0);
-            let comp = crate::group::Composite { opacity: dim, ..Default::default() };
-            self.group(ctx, f, comp, &mut |r, c, fr| {
-                for o in def.preview_offsets() {
-                    let frame = Frame { view: fr.view * Affine::translate(o), visible: fr.visible - o, ..*fr };
-                    for a in &children {
-                        r.draw_arc(c, &frame, a);
-                    }
-                }
-            });
+            let (before, after) = def.preview_offsets_dimmed_sides();
+            self.draw_dimmed_pattern_copies(ctx, f, dim, &before, &children);
+            self.draw_arc(ctx, f, layer);
+            self.draw_dimmed_pattern_copies(ctx, f, dim, &after, &children);
+        } else {
+            self.draw_arc(ctx, f, layer);
         }
-        self.draw_arc(ctx, f, layer);
         // The tile edge and swatch bounds are editing aids: exports and thumbnails leave them out,
         // as they do guides (#3261).
         if f.opts.skip_templates {
@@ -601,7 +621,8 @@ mod tests {
         let mut d = doc_with_pattern(TileType::Grid);
         // A PNG signature with nothing after it.
         d.images.insert("cut".into(), ImageBlob::new("image/png", b"\x89PNG\r\n\x1a\n".to_vec()));
-        let im = ImageObject { key: "cut".into(), width: 10, height: 10, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+        let im =
+            ImageObject { key: "cut".into(), width: 10, height: 10, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
         d.patterns[0].art = vec![Arc::new(Node::new(NodeId(901), NodeKind::Image(Box::new(im))))];
         let mut r = Renderer::new();
         let start = tiles_rasterized();
@@ -674,5 +695,14 @@ mod tests {
         // A change within 2× keeps the raster.
         assert_eq!(raster_scale(2.1, (10.0, 10.0)), raster_scale(3.9, (10.0, 10.0)));
         assert!(raster_scale(64.0, (1000.0, 10.0)) * 1000.0 <= MAX_TILE_PX);
+    }
+
+    #[test]
+    fn tile_renderer_depth_survives_caught_panics() {
+        for _ in 0..4 {
+            let r = std::panic::catch_unwind(|| with_tile_renderer(|_| panic!("tile boom")));
+            assert!(r.is_err());
+        }
+        assert!(with_tile_renderer(|_| ()).is_some(), "depth leaked after caught panics");
     }
 }

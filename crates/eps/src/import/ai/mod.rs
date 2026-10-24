@@ -22,6 +22,7 @@ mod lex;
 mod mesh;
 mod obj;
 mod paint;
+mod palette;
 mod read;
 mod style;
 
@@ -31,7 +32,7 @@ use super::lex::find;
 use crate::ps;
 
 pub(crate) use frames::text_frames;
-pub use read::{Structure, artboards, read, variables};
+pub use read::{IMAGE_TOO_LARGE, Structure, artboards, read, variables};
 pub(crate) use read::{slot_frame, slot_of};
 
 #[cfg(test)]

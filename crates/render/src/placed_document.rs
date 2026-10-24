@@ -120,12 +120,25 @@ impl Bitmaps {
     }
 }
 
+/// Runs a closure in the file-access scope of whoever scheduled a job (see [`set_scope_capture`]).
+pub type Scoped = Box<dyn FnOnce(&mut dyn FnMut()) + Send>;
+
+static SCOPE_CAPTURE: std::sync::OnceLock<fn() -> Scoped> = std::sync::OnceLock::new();
+
+/// Register how the scope the caller reads files in is carried to the background workers, which
+/// read placed files too (the first registration stays). The engine registers its automation roots.
+pub fn set_scope_capture(f: fn() -> Scoped) {
+    let _ = SCOPE_CAPTURE.set(f);
+}
+
 /// What a bitmap is made from.
 struct Job {
     key: BitmapKey,
     object: PlacedDocument,
     blob: ImageBlob,
     step: f64,
+    /// The scheduler's file-access scope, which the worker runs the job in.
+    scope: Option<Scoped>,
 }
 
 /// Device pixels per point of `object`'s box its preview `bytes` have.
@@ -192,12 +205,19 @@ fn pixels(v: f64) -> u16 {
 }
 
 /// Make `job`'s bitmap and keep it.
-fn run(r: &mut Renderer, job: Job) {
-    if let Some(pm) = make(r, &job.object, &job.blob, job.step) {
-        lock(&BITMAPS).insert(job.key.clone(), pm, job.step);
+fn run(r: &mut Renderer, mut job: Job) {
+    let scope = job.scope.take();
+    let mut body = || {
+        if let Some(pm) = make(r, &job.object, &job.blob, job.step) {
+            lock(&BITMAPS).insert(job.key.clone(), pm, job.step);
+        }
+        lock(&PENDING).remove(&job.key);
+        GENERATION.fetch_add(1, Ordering::Relaxed);
+    };
+    match scope {
+        Some(scoped) => scoped(&mut body),
+        None => body(),
     }
-    lock(&PENDING).remove(&job.key);
-    GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -317,7 +337,7 @@ impl Renderer {
         let shown = match found {
             Some(pm) => Some(pm),
             None => {
-                schedule(Job { key, object: p.clone(), blob, step });
+                schedule(Job { key, object: p.clone(), blob, step, scope: SCOPE_CAPTURE.get().map(|capture| capture()) });
                 // Made here and now (no threads) or meanwhile another step's.
                 let mut b = lock(&BITMAPS);
                 b.get(&(p.key.clone(), step.to_bits())).or(nearest.map(|n| n.0))

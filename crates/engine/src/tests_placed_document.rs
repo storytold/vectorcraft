@@ -1,6 +1,7 @@
 //! Placed documents: a VectorCraft document placed linked (`file.place`'s default for one read
 //! from a file), drawn and output as vectors, saved with its preview, checked, updated and
-//! relinked when the file changes, and turned into an editable copy (Break Link, Expand).
+//! relinked when the file changes, and turned into an editable copy (Break Link, Expand). A PDF
+//! or `.ai` page places the same way.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -435,6 +436,171 @@ fn relink_points_a_placed_document_at_another_file() {
     assert_eq!(r["relinked"], json!([id.0]), "{r}");
     assert_eq!(placed(&s, id).link.path, b);
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
+/// A file made from scratch at `path` in `format` (`pdf`, or `ai`: a PDF-compatible .ai): one
+/// 100×50 page per color of `pages`, filled with it (`extra` more rectangles on each change the
+/// file's size).
+fn pdf_source(path: &str, format: &str, pages: &[[u8; 3]], extra: usize) {
+    let mut d = Document::new(100.0, 50.0);
+    let layer = d.layers[0].id;
+    for (i, rgb) in pages.iter().enumerate() {
+        let x = i as f64 * 150.0;
+        let page = Rect::new(x, 0.0, x + 100.0, 50.0);
+        if i > 0 {
+            let mut b = d.artboards[0].clone();
+            (b.id, b.rect) = (i as u32 + 1, page);
+            d.artboards.push(b);
+        }
+        for _ in 0..=extra {
+            let id = d.alloc_id();
+            d.insert(Some(layer), usize::MAX, Node::path(id, shapes::rectangle(page), look(*rgb))).unwrap();
+        }
+    }
+    let p = if format == "ai" { json!({"pdfCompatible": true}) } else { json!({"range": "all", "preserveEditing": false}) };
+    write(path, &cmd::fileio::encode_all(&d, format, &p).unwrap().files[0].1);
+}
+
+#[test]
+fn a_pdf_page_placed_without_link_is_embedded() {
+    let dir = Folder::new("placed-pdf-embedded");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED], 0);
+    let mut s = session();
+    let r = s.execute("file.place", &json!({"path": src, "link": false, "at": [200, 150]})).unwrap();
+    assert_eq!(r["linked"], false, "{r}");
+    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+    assert_eq!(n.kind_label(), "Clip Group");
+    assert!(!s.doc().unwrap().doc.has_placed());
+    // Text asked for as outlines is embedded with Link too.
+    let r = s.execute("file.place", &json!({"path": src, "textAs": "outlines"})).unwrap();
+    assert_eq!(r["linked"], false, "{r}");
+    assert!(!s.doc().unwrap().doc.has_placed());
+}
+
+#[test]
+fn with_link_a_pdf_page_places_linked() {
+    let dir = Folder::new("placed-pdf-linked");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED], 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let p = placed(&s, id);
+    assert_eq!((p.link.path.as_str(), p.link.page, p.bounding), (src.as_str(), Some(1), false), "{p:?}");
+    assert!((p.width - 100.0).abs() < 1e-6 && (p.height - 50.0).abs() < 1e-6, "{p:?}");
+    assert_eq!(bounds(&s, id), Rect::new(150.0, 125.0, 250.0, 175.0));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!((row["format"].as_str(), row["document"].as_bool(), row["status"].as_str()), (Some("PDF"), Some(true), Some("ok")), "{row}");
+    assert_eq!(s.doc().unwrap().doc.images[&p.key].mime, "application/pdf");
+    // Break Link gives the group placing it without Link gives.
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r["embedded"], json!([id.0]), "{r}");
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().kind_label(), "Clip Group");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+#[test]
+fn a_changed_pdf_is_modified_and_update_links_reads_it_again() {
+    let dir = Folder::new("placed-pdf-update");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED], 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    pdf_source(&src, "pdf", &[BLUE], 1);
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["links"][0]["status"], "modified");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "shows the page as it read it");
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"], json!([id.0]), "{u}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["modified"], 0);
+    // Relinked to another PDF, it shows that file's page.
+    let other = dir.file("other.pdf");
+    pdf_source(&other, "pdf", &[RED], 2);
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([id.0]), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    // A file it can't show is refused.
+    let notes = dir.file("notes.txt");
+    write(&notes, b"not a page");
+    let e = s.execute("links.relink", &json!({"ids": [id.0], "path": notes})).unwrap_err().to_string();
+    assert!(e.contains("isn't a VectorCraft document, a PDF or a PDF-compatible .ai file"), "{e}");
+    assert_eq!(placed(&s, id).link.path, other);
+}
+
+#[test]
+fn a_linked_pdf_page_outputs_as_vectors_after_the_document_reopens() {
+    let dir = Folder::new("placed-pdf-outputs");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED], 3);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    open(&mut s, &doc_path);
+    let key = placed(&s, id).key;
+    assert!(s.doc().unwrap().doc.images[&key].is_proxy(), "opened with the preview only");
+    // Output reads the file again: the page's paths, not the preview.
+    let pdf = s.execute("document.serialize", &json!({"format": "pdf"})).unwrap();
+    assert_eq!(pdf["warnings"], json!([]), "{}", pdf["warnings"]);
+    let (images, paths) = pdf_contents(&decode(&pdf));
+    assert_eq!(images, 0, "no image in the PDF");
+    assert!(paths > 0);
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    assert!(!svg["text"].as_str().unwrap().contains("<image"), "vectors");
+    // Include Linked Files keeps the PDF itself.
+    let full = file_json(&decode(&s.execute("document.serialize", &json!({"format": "vectorcraft", "includeLinked": true})).unwrap()));
+    assert_eq!((full["images"][&key]["proxy"].clone(), full["images"][&key]["mime"].as_str()), (Value::Null, Some("application/pdf")));
+}
+
+#[test]
+fn saving_and_reopening_keeps_a_linked_pdf_pages_number_and_box() {
+    let dir = Folder::new("placed-pdf-reopen");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED, BLUE], 4);
+    let mut s = session();
+    let r = s.execute("file.place", &json!({"path": src, "page": 2, "crop": "media", "at": [200, 150]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let before = placed(&s, id);
+    assert_eq!((before.link.page, before.page_box), (Some(2), vectorcraft_doc::PageBox::Media), "{before:?}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE), "page 2");
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    let saved = file_json(&std::fs::read(&doc_path).unwrap());
+    let kind = &saved["document"]["layers"][0]["kind"]["children"][0]["kind"];
+    assert_eq!((kind["type"].as_str(), kind["page_box"].as_str(), kind["link"]["page"].as_u64()), (Some("placeddocument"), Some("media"), Some(2)));
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    let mut reopened = placed(&s, id);
+    assert_eq!(reopened.link.relative.take().as_deref(), Some("flyer.pdf"), "written on save");
+    assert_eq!(reopened, before);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    // Read again from the file, it shows the same page and box.
+    pdf_source(&src, "pdf", &[RED, RED], 5);
+    s.execute("links.update", &json!({})).unwrap();
+    let after = placed(&s, id);
+    assert_eq!((after.link.page, after.page_box), (Some(2), vectorcraft_doc::PageBox::Media));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+#[test]
+fn a_pdf_compatible_ai_file_places_linked_like_a_pdf() {
+    let dir = Folder::new("placed-ai-linked");
+    let src = dir.file("badge.ai");
+    pdf_source(&src, "ai", &[RED], 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    assert_eq!(placed(&s, id).link.path, src);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!(row["format"], "PDF-compatible .ai", "{row}");
+    pdf_source(&src, "ai", &[BLUE], 1);
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"], json!([id.0]), "{u}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let (images, _) = pdf_contents(&decode(&s.execute("document.serialize", &json!({"format": "pdf"})).unwrap()));
+    assert_eq!(images, 0);
 }
 
 #[test]

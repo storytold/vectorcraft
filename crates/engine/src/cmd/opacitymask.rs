@@ -237,6 +237,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
             released.put(d, *id, parts)?;
         }
         released.finish(d)?;
+        // Copied type whose layout caches `reid` dropped has them again.
+        super::typecmd::refresh_bounds_of(d, &out);
         sel.set(out);
         Ok(())
     })?;

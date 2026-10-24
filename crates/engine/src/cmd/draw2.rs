@@ -665,9 +665,10 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     let pressure = stroke_pressure(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
     let tol = number_or(p, "fidelity", 1.5, C)?.clamp(0.05, 100.0);
-    let closed = bool_or(p, "closed", false);
+    let closed = switch_or(p, "closed", false, C)?;
     let brush = str_param(p, "style") == Some("brush");
-    let keep_selected = bool_or(p, "keepSelected", true);
+    let keep_selected = switch_or(p, "keepSelected", true, C)?;
+    let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
         let id = id_param(ext, "id").ok_or_else(|| bad(C, "extend needs id"))?;
         let at_start = str_param(ext, "end") == Some("start");
@@ -764,7 +765,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "need at least two points"));
     }
     let sp = fit_freehand(&pts, tol, closed);
-    let fill = if bool_or(p, "fill", false) { s.paint.fill.clone() } else { Paint::None };
+    let fill = if filled { s.paint.fill.clone() } else { Paint::None };
     // A pencil path with a fill keeps a stroke of None (#1679); only one that would show nothing
     // gets black. A brush is its stroke.
     let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
@@ -780,12 +781,11 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
 fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.curvature";
     let arr = p.get("points").and_then(Value::as_array).ok_or_else(|| bad(C, "missing points"))?;
-    let pts: Vec<(Point, bool)> =
-        arr.iter().map(|v| Ok((point_entry(v, C)?, v.get("corner").and_then(Value::as_bool).unwrap_or(false)))).collect::<Result<_>>()?;
+    let pts: Vec<(Point, bool)> = arr.iter().map(|v| Ok((point_entry(v, C)?, switch_or(v, "corner", false, C)?))).collect::<Result<_>>()?;
     if pts.is_empty() {
         return Err(bad(C, "need at least one point"));
     }
-    let sp = vectorcraft_tools::draw2::curvature_spline(&pts, bool_or(p, "closed", false));
+    let sp = vectorcraft_tools::draw2::curvature_spline(&pts, switch_or(p, "closed", false, C)?);
     if let Some(id) = id_param(p, "id") {
         s.edit("Curvature", |d, sel| {
             *path_mut(d, id)? = PathData::single(sp);
@@ -831,7 +831,7 @@ fn curvature_edit(s: &mut Session, p: &Value) -> Result<Value> {
         None => EndCurve::Keep,
         Some(f) => EndCurve::parse(f).ok_or_else(|| bad(C, format!("unknown from {f:?}")))?,
     };
-    let corner = bool_or(p, "corner", false);
+    let corner = switch_or(p, "corner", false, C)?;
     let op = match str_param(p, "op") {
         Some("move") => CurvatureOp::Move(usize_req(p, "anchor", C)?, to()?),
         Some("insert") => CurvatureOp::Insert(usize_req(p, "segment", C)?, f64_or(p, "t", 0.5), at),
@@ -1030,7 +1030,7 @@ fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
     if !(dv.x.is_finite() && dv.y.is_finite() && dv.hypot() < MAX_INPUT) {
         return Err(bad(C, "invalid delta"));
     }
-    let perpendicular = bool_or(p, "perpendicular", false);
+    let perpendicular = switch_or(p, "perpendicular", false, C)?;
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -1490,11 +1490,12 @@ fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         Paint::solid(Color::BLACK)
     };
-    let keep_selected = bool_or(p, "keepSelected", false);
-    let only_selection = bool_or(p, "mergeOnlySelection", false);
+    let keep_selected = switch_or(p, "keepSelected", false, C)?;
+    let only_selection = switch_or(p, "mergeOnlySelection", false, C)?;
+    let merge = switch_or(p, "merge", true, C)?;
     let st = s.doc()?;
     let mut merge_ids = vec![];
-    if bool_or(p, "merge", true) && !(only_selection && st.selection.is_empty()) {
+    if merge && !(only_selection && st.selection.is_empty()) {
         let all = Selection::default();
         let from = if only_selection { &st.selection } else { &all };
         for id in target_paths(&st.doc, from, poly_bounds(&pts, size)) {

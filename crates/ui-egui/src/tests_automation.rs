@@ -8,12 +8,19 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::AutomationRoots;
 
+use crate::background::SharedWriteFn;
 use crate::control::ControlRequest;
 use crate::{Services, VectorcraftApp};
 
 /// A folder holding `in` (the read root, with `a.svg`), `out` (the write root) and `outside`
 /// (with `b.svg`), and an app with the desktop's file services confined to `in` and `out`.
 fn confined(tag: &str) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, PathBuf) {
+    confined_with(tag, None)
+}
+
+/// [`confined`], with `write_shared` as the thread-safe writer that Background Save and Background
+/// Export use.
+fn confined_with(tag: &str, write_shared: Option<SharedWriteFn>) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, PathBuf) {
     let base = std::env::temp_dir().join(format!("vc-ui-roots-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     for d in ["in", "out", "outside"] {
@@ -25,9 +32,10 @@ fn confined(tag: &str) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlReques
     let services = Services {
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()))),
+        write_shared,
         ..Default::default()
     };
-    let roots = AutomationRoots::new(Some(&base.join("in")), Some(&base.join("out"))).unwrap();
+    let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     let app = VectorcraftApp::new(Session::new(), services).with_control(rx).with_automation_roots(roots);
     (app, tx, base)
@@ -77,6 +85,52 @@ fn control_requests_stay_inside_the_roots() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.save` (MCP's `save_file`) writes a native file with the save options it is given, without
+/// asking for them.
+#[test]
+fn control_saves_take_the_native_save_options() {
+    let (mut app, tx, base) = confined("saveopts");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let saved = |app: &mut VectorcraftApp, name: &str, mut params: Value| {
+        let path = base.join("out").join(name);
+        params["path"] = json!(s(path.clone()));
+        let r = request(app, &tx, "app.save", params);
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(r["result"].get("pending").is_none() && app.ui.dialog.is_none(), "no dialog opens: {r}");
+        std::fs::read(path).unwrap()
+    };
+    assert_eq!(saved(&mut app, "gz.vectorcraft", json!({"compress": true}))[..2], [0x1f, 0x8b]);
+    let v3: Value = serde_json::from_slice(&saved(&mut app, "v3.vectorcraft", json!({"version": 3}))).unwrap();
+    assert_eq!(v3["version"], 3);
+    assert!(vectorcraft_format::preview(&saved(&mut app, "p.vectorcraft", json!({"preview": true}))).is_some());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
+/// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
+/// before they reply. Without `wait` the refusal reaches only the status bar.
+#[test]
+fn control_saves_with_wait_reply_with_the_write_roots_refusal() {
+    let shared: SharedWriteFn = std::sync::Arc::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()));
+    let (mut app, tx, base) = confined_with("wait", Some(shared));
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    for (method, name) in [("app.save", "a.vectorcraft"), ("app.export", "a.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": s(base.join("outside").join(name)), "wait": true}));
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the write root")), "{method}: {r}");
+        let path = base.join("out").join(name);
+        let r = request(&mut app, &tx, method, json!({"path": s(path.clone()), "wait": true}));
+        assert_eq!(r["ok"], true, "{method}: {r}");
+        assert!(r["result"].get("background").is_none() && path.is_file(), "{method}: written before the reply: {r}");
+    }
+    let r = request(&mut app, &tx, "app.save", json!({"path": s(base.join("outside/b.vectorcraft"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.status.contains("outside the write root"), "{}", app.ui.status);
+    assert_eq!(std::fs::read_dir(base.join("outside")).unwrap().count(), 1, "nothing written outside");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A shortcut set another app saved (`.kys`) is read only from inside the read root, whichever way a
 /// control request names it: `shortcutSet.read`, Import Shortcut Set, Keyboard Shortcuts' Import…
 /// and File › Open.
@@ -102,6 +156,27 @@ fn shortcut_sets_are_read_only_inside_the_read_root() {
     let r = request(&mut app, &tx, "engine.execute", execute("ui.shortcutImportDialog", base.join("in/a.kys")));
     assert_eq!(r["ok"], true, "{r}");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::shortcut_import::KIND));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.render` (MCP's `render_preview` and `screenshot` in the app) draws the artboard pixel for
+/// pixel as `app.export` writes a PNG on white: two rectangles that meet at x 40.3 and a diagonal
+/// edge.
+#[test]
+fn control_render_matches_a_png_export_on_white() {
+    let (mut app, tx, base) = confined("render");
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect x="0" y="10" width="40.3" height="50" fill="#204080"/><rect x="40.3" y="10" width="49.7" height="50" fill="#e0a020"/><path d="M10 75 L110 5 L115 30 Z" fill="#30a050"/></svg>"##;
+    std::fs::write(base.join("in/edges.svg"), svg).unwrap();
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/edges.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let r = request(&mut app, &tx, "app.export", json!({"format": "png", "background": "white"}));
+    let export = pixels(&r["result"]["dataBase64"]);
+    let r = request(&mut app, &tx, "ui.render", json!({}));
+    let render = pixels(&r["result"]["pngBase64"]);
+    assert_eq!(render.dimensions(), export.dimensions());
+    let differ = render.pixels().zip(export.pixels()).filter(|(a, b)| a != b).count();
+    assert_eq!(differ, 0, "{differ} pixels differ from the export");
     let _ = std::fs::remove_dir_all(base);
 }
 

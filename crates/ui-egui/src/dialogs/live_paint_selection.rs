@@ -67,8 +67,8 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (min, max) = LP_SELECT_WIDTH_RANGE;
     let v = d.f64("width", min);
     widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
-        if let Some(x) = widgets::plain_field(ui, "lp-select-width", v, "px", 0, 72.0) {
-            d.fields.insert("width".into(), json!(x.round().clamp(min, max)));
+        if let Some(x) = widgets::range_field(ui, "lp-select-width", v, min..=max, "px", 0, 72.0) {
+            d.fields.insert("width".into(), json!(x));
         }
     });
     false

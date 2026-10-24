@@ -89,7 +89,7 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
     out.stops = offsets
         .iter()
         .map(|&o| {
-            let (color, opacity) = g.sample_with(o, lerp_color);
+            let (color, opacity) = g.sample_keep_model(o);
             let (swatch, tint) = link_at(g, o);
             GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
         })

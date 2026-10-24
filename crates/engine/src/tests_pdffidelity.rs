@@ -1,5 +1,5 @@
-//! PDF vector fidelity: pattern strokes are written as their tiles clipped to the stroke's
-//! outline, freeform gradients as images of their colour field clipped to what they paint, and
+//! PDF vector fidelity: pattern fills and strokes are written as tiling patterns (strokes clipped
+//! to the stroke's outline), freeform gradients as images of their colour field clipped to what they paint, and
 //! both read back looking like the canvas (within 2% at 150 ppi), with nothing to report.
 
 use serde_json::{Value, json};
@@ -55,7 +55,7 @@ fn assert_faithful(what: &str, s: &Session, image: bool, rough: &Document) {
 }
 
 #[test]
-fn pattern_strokes_are_tiles_clipped_to_the_stroke() {
+fn pattern_strokes_are_tiling_patterns_clipped_to_the_stroke() {
     let mut s = Session::new();
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 6, "height": 6}))["id"].clone();
@@ -71,6 +71,23 @@ fn pattern_strokes_are_tiles_clipped_to_the_stroke() {
     // The old way: a mid-grey stroke.
     let grey = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
     assert_faithful("pattern stroke", &s, false, &repainted(&s, &frame, None, Some(grey)));
+}
+
+/// A brick tiling whose art reaches over the next tiles repeats as one period of the tiling (#3849).
+#[test]
+fn brick_tilings_with_overlapping_tiles_are_tiling_patterns() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 12, "height": 12}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [dot]}));
+    run(&mut s, "paint.setFill", json!({"color": "#d02020"}));
+    run(&mut s, "object.pattern.make", json!({"name": "Bricks", "tileType": "brickByRow", "width": 10, "height": 10}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let frame = run(&mut s, "shape.rectangle", json!({"x": 30, "y": 30, "width": 140, "height": 120}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [frame]}));
+    run(&mut s, "paint.setFill", json!({"swatch": "Bricks"}));
+    let grey = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    assert_faithful("brick fill", &s, false, &repainted(&s, &frame, Some(grey), None));
 }
 
 #[test]

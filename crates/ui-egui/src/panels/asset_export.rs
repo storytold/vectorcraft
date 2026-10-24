@@ -3,8 +3,9 @@
 //! of them all), and so does the selection with the + button. Clicking selects assets (Shift or
 //! Cmd adds), double-clicking one renames it and the bin removes the selected ones. Below are the
 //! export settings, the format rows Export for Screens shows too (one set per document), and
-//! Export, which writes the selected assets (else all of them) into a picked folder; the web
-//! downloads them. The screen button opens Export for Screens on its Assets tab.
+//! Export, which writes the selected assets (else all of them) into a picked folder (on the
+//! desktop with Background Export on, on the background thread); the web downloads them. The
+//! screen button opens Export for Screens on its Assets tab.
 //!
 //! Everything runs through the `assets.*` commands.
 

@@ -500,7 +500,7 @@ impl Imported {
 
 impl Clipboard {
     /// `nodes` (from `src`) and the resources of `src` they use.
-    pub(super) fn gather(src: &Document, nodes: Vec<Node>) -> Self {
+    pub(crate) fn gather(src: &Document, nodes: Vec<Node>) -> Self {
         let used = Used::of(&Defs::of(src), &nodes);
         let pick = |r: Res, list: &[TextStyleDef]| list.iter().filter(|s| used.has(r, &s.name)).cloned().collect::<Vec<_>>();
         let brushes = match used.names.get(&Res::Brush) {

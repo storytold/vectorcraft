@@ -11,6 +11,8 @@
 //! `YYYYMMDD`…, see `document.exportForScreens`) names every file alike, with a live example, and
 //! the files go into one folder, or a folder per row, format, item, or item and format
 //! (`folders`). Export presets (built-in and saved) set the formats, naming and folders at once.
+//! On the desktop with Background Export on, the files are encoded and written on the background
+//! thread ([`crate::background`]) after the dialog closes.
 //!
 //! Fields (`ui.dialog.set`): `tab` (artboards|assets|layers|selection), `select` (all|range|full), `range`,
 //! `boards` ([bool] per artboard), `assets` ([asset id] checked on the Assets tab), `includeBleed`,

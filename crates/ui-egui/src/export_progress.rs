@@ -1,8 +1,9 @@
 //! The export progress dialog: while an export runs in the background (Background Export) a modal
 //! window shows what is being exported, how far it has got (artboard by artboard for raster
-//! exports of several artboards; busy for one artboard and for formats made in one go, which
-//! report no steps) and two buttons: Cancel (`file.cancelExport`, also
-//! Esc) stops it and writes nothing, Continue in Background (`file.exportInBackground`) closes the
+//! exports of several artboards, file by file for Export for Screens; busy for one artboard and for
+//! formats made in one go, which report no steps) and two buttons: Cancel (`file.cancelExport`, also
+//! Esc) stops it and writes nothing (Export for Screens keeps the files it wrote before the
+//! Cancel), Continue in Background (`file.exportInBackground`) closes the
 //! dialog and leaves the export to the status bar.
 //!
 //! It opens after [`DELAY`] so a quick export doesn't flash it, and waits while another dialog is
@@ -22,8 +23,9 @@ fn seen_id() -> egui::Id {
     egui::Id::new("export-progress-seen")
 }
 
-/// What the dialog shows: (label, steps done, steps in all, share done, exports after this one).
-fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String, u64, u64, f32, usize)> {
+/// What the dialog shows: (label, steps done, steps in all, share done, exports after this one,
+/// whether the steps are files).
+fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String, u64, u64, f32, usize, bool)> {
     let jobs: Vec<_> = app.background.jobs.iter().filter(|j| !j.hidden && !j.cancelled()).filter(|j| j.progress.is_some()).collect();
     let first = jobs.first()?;
     let since = ctx.data_mut(|m| {
@@ -38,25 +40,26 @@ fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String,
     }
     let (done, total) = first.progress.as_ref().map(|p| p.counts()).unwrap_or_default();
     let frac = first.progress.as_ref().and_then(|p| p.fraction()).unwrap_or(0.0) as f32;
-    Some((first.label.clone(), done, total, frac, jobs.len() - 1))
+    let files = first.progress.as_ref().is_some_and(|p| p.counts_files());
+    Some((first.label.clone(), done, total, frac, jobs.len() - 1, files))
 }
 
+/// Draws the window for the first export running in the background that wasn't hidden or
+/// cancelled, once it has run [`DELAY`] seconds and no other dialog is open, and runs the command
+/// of the button pressed.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
-    let Some((label, done, total, frac, more)) = shown(app, now, ctx) else { return };
+    let Some((label, done, total, frac, more, files)) = shown(app, now, ctx) else { return };
     if app.ui.dialog.is_some() {
         return;
     }
     let t = Tokens::get(ctx);
     let heading = format!("{}…", crate::i18n::msg(&label));
-    let mut action = None;
-    modal::show(ctx, &heading, egui::Id::new("export-progress"), -40.0, 20, |ui| {
-        ui.set_width(360.0);
-        modal::heading(ui, &heading);
-        ui.add_space(12.0);
+    let pressed = window(ctx, "export-progress", &heading, |ui| {
         // One step says nothing a spinner doesn't: the bar would sit at 0 % until the file is written.
         if total > 1 {
-            let step = crate::i18n::fmt(tl!("Artboard {n} of {total}"), &[("n", &(done + 1).min(total).to_string()), ("total", &total.to_string())]);
+            let step = if files { tl!("File {n} of {total}") } else { tl!("Artboard {n} of {total}") };
+            let step = crate::i18n::fmt(step, &[("n", &(done + 1).min(total).to_string()), ("total", &total.to_string())]);
             // The count on its own line: drawn over the bar it would straddle the fill's edge.
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(step).color(t.text_dim));
@@ -67,36 +70,69 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(4.0);
             ui.add(egui::ProgressBar::new(frac).desired_width(360.0).desired_height(6.0).fill(t.accent));
         } else {
-            ui.horizontal(|ui| {
-                ui.add(egui::Spinner::new().size(14.0).color(t.accent));
-                ui.label(egui::RichText::new(tl!("Encoding and writing the file…")).color(t.text_dim));
-            });
+            busy(ui, tl!("Encoding and writing the file…"));
         }
         if more > 0 {
             ui.add_space(6.0);
             let queued = crate::i18n::tn(more as u64, "{n} more export waiting", "{n} more exports waiting");
             ui.label(egui::RichText::new(queued).size(11.5).color(t.text_dim));
         }
+    });
+    let id = match pressed {
+        Some(Pressed::Cancel) => "file.cancelExport",
+        Some(Pressed::Hide) => "file.exportInBackground",
+        None => return,
+    };
+    if let Err(e) = app.run(id, json!({})) {
+        app.status(e);
+    }
+}
+
+/// A button of a progress [`window`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pressed {
+    /// Cancel, or Esc: stop the work.
+    Cancel,
+    /// Continue in Background: close the window; the work goes on, shown in the status bar.
+    Hide,
+}
+
+/// A modal window (`id`) headed `heading`, in the UI language: `body` draws how far the work has
+/// got, then come Cancel (also Esc) and Continue in Background → the one pressed. Work that may
+/// take a while in the background shows it: exports, and heavy plug-in filters
+/// ([`crate::plugin_runs`]).
+pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
+    let mut pressed = None;
+    modal::show(ctx, heading, egui::Id::new(id), -40.0, 20, |ui| {
+        ui.set_width(360.0);
+        modal::heading(ui, heading);
+        ui.add_space(12.0);
+        body(ui);
         ui.add_space(16.0);
         let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
         ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::secondary_button(ui, "Cancel").clicked() {
-                action = Some("file.cancelExport");
+                pressed = Some(Pressed::Cancel);
             }
             ui.add_space(8.0);
             if widgets::secondary_button(ui, "Continue in Background").clicked() {
-                action = Some("file.exportInBackground");
+                pressed = Some(Pressed::Hide);
             }
         });
     });
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-        action = Some("file.cancelExport");
+        pressed = Some(Pressed::Cancel);
     }
-    if let Some(id) = action
-        && let Err(e) = app.run(id, json!({}))
-    {
-        app.status(e);
-    }
+    pressed
+}
+
+/// Work that counts no steps, in a [`window`]: a spinner and `what` it does, in the UI language.
+pub fn busy(ui: &mut egui::Ui, what: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.add(egui::Spinner::new().size(14.0).color(t.accent));
+        ui.label(egui::RichText::new(what).color(t.text_dim));
+    });
 }
 
 #[cfg(test)]
@@ -192,5 +228,43 @@ mod tests {
         go.store(true, std::sync::atomic::Ordering::SeqCst);
         background::wait_all(&mut app);
         assert!(app.background.jobs.is_empty());
+    }
+
+    #[test]
+    fn an_export_of_files_counts_files() {
+        let go = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut app = app(go.clone());
+        let p = Progress::of_files();
+        let reporting = p.clone();
+        background::run_with_progress(
+            &mut app,
+            true,
+            "Exporting icons".into(),
+            None,
+            Some(p.clone()),
+            move |w| {
+                vectorcraft_engine::cmd::fileio::progress::scope(&reporting, || {
+                    vectorcraft_doc::cancel::progress(1, 3, "file 2 of 3");
+                    w("/icons/b.png", b"x").map(|()| json!({}))
+                })
+            },
+            |_, r| r,
+        )
+        .unwrap();
+        // The worker reports the step before it waits on the writer.
+        for _ in 0..10_000 {
+            if p.counts() == (1, 3) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0);
+        frame(&mut app, &ctx, 1.0);
+        let shown = frame(&mut app, &ctx, 1.1);
+        assert!(shown.contains("File 2 of 3") && !shown.contains("Artboard"), "{shown}");
+        go.store(true, std::sync::atomic::Ordering::SeqCst);
+        background::wait_all(&mut app);
     }
 }

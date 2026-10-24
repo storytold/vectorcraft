@@ -9,19 +9,20 @@ use vectorcraft_doc::{Appearance, Document, Node};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Rect, shapes};
 
+use crate::control::ControlRequest;
 use crate::{Services, VectorcraftApp, background, io};
 
-type Files = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+pub(super) type Files = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
 /// Holds the background writer until opened.
 #[derive(Clone, Default)]
-struct Gate(Arc<AtomicBool>);
+pub(super) struct Gate(Arc<AtomicBool>);
 
 impl Gate {
-    fn open(&self) {
+    pub(super) fn open(&self) {
         self.0.store(true, Ordering::SeqCst);
     }
-    fn wait(&self) {
+    pub(super) fn wait(&self) {
         while !self.0.load(Ordering::SeqCst) {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
@@ -56,7 +57,7 @@ fn paths(n: usize) -> Document {
     d
 }
 
-fn written(files: &Files) -> Vec<String> {
+pub(super) fn written(files: &Files) -> Vec<String> {
     files.lock().unwrap().iter().map(|(p, _)| p.clone()).collect()
 }
 
@@ -119,6 +120,29 @@ fn exports_run_in_the_background_and_the_preference_turns_both_off() {
     assert!(io::export(&mut app, Some("svg"), Some("/out/b.svg".into()), &json!({})).is_err());
     assert!(app.run("file.save", json!({"path": "/docs/x.vectorcraft"})).is_err());
     assert!(app.background.jobs.is_empty());
+}
+
+/// A save that returns before the file is written still says what it writes and which options it
+/// does not use, as `app.save` (MCP's `save_file`) replies with it: what the format loses first, as
+/// the reply of a save written at once.
+#[test]
+fn a_background_save_names_its_format_and_unused_options_at_once() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let r = app.run("file.save", json!({"path": "/out/a.svg", "compress": true})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["format"].as_str()), (Some(true), Some("svg")), "{r}");
+    let warnings = r["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{r}");
+    assert!(warnings[0].as_str().unwrap().starts_with("SVG keeps the artwork but not everything"), "{r}");
+    assert_eq!(warnings[1], "`compress` was not used: SVG files don't read it", "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    let r = app.run("file.save", json!({"path": "/out/b.vectorcraft", "compress": true})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["format"].as_str()), (Some(true), Some("vectorcraft")), "{r}");
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/out/a.svg", "/out/b.vectorcraft"]);
 }
 
 #[test]
@@ -199,6 +223,174 @@ fn the_status_bar_shows_progress() {
     background::wait_all(&mut app);
     let done = status_bar_texts(&mut app);
     assert!(done.iter().any(|t| t == "Exported /out/p.svg") && !done.iter().any(|t| t.contains('…')), "{done:?}");
+}
+
+/// An app with a control channel: its UI-thread writer records files (or fails with `fail`), and
+/// its thread-safe writer does the same once `gate` opens.
+fn controlled(gate: Gate, fail: Option<&'static str>) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, Files) {
+    controlled_with(gate, fail, None)
+}
+
+/// [`controlled`], with `wrote` told each time the UI-thread writer has recorded a file.
+fn controlled_with(
+    gate: Gate,
+    fail: Option<&'static str>,
+    wrote: Option<std::sync::mpsc::Sender<()>>,
+) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, Files) {
+    let files = Files::default();
+    let (f, g) = (files.clone(), files.clone());
+    let services = Services {
+        write: Some(Box::new(move |p: &str, b: &[u8]| match fail {
+            Some(e) => Err(e.into()),
+            None => {
+                f.lock().unwrap().push((p.to_string(), b.to_vec()));
+                if let Some(w) = &wrote {
+                    let _ = w.send(());
+                }
+                Ok(())
+            }
+        })),
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            gate.wait();
+            if let Some(e) = fail {
+                return Err(e.into());
+            }
+            g.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    (app, tx, files)
+}
+
+/// One request through the control channel, as the app's frame drains it.
+fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
+    let (req, reply) = ControlRequest::new(method, params);
+    tx.send(req).unwrap();
+    app.drain_control(&egui::Context::default());
+    reply.try_recv().unwrap()
+}
+
+/// `app.save` and `app.export` with `wait: true` (MCP's `save_file` in the app) write the file before
+/// they reply, with Background Save and Background Export on; without it they still reply at once.
+#[test]
+fn control_saves_and_exports_with_wait_reply_once_written() {
+    let gate = Gate::default();
+    let (mut app, tx, files) = controlled(gate.clone(), None);
+    let r = request(&mut app, &tx, "app.save", json!({"path": "/docs/w.vectorcraft", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r["result"].get("background").is_none() && r["result"]["path"] == "/docs/w.vectorcraft", "{r}");
+    assert_eq!(written(&files), ["/docs/w.vectorcraft"], "written before the reply");
+    let st = app.session.doc().unwrap();
+    assert!(!st.is_dirty() && st.path.as_deref() == Some("/docs/w.vectorcraft"));
+    assert_eq!(app.ui.status, "Saved /docs/w.vectorcraft");
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/w.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r["result"].get("background").is_none() && r["result"]["path"] == "/out/w.svg", "{r}");
+    assert_eq!(written(&files), ["/docs/w.vectorcraft", "/out/w.svg"]);
+    assert!(app.background.jobs.is_empty());
+
+    for (method, path) in [("app.save", "/docs/later.vectorcraft"), ("app.export", "/out/later.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": path, "wait": false}));
+        assert_eq!(r["result"]["background"], true, "{method}: {r}");
+    }
+    assert_eq!(written(&files).len(), 2, "the gate holds the worker");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/w.vectorcraft", "/out/w.svg", "/docs/later.vectorcraft", "/out/later.svg"]);
+}
+
+/// An export with `wait: true` to the file a background export is still writing replies after both
+/// are written, so the older one doesn't write over it afterwards.
+#[test]
+fn control_exports_with_wait_follow_the_jobs_already_running() {
+    let gate = Gate::default();
+    let (wrote, waiting_wrote) = std::sync::mpsc::channel();
+    let (mut app, tx, files) = controlled_with(gate.clone(), None, Some(wrote));
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/same.svg"}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    // The waiting export draws one more rectangle than the background export's snapshot.
+    app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 30, "height": 30})).unwrap();
+    // The background export is let go as soon as the waiting export has written its file, or after
+    // a second while the waiting export waits for it.
+    let opener = gate.clone();
+    let release = std::thread::spawn(move || {
+        let _ = waiting_wrote.recv_timeout(std::time::Duration::from_secs(1));
+        opener.open();
+    });
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/same.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.background.jobs.is_empty(), "the background export finished before the reply");
+    release.join().unwrap();
+    background::wait_all(&mut app);
+    let both = files.lock().unwrap().clone();
+    assert_eq!(written(&files), ["/out/same.svg", "/out/same.svg"]);
+    assert_ne!(both[0].1, both[1].1, "the two exports draw different art");
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/check.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(files.lock().unwrap()[2].1, both[1].1, "the waiting export wrote last");
+}
+
+/// A panic during a save with `wait: true`, caught further up, leaves Background Save on.
+#[test]
+fn a_panic_while_waiting_leaves_background_saves_on() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| background::in_foreground(&mut app, |_| panic!("an encoder bug"))));
+    assert!(r.is_err());
+    let r = app.run("file.save", json!({"path": "/docs/after.vectorcraft"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/after.vectorcraft"]);
+}
+
+/// A save or export with `wait: true` that fails replies with the error.
+#[test]
+fn control_saves_and_exports_with_wait_reply_with_the_error() {
+    let gate = Gate::default();
+    gate.open();
+    let (mut app, tx, files) = controlled(gate, Some("disk full"));
+    for (method, path) in [("app.save", "/docs/f.vectorcraft"), ("app.export", "/out/f.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": path, "wait": true}));
+        assert_eq!(r["ok"], false, "{method}: {r}");
+        assert!(r["error"].as_str().unwrap().contains("disk full"), "{method}: {r}");
+    }
+    assert!(app.session.doc().unwrap().path.is_none(), "the document keeps no file");
+    // Without it the reply comes first, and the failure only reaches the status bar.
+    let r = request(&mut app, &tx, "app.save", json!({"path": "/docs/f.vectorcraft"}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    background::wait_all(&mut app);
+    assert!(written(&files).is_empty());
+}
+
+/// A `wait` that is not true or false is refused before anything is saved or exported; null is the
+/// same as leaving it out.
+#[test]
+fn control_saves_and_exports_refuse_a_wait_that_is_not_a_boolean() {
+    let gate = Gate::default();
+    let (mut app, tx, files) = controlled(gate.clone(), None);
+    for (method, path) in [("app.save", "/docs/y.vectorcraft"), ("app.export", "/out/y.svg")] {
+        for wait in [json!("yes"), json!(1), json!({})] {
+            let r = request(&mut app, &tx, method, json!({"path": path, "wait": wait}));
+            assert_eq!(r["ok"], false, "{method} {wait}: {r}");
+            assert_eq!(r["error"], "`wait` must be true or false", "{method} {wait}: {r}");
+        }
+    }
+    assert!(app.background.jobs.is_empty() && written(&files).is_empty(), "nothing saved or exported");
+    assert!(app.session.doc().unwrap().path.is_none());
+    for (method, path) in [("app.save", "/docs/n.vectorcraft"), ("app.export", "/out/n.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": path, "wait": null}));
+        assert_eq!(r["result"]["background"], true, "{method}: {r}");
+    }
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/n.vectorcraft", "/out/n.svg"]);
 }
 
 #[test]

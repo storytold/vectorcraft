@@ -104,6 +104,23 @@ fn the_exporter_is_given_the_native_file_s_json() {
     assert!(image.get("blob").is_some() && image.get("data").is_none(), "{image}");
 }
 
+/// What filter plug-ins keep with the document reaches an exporter with the rest of the document:
+/// a plotter's exporter finds the pens a setup filter kept (`document.unknown.pluginData`, by
+/// plug-in id).
+#[test]
+fn an_exporter_finds_what_filters_keep_with_the_document() {
+    let mut s = session();
+    s.execute("select.none", &json!({})).unwrap();
+    let pens = json!({"pens": [{"slot": 1, "width": 0.3}, {"slot": 2, "width": 0.5}]});
+    let setup = json!({"objects": [], "documentData": pens});
+    install(&mut s, &tpl::returning(&tpl::manifest("test.setup", "filter", "{}"), &setup.to_string()));
+    s.execute("plugin.run", &json!({"id": "test.setup"})).unwrap();
+    install(&mut s, &tpl::echo_exporter(&tpl::exporter("test.pens", r#"["tsd"]"#, "{}"), Echo::Input));
+    let r = s.execute("document.export", &json!({"format": "plugin.test.pens"})).unwrap();
+    let doc: Value = serde_json::from_slice(&exported(&r)).unwrap();
+    assert_eq!(doc["document"]["unknown"][vectorcraft_doc::plugin_data::PLUGIN_DATA], json!({"test.setup": pens}));
+}
+
 #[test]
 fn the_exporter_is_given_its_parameters_and_the_file_it_writes() {
     let dir = tmp_dir("params");

@@ -1,8 +1,10 @@
 //! Object → Path commands: Simplify, Smooth, Remove redundant points, Add Anchor Points, Average,
 //! Join, Split Into Grid.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use kurbo::{CubicBez, ParamCurveArclen, Point, Rect, Vec2};
-use vectorcraft_geom::{Anchor, PathData, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
 use crate::fit::{end_tangent, fit_cubics, fit_single, fit_single_from, is_straight, sample, start_tangent};
@@ -29,7 +31,7 @@ pub fn simplify(path: &PathData, tolerance: f64) -> PathData {
     simplify_with(path, &SimplifyOptions { tolerance, ..Default::default() })
 }
 
-/// The Simplify slider's level for a tolerance of 1 pt, where the slider opens.
+/// The Simplify slider's level for a tolerance of 1 pt, the middle of its scale.
 pub const SIMPLIFY_LEVEL: f64 = 50.0;
 
 /// The tolerance (points) of Simplify slider level `level`, from 0 (the fewest anchor points) to
@@ -69,62 +71,178 @@ fn turn_deg(a: &Seg, b: &Seg) -> f64 {
 
 /// Least-squares Bézier refit of every subpath, keeping corners sharper than the threshold.
 pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
-    let tol = opts.tolerance.max(1e-6);
     let mut out = Vec::new();
     for sp in &path.subpaths {
-        let mut segs = subpath_segs(sp);
-        let n = segs.len();
-        if n == 0 {
-            out.push(sp.clone());
-            continue;
-        }
-        let corner_at = |segs: &[Seg], i: usize| -> bool {
-            if !sp.closed && (i == 0 || i == n) {
-                return true;
-            }
-            turn_deg(&segs[(i + n - 1) % n], &segs[i % n]) > opts.corner_angle_deg
-        };
-        let mut corners: Vec<usize> = (0..n).filter(|&i| corner_at(&segs, i)).collect();
-        if sp.closed {
-            if let Some(&k) = corners.first() {
-                segs.rotate_left(k);
-                corners = corners.iter().map(|&c| c - k).collect();
-            } else {
-                corners = vec![0];
-            }
-            corners.push(n);
-        } else if corners.last() != Some(&n) {
-            corners.push(n);
-        }
-        let mut result: Vec<Seg> = Vec::new();
-        for w in corners.windows(2) {
-            let run = &segs[w[0]..w[1]];
-            if run.is_empty() {
-                continue;
-            }
-            let mut pts = Vec::new();
-            for (k, s) in run.iter().enumerate() {
-                let len = s.c.arclen(1e-6);
-                let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
-                sample(&s.c, m, &mut pts, k == 0);
-            }
-            if opts.straight_lines {
-                let keep = rdp(&pts, tol);
-                result.extend(keep.windows(2).map(|p| Seg::line(p[0], p[1])));
-                continue;
-            }
-            let t0 = start_tangent(&run[0].c);
-            let t1 = end_tangent(&run[run.len() - 1].c);
-            for c in fit_cubics(&pts, t0, t1, tol) {
-                let line = is_straight(&c, tol * 0.02);
-                result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
-            }
-        }
-        if let Some(s) = segs_to_subpath(&result, sp.closed) {
-            out.push(if opts.straight_lines { s } else { no_worse(sp, s) });
+        if let Some(s) = simplify_subpath(sp, opts) {
+            out.push(s);
         }
     }
     PathData::new(out)
+}
+
+/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it.
+fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
+    let mut segs = subpath_segs(sp);
+    let n = segs.len();
+    if n == 0 {
+        return Some(sp.clone());
+    }
+    if sp.closed {
+        // Start the loop at its first corner, so no fit runs across one.
+        let k = (0..n).find(|&i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) > opts.corner_angle_deg).unwrap_or(0);
+        segs.rotate_left(k);
+    }
+    let result = simplify_run(&segs, opts);
+    let s = segs_to_subpath(&result, sp.closed)?;
+    Some(if opts.straight_lines { s } else { no_worse(sp, s) })
+}
+
+/// The refit of the consecutive segments `run`, split at its corners sharper than the threshold:
+/// it starts and ends where `run` does, leaving the same way.
+fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
+    let tol = opts.tolerance.max(1e-6);
+    let mut cuts: Vec<usize> = (1..run.len()).filter(|&i| turn_deg(&run[i - 1], &run[i]) > opts.corner_angle_deg).collect();
+    cuts.insert(0, 0);
+    cuts.push(run.len());
+    let mut result: Vec<Seg> = Vec::new();
+    for w in cuts.windows(2) {
+        let piece = &run[w[0]..w[1]];
+        if piece.is_empty() {
+            continue;
+        }
+        let mut pts = Vec::new();
+        for (k, s) in piece.iter().enumerate() {
+            let len = s.c.arclen(1e-6);
+            let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
+            sample(&s.c, m, &mut pts, k == 0);
+        }
+        if opts.straight_lines {
+            let keep = rdp(&pts, tol);
+            result.extend(keep.windows(2).map(|p| Seg::line(p[0], p[1])));
+            continue;
+        }
+        let t0 = start_tangent(&piece[0].c);
+        let t1 = end_tangent(&piece[piece.len() - 1].c);
+        for c in fit_cubics(&pts, t0, t1, tol) {
+            let line = is_straight(&c, tol * 0.02);
+            result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
+        }
+    }
+    result
+}
+
+/// What [`simplify_part`] made of a path.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimplifiedPart {
+    pub path: PathData,
+    /// The segments of the simplified runs, as (subpath, segment) in `path`.
+    pub segments: BTreeSet<(usize, usize)>,
+    /// Where each anchor of the original path that is still there went: (subpath, anchor) in the
+    /// original → in `path`. Anchors inside a simplified run are gone; every other anchor is kept.
+    pub anchors: BTreeMap<(usize, usize), (usize, usize)>,
+}
+
+/// Simplify only the `segments` (subpath, segment) of `path`: each run of consecutive segments
+/// among them (a closed subpath's run may cross its start point) is refitted on its own between its
+/// two end anchors, which stay where they are with their handles on the side away from the run.
+/// The other segments and anchors stay exactly as they are. A subpath whose every segment is in
+/// `segments` is simplified whole, as [`simplify_with`] does. A run whose refit would have more
+/// segments than it had is left as it is (except with Convert to Straight Lines).
+pub fn simplify_part(path: &PathData, segments: &BTreeSet<(usize, usize)>, opts: &SimplifyOptions) -> SimplifiedPart {
+    let (mut runs, mut anchors) = (BTreeSet::new(), BTreeMap::new());
+    let mut subpaths = Vec::with_capacity(path.subpaths.len());
+    for (si, sp) in path.subpaths.iter().enumerate() {
+        let n = sp.segment_count();
+        let picked: Vec<bool> = (0..n).map(|i| segments.contains(&(si, i))).collect();
+        let ni = subpaths.len();
+        if !picked.contains(&true) {
+            anchors.extend((0..sp.anchors.len()).map(|ai| ((si, ai), (ni, ai))));
+            subpaths.push(sp.clone());
+        } else if !picked.contains(&false) {
+            if let Some(s) = simplify_subpath(sp, opts) {
+                runs.extend((0..s.segment_count()).map(|i| (ni, i)));
+                subpaths.push(s);
+            }
+        } else {
+            let (s, segs, kept) = simplify_runs(sp, &picked, opts);
+            runs.extend(segs.into_iter().map(|i| (ni, i)));
+            anchors.extend(kept.into_iter().map(|(old, new)| ((si, old), (ni, new))));
+            subpaths.push(s);
+        }
+    }
+    SimplifiedPart { path: PathData::new(subpaths), segments: runs, anchors }
+}
+
+/// [`simplify_part`] for a subpath with some but not all segments `picked`: → (the subpath, the
+/// segments of its refitted runs, old → new index of each anchor kept).
+fn simplify_runs(sp: &SubPath, picked: &[bool], opts: &SimplifyOptions) -> (SubPath, Vec<usize>, Vec<(usize, usize)>) {
+    let m = sp.anchors.len();
+    let n = picked.len();
+    // An anchor inside a run (both its segments picked) goes; a closed subpath's walk starts at the
+    // first anchor that stays, so that no run crosses the start of the walk.
+    let inside = |a: usize| (sp.closed && a == 0 && picked[n - 1] && picked[0]) || (a > 0 && a < n && picked[a - 1] && picked[a]);
+    let start = (0..m).find(|&a| !inside(a)).unwrap_or(0);
+    let mut anchors = vec![sp.anchors[start]];
+    let mut kept = vec![(start, 0)];
+    let mut runs = vec![];
+    let mut k = 0;
+    while k < n {
+        let j = (start + k) % n;
+        if !picked[j] {
+            let next = (j + 1) % m;
+            if k + 1 < n || !sp.closed {
+                kept.push((next, anchors.len()));
+                anchors.push(sp.anchors[next]);
+            }
+            k += 1;
+            continue;
+        }
+        let len = (k..n).take_while(|&i| picked[(start + i) % n]).count();
+        let run: Vec<Seg> = (k..k + len).map(|i| (start + i) % n).map(|i| Seg { c: sp.segment(i), line: sp.segment_is_line(i) }).collect();
+        let end = (start + k + len) % m;
+        let fitted = simplify_run(&run, opts);
+        let keep_original = fitted.is_empty() || !opts.straight_lines && fitted.len() > run.len();
+        let first = anchors.len() - 1;
+        if keep_original {
+            anchors.extend((k + 1..k + len).map(|i| sp.anchors[(start + i) % m]));
+        } else {
+            let a = anchors[first];
+            anchors[first] = with_handle(a, true, if fitted[0].line { a.p } else { fitted[0].c.p1 });
+            for w in fitted.windows(2) {
+                let p = w[1].c.p0;
+                let h_in = if w[0].line { p } else { w[0].c.p2 };
+                let h_out = if w[1].line { p } else { w[1].c.p1 };
+                anchors.push(Anchor::with_handles(p, h_in, h_out));
+            }
+        }
+        // The run's segments, from its first anchor on: a run back to the walk's start ends with
+        // the closing segment, the last index.
+        runs.extend(first..first + if keep_original { run.len() } else { fitted.len() });
+        let end_seg = fitted.last().filter(|_| !keep_original);
+        if sp.closed && k + len == n {
+            // The run ends where the walk started.
+            if let Some(s) = end_seg {
+                anchors[0] = with_handle(anchors[0], false, if s.line { anchors[0].p } else { s.c.p2 });
+            }
+        } else {
+            let a = sp.anchors[end];
+            kept.push((end, anchors.len()));
+            anchors.push(match end_seg {
+                Some(s) => with_handle(a, false, if s.line { a.p } else { s.c.p2 }),
+                None => a,
+            });
+        }
+        k += len;
+    }
+    (SubPath::new(anchors, sp.closed), runs, kept)
+}
+
+/// `a` with its out (`out`) or in handle at `h` and the other as it is: still smooth when it was
+/// and its handles still line up, a corner otherwise.
+fn with_handle(a: Anchor, out: bool, h: Point) -> Anchor {
+    let (h_in, h_out) = if out { (a.h_in, h) } else { (h, a.h_out) };
+    let kind = if a.kind == AnchorKind::Smooth { Anchor::with_handles(a.p, h_in, h_out).kind } else { AnchorKind::Corner };
+    Anchor { p: a.p, h_in, h_out, kind }
 }
 
 /// Ramer–Douglas–Peucker polyline reduction.
@@ -136,7 +254,17 @@ fn rdp(pts: &[Point], tol: f64) -> Vec<Point> {
     keep[0] = true;
     keep[pts.len() - 1] = true;
     let mut stack = vec![(0, pts.len() - 1)];
+    // Distances measured at most: lopsided splits (a shallow zigzag) make it quadratic. Past it,
+    // the points of the parts left are kept as they are.
+    let mut budget = pts.len().saturating_mul(64).saturating_add(1 << 20);
     while let Some((a, b)) = stack.pop() {
+        budget = match budget.checked_sub(b - a) {
+            Some(left) => left,
+            None => {
+                keep[a..=b].fill(true);
+                continue;
+            }
+        };
         let (pa, pb) = (pts[a], pts[b]);
         let chord = pb - pa;
         let len = chord.hypot();
@@ -200,6 +328,23 @@ pub fn remove_redundant_points(path: &PathData, tolerance: f64) -> PathData {
         // Drop zero-length segments.
         segs.retain(|s| !(s.c.p0.distance(s.c.p3) < 1e-9 && s.c.p1.distance(s.c.p0) < 1e-9 && s.c.p2.distance(s.c.p0) < 1e-9));
         let min_segs = if sp.closed { 2 } else { 1 };
+        // Joints are merged along the path in one pass (a merged segment is tried with the one
+        // before it, then the next); the search below then only finds what a closed path's wrap
+        // leaves. (Merging at the first joint of a dense line one at a time shifts the rest each time.)
+        let total = segs.len();
+        let mut merged = 0;
+        let mut done: Vec<Seg> = Vec::with_capacity(total);
+        for s in segs.drain(..) {
+            done.push(s);
+            while done.len() >= 2 && total - merged > min_segs {
+                let n = done.len();
+                let Some(m) = merge_pair(&done[n - 2], &done[n - 1], tol) else { break };
+                done.truncate(n - 1);
+                done[n - 2] = m;
+                merged += 1;
+            }
+        }
+        segs = done;
         let mut changed = true;
         while changed && segs.len() > min_segs {
             changed = false;
@@ -403,9 +548,12 @@ pub fn join(paths: &[PathData], tolerance: f64) -> PathData {
         return PathData::new(closed);
     }
     while open.len() > 1 {
-        // Find the closest pair of endpoints on different subpaths.
+        // Find the closest pair of endpoints on different subpaths. Past this many subpaths every
+        // pair at every merge is too much (cubic): the first one is joined to its nearest.
+        const SEARCH_ALL: usize = 200;
+        let first_only = open.len() > SEARCH_ALL;
         let mut best = (f64::INFINITY, 0, 0, false, false);
-        for i in 0..open.len() {
+        for i in 0..if first_only { 1 } else { open.len() } {
             for j in (i + 1)..open.len() {
                 for ei in [false, true] {
                     for ej in [false, true] {

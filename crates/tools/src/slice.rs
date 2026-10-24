@@ -259,7 +259,7 @@ impl Tool for SliceSelectionTool {
                     }
                     out.push(Action::Begin("Move Slice".into()));
                 }
-                let d = move_delta(start, p, m.shift);
+                let d = move_delta(start, p, m.shift, cx.constrain_angle);
                 out.push(Action::Preview("object.slice.move".into(), json!({ "slices": json_ids(&ids), "dx": d.x, "dy": d.y })));
                 self.drag = Some(Drag::Move { start, ids, began: true });
                 out

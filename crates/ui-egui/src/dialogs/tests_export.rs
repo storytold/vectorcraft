@@ -16,10 +16,15 @@ pub(super) type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 /// An app with `artboards` 60×40 pt artboards whose save dialog answers `/out/<suggested>` and
 /// whose writer records what it is given.
 pub(super) fn app(artboards: usize) -> (VectorcraftApp, Written) {
+    app_saving(artboards, |p| format!("/out/{}", p.name))
+}
+
+/// [`app`], with a save dialog that answers `pick`.
+pub(super) fn app_saving(artboards: usize, pick: fn(&crate::FilePick) -> String) -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let services = Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name)))),
+        pick_save: Some(Box::new(move |p: &crate::FilePick| Some(pick(p)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -265,4 +270,43 @@ fn export_as_writes_only_the_chosen_artboard_in_every_format() {
             }
         }
     }
+}
+
+/// The Enter that closed the save panel, still held as the format's options open, doesn't write
+/// the file; Enter pressed again after it is let go does. So for every options dialog Export As
+/// opens after its panel, an exporter plug-in's included (as Save As's options).
+#[test]
+fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
+    let params = r#"{"speed":{"type":"number","min":1,"max":100,"default":40}}"#;
+    let module = wat::parse_str(vectorcraft_plugins::wat::returning(
+        &vectorcraft_plugins::wat::exporter("test.ui.held", r#"["tuh"]"#, params),
+        r#"{"dataBase64":"SGk="}"#,
+    ))
+    .unwrap();
+    let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    // Each format whose options follow the panel (PDF's with Use Artboards: Save PDF).
+    let formats = [("png", false), ("svg", false), ("pdf", true), ("txt", false), ("dxf", false), ("eps", false), ("plugin.test.ui.held", false)];
+    for (format, artboards) in formats {
+        let (mut app, written) = app(1);
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+        app.run("file.exportAs", json!({"format": format})).unwrap();
+        set(&mut app, "useArtboards", json!(artboards));
+        confirm(&mut app).unwrap();
+        let options = kind(&app).map(str::to_string);
+        assert!(options.as_deref().is_some_and(|k| k != "exportAs"), "{format}: its options follow the panel, not {options:?}");
+        frame(&mut app, vec![enter(true)]);
+        assert_eq!(kind(&app).map(str::to_string), options, "{format}: the Enter still held isn't the options'");
+        assert!(written.borrow().is_empty(), "{format}: nothing written");
+        frame(&mut app, vec![enter(false)]);
+        frame(&mut app, vec![enter(true)]);
+        assert!(app.ui.dialog.is_none(), "{format}: Enter pressed again confirms");
+        assert!(!written.borrow().is_empty(), "{format}: and writes");
+    }
+    vectorcraft_plugins::registry::remove("test.ui.held");
 }

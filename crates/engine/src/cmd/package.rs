@@ -4,7 +4,7 @@
 //! report). The packaged document links to the copies (Relink); the open document doesn't change.
 //! Without a folder (the web, agents) the same files come back as a zip archive.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -101,6 +101,34 @@ fn safe_asset_name(name: &str) -> String {
     if name.is_empty() { "asset".into() } else { name.into() }
 }
 
+/// A file placed: (page, bounding, page box) of each placed object showing it.
+type PlacedPages = Vec<(u32, bool, vectorcraft_doc::PageBox)>;
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many placed PDF or `.ai` pages [`page_fonts`] read on this thread.
+    pub(crate) static PAGES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many linked `.vectorcraft` files had their preview and PDF read on this thread,
+    /// to keep them in the rewritten copy.
+    pub(crate) static PARTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The fonts of the type on `pages` of the PDF or `.ai` file `name` (`bytes`, found at `path`);
+/// none for other files.
+fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTreeSet<super::fonts::UsedFont> {
+    let mut fonts = BTreeSet::new();
+    if super::place::document::is_pdf(name, bytes) {
+        for &(page, bounding, page_box) in pages {
+            #[cfg(test)]
+            PAGES_READ.with(|c| c.set(c.get() + 1));
+            if let Ok(a) = super::place::document::document_art(name, bytes, Some(path), page, bounding, page_box, C) {
+                fonts.extend(super::fonts::art_fonts(&a.doc, &a.nodes));
+            }
+        }
+    }
+    fonts
+}
+
 /// Collect dependencies depth-first so nested VectorCraft files are rewritten before
 /// their parents: each parent can record the final hash of the rewritten child.
 /// Cycles, excessive nesting, and unreadable children are reported, not fatal.
@@ -148,7 +176,20 @@ impl<'a> Collector<'a> {
         self.warnings.push(message);
     }
 
-    fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize) -> Result<()> {
+    /// Warns when a file that placed `.ai` file `source` links (`name`) was copied as `copy`: the
+    /// copy of `source` finds it only by its name, beside it.
+    fn renamed(&mut self, lines: &mut Vec<String>, source: &str, path: &str, name: &str, copy: &str) {
+        if Path::new(copy).file_name().and_then(|n| n.to_str()) != Some(name) {
+            let message = format!(
+                "{path}: copied as {copy}; the copy of {source} looks for it as {name} and shows the file of that name, if any, else its preview"
+            );
+            self.warn(lines, message);
+        }
+    }
+
+    /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` file's editing data,
+    /// whose links are not rewritten, so its copy finds them by name beside it.
+    fn collect(&mut self, doc: &mut Document, source: &str, destination: &str, depth: usize, by_name: bool) -> Result<()> {
         // The caller checks cycles and depth before descending; active documents have
         // a destination reserved so back-links can point at their single packaged copy.
         self.visiting.insert(source.to_string(), destination.to_string());
@@ -167,11 +208,24 @@ impl<'a> Collector<'a> {
         // Different linked documents can reuse the same stale absolute path yet
         // resolve it to distinct local assets. Keep a mapping per document.
         let mut local = BTreeMap::<String, Copied>::new();
+        // The fonts of the type on the PDF and `.ai` pages placed linked.
+        let mut placed_fonts = BTreeSet::new();
+        let mut placed = BTreeMap::<String, PlacedPages>::new();
+        doc.visit_placed(|_, p| {
+            let page = (p.link.page.unwrap_or(1), p.bounding, p.page_box);
+            let pages = placed.entry(p.link.path.clone()).or_default();
+            if !pages.contains(&page) {
+                pages.push(page);
+            }
+        });
+        if self.opts.copy_fonts && !self.opts.copy_links && !placed.is_empty() {
+            for file in super::links::linked_files(doc, Some(source)) {
+                if let (Some(pages), Some(bytes)) = (placed.get(&file.path), &file.bytes) {
+                    placed_fonts.extend(page_fonts(&file.name, bytes, file.found_path.as_deref().unwrap_or(&file.path), pages));
+                }
+            }
+        }
         if self.opts.copy_links {
-            let mut placed = HashSet::new();
-            doc.visit_placed(|_, p| {
-                placed.insert(p.link.path.clone());
-            });
             heading(&mut lines, "LINKED FILES");
             for file in super::links::linked_files(doc, Some(source)) {
                 let found_path = file.found_path.as_deref().unwrap_or(&file.path);
@@ -183,8 +237,17 @@ impl<'a> Collector<'a> {
                     local.insert(file.path.clone(), Copied { name: ancestor, size: None, hash: None });
                     continue;
                 }
-                if let Some(existing) = self.copies.get(found_path) {
-                    local.insert(file.path.clone(), existing.clone());
+                if let Some(existing) = self.copies.get(found_path).cloned() {
+                    if by_name {
+                        self.renamed(&mut lines, source, &file.path, &file.name, &existing.name);
+                    }
+                    // Another document may place other pages of a PDF copied already.
+                    if self.opts.copy_fonts
+                        && let (Some(pages), Some(bytes)) = (placed.get(&file.path), &file.bytes)
+                    {
+                        placed_fonts.extend(page_fonts(&file.name, bytes, found_path, pages));
+                    }
+                    local.insert(file.path.clone(), existing);
                     continue;
                 }
                 let Some(mut bytes) = file.bytes else {
@@ -199,24 +262,42 @@ impl<'a> Collector<'a> {
                 let name = safe_asset_name(&file.name);
                 let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
                 let destination_file = format!("{dir}{unique}");
-                if placed.contains(&file.path) {
+                if by_name {
+                    self.renamed(&mut lines, source, &file.path, &file.name, &destination_file);
+                }
+                // A placed PDF or .ai file is copied as it is, as an image is; the files a .ai file
+                // read from its editing data links are copied beside it.
+                let pages = placed.get(&file.path);
+                let placed_file = pages.is_some();
+                if placed_file && let Some(mut art) = super::place::document::editing_data(&file.name, &bytes) {
+                    if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
+                        self.warn(&mut lines, format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
+                    } else {
+                        self.collect(&mut art, found_path, &destination_file, depth + 1, true)?;
+                    }
+                } else if self.opts.copy_fonts
+                    && let Some(pages) = pages
+                {
+                    placed_fonts.extend(page_fonts(&file.name, &bytes, found_path, pages));
+                }
+                if placed_file && super::place::document::is_native(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
                         self.warn(&mut lines, format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
                     } else {
                         match vectorcraft_format::load_file(&bytes) {
                             Ok(saved) => {
-                                let preview = vectorcraft_format::preview(&bytes);
-                                let pdf = vectorcraft_format::pdf_content(&bytes);
                                 let compressed = bytes.starts_with(&[0x1f, 0x8b]);
                                 let include_linked =
                                     saved.doc.linked_only_images().iter().any(|key| saved.doc.images.get(key).is_some_and(|blob| !blob.is_proxy()));
                                 let mut nested = saved.doc;
-                                self.collect(&mut nested, found_path, &destination_file, depth + 1)?;
+                                self.collect(&mut nested, found_path, &destination_file, depth + 1, false)?;
                                 if self.opts.relink {
+                                    #[cfg(test)]
+                                    PARTS_READ.with(|c| c.set(c.get() + 1));
                                     // Preserve auxiliary native-file content when rewriting.
                                     let mut options = vectorcraft_format::SaveOptions::for_doc(&nested);
-                                    options.preview = preview;
-                                    options.pdf = pdf;
+                                    options.preview = vectorcraft_format::preview(&bytes);
+                                    options.pdf = vectorcraft_format::pdf_content(&bytes);
                                     options.profiles = saved.profiles;
                                     options.compress = compressed;
                                     options.include_linked = include_linked;
@@ -250,7 +331,9 @@ impl<'a> Collector<'a> {
         if self.opts.copy_fonts {
             let db = vectorcraft_text::FontDb::global();
             heading(&mut lines, "FONTS");
-            for used in super::fonts::used_fonts(doc) {
+            let mut used_fonts = super::fonts::used_fonts(doc);
+            used_fonts.append(&mut placed_fonts);
+            for used in used_fonts {
                 let font = super::fonts::font_label(&used);
                 let (family, style, version) = used;
                 // Found by any of its names, as the canvas draws it (in the version the type names).
@@ -306,6 +389,51 @@ impl<'a> Collector<'a> {
 }
 
 fn package(s: &mut Session, p: &Value) -> Result<Value> {
+    let package = prepare(s, p)?;
+    match &mut s.package_hand_off {
+        Some(slot) => {
+            *slot = Some(package);
+            Ok(Value::Null)
+        }
+        None => package.write(&mut |path, bytes| write_file(path, bytes)),
+    }
+}
+
+/// A package of the active document as `file.package` takes it from the session: the options, the
+/// names, the report's Document Info text and the document as it is now
+/// ([`Session::prepare_package`]). [`Package::write`] collects and writes it without the session,
+/// on any thread.
+pub struct Package {
+    o: Options,
+    doc_path: String,
+    stem: String,
+    name: String,
+    root: Option<PathBuf>,
+    info: Option<String>,
+    doc: std::sync::Arc<Document>,
+}
+
+impl Session {
+    /// Run `file.package` with `params` as a command (checked and journaled as any other) that
+    /// collects and writes nothing → the package it prepared, which [`Package::write`] collects
+    /// and writes (on the desktop with Background Export on, File › Package… does this on the
+    /// background thread).
+    pub fn prepare_package(&mut self, params: &Value) -> Result<Package> {
+        self.package_hand_off = Some(None);
+        let r = self.execute(C, params);
+        let handed = self.package_hand_off.take().flatten();
+        match (r, handed) {
+            (Err(e), _) => Err(e),
+            (Ok(_), Some(package)) => Ok(package),
+            // Every run that succeeds hands one over; otherwise the package is prepared here.
+            (Ok(_), None) => prepare(self, params),
+        }
+    }
+}
+
+/// What `file.package` reads from the session: the options, the checks of the document and the
+/// name, the report's Document Info text and the document.
+fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let o = Options {
         copy_links: bool_or(p, "copyLinks", true),
         links_folder: bool_or(p, "linksFolder", true),
@@ -322,8 +450,23 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let folder = str_param(p, "folder");
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
-    let st = s.doc()?;
-    let mut doc = (*st.doc).clone();
+    let doc = s.doc()?.doc.clone();
+    Ok(Package { o, doc_path, stem, name, root, info, doc })
+}
+
+impl Package {
+    /// Collect the linked files and fonts and write the package's files with `write` into
+    /// `folder/name`, making its folders first, or into the zip without a folder → the reply of
+    /// `file.package`.
+    pub fn write(self, write: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        collect_and_write(self, write)
+    }
+}
+
+/// [`Package::write`].
+fn collect_and_write(package: Package, write: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    let Package { o, doc_path, stem, name, root, info, doc } = package;
+    let mut doc = (*doc).clone();
     let doc_name = format!("{stem}.{}", vectorcraft_format::EXTENSION);
     // Prepare original links for the destination *before* rebasing copied links.
     // Recalculating afterward would overwrite the portable relative paths.
@@ -333,7 +476,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         doc = d;
     }
     let mut collector = Collector::new(&o, root.clone(), &doc_name);
-    collector.collect(&mut doc, &doc_path, &doc_name, 0)?;
+    collector.collect(&mut doc, &doc_path, &doc_name, 0, false)?;
     let mut entries = std::mem::take(&mut collector.entries);
     entries.insert(0, (doc_name.clone(), vectorcraft_format::save_file(&doc)));
     let mut taken = std::mem::take(&mut collector.taken);
@@ -366,7 +509,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(dir) = path.parent() {
                     create_dir(&dir.to_string_lossy())?;
                 }
-                write_file(&path.to_string_lossy(), bytes)?;
+                write(&path.to_string_lossy(), bytes)?;
             }
             out["folder"] = json!(root.to_string_lossy());
         }

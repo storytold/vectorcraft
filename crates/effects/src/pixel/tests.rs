@@ -1224,6 +1224,8 @@ fn texture_params_take_defaults_and_stay_in_range() {
         ("texture.texturizer", "lightDirection", LIGHT_DIRECTIONS.as_slice()),
         ("artistic.roughPastels", "texture", TEXTURES.as_slice()),
         ("artistic.roughPastels", "lightDirection", LIGHT_DIRECTIONS.as_slice()),
+        ("sketch.conteCrayon", "texture", TEXTURES.as_slice()),
+        ("sketch.conteCrayon", "lightDirection", LIGHT_DIRECTIONS.as_slice()),
     ] {
         let doc = crate::effect_info(id).unwrap().params;
         let parsed: Vec<PixelFx> = table.iter().map(|(_, v)| fx(id, json!({ key: v }))).collect();

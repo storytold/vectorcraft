@@ -248,6 +248,7 @@ fn a_raster_export_says_nothing_of_images_another_thread_could_not_decode() {
         xf: vectorcraft_geom::Affine::scale(20.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let (id, layer) = (broken.alloc_id(), broken.layers[0].id);
     broken.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();

@@ -24,7 +24,9 @@ use vectorcraft_geom::{FillRule, PathData};
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
 use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, Walked, all_on, hides_forms, scan_page, tag_key};
-use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, gradient_shape, mesh_shading, shading_gradient};
+use crate::import_shading::{
+    FunctionBudget, FunctionPaint, clipped, extend_clip, fold_stop_opacity, function_paint, gradient_shape, mesh_shading, shading_gradient,
+};
 use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
@@ -392,6 +394,8 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             locked: false,
             show_center_mark: false,
             show_cross_hairs: false,
+            show_video_safe_areas: false,
+            video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
@@ -481,6 +485,10 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         let list = b.missing_fonts.join(", ");
         b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
     }
+    // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
+    // than the stack goes.
+    let mut depth_notes = vec![];
+    doc.limit_depth_noting(&mut depth_notes);
     doc.fix_next_id();
     doc.reserve_ids(b.next);
 
@@ -492,7 +500,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             }
         }
     }
-    doc.limit_depth_noting(&mut warnings);
+    warnings.extend(depth_notes);
     let user_unit = picked.first().and_then(|&n| pages.get(n)).map_or(1.0, |page| f64::from(page.user_unit()));
     Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text, user_unit })
 }
@@ -872,6 +880,10 @@ struct Builder<'p> {
     /// Pattern swatches made, and per (pattern, stroke) the art signatures read and their names.
     patterns: Vec<PatternDef>,
     pattern_keys: HashMap<(u128, bool), PatternReadings>,
+    /// Per function-based shading (and the inks it paints with): what it comes in as, read once.
+    function_paints: HashMap<(u128, Option<Vec<String>>), Paint>,
+    /// What is left of the import's function evaluations for those shadings.
+    function_budget: FunctionBudget,
     /// Swatch names in use.
     taken: Vec<String>,
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.
@@ -980,11 +992,19 @@ fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> Stro
         kurbo::Join::Bevel => LineJoin::Bevel,
     };
     st.miter_limit = p.miter_limit as f64;
-    let dash = Dash { pattern: p.dash_array.iter().map(|v| *v as f64 * scale).collect(), offset: p.dash_offset as f64 * scale, align_corners: false };
+    // (Every stroke keeps its own copy: a dash array has a few entries, and one with thousands is cut.)
+    let dash = Dash {
+        pattern: p.dash_array.iter().take(MAX_DASH_ENTRIES).map(|v| *v as f64 * scale).collect(),
+        offset: p.dash_offset as f64 * scale,
+        align_corners: false,
+    };
     // An invalid dash array (a negative value, or all zeros) strokes solid.
     st.dash = dash.is_dashed().then_some(dash);
     st
 }
+
+/// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
+const MAX_DASH_ENTRIES: usize = 64;
 
 pub(crate) fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
@@ -1035,6 +1055,8 @@ impl<'p> Builder<'p> {
             masks: HashMap::new(),
             patterns: vec![],
             pattern_keys: HashMap::new(),
+            function_paints: HashMap::new(),
+            function_budget: FunctionBudget::new(),
             taken: vec![],
             scan: Scan::default(),
             tag_at: 0,
@@ -1419,13 +1441,20 @@ impl<'p> Builder<'p> {
                 (paint, a)
             }
             craft_pdf::interpret::Paint::Pattern(pat) => match pat.as_ref() {
-                Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors, inks) {
-                    Some((g, _)) => (Paint::Gradient(Box::new(g)), sp.opacity),
-                    None => {
-                        self.warn("function-based shadings (and very large meshes) are imported as a flat colour");
-                        (Paint::solid(Color::rgb(0.5, 0.5, 0.5)), sp.opacity)
+                Pattern::Shading(sp) => {
+                    // The ink names outlive the walk's borrow of `self`.
+                    let inks = inks.map(<[String]>::to_vec);
+                    match self.function_shading(sp, inks.as_deref()) {
+                        Some(paint) => (paint, sp.opacity),
+                        None => match shading_gradient(sp, &mut self.colors, inks.as_deref()) {
+                            Some((g, _)) => (Paint::Gradient(Box::new(g)), sp.opacity),
+                            None => {
+                                self.warn("shadings that can't be read as a gradient or gradient mesh (such as very large meshes) are imported as a flat grey");
+                                (Paint::solid(Color::rgb(0.5, 0.5, 0.5)), sp.opacity)
+                            }
+                        },
                     }
-                },
+                }
                 Pattern::Tiling(t) => match self.tiling(t, stroke) {
                     Some(paint) => (paint, 1.0),
                     None => {
@@ -1491,6 +1520,30 @@ impl<'p> Builder<'p> {
         let spec = Arc::new(spec);
         self.masks.insert(key, spec.clone());
         spec
+    }
+
+    /// Function-based shading `sp` (painting with `inks`) as a paint, read the first time it is
+    /// used and within the import's budget of function evaluations; `None` for other shadings.
+    fn function_shading(&mut self, sp: &craft_pdf::interpret::pattern::ShadingPattern, inks: Option<&[String]>) -> Option<Paint> {
+        let key = (sp.cache_key(), inks.map(<[String]>::to_vec));
+        if let Some(paint) = self.function_paints.get(&key) {
+            return Some(paint.clone());
+        }
+        let paint = match function_paint(sp, &mut self.colors, inks, &self.function_budget)? {
+            FunctionPaint::Gradient(g) => Paint::Gradient(g),
+            FunctionPaint::Average(c) => {
+                self.warn(
+                    "function-based shadings that aren't read as a gradient (their colour changes in two directions, they need too many stops, or the file has too many to read) are imported as their average colour",
+                );
+                Paint::solid(c)
+            }
+            FunctionPaint::Unread => {
+                self.warn("function-based shadings that can't be read (their function or domain is invalid, or the file has too many to read) are imported as a flat grey");
+                Paint::solid(Color::rgb(0.5, 0.5, 0.5))
+            }
+        };
+        self.function_paints.insert(key, paint.clone());
+        Some(paint)
     }
 
     /// Tiling pattern `t` as a pattern swatch's paint (the swatch made the first time).
@@ -1567,7 +1620,7 @@ impl<'p> Builder<'p> {
         let xf = transform * Affine::scale_non_uniform(f64::from(w) / f64::from(mw.max(1)), f64::from(h) / f64::from(mh.max(1)));
         let art = Node::new(
             self.id(),
-            NodeKind::Image(Box::new(ImageObject { key: k, width: mw, height: mh, xf, link: None, placement: Default::default() })),
+            NodeKind::Image(Box::new(ImageObject { key: k, width: mw, height: mh, xf, link: None, placement: Default::default(), pixels: None })),
         );
         Some(OpacityMask::new(art, true))
     }
@@ -1587,8 +1640,10 @@ impl<'p> Builder<'p> {
             (k, w, h)
         };
         let id = self.id();
-        let mut n =
-            Node::new(id, NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() })));
+        let mut n = Node::new(
+            id,
+            NodeKind::Image(Box::new(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
+        );
         n.extras_mut().mask = mask.map(Box::new);
         self.push_node(n);
     }
@@ -1628,7 +1683,7 @@ impl<'p> Builder<'p> {
             return n.clone();
         }
         let data = o.font_data();
-        let name = self.fonts.get(&key).map(|(n, _)| n.clone()).or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
+        let name = self.fonts.get(&key).map(|f| f.name.clone()).or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
         let (weight, italic) = data.as_ref().map_or((None, false), |d| (d.weight, d.is_italic));
         // A subset's six-letter tag.
         let ps = name.as_deref().map(|n| match n.split_once('+') {
@@ -1710,13 +1765,12 @@ impl<'p> Builder<'p> {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
-        // Set vertically (WMode 1): no horizontal advance; its em box is a full em wide.
+        // Set vertically (WMode 1): no horizontal advance.
         let upright = width.is_some_and(|w| w.abs() <= 1.0);
-        let top = m * kurbo::Point::new(f64::from(width.filter(|w| *w > 1.0).unwrap_or(1000.0)) * 0.5, 880.0);
         let mut info = self.font_name(key, o);
         // A font the file doesn't carry is drawn with a stand-in: its glyphs can't tell which
         // style of the installed family it is, so the name decides.
-        let embedded = self.fonts.get(&key).is_none_or(|(_, e)| *e);
+        let embedded = self.fonts.get(&key).is_none_or(|f| f.embedded);
         if let Some(face) = &info.face
             && embedded
         {
@@ -1772,8 +1826,17 @@ impl<'p> Builder<'p> {
             stroke,
         };
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
-        let place = |line: &mut TextLine| {
-            if upright { line.push_upright(&look, at, opacity, Upright { top }, &text) } else { line.push(&look, at, opacity, advance, &text) }
+        // A glyph set vertically is drawn from its origin, which the file puts the position
+        // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of
+        // the column's centre (ISO 32000-1 §9.7.4.3); vertical type centres each glyph on the
+        // column. Half an em only for a full-width glyph (#722).
+        let top = upright.then(|| {
+            let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
+            m * kurbo::Point::new(vx, 880.0)
+        });
+        let place = |line: &mut TextLine| match top {
+            Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
+            None => line.push(&look, at, opacity, advance, &text),
         };
         self.flush_glyphs();
         // A stroke over the glyph just filled (fill and stroke rendering).

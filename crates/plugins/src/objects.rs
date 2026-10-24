@@ -30,6 +30,8 @@ pub const MAX_STROKE_WIDTH: f64 = 1000.0;
 pub const MITER_LIMIT: std::ops::RangeInclusive<f64> = 1.0..=500.0;
 /// Longest effect id a plug-in may return, in bytes.
 pub const MAX_EFFECT_ID: usize = 128;
+/// Largest data a plug-in may keep with a document (`documentData`), in bytes of JSON.
+pub const MAX_DOCUMENT_DATA: usize = 1 << 20;
 
 /// One object returned by a plug-in. `None` fields keep the object's value (new objects take the
 /// defaults: a path, non-zero rule, no fills or strokes, full opacity).
@@ -373,11 +375,45 @@ fn decode_effect(v: &Value, at: &str) -> Result<Effect> {
     Ok(Effect { id: id.to_string(), params, visible })
 }
 
-/// Parses a plug-in's output: `{"objects": [...]}`, or `{"error": "message"}` when the plug-in
-/// declined (the message reaches the user).
+/// What a filter returned: its objects, and what it keeps with the document.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Output {
+    pub objects: Vec<OutObject>,
+    /// `documentData`, as `Document::set_plugin_data` takes it: `None` when the output has none
+    /// (what the plug-in keeps stays as it is), `Some(None)` for `null` (it forgets it), else what
+    /// it keeps from now on, at most [`MAX_DOCUMENT_DATA`] bytes of JSON.
+    pub document_data: Option<Option<Value>>,
+}
+
+/// Parses a filter's output: `{"objects": [...], "documentData"?: …}`, or `{"error": "message"}`
+/// when the plug-in declined (the message reaches the user).
+pub fn decode_output(bytes: &[u8]) -> Result<Output> {
+    let mut v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
+    let objects = decode_objects(&v)?;
+    let document_data = match v.get_mut("documentData").map(Value::take) {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(data) => {
+            let size = serde_json::to_vec(&data).map_or(usize::MAX, |b| b.len());
+            if size > MAX_DOCUMENT_DATA {
+                return Err(Error::Output(format!("`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})")));
+            }
+            Some(Some(data))
+        }
+    };
+    Ok(Output { objects, document_data })
+}
+
+/// Parses a plug-in's objects: `{"objects": [...]}`, or `{"error": "message"}` when the plug-in
+/// declined (the message reaches the user). A live effect's other keys don't matter.
 pub fn decode(bytes: &[u8]) -> Result<Vec<OutObject>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
-    if let Some(e) = declined(&v) {
+    decode_objects(&v)
+}
+
+/// The objects of output `v`, or its decline.
+fn decode_objects(v: &Value) -> Result<Vec<OutObject>> {
+    if let Some(e) = declined(v) {
         return Err(e);
     }
     let objects = v.get("objects").and_then(Value::as_array).ok_or_else(|| Error::Output("expected {\"objects\": [...]}".into()))?;

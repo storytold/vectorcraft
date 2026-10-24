@@ -174,6 +174,56 @@ fn a_gap_field_passed_through_with_tab_commits_nothing() {
     }
 }
 
+/// #3497: committing a visible dash field must not replace an extended pattern with six values.
+/// Passing through the next field without typing must not commit anything else.
+#[test]
+fn dash_tab_and_enter_commits_preserve_the_unshown_pattern_tail() {
+    use crate::panels::stroke::{dash_fields, edited_dash_pattern};
+    for end in [key(Key::Tab, Modifiers::NONE), enter()] {
+        let original = vec![12.0, 6.0, 2.0, 3.0, 4.0, 5.0, 20.0, 10.0];
+        let pattern = RefCell::new(original.clone());
+        let edits = RefCell::new([None; 6]);
+        let draw = |ui: &mut egui::Ui| {
+            let fields = dash_fields(&pattern.borrow());
+            for (i, value) in fields.iter().enumerate() {
+                edits.borrow_mut()[i] = widgets::opt_field(ui, ("dash", i), *value, Unit::Points, 40.0);
+            }
+            None
+        };
+        let step = |f: &mut Field, events: Vec<Event>| {
+            f.frame(events, &draw);
+            let mut fields = dash_fields(&pattern.borrow());
+            let mut changed = false;
+            for (field, edit) in fields.iter_mut().zip(edits.borrow_mut().iter_mut()) {
+                if let Some(value) = edit.take() {
+                    *field = value;
+                    changed = true;
+                }
+            }
+            if changed {
+                let next = edited_dash_pattern(&fields, &pattern.borrow());
+                *pattern.borrow_mut() = next;
+            }
+            changed
+        };
+        let mut f = Field::new();
+        let tab = || key(Key::Tab, Modifiers::NONE);
+        for events in [vec![], vec![tab()], vec![], vec![tab()], vec![]] {
+            assert!(!step(&mut f, events));
+        }
+        assert_eq!(*pattern.borrow(), original, "tabbing without editing changes nothing");
+        // Shift+Tab back to the first dash, replace it, then commit with Tab or Enter.
+        for events in [vec![key(Key::Tab, Modifiers::SHIFT)], vec![], vec![Event::Text("14".into())]] {
+            assert!(!step(&mut f, events));
+        }
+        assert!(step(&mut f, vec![end]));
+        assert!(!step(&mut f, vec![]));
+        assert_eq!(*pattern.borrow(), vec![14.0, 6.0, 2.0, 3.0, 4.0, 5.0, 20.0, 10.0]);
+        assert!(!step(&mut f, vec![tab()]));
+        assert!(!step(&mut f, vec![]));
+    }
+}
+
 /// Headless frames of one field: its rect and id as last drawn.
 struct Field {
     ctx: egui::Context,

@@ -31,6 +31,7 @@ fn doc_with(key: &str, bytes: &[u8]) -> Document {
         link: LinkInfo::new("/art/card.vectorcraft"),
         key: key.into(),
         bounding: false,
+        page_box: Default::default(),
         width: 40.0,
         height: 20.0,
         xf: Affine::translate((10.0, 10.0)) * Affine::scale(2.0),

@@ -101,6 +101,12 @@ pub(super) fn font_label((family, style, version): &UsedFont) -> String {
 
 /// The fonts (family, style, version) of the type in the layers and symbols of `d`.
 pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
+    art_fonts(d, &[])
+}
+
+/// The fonts (family, style, version) of the type in the layers and symbols of `d` and in `art`
+/// (art read from a file, its resources in `d`).
+pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
@@ -110,6 +116,9 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     d.walk(&mut add);
     for s in &d.symbols {
         s.art.walk(&mut add);
+    }
+    for n in art {
+        n.walk(&mut add);
     }
     fonts
 }

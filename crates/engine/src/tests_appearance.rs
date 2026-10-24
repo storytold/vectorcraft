@@ -420,6 +420,32 @@ fn appearance_commands_that_change_nothing_record_no_undo_step() {
     }
 }
 
+/// The Appearance panel's commands refuse a weight or opacity that is not a number and an on/off
+/// option that is not true or false, given as text or as another value of the wrong kind; the
+/// objects and the undo history stay as they were. Numbers, true, false and null still work.
+#[test]
+fn appearance_commands_refuse_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let a = rect(&mut s, 50.0);
+    let b = rect(&mut s, 200.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let calls = [
+        not_a_number("appearance.setItem", json!({"index": 1, "weight": "3"}), "weight"),
+        not_a_number("appearance.setItem", json!({"index": 0, "opacity": "50"}), "opacity"),
+        not_a_switch("appearance.setItem", json!({"index": 0, "visible": "false"}), "visible"),
+        not_a_switch("appearance.transfer", json!({"source": b.0, "target": a.0, "copy": "true"}), "copy"),
+        not_a_switch("appearance.copyFrom", json!({"source": b.0, "ids": [a.0], "reverse": "true"}), "reverse"),
+        not_a_switch("appearance.copyFrom", json!({"source": b.0, "ids": [a.0], "append": 1}), "append"),
+    ];
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    run(&mut s, "appearance.setItem", json!({"index": 1, "weight": 3, "visible": null}));
+    run(&mut s, "appearance.transfer", json!({"source": b.0, "target": a.0, "copy": true}));
+    assert_eq!((stroke(&node(&s, a), 1).width, fill_paint(&node(&s, a), 0)), (stroke(&node(&s, b), 1).width, fill_paint(&node(&s, b), 0)));
+}
+
 #[test]
 fn graphic_style_apply_replaces_the_stack() {
     let mut s = session();

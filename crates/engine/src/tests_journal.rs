@@ -520,6 +520,144 @@ fn an_undo_group_is_one_undo_step() {
     assert_eq!(undo_len(&s), undo + 2);
 }
 
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, each document created meanwhile opens an
+/// undo group with the begun group's name, also when no document was open at the begin: its edits
+/// are one undo step there, and a cancel undoes them and leaves the document open. A group opened
+/// without the command (a scrubbed field) and a begin that a failed batch rolled back open no group
+/// in a new document.
+#[test]
+fn an_undo_group_begun_by_command_opens_in_each_document_created_before_its_end() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let new = json!({"width": 400, "height": 300});
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+    for _ in 0..2 {
+        s.execute("file.new", &new).unwrap();
+        s.execute("shape.rectangle", &rect).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+    }
+    s.execute("edit.undoGroup.end", &json!({})).unwrap();
+    assert_eq!(labels(&s), ["Job"]);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(labels(&s), ["Job"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 0, "one undo takes back both edits");
+
+    // Closed: the next document's edits are steps of their own.
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    assert_eq!(labels(&s).len(), 2);
+
+    // Canceled: the new document stays open without the group's edits, and the journal replays to it.
+    let count = s.documents().len();
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("edit.undoGroup.end", &json!({"cancel": true})).unwrap();
+    assert_eq!(s.documents().len(), count + 1);
+    assert_eq!((objects(&s), labels(&s).len()), (0, 0));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+
+    // A scrubbed field's group stays in its own document.
+    s.begin_undo_group();
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+    s.end_undo_group(false);
+
+    // A group begun by command and closed with `end_undo_group` opens no group in a later document.
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    s.end_undo_group(false);
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+
+    // A batch that begins a group and then fails leaves no group begun.
+    let steps = json!([{"command": "edit.undoGroup.begin"}, {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+}
+
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, a command that creates a document and
+/// edits it (a `command.batch`) keeps its edits as an undo step of its own in that document, and the
+/// edits after it are the group's step. A cancel undoes only those, keeps the document and the
+/// command's edits, and the journal replays to the same documents.
+#[test]
+fn an_undo_group_leaves_out_the_edits_of_the_command_that_creates_its_document() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let batch = json!({"commands": [
+        {"command": "file.new", "params": {"width": 400, "height": 300}},
+        {"command": "shape.rectangle", "params": rect},
+    ]});
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for cancel in [false, true] {
+        s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+        s.execute("command.batch", &batch).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+        s.execute("edit.undoGroup.end", &json!({ "cancel": cancel })).unwrap();
+        let (objects, steps) = (objects(&s), labels(&s).len());
+        assert_eq!((objects, steps), if cancel { (1, 1) } else { (3, 2) }, "cancel: {cancel}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "cancel: {cancel}");
+    }
+    assert_eq!(s.documents().len(), 3);
+}
+
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, switching to a document that was open
+/// before the begin opens no group in it: each edit made there is an undo step of its own. The edits
+/// made in the document active at the begin, and in a document created meanwhile, stay one undo step
+/// each after a switch away and back, and the journal replays to the same documents.
+#[test]
+fn an_undo_group_begun_by_command_opens_no_group_in_a_document_switched_to() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let new = json!({"width": 400, "height": 300});
+    let labels = |s: &Session, i: usize| s.documents()[i].history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("file.new", &new).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 2})).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("edit.undoGroup.end", &json!({})).unwrap();
+    assert_eq!((labels(&s, 0), labels(&s, 2)), (vec!["Job".to_string()], vec!["Job".to_string()]));
+    assert_eq!(labels(&s, 1).len(), 3, "{:?}", labels(&s, 1));
+    assert!(s.documents().iter().all(|d| d.undo_group.is_none()));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 0, "one undo takes back both edits in the document active at the begin");
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 2, "one undo takes back one edit in the document switched to");
+}
+
+/// `edit.undoGroup.begin`'s params text gives the undo step's default name next to `label`, and the
+/// clause on a document switched to says only that its edits stay steps of their own.
+#[test]
+fn the_undo_group_params_text_names_the_default_label_next_to_label() {
+    let params = cmd::find_command("edit.undoGroup.begin").unwrap().params;
+    assert!(params.contains("named `label` (else after its first edit); in a document"), "{params}");
+    assert!(params.contains("each edit stays its own undo step: for automation"), "{params}");
+}
+
 /// An undo scope ([`Session::begin_undo_scope`]) in a document without an open undo group opens
 /// one, and [`Session::end_undo_scope`] closes that group only, whichever document is active, and
 /// leaves another document's group open; canceled, it undoes only that group's edits and cuts the

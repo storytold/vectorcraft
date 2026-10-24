@@ -310,6 +310,39 @@ fn the_swatch_commands_refuse_a_keep_model_given_as_text() {
     assert_eq!(doc(&s).swatch(r["name"].as_str().unwrap()).and_then(|w| w.paint.color()), Some(managed(Color::rgb(1.0, 0.0, 0.0))));
 }
 
+/// The swatch commands refuse an on/off option given as text or as another value that is not true
+/// or false, and `swatch.move` a `to` that is not a number, naming the key; the swatches and the
+/// undo history stay as they were. True, false, numbers and null still work.
+#[test]
+fn the_swatch_commands_refuse_a_boolean_or_number_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}));
+    run(&mut s, "paint.setFill", json!({"color": "#3366cc"}));
+    let name = run(&mut s, "swatch.new", json!({"color": "#000000"}))["name"].clone();
+    let mut calls: Vec<_> = [
+        ("swatch.new", json!({"color": "#ff0000", "spot": "true"}), "spot"),
+        ("swatch.new", json!({"color": "#ff0000", "global": 1}), "global"),
+        ("swatch.delete", json!({"name": name, "unlink": "false"}), "unlink"),
+        ("swatch.newGroup", json!({"name": "K", "colors": ["#00ff00"], "includeTints": "true"}), "includeTints"),
+        ("swatch.newGroup", json!({"name": "K", "fromArtwork": "true"}), "fromArtwork"),
+        ("swatch.newGroup", json!({"name": "K", "fromArtwork": true, "toGlobal": "false"}), "toGlobal"),
+        ("swatch.edit", json!({"name": name, "spot": "true"}), "spot"),
+        ("swatch.edit", json!({"name": name, "global": [true]}), "global"),
+        ("swatch.addUsedColors", json!({"global": "true"}), "global"),
+        ("swatch.addUsedColors", json!({"selection": 1}), "selection"),
+    ]
+    .into_iter()
+    .map(|(cmd, p, key)| not_a_switch(cmd, p, key))
+    .collect();
+    calls.push(not_a_number("swatch.move", json!({"name": name, "to": "0"}), "to"));
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    run(&mut s, "swatch.edit", json!({"name": name, "global": true, "spot": null}));
+    run(&mut s, "swatch.move", json!({"name": name, "to": 0}));
+    assert!(doc(&s).swatch(name.as_str().unwrap()).is_some_and(|w| w.global && !w.spot));
+}
+
 #[test]
 fn rgb_documents_keep_colours_as_given_and_edits_keep_the_source_model() {
     use vectorcraft_color::Color;

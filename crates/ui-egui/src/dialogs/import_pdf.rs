@@ -202,7 +202,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         if let Some(pw) = password(&d) {
             p["password"] = json!(pw);
         }
-        crate::place::run(app, &p).map(|_| ())
+        crate::place::run_for_user(app, &p).map(|_| ())
     } else {
         let mut p = json!({"cropTo": crop(&d).id(), "password": password(&d)});
         let range = d.str("range");
@@ -249,8 +249,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     nav(ui, "chevrons-left", tl!("First Page"), 1, current > 1),
                     nav(ui, "chevron-left", tl!("Previous Page"), current.saturating_sub(1).max(1), current > 1),
                 ];
-                if let Some(v) = widgets::plain_field(ui, "pdf-page", current as f64, "", 0, 40.0) {
-                    current = (v.max(1.0) as usize).min(count.max(1));
+                if let Some(v) = widgets::range_field(ui, "pdf-page", current as f64, 1.0..=count.max(1) as f64, "", 0, 40.0) {
+                    current = v as usize;
                 }
                 ui.label(egui::RichText::new(crate::i18n::fmt(tl!("of {count}"), &[("count", &count.to_string())])).color(t.text_dim));
                 let go2 = [

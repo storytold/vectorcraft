@@ -22,7 +22,9 @@ pub(super) fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
         .filter_map(|d| {
             let (k, v) = d.split_once(':')?;
             let v = v.trim();
-            let (v, important) = match v.strip_suffix("important").map(str::trim_end).and_then(|v| v.strip_suffix('!')) {
+            let stem = v.len().checked_sub("important".len()).and_then(|i| v.get(..i).zip(v.get(i..)));
+            let flagged = stem.filter(|(_, kw)| kw.eq_ignore_ascii_case("important"));
+            let (v, important) = match flagged.map(|(h, _)| h.trim_end()).and_then(|v| v.strip_suffix('!')) {
                 Some(v) => (v.trim_end(), true),
                 None => (v, false),
             };
@@ -456,6 +458,14 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    #[test]
+    fn important_flag_is_case_insensitive() {
+        for s in ["fill: red !IMPORTANT", "fill: red !Important", "fill: red ! important"] {
+            assert_eq!(parse_decls(s), [("fill".to_string(), "red".to_string(), true)], "{s}");
+        }
+        assert_eq!(parse_decls("fill: red !importantx"), [("fill".to_string(), "red !importantx".to_string(), false)]);
+    }
 
     fn with_doc(svg: &str, f: impl FnOnce(&roxmltree::Document, &Styles)) {
         let doc = roxmltree::Document::parse(svg).unwrap();

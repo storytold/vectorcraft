@@ -14,10 +14,10 @@ use std::sync::Arc;
 
 use kurbo::{Point, Rect, Shape};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{AppearanceItem, CharStyle, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::shapes;
 
-use crate::import_text::LineFacts;
+use crate::import_text::{LineFacts, median};
 
 /// Rebuild the type among `nodes` (and in their groups) from what its lines tell (`lines`).
 pub(crate) fn rebuild(nodes: &mut Vec<Arc<Node>>, lines: &HashMap<NodeId, LineFacts>) {
@@ -148,79 +148,108 @@ fn block(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>) -> (usize, Opt
     (count, (space > -size * 0.01).then_some(Block { leading, space: space.max(0.0), ys }))
 }
 
+/// How far a line's characters' tracking may stray (thousandths of an em) and still be one
+/// value: placing each glyph where the file put it (#722) tracks characters a little apart where
+/// the file's widths are rounded, or it moved a glyph a hair (`TJ`).
+const EVEN_TRACKING: f64 = 10.0;
+
+/// A line's spacing: the tracking after its letters, and how much more its spaces take (word
+/// spacing, `Tw`; `None` when it has none). `None` when its letters are tracked apart (set by
+/// hand), or its spaces more than `slack` apart.
+fn line_spacing(t: &TextObject, slack: f64) -> Option<(f64, Option<f64>)> {
+    // The tracking of the runs with characters that are spaces (`true`) or that aren't.
+    let tracking = |space: bool| -> Vec<f64> {
+        t.runs.iter().filter(|r| r.text.chars().any(|c| c.is_whitespace() == space)).map(|r| r.style.tracking).collect()
+    };
+    let letters = tracking(false);
+    let one = median(letters.clone())?;
+    letters.iter().all(|x| (x - one).abs() <= EVEN_TRACKING).then_some(())?;
+    let spaces = tracking(true);
+    let word = match median(spaces.clone()) {
+        Some(s) => {
+            spaces.iter().all(|x| (x - s).abs() <= slack).then_some(())?;
+            Some(s - one)
+        }
+        None => None,
+    };
+    Some((one, word))
+}
+
+/// The one word spacing (thousandths of an em past the letters' tracking) of lines spaced
+/// `words` (`None`: no spaces): 0 for lines without.
+fn one_word_spacing(words: &[Option<f64>]) -> Option<f64> {
+    let w: Vec<f64> = words.iter().flatten().copied().collect();
+    let Some(one) = median(w.clone()) else { return Some(0.0) };
+    w.iter().all(|x| (x - one).abs() <= EVEN_TRACKING).then_some(if one.abs() <= EVEN_TRACKING { 0.0 } else { one })
+}
+
 /// Lines `nodes` of block `b` as one area type object, aligned left or justified, when laying it
 /// out breaks its lines where the file does.
 fn area_type(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>, b: &Block) -> Option<TextObject> {
     let texts: Vec<(&TextObject, &LineFacts)> = nodes.iter().map(|n| line(n, lines)).collect::<Option<_>>()?;
     let (first, _) = texts.first()?;
     let size = first.first_style().size;
-    // A line's tracking: one for all its runs, or (`spaces` false) one for its runs other than
-    // lone spaces.
-    let shared = |t: &TextObject, spaces: bool| {
-        let mut all = t.runs.iter().filter(|r| spaces || r.text != " ").map(|r| r.style.tracking);
-        let one = all.next()?;
-        all.all(|x| x == one).then_some(one)
-    };
-    // As justified type, a wrapped line's tracking leaves out its spaces when each space is a run
-    // of its own, tracked within a fiftieth of an em of the line's first space.
-    let spread = |t: &TextObject| {
-        let tracking = shared(t, false)?;
-        let mut spaces = t.runs.iter().filter(|r| r.text == " ").map(|r| r.style.tracking);
-        let alike =
-            spaces.next().is_some_and(|s| spaces.all(|x| (x - s).abs() <= 20.0)) && !t.runs.iter().any(|r| r.text != " " && r.text.contains(' '));
-        (alike || shared(t, true).is_some()).then_some(tracking)
-    };
-    let trackings: Option<Vec<f64>> = texts.iter().map(|(t, _)| shared(t, true)).collect();
-    let justified: Option<Vec<f64>> = texts.iter().map(|(t, f)| if f.wraps { spread(t) } else { shared(t, true) }).collect();
-    let median = |mut v: Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        v.get(v.len() / 2).copied()
-    };
+    // Each line's tracking and word spacing. A justified line spaces its words out (word spacing,
+    // `Tw`), which justification does again (#722); word spacing the same on every line is the
+    // type's own.
+    // A wrapped line's spaces may each be tracked apart, within a fiftieth of an em of each other.
+    let spacings: Vec<(f64, Option<f64>)> =
+        texts.iter().map(|(t, f)| line_spacing(t, if f.wraps { 20.0 } else { EVEN_TRACKING })).collect::<Option<_>>()?;
+    let trackings: Vec<f64> = spacings.iter().map(|(t, _)| *t).collect();
+    let words: Vec<Option<f64>> = spacings.iter().map(|(_, w)| *w).collect();
     let wrapped: Vec<f64> = texts.iter().filter(|(_, f)| f.wraps).map(|(_, f)| f.length).collect();
     let longest = |v: &[f64]| v.iter().copied().fold(0.0, f64::max);
     let mut tries = vec![];
-    // Wrapped lines all as long: justified (a paragraph's last line aligned left), tracked as the
-    // lines that end paragraphs are (the others are spaced out).
+    // Wrapped lines all as long: justified (a paragraph's last line aligned left), tracked and
+    // word spaced as the lines that end paragraphs are (the others are spaced out).
     let full = longest(&wrapped);
+    let ends: Vec<usize> = texts.iter().enumerate().filter(|(_, (_, f))| !f.wraps).map(|(i, _)| i).collect();
+    let end_words: Vec<Option<f64>> = ends.iter().filter_map(|i| words.get(*i).copied()).collect();
     if wrapped.len() >= 2
         && wrapped.iter().all(|l| (full - l).abs() <= size * 0.02)
-        && let Some(justified) = justified
+        && let Some(word) = one_word_spacing(&end_words)
     {
-        let ends: Vec<f64> = texts.iter().zip(&justified).filter(|((_, f), _)| !f.wraps).map(|(_, t)| *t).collect();
-        let tracking = median(ends).or_else(|| justified.iter().copied().reduce(f64::min))?;
-        tries.push((Justify::JustifyLeft, full, tracking));
+        let tracking =
+            median(ends.iter().filter_map(|i| trackings.get(*i).copied()).collect()).or_else(|| trackings.iter().copied().reduce(f64::min))?;
+        tries.push((Justify::JustifyLeft, full, tracking, word));
     }
-    let all: Vec<f64> = texts.iter().map(|(_, f)| f.length).collect();
-    if let Some(trackings) = trackings {
-        tries.push((Justify::Left, longest(&all) + size * 0.02, median(trackings)?));
+    // Every line spaced alike: aligned left.
+    if let Some(word) = one_word_spacing(&words) {
+        let all: Vec<f64> = texts.iter().map(|(_, f)| f.length).collect();
+        tries.push((Justify::Left, longest(&all) + size * 0.02, median(trackings)?, word));
     }
-    tries.into_iter().find_map(|(justify, width, tracking)| laid_out(&texts, b, justify, width, tracking))
+    tries.into_iter().find_map(|(justify, width, tracking, word)| laid_out(&texts, b, justify, width, tracking, word))
 }
 
 /// The area type of lines `texts` (block `b`): `width` wide, aligned `justify`, its characters
-/// tracked `tracking`; `None` when it doesn't lay out as the lines did.
-fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, width: f64, tracking: f64) -> Option<TextObject> {
+/// tracked `tracking` and its spaces `word` more; `None` when it doesn't lay out as the lines did.
+fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, width: f64, tracking: f64, word: f64) -> Option<TextObject> {
     let (first, _) = texts.first()?;
     let size = first.first_style().size;
     // Leading as set, unless it is Auto's (120% of the size).
     let explicit =
         (b.leading - size * 1.2).abs() > size * 1e-3 || texts.iter().any(|(t, _)| t.runs.iter().any(|r| (r.style.size - size).abs() > 1e-9));
     let mut runs: Vec<TextRun> = vec![];
+    let mut push = |text: &str, style: CharStyle| match runs.last_mut() {
+        Some(last) if last.style == style => last.text.push_str(text),
+        _ => runs.push(TextRun { text: text.to_string(), style, inline: None }),
+    };
     for (k, (t, f)) in texts.iter().enumerate() {
+        let mut style = CharStyle::default();
         for r in &t.runs {
-            let mut style = r.style.clone();
-            style.tracking = tracking;
+            style = r.style.clone();
+            style.tracking = if r.text.trim().is_empty() { tracking + word } else { tracking };
             style.leading = explicit.then_some((b.leading * 1000.0).round() / 1000.0);
-            match runs.last_mut() {
-                Some(last) if last.style == style => last.text.push_str(&r.text),
-                _ => runs.push(TextRun { text: r.text.clone(), style, inline: None }),
-            }
+            push(&r.text, style.clone());
         }
         // A wrapped line's space, or the end of a paragraph.
-        if k + 1 < texts.len()
-            && let Some(last) = runs.last_mut()
-        {
-            last.text.push(if f.wraps { ' ' } else { '\n' });
+        if k + 1 < texts.len() {
+            if f.wraps {
+                style.tracking = tracking + word;
+                push(" ", style);
+            } else {
+                push("\n", style);
+            }
         }
     }
     let mut t = (*first).clone();

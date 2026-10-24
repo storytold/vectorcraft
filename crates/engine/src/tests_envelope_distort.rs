@@ -122,7 +122,7 @@ fn red_image(s: &mut Session) -> NodeId {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png));
         let id = d.alloc_id();
         let xf = Affine::translate((100.0, 100.0)) * Affine::scale(10.0);
-        let im = vectorcraft_doc::ImageObject { key: "pic".into(), width: 4, height: 4, xf, link: None, placement: Default::default() };
+        let im = vectorcraft_doc::ImageObject { key: "pic".into(), width: 4, height: 4, xf, link: None, placement: Default::default(), pixels: None };
         d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
         sel.set([id]);
         Ok(id)

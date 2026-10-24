@@ -341,6 +341,8 @@ impl DocSettings {
                 locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                show_video_safe_areas: false,
+                video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
             })
             .collect();
@@ -515,6 +517,7 @@ pub const CATEGORIES: &[Category] = &[
             ("Logo 1000×1000", 1000.0, 1000.0, PX),
             ("Business Card 3.5 × 2 in", 3.5, 2.0, IN),
             ("Business Card 85 × 55 mm", 85.0, 55.0, MM),
+            ("Business Card 91 × 55 mm", 91.0, 55.0, MM),
             ("Letterhead Letter", 8.5, 11.0, IN),
             ("Letterhead A4", 210.0, 297.0, MM),
             ("Envelope DL", 220.0, 110.0, MM),

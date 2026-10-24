@@ -296,6 +296,60 @@ fn headless_end_to_end() {
     assert_eq!(v["error"]["code"], -32002);
 }
 
+/// The trace-and-style prompt's steps, run in its order on an image drawn here: each one
+/// succeeds, the expanded trace holds no image, and its paths keep the image's colors.
+#[test]
+fn trace_and_style_prompt_steps_run_in_order() {
+    let mut s = server();
+    // 60 × 40 pixels: a red and a blue block on white.
+    let png = tmp("trace-and-style.png");
+    image::RgbImage::from_fn(60, 40, |x, y| match (x, y) {
+        (5..25, 5..35) => image::Rgb([220, 30, 30]),
+        (35..55, 5..35) => image::Rgb([30, 60, 200]),
+        _ => image::Rgb([255, 255, 255]),
+    })
+    .save(&png)
+    .unwrap();
+    let path = png.to_str().unwrap();
+    let v = rpc(&mut s, 1, "prompts/get", json!({"name": "trace-and-style", "arguments": {"path": path}}));
+    let prompt = v["result"]["messages"][0]["content"]["text"].as_str().unwrap().to_string();
+
+    let ok = |s: &mut Server, id: u64, name: &str, args: Value| {
+        let r = call(s, id, name, args);
+        assert_eq!(r["isError"], false, "{name}: {r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap_or(Value::Null)
+    };
+    let command = |s: &mut Server, id: u64, command: &str, params: Value| {
+        assert!(prompt.contains(command), "the prompt names {command}: {prompt}");
+        ok(s, id, "run_command", json!({"command": command, "params": params}))
+    };
+    ok(&mut s, 2, "open_file", json!({"path": path}));
+    command(&mut s, 3, "select.all", json!({}));
+    let traced = command(&mut s, 4, "imageTrace.make", json!({"preset": "6 Colors"}));
+    assert!(traced["colors"].as_u64().unwrap() > 1, "{traced}");
+    command(&mut s, 5, "imageTrace.expand", json!({}));
+    ok(&mut s, 6, "apply_effect", json!({"effect": "stylize.scribble"}));
+    let colors = command(&mut s, 7, "recolor.colors", json!({}));
+    let from = colors["colors"].as_array().unwrap().iter().filter_map(|c| c["hex"].as_str()).find(|h| *h != "#ffffff").unwrap().to_string();
+    command(&mut s, 8, "recolor.apply", json!({"map": {from.as_str(): "#00aa00"}}));
+    let r = call(&mut s, 9, "render_preview", json!({}));
+    assert_eq!(r["isError"], false, "{r}");
+
+    // No image is left, and the paths carry more than one fill color, the new one among them.
+    let doc = ok(&mut s, 10, "inspect_document", json!({}));
+    let (mut kinds, mut fills) = (vec![], std::collections::BTreeSet::new());
+    let mut stack: Vec<&Value> = doc["layers"].as_array().unwrap().iter().collect();
+    while let Some(n) = stack.pop() {
+        kinds.push(n["kind"].as_str().unwrap_or_default().to_string());
+        if let Some(fill) = n["fill"].as_str().filter(|f| f.starts_with('#')) {
+            fills.insert(fill.to_string());
+        }
+        stack.extend(n["children"].as_array().into_iter().flatten());
+    }
+    assert!(!kinds.iter().any(|k| k == "Image"), "{kinds:?}");
+    assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
+}
+
 #[test]
 fn headless_path_gesture_undo() {
     let mut s = server();
@@ -354,6 +408,26 @@ fn headless_path_gesture_undo() {
     let r = call(&mut s, 12, "export", json!({"path": tmp("x.png").to_str().unwrap(), "scale": 0.5}));
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(&std::fs::read(tmp("x.png")).unwrap()[..4], b"\x89PNG");
+}
+
+/// A hover's reply comes once the tool's highlight is ready, also when the tool finds it on another
+/// thread (the Shape Builder's map of a large selection).
+#[test]
+fn headless_hover_waits_for_the_shape_builder_map() {
+    let mut h = Headless::with_document();
+    let run = |h: &mut Headless, command: &str, params: Value| {
+        let r = crate::call_tool(h, "run_command", &json!({"command": command, "params": params}));
+        assert!(!r.is_error, "{command}: {r:?}");
+    };
+    for k in 0..40 {
+        run(&mut h, "shape.rectangle", json!({"x": 100 + k * 10, "y": 100, "width": 20, "height": 20}));
+    }
+    run(&mut h, "select.all", json!({}));
+    run(&mut h, "tool.select", json!({"tool": "shapeBuilder"}));
+    let r = crate::call_tool(&mut h, "pointer_gesture", &json!({"events": [{"kind": "move", "x": 115, "y": 110}]}));
+    assert!(!r.is_error, "{r:?}");
+    assert!(!h.session.tool_waiting());
+    assert!(!h.session.overlays(h.view).is_empty(), "the region under the pointer is highlighted");
 }
 
 /// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
@@ -605,6 +679,68 @@ fn remote_does_not_replay_when_edit_reply_is_lost() {
     let error = first.expect_err("the lost reply must report uncertainty");
     assert!(error.contains("operation may have completed"), "{error}");
     assert!(next.is_ok(), "the next call must reconnect: {next:?}");
+}
+
+#[test]
+fn remote_file_tools_send_absolute_paths() {
+    let (addr, h) = fake_app();
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let given = std::env::temp_dir().join("given.svg");
+    let given = given.to_str().unwrap();
+    call(&mut s, 1, "open_file", json!({"path": "rel/in.svg"}));
+    call(&mut s, 2, "open_file", json!({"path": given}));
+    call(&mut s, 3, "save_file", json!({"path": "rel/out.vectorcraft"}));
+    call(&mut s, 4, "export", json!({"path": "rel/out.png", "scale": 2}));
+    call(&mut s, 5, "export", json!({"format": "svg", "options": {"path": "rel/opt.svg"}}));
+    call(&mut s, 6, "screenshot", json!({"path": "rel/shot.png"}));
+    call(&mut s, 7, "run_command", json!({"command": "document.export", "params": {"path": "rel/cmd.svg"}}));
+    drop(s);
+    let seen = h.join().unwrap();
+    let abs = |p: &str| std::path::absolute(p).unwrap().to_str().unwrap().to_string();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["app.open", "app.open", "app.save", "engine.execute", "engine.execute", "ui.render", "engine.execute"]);
+    assert_eq!(seen[0]["params"]["path"], abs("rel/in.svg"));
+    assert_eq!(seen[1]["params"]["path"], given);
+    assert_eq!(seen[2]["params"]["path"], abs("rel/out.vectorcraft"));
+    assert_eq!(seen[3]["params"]["params"]["path"], abs("rel/out.png"));
+    // The format still comes from the extension the agent gave: a raster export keeps `scale`.
+    assert_eq!(seen[3]["params"]["params"]["scale"], 2);
+    assert_eq!(seen[4]["params"]["params"]["path"], abs("rel/opt.svg"));
+    assert_eq!(seen[5]["params"]["path"], abs("rel/shot.png"));
+    // Command params go to the app as given.
+    assert_eq!(seen[6]["params"]["params"]["path"], "rel/cmd.svg");
+}
+
+/// `p` written relative to this process's working directory, or None when the two are on
+/// different drives.
+fn relative_to_cwd(p: &std::path::Path) -> Option<std::path::PathBuf> {
+    use std::path::Component;
+    let cwd = std::env::current_dir().unwrap();
+    if cwd.components().next() != p.components().next() {
+        return None;
+    }
+    let mut rel = std::path::PathBuf::new();
+    for _ in cwd.components().filter(|c| matches!(c, Component::Normal(_))) {
+        rel.push("..");
+    }
+    for c in p.components().filter(|c| matches!(c, Component::Normal(_))) {
+        rel.push(c);
+    }
+    Some(rel)
+}
+
+#[test]
+fn headless_file_tools_take_relative_paths() {
+    let mut s = server();
+    let file = tmp("relative.vectorcraft");
+    let Some(rel) = relative_to_cwd(&file) else { return };
+    let rel = rel.to_str().unwrap();
+    assert!(std::path::Path::new(rel).is_relative());
+    let r = call(&mut s, 1, "save_file", json!({"path": rel}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(file.is_file());
+    let r = call(&mut s, 2, "open_file", json!({"path": rel}));
+    assert_eq!(r["isError"], false, "{r}");
 }
 
 #[test]

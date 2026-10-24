@@ -634,6 +634,48 @@ fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
     assert!(crate::dialogs::place::link_tip(d).contains("VectorCraft documents"));
 }
 
+#[test]
+fn the_place_dialog_links_a_pdf_page_and_embeds_it_with_link_off() {
+    let mut app = app();
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let pdf = src.execute("document.serialize", &json!({"format": "pdf", "preserveEditing": false})).unwrap();
+    let path = temp_file("flyer.pdf", &vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap());
+    // Link on (the default): one locked object, linked to the file.
+    place_picked(&mut app, &path);
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert!(d.bool("link") && d.bool("__documents") && !d.bool("__others"), "Link places it as one locked object");
+    assert!(crate::dialogs::place::link_tip(d).contains("locked object"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let vectorcraft_doc::NodeKind::PlacedDocument(p) = &st.doc.node(st.selection.objects[0]).unwrap().kind else { panic!("not a placed document") };
+    assert_eq!(p.link.path, path);
+    // Link off: the page's art is embedded.
+    place_picked(&mut app, &path);
+    app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().kind_label(), "Clip Group");
+}
+
+#[test]
+fn the_place_dialog_does_not_offer_a_postscript_ai_as_a_locked_object() {
+    let mut app = app();
+    let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
+    let path = temp_file("legacy.ai", ps);
+    // file.place embeds a .ai saved without PDF compatibility, even with Link on.
+    let r = app.session.execute("file.place", &json!({"path": path, "link": true})).unwrap();
+    assert_eq!(r["linked"], json!(false), "{r}");
+    let st = app.session.active().unwrap();
+    assert!(!matches!(st.doc.node(st.selection.objects[0]).unwrap().kind, NodeKind::PlacedDocument(_)));
+    // So Link's tooltip does not promise one locked object for it.
+    place_picked(&mut app, &path);
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert!(!d.bool("__documents") && d.bool("__others"), "{:?}", d.fields);
+    assert!(!crate::dialogs::place::link_tip(d).contains("locked object"));
+}
+
 /// Tool key `key` as the Control bar's Apply (Enter) and Cancel (Escape) send it.
 fn tool_key(app: &mut VectorcraftApp, key: vectorcraft_tools::ToolKey) {
     let view = app.view_info();

@@ -256,6 +256,36 @@ fn select_same_appearance_attribute() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
 }
 
+/// With a member path of a compound path selected first, Select > Same > Graphic Style and
+/// Appearance Attribute compare the other objects with the compound path, except in isolation mode
+/// inside it.
+#[test]
+fn select_same_style_and_attribute_from_a_compound_path_member() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    set_fill(&mut s, a, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let outer = rect(&mut s, 100.0);
+    let inner = rect(&mut s, 120.0);
+    run(&mut s, "select.set", json!({"ids": [outer.0, inner.0]}));
+    let c = NodeId(run(&mut s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    rect(&mut s, 300.0);
+    for cmd in ["select.same.graphicStyle", "select.same.appearanceAttribute"] {
+        for from in [c, outer] {
+            run(&mut s, "select.set", json!({"ids": [from.0]}));
+            run(&mut s, cmd, json!({}));
+            assert_eq!(s.doc().unwrap().selection.objects, vec![a, c], "{cmd} from {from:?}");
+        }
+    }
+    // Isolated in the compound path, its member paths are compared, and they carry no style.
+    run(&mut s, "object.isolate", json!({"id": c.0}));
+    run(&mut s, "select.set", json!({"ids": [outer.0]}));
+    assert!(s.execute("select.same.graphicStyle", &json!({})).is_err());
+}
+
 #[test]
 fn document_info_lists_style_names() {
     let mut s = session();

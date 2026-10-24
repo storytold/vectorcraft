@@ -29,9 +29,12 @@ pub struct Opening {
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
-/// save/export with a label, or a file opening off the UI thread)?
+/// save/export with a label, a file opening or being read for Place off the UI thread, or a heavy plug-in filter)?
 pub fn long_operation_busy(app: &VectorcraftApp) -> bool {
-    app.background.jobs.iter().any(|j| !j.label.is_empty() && !j.cancelled()) || !app.opening.pending.is_empty()
+    app.background.jobs.iter().any(|j| !j.label.is_empty() && !j.cancelled())
+        || !app.opening.pending.is_empty()
+        || !app.plugin_runs.running.is_empty()
+        || !app.placing.pending.is_empty()
 }
 
 /// Does opening happen off the UI thread here? Not on wasm (no threads), in unit tests (they look
@@ -49,13 +52,14 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     let (name, file) = (path.to_string(), bytes.clone());
     // Update Links (Preferences › File Handling) applies there as it is set now.
     let update_links = app.session.prefs.update_links == "automatically";
+    let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
         let r = scope
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
-                    fileio::read_for_open(&name, &file, Some(name.clone()), &Value::Null, update_links).map_err(|e| e.to_string())
+                    fileio::read_for_open(&name, &file, Some(name.clone()), &Value::Null, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
                 })
             })
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
@@ -77,9 +81,15 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
 /// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
 /// becomes the active one, and the dialog's OK acts on the active document (#1694: Save As
 /// options confirmed after another file had finished opening saved that file's art under the
-/// first one's name). The files wait, their status line too, until the dialog is closed.
+/// first one's name). The files wait, their status line too, until the dialog is closed. Nor while
+/// an interaction is open (a drag, a slider's preview, or a tool's preview between its clicks) or
+/// a tool is busy with a drag of its own while the pointer button is held: a document that opens
+/// cancels it. A tool that is busy while the button is not held and no interaction is open is
+/// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
+/// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() {
+    let s = &app.session;
+    if app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()) {
         return;
     }
     let mut i = 0;
@@ -181,6 +191,158 @@ mod tests {
         }
         assert_eq!(app.session.documents().len(), before + 1);
         assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/art/Second.vectorcraft"));
+    }
+
+    /// A file that finishes opening while an object is being dragged waits for the drag to end, so
+    /// the drag is not canceled.
+    #[test]
+    fn a_file_ready_during_a_drag_waits_for_it_to_end() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let square = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.select_tool("selection");
+        let view = vectorcraft_engine::ViewInfo::default();
+        for (kind, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 40.0), (PointerKind::Drag, 60.0)] {
+            app.session.pointer(&PointerEvent::new(kind, x, 20.0), view).unwrap();
+        }
+        start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+        let t0 = std::time::Instant::now();
+        while t0.elapsed().as_millis() < 400 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert!(app.session.documents().len() == 1 && app.session.in_interaction(), "the file waits for the drag");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 60.0, 20.0), view).unwrap();
+        let t0 = std::time::Instant::now();
+        while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert_eq!(app.session.documents().len(), 2);
+        let moved = app.session.documents()[0].doc.node(vectorcraft_doc::NodeId(square)).and_then(|n| n.geometric_bounds());
+        assert_eq!(moved.map(|b| (b.x0, b.y0)), Some((50.0, 10.0)), "the drag was not canceled");
+    }
+
+    /// A file that finishes opening while the place cursor is being dragged, a drag the tool keeps
+    /// to itself, waits for the drag to end: the drag still places its file.
+    #[test]
+    fn a_file_ready_during_a_place_cursor_drag_waits_for_it_to_end() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let mut png = vec![];
+        image::RgbImage::new(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        app.run("file.place.queue", json!({"files": [{"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)}]})).unwrap();
+        let view = vectorcraft_engine::ViewInfo::default();
+        for (kind, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 60.0)] {
+            crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, x, 20.0), view);
+        }
+        start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+        let t0 = std::time::Instant::now();
+        while t0.elapsed().as_millis() < 400 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert!(app.session.documents().len() == 1 && app.session.tool_busy(), "the file waits for the drag");
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Up, 60.0, 20.0), view);
+        let t0 = std::time::Instant::now();
+        while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+            poll(&mut app);
+            std::thread::yield_now();
+        }
+        assert_eq!(app.session.documents().len(), 2);
+        let first = &app.session.documents()[0].doc;
+        let names: Vec<_> = first.layers.iter().flat_map(|l| l.children().into_iter().flatten()).filter_map(|n| n.name.clone()).collect();
+        assert_eq!(names, ["a.png"], "the drag placed its file");
+    }
+
+    /// A file that finishes opening while a preview runs waits for the preview to end, so the
+    /// preview is not canceled: a slider's preview with the tool idle, a slider's preview while the
+    /// Dimension tool waits after its first point, and the Dimension tool's line following the
+    /// pointer after its second point.
+    #[test]
+    fn a_file_ready_during_a_preview_waits_for_it_to_end() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let view = vectorcraft_engine::ViewInfo::default();
+        let click = |app: &mut VectorcraftApp, x: f64| {
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                crate::canvas::dispatch(app, &PointerEvent::new(kind, x, 20.0), view);
+            }
+        };
+        for case in ["slider", "slider between clicks", "line"] {
+            let mut app = VectorcraftApp::new(Session::new(), Services::default());
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            if case != "slider" {
+                app.select_tool("dimension");
+                click(&mut app, 20.0);
+            }
+            if case == "line" {
+                click(&mut app, 80.0);
+                crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Move, 50.0, 60.0), view);
+            } else {
+                app.session.begin_interaction("Preview").unwrap();
+            }
+            assert_eq!(app.session.tool_busy(), case != "slider", "{case}");
+            start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+            let t0 = std::time::Instant::now();
+            while t0.elapsed().as_millis() < 400 {
+                poll(&mut app);
+                std::thread::yield_now();
+            }
+            assert!(app.session.documents().len() == 1 && app.session.in_interaction(), "the file waits for the preview: {case}");
+            if case == "line" {
+                click(&mut app, 50.0);
+            } else {
+                app.session.cancel_interaction().unwrap();
+            }
+            let t0 = std::time::Instant::now();
+            while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+                poll(&mut app);
+                std::thread::yield_now();
+            }
+            assert_eq!(app.session.documents().len(), 2, "{case}");
+        }
+    }
+
+    /// A file that finishes opening while a tool waits between its clicks with no preview open (the
+    /// Dimension tool after its first point, then after its second before the pointer moves) opens
+    /// without waiting for the next click, and the tool starts afresh in it, as when the user
+    /// switches documents.
+    #[test]
+    fn a_file_ready_between_a_tools_clicks_opens() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("dimension");
+        let view = vectorcraft_engine::ViewInfo::default();
+        let click = |app: &mut VectorcraftApp, x: f64| {
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                crate::canvas::dispatch(app, &PointerEvent::new(kind, x, 20.0), view);
+            }
+        };
+        let opened = |app: &mut VectorcraftApp| {
+            let t0 = std::time::Instant::now();
+            while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+                poll(app);
+                std::thread::yield_now();
+            }
+        };
+        click(&mut app, 20.0);
+        assert!(app.session.tool_busy() && !app.session.in_interaction(), "the first point waits for the second");
+        start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(400.0, 300.0), false)).unwrap();
+        opened(&mut app);
+        assert_eq!(app.session.documents().len(), 2, "the file opens after one click");
+        assert!(!app.session.tool_busy(), "the tool starts afresh");
+        click(&mut app, 20.0);
+        click(&mut app, 80.0);
+        assert!(app.session.tool_busy() && !app.session.in_interaction(), "the second point waits for the line's place");
+        start(&mut app, "/art/Third.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+        opened(&mut app);
+        assert_eq!(app.session.documents().len(), 3, "the file opens after two clicks");
+        assert!(!app.session.tool_busy() && !app.session.in_interaction(), "the tool starts afresh");
+        let second = &app.session.documents()[1].doc;
+        assert!(second.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "the unfinished dimension is not made");
     }
 
     #[test]

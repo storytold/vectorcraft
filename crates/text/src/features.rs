@@ -46,6 +46,9 @@ pub struct OtFeatures {
     pub extra: u32,
 }
 
+/// The most entries of a style's feature list read: every segment of its text reads the list again.
+const MAX_STYLE_FEATURES: usize = 256;
+
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
 /// and lining `lnum` figures, superscript `sups` and subscript `subs`.
@@ -146,13 +149,15 @@ impl OtFeatures {
     /// The harfrust features for text in style `st`.
     pub(crate) fn resolve(&self, st: &CharStyle) -> Vec<Feature> {
         // The character's own OpenType settings override the layout-wide ones.
-        let own = self.with_tags(st.features.iter().map(String::as_str));
+        // (A style lists a few features; one with thousands, in a document, is read for the first.)
+        let listed = st.features.get(..MAX_STYLE_FEATURES).unwrap_or(&st.features);
+        let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
         if st.kerning.is_some() {
             v.push(f(b"kern", false));
         }
-        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(&st.features));
+        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
         if !liga {
             v.push(f(b"liga", false));
             v.push(f(b"clig", false));

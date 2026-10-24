@@ -23,12 +23,13 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, size, source}], "folder": report}` |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have. |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped. |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so is a heavy filter (nobody was asked). |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -45,9 +46,10 @@ parameters it runs at once. Parameters too many for the window's height scroll i
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. **File › Open** of a `.wasm` file installs
-a plug-in too (on the web this is how plug-ins get in).
+a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
+background ([below](#heavy-filters)).
 
-**Preference folder.** Edit › Preferences › Performance & Storage › *Additional Plug-ins Folder*: when set, every
+**Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
 the web build installs from bytes).
 
@@ -67,13 +69,36 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an export 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per export (desktop; checked every 20 M instructions) | `Limit("time budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export 10 G + 4,000 per byte | `Limit("instruction budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run or export (desktop; checked every 20 M instructions) | `Limit("time budget")` |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
 
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
 plug-in between two of those 20 M-instruction slices; nothing is written then.
+
+### Heavy filters
+
+Some filters do heavy but legitimate work, such as routing a plotter's pen, packing shapes onto a sheet or running a
+simulation, which a minute and 50 M instructions don't cover. Such a filter declares `"budget": "heavy"` in its
+manifest (only a filter may: a live effect runs whenever the document is drawn, and an exporter has an export's
+budget). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte, and 300 s
+(`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns how
+much there is only once the run has ended.
+
+- **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, and install it once the
+  user clicks OK; `plugin.install` refuses it without `allowHeavy: true`, which an agent passes once the user agreed
+  (`plugin.inspect` tells it beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed again
+  at startup. The Additional Plug-ins Folder skips heavy filters with a note in its report, since loading a folder
+  asks nobody.
+- **It runs in the background.** Its dialog has no Preview. OK (or the menu item, without parameters) runs it on a
+  thread of its own while editing goes on, shown in the status bar and, after a moment, in a progress window with
+  Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
+  applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
+  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
+  it runs at once; the instruction budget alone bounds it there.
+- `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
+  its `notifications/cancelled` stops it.
 
 Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
 modules, bad manifests, out-of-range pointers, negative return codes and invalid output all become errors, and the
@@ -126,6 +151,8 @@ pointers are offsets into the module's memory.
 - `name`: the menu label, or an exporter's format name in Export As (1–64 printable characters). `kind`: `"filter"`
   (object filter), `"effect"` (live effect) or `"exporter"`. Exporters came after the first ABI v1 hosts, which refuse
   the kind when the plug-in is installed.
+- `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
+  filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
   `document.export` then writes the exporter's format only when asked for by its format id.
@@ -198,7 +225,7 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
   `paint`, `width` in points, `join` (`"miter"`, `"round"` or `"bevel"`), `cap` (`"butt"`, `"round"` or `"square"`)
   and `miterLimit`. Paints use the
   native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`, `{"type": "gradient", "gradient":
-  {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity, midpoint}]}, "geom"?, "angle",
+  {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity, midpoint}], "dither"?, "method"?: "Perceptual"}, "geom"?, "angle",
   "freeform"?}`, `{"type": "pattern", "pattern", "xf"?}`. Colours are `{"model": "rgb", r, g, b}`, `{"model": "cmyk",
   c, m, y, k}`, `{"model": "gray", k}` (ink: 0 white, 1 black) or `{"model": "lab", l, a, b}`; components 0–1 except
   Lab's.
@@ -212,12 +239,13 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
 
 ```json
 {"amount": 50, "mode": "soft",
- "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792]}}
+ "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
 `mode` is `"filter"`, `"effect"` or `"export"`; `bounds` the selection's geometric bounds (a live effect: the reference
 box of the effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard
-under the selection's centre, else the first. A live effect's `item` says where it sits: `"object"` (one of the
+under the selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document
+(`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the
 object's effects), or `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke,
 counted from the bottom as in `fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt",
 "name": "Poster"}` instead: the extension of the file being written (one the exporter lists) and its name without the
@@ -253,6 +281,14 @@ most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops
 clamped into range, stroke weights to 0–1,000 pt and miter limits to 1–500; a pattern must exist in the document. A
 paint returned unchanged keeps its swatch link; any other paint is unlinked. One refused effect record refuses the
 whole output.
+
+A filter's output may also hold `documentData`: any JSON of at most 1 MiB, which replaces what the plug-in keeps with
+the document (`null` removes it), in the same undo step as its objects. Settings that belong to the whole document
+rather than to one object go there, such as the pens a plotter holds. A filter reads and writes only its own data. It
+is the document's foreign data, as the perspective grid is: the native file keeps it in `document.unknown.pluginData`
+under the plug-in's id, and hosts from before `documentData` keep it when they save. An exporter is given the whole
+document, so it can read what every plug-in keeps there, not only its own. A live effect isn't given it: its geometry
+is worked out from the object alone.
 
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
 object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry.

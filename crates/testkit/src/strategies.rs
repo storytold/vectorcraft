@@ -273,7 +273,7 @@ impl Op {
     pub fn command(&self, s: &Session) -> (String, Value) {
         let doc = s.active().map(|d| d.doc.clone());
         // Children of compound paths are excluded: grouping one of them nests a group inside the
-        // compound (known bug, see crates/engine/tests/known_bugs.rs).
+        // compound (known bug, see crates/engine/tests/it/known_bugs.rs).
         let art: Vec<_> = doc
             .as_ref()
             .map(|d| {
@@ -313,7 +313,7 @@ impl Op {
             Op::Ungroup => c("object.ungroup", json!({})),
             Op::Arrange(i) => {
                 let i = *i as usize % ARRANGE.len();
-                // Known bug (crates/engine/tests/known_bugs.rs): Bring to Front/Forward panics when
+                // Known bug (crates/engine/tests/it/known_bugs.rs): Bring to Front/Forward panics when
                 // the selection spans several parents. Avoid generating that case.
                 let multi_parent = doc.as_ref().zip(s.active()).is_some_and(|(d, st)| {
                     let mut parents: Vec<_> = st.selection.objects.iter().map(|id| d.parent_of(*id)).collect();

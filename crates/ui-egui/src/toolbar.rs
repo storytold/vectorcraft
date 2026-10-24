@@ -327,7 +327,8 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser and Shape Builder tools' are
-/// their Tool Options.
+/// their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
+/// ([`crate::dialogs::shapes::open_options`]).
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "dimension" => crate::dialogs::dimension::open(app),
@@ -359,6 +360,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
         "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
+        // drag and click.
+        _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
         // The Flare tool: its options, which draw the next flare (OK draws none).
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
@@ -1058,6 +1062,80 @@ pub(crate) mod tests {
             crate::dialogs::cancel(&mut app);
             assert_eq!(objects(&app), 4);
             assert_eq!(app.session.tool_options()[key], count, "Cancel keeps the count");
+        }
+    }
+
+    /// #2691: a double-click on the Line Segment, Arc, Rectangular Grid or Polar Grid tool opens
+    /// its Tool Options (the Rectangular Grid and Arc help pages, step 3). Cancel leaves the next
+    /// drag as it was; OK draws nothing and the next drag, and a click's dialog, use the options.
+    #[test]
+    fn double_clicking_the_line_arc_and_grid_tools_opens_their_tool_options() {
+        // (tool, the option changed, its new value, the drag's command, the param it shows in)
+        let cases = [
+            ("lineSegment", "fillLine", json!(true), "shape.line", "fill"),
+            ("arc", "slope", json!(-30.0), "shape.arc", "slope"),
+            ("rectangularGrid", "rows", json!(2), "shape.rectangularGrid", "rows"),
+            ("polarGrid", "radial", json!(3), "shape.polarGrid", "radial"),
+        ];
+        let objects =
+            |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>();
+        let drag = |app: &mut VectorcraftApp| {
+            let view = app.view_info();
+            for (kind, x, y) in [
+                (vectorcraft_tools::PointerKind::Down, 50.0, 50.0),
+                (vectorcraft_tools::PointerKind::Drag, 150.0, 120.0),
+                (vectorcraft_tools::PointerKind::Up, 150.0, 120.0),
+            ] {
+                app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, x, y), view).unwrap();
+            }
+            app.session.journal.last().cloned().expect("the drag's command")
+        };
+        for (tool, key, value, cmd, param) in cases {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.ui.toolbar_advanced = true;
+            app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+            app.select_tool(tool);
+            let index = slots(&app).iter().position(|(_, tools)| tools.contains(&tool)).expect("a toolbar slot");
+            let ctx = egui::Context::default();
+            let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
+            let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame_in(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)], 2000.0);
+            let d = app.ui.dialog.clone().unwrap_or_else(|| panic!("{tool}: Tool Options"));
+            assert_eq!((d.kind.as_str(), d.bool("__toolOptions")), (tool, true));
+            assert!(!d.fields.contains_key("x"), "{tool}: no click to draw at");
+            let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+            let title = match tool {
+                "lineSegment" => "Line Segment Tool Options",
+                "arc" => "Arc Segment Tool Options",
+                "rectangularGrid" => "Rectangular Grid Tool Options",
+                _ => "Polar Grid Tool Options",
+            };
+            assert!(text.contains(title) && !text.contains("Reference:"), "{tool}: {text}");
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert(key.into(), value.clone());
+            crate::dialogs::cancel(&mut app);
+            let (c, p) = drag(&mut app);
+            assert_eq!(c, cmd);
+            assert_ne!(p.get(param), Some(&value), "{tool}: Cancel changes nothing");
+            assert_eq!(objects(&app), 1);
+            app.run("tool.options", json!({ "tool": tool })).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert(key.into(), value.clone());
+            if tool.ends_with("Grid") {
+                d.fields.insert("width".into(), json!("150 pt"));
+            }
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(objects(&app), 1, "{tool}: OK draws nothing");
+            let (c, p) = drag(&mut app);
+            assert_eq!((c.as_str(), &p[param]), (cmd, &value), "{tool}: the next drag uses the option");
+            // A click's dialog opens at them too, a grid at its Default Size.
+            crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x": 100, "y": 100}));
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!(d.fields[key], value, "{tool}");
+            if tool.ends_with("Grid") {
+                assert_eq!(d.f64("width", 0.0), 150.0);
+            }
         }
     }
 

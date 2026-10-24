@@ -286,7 +286,7 @@ fn a_masked_surface_under_a_colored_light_stays_whole() {
     use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
     let mut half = GradientStop::new(1.0, RED);
     half.opacity = 0.5;
-    let gradient = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops: vec![GradientStop::new(0.0, RED), half] });
+    let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), half]));
     for (lights, surfaces) in [(json!({"lights": [{"color": "#ff8080"}]}), 2), (json!({}), 1)] {
         let mut n = stroked_rect(100.0);
         if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {

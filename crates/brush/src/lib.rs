@@ -689,6 +689,10 @@ fn leave_out_brushed(doc: &Document, nodes: &mut Vec<Node>, known: &mut Known) {
 /// with the stroke's opacity folded into the piece opacity. `None` if nothing is brushed.
 pub fn node_pieces(doc: &Document, n: &Node) -> Option<Vec<Node>> {
     let bp = node_bezpath(n)?;
+    // The library is parsed for a stroke that names a brush, not for every path.
+    if !n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if st.brush.is_some())) {
+        return None;
+    }
     let lib = library(doc);
     let mut out = vec![];
     let mut any = false;

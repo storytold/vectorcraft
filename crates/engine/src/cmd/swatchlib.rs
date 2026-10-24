@@ -162,7 +162,7 @@ impl<L: LibraryFile> Libraries<L> {
             let file = file_name(&path);
             let read = || crate::file_access::unconfined(|| read_file(&path)).ok().and_then(|b| L::read(&b, stem(&file)).ok());
             let Some(lib) = crate::guard::catch_panic(read).ok().flatten() else { continue };
-            let info = LibraryInfo { id: format!("user/{file}"), name: lib.name().to_string(), category: "user" };
+            let info = LibraryInfo { id: format!("user/{file}"), name: library_tab_name(&file, lib.name()), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
     }
@@ -245,7 +245,7 @@ impl<L: LibraryFile> Libraries<L> {
         if let Some(e) = path.and_then(user) {
             return Ok((e.info.clone(), e.lib.clone()));
         }
-        let info = LibraryInfo { id: format!("loaded/{}", path.unwrap_or(&file)), name: lib.name().to_string(), category: "loaded" };
+        let info = LibraryInfo { id: format!("loaded/{}", path.unwrap_or(&file)), name: library_tab_name(&file, lib.name()), category: "loaded" };
         let lib = Arc::new(lib);
         self.extra.retain(|x| x.info.id != info.id);
         self.extra.push(Extra { info: info.clone(), path: path.map(str::to_string), lib: lib.clone() });
@@ -278,9 +278,10 @@ impl<L: LibraryFile> Libraries<L> {
             Some(p) => {
                 let ext = extension(&p);
                 let base = file_name(&p);
-                // Color books (.acb) name the tab from the book title inside the file; a sandbox
-                // copy of an import often lands as tmp….tmp.acb (#2996).
-                let file = if ext == "acb" || temporary_library_file_name(&base) { library_file_name(lib.name(), &ext) } else { base };
+                // A sandbox copy of an import often lands as tmp….tmp.acb (#2996): store it under the
+                // book title. A normal .acb path keeps its file name so the tab matches Illustrator
+                // (#3395).
+                let file = if temporary_library_file_name(&base) { library_file_name(lib.name(), &ext) } else { base };
                 (file, read_file(&p)?)
             }
             None => (library_file_name(lib.name(), ext), encode(&lib)?),
@@ -316,6 +317,13 @@ impl<L: LibraryFile> Libraries<L> {
 fn temporary_library_file_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.contains(".tmp.")
+}
+
+/// The name library panels and menus show: color books (.acb) use the file name without its
+/// extension (Illustrator), except when the path is a host temporary (#2996), then the book title.
+fn library_tab_name(file: &str, lib_name: &str) -> String {
+    let base = file_name(file);
+    if extension(&base) == "acb" && !temporary_library_file_name(&base) { stem(&base).to_string() } else { lib_name.to_string() }
 }
 
 /// The file name of library `name` with extension `ext`: characters file systems reject become

@@ -73,8 +73,8 @@ fn number(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, key: &str, l
     let mut changed = false;
     widgets::label_row(ui, tl!(label), 96.0, |ui| {
         let value = fields.get(key).and_then(Value::as_f64).unwrap_or_default();
-        if let Some(v) = widgets::plain_field(ui, ("dimension", key), value, suffix, 2, 90.0) {
-            fields.insert(key.into(), json!(v.clamp(range.0, range.1)));
+        if let Some(v) = widgets::range_field(ui, ("dimension", key), value, range.0..=range.1, suffix, 2, 90.0) {
+            fields.insert(key.into(), json!(v));
             changed = true;
         }
     });

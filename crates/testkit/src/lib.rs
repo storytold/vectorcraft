@@ -39,10 +39,28 @@ pub use vectorcraft_engine::{Session, doc::NodeId};
 /// Re-exports so dependents without direct dependencies (e.g. app test crates) can use them.
 pub use {vectorcraft_doc as doc, vectorcraft_format as format, vectorcraft_render as render, vectorcraft_svg as svg};
 
-/// A per-process temporary directory for test output (created on first use).
+/// A per-process temporary directory for test output (created on first use). It is made with
+/// `create_dir` (owner-only on Unix), and a directory that already exists is reused only when it is a
+/// real directory, not a link, with no access for others and writable by this user: one pre-made in a shared temp folder is refused.
 pub fn temp_dir(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vectorcraft-testkit-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("create temp dir");
+    // Unix sets the mode on it; elsewhere it stays as made.
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut b = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    if let Err(e) = b.create(&dir) {
+        let m = std::fs::symlink_metadata(&dir).expect("temp dir");
+        assert!(e.kind() == std::io::ErrorKind::AlreadyExists && m.is_dir(), "create temp dir: {e}");
+        #[cfg(unix)]
+        assert!(std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o077 == 0, "{}: not private", dir.display());
+        // A private directory made by another user passes the mode check but is closed to this one:
+        // writing a probe file tells it apart from ours without needing the user ids.
+        // Named for this call: tests running alongside probe the same directory.
+        static PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let probe = dir.join(format!(".probe-{}", PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        assert!(std::fs::write(&probe, b"").and_then(|()| std::fs::remove_file(&probe)).is_ok(), "{}: not owned by this user", dir.display());
+    }
     dir
 }
 

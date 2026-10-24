@@ -75,7 +75,7 @@ proptest! {
         d.images.insert(key.clone(), ImageBlob::new("image/png", data.clone()));
         let layer = d.layers[0].id;
         let id = d.alloc_id();
-        let im = ImageObject { key: key.clone(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+        let im = ImageObject { key: key.clone(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
         d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         for pretty in [false, true] {
             let back = load(&save(&d, pretty)).unwrap();

@@ -469,6 +469,7 @@ fn dataset_list(s: &mut Session, _p: &Value) -> Result<Value> {
 
 fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
     const C: &str = "dataset.select";
+    let doc_path = s.doc()?.path.clone();
     let (applied, skipped, mut typed, bound) = s.edit("Apply Data Set", |d, sel| {
         let ds = d.variables.dataset(name).cloned().ok_or_else(|| bad(C, format!("no dataset named `{name}`")))?;
         // One object may be driven by several variables; walk them in definition order, so two
@@ -513,7 +514,7 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
                     true
                 }),
                 // Swap the linked file; keep the object's bounds. A missing path skips.
-                (VariableKind::Image, DataValue::Image(path)) => links::set_image_from_path(d, id, path).is_ok(),
+                (VariableKind::Image, DataValue::Image(path)) => links::set_image_from_path(d, id, path, doc_path.as_deref()).is_ok(),
                 (VariableKind::Graph, DataValue::Graph(csv)) => super::graph::apply_csv(d, id, csv).is_ok(),
                 _ => false,
             };

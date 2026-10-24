@@ -30,6 +30,8 @@ fn artboard(id: u32, x: f64) -> Artboard {
         locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
     }
 }
@@ -437,6 +439,60 @@ fn turns_mirror_and_negative() {
     assert_eq!(img.over_white(300, 300), [0, 0, 0]);
     let c = img.over_white(25, 50);
     assert!(c[0] < 10 && c[1] > 245 && c[2] > 245, "{c:?}");
+}
+
+#[test]
+fn for_a_printer_landscape_pages_print_upright_turned_anticlockwise() {
+    let d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 50.0, 100.0), rgb(1.0, 0.0, 0.0))]);
+    let s = json!({"placement": {"origin": "topLeft"}, "autoRotate": false, "orientation": "landscape"});
+    let spooled = |v| {
+        let opts = PrintOptions { settings: settings(v), created: Some(1_791_200_000), uncompressed: true, for_printer: true, ..Default::default() };
+        pages(&print(&d, &opts).unwrap().bytes).remove(0)
+    };
+    // Saved, the page stays landscape.
+    assert_eq!(pages(&job(&d, s.clone()).bytes)[0].0, (792.0, 612.0));
+    // For a printer, Letter upright: the art's top at the paper's left edge, its left half at the bottom.
+    let p = spooled(s.clone());
+    assert_eq!(p.0, (612.0, 792.0));
+    assert!(near(p.1[0].0, Rect::new(0.0, 742.0, 100.0, 792.0)), "{:?}", p.1);
+    // A portrait page and a transverse one (already upright) don't turn.
+    let p = spooled(json!({"placement": {"origin": "topLeft"}, "autoRotate": false}));
+    assert_eq!(p.0, (612.0, 792.0));
+    assert!(near(p.1[0].0, Rect::new(0.0, 0.0, 50.0, 100.0)), "{:?}", p.1);
+    let mut t = s;
+    t["transverse"] = json!(true);
+    assert_eq!(spooled(t).0, (612.0, 792.0));
+    // Transverse in Portrait is wide on purpose: it stays wide.
+    assert_eq!(spooled(json!({"autoRotate": false, "transverse": true})).0, (792.0, 612.0));
+}
+
+#[test]
+fn for_a_printer_paper_wide_in_portrait_stays_as_it_is() {
+    // A 4 × 2 in label in Portrait: the queue's media is wide too.
+    let d = doc(288.0, 144.0, &[(Rect::new(0.0, 0.0, 144.0, 144.0), rgb(1.0, 0.0, 0.0))]);
+    let v =
+        json!({"media": "custom", "width": 288, "height": 144, "orientation": "portrait", "autoRotate": false, "placement": {"origin": "topLeft"}});
+    let opts = PrintOptions { settings: settings(v), uncompressed: true, for_printer: true, ..Default::default() };
+    let p = pages(&print(&d, &opts).unwrap().bytes).remove(0);
+    assert_eq!(p.0, (288.0, 144.0));
+    assert!(near(p.1[0].0, Rect::new(0.0, 0.0, 144.0, 144.0)), "{:?}", p.1);
+}
+
+#[test]
+fn for_a_printer_auto_rotated_artboards_all_print_upright() {
+    // A wide artboard and a tall one, the paper turned to each.
+    let mut d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 10.0, 10.0), rgb(1.0, 0.0, 0.0))]);
+    let mut wide = artboard(1, 0.0);
+    wide.rect = Rect::new(0.0, 0.0, 300.0, 100.0);
+    let mut tall = artboard(2, 400.0);
+    tall.rect = Rect::new(400.0, 0.0, 500.0, 300.0);
+    d.artboards = vec![wide, tall];
+    let set = settings(json!({"autoRotate": true}));
+    let saved = print(&d, &PrintOptions { settings: set.clone(), ..Default::default() }).unwrap();
+    let sizes = |bytes: &[u8]| pages(bytes).into_iter().map(|p| p.0).collect::<Vec<_>>();
+    assert_eq!(sizes(&saved.bytes), [(792.0, 612.0), (612.0, 792.0)]);
+    let spooled = print(&d, &PrintOptions { settings: set, for_printer: true, ..Default::default() }).unwrap();
+    assert_eq!(sizes(&spooled.bytes), [(612.0, 792.0), (612.0, 792.0)]);
 }
 
 #[test]

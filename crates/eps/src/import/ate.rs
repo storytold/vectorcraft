@@ -373,8 +373,17 @@ impl Texts {
                 let range = carries.get("6").and_then(Val::nums).unwrap_or_default();
                 let segments = segments()?;
                 let n = segments.len() as f64;
-                let start = range.first().copied().unwrap_or(0.0).clamp(0.0, n);
-                let end = range.get(1).copied().unwrap_or(n).clamp(start, n);
+                let finite = |v: Option<&f64>| v.copied().filter(|v| v.is_finite());
+                let (start, end) = if closed(&segments) {
+                    // Round a closed path the end is written unwrapped (the start plus the run, so
+                    // past the last segment), or wrapped the other way: both brackets are places on
+                    // the loop.
+                    let start = finite(range.first()).unwrap_or(0.0).rem_euclid(n);
+                    (start, finite(range.get(1)).map_or(start, |e| e.rem_euclid(n)))
+                } else {
+                    let start = finite(range.first()).unwrap_or(0.0).clamp(0.0, n);
+                    (start, finite(range.get(1)).unwrap_or(n).clamp(start, n))
+                };
                 Some(FrameKind::OnPath { segments, start, end })
             }
             _ => None,
@@ -530,11 +539,16 @@ fn path_of(segments: &[[f64; 8]], template: (f64, f64), to_doc: Affine) -> PathD
         }
         bp.curve_to(at(*x1, *y1), at(*x2, *y2), at(*x3, *y3));
     }
-    let closed = matches!((segments.first(), segments.last()), (Some(f), Some(l)) if (f[0] - l[6]).abs() < 1e-3 && (f[1] - l[7]).abs() < 1e-3);
+    let closed = closed(segments);
     if closed {
         bp.close_path();
     }
     PathData::from_bezpath(&bp)
+}
+
+/// Do `segments` end where they start (a closed path)?
+fn closed(segments: &[[f64; 8]]) -> bool {
+    matches!((segments.first(), segments.last()), (Some(f), Some(l)) if (f[0] - l[6]).abs() < 1e-3 && (f[1] - l[7]).abs() < 1e-3)
 }
 
 /// Where on `segments` the place `t` (segment index and the place in it) is, as a fraction of their
@@ -638,7 +652,9 @@ impl Story {
             FrameKind::Area(s) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
             FrameKind::OnPath { segments, start, end } => {
                 let n = segments.len() as f64;
-                let end = (*end < n - 0.02).then(|| length_fraction(segments, *end));
+                // A closed path keeps its end bracket wherever it is (the same place as the start: a
+                // full turn, see `TextKind::path_span`); an open one's end at its end is none.
+                let end = (closed(segments) || *end < n - 0.02).then(|| length_fraction(segments, *end));
                 (1.0, Affine::IDENTITY, TextKind::OnPath { path: path_of(segments, template, to_doc), start: length_fraction(segments, *start), end })
             }
         };
@@ -840,6 +856,84 @@ mod tests {
         }
         let deep = format!("/0 {}", "[".repeat(200));
         assert!(read(deep.as_bytes()).is_none());
+    }
+
+    /// A text document's frame on a path of `segments` (each `x0 y0 x1 y1 x2 y2 x3 y3`) with the
+    /// range `range`, written by hand.
+    fn on_path_frame(segments: &[[f64; 8]], range: [f64; 2]) -> Option<FrameKind> {
+        let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
+        let all: Vec<f64> = segments.iter().flatten().copied().collect();
+        let doc = format!("/0 << /1 << /0 [ {} ] >> /2 << /0 2 /6 [ {} ] >> >>", nums(&all), nums(&range));
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            frames: vec![read(doc.as_bytes()).unwrap()],
+        };
+        texts.frame(0)
+    }
+
+    /// A circle of radius 100 round the origin in four cubics, from its right, closed.
+    fn circle() -> Vec<[f64; 8]> {
+        let k = 55.228475;
+        vec![
+            [100.0, 0.0, 100.0, k, k, 100.0, 0.0, 100.0],
+            [0.0, 100.0, -k, 100.0, -100.0, k, -100.0, 0.0],
+            [-100.0, 0.0, -100.0, -k, -k, -100.0, 0.0, -100.0],
+            [0.0, -100.0, k, -100.0, 100.0, -k, 100.0, 0.0],
+        ]
+    }
+
+    /// The text object of type `text` on `frame`, and how much of its path its brackets span.
+    fn on_path(text: &str, frame: FrameKind) -> (TextObject, f64) {
+        let mut st = story(text, &[0.0], &Para::default());
+        st.frames = vec![frame];
+        let node = st.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        let NodeKind::Text(t) = node.kind else { panic!("not type") };
+        let (a, b) = t.kind.path_span().unwrap();
+        (*t, b - a)
+    }
+
+    /// Round a closed path the file writes the end bracket unwrapped, past the last segment (the
+    /// start plus the run): the type keeps that run, nearly the whole circle here, not the bit
+    /// from the start to the path's end.
+    #[test]
+    fn type_on_a_closed_path_keeps_its_unwrapped_end() {
+        let Some(FrameKind::OnPath { start, end, .. }) = on_path_frame(&circle(), [3.86426, 7.85426]) else { panic!("on a path") };
+        assert!((start - 3.86426).abs() < 1e-9 && (end - 3.85426).abs() < 1e-9, "{start} {end}");
+        let (t, span) = on_path("type", on_path_frame(&circle(), [3.86426, 7.85426]).unwrap());
+        assert!((span - 0.9975).abs() < 1e-3, "{span}");
+        assert_eq!(t.plain_text(), "type");
+        // Wrapped the other way, or below zero, the brackets are the same places.
+        for range in [[3.86426, 3.85426], [-0.13574, 3.85426]] {
+            let (_, other) = on_path("type", on_path_frame(&circle(), range).unwrap());
+            assert!((other - span).abs() < 1e-6, "{range:?}: {other}");
+        }
+        // Values that aren't numbers fall back to the start of the path, a full turn.
+        let Some(FrameKind::OnPath { start, end, .. }) = on_path_frame(&circle(), [f64::NAN, f64::INFINITY]) else { panic!("on a path") };
+        assert!(start.is_finite() && end.is_finite());
+    }
+
+    /// A range inside the loop is kept as it is, and a run of exactly the loop is a full turn,
+    /// where a short line of type doesn't overflow.
+    #[test]
+    fn type_on_a_closed_path_keeps_a_range_inside_it_and_a_full_turn() {
+        let (_, half) = on_path("type", on_path_frame(&circle(), [0.5, 2.5]).unwrap());
+        assert!((half - 0.5).abs() < 1e-3, "{half}");
+        let (t, full) = on_path("type", on_path_frame(&circle(), [1.0, 5.0]).unwrap());
+        assert!((full - 1.0).abs() < 1e-9, "{full}");
+        assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "a short line fits a full turn");
+    }
+
+    /// An open path keeps clamping: a range past its end stops at it.
+    #[test]
+    fn type_on_an_open_path_clamps_its_range() {
+        let open: Vec<[f64; 8]> = circle().into_iter().take(2).collect();
+        let Some(FrameKind::OnPath { start, end, .. }) = on_path_frame(&open, [0.5, 7.0]) else { panic!("on a path") };
+        assert_eq!((start, end), (0.5, 2.0));
+        let (_, span) = on_path("type", on_path_frame(&open, [0.5, 7.0]).unwrap());
+        assert!((span - 0.75).abs() < 1e-3, "{span}");
     }
 
     /// A point-type story of `text` whose lines start at the heights `ys` (the layout's own: where

@@ -687,3 +687,81 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
         assert_eq!(fills, [Paint::Pattern { pattern: "plain".into(), xf: vectorcraft_geom::Affine::IDENTITY }, Paint::None]);
     }
 }
+
+/// Anchors a brushed stroke emitted, which is what the output budget counts.
+fn anchors(nodes: &[Node]) -> usize {
+    nodes
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::Path { path, .. } => path.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>(),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// A path of `subpaths` long parallel lines, each long enough to want more tiles than the
+/// per-run cap allows.
+fn many_long_subpaths(subpaths: usize) -> BezPath {
+    let mut bp = BezPath::new();
+    for i in 0..subpaths {
+        let y = i as f64 * 50.0;
+        bp.move_to((0.0, y));
+        bp.line_to((300_000.0, y));
+    }
+    bp
+}
+
+/// #3594: the per-factor caps are per track, and a path has as many tracks as it has subpaths,
+/// so they multiply instead of bounding. Measured before the budget: 20,000 nodes and 320,000
+/// anchors for one subpath, and exactly N times that for N, so sixteen gave 5,120,000.
+#[test]
+fn pattern_output_is_capped_across_subpaths_not_only_per_run() {
+    let brush = pattern_brush(PatternFit::Stretch, false);
+    let one = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(1), &stroke(1.0));
+    assert_eq!(one.len(), 20_000, "one track still fills its own per-run cap");
+    let a1 = anchors(&one);
+    assert!(a1 < 2_000_000, "one track stays under the total budget: {a1}");
+
+    // Sixteen tracks would be sixteen times that without a total budget.
+    // Four tracks are 4 x 320,000 anchors, still inside the budget, so nothing is cut: the
+    // budget must not bite before the per-factor caps have actually multiplied past it.
+    let four = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(4), &stroke(1.0));
+    assert_eq!(four.len(), 4 * 20_000, "four tracks are under the budget and keep every piece");
+    assert_eq!(anchors(&four), 4 * a1);
+
+    // Sixteen would be 5,120,000 anchors. The budget is what stops it, not the per-run caps.
+    let many = stroke_pieces(&Document::new(1.0, 1.0), &brush, &many_long_subpaths(16), &stroke(1.0));
+    let an = anchors(&many);
+    assert!(an <= 2_000_000, "sixteen subpaths must not exceed the budget: {an}");
+    assert!(an > anchors(&four), "but more is drawn than four tracks' worth: {an}");
+    assert!(many.len() < 16 * 20_000, "and fewer pieces than the per-run caps alone would allow: {}", many.len());
+}
+
+/// The same for scatter, whose per-track guard is also 20,000 copies.
+#[test]
+fn scatter_output_is_capped_across_subpaths() {
+    let b = Brush {
+        name: "s".into(),
+        kind: BrushKind::Scatter(Scatter { art: rect_art(4.0, 4.0), colorization: Colorization::None, ..Default::default() }),
+    };
+    let few = stroke_pieces(&Document::new(1.0, 1.0), &b, &many_long_subpaths(1), &stroke(1.0));
+    let per_track = anchors(&few);
+    assert!(per_track > 0, "one track draws something");
+    // Enough tracks that the per-track guards alone would pass the budget.
+    let tracks = 2_000_000 / per_track + 4;
+    let many = stroke_pieces(&Document::new(1.0, 1.0), &b, &many_long_subpaths(tracks), &stroke(1.0));
+    let an = anchors(&many);
+    assert!(an <= 2_000_000, "{tracks} tracks must not exceed the budget: {an}");
+    assert!(an > per_track, "but more is drawn than one track's worth: {an}");
+    assert!(many.len() < tracks * few.len().max(1), "fewer copies than the per-track guards alone would allow");
+}
+
+/// A short, ordinary stroke is untouched by the budget: it is the absurd ones that are cut.
+#[test]
+fn an_ordinary_stroke_is_unaffected_by_the_budget() {
+    let brush = pattern_brush(PatternFit::Stretch, false);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
+    assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
+    assert!(anchors(&out) < 2_000_000);
+}

@@ -336,8 +336,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "persp-opacity", tl!("Opacity:"), Some(shown), (v / 100.0) as f32, form::SLIDER_WIDTH, &track);
         let mut new = x.map(|x| (f64::from(x) * 100.0).round()).or(keyed);
-        if let Some(x) = widgets::plain_field(ui, "persp-opacity-field", v, "%", 0, 52.0) {
-            new = Some(x.round().clamp(0.0, 100.0));
+        if let Some(x) = widgets::range_field(ui, "persp-opacity-field", v, 0.0..=100.0, "%", 0, 52.0) {
+            new = Some(x);
         }
         if let Some(n) = new.filter(|n| *n != v) {
             d.fields.insert("opacity".into(), json!(n));

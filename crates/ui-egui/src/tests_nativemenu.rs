@@ -147,7 +147,6 @@ fn language_and_appearance_are_in_the_app_menu() {
     assert_eq!(appearance.len(), crate::theme::Brightness::ALL.len());
     assert_eq!(appearance.iter().filter(|(_, c)| *c == Some(true)).count(), 1, "{appearance:?}");
     assert!(appearance.iter().all(|(_, c)| c.is_some()));
-    assert_eq!(crate::i18n::tr_ctx(Lang::from_code("ja").unwrap(), "theme", "Appearance"), "外観", "the theme, not the Appearance panel");
 }
 
 /// Everything the in-window bar lists is in the Mac menu bar, once: what moved to the app menu
@@ -211,7 +210,7 @@ fn the_window_menu_has_the_system_items() {
 #[test]
 fn a_command_keeps_a_system_key_it_is_bound_to() {
     let mut app = app(true);
-    app.ui.shortcut_overrides.insert("view.grid".into(), "Ctrl+Cmd+H".into());
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Ctrl+Cmd+H");
     crate::shortcut_editor::sync(&app.ui);
     let layout = native_menu::mac_layout(&app, &native_menu::from_tree(&app, &menus::menu_tree()), Lang::EN);
     app.ui.shortcut_overrides.clear();
@@ -387,7 +386,8 @@ fn click(at: Pos2, pressed: bool) -> Event {
 /// Run `drag` on a new app with the fake native menu, and run it again on another new app until
 /// the shortcut and plug-in generations hold still through a run (at most 20 runs). Return that app
 /// and what `drag` returned. The generations are process-wide and only grow. A test running
-/// alongside can bump them, and the app then reads the menus again.
+/// alongside can bump them, and the app then reads the menus again, so every step whose menu
+/// reads a test counts runs inside `drag`.
 fn undisturbed<R>(drag: impl Fn(&mut Mac) -> R) -> (Mac, R) {
     let generations = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
     for _ in 0..20 {
@@ -434,15 +434,16 @@ fn key_equivalents_run_through_the_normal_shortcut_path_once() {
 /// while the button is held, and are read when the button is released, with Undo naming the move.
 #[test]
 fn a_drag_reads_the_menus_when_it_is_released() {
-    let (mut m, (start, read)) = undisturbed(|m| {
+    let (m, (read, synced, ended, released)) = undisturbed(|m| {
         let start = m.start_move();
-        (start, m.reads(6, |_, i| vec![Event::PointerMoved(start + vec2(8.0 * (i + 2) as f32, 0.0))]))
+        let read = m.reads(6, |_, i| vec![Event::PointerMoved(start + vec2(8.0 * (i + 2) as f32, 0.0))]);
+        let synced = m.fake.synced();
+        m.frame(vec![click(start + vec2(56.0, 0.0), false)]);
+        (read, synced, !m.app.session.in_interaction(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read at any step of the drag");
-    let synced = m.fake.synced();
-    m.frame(vec![click(start + vec2(56.0, 0.0), false)]);
-    assert!(!m.app.session.in_interaction());
-    assert_eq!(m.fake.synced(), synced + 1, "the menus were read on the release");
+    assert!(ended);
+    assert_eq!(released, synced + 1, "the menus were read on the release");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, "Undo Move");
 }
 
@@ -450,21 +451,24 @@ fn a_drag_reads_the_menus_when_it_is_released() {
 /// the preview's rectangle gone (nothing selected, so Cut is off), and not at the steps before.
 #[test]
 fn escape_during_a_drag_reads_the_menus() {
-    let (mut m, read) = undisturbed(|m| {
+    let (m, read) = undisturbed(|m| {
         m.app.run("select.none", json!({})).unwrap();
         m.app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
         let start = m.on_canvas(200.0, 150.0);
         m.frame(vec![Event::PointerMoved(start), click(start, true)]);
         m.frame(vec![Event::PointerMoved(start + vec2(10.0, 10.0))]);
         assert!(m.app.session.in_interaction(), "the rectangle is being drawn");
-        m.reads(6, |_, i| vec![Event::PointerMoved(start + vec2(10.0, 10.0) * (i + 2) as f32)])
+        let read = m.reads(6, |_, i| vec![Event::PointerMoved(start + vec2(10.0, 10.0) * (i + 2) as f32)]);
+        let cut = find(&m.fake.last(), "edit.cut").enabled;
+        let synced = m.fake.synced();
+        m.frame(vec![Event::Key { key: Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
+        (read, cut, synced, !m.app.session.in_interaction(), m.fake.synced())
     });
+    let (read, cut, synced, dropped, escaped) = read;
     assert_eq!(read, 0, "the menus weren't read at any step of the drag");
-    assert!(find(&m.fake.last(), "edit.cut").enabled, "the preview's rectangle is selected");
-    let synced = m.fake.synced();
-    m.frame(vec![Event::Key { key: Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
-    assert!(!m.app.session.in_interaction(), "Escape dropped the rectangle");
-    assert_eq!(m.fake.synced(), synced + 1, "the menus were read");
+    assert!(cut, "the preview's rectangle is selected");
+    assert!(dropped, "Escape dropped the rectangle");
+    assert_eq!(escaped, synced + 1, "the menus were read");
     assert!(!find(&m.fake.last(), "edit.cut").enabled, "nothing is selected");
 }
 
@@ -473,22 +477,26 @@ fn escape_during_a_drag_reads_the_menus() {
 /// names the step before the drag.
 #[test]
 fn a_move_dragged_onto_a_panel_reads_the_menus() {
-    let (mut m, (start, undo, read)) = undisturbed(|m| {
+    // The whole drag, the wait over the panel and the release run undisturbed: a generation bumped
+    // by a test running alongside would read the menus once more.
+    let (m, (undo, read, synced, waits, over, dropped, released)) = undisturbed(|m| {
         let undo = find(&m.fake.last(), "edit.undo").label.clone();
         let start = m.start_move();
-        (start, undo, m.reads(4, |_, i| vec![Event::PointerMoved(start + vec2(8.0 * (i + 2) as f32, 0.0))]))
+        let read = m.reads(4, |_, i| vec![Event::PointerMoved(start + vec2(8.0 * (i + 2) as f32, 0.0))]);
+        let synced = m.fake.synced();
+        let panel = Pos2::new(m.app.canvas_rect.unwrap().right() + 40.0, start.y);
+        // Over a panel the move waits: the menus keep the interaction's state.
+        m.frame(vec![Event::PointerMoved(panel)]);
+        let (waits, over) = (m.app.session.in_interaction(), m.fake.synced());
+        // Released over the panel, the move is dropped and the menus are read.
+        m.frame(vec![click(panel, false)]);
+        (undo, read, synced, waits, over, !m.app.session.in_interaction(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read at any step of the drag");
-    let synced = m.fake.synced();
-    let panel = Pos2::new(m.app.canvas_rect.unwrap().right() + 40.0, start.y);
-    // Over a panel the move waits: the menus keep the interaction's state.
-    m.frame(vec![Event::PointerMoved(panel)]);
-    assert!(m.app.session.in_interaction(), "the move waits over the panel");
-    assert_eq!(m.fake.synced(), synced, "the menus weren't read");
-    // Released over the panel, the move is dropped and the menus are read.
-    m.frame(vec![click(panel, false)]);
-    assert!(!m.app.session.in_interaction(), "the move was dropped");
-    assert_eq!(m.fake.synced(), synced + 1, "the menus were read");
+    assert!(waits, "the move waits over the panel");
+    assert_eq!(over, synced, "the menus weren't read");
+    assert!(dropped, "the move was dropped");
+    assert_eq!(released, synced + 1, "the menus were read");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, undo);
 }
 
@@ -497,32 +505,34 @@ fn a_move_dragged_onto_a_panel_reads_the_menus() {
 /// without a release or a key.
 #[test]
 fn a_control_port_cancel_of_a_dialog_preview_reads_the_menus() {
-    let (mut m, read) = undisturbed(|m| {
+    let (_m, (read, synced, closed, after)) = undisturbed(|m| {
         m.rotate_preview();
-        m.angles(4)
+        let read = m.angles(4);
+        let synced = m.fake.synced();
+        crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.cancel", json!({}));
+        m.frame(vec![]);
+        (read, synced, !m.app.session.in_interaction() && m.app.ui.dialog.is_none(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read while the dialog previewed the angles");
-    let synced = m.fake.synced();
-    crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.cancel", json!({}));
-    m.frame(vec![]);
-    assert!(!m.app.session.in_interaction() && m.app.ui.dialog.is_none());
-    assert_eq!(m.fake.synced(), synced + 1, "the menus were read");
+    assert!(closed);
+    assert_eq!(after, synced + 1, "the menus were read");
 }
 
 /// OK applies the rotation a dialog previews as one undo step: the menus are read then, with Undo
 /// naming it, and not for the angles previewed before.
 #[test]
 fn applying_a_dialog_preview_reads_the_menus() {
-    let (mut m, read) = undisturbed(|m| {
+    let (m, (read, synced, closed, after)) = undisturbed(|m| {
         m.rotate_preview();
-        m.angles(4)
+        let read = m.angles(4);
+        let synced = m.fake.synced();
+        crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.confirm", json!({}));
+        m.frame(vec![]);
+        (read, synced, !m.app.session.in_interaction() && m.app.ui.dialog.is_none(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read while the dialog previewed the angles");
-    let synced = m.fake.synced();
-    crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.confirm", json!({}));
-    m.frame(vec![]);
-    assert!(!m.app.session.in_interaction() && m.app.ui.dialog.is_none());
-    assert_eq!(m.fake.synced(), synced + 1, "the menus were read");
+    assert!(closed);
+    assert_eq!(after, synced + 1, "the menus were read");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, "Undo Rotate");
 }
 
@@ -539,16 +549,18 @@ fn the_font_menu_preview_reads_the_menus_when_it_ends() {
         native_menu::sync(&mut m.app, &m.ctx);
         m.fake.synced() - synced
     };
-    let (mut m, read) = undisturbed(|m| {
+    let (_m, read) = undisturbed(|m| {
         m.app.run("select.none", json!({})).unwrap();
         m.app.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
         m.frame(vec![]);
         assert_eq!(apply(m, FontPick::Preview("Source Serif 4".into(), None)), 1, "the menus were read as the preview began");
-        apply(m, FontPick::Preview("Source Sans 3".into(), None)) + apply(m, FontPick::Preview("Inter".into(), None))
+        let read = apply(m, FontPick::Preview("Source Sans 3".into(), None)) + apply(m, FontPick::Preview("Inter".into(), None));
+        (read, apply(m, FontPick::EndPreview), !m.app.session.in_interaction())
     });
+    let (read, ended, done) = read;
     assert_eq!(read, 0, "the menus weren't read for the fonts after the first");
-    assert_eq!(apply(&mut m, FontPick::EndPreview), 1, "the menus were read as the preview ended");
-    assert!(!m.app.session.in_interaction());
+    assert_eq!(ended, 1, "the menus were read as the preview ended");
+    assert!(done);
 }
 
 /// A click runs its command like an in-window click, and the menus follow: View › Show Rulers

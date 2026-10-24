@@ -103,7 +103,15 @@ fn groups_layers_type_images_and_symbols_keep_their_raster_effects() {
     let xf = Affine::translate((40.0, 50.0)) * Affine::scale(2.5);
     let im = Node::new(
         d.alloc_id(),
-        NodeKind::Image(Box::new(ImageObject { key: "pic".into(), width: 40, height: 30, xf, link: None, placement: Default::default() })),
+        NodeKind::Image(Box::new(ImageObject {
+            key: "pic".into(),
+            width: 40,
+            height: 30,
+            xf,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
     );
     add(&mut d, with(im, shadow()));
     assert_written("image", &d);

@@ -104,7 +104,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(bake_pieces(d, m));
     }
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
-        let m = evaluate_container(&m).unwrap_or(m);
+        let m = evaluate_container(Some(d), &m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines, and so are
@@ -119,20 +119,21 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
             _ => None,
         };
-        let m = reshape(n, symbol.as_deref())?;
+        let m = reshape(Some(d), n, symbol.as_deref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
-    // A path whose Transform effect copies it with a gradient: each copy an object of its own, so
-    // its gradient fits it rather than spanning every copy.
-    if crate::has_gradient_copies(n)
-        && let Some(m) = reshape(n, None)
+    // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
+    // patterns: each copy an object of its own, so its gradient fits it rather than spanning
+    // every copy and its strokes and patterns can differ from the others'.
+    if crate::has_transform_art(n)
+        && let Some(m) = reshape(Some(d), n, None)
     {
         return Some(bake_pieces(d, m));
     }
     // Groups and layers: Pathfinder, geometry effects and their own fills and strokes (type that
     // Transform effects only move stays type). The new pieces (results, outlines, copies, the
     // fills' and strokes' art) get ids of their own.
-    if let Some(m) = container_keeping_type(n).or_else(|| evaluate_container(n)) {
+    if let Some(m) = container_keeping_type(d, n).or_else(|| evaluate_container(Some(d), n)) {
         return Some(bake_pieces(d, m));
     }
     if let Some(ch) = n.children() {
@@ -323,7 +324,7 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// objects or inside groups with Pathfinder or geometry effects or fills and strokes that paint, is
 /// outlined as [`evaluate_container`] outlines it, and the other members become what it makes of
 /// them. `None` when no type stays type.
-fn container_keeping_type(n: &Node) -> Option<Node> {
+fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     fn keep(n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
         let clips = n.clips();
         let Some(ch) = n.children_mut() else { return };
@@ -348,7 +349,7 @@ fn container_keeping_type(n: &Node) -> Option<Node> {
                     }
                 }
                 None if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
-                None => as_art(c, None),
+                None => as_art(None, c, None),
             };
             if let Some(o) = art {
                 *c = Arc::new(o);
@@ -365,8 +366,7 @@ fn container_keeping_type(n: &Node) -> Option<Node> {
     if !text {
         return None;
     }
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-    let mut m = vectorcraft_doc::live::expand_deep(n, Some(hook));
+    let mut m = crate::reshape::evaluated(Some(d), n);
     let mut kept = false;
     keep(&mut m, &moves, false, &mut kept);
     if !kept {
@@ -454,7 +454,7 @@ pub type StrokeArt<'a> = &'a mut dyn FnMut(&mut Document, &PathData, FillRule, &
 /// effects are dropped. `None` for other kinds of objects.
 pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<Node> {
     if let Some(m) = crate::revolve::expand_revolve_art(n).or_else(|| crate::solid_art(n)) {
-        let m = evaluate_container(&m).unwrap_or(m);
+        let m = evaluate_container(Some(d), &m).unwrap_or(m);
         return Some(bake_pieces(d, m));
     }
     let (g, rule, ctx, mut m) = leaf_base(n)?;
@@ -565,7 +565,7 @@ pub fn bake_appearance(n: &Node) -> Option<Node> {
                     }
                     None => {
                         let effects = st.effects.clone();
-                        let fill = FillLayer { opacity: st.opacity, blend: st.blend, effects, ..FillLayer::new(st.paint.clone()) };
+                        let fill = FillLayer { opacity: st.opacity, blend: st.blend, effects, ..FillLayer::new(st.paint.stroke_as_fill()) };
                         piece(outline, FillRule::NonZero, AppearanceItem::Fill(fill))
                     }
                 }
@@ -674,6 +674,22 @@ mod tests {
     }
 
     #[test]
+    fn a_baked_stroke_leaves_dither_behind() {
+        // Strokes ignore dither, so the filled outline goes without it and looks as the stroke did.
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        if let AppearanceItem::Stroke(s) = &mut n.appearance.items[1] {
+            let mut g = vectorcraft_color::GradientPaint::new(Default::default());
+            g.gradient.dither = true;
+            s.paint = Paint::Gradient(Box::new(g));
+        }
+        let m = bake_appearance(&n).unwrap();
+        let ch = m.children().unwrap();
+        let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
+        let Paint::Gradient(g) = &f.paint else { panic!("a gradient fill") };
+        assert!(!g.gradient.dither);
+    }
+
+    #[test]
     fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline() {
         let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
         if let AppearanceItem::Stroke(s) = &mut n.appearance.items[1] {
@@ -738,7 +754,7 @@ mod tests {
             baked.walk(&mut |n| assert!(ids.insert(n.id), "{params}: duplicate id {}", n.id));
             // The renderer and Expand Appearance still draw it as outlines.
             let mut text = 0;
-            evaluate_container(&g).unwrap().walk(&mut |n| text += usize::from(matches!(n.kind, NodeKind::Text(_))));
+            evaluate_container(None, &g).unwrap().walk(&mut |n| text += usize::from(matches!(n.kind, NodeKind::Text(_))));
             assert_eq!(text, 0, "{params}");
         }
         // Stacked effects that only move: every copy of a copy.
@@ -1034,7 +1050,7 @@ mod tests {
     fn gradient_copies(id: u64) -> Node {
         use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
         let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-        let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+        let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
         let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(paint, Paint::None, 0.0));
         n.appearance.effects.push(fx("distort.transform", json!({"moveH": 30, "copies": 2})));
         n

@@ -481,6 +481,206 @@ fn default_align_on() -> char {
 /// Distance between default tab stops when no explicit stop applies (½ inch).
 pub const DEFAULT_TAB_INTERVAL: f64 = 36.0;
 
+/// The bullet of a bulleted list ([`ParaList::bullet`]): the Paragraph panel's Bullets presets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Bullet {
+    /// A filled dot (•).
+    #[default]
+    Dot,
+    /// A dash (–).
+    Dash,
+    /// A hollow circle (◦).
+    Circle,
+    /// A filled square (▪).
+    Square,
+}
+
+impl Bullet {
+    /// The character the layout draws for the bullet.
+    pub fn character(self) -> char {
+        match self {
+            Bullet::Dot => '\u{2022}',
+            Bullet::Dash => '\u{2013}',
+            Bullet::Circle => '\u{25E6}',
+            Bullet::Square => '\u{25AA}',
+        }
+    }
+}
+
+/// How a numbered list writes its numbers ([`ParaList::number`]): the Paragraph panel's Numbered
+/// List presets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NumberStyle {
+    /// 1, 2, 3…
+    #[default]
+    Arabic,
+    /// A, B, C… Z, AA, BB…
+    UpperLetters,
+    /// a, b, c… z, aa, bb…
+    LowerLetters,
+    /// I, II, III, IV…
+    UpperRoman,
+    /// i, ii, iii, iv…
+    LowerRoman,
+    /// 01, 02… 99, 100…
+    TwoDigits,
+    /// 001, 002… 999, 1000…
+    ThreeDigits,
+}
+
+/// Past this number, roman numerals and letters are written in Arabic digits.
+const MAX_LETTERS_OR_ROMAN: u32 = 3999;
+
+impl NumberStyle {
+    /// Every style, in the order the Numbered List presets list them.
+    pub const ALL: [NumberStyle; 7] = [
+        NumberStyle::Arabic,
+        NumberStyle::UpperLetters,
+        NumberStyle::LowerLetters,
+        NumberStyle::UpperRoman,
+        NumberStyle::LowerRoman,
+        NumberStyle::TwoDigits,
+        NumberStyle::ThreeDigits,
+    ];
+
+    /// Number `n` (1 or more) written in this style, without a separator. Letters run A to Z, then
+    /// AA to ZZ, then AAA and so on; roman numerals use the subtractive forms (IV, IX, XL, XC, CD,
+    /// CM); both are written in Arabic digits past 3999. Two and three digits pad with zeros and
+    /// keep every digit of a longer number.
+    pub fn format(self, n: u32) -> String {
+        let letters_or_roman =
+            matches!(self, NumberStyle::UpperLetters | NumberStyle::LowerLetters | NumberStyle::UpperRoman | NumberStyle::LowerRoman);
+        if n == 0 || (letters_or_roman && n > MAX_LETTERS_OR_ROMAN) {
+            return n.to_string();
+        }
+        match self {
+            NumberStyle::Arabic => n.to_string(),
+            NumberStyle::TwoDigits => format!("{n:02}"),
+            NumberStyle::ThreeDigits => format!("{n:03}"),
+            NumberStyle::UpperLetters => letters(n),
+            NumberStyle::LowerLetters => letters(n).to_lowercase(),
+            NumberStyle::UpperRoman => roman(n),
+            NumberStyle::LowerRoman => roman(n).to_lowercase(),
+        }
+    }
+}
+
+/// `n` (1 or more) in capital letters: A to Z, then each letter twice, three times and so on.
+fn letters(n: u32) -> String {
+    let n = n - 1;
+    let letter = char::from(b'A' + (n % 26) as u8);
+    std::iter::repeat_n(letter, (n / 26 + 1) as usize).collect()
+}
+
+/// `n` (1 to 3999) in capital roman numerals.
+fn roman(mut n: u32) -> String {
+    const DIGITS: [(u32, &str); 13] = [
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ];
+    let mut s = String::new();
+    for (value, digits) in DIGITS {
+        while n >= value {
+            s.push_str(digits);
+            n -= value;
+        }
+    }
+    s
+}
+
+/// The list a paragraph is in (Paragraph panel › Bullets and Numbered List). The layout draws the
+/// list's marker before the paragraph's first line, in the font, size and color of the paragraph's
+/// first character without its baseline shift, rotation, superscript or subscript, tracking, manual
+/// kerning, tate-chu-yoko, underline and strikethrough ([`Self::marker_style`]), and the text after
+/// it starts at the next tab stop, the left indent counting as a stop. The marker is not a
+/// character of the text, and an empty paragraph has none. A saved list reads the fields it leaves
+/// out as their defaults, and a build ignores the fields it doesn't know.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ParaList {
+    /// The bullet each paragraph of a bulleted list starts with. A numbered list keeps it for
+    /// when the list is made bulleted again.
+    pub bullet: Bullet,
+    /// A numbered list's number style. A bulleted list has none, and the file saves it only for a
+    /// numbered list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number: Option<NumberStyle>,
+}
+
+impl ParaList {
+    /// A bulleted list with `bullet`.
+    pub fn bulleted(bullet: Bullet) -> Self {
+        Self { bullet, number: None }
+    }
+
+    /// A numbered list with `style`.
+    pub fn numbered(style: NumberStyle) -> Self {
+        Self { bullet: Bullet::default(), number: Some(style) }
+    }
+
+    /// The characters of the marker the layout draws before the paragraph: the bullet, or for a
+    /// numbered list number `n` in its style followed by a period.
+    pub fn marker(&self, n: u32) -> String {
+        match self.number {
+            Some(style) => format!("{}.", style.format(n)),
+            None => self.bullet.character().to_string(),
+        }
+    }
+
+    /// The marker of the next paragraph of a story, whose list is `list` (None: in no list) and
+    /// which holds no text when `empty`, with `count` the numbered paragraphs counted before it.
+    /// A paragraph in no list sets the count back to 0 and has no marker; an empty paragraph has
+    /// none and leaves the count as it is; a bulleted paragraph has its bullet and leaves the
+    /// count as it is; a numbered paragraph adds one to the count and is numbered with it.
+    pub fn next_marker(list: Option<ParaList>, empty: bool, count: &mut u32) -> Option<String> {
+        let Some(list) = list else {
+            *count = 0;
+            return None;
+        };
+        if empty {
+            return None;
+        }
+        if list.number.is_some() {
+            *count = count.saturating_add(1);
+        }
+        Some(list.marker(*count))
+    }
+
+    /// The style the marker is set in: `first` (the style of the paragraph's first character)
+    /// without its baseline shift, rotation, superscript or subscript, tracking, manual kerning,
+    /// tate-chu-yoko, underline and strikethrough.
+    pub fn marker_style(first: &CharStyle) -> CharStyle {
+        CharStyle {
+            baseline_shift: 0.0,
+            rotation: 0.0,
+            position: CharPosition::Normal,
+            tracking: 0.0,
+            kerning: None,
+            tate_chu_yoko: false,
+            underline: false,
+            strikethrough: false,
+            ..first.clone()
+        }
+    }
+}
+
+/// The left and first-line indents (pt) a list gives a paragraph whose indents are both 0: the
+/// marker hangs in the first line's 18 pt before the text.
+pub const LIST_HANGING_INDENT: f64 = 18.0;
+
 /// Paragraph composer (Paragraph panel menu): how lines are broken.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -674,6 +874,9 @@ pub struct ParaStyle {
     pub composer: Composer,
     /// Tab stops (Tabs panel), sorted by position.
     pub tabs: Vec<TabStop>,
+    /// Bullets (Paragraph panel): the list the paragraph is in; None for a paragraph that is not
+    /// in a list.
+    pub list: Option<ParaList>,
     /// Paragraph style (Paragraph Styles panel) these attributes come from; None = Normal.
     pub style_name: Option<String>,
     /// Japanese composition: the spacing of punctuation (Paragraph panel › Mojikumi). Type made
@@ -717,6 +920,19 @@ impl ParaStyle {
             t.position = within(t.position, 0.0, 100_000.0);
         }
     }
+
+    /// The leading of characters styled `st` in this paragraph, as the layout sets it: their own
+    /// leading, or for Auto leading the paragraph's Justification › Auto Leading share of their
+    /// size (exactly [`CharStyle::effective_leading`] at the default 120%, or when the share is
+    /// not a finite number).
+    pub fn effective_leading(&self, st: &CharStyle) -> f64 {
+        let auto = self.justification.auto_leading;
+        if st.leading.is_some() || auto == JustificationOptions::default().auto_leading {
+            return st.effective_leading();
+        }
+        let l = self.justification.auto_leading_for(st.size);
+        if l.is_finite() { l } else { st.effective_leading() }
+    }
 }
 
 /// [`ParaStyle`] as saved. [`Justify::Auto`] is written as the alignment it has in the paragraph
@@ -748,6 +964,8 @@ struct ParaStyleFile {
     composer: Composer,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tabs: Vec<TabStop>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    list: Option<ParaList>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     style_name: Option<String>,
     #[serde(default, skip_serializing_if = "Mojikumi::is_none")]
@@ -785,6 +1003,7 @@ impl From<ParaStyle> for ParaStyleFile {
             justification,
             composer,
             tabs,
+            list,
             style_name,
             mojikumi,
             direction,
@@ -808,6 +1027,7 @@ impl From<ParaStyle> for ParaStyleFile {
             justification,
             composer,
             tabs,
+            list,
             style_name,
             mojikumi,
             direction,
@@ -835,6 +1055,7 @@ impl From<ParaStyleFile> for ParaStyle {
             hyphenation,
             composer,
             tabs,
+            list,
             style_name,
             mojikumi,
             direction,
@@ -857,6 +1078,7 @@ impl From<ParaStyleFile> for ParaStyle {
             justification,
             composer,
             tabs,
+            list,
             style_name,
             mojikumi,
             direction,
@@ -1405,6 +1627,12 @@ pub struct TextObject {
     /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paras: Vec<ParaStyle>,
+    /// Threaded text: the first paragraph continues from the frame before this one in its thread,
+    /// so its first line here has no first-line indent and no list marker. The engine sets it for
+    /// every frame of a thread when the story flows through them and when a file opens, and clears
+    /// it on a frame that leaves its thread and on a copy. Not saved.
+    #[serde(skip)]
+    pub first_para_continues: bool,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,
@@ -1440,6 +1668,12 @@ pub struct TextObject {
     /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
     #[serde(default = "yes", rename = "fractionalWidths", skip_serializing_if = "crate::skip::is_true")]
     pub fractional_widths: bool,
+    /// Threaded text: the numbered list paragraphs the story's earlier frames count before this
+    /// frame's first paragraph ([`ParaList::next_marker`]), so one count runs through the story.
+    /// The engine sets it whenever it re-flows a thread. Type that is not threaded has 0, and the
+    /// file saves the count only when it is not 0.
+    #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
+    pub list_count: u32,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,
@@ -1531,6 +1765,7 @@ impl TextObject {
             ruby: Vec::new(),
             para: ParaStyle::default(),
             paras: Vec::new(),
+            first_para_continues: false,
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
@@ -1539,6 +1774,7 @@ impl TextObject {
             optical_margin: false,
             system_layout: false,
             fractional_widths: true,
+            list_count: 0,
             cached_bounds: None,
             cached_baselines: Vec::new(),
         }
@@ -1715,6 +1951,15 @@ impl TextObject {
     pub fn char_stroke_outset(&self) -> f64 {
         let k = crate::node::Scaling::factor(self.xf).unwrap_or(1.0);
         self.runs.iter().map(|r| r.style.stroke_outset()).fold(0.0, f64::max) * k
+    }
+    /// How far the characters' strokes can paint past their glyphs, their miter spikes and square
+    /// caps included ([`StrokeLayer::reach`]), in document space: what a change of the type must
+    /// redraw. They stretch with the type, so this is as far as its transform takes them on either
+    /// axis. The visual bounds take [`Self::char_stroke_outset`].
+    pub fn char_stroke_reach(&self) -> f64 {
+        let reach = self.runs.iter().filter(|r| r.style.has_stroke()).map(|r| r.style.stroke_layer().reach()).fold(0.0, f64::max);
+        let [a, b, c, d, ..] = self.xf.as_coeffs();
+        reach * (a.abs() + c.abs()).max(b.abs() + d.abs())
     }
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
@@ -1980,6 +2225,22 @@ mod tests {
         assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
     }
 
+    /// Auto leading follows the paragraph's Auto Leading; a set leading doesn't.
+    #[test]
+    fn paragraph_effective_leading_follows_auto_leading() {
+        let st = CharStyle { size: 10.0, leading: None, ..CharStyle::default() };
+        let mut para = ParaStyle::default();
+        assert_eq!(para.effective_leading(&st), st.effective_leading(), "default 120%");
+        para.justification.auto_leading = 200.0;
+        assert_eq!(para.effective_leading(&st), 20.0);
+        para.justification.auto_leading = 0.0;
+        assert_eq!(para.effective_leading(&st), 0.0);
+        let set = CharStyle { leading: Some(14.0), ..st.clone() };
+        assert_eq!(para.effective_leading(&set), 14.0);
+        para.justification.auto_leading = f64::NAN;
+        assert_eq!(para.effective_leading(&st), st.effective_leading(), "not a number");
+    }
+
     /// A file can't feed layout justification values `text.setFormat` would refuse: each is
     /// clamped to its range, one that isn't finite takes its default, and a Minimum, Desired and
     /// Maximum out of order go back to their defaults.
@@ -2009,6 +2270,47 @@ mod tests {
         let mut same = d.clone();
         same.keep_in_range();
         assert_eq!(same, d);
+    }
+
+    /// Numbered lists: each number style writes its numbers and rolls over (letters after Z,
+    /// roman numerals in subtractive forms, zero-padded numbers past their digits), the marker adds
+    /// a period, and the count runs through list paragraphs, skips empty and bulleted ones and
+    /// starts again after a paragraph in no list. A list from before number styles reads as
+    /// bulleted, and a bulleted list saves no number style.
+    #[test]
+    fn number_styles_write_their_numbers_and_roll_over() {
+        let numbers = |style: NumberStyle, ns: &[u32]| ns.iter().map(|&n| style.format(n)).collect::<Vec<_>>();
+        assert_eq!(numbers(NumberStyle::Arabic, &[1, 9, 10, 123]), ["1", "9", "10", "123"]);
+        assert_eq!(
+            numbers(NumberStyle::UpperLetters, &[1, 2, 26, 27, 28, 52, 53, 3999, 4000]),
+            ["A", "B", "Z", "AA", "BB", "ZZ", "AAA", &"U".repeat(154), "4000"]
+        );
+        assert_eq!(numbers(NumberStyle::LowerLetters, &[1, 26, 27]), ["a", "z", "aa"]);
+        assert_eq!(
+            numbers(NumberStyle::UpperRoman, &[1, 2, 3, 4, 5, 9, 14, 40, 90, 400, 1994, 3999, 4000]),
+            ["I", "II", "III", "IV", "V", "IX", "XIV", "XL", "XC", "CD", "MCMXCIV", "MMMCMXCIX", "4000"]
+        );
+        assert_eq!(numbers(NumberStyle::LowerRoman, &[1, 4, 9, 12]), ["i", "iv", "ix", "xii"]);
+        assert_eq!(numbers(NumberStyle::TwoDigits, &[1, 9, 10, 99, 100]), ["01", "09", "10", "99", "100"]);
+        assert_eq!(numbers(NumberStyle::ThreeDigits, &[1, 10, 999, 1000]), ["001", "010", "999", "1000"]);
+        assert_eq!(ParaList::numbered(NumberStyle::UpperRoman).marker(4), "IV.");
+        assert_eq!(ParaList::bulleted(Bullet::Square).marker(4), "\u{25AA}");
+        let (num, dot) = (Some(ParaList::numbered(NumberStyle::Arabic)), Some(ParaList::bulleted(Bullet::Dot)));
+        let mut count = 0;
+        let markers: Vec<Option<String>> = [(num, false), (num, true), (dot, false), (num, false), (None, false), (num, false)]
+            .iter()
+            .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut count))
+            .collect();
+        assert_eq!(markers, [Some("1.".into()), None, Some("\u{2022}".into()), Some("2.".into()), None, Some("1.".into())]);
+        assert_eq!(count, 1);
+        let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+        assert_eq!(read(serde_json::json!({"bullet": "dash"})), ParaList::bulleted(Bullet::Dash));
+        assert_eq!(read(serde_json::json!({"number": "threeDigits"})), ParaList::numbered(NumberStyle::ThreeDigits));
+        assert_eq!(serde_json::to_value(ParaList::bulleted(Bullet::Dash)).unwrap(), serde_json::json!({"bullet": "dash"}));
+        assert_eq!(
+            serde_json::to_value(ParaList::numbered(NumberStyle::LowerRoman)).unwrap(),
+            serde_json::json!({"bullet": "dot", "number": "lowerRoman"})
+        );
     }
 
     #[test]

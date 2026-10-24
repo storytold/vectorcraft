@@ -25,6 +25,12 @@ use crate::{Document, Node, NodeKind};
 /// can be made can be saved and opened again.
 pub const MAX_DEPTH: usize = 32;
 
+/// Most objects the symbol instances drawn in one frame or written in one export may hold
+/// together. Instances of symbols that hold instances of others draw every level for each instance
+/// above it, so a few levels of a few instances each multiply past what [`MAX_DEPTH`] stops; past
+/// it, further instances aren't drawn.
+pub const MAX_SYMBOL_NODES: u64 = 16_000_000;
+
 /// The deepest an object may be drawn: as [`MAX_DEPTH`], the art of a symbol counted under its
 /// instance and a pattern's tile under the object it paints (and what those use, under them).
 /// Symbols a few objects deep nest in one another dozens deep within it.

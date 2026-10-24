@@ -95,6 +95,24 @@ fn raster_effects_are_written_as_images() {
     assert!(kinds.contains(&114), "the shadow is an image with transparency");
 }
 
+/// Two placed images whose pixel data can't be decoded are left out of an EMF or WMF, and
+/// `warnings` holds the note raster exports give, once, without naming either image's key.
+#[test]
+fn images_that_cant_be_decoded_give_the_raster_note_once() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut s = session(200.0, 100.0, 1);
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    crate::tests_menucmds::place_undecodable_png_sized(&mut s, 32, 16);
+    let keys: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    assert_eq!(keys.len(), 2);
+    for format in ["emf", "wmf"] {
+        let r = s.execute("document.export", &json!({"format": format})).unwrap();
+        let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert_eq!(w.iter().filter(|w| **w == NOTE).count(), 1, "{format}: {w:?}");
+        assert!(!w.iter().any(|w| keys.iter().any(|k| w.contains(k.as_str()))), "{format}: {w:?}");
+    }
+}
+
 #[test]
 fn metafiles_open_and_place() {
     let mut s = two_boards();

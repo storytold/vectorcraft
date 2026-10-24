@@ -388,6 +388,10 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         let ch = d.children_mut(Some(parent))?;
         let at = index.min(ch.len());
         ch.splice(at..at, layers);
+        // Copied type whose layout caches `reid` dropped has them again.
+        if build {
+            super::typecmd::refresh_bounds_of(d, &new);
+        }
         sel.prune(d);
         Ok(new)
     })?;

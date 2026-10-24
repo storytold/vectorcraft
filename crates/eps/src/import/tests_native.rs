@@ -243,6 +243,29 @@ fn in_points(mut d: Document, k: f64) -> Document {
     d
 }
 
+/// #1479: an image larger than the editing data's reader takes would be missing from the layers,
+/// while the PDF part has it (it reads larger images): the file comes in as its PDF part, with a
+/// note saying why, rather than without the image.
+#[test]
+fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_part() {
+    let raster = |w: u32, h: u32| {
+        format!(
+            "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n\
+             [ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN"
+        )
+    };
+    // 6,000 × 6,000 pixels: past the reader's 2^25.
+    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(6000, 6000))));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("an image is too large to read from them")), "{warnings:?}");
+    assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the PDF part's art");
+    // An image the reader takes keeps the layers.
+    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(1, 1))));
+    let (_, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(read, "{warnings:?}");
+}
+
 #[test]
 fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     // A square on the artboard, and one above it (the artboard is y 0 to 100 here).

@@ -765,6 +765,19 @@ mod tests {
     }
 
     #[test]
+    fn art_styles_ignore_filters_beyond_the_cap() {
+        const UNIT: &[u8] = b"/BasicFilter :\n(Adobe Feather) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n; /Dict ;\n /Part ,\n";
+        let mut data =
+            Vec::from(b"/KnownStyle :\n(Capped) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n");
+        for _ in 0..MAX_FILTERS + 16 {
+            data.extend_from_slice(UNIT);
+        }
+        data.extend_from_slice(b";\n");
+        let style = art_styles(&data).remove("Capped").unwrap_or_default();
+        assert!(style.effects.len() <= MAX_FILTERS);
+    }
+
+    #[test]
     fn hostile_dash_offsets_and_width_profiles_are_tamed() {
         let mut f = Filter::default();
         paint_op(&mut f, "d", &[V::Arr(vec![V::Num(5.0)]), V::Num(f64::NAN)]);

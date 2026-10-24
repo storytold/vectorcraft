@@ -268,6 +268,133 @@ proptest! {
     }
 }
 
+// ---------- Affinity documents with every feature the reader maps ----------
+
+#[path = "support/affinity_docs.rs"]
+mod affinity_docs;
+#[path = "../../affinity/tests/support/text_fixture.rs"]
+mod text_fixture;
+
+/// One sample document: its object stream and, for embedded content, the embedded document's.
+struct AffinitySample {
+    name: &'static str,
+    stream: Vec<u8>,
+    embedded: Option<Vec<u8>>,
+}
+
+/// Original synthetic documents (not an Affinity writer) reaching what the reader maps beyond
+/// [`affinity_native_stream`]: layer effects and colour overlays (also over tables), stroke
+/// styles, dashes and brushes, paragraph alignment, frame text, underline, strikethrough and
+/// line breaks inside a paragraph, tables with merged and two-line cells, master pages, CMYK
+/// pixel layers with and without the document's CMYK profile, and embedded documents.
+fn affinity_feature_samples() -> Vec<AffinitySample> {
+    use affinity_docs::*;
+    let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+    let fx = vec![shadow(), effect(b"OutG", 6.0), effect(b"InnS", 3.0), effect(b"BevE", 4.0), outline(0, 3.0), outline(2, 4.0), colour_overlay(0.5)];
+    let canvas = canvas_stream(vec![
+        with_effects(stroked(10, 1, &[]), fx),
+        stroked(11, 0, &[]),
+        stroked(12, 2, &[4.0, 2.0]),
+        stroked(13, 3, &[]),
+        mixed_alignment(1, 2),
+        two_line_frame(150.0),
+        decorated_text(70),
+        with_effects(table_with(30, identity, ["A", "B\u{2028}two", "C", "D", "E"]), vec![colour_overlay(1.0)]),
+    ]);
+    let icc = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::GENERIC_CMYK).unwrap();
+    let inner = canvas_stream(vec![with_effects(rectangle(10, (0.0, 0.0), (50.0, 50.0)), vec![colour_overlay(1.0)]), artistic_text(20, "Hi", 40.0)]);
+    vec![
+        AffinitySample { name: "effects, strokes, text and tables", stream: canvas, embedded: None },
+        AffinitySample { name: "master pages", stream: master_stream(3), embedded: None },
+        AffinitySample { name: "CMYK pixels with a profile", stream: cmyk_stream(false, Some(&icc)), embedded: None },
+        AffinitySample { name: "CMYK pixels with transparency", stream: cmyk_stream(true, None), embedded: None },
+        AffinitySample { name: "embedded document", stream: canvas_stream(vec![embedded_node(20)]), embedded: Some(inner) },
+    ]
+}
+
+/// A sample's file: its streams stored uncompressed, so mutations reach the object graph
+/// instead of failing a decompressor's checks.
+fn affinity_sample_file(stream: &[u8], embedded: Option<&[u8]>) -> Vec<u8> {
+    use vectorcraft_affinity::synth::Method;
+    let inner = embedded.map(|e| affinity_docs::packed(e, None, Method::Stored));
+    affinity_docs::packed(stream, inner.as_deref(), Method::Stored)
+}
+
+#[test]
+fn the_affinity_feature_samples_reach_what_they_are_for() {
+    use vectorcraft_doc::NodeKind;
+    let samples = affinity_feature_samples();
+    let open = |i: usize| {
+        let s: &AffinitySample = &samples[i];
+        let l = vectorcraft_engine::cmd::fileio::load("x.af", &affinity_sample_file(&s.stream, s.embedded.as_deref())).unwrap();
+        assert!(!l.preview_only, "{}: {:?}", s.name, l.warnings);
+        l
+    };
+    fn all(d: &Document) -> Vec<&vectorcraft_doc::Node> {
+        fn walk<'a>(nodes: &'a [std::sync::Arc<vectorcraft_doc::Node>], out: &mut Vec<&'a vectorcraft_doc::Node>) {
+            for n in nodes {
+                out.push(n);
+                if let Some(c) = n.children() {
+                    walk(c, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&d.layers, &mut out);
+        out
+    }
+    let l = open(0);
+    let nodes = all(&l.doc);
+    let runs: Vec<&vectorcraft_doc::text::TextRun> =
+        nodes.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.runs.iter()) } else { None }).flatten().collect();
+    assert!(runs.iter().any(|r| r.style.underline) && runs.iter().any(|r| r.style.strikethrough));
+    assert!(runs.iter().any(|r| r.text.contains("two")), "the table's two-line cell");
+    assert!(nodes.iter().any(|n| n.appearance.effects.iter().any(|e| e.id == "stylize.dropShadow")));
+    assert!(l.warnings.iter().any(|w| w.contains("bevel")), "{:?}", l.warnings);
+    // Line styles: solid, None (no stroke), dashed and brush.
+    use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
+    let strokes = |n: &vectorcraft_doc::Node| -> Vec<StrokeLayer> {
+        n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.clone()) } else { None }).collect()
+    };
+    let boxes: Vec<_> = nodes.iter().filter(|n| n.name.as_deref() == Some("Magenta box")).collect();
+    assert_eq!(boxes.len(), 4);
+    assert_eq!(boxes.iter().filter(|b| strokes(b).is_empty()).count(), 1, "line style None");
+    assert!(boxes.iter().any(|b| strokes(b).iter().any(|s| s.dash.is_some())), "dashed");
+    let l = open(1);
+    assert_eq!(l.doc.artboards.len(), 3);
+    assert!(l.doc.layers.iter().any(|n| n.name.as_deref() == Some("Master A")));
+    for i in [2, 3] {
+        assert!(all(&open(i).doc).iter().any(|n| matches!(n.kind, NodeKind::Image(_))), "{}", samples[i].name);
+    }
+    assert!(all(&open(4).doc).iter().any(|n| n.name.as_deref() == Some("Magenta box")));
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn affinity_feature_documents_with_mutated_streams_render_and_export(
+        sample in 0usize..5,
+        inner in any::<bool>(),
+        cut in 0usize..8192,
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let samples = affinity_feature_samples();
+        let s = &samples[sample % samples.len()];
+        let (mut stream, mut embedded) = (s.stream.clone(), s.embedded.clone());
+        // Mutate the embedded document's stream instead, where there is one.
+        let target = match embedded.as_mut() {
+            Some(e) if inner => e,
+            _ => &mut stream,
+        };
+        let n = target.len();
+        for (at, b) in edits { target[at % n] = b; }
+        target.truncate(cut.max(16));
+        let bytes = affinity_sample_file(&stream, embedded.as_deref());
+        survive(s.name, || vectorcraft_engine::cmd::fileio::load("x.af", &bytes).ok().map(|l| l.doc))?;
+    }
+}
+
 /// Import must not panic; whatever comes back must render and export without panicking either.
 fn survive(what: &str, import: impl FnOnce() -> Option<Document>) -> Result<(), TestCaseError> {
     let r = catch_quiet(|| {
@@ -578,6 +705,32 @@ fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
     }
     out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
     out
+}
+
+/// A file filling thousands of paths with function-based shadings, each a long PostScript
+/// calculator function of fine stripes, opens in bounded time: each shading is read once, and all
+/// of them within one budget of function evaluations per import (#3621 review).
+#[test]
+fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
+    let shadings = 20;
+    // Five hundred no-op steps, then stripes: red, then white, along x.
+    let program = format!("{{ pop {}dup truncate sub 0.5 le {{ 1 0 0 }} {{ 1 1 1 }} ifelse }}", "1 mul ".repeat(500));
+    let patterns: String = (0..shadings)
+        .map(|i| format!("/P{i} << /PatternType 2 /Shading << /ShadingType 1 /ColorSpace /DeviceRGB /Domain [0 {} 0 1] /Matrix [1 0 0 100 0 0] /Function {} 0 R >> >> ", 200 + i, 5 + i))
+        .collect();
+    let functions: Vec<Vec<u8>> = (0..shadings)
+        .map(|i| {
+            format!("<< /FunctionType 4 /Domain [0 {} 0 1] /Range [0 1 0 1 0 1] /Length {} >>\nstream\n{program}\nendstream", 200 + i, program.len())
+                .into_bytes()
+        })
+        .collect();
+    let content: String = (0..5000).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % shadings, i % 100 * 2, i / 100 * 2)).collect();
+    let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
+    let start = std::time::Instant::now();
+    let d = vectorcraft_pdf::import(&pdf).unwrap();
+    let took = start.elapsed();
+    assert!(!d.layers.is_empty());
+    assert!(took < std::time::Duration::from_secs(30), "took {took:?}");
 }
 
 /// One content-stream operation with junk operands.
@@ -2368,6 +2521,13 @@ fn ascii85(data: &[u8]) -> String {
 /// A pattern's definition in editing data: its name and tile, its art on `%_` lines, its end.
 const PATTERN: &str = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 6 6\n%_0 A\n%_0 Ae\n%_u\n%_0 0 m\n%_0 6 L\n%_6 6 L\n%_6 0 L\n%_n\n%_0 0 0 1 K\n%_1 J 1 w\n%_3 3 m\n%_3 3 L\n%_S\n%_U\n%_9 () XW\nE\n%AI3_EndPattern\n";
 
+/// The swatches in editing data: process, spot (one the art doesn't use), global, a gradient that
+/// isn't defined and a pattern, a colour group, and versioned content read once.
+const PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\n%AI17_Begin_Content_if_version_gt:24 15\n1 1 1 1 ([Registration]) 0 Xs\n([Registration])\nPc\n\
+     0 0 0 1 k\n(Black)\nPc\n0.1 0.9 0.8 0 (Unused ink) 0 x\n(Unused ink)\nPc\n0 0 0 1 0 0 0 (Black global) 0 1 Xk\n(Black global)\nPc\n\
+     Bb\n2 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(G)\nPc\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\n\
+     %AI17_Alternate_Content\n0 0 0 1 k\n(Black)\nPc\n%AI17_End_Versioned_Content\n1 (Greys) 1 Pg\n0 0 0 0.5 k\n(K50)\nPc\nPB\n%AI5_EndPalette\n";
+
 /// The editing data of a file with every sort of object the layers reader knows, and some it doesn't.
 fn editing_text() -> String {
     let square = |x: u32| format!("0 0 1 0 k\n{x} 10 m\n{} 10 L\n{} 14 L\n{x} 14 L\nf", x + 4, x + 4);
@@ -2393,6 +2553,7 @@ fn editing_text() -> String {
         "Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n1 0 0 1 0 0 Xm\n0 0 0 0 0 0 Bm\n1 0 0 1 5 5 Bm\n0 BB".into(),
         "0 1 w 2 J 0 j 4 M [3 2]0 d 1 D".into(),
         "0 0 0 1 (Black global) 0.4 0 Xk".into(),
+        "0 0 0 0 0 0 0 ([Registration]) 0.1 1 Xz".into(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p".into(),
         square(60),
         // A 2 × 1 CMYK image with an alpha channel, its samples in hex.
@@ -2405,7 +2566,7 @@ fn editing_text() -> String {
         format!("%AI5_BeginLayer\n{visible} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n")
     };
     format!(
-        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{PATTERN}{}{}%%Trailer\n",
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{PATTERN}{PALETTE}{}{}%%Trailer\n",
         layer("One", 1, &format!("{body}\n{}", layer("Sub", 1, &square(70)))),
         layer("Two", 0, &square(80))
     )
@@ -2423,6 +2584,20 @@ fn editing_eps(editing: &str) -> Vec<u8> {
         lines.join("\n")
     )
     .into_bytes()
+}
+
+/// The fuzzed editing data, as it is, opens with its palette's swatches in its order and groups,
+/// the spot colour the art doesn't use included (the gradient isn't defined: left out).
+#[test]
+fn the_editing_fixture_reads_its_palette() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+    let (doc, warnings, layers) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    assert!(layers, "{warnings:?}");
+    let swatches: Vec<&str> = doc.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "Black", "Unused ink", "Black global", "Dots"]);
+    assert!(doc.swatch("Unused ink").is_some_and(|s| s.spot && s.global));
+    let groups: Vec<(&str, usize)> = doc.swatch_groups.iter().map(|g| (g.name.as_str(), g.swatches.len())).collect();
+    assert_eq!(groups, [("Greys", 1)]);
 }
 
 /// The fuzzed editing data, as it is, reads its CMYK image with its ink amounts and its alpha
@@ -3226,17 +3401,38 @@ fn deeply_nested_svg_is_refused_or_merged() {
             "<svg {SVG_NS} width=\"9\" height=\"9\"><defs>{links}<rect id=\"u3000\" width=\"1\" height=\"1\"/></defs><use href=\"#u0\"/></svg>"
         );
         assert!(open_deep("chain.svg", chain.as_bytes()).is_none());
+        // SVG images in SVG images, read on the same stack: each too deep, of a type that is read
+        // as SVG too (`text/plain`), or each within the cap but not all together (#3562). What is
+        // past the cap is left out.
+        let images = [nested_images(3, 1000), nested_images(12, most - 4)];
+        for (i, file) in images.iter().enumerate() {
+            let (_, warnings) = open_deep("images.svg", file.as_bytes()).expect("opens");
+            assert!(warnings.iter().any(|w| w.contains("SVG images were left out")), "{i}: {warnings:?}");
+        }
         // Placed and pasted, as opened.
         let mut s = vectorcraft_engine::Session::new();
         s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
-        for n in [40, 2 * most] {
-            let p = json!({"name": "deep.svg", "dataBase64": vectorcraft_format::base64_encode(nested_svg(n).as_bytes())});
+        for svg in [nested_svg(40), nested_svg(2 * most)].iter().chain(&images) {
+            let p = json!({"name": "deep.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())});
             let _ = no_panic(s.execute("file.place", &p));
-            let _ = no_panic(s.execute("clipboard.importSvg", &json!({"svg": nested_svg(n)})));
+            let _ = no_panic(s.execute("clipboard.importSvg", &json!({"svg": svg})));
             let _ = no_panic(s.execute("edit.paste", &json!({})));
             assert!(!s.doc().unwrap().doc.too_deep(None));
         }
     });
+}
+
+/// An SVG showing a chain of `levels` SVG images from `text/plain` data URLs, each `n` groups
+/// deep around the next.
+fn nested_images(levels: usize, n: usize) -> String {
+    let image = |svg: &str| {
+        format!("<image href=\"data:text/plain;base64,{}\" width=\"9\" height=\"9\"/>", vectorcraft_format::base64_encode(svg.as_bytes()))
+    };
+    let mut svg = nested_svg(0);
+    for _ in 0..levels {
+        svg = format!("<svg {SVG_NS} width=\"9\" height=\"9\">{}{}{}</svg>", "<g>".repeat(n), image(&svg), "</g>".repeat(n));
+    }
+    format!("<svg {SVG_NS} width=\"9\" height=\"9\">{}</svg>", image(&svg))
 }
 
 /// A page whose content is `content`, with `resources`.
@@ -4045,4 +4241,16 @@ fn ai_cut_inside_an_array_or_dictionary_opens_without_panicking() {
         b.truncate(44902.min(b.len()));
         survive("ai cut inside an array or dictionary", || vectorcraft_engine::cmd::fileio::load("saved.ai", &b).ok().map(|l| l.doc)).unwrap();
     }
+}
+
+/// Found by the fuzzer above: a shape 3.3 million points long and 50 high, with a drop shadow,
+/// made the PDF export rasterise its shadow wider than the renderer can address (within the
+/// effect image's area limit, past any side), which panicked.
+#[test]
+fn a_long_thin_shape_with_a_shadow_renders_and_exports() {
+    use affinity_docs::*;
+    let stream = canvas_stream(vec![with_effects(rectangle(10, (0.0, 0.0), (3_276_800.0, 50.0)), vec![shadow()])]);
+    let bytes = affinity_sample_file(&stream, None);
+    let doc = vectorcraft_engine::cmd::fileio::load("long.af", &bytes).unwrap().doc;
+    survive("long shape", || Some(doc)).unwrap();
 }

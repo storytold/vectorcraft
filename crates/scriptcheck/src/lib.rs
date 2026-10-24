@@ -15,8 +15,10 @@
 //!
 //! The checker never recurses: it reads each file once, and each scan of a file goes through its
 //! tokens front to back, first for the names its functions and its global code declare and then
-//! for the analysis. When it follows includes, it scans each file for the includes and what the
-//! variables hold, again while that grows (at most three more times), and then for the report. It
+//! for the analysis. It scans the script for the includes and what the variables hold, and each
+//! file it includes when it follows them, again while that grows (at most three more times), and
+//! then for the report; a scan that finds nothing more is the report scan of a script read without
+//! its included files. It
 //! keeps open brackets and the levels of an XML literal on capped stacks. Its work is linear in the
 //! input's size, and no input can overflow the stack.
 #![forbid(unsafe_code)]
@@ -137,8 +139,6 @@ impl Need {
     }
 }
 
-/// Every feature id a report can list, in the order the report lists them.
-pub use catalog::FEATURES;
 /// Every id in [`Report::outside`], in the order the report lists them.
 pub use report::OUTSIDE;
 /// Every problem code a report can list.
@@ -148,7 +148,8 @@ pub use report::PROBLEMS;
 /// `loader`, the files its `#include` lines name are read through it and checked too; without one
 /// they are listed as [`IncludeStatus::NotRead`]. When the script or one of those files assigns a
 /// member chain or a File object to a variable, the check treats the variable as holding it in
-/// every file. Nothing in the script runs.
+/// every file, also in code before the assignment. A script that includes nothing gets the same
+/// report with a loader and without one. Nothing in the script runs.
 pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: &Limits) -> Report {
     let mut acc = report::Acc::new(limits);
     if bytes.len() > limits.file_bytes {
@@ -165,11 +166,14 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
     if invalid {
         acc.problem(report::NOT_UTF8, None, None, None);
     }
+    let text = analyze::unescaped(text, &mut acc);
+    let declared = analyze::declarations(&text, &mut acc);
     let none = analyze::Known::default();
     // With a loader, this first scan finds the includes and what the script's variables hold; its
     // tallies are left out.
     let mut tallies = report::Acc::new(limits);
-    let scan = analyze::scan(&text, None, std::rc::Rc::from([]), &none, if loader.is_some() { &mut tallies } else { &mut acc });
+    let pre = acc.clone();
+    let scan = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &none, if loader.is_some() { &mut tallies } else { &mut acc });
     acc.steps = acc.steps.saturating_add(tallies.steps);
     if scan.module {
         // A module's report holds its kind and its lines, and none of what the scan found.
@@ -179,20 +183,25 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
         return acc.finish(Kind::Module, scan.lines);
     }
     let Some(loader) = loader else {
+        let mut acc = settle(acc, pre, &text, &declared, scan.known);
         includes::not_read(&mut acc, scan.includes);
         return acc.finish(Kind::Script, scan.lines);
     };
     let mut known = scan.known;
     let read = includes::follow(&mut acc, scan.includes, loader, name, bytes.len(), &mut known);
+    // Each file's text and the names it declares are worked out once for all the scans below.
+    let decoded: Vec<_> = read.iter().map(|file| decode(&file.bytes)).collect();
+    let texts: Vec<_> = decoded.into_iter().map(|(text, invalid)| (analyze::unescaped(text, &mut acc), invalid)).collect();
+    let declarations: Vec<_> = texts.iter().map(|(text, _)| analyze::declarations(text, &mut acc)).collect();
     // A variable may get what it holds from another file's variable: the files are scanned again,
     // each with what is known so far, while that grows, at most three more times.
     for _ in 0..3 {
         let before = known.len();
         let mut tallies = report::Acc::new(limits);
-        let more = analyze::scan(&text, None, std::rc::Rc::from([]), &known, &mut tallies).known;
+        let more = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &known, &mut tallies).known;
         known.add(more, limits.entries);
-        for file in &read {
-            let more = analyze::scan(&file.text, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut tallies).known;
+        for ((file, (text, _)), declared) in read.iter().zip(&texts).zip(&declarations) {
+            let more = analyze::scan(text, declared, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut tallies).known;
             known.add(more, limits.entries);
         }
         acc.steps = acc.steps.saturating_add(tallies.steps);
@@ -201,14 +210,48 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
         }
     }
     // The scans for the report: every file starts with what any file's variables hold.
-    let lines = analyze::scan(&text, None, std::rc::Rc::from([]), &known, &mut acc).lines;
-    for file in read {
-        if file.invalid {
+    let lines = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &known, &mut acc).lines;
+    for ((file, (text, invalid)), declared) in read.iter().zip(&texts).zip(&declarations) {
+        if *invalid {
             acc.problem(report::NOT_UTF8, None, Some(&file.path), None);
         }
-        analyze::scan(&file.text, Some(&file.path), file.paths, &known, &mut acc);
+        analyze::scan(text, declared, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut acc);
     }
     acc.finish(Kind::Script, lines)
+}
+
+/// The report of a script read without its included files: what the scans above find for a script
+/// that includes nothing, so a variable a function uses before the global code assigns it holds
+/// what it is assigned. `first` holds the scan made with nothing known, which found `known`, and
+/// `pre` what came before it. A scan made with what the scans before it found, and that finds
+/// nothing more, is the report scan; no other scan is repeated.
+fn settle<'l>(
+    first: report::Acc<'l>,
+    pre: report::Acc<'l>,
+    text: &str,
+    declared: &analyze::Declared<'_>,
+    mut known: analyze::Known,
+) -> report::Acc<'l> {
+    if known.len() == 0 {
+        return first;
+    }
+    let entries = pre.limits.entries;
+    let mut spent = first.steps.saturating_sub(pre.steps);
+    for _ in 0..3 {
+        let before = known.len();
+        let mut acc = pre.clone();
+        let more = analyze::scan(text, declared, None, std::rc::Rc::from([]), &known, &mut acc).known;
+        known.add(more, entries);
+        if known.len() == before {
+            acc.steps = acc.steps.saturating_add(spent);
+            return acc;
+        }
+        spent = spent.saturating_add(acc.steps.saturating_sub(pre.steps));
+    }
+    let mut acc = pre;
+    analyze::scan(text, declared, None, std::rc::Rc::from([]), &known, &mut acc);
+    acc.steps = acc.steps.saturating_add(spent);
+    acc
 }
 
 /// The last part of a path (`lib/Tidy.jsx` → `Tidy.jsx`), whichever separator it uses.

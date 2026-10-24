@@ -24,6 +24,14 @@ fn every_unit_round_trips_through_its_field_text() {
 }
 
 #[test]
+fn an_explicit_leading_plus_is_accepted() {
+    assert_eq!(Unit::Points.parse("+5"), Some(5.0));
+    assert_eq!(Unit::Millimeters.parse("+5mm"), Some(Unit::Millimeters.to_pt(5.0)));
+    assert_eq!(Unit::Points.parse("+5+3"), Some(8.0));
+    assert_eq!(Unit::Points.parse("5+-3"), Some(2.0));
+}
+
+#[test]
 fn typed_units_win_over_the_fields_unit() {
     let mm = 72.0 / 25.4;
     assert_eq!(Unit::Millimeters.parse("10"), Some(10.0 * mm));

@@ -252,7 +252,7 @@ pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
     }
-    hay.windows(needle.len()).position(|w| w == needle)
+    memchr::memmem::find(hay, needle)
 }
 
 /// Hexadecimal digits (whitespace ignored, an odd last digit padded with 0); `None` on others.

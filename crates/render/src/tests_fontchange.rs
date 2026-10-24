@@ -9,8 +9,10 @@ use vectorcraft_geom::Point;
 
 use super::*;
 
-/// Taken to add fonts. Renderers lay type out again when the fonts change, so tests of what they
-/// keep between frames hold it shared ([`fonts_steady`]) and the tests here hold it alone.
+/// Taken to add fonts, or to look up an installed one by name (`FontDb::face` loads it, which
+/// changes the fonts too). Renderers lay type out again when the fonts change, so tests of what
+/// they keep between frames hold it shared ([`fonts_steady`]) and the tests that change the fonts
+/// hold it alone ([`adding_fonts`]).
 static FONTS: RwLock<()> = RwLock::new(());
 
 /// No fonts are added by these tests until the guard is dropped.
@@ -20,7 +22,7 @@ pub(crate) fn fonts_steady() -> RwLockReadGuard<'static, ()> {
 }
 
 /// No test holding [`fonts_steady`] runs until the guard is dropped.
-fn adding_fonts() -> RwLockWriteGuard<'static, ()> {
+pub(crate) fn adding_fonts() -> RwLockWriteGuard<'static, ()> {
     FONTS.write().unwrap_or_else(PoisonError::into_inner)
 }
 

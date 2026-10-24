@@ -209,7 +209,7 @@ const W_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main
 
 /// A Word document's package: its main part `body` (the inside of `w:body`), with a styles part
 /// and a theme part named through the main part's relationships.
-fn docx(body: &str, styles: &str) -> Vec<u8> {
+pub(super) fn docx(body: &str, styles: &str) -> Vec<u8> {
     let rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     let rels = "http://schemas.openxmlformats.org/package/2006/relationships";
     let types = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/></Types>"#;
@@ -237,7 +237,7 @@ fn docx(body: &str, styles: &str) -> Vec<u8> {
 /// Document defaults in the theme's minor font at 11 pt with 8 pt after each paragraph, a default
 /// Normal style, a centered, bold Heading 1 in the theme's major font at 16 pt and in a color, a
 /// bold character style and a default character style in all caps.
-const STYLES: &str = concat!(
+pub(super) const STYLES: &str = concat!(
     r#"<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:asciiTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/><w:sz w:val="22"/></w:rPr></w:rPrDefault>"#,
     r#"<w:pPrDefault><w:pPr><w:spacing w:after="160"/></w:pPr></w:pPrDefault></w:docDefaults>"#,
     r#"<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>"#,

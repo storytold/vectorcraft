@@ -56,7 +56,7 @@ fn type_with_outline_object_stays_editable_type_and_keeps_its_geometric_bounds()
     assert_eq!(s.transform_bounds(&[id]), before);
     // With Use Preview Bounds on, the type is measured by its glyph outlines.
     s.prefs.use_preview_bounds = true;
-    let glyphs = vectorcraft_render::effects::reshape(&node(&s, id), None).unwrap().geometric_bounds();
+    let glyphs = vectorcraft_render::effects::reshape(None, &node(&s, id), None).unwrap().geometric_bounds();
     assert_eq!(s.transform_bounds(&[id]), glyphs);
     s.prefs.use_preview_bounds = false;
     // A native save keeps the effect.
@@ -66,10 +66,10 @@ fn type_with_outline_object_stays_editable_type_and_keeps_its_geometric_bounds()
     // The type is still type, drawn as its outlines, and a text edit changes them.
     let n = node(&s, id);
     assert!(matches!(n.kind, NodeKind::Text(_)));
-    let drawn = vectorcraft_render::effects::reshape(&n, None).unwrap();
+    let drawn = vectorcraft_render::effects::reshape(None, &n, None).unwrap();
     assert_eq!(count_text(&drawn), 0);
     s.execute("text.setText", &json!({"id": id.0, "text": "OUTLINED TYPE"})).unwrap();
-    let longer = vectorcraft_render::effects::reshape(&node(&s, id), None).unwrap();
+    let longer = vectorcraft_render::effects::reshape(None, &node(&s, id), None).unwrap();
     assert!(longer.geometric_bounds().unwrap().width() > drawn.geometric_bounds().unwrap().width() + 50.0);
 }
 

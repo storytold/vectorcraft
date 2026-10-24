@@ -229,7 +229,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let mut rs = rows(d);
     let top = ui.cursor().top();
     let changed = if d.str("tab") == "edit" { edit_tab(ui, d, &mut rs) } else { assign_tab(app, ui, d, &mut rs) };
-    ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
+    if d.str("tab") != "edit" {
+        ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
+    }
     if changed {
         snap(app, d, &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
@@ -543,6 +545,7 @@ const DRAG: &str = "__drag";
 
 /// The Edit tab. Returns true when the rows changed.
 fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
+    let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let linked = d.bool("linked");
@@ -595,17 +598,22 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
     }
     ui.add_space(6.0);
     // The new colours: click one to make it the base colour.
-    ui.horizontal_wrapped(|ui| {
-        for &i in &active {
-            let (r, resp) = ui.allocate_exact_size(vec2(28.0, 20.0), Sense::click());
-            chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
-            if Some(i) == base {
-                ui.painter().rect_stroke(r.expand(1.5), 2.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+    let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
+    super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
+        // Keep the usual tab height when it fits; the empty space scrolls with the chips.
+        ui.set_min_height(min_height);
+        ui.horizontal_wrapped(|ui| {
+            for &i in &active {
+                let (r, resp) = ui.allocate_exact_size(vec2(28.0, 20.0), Sense::click());
+                chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
+                if Some(i) == base {
+                    ui.painter().rect_stroke(r.expand(1.5), 2.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                }
+                if resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default()).clicked() {
+                    d.fields.insert("__sel".into(), json!([i]));
+                }
             }
-            if resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default()).clicked() {
-                d.fields.insert("__sel".into(), json!([i]));
-            }
-        }
+        });
     });
     changed
 }

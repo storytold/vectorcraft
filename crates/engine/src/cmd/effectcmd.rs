@@ -69,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -558,10 +558,12 @@ pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_b
     let mut listed = vec![];
     let m = expanded_node(d, n, brushes, &mut listed);
     out.extend(listed.into_iter().map(|(id, _)| id));
-    if let Some(m) = m
-        && let Some(slot) = d.node_mut(id)
-    {
-        *slot = m;
+    if let Some(mut m) = m {
+        // Art made from type takes its emoji's pixels into the document.
+        d.adopt_pixels(&mut m);
+        if let Some(slot) = d.node_mut(id) {
+            *slot = m;
+        }
     }
 }
 
@@ -626,20 +628,20 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         image => {
             let m = if container {
                 // A group's or layer's own fills and strokes become art among its members.
-                effects::evaluate_container(&v).map(|mut m| {
+                effects::evaluate_container(Some(&*d), &v).map(|mut m| {
                     members = expand_pieces(d, &mut m, false, brushes, &mut stroke_art);
                     m
                 })
-            } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && !effects::has_gradient_copies(&v) {
+            } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && !effects::has_transform_art(&v) {
                 effects::expand_leaf(d, &v, &mut stroke_art)
             } else {
                 // Type, images, symbol instances, live objects (and paths whose Transform effect copies
-                // them with a gradient): through their outlines.
+                // them with a gradient or changes their fills and strokes): through their outlines.
                 let symbol = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
                     _ => None,
                 };
-                effects::expand_outlined(&v, symbol.as_deref()).map(|mut m| {
+                effects::expand_outlined(Some(&*d), &v, symbol.as_deref()).map(|mut m| {
                     expand_pieces(d, &mut m, true, brushes, &mut stroke_art);
                     m
                 })
@@ -690,9 +692,13 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = s.edit("Expand Appearance", |d, _| {
         let brushes = vectorcraft_brush::library(d);
         let mut out = vec![];
+        let threaded = super::threads::frames(d);
         for id in &roots {
             expand_node(d, *id, &brushes, &mut out);
         }
+        // Outlined frames of threaded text leave their threads with the text they show; type that
+        // stays type under a new id takes its frame's place.
+        super::threads::leave_threads(d, &threaded);
         if out.is_empty() {
             return Err(EngineError::Other("Expand Appearance: the selection has a basic appearance".into()));
         }
@@ -1111,7 +1117,7 @@ mod tests {
         let glyphs = effects::outline_text(&node(&s, t)).unwrap();
         let b = glyphs.geometric_bounds().unwrap();
         assert!(b.x0 > 105.0 && b.y0 > 105.0 && b.x1 < 195.0 && b.y1 < 195.0, "the type lies inside the square: {b:?}");
-        let area = |n: &vectorcraft_doc::Node| effects::member_shapes(n).iter().map(|(p, r)| vectorcraft_pathops::area(p, *r)).sum::<f64>();
+        let area = |n: &vectorcraft_doc::Node| effects::member_shapes(None, n).iter().map(|(p, r)| vectorcraft_pathops::area(p, *r)).sum::<f64>();
         let glyph_area = area(&glyphs);
         s.execute("select.set", &json!({"ids": [a.0, t.0]})).unwrap();
         let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
@@ -1151,7 +1157,7 @@ mod tests {
         use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
         let (mut s, id) = session_with_rect();
         let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
-        let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+        let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
         s.edit("gradient", |d, _| {
             let n = d.node_mut(id).unwrap();
             n.appearance.set_fill(ramp);

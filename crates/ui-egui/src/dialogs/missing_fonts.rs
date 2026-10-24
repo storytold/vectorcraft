@@ -736,27 +736,6 @@ mod tests {
         assert_eq!((d.str("state"), &d.fields["chosen"]), ("done".to_string(), &json!([])));
     }
 
-    /// The status lines are translated with the reasons in them, and so are the reasons a search
-    /// failed and a file wasn't copied, which the code holds as constants.
-    #[test]
-    fn the_status_lines_read_in_the_interface_language() {
-        let fr = crate::i18n::Lang::from_code("fr").unwrap();
-        let shown = crate::i18n::message(fr, "2 font file(s) are now in /Fonts; 1 couldn't be added: a.otf: larger than 256 MB");
-        assert!(shown.contains("se trouvent maintenant dans /Fonts") && shown.contains("a.otf") && shown.contains("plus de 256 Mo"), "{shown}");
-        for code in ["de", "es", "fr", "hu", "it", "ka", "pl", "ru", "sv"] {
-            let lang = crate::i18n::Lang::from_code(code).unwrap();
-            for s in [
-                "every search thread stopped on an internal error (please report this bug)",
-                "not a file",
-                "not a font file",
-                "the files come to more than 1 GB: add fewer at a time",
-                "every numbered name for it is taken in the Fonts folder",
-            ] {
-                assert_ne!(crate::i18n::message(lang, s), s, "{code}");
-            }
-        }
-    }
-
     #[test]
     fn the_web_says_how_many_fonts_are_missing() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());

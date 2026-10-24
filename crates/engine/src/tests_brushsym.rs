@@ -1069,6 +1069,43 @@ fn symbol_stainer_refuses_a_keep_model_given_as_text() {
     assert_eq!(node(&s, inst).appearance.fill().map(|f| f.paint.clone()), Some(Paint::solid(red)));
 }
 
+/// Place Symbol Instance, Delete Symbol, the Symbol Sprayer and the symbolism tools refuse a number
+/// or an on/off option given as text or as another value of the wrong kind, naming the key; the
+/// document and the undo history stay as they were. Numbers, true, false and null still work.
+#[test]
+fn symbol_commands_refuse_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let (_, name, b) = make_symbol(&mut s);
+    let at = json!([[b.center().x, b.center().y]]);
+    let mut calls: Vec<_> = [
+        ("symbol.place", json!({"name": name, "x": "200"}), "x"),
+        ("symbol.place", json!({"name": name, "x": 200, "y": [100]}), "y"),
+        ("symbol.spray", json!({"name": name, "points": at, "radius": "40"}), "radius"),
+        ("symbol.spray", json!({"name": name, "points": at, "density": "5"}), "density"),
+        ("symbol.spray", json!({"name": name, "points": at, "scale": true}), "scale"),
+        ("symbol.adjust", json!({"tool": "size", "points": at, "radius": "40"}), "radius"),
+        ("symbol.adjust", json!({"tool": "size", "points": at, "intensity": "10"}), "intensity"),
+    ]
+    .into_iter()
+    .map(|(cmd, p, key)| not_a_number(cmd, p, key))
+    .collect();
+    calls.extend(
+        [
+            ("symbol.spray", json!({"name": name, "points": at, "alt": "true"}), "alt"),
+            ("symbol.adjust", json!({"tool": "size", "points": at, "alt": 1}), "alt"),
+            ("symbol.delete", json!({"name": name, "expandInstances": "false"}), "expandInstances"),
+        ]
+        .map(|(cmd, p, key)| not_a_switch(cmd, p, key)),
+    );
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("symbol.place", &json!({"name": name, "x": 200, "y": null})).unwrap();
+    s.execute("symbol.spray", &json!({"name": name, "points": at, "radius": 40, "alt": false})).unwrap();
+    s.execute("symbol.delete", &json!({"name": name, "expandInstances": true})).unwrap();
+    assert!(s.doc().unwrap().doc.symbols.is_empty());
+}
+
 #[test]
 fn symbol_sprayer_tool_gesture_is_one_undo_step() {
     let mut s = session();

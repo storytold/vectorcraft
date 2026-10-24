@@ -614,11 +614,20 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
                     })
                     .collect();
                 ts.sort_by(f64::total_cmp);
-                let start_is_junction = ts.first().is_some_and(|&t| t < 1e-9);
+                // Junctions are compared where they are, not by parameter: a shape's own anchor and
+                // a crossing computed a hair from it are one junction, and one within `reach` of an
+                // end of the segment is that end. Else a sliver piece is left between them (#3870).
+                let at = |t: f64| kurbo::ParamCurve::eval(&c, t);
+                let start_is_junction = ts.first().is_some_and(|&t| at(t).distance(c.p0) <= reach);
                 let mut cuts: Vec<f64> = vec![0.0];
-                cuts.extend(ts.into_iter().filter(|&t| t > 1e-9 && t < 1.0 - 1e-9));
+                for t in ts {
+                    let p = at(t);
+                    let last = at(cuts.last().copied().unwrap_or(0.0));
+                    if p.distance(last) > reach && p.distance(c.p3) > reach {
+                        cuts.push(t);
+                    }
+                }
                 cuts.push(1.0);
-                cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
                 for (k, w) in cuts.windows(2).enumerate() {
                     let sub = c.subsegment(w[0]..w[1]);
                     let seg = if line { Seg::line(sub.p0, sub.p3) } else { Seg { c: sub, line: false } };
@@ -937,9 +946,11 @@ mod tests {
     #[test]
     fn divide_open_paths_retains_the_existing_segment_cap() {
         let mut inputs = vec![Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 7)];
-        inputs.extend((0..4093).map(|_| Shape::new(shapes::line(Point::new(-10.0, 50.0), Point::new(110.0, 50.0)), FillRule::NonZero, 99)));
+        // The square's four sides and one line past the cap.
+        let n = crate::SHAPE_BUILDER_MAX_SEGMENTS - 3;
+        inputs.extend((0..n).map(|_| Shape::new(shapes::line(Point::new(-10.0, 50.0), Point::new(110.0, 50.0)), FillRule::NonZero, 99)));
         let faces = pathfinder(PathfinderOp::Divide, &inputs);
-        assert_eq!(faces.len(), 1, "4097 segments fall back to filled areas");
+        assert_eq!(faces.len(), 1, "a segment past the cap falls back to filled areas");
         assert_eq!(faces[0].key, 7);
         assert!((crate::area(&faces[0].path, faces[0].rule) - 10000.0).abs() < 1e-6);
     }

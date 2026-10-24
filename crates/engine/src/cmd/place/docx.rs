@@ -77,6 +77,10 @@ const MAX_BASED_ON: usize = 32;
 const MAX_FONTS: usize = 4096;
 /// The most bytes of a font name kept.
 const MAX_NAME: usize = 256;
+/// The most bytes of a style id: a longer one (Word's are under 256 characters) is ignored, both
+/// where it is defined and where it is used, since every paragraph and run looks its style up by
+/// it.
+const MAX_STYLE_ID: usize = 256;
 /// The most paragraphs placed type takes from one Word document.
 const MAX_PARAGRAPHS: usize = 100_000;
 /// The most runs of one character formatting placed type takes from one Word document.
@@ -484,7 +488,7 @@ impl Reader {
                     }
                 }
                 Some("style") if self.styles.len() < MAX_STYLES => {
-                    let Some(id) = attr(n, "styleId") else { continue };
+                    let Some(id) = attr(n, "styleId").filter(|id| id.len() <= MAX_STYLE_ID) else { continue };
                     let default = match attr(n, "type") {
                         Some("paragraph") => Some(&mut self.default_style),
                         Some("character") => Some(&mut self.default_char_style),
@@ -495,7 +499,7 @@ impl Reader {
                     }
                     let run = child(n, "rPr").map(|r| self.run_props(r)).unwrap_or_default();
                     let para = child(n, "pPr").map(para_props).unwrap_or_default();
-                    let based_on = child(n, "basedOn").and_then(|b| attr(b, "val")).map(str::to_string);
+                    let based_on = child(n, "basedOn").and_then(|b| attr(b, "val")).filter(|v| v.len() <= MAX_STYLE_ID).map(str::to_string);
                     self.styles.entry(id.to_string()).or_insert(Style { based_on, run, para });
                 }
                 _ => {}
@@ -637,7 +641,12 @@ impl Reader {
     fn paragraph(&mut self, p: Node, depth: usize) {
         self.flush();
         let ppr = child(p, "pPr");
-        let style = ppr.and_then(|n| child(n, "pStyle")).and_then(|n| attr(n, "val")).map(str::to_string).or_else(|| self.default_style.clone());
+        let style = ppr
+            .and_then(|n| child(n, "pStyle"))
+            .and_then(|n| attr(n, "val"))
+            .filter(|v| v.len() <= MAX_STYLE_ID)
+            .map(str::to_string)
+            .or_else(|| self.default_style.clone());
         let mut para = Para::default();
         para.apply(&self.default_para);
         let mut base = Chars::default();
@@ -688,7 +697,11 @@ impl Reader {
     fn run(&mut self, r: Node) {
         let rpr = child(r, "rPr");
         let mut chars = self.base;
-        let style = rpr.and_then(|n| child(n, "rStyle")).and_then(|n| attr(n, "val")).or(self.default_char_style.as_deref());
+        let style = rpr
+            .and_then(|n| child(n, "rStyle"))
+            .and_then(|n| attr(n, "val"))
+            .filter(|v| v.len() <= MAX_STYLE_ID)
+            .or(self.default_char_style.as_deref());
         for s in self.chain(style) {
             chars.apply(&s.run, true);
         }

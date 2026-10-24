@@ -33,6 +33,11 @@ const CLIPPING: &str = "clipping masks are not applied: the art they clip is wri
 const FLAT_GRADIENTS: &str = "gradients are written as one colour, the average of their stops";
 const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
 const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
+const TEXT_OUTLINES: &str = "type is written as outlines: it can't be searched, selected or read aloud as text";
+const PATTERN_TILES: &str = "pattern fills are written as their tiles, one shape each";
+/// The warning for an image left out because it can't be decoded: the note raster exports give
+/// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
+const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
 /// A stroke as a pen draws it.
 #[derive(Clone, Debug, PartialEq)]
@@ -194,6 +199,7 @@ impl<'a> Scene<'a> {
             }
             NodeKind::Text(_) => {
                 if let Some(o) = vectorcraft_effects::outline_text(n) {
+                    self.warn(TEXT_OUTLINES);
                     self.node(&o, true);
                 }
             }
@@ -313,6 +319,9 @@ impl<'a> Scene<'a> {
                     return;
                 }
                 self.tiles_left -= tiles.len();
+                if !tiles.is_empty() {
+                    self.warn(PATTERN_TILES);
+                }
                 let outer = self.opacity;
                 self.opacity *= opacity.clamp(0.0, 1.0);
                 self.ops.push(Op::Clip { path: bp.clone(), rule });
@@ -430,26 +439,27 @@ impl<'a> Scene<'a> {
 
     /// A placed image, decoded once per image.
     fn image(&mut self, im: &ImageObject) {
-        let Some(img) = self.decoded(&im.key) else { return };
+        let Some(img) = self.decoded(im) else { return };
         let (dw, dh) = (f64::from(img.width), f64::from(img.height));
         let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width.max(1)) / dw, f64::from(im.height.max(1)) / dh);
         self.ops.push(Op::Image { image: img, xf, opacity: self.opacity.clamp(0.0, 1.0) });
     }
 
-    /// Image `key`'s pixels (scaled down to what a metafile stores), `None` with a warning when it
+    /// Image `im`'s pixels (scaled down to what a metafile stores), `None` with a warning when it
     /// has none or can't be decoded.
-    fn decoded(&mut self, key: &str) -> Option<Arc<Rgba>> {
+    fn decoded(&mut self, im: &ImageObject) -> Option<Arc<Rgba>> {
+        let key = im.key.as_str();
         if let Some(i) = self.images.get(key) {
             return i.clone();
         }
-        let blob = self.doc.images.get(key).filter(|b| !b.bytes.is_empty());
+        let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty());
         let img = blob
             .and_then(|b| image::load_from_memory(&b.bytes).ok())
             .map(|i| Rgba::fitted(i.to_rgba8()))
             .filter(|i| i.width > 0 && i.height > 0)
             .map(Arc::new);
         if img.is_none() {
-            self.warn(&format!("image '{key}' could not be decoded and was left out"));
+            self.warn(UNDECODED);
         }
         self.images.insert(key.to_string(), img.clone());
         img

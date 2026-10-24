@@ -4,17 +4,18 @@ members = ["crates/*", "apps/*", "xtask"]
 default-members = ["crates/*", "apps/vectorcraft", "apps/vectorcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.16.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d", default-features = false, features = ["interpret", "write"] }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "d991bf6792f8ade99c51358bf3c1d902c8cd96b5" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "82a24b006eefa036b43c09a67fb9a3fbd17ffe63" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
+craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
 # Decides who draws the window frame (desktop vs. app) so the suite shares one native titlebar per
 # desktop. The `egui` feature adds `craft_window::decorate`. (craft-libs#217.)
 craft-window = { git = "https://github.com/storytold/craft-libs", rev = "1f805378d454dac48b5c214029d254055fdf961b", features = ["egui"] }
@@ -56,6 +57,8 @@ thiserror = "2"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 log = "0.4"
+# All date/time conversion goes through chrono (no hand-rolled calendar code beyond the 400-year range extension; AGENTS.md).
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 proptest = "1"
 crc32fast = "1.5"
 # tests: a TCP port bound without listening (connections to it are refused)
@@ -89,6 +92,8 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 # CCITT Group 3 and Group 4 decoder (ITU-T T.4 and T.6): EPS images read through
 # `CCITTFaxDecode`. The PDF reader's hayro-syntax uses the same version.
 hayro-ccitt = "0.3"
+# Substring search for the EPS reader's PostScript `search`.
+memchr = "2"
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
 # CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
@@ -120,18 +125,24 @@ todo = "deny"
 unimplemented = "deny"
 unreachable = "deny"
 
+# Workspace crates keep line tables, so panics and backtraces name file and line; dependencies
+# carry no debug info. Full debug info would make the dev target dir several times larger.
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
 
 [profile.dev]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.release]
 lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
-hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
-krilla = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "2eca9b3a53a98ac52efed2a27353c6a6927ead10" }

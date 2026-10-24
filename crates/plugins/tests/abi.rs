@@ -6,7 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use vectorcraft_plugins::{Error, Kind, Limits, Plugin, registry, wat as tpl};
+use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -179,6 +179,20 @@ fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     assert_eq!(e, Error::Limit("instruction budget".into()));
 }
 
+/// A filter that asks for a heavy budget gets 20 times the instructions and five times the time of
+/// a light one, so it finishes work a light one can't: here 100 million steps of a loop. The
+/// budget is its own: what it returns can't add to it, since the host learns that only at the end.
+#[test]
+fn a_heavy_filter_finishes_what_a_light_one_cannot() {
+    let heavy = r#"{"id":"test.heavy","name":"Heavy","version":"1","kind":"filter","budget":"heavy"}"#;
+    let (light, heavy) = (build(&tpl::spinning(MANIFEST, 100_000_000, INPUT)), build(&tpl::spinning(heavy, 100_000_000, INPUT)));
+    assert_eq!(run_err(&light, Limits::default()).0, Error::Limit("instruction budget".into()));
+    let p = Plugin::load(&heavy, Limits::default()).unwrap();
+    assert_eq!((p.limits().fuel_base, p.limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
+    assert_eq!(heavy_terms(), (5, 20));
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
 #[test]
 fn an_exporter_returns_its_file_with_an_export_s_budget() {
     use vectorcraft_plugins::export::{self, Target};
@@ -265,5 +279,20 @@ fn folder_loading_skips_bad_files() {
     assert!(r.failed[0].0.ends_with("b-broken.wasm"));
     assert!(registry::load_folder(&dir.join("missing")).is_err());
     assert!(registry::load_file(&dir, Limits::default()).is_err(), "a directory is not a module");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped
+/// and reported.
+#[test]
+fn folder_loading_skips_heavy_filters() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-plugins-heavy-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = r#"{"id":"test.folder.heavy","name":"Heavy","kind":"filter","budget":"heavy"}"#;
+    std::fs::write(dir.join("heavy.wasm"), build(&tpl::spinning(manifest, 1, INPUT))).unwrap();
+    let r = registry::load_folder(&dir).unwrap();
+    assert!(r.loaded.is_empty());
+    assert!(r.failed.len() == 1 && r.failed[0].1.contains("heavy budget"), "{:?}", r.failed);
+    assert!(registry::get("test.folder.heavy").is_none());
     std::fs::remove_dir_all(&dir).ok();
 }

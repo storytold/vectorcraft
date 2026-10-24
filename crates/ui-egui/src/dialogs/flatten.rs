@@ -205,8 +205,8 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
                 o.balance = b;
             }
             dim(ui, tl!("Vectors"));
-            if let Some(v) = widgets::plain_field(ui, (id, "balance"), o.balance, "", 0, FIELD - 12.0) {
-                o.balance = v.round().clamp(0.0, 100.0);
+            if let Some(v) = widgets::range_field(ui, (id, "balance"), o.balance, 0.0..=100.0, "", 0, FIELD - 12.0) {
+                o.balance = v;
             }
         });
         ui.add_space(4.0);
@@ -215,8 +215,8 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
                 widgets::dim_label(ui, label);
                 ui.horizontal(|ui| {
                     let v = if key == 0 { &mut o.line_art_ppi } else { &mut o.gradient_ppi };
-                    if let Some(n) = widgets::plain_field(ui, (id, key), *v, "", 0, FIELD) {
-                        *v = n.round().clamp(1.0, 2400.0);
+                    if let Some(n) = widgets::range_field(ui, (id, key), *v, 1.0..=2400.0, "", 0, FIELD) {
+                        *v = n;
                     }
                     dim(ui, "ppi");
                 });

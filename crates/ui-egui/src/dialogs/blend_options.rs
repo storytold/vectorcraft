@@ -76,8 +76,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             m => {
                 let steps = d.f64("steps", 5.0);
                 ui.add_enabled_ui(m == "steps", |ui| {
-                    if let Some(n) = widgets::plain_field(ui, "blend-steps", steps, "", 0, 72.0) {
-                        d.fields.insert("steps".into(), json!(n.round().clamp(1.0, 1000.0)));
+                    if let Some(n) = widgets::range_field(ui, "blend-steps", steps, 1.0..=1000.0, "", 0, 72.0) {
+                        d.fields.insert("steps".into(), json!(n));
                     }
                 });
             }

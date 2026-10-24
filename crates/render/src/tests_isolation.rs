@@ -416,3 +416,27 @@ fn isolation_mode_dims_the_art_around_the_isolated_group() {
     // An object that isn't in the document dims nothing.
     assert_eq!(isolated(NodeId(u64::MAX)).pixels, plain.pixels);
 }
+
+/// Deeply nested isolated blending groups (#3581): each level is drawn offscreen only while the
+/// offscreen pixels alive stay within a few frames' worth; deeper levels are drawn as layers.
+#[test]
+fn nested_isolated_blending_groups_stay_within_the_offscreen_budget() {
+    let d = doc(|d| {
+        let mut n = multiply(d);
+        for _ in 0..30 {
+            n = group(d, vec![n], 1.0, Blend::Multiply, true);
+        }
+        n
+    });
+    let drawn = || crate::group::PIXELS_DRAWN.with(std::cell::Cell::get);
+    let before = drawn();
+    let frame = render(&d);
+    let images = drawn() - before;
+    // Each level's offscreen region is the content's bounds (20..80) plus `region`'s 2 px
+    // antialiasing margin on each side: 64 × 64. A budget of 4 frames fits whole levels only.
+    let level = 64 * 64;
+    let budget = 4 * 100 * 100 / level * level;
+    assert!(images <= budget, "{images} pixels drawn from offscreen groups, budget {budget}");
+    assert_near(frame.pixel(50, 50), blend_rgb(Blend::Multiply, B, S), "inside the groups");
+    assert_near(frame.pixel(10, 10), B, "outside the groups");
+}

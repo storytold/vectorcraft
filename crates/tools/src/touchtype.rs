@@ -152,10 +152,17 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
     }
     let m = g.xf;
     let (pen, ex, ey) = (m * Point::ZERO, unit(linear(m, Vec2::new(1.0, 0.0))), unit(linear(m, Vec2::new(0.0, -1.0))));
-    // The corners of its glyphs' boxes in the first glyph's font units (y down).
+    // The corners of its glyphs' boxes in the first glyph's font units (y down). A list marker's
+    // glyphs (length 0) stand for no character.
     let to_glyph = m.inverse();
-    let corners: Vec<Point> =
-        lay.glyphs.iter().filter(|h| h.byte == g.byte && h.line == g.line).filter_map(glyph_quad).flatten().map(|p| to_glyph * p).collect();
+    let corners: Vec<Point> = lay
+        .glyphs
+        .iter()
+        .filter(|h| h.byte == g.byte && h.len > 0 && h.line == g.line)
+        .filter_map(glyph_quad)
+        .flatten()
+        .map(|p| to_glyph * p)
+        .collect();
     let (mut x0, mut x1, mut y0, mut y1) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
     for p in corners {
         (x0, x1, y0, y1) = (x0.min(p.x), x1.max(p.x), y0.min(p.y), y1.max(p.y));
@@ -174,7 +181,7 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
         along: if g.rtl { -d } else { d },
         ex,
         ey,
-        kerned: !g.rtl && lay.glyphs.iter().any(|h| h.line == g.line && h.byte + h.len == g.byte),
+        kerned: !g.rtl && lay.glyphs.iter().any(|h| h.line == g.line && h.len > 0 && h.byte + h.len == g.byte),
         style: t.effective_char_style(&style)?,
     })
 }
@@ -342,7 +349,9 @@ impl Tool for TouchTypeTool {
                         let Some(t) = text_of(cx, id) else { return out };
                         let lay = self.layout(t);
                         let start = self.target.map_or(0, |(_, s)| s);
-                        let Some(b) = lay.glyphs.iter().position(|g| g.byte == start).and_then(|gi| char_box(t, &lay, gi)) else { return out };
+                        let Some(b) = lay.glyphs.iter().position(|g| g.byte == start && g.len > 0).and_then(|gi| char_box(t, &lay, gi)) else {
+                            return out;
+                        };
                         (Part::Move, b)
                     }
                 };
@@ -533,6 +542,37 @@ mod tests {
         let cx = crate::testutil::cx(&d, &none, &p);
         let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y));
         assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    }
+
+    /// In a list item, the first character's box holds that character and not the bullet before
+    /// it, and a drag of the box moves that character.
+    #[test]
+    fn the_first_character_of_a_list_item_has_its_own_box_and_drags() {
+        let (mut d, id, s) = doc_with_type();
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            t.para.list = Some(vectorcraft_doc::text::ParaList::bulleted(vectorcraft_doc::text::Bullet::Dot));
+            t.para.left_indent = 18.0;
+            t.para.first_line_indent = -18.0;
+        }
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TouchTypeTool::default();
+        let t_object = text_of(&cx, id).unwrap().clone();
+        let lay = vectorcraft_text::layout(FontDb::global(), &t_object);
+        let first = lay.glyphs.iter().find(|g| g.byte == 0 && g.len > 0).unwrap();
+        let at = t_object.xf * (first.origin + Vec2::new(first.advance / 2.0, -10.0));
+        drag(&mut t, &cx, at, at);
+        assert_eq!(t.options(), json!({"id": id.0, "start": 0}));
+        let (q, pen) = (quad(&t, &cx), t_object.xf * first.origin);
+        assert!(q[0].x > pen.x - 5.0, "the box starts at the T, 18 pt past the bullet: {q:?}, the T at {pen:?}");
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -4.0));
+        assert_eq!(preview(&acts[1])["start"].as_u64(), Some(0));
+        // A drag on the character once the type is deselected selects the type and moves it.
+        let none = Selection::default();
+        let cx = crate::testutil::cx(&d, &none, &p);
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -4.0));
+        assert_eq!(acts[0], vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+        assert_eq!(preview(&acts[1])["start"].as_u64(), Some(0));
     }
 
     #[test]

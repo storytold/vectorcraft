@@ -1,8 +1,8 @@
 //! `vectorcraft-cli`: VectorCraft from the command line.
 //!
 //! ```text
-//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
-//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
+//! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
+//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
@@ -68,19 +68,24 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
-  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR] [--automation-write-root DIR]
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
       --automation-read-root / --automation-write-root confine the files the agent's commands read
       (open, place, relink, library loads…) and write (save, export, package, library saves…) to
-      DIR, links followed; a root left out grants none of its access. They imply --headless: a
-      running app enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
+      DIR, links followed; each may be given more than once, a path inside any of its folders being
+      allowed, and a kind left out grants none of its access. They imply --headless: a running app
+      enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
 
-  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
+  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export each FILE in the format its extension picks (see Writable formats; a .ait FILE
       is a template, written as file.saveAsTemplate writes it). --scale sizes raster exports
       (pixels per point, default 1); other formats leave it out. Prints one JSON result per step.
+      --commands reads steps from FILE, or from standard input for -, where it stands among the
+      --cmd and --export steps: a JSON array of {\"command\": ID, \"params\": {...}} (or \"id\" for
+      \"command\"), or one such object per line (JSON Lines), at most 64 MiB and 100000 steps.
+      Errors name the step, counting from 0 as \"$N\" references do.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
@@ -177,7 +182,7 @@ fn with_stores(mut h: Headless) -> Headless {
 fn mcp(args: &[String]) -> Result<(), String> {
     let mut connect: Option<String> = None;
     let mut headless = false;
-    let (mut read_root, mut write_root): (Option<String>, Option<String>) = (None, None);
+    let (mut read_roots, mut write_roots): (Vec<String>, Vec<String>) = (vec![], vec![]);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         // The roots also come as `--flag=DIR`, as the other Craft apps take them.
@@ -190,10 +195,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             "--headless" => headless = true,
             "--automation-read-root" | "--automation-write-root" => {
                 let dir = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("{flag} needs a folder"))?;
-                let slot = if flag == "--automation-read-root" { &mut read_root } else { &mut write_root };
-                if slot.replace(dir).is_some() {
-                    return Err(format!("{flag} is given twice: it takes one folder"));
-                }
+                if flag == "--automation-read-root" { read_roots.push(dir) } else { write_roots.push(dir) }
             }
             other => return Err(format!("unknown mcp option `{other}`")),
         }
@@ -201,7 +203,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
-    let roots = AutomationRoots::new(read_root.as_deref().map(Path::new), write_root.as_deref().map(Path::new))?;
+    let read: Vec<&Path> = read_roots.iter().map(Path::new).collect();
+    let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
+    let roots = AutomationRoots::new(&read, &write)?;
     if roots.is_some() && connect.is_some() {
         return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots:                     start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
             .into());
@@ -209,8 +213,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
     let backend: Box<dyn Backend> = if let Some(roots) = roots {
         // Every thread of this process, not only the server's: nothing reaches past the roots.
         file_access::confine_process(roots.clone());
-        let show = |root: Option<&Path>| root.map_or_else(|| "none".to_string(), |r| r.display().to_string());
-        eprintln!("vectorcraft-cli: files confined: read root {}, write root {}", show(roots.read_root()), show(roots.write_root()));
+        eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
         Box::new(Headless::with_document().with_automation_roots(Some(roots)))
     } else if headless {
         Box::new(with_stores(Headless::with_document()))
@@ -338,28 +341,127 @@ enum Step {
     Export(String),
 }
 
+/// Most bytes `run --commands` reads from a file or standard input: the steps are untrusted input.
+const MAX_COMMANDS_BYTES: u64 = 64 * 1024 * 1024;
+/// Most steps one `run --commands` takes.
+const MAX_COMMANDS_STEPS: usize = 100_000;
+
+/// The text of `--commands source`: the file `source`, or standard input for `-`, refused past
+/// [`MAX_COMMANDS_BYTES`].
+fn read_commands(source: &str) -> Result<String, String> {
+    use std::io::Read;
+    let mut bytes = vec![];
+    let read = if source == "-" {
+        std::io::stdin().lock().take(MAX_COMMANDS_BYTES + 1).read_to_end(&mut bytes)
+    } else {
+        std::fs::File::open(source).and_then(|f| f.take(MAX_COMMANDS_BYTES + 1).read_to_end(&mut bytes))
+    };
+    read.map_err(|e| format!("--commands {source}: {e}"))?;
+    if bytes.len() as u64 > MAX_COMMANDS_BYTES {
+        return Err(format!("--commands {source}: more than {} MiB of steps", MAX_COMMANDS_BYTES / (1024 * 1024)));
+    }
+    String::from_utf8(bytes).map_err(|_| format!("--commands {source}: not UTF-8 text"))
+}
+
+/// The steps of `--commands source` from its `text`: a JSON array of `{"command": ID, "params":
+/// {…}}` objects (`"id"` may stand for `"command"`, as in MCP's `command_batch`), or one such object
+/// per line (JSON Lines, blank lines skipped). `first` is the run's index of the first of them
+/// (the `N` of `"$N"`), which an error names with the entry's place in the text.
+fn parse_commands(source: &str, text: &str, first: usize) -> Result<Vec<Step>, String> {
+    // Notepad on Windows starts UTF-8 files with a byte order mark.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let too_many = || format!("--commands {source}: more than {MAX_COMMANDS_STEPS} steps");
+    // Each entry with where it is in the text: its line for JSON Lines.
+    let mut entries: Vec<(Option<usize>, Value)> = vec![];
+    if text.trim_start().starts_with('[') {
+        let v: Value = serde_json::from_str(text).map_err(|e| format!("--commands {source}: {e}"))?;
+        let Value::Array(items) = v else { return Err(format!("--commands {source}: not a JSON array")) };
+        if items.len() > MAX_COMMANDS_STEPS {
+            return Err(too_many());
+        }
+        entries.extend(items.into_iter().map(|v| (None, v)));
+    } else {
+        for (n, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+            if entries.len() == MAX_COMMANDS_STEPS {
+                return Err(too_many());
+            }
+            let v = serde_json::from_str(line).map_err(|e| format!("--commands {source}: step {} (line {}): {e}", first + entries.len(), n + 1))?;
+            entries.push((Some(n + 1), v));
+        }
+    }
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(k, (line, v))| {
+            command_step(v).map_err(|e| {
+                let place = line.map_or_else(|| format!("entry {}", k + 1), |l| format!("line {l}"));
+                format!("--commands {source}: step {} ({place}): {e}", first + k)
+            })
+        })
+        .collect()
+}
+
+/// The step of one `--commands` entry, `{"command": ID, "params": {…}}`.
+fn command_step(v: Value) -> Result<Step, String> {
+    let Value::Object(mut o) = v else { return Err("a step must be an object such as {\"command\": \"select.all\", \"params\": {}}".into()) };
+    let id = match (o.remove("command"), o.remove("id")) {
+        (Some(Value::String(id)), None) | (None, Some(Value::String(id))) => id,
+        (Some(_), Some(_)) => return Err("give `command` or `id`, not both".into()),
+        (None, None) => return Err("no `command`".into()),
+        _ => return Err("`command` must be a string, a command id".into()),
+    };
+    let params = match o.remove("params") {
+        None | Some(Value::Null) => json!({}),
+        Some(p @ Value::Object(_)) => p,
+        Some(_) => return Err(format!("`params` of {id} must be a JSON object")),
+    };
+    if let Some(key) = o.keys().next() {
+        return Err(format!("unknown key `{key}`: a step has `command` (or `id`) and `params`"));
+    }
+    Ok(Step::Cmd(id, params))
+}
+
 fn run(args: &[String]) -> Result<(), String> {
     let mut input: Option<String> = None;
     let mut steps: Vec<Step> = vec![];
+    // The step of the `--cmd` just given, which a `--params` sets.
+    let mut params_for: Option<usize> = None;
+    let mut stdin_read = false;
     let mut scale = 1.0;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("{a} needs {what}"));
         match a.as_str() {
             "--in" | "-i" => input = Some(val("a file")?),
-            "--cmd" | "-c" => steps.push(Step::Cmd(val("a command id")?, json!({}))),
+            "--cmd" | "-c" => {
+                steps.push(Step::Cmd(val("a command id")?, json!({})));
+                params_for = Some(steps.len() - 1);
+            }
             "--params" | "-p" => {
                 let raw = val("JSON")?;
                 let p: Value = serde_json::from_str(&raw).map_err(|e| format!("--params {raw}: {e}"))?;
                 if !p.is_object() {
                     return Err(format!("--params must be a JSON object, got {raw}"));
                 }
-                match steps.last_mut() {
+                match params_for.and_then(|i| steps.get_mut(i)) {
                     Some(Step::Cmd(_, params)) => *params = p,
                     _ => return Err("--params must follow a --cmd".into()),
                 }
             }
-            "--export" | "-o" => steps.push(Step::Export(val("a file")?)),
+            "--commands" => {
+                let source = val("a file, or - for standard input")?;
+                if source == "-" && std::mem::replace(&mut stdin_read, true) {
+                    return Err("--commands - is given twice: standard input is read once".into());
+                }
+                let text = read_commands(&source)?;
+                let read = parse_commands(&source, &text, steps.len())?;
+                steps.extend(read);
+                params_for = None;
+            }
+            "--export" | "-o" => {
+                steps.push(Step::Export(val("a file")?));
+                params_for = None;
+            }
             "--scale" | "-s" => {
                 let raw = val("a number")?;
                 scale = raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?;
@@ -394,10 +496,12 @@ fn run(args: &[String]) -> Result<(), String> {
     // Each step's result, for later steps to refer to (`"$1.id"`, see `vectorcraft_engine::steps`).
     let mut results = vec![];
     for step in steps {
+        // The step's index, as `"$N"` names its result.
+        let n = results.len();
         let r = match step {
             Step::Cmd(id, params) => {
-                let params = vectorcraft_engine::steps::resolve(&params, &results).map_err(|e| format!("{id}: {e}"))?;
-                let r = h.call("engine.execute", json!({"command": id, "params": params})).map_err(|e| format!("{id}: {e}"))?;
+                let params = vectorcraft_engine::steps::resolve(&params, &results).map_err(|e| format!("step {n} ({id}): {e}"))?;
+                let r = h.call("engine.execute", json!({"command": id, "params": params})).map_err(|e| format!("step {n} ({id}): {e}"))?;
                 emit(json!({"step": "cmd", "command": id, "result": r}))?;
                 r
             }
@@ -407,7 +511,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 } else {
                     h.call("app.export", with_pixel_scale(json!({"path": path}), &path, scale))
                 };
-                let r = r.map_err(|e| format!("export {path}: {e}"))?;
+                let r = r.map_err(|e| format!("step {n}: export {path}: {e}"))?;
                 emit(json!({"step": "export", "result": r}))?;
                 r
             }

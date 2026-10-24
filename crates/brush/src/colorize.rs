@@ -77,8 +77,30 @@ pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
                 walk(Arc::make_mut(c), mode, key);
             }
         }
+        // A mask's art is drawn too: a brush on its strokes would run this brush again. Its colours
+        // are the mask's values, so they stay.
+        if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+            strip_brushes(Arc::make_mut(&mut m.art));
+        }
     }
     walk(n, mode, key);
+}
+
+/// Strip the brushes from every stroke under `n`, its masks' art included.
+fn strip_brushes(n: &mut Node) {
+    for it in &mut n.appearance.items {
+        if let AppearanceItem::Stroke(s) = it {
+            s.brush = None;
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch.iter_mut() {
+            strip_brushes(Arc::make_mut(c));
+        }
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        strip_brushes(Arc::make_mut(&mut m.art));
+    }
 }
 
 /// Mix every solid paint under `n` towards `color` by `amount` (0..1) — the Symbol Stainer.

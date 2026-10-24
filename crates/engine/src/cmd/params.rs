@@ -161,6 +161,32 @@ pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
+/// Does the description `doc` take `id` as `ids` of one object (`{ids?|id?}`, `{id?, ids?: …
+/// (instead of id)}`, `{id} or {ids: […]}`): it names both keys, and no params object of it names
+/// `ids` beside a required `id`, which is something else (`plugin.run {id, ids?}`: the plug-in's)?
+pub(crate) fn id_stands_for_ids(doc: &'static str) -> bool {
+    fn head(alternative: &str) -> &str {
+        alternative.split([':', '=', '(']).next().unwrap_or_default().trim()
+    }
+    if !takes_key(doc, "ids") || !takes_key(doc, "id") {
+        return false;
+    }
+    let mut rest = doc;
+    while let Ok((body, after)) = object_body(rest) {
+        let entries = split_top(body, ',');
+        let required_id = entries.iter().any(|e| split_top(e, '|').len() == 1 && head(e) == "id");
+        let names_ids = entries.iter().any(|e| split_top(e, '|').iter().any(|a| head(a).trim_end_matches('?').trim_end() == "ids"));
+        if required_id && names_ids {
+            return false;
+        }
+        match after.trim_start().strip_prefix("or ").or_else(|| after.trim_start().strip_prefix("| ")).filter(|r| r.starts_with('{')) {
+            Some(next) => rest = next,
+            None => break,
+        }
+    }
+    true
+}
+
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());
@@ -202,7 +228,7 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
-fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
     bad(
         id,
         match nearest(key, keys) {

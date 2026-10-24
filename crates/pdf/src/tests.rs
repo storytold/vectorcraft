@@ -82,6 +82,8 @@ fn one_page_per_artboard_with_sizes() {
         locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
     });
     d.artboards.push(Artboard {
@@ -91,6 +93,8 @@ fn one_page_per_artboard_with_sizes() {
         locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
@@ -109,6 +113,8 @@ fn artboard_range_and_bad_index() {
         locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
@@ -379,6 +385,7 @@ fn art_reaching_beyond_a_billion_points_is_left_out() {
         xf: Affine::new([5.5e8, 0.0, 0.0, 10.0, far, 60.0]),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     for (what, n) in [
         ("path", rect_node(Rect::new(far, 60.0, 90.0, 90.0), Color::BLACK)),
@@ -509,6 +516,30 @@ fn text_exported_as_outlines() {
     assert!(b.x0 >= 9.0 && b.x1 < 120.0 && b.y1 <= 56.0 && b.y0 > 25.0, "{b:?}");
 }
 
+/// Colour bitmap glyphs (emoji) are images in the PDF: in their font's Type 3 glyphs with real
+/// text, else drawn where the glyphs are.
+#[test]
+fn colour_bitmap_glyphs_export_as_images() {
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    for sbix in [true, false] {
+        vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(sbix).unwrap());
+        let mut d = doc(300.0, 100.0);
+        let st = CharStyle { font_family: colour_bitmap_family(sbix).into(), size: 24.0, ..CharStyle::default() };
+        add(&mut d, Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 50.0), &format!("{COLOUR_CHAR}F"), st)))));
+        let text = uncompressed(&d).replace(' ', "");
+        assert!(text.contains("/Type3") && text.contains("/Subtype/Image"), "an image in a Type 3 glyph (sbix {sbix})");
+        let mut outlined = PdfOptions::uncompressed();
+        outlined.settings.advanced.outline_text = true;
+        let r = import_with_report(&export(&d, &outlined).unwrap(), &ImportOptions::default()).unwrap();
+        let l = leaves(&r.document);
+        let images: Vec<_> = l.iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).collect();
+        assert_eq!(images.len(), 1, "outlined, the glyph is an image (sbix {sbix})");
+        let b = images[0].geometric_bounds().unwrap();
+        assert!((b.width() - 24.0).abs() < 0.1 && (b.height() - 24.0).abs() < 0.1, "one em: {b:?}");
+        assert!(l.iter().any(|n| matches!(n.kind, NodeKind::Path { .. })), "the other glyph stays an outline");
+    }
+}
+
 fn tiny_png() -> Vec<u8> {
     let mut img = image::RgbaImage::new(4, 2);
     for (x, _, p) in img.enumerate_pixels_mut() {
@@ -530,6 +561,7 @@ fn image_roundtrip() {
         xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     add(&mut d, Node::new(NodeId(0), NodeKind::Image(Box::new(im))));
     let out = roundtrip(&d);
@@ -571,7 +603,7 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
     for (i, (key, blob)) in blobs.into_iter().enumerate() {
         d.images.insert(key.into(), blob);
         let xf = Affine::translate((20.0, 20.0 + 50.0 * i as f64)) * Affine::scale(10.0);
-        let im = ImageObject { key: key.into(), width: 4, height: 2, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key: key.into(), width: 4, height: 2, xf, link: None, placement: Default::default(), pixels: None };
         add(&mut d, Node::new(NodeId(0), NodeKind::Image(Box::new(im))));
     }
     add(&mut d, rect_node(Rect::new(100.0, 100.0, 150.0, 150.0), Color::BLACK));
@@ -604,6 +636,7 @@ fn a_group_transform_effect_exports_its_image_copies() {
         xf: Affine::translate((20.0, 30.0)) * Affine::scale(5.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let image = Arc::new(Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))));
     let mut square = rect_node(Rect::new(20.0, 60.0, 30.0, 70.0), Color::BLACK);
@@ -732,6 +765,8 @@ fn import_max_pages_and_multi_page() {
         locked: false,
         show_center_mark: false,
         show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
     });
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
@@ -878,15 +913,17 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     for key in ["/Title", "/Author", "/Keywords", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
         assert!(!s.contains(key), "unexpected empty metadata {key}");
     }
+    assert!(!s.contains("/DisplayDocTitle true"), "the default export does not request displaying its metadata title");
     d.title = "Synthetic title".into();
     d.metadata.author = " Test author ".into();
     d.metadata.keywords = vec!["test keyword".into()];
-    let bytes = export(&d, &PdfOptions { created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
+    let bytes = export(&d, &PdfOptions { display_doc_title: true, created: Some(1_700_000_000), ..PdfOptions::uncompressed() }).unwrap();
     let s = String::from_utf8_lossy(&bytes);
     for key in ["/Title", "/Author", "/Keywords", "/CreationDate", "<dc:title>", "<dc:creator>", "<pdf:Keywords>"] {
         assert!(s.contains(key), "missing populated metadata {key}");
     }
     assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
+    assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by
@@ -959,4 +996,118 @@ fn dictionary_values_the_reader_cannot_parse_are_skipped() {
         let e = import(&looped).err().map(|e| e.to_string());
         assert!(e.as_deref().is_some_and(|e| e.contains("built on one another without end")), "{junk}: {e:?}");
     }
+}
+
+/// Illustrator's documentation describes dither as the gradient converted to pixels with subtle
+/// noise, at the Document Raster Effects resolution
+/// (https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-dither-in-gradients.html):
+/// a dithered gradient fill is drawn as an image at that resolution, clipped to the shape; a
+/// stroke (dither applies to fills only) and an undithered fill stay shadings.
+#[test]
+fn dithered_gradient_fills_export_as_images_and_strokes_as_shadings() {
+    let grad = |dither| Paint::Gradient(Box::new(GradientPaint::new(Gradient { dither, ..Default::default() })));
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let mut d = doc(200.0, 100.0);
+    d.raster_effects_ppi = 144.0;
+    add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(grad(true), grad(true), 4.0)));
+    let pdf = uncompressed(&d).replace(' ', "");
+    assert!(pdf.contains("/Subtype/Image"), "the fill is an image");
+    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(pdf.contains("/ShadingType2"), "the stroke keeps its shading");
+    let mut plain = doc(200.0, 100.0);
+    add(&mut plain, Node::path(NodeId(0), shape, Appearance::basic(grad(false), Paint::None, 0.0)));
+    let pdf = uncompressed(&plain).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"));
+}
+
+/// Illustrator's documentation: perceptual gradients aren't supported in PDF exports, and are
+/// rasterised when saved that way
+/// (https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html).
+/// A Perceptual fill and stroke are drawn as images at the raster effects resolution, clipped to
+/// what they paint; a Classic gradient stays a shading, and so does a gradient along a stroke
+/// (slices through stops on the perceptual curve, as the canvas draws it).
+#[test]
+fn perceptual_gradients_export_as_images_and_classic_ones_as_shadings() {
+    let grad = |method| Paint::Gradient(Box::new(GradientPaint::new(Gradient { method, ..Default::default() })));
+    let p = grad(vectorcraft_color::GradientMethod::Perceptual);
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let mut d = doc(200.0, 100.0);
+    d.raster_effects_ppi = 144.0;
+    add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(p.clone(), p.clone(), 4.0)));
+    let pdf = uncompressed(&d).replace(' ', "");
+    assert_eq!(pdf.matches("/Subtype/Image").count(), 2, "the fill and the stroke are images");
+    assert!(pdf.contains("/Width200") && pdf.contains("/Height100"), "two pixels a point at 144 ppi");
+    assert!(!pdf.contains("/ShadingType2"), "no shading");
+    let mut along = Appearance::basic(Paint::None, p, 4.0);
+    if let Some(AppearanceItem::Stroke(st)) = along.items.get_mut(1) {
+        st.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
+    }
+    let mut a = doc(200.0, 100.0);
+    add(&mut a, Node::path(NodeId(0), shape.clone(), along));
+    let pdf = uncompressed(&a).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"), "along the stroke: slices");
+    let c = grad(vectorcraft_color::GradientMethod::Classic);
+    let mut plain = doc(200.0, 100.0);
+    add(&mut plain, Node::path(NodeId(0), shape, Appearance::basic(c.clone(), c, 4.0)));
+    let pdf = uncompressed(&plain).replace(' ', "");
+    assert!(!pdf.contains("/Subtype/Image") && pdf.contains("/ShadingType2"));
+}
+
+/// A dithered Perceptual gradient: the fill and the stroke are images (Perceptual), and dither
+/// adds its noise to the fill's pixels only.
+#[test]
+fn dithered_perceptual_gradients_export_as_images_with_noise_on_the_fill() {
+    let grad = |dither| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient {
+            dither,
+            method: vectorcraft_color::GradientMethod::Perceptual,
+            ..Default::default()
+        })))
+    };
+    let shape = shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0));
+    let export_with = |dither, stroke: bool| {
+        let mut d = doc(200.0, 100.0);
+        let (fill, stroke) = if stroke { (Paint::None, grad(dither)) } else { (grad(dither), Paint::None) };
+        add(&mut d, Node::path(NodeId(0), shape.clone(), Appearance::basic(fill, stroke, 4.0)));
+        uncompressed(&d).replace(' ', "")
+    };
+    for stroke in [false, true] {
+        let pdf = export_with(true, stroke);
+        assert_eq!(pdf.matches("/Subtype/Image").count(), 1, "stroke {stroke}: an image");
+        assert!(!pdf.contains("/ShadingType"), "stroke {stroke}: no shading");
+    }
+    assert_ne!(export_with(true, false), export_with(false, false), "the fill's pixels carry the noise");
+    assert_eq!(export_with(true, true), export_with(false, true), "a stroke has no dither");
+}
+
+/// COLR glyphs in the PDF: as real text, in their font's Type 3 glyphs (the foreground layer in
+/// the fill); outlined, as vector art, a sweep glyph as an image.
+#[test]
+fn colr_glyphs_export_as_vector_art() {
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, COLR_SWEEP_CHAR, colr_family, colr_font};
+    for v1 in [false, true] {
+        vectorcraft_text::FontDb::global().add_font(colr_font(v1).unwrap());
+    }
+    let page = |v1: bool, ch: char, outline_text: bool| {
+        let mut d = doc(300.0, 100.0);
+        let fill = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+        let st = CharStyle { font_family: colr_family(v1).into(), size: 24.0, fill, ..CharStyle::default() };
+        add(&mut d, Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 50.0), &ch.to_string(), st)))));
+        let mut o = PdfOptions::uncompressed();
+        o.settings.advanced.outline_text = outline_text;
+        import_with_report(&export(&d, &o).unwrap(), &ImportOptions::default()).unwrap().document
+    };
+    let fills = |d: &Document| -> Vec<Paint> { leaves(d).iter().map(|n| n.appearance.fill_paint()).collect() };
+    let near =
+        |p: &Paint, rgb: [f32; 3]| matches!(p, Paint::Solid { color, .. } if color.to_rgb().iter().zip(rgb).all(|(a, b)| (a - b).abs() < 0.02));
+    for outline_text in [false, true] {
+        let v0 = fills(&page(false, COLOUR_CHAR, outline_text));
+        assert!(v0.iter().any(|p| near(p, [1.0, 0.0, 0.0])), "the red layer (outlined {outline_text}): {v0:?}");
+        assert!(v0.iter().any(|p| near(p, [0.0, 0.0, 1.0])), "the foreground layer in the fill (outlined {outline_text}): {v0:?}");
+    }
+    let v1 = page(true, COLOUR_CHAR, true);
+    assert!(!leaves(&v1).iter().any(|n| matches!(n.kind, NodeKind::Image(_))), "vector art");
+    assert!(fills(&v1).iter().any(|p| matches!(p, Paint::Gradient(_))), "with its gradients");
+    let sweep = page(true, COLR_SWEEP_CHAR, true);
+    assert!(leaves(&sweep).iter().any(|n| matches!(n.kind, NodeKind::Image(_))), "a sweep glyph is an image");
 }

@@ -176,17 +176,33 @@ pub fn line(a: Point, b: Point) -> PathData {
     PathData::single(SubPath::polyline(&[a, b], false))
 }
 
-/// Quarter-ellipse arc from `a` to `b` (Arc tool default: concave, open, x-axis base).
-pub fn arc(a: Point, b: Point, slope: f64, closed: bool) -> PathData {
-    // Corner of the arc's bounding box is at (a.x, b.y): the arc bows away from it.
-    let k = KAPPA * (1.0 + slope.clamp(-1.0, 1.0) * 0.0);
-    let corner = Point::new(b.x, a.y);
-    let h1 = a + (corner - a) * k;
-    let h2 = b + (corner - b) * k;
+/// Bounding box of an arc segment when reference point `reference` (0…8) is placed on `anchor`.
+pub fn arc_bbox(anchor: Point, reference: usize, length_x: f64, length_y: f64) -> Rect {
+    let w = length_x.abs().max(1e-9);
+    let h = length_y.abs().max(1e-9);
+    let rp = crate::reference_point(Rect::new(0.0, 0.0, w, h), reference.min(8));
+    Rect::new(anchor.x - rp.x, anchor.y - rp.y, anchor.x - rp.x + w, anchor.y - rp.y + h)
+}
+
+/// Arc segment from the Arc tool dialog: lengths, reference point, base axis, slope and open/closed.
+pub fn arc_segment(anchor: Point, reference: usize, length_x: f64, length_y: f64, base_along_x: bool, slope: f64, closed: bool) -> PathData {
+    let r = arc_bbox(anchor, reference, length_x, length_y).abs();
+    let (a, b) = if base_along_x { (Point::new(r.x0, r.y0), Point::new(r.x1, r.y1)) } else { (Point::new(r.x0, r.y1), Point::new(r.x1, r.y0)) };
+    arc(a, b, slope, closed, base_along_x)
+}
+
+/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open, x-axis base when `base_along_x`).
+/// `slope` is −100…100 (concave…convex); 0 is a straight chord.
+pub fn arc(a: Point, b: Point, slope: f64, closed: bool, base_along_x: bool) -> PathData {
+    let t = slope.clamp(-100.0, 100.0) / 100.0;
+    let corner = if t >= 0.0 { Point::new(b.x, a.y) } else { Point::new(a.x, b.y) };
+    let k = KAPPA * t.abs();
+    let h1 = if k == 0.0 { a } else { a + (corner - a) * k };
+    let h2 = if k == 0.0 { b } else { b + (corner - b) * k };
     let mut anchors =
         vec![Anchor { p: a, h_in: a, h_out: h1, kind: AnchorKind::Corner }, Anchor { p: b, h_in: h2, h_out: b, kind: AnchorKind::Corner }];
     if closed {
-        let o = Point::new(a.x, b.y);
+        let o = if base_along_x { Point::new(a.x, b.y) } else { Point::new(b.x, a.y) };
         anchors.push(Anchor::corner(o));
     }
     PathData::single(SubPath::new(anchors, closed))
@@ -531,7 +547,9 @@ mod tests {
 
     #[test]
     fn arc_open_and_closed() {
-        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false).anchor_count(), 2);
-        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true).subpaths[0].closed);
+        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false, true).anchor_count(), 2);
+        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true, true).subpaths[0].closed);
+        let seg = arc_segment(Point::ZERO, 0, 100.0, 50.0, true, 50.0, false);
+        assert_eq!(seg.anchor_count(), 2);
     }
 }

@@ -221,6 +221,194 @@ fn replace_needs_exactly_one_selected_object() {
     assert!(r.unwrap_err().to_string().contains("select the one object"));
 }
 
+/// `p` with the members of `extra` added.
+fn with(mut p: Value, extra: Value) -> Value {
+    if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+        o.extend(e);
+    }
+    p
+}
+
+/// A file read apart from the session ([`Session::prepare_place`], then [`cmd::place::PlaceJob::read`]
+/// on another thread and [`Session::place_read`]), as File › Place reads one off the UI thread, is
+/// placed as `file.place` places it: the same reply, document, selection and undo step, and the
+/// same journal entry.
+#[test]
+fn a_file_read_apart_from_the_session_places_as_file_place_does() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+    let (pdf, native, eps) = (serialize(&mut src, "pdf"), serialize(&mut src, "vectorcraft"), eps_of(&mut src));
+    // SVG is serialized as text.
+    let svg = src.execute("document.serialize", &json!({"format": "svg"})).unwrap()["text"].as_str().unwrap().as_bytes().to_vec();
+    let dxf = serialize(&mut src, "dxf");
+    let dir = std::env::temp_dir().join(format!("vc-place-apart-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let saved = |name: &str, bytes: &[u8]| {
+        let p = dir.join(name);
+        std::fs::write(&p, bytes).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let (pdf_path, native_path) = (saved("page.pdf", &pdf), saved("art.vectorcraft", &native));
+    let words = super::tests_textimport::docx(r#"<w:p><w:r><w:t>Placed words</w:t></w:r></w:p>"#, super::tests_textimport::STYLES);
+    let cases = [
+        with(file("red.png", &png(30, 20, [255, 0, 0, 255], Some(144.0))), json!({"at": [150, 100]})),
+        with(file("notes.txt", b"Two lines\nof text"), json!({"text": {}})),
+        file("note.rtf", br"{\rtf1\ansi {\b Bold} words\par}"),
+        file("words.docx", &words),
+        with(file("art.svg", &svg), json!({"rect": [10, 10, 80, 40]})),
+        file("art.eps", &eps),
+        file("plan.dxf", &dxf),
+        json!({"path": pdf_path}),
+        json!({"path": pdf_path, "link": false, "crop": "bounding"}),
+        json!({"path": native_path}),
+        with(file("page.pdf", &pdf), json!({"template": true})),
+        with(file("blue.png", &png(8, 8, [0, 0, 255, 255], None)), json!({"replace": true})),
+    ];
+    for p in cases {
+        let name = p["name"].as_str().or(p["path"].as_str()).map(cmd::fileio::file_name).unwrap_or_default();
+        let (mut a, mut b) = (session(), session());
+        for s in [&mut a, &mut b] {
+            let id = s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 30, "height": 30})).unwrap()["id"].clone();
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        }
+        let at_once = a.execute("file.place", &p).map_err(|e| e.to_string());
+        assert!(at_once.is_ok(), "{name}: {at_once:?}");
+        let job = b.prepare_place(&p).unwrap();
+        assert_eq!(job.name(), name);
+        let read = std::thread::spawn(move || job.read()).join().unwrap().unwrap();
+        assert_eq!(b.place_read(read).map_err(|e| e.to_string()), at_once, "{name}: the same reply");
+        let (sa, sb) = (a.doc().unwrap(), b.doc().unwrap());
+        // `file.new` stamps each document with the second it was made in, which can differ by one.
+        let undated = |d: &vectorcraft_doc::Document| {
+            let mut d = d.clone();
+            d.metadata.created = None;
+            d
+        };
+        assert!(undated(&sa.doc) == undated(&sb.doc), "{name}: the same document");
+        assert_eq!(sa.selection.objects, sb.selection.objects, "{name}");
+        assert_eq!(sa.history.undo.len(), sb.history.undo.len(), "{name}: one undo step");
+        assert_eq!(a.journal.last(), b.journal.last(), "{name}");
+        assert_eq!(b.journal.last().map(|(id, _)| id.as_str()), Some("file.place"), "{name}: journaled as file.place");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    // With no document open, the error the commands give.
+    let mut none = Session::new();
+    let p = file("red.png", &png(2, 2, [0; 4], None));
+    let err = |r: Result<Value>| r.err().map(|e| e.to_string());
+    assert_eq!(none.prepare_place(&p).err().map(|e| e.to_string()), err(none.execute("file.place", &p)));
+    let q = json!({"files": [p]});
+    assert_eq!(none.prepare_place_queue(&q).err().map(|e| e.to_string()), err(none.execute("file.place.queue", &q)));
+}
+
+/// Replace swaps the object selected when Place started, even when another one is selected by the
+/// time the file has been read, and the journal replays the same; when that object was deleted or
+/// changed meanwhile, nothing is placed.
+#[test]
+fn a_file_read_apart_from_the_session_replaces_what_was_selected_when_place_started() {
+    let two = || {
+        let mut s = session();
+        let first = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let other = s.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone();
+        (s, first, other)
+    };
+    let (mut s, first, other) = two();
+    let p = with(file("blue.png", &png(8, 8, [0, 0, 255, 255], None)), json!({"replace": true}));
+    s.execute("select.set", &json!({"ids": [first]})).unwrap();
+    let read = s.prepare_place(&p).unwrap().read().unwrap();
+    s.execute("select.set", &json!({"ids": [other]})).unwrap();
+    let r = s.place_read(read).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.doc.node(NodeId(first.as_u64().unwrap())).is_none(), "the object selected when Place started is replaced");
+    assert!(st.doc.node(NodeId(other.as_u64().unwrap())).is_some());
+    assert_eq!(st.selection.objects, [NodeId(r["ids"][0].as_u64().unwrap())]);
+    // The journal's last two entries, run where the other object is selected, replace the same one.
+    let last: Vec<_> = s.journal.iter().rev().take(2).rev().cloned().collect();
+    assert_eq!(last.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), ["select.set", "file.place"]);
+    let (mut replay, _, _) = two();
+    replay.execute("select.set", &json!({"ids": [other]})).unwrap();
+    for (id, p) in &last {
+        replay.execute(id, p).unwrap();
+    }
+    let undated = |s: &Session| {
+        let mut d = (*s.doc().unwrap().doc).clone();
+        d.metadata.created = None;
+        d
+    };
+    assert!(undated(&replay) == undated(&s), "the replay replaces the same object");
+    // The object to replace is deleted before the file has been read.
+    let read = s.prepare_place(&p).unwrap().read().unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let (doc, undo, journal) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len(), s.journal.len());
+    let err = s.place_read(read).unwrap_err();
+    assert!(err.to_string().contains("the object to replace was changed or deleted"), "{err}");
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc && st.history.undo.len() == undo && s.journal.len() == journal, "nothing placed or journaled");
+    // The object to replace is moved, or an undo removes it and the next object made takes its id,
+    // before the file has been read.
+    for undone in [false, true] {
+        let mut s = session();
+        let id = s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let read = s.prepare_place(&p).unwrap().read().unwrap();
+        if undone {
+            s.execute("edit.undo", &json!({})).unwrap();
+            let next = s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 10, "height": 10})).unwrap()["id"].clone();
+            assert_eq!(next, id, "the next object takes the id");
+        } else {
+            s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+        }
+        let (doc, undo, journal) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len(), s.journal.len());
+        let err = s.place_read(read).unwrap_err();
+        assert!(err.to_string().contains("the object to replace was changed or deleted"), "undone {undone}: {err}");
+        let st = s.doc().unwrap();
+        assert!(*st.doc == *doc && st.history.undo.len() == undo && s.journal.len() == journal, "undone {undone}: nothing placed or journaled");
+    }
+}
+
+/// A linked image keeps the preview its file was read with ([`cmd::place::PlaceJob::read`] makes
+/// it), so placing the read file does not decode the image again; an embedded image has none.
+#[test]
+fn a_linked_image_keeps_the_preview_made_when_its_file_was_read() {
+    let blob = vectorcraft_doc::ImageBlob::new("image/png", png(600, 300, [9, 9, 9, 255], None)).with_proxy();
+    let made = blob.proxy.clone().unwrap();
+    let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+    cmd::links::store_image(&mut d, "linked", blob.clone(), true);
+    assert!(d.images["linked"].proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &made)), "the preview it was read with");
+    cmd::links::store_image(&mut d, "embedded", blob, false);
+    assert!(d.images["embedded"].proxy.is_none());
+}
+
+/// Type and a DXF drawing fitted to the artboard, read apart from the session while the artboard
+/// under `at` changes size, are placed against the artboard as it is when they are placed: as
+/// `file.place` places them after the change, which is what a replay of the journal does.
+#[test]
+fn a_file_read_apart_from_the_session_is_placed_against_the_artboard_as_it_is_then() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+    let dxf = serialize(&mut src, "dxf");
+    let text = with(file("notes.txt", b"Words to place"), json!({"text": {}, "at": [100, 150]}));
+    for p in [text, with(file("plan.dxf", &dxf), json!({"dxf": {"fit": true}, "at": [100, 150]}))] {
+        let (mut a, mut b) = (session(), session());
+        let read = b.prepare_place(&p).unwrap().read().unwrap();
+        for s in [&mut a, &mut b] {
+            s.execute("artboard.setProps", &json!({"index": 0, "width": 200})).unwrap();
+        }
+        let at_once = a.execute("file.place", &p).unwrap();
+        assert_eq!(b.place_read(read).unwrap(), at_once, "{}", at_once["name"]);
+        let undated = |s: &Session| {
+            let mut d = (*s.doc().unwrap().doc).clone();
+            d.metadata.created = None;
+            d
+        };
+        assert!(undated(&a) == undated(&b), "{}", at_once["name"]);
+        if at_once["format"] == "txt" {
+            // The 200 × 300 pt artboard less a 36 pt margin on each side.
+            assert!(close(at_once["width"].as_f64().unwrap(), 128.0) && close(at_once["height"].as_f64().unwrap(), 228.0), "{at_once}");
+        }
+    }
+}
+
 #[test]
 fn template_puts_the_art_on_a_locked_template_layer_below_the_current_one() {
     let mut s = session();
@@ -479,6 +667,61 @@ fn a_queue_of_3_with_click_drag_and_esc_places_2() {
     assert_eq!(reqs, vec![UiRequest::SwitchTool("selection".into())]);
     assert_eq!(top_children(&s).len(), 2);
     assert_eq!(s.doc().unwrap().history.undo.len(), 2, "one undo step per placement");
+}
+
+/// With [`Session::place_cursor_requests`] set, a click of the place cursor asks the frontend to
+/// place its file ([`UiRequest::Place`]) and places nothing itself; the params it asks with place
+/// the file as the click places it without the flag.
+#[test]
+fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to() {
+    let view = ViewInfo::default();
+    let files: Vec<Value> = ["a.png", "b.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    let (mut at_once, mut s) = (session(), session());
+    s.place_cursor_requests = true;
+    for s in [&mut at_once, &mut s] {
+        s.execute("file.place.queue", &json!({"files": files})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view).unwrap();
+    }
+    at_once.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view).unwrap();
+    let reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view).unwrap();
+    let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
+    assert_eq!(p["rect"], json!([10.0, 10.0, 40.0, 20.0]));
+    assert!(top_children(&s).is_empty(), "the frontend places it");
+    assert_eq!(s.tool_options()["names"], json!(["b.png"]), "the cursor goes on to the next file");
+    s.execute("file.place", p).unwrap();
+    // Left out: the second each document was made in.
+    let doc = |s: &Session| {
+        let mut d = (*s.doc().unwrap().doc).clone();
+        d.metadata.created = None;
+        d
+    };
+    assert!(doc(&s) == doc(&at_once));
+    assert_eq!(s.journal.last(), at_once.journal.last());
+}
+
+/// Files read for the place cursor apart from the session ([`Session::prepare_place_queue`], then
+/// [`cmd::place::QueueJob::read`] on another thread and [`Session::place_queue_read`]) load it as
+/// `file.place.queue` loads it: the same reply, with the files that can't be read skipped, and the
+/// same tool and queue.
+#[test]
+fn files_read_for_the_place_cursor_apart_from_the_session_load_it_as_file_place_queue_does() {
+    let mut files: Vec<Value> = ["a.png", "b.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    files.push(file("notes.xyz", b"hello"));
+    let p = json!({"files": files, "thumbnail": 8, "link": false});
+    let (mut a, mut b) = (session(), session());
+    let at_once = a.execute("file.place.queue", &p).unwrap();
+    assert_eq!((at_once["count"].as_u64(), at_once["skipped"][0]["name"].as_str()), (Some(2), Some("notes.xyz")));
+    let job = b.prepare_place_queue(&p).unwrap();
+    assert_eq!(job.names(), ["a.png", "b.png", "notes.xyz"]);
+    let read = std::thread::spawn(move || job.read()).join().unwrap().unwrap();
+    assert_eq!(b.place_queue_read(read).unwrap(), at_once);
+    assert_eq!((b.tool_id(), b.tool_options()), (a.tool_id(), a.tool_options()));
+    // None of the files can be read: an error, and the tool stays.
+    let mut c = session();
+    let none = json!({"files": [file("notes.xyz", b"hello")]});
+    let read = c.prepare_place_queue(&none).unwrap().read().unwrap();
+    assert!(c.place_queue_read(read).unwrap_err().to_string().contains("not a format"));
+    assert_eq!(c.tool_id(), "selection");
 }
 
 #[test]

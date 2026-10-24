@@ -152,9 +152,12 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         .features
         .iter()
         .map(|t| match t.strip_prefix('-') {
-            Some(off) => format!("\"{off}\" 0"),
-            None => format!("\"{t}\" 1"),
+            Some(off) => (off, 0),
+            None => (t.as_str(), 1),
         })
+        // A feature tag is four letters or digits: anything else could end the CSS string.
+        .filter(|(tag, _)| tag.len() == 4 && tag.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .map(|(tag, on)| format!("\"{tag}\" {on}"))
         .collect();
     // Proportional Metrics: `palt` (SVG writes vertical type as outlines).
     if st.proportional_metrics {

@@ -33,6 +33,9 @@ const WIDE_LINES: &str =
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
 const TYPE_ITEMS: &str = "fills and strokes added to whole type objects are left out of text entities (outline the text to keep them)";
+/// The warning for an image left out because it can't be decoded: the note raster exports give
+/// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
+const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
 /// One segment of a subpath, cubics for every curve.
 #[derive(Clone, Copy)]
@@ -165,12 +168,32 @@ fn subpaths(bp: &BezPath) -> Vec<Sub> {
     out
 }
 
+/// The most pixels of an image written (it is held decoded, as RGBA and encoded at once).
+const MAX_IMAGE_PIXELS: u64 = 64 << 20;
+
+/// The most entities (handles) a drawing is written with.
+const MAX_ENTITIES: u32 = 10_000_000;
+
+/// The largest x or y a path may have to be flattened, and the most points its polygons keep.
+const MAX_COORD: f64 = 1e9;
+const MAX_POINTS: usize = 4_000_000;
+
 /// `bp` flattened into polygons (each closing implicitly), consecutive repeats dropped.
 fn polygons(bp: &BezPath) -> Vec<Vec<Point>> {
+    // Far outside any drawing, a curve flattens to millions of points at this tolerance.
+    let b = bp.control_box();
+    if !matches!(
+        b.x0.abs().max(b.x1.abs()).max(b.y0.abs()).max(b.y1.abs()).partial_cmp(&MAX_COORD),
+        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+    ) {
+        return vec![];
+    }
     let mut out: Vec<Vec<Point>> = vec![];
     let mut cur: Vec<Point> = vec![];
-    let push = |p: Point, cur: &mut Vec<Point>| {
-        if cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
+    let mut points = 0usize;
+    let mut push = |p: Point, cur: &mut Vec<Point>| {
+        if points < MAX_POINTS && cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
+            points += 1;
             cur.push(p);
         }
     };
@@ -205,21 +228,37 @@ fn symbol_name(name: &str, long: bool) -> String {
     s.trim().to_string()
 }
 
-/// `base` made unique among `taken` (any case) by `_2`, `_3`…, within `max` characters.
-fn unique(base: &str, taken: &[&str], max: usize) -> String {
-    let base = if base.is_empty() { "Layer".to_string() } else { base.to_string() };
-    let free = |n: &str| !taken.iter().any(|t| t.eq_ignore_ascii_case(n));
-    if free(&base) {
-        return base;
+/// The names a DXF table holds (compared in any case), and the next suffix to try for each base,
+/// so identical names don't each search the suffixes before.
+#[derive(Default)]
+struct Names {
+    taken: std::collections::HashSet<String>,
+    next: HashMap<String, usize>,
+}
+
+impl Names {
+    /// Names that are there already.
+    fn with(names: &[&str]) -> Self {
+        Self { taken: names.iter().map(|n| n.to_lowercase()).collect(), next: HashMap::new() }
     }
-    (2..)
-        .map(|i| {
-            let suffix = format!("_{i}");
+
+    /// `base` made unique by `_2`, `_3`…, within `max` characters; the name is taken from now on.
+    fn unique(&mut self, base: &str, max: usize) -> String {
+        let base = if base.is_empty() { "Layer".to_string() } else { base.to_string() };
+        if self.taken.insert(base.to_lowercase()) {
+            return base;
+        }
+        let next = self.next.entry(base.to_lowercase()).or_insert(2);
+        loop {
+            let suffix = format!("_{next}");
+            *next += 1;
             let keep: String = base.chars().take(max.saturating_sub(suffix.len())).collect();
-            format!("{keep}{suffix}")
-        })
-        .find(|n| free(n))
-        .unwrap_or(base)
+            let name = format!("{keep}{suffix}");
+            if self.taken.insert(name.to_lowercase()) {
+                return name;
+            }
+        }
+    }
 }
 
 fn overlaps(a: Rect, b: Rect) -> bool {
@@ -248,12 +287,14 @@ pub(crate) struct Scene<'a> {
     e: Codes,
     next: u32,
     layers: Vec<Layer>,
+    layer_names: Names,
     /// The DXF layer art goes on, and its flags.
     layer: String,
     flags: LayerFlags,
     linetypes: Vec<LineType>,
     /// (style name, font family).
     styles: Vec<(String, String)>,
+    style_names: Names,
     images: Vec<ImageDef>,
     files: Vec<DxfImage>,
     /// Image keys → index into `images` (`None`: left out).
@@ -280,10 +321,12 @@ impl<'a> Scene<'a> {
             e: Codes::new(o.version),
             next: fixed::FIRST_FREE,
             layers: vec![],
+            layer_names: Names::with(&["0", "Defpoints"]),
             layer: "0".into(),
             flags: LayerFlags { off: false, locked: false, plot: true },
             linetypes: vec![],
             styles: vec![],
+            style_names: Names::with(&[crate::writer::STANDARD_STYLE]),
             images: vec![],
             files: vec![],
             by_key: HashMap::new(),
@@ -345,6 +388,12 @@ impl<'a> Scene<'a> {
 
     fn node(&mut self, n: &Node, force: bool) {
         if let NodeKind::Layer { template: true, .. } = n.kind {
+            return;
+        }
+        // Symbols that hold symbols are written in full for each instance: depth alone doesn't
+        // bound how many entities that is.
+        if self.next.saturating_sub(fixed::FIRST_FREE) > MAX_ENTITIES {
+            self.warn("the drawing is too large for DXF: what follows 10 million entities was left out");
             return;
         }
         // Hidden layers are written, switched off.
@@ -449,9 +498,7 @@ impl<'a> Scene<'a> {
     fn add_layer(&mut self, n: &Node) -> String {
         let long = self.o.version.r2000();
         let base = symbol_name(n.name.as_deref().unwrap_or("Layer"), long);
-        let mut taken: Vec<&str> = self.layers.iter().map(|l| l.name.as_str()).collect();
-        taken.extend(["0", "Defpoints"]);
-        let name = unique(&base, &taken, if long { 255 } else { 31 });
+        let name = self.layer_names.unique(&base, if long { 255 } else { 31 });
         let aci = match n.kind {
             NodeKind::Layer { color, .. } => nearest_aci(color.rgb(), ColorDepth::Aci256),
             _ => 7,
@@ -852,11 +899,23 @@ impl<'a> Scene<'a> {
         let angle = b.atan2(a).to_degrees();
         for line in &layout.lines {
             let Some(glyphs) = layout.glyphs.get(line.glyph_start..line.glyph_end) else { continue };
-            for run in glyphs.chunk_by(|x, y| x.run == y.run) {
-                let Some(first) = run.first() else { continue };
+            // A list marker is a TEXT entity of its own, holding the marker's characters where its
+            // characters' glyphs are drawn (not its tab's).
+            let marked: Vec<(usize, &vectorcraft_text::PositionedGlyph, Option<&vectorcraft_text::ListMarker>)> =
+                glyphs.iter().enumerate().map(|(k, g)| (line.glyph_start + k, g, layout.marker_of(line.glyph_start + k))).collect();
+            for chunk in marked.chunk_by(|x, y| x.1.run == y.1.run && x.2.is_some() == y.2.is_some()) {
+                let run: Vec<&vectorcraft_text::PositionedGlyph> =
+                    chunk.iter().filter(|(k, _, m)| m.is_none_or(|m| m.tab != *k)).map(|(_, g, _)| *g).collect();
+                let Some(&first) = run.first() else { continue };
                 let lo = run.iter().map(|g| g.byte).min().unwrap_or(first.byte);
                 let hi = run.iter().map(|g| g.byte + g.len).max().unwrap_or(lo);
-                let Some(s) = plain.get(lo..hi).map(str::trim_end).filter(|s| !s.trim().is_empty()) else { continue };
+                // A right-to-left paragraph's marker is drawn with its tab first and its number's
+                // period at the number's left; the TEXT entity holds the characters in that order.
+                let marker = chunk.first().and_then(|(_, _, m)| *m).map(|m| match m.text.strip_suffix('.') {
+                    Some(number) if m.tab == m.glyphs.start => format!(".{number}"),
+                    _ => m.text.clone(),
+                });
+                let Some(s) = marker.as_deref().or_else(|| plain.get(lo..hi).map(str::trim_end)).filter(|s| !s.trim().is_empty()) else { continue };
                 let Some(cs) = t.runs.get(first.run).map(|r| &r.style) else { continue };
                 let paint = if cs.fill.is_none() { &cs.stroke } else { &cs.fill };
                 let Some(rgb) = self.paint_rgb(paint) else { continue };
@@ -894,9 +953,7 @@ impl<'a> Scene<'a> {
             return name.clone();
         }
         let long = self.o.version.r2000();
-        let mut taken: Vec<&str> = self.styles.iter().map(|(n, _)| n.as_str()).collect();
-        taken.push(crate::writer::STANDARD_STYLE);
-        let name = unique(&symbol_name(family, long), &taken, if long { 255 } else { 31 });
+        let name = self.style_names.unique(&symbol_name(family, long), if long { 255 } else { 31 });
         self.styles.push((name.clone(), family.to_string()));
         name
     }
@@ -907,7 +964,7 @@ impl<'a> Scene<'a> {
             self.warn(NO_IMAGES);
             return;
         }
-        let Some(i) = self.image_def(&im.key) else { return };
+        let Some(i) = self.image_def(im) else { return };
         let Some((dw, dh)) = self.images.get(i).map(|d| (f64::from(d.size.0), f64::from(d.size.1))) else { return };
         let (w, h) = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
         let map = self.to_dxf * im.xf;
@@ -949,12 +1006,13 @@ impl<'a> Scene<'a> {
         }
     }
 
-    /// The image file for image `key`, encoded once in the chosen format (`None`: left out).
-    fn image_def(&mut self, key: &str) -> Option<usize> {
+    /// The image file for image `im`, encoded once in the chosen format (`None`: left out).
+    fn image_def(&mut self, im: &ImageObject) -> Option<usize> {
+        let key = im.key.as_str();
         if let Some(i) = self.by_key.get(key) {
             return *i;
         }
-        let made = self.encode_image(key);
+        let made = self.encode_image(im);
         let i = match made {
             Ok((file, size)) => {
                 let handle = self.handle();
@@ -971,10 +1029,19 @@ impl<'a> Scene<'a> {
         i
     }
 
-    /// Image `key` as a file in the chosen format, and its size in pixels.
-    fn encode_image(&self, key: &str) -> Result<(DxfImage, (u32, u32)), String> {
-        let blob = self.doc.images.get(key).filter(|b| !b.bytes.is_empty()).ok_or_else(|| format!("image '{key}' has no pixels and was left out"))?;
-        let img = image::load_from_memory(&blob.bytes).map_err(|_| format!("image '{key}' could not be decoded and was left out"))?;
+    /// Image `im` as a file in the chosen format, and its size in pixels.
+    fn encode_image(&self, im: &ImageObject) -> Result<(DxfImage, (u32, u32)), String> {
+        let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty()).ok_or_else(|| "an image has no pixels and was left out".to_string())?;
+        // The pixels it converts to (RGBA, 4 bytes each) are read from its header before decoding.
+        let (w, h) = image::ImageReader::new(Cursor::new(blob.bytes.as_slice()))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .ok_or_else(|| UNDECODED.to_string())?;
+        if u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
+            return Err("an image is too large for DXF and was left out".to_string());
+        }
+        let img = image::load_from_memory(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
         let size = (img.width(), img.height());
         let mut bytes = vec![];
         let written = match self.o.raster {
@@ -992,7 +1059,7 @@ impl<'a> Scene<'a> {
                 rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90))
             }
         };
-        written.map_err(|e| format!("image '{key}' could not be written: {e}"))?;
+        written.map_err(|e| format!("an image could not be written: {e}"))?;
         Ok((DxfImage { name: format!("{}.{}", blob.content_key(), self.o.raster.extension()), bytes }, size))
     }
 }

@@ -47,6 +47,18 @@ fn a_variable_font_lists_its_axes() {
     assert!(db.face(FALLBACK_FAMILY, "Regular").unwrap().axes().is_empty(), "a static face");
 }
 
+/// Font menus' Font Technology › Variable: a family with variation axes is variable, the bundled
+/// static families aren't.
+#[test]
+fn a_family_with_variation_axes_is_variable() {
+    let db = db();
+    assert!(db.family_traits(FAMILY).variable);
+    assert_eq!(db.family_traits(FAMILY).class, FontClass::Sans, "its kind is read as before");
+    for family in ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"] {
+        assert!(!db.family_traits(family).variable, "{family} is static");
+    }
+}
+
 #[test]
 fn axis_settings_lay_out_and_draw_between_the_named_instances() {
     let db = db();

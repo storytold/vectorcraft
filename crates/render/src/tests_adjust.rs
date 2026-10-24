@@ -93,6 +93,7 @@ fn an_embedded_image_is_recoloured_and_the_original_pixels_stay() {
             xf: Affine::translate((20.0, 20.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     n.appearance.effects.push(hue());

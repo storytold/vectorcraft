@@ -109,6 +109,18 @@ fn shaper_interior_punch_removes_the_whole_visible_front_face() {
 }
 
 #[test]
+fn shaper_scribble_merges_a_face_narrower_than_its_sampling_step() {
+    let mut s = session();
+    rectangle(&mut s, 0.0, "#0000ff");
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": []})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 49.8, "y": 10, "width": 0.4, "height": 80})).unwrap();
+    // Every crossing of the 0.4 pt strip falls between two of the 2 pt samples.
+    let g = scribble(&mut s, &[[25.0, 20.0], [75.0, 35.0], [30.0, 50.0], [75.0, 65.0]]);
+    assert_eq!(fill(&s, g, 50.0, 50.0).as_deref(), Some("#0000ff"), "the strip merges into the face around it");
+    assert_eq!(fill(&s, g, 25.0, 50.0).as_deref(), Some("#0000ff"));
+}
+
+#[test]
 fn shaper_exiting_scribble_erases_only_touched_fill_and_boundary_strokes() {
     let mut s = session();
     rectangle(&mut s, 0.0, "#ff0000");
@@ -139,6 +151,22 @@ fn shaper_erases_only_protruding_stroke_pieces_keeps_fill_and_original_line() {
     assert!(!stroke(&s, g, 225.0, 150.0));
     assert!(stroke(&s, g, 150.0, 150.0));
     assert_eq!(node(&s, line), &original_line);
+}
+
+#[test]
+fn shaper_scribble_with_a_small_tolerance_erases_a_stroke_it_crosses_between_samples() {
+    for (tolerance, from, to) in [(0.1, 140.25, 160.25), (0.01, 50.0123, 250.0123)] {
+        let mut s = session();
+        s.execute("paint.setFill", &json!({"color":"#ffff00"})).unwrap();
+        s.execute("shape.ellipse", &json!({"x":100,"y":100,"width":100,"height":100})).unwrap();
+        s.execute("shape.line", &json!({"x1":50,"y1":150,"x2":250,"y2":150})).unwrap();
+        // No sample along the stroke lands within `tolerance` of the line at y = 150.
+        let v = s.execute("shaper.scribble", &json!({"points": [[60.0, from], [60.0, to]], "tolerance": tolerance})).unwrap();
+        assert_eq!(v["strokes"], json!(1), "tolerance {tolerance}: {v}");
+        let g = NodeId(v["id"].as_u64().unwrap());
+        assert!(!stroke(&s, g, 75.0, 150.0));
+        assert!(stroke(&s, g, 150.0, 150.0));
+    }
 }
 
 /// Export Selection crops a Shaper group to the art it shows, not to its transparent source art.

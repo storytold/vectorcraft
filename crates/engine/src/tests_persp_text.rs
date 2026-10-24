@@ -26,7 +26,7 @@ fn node(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
 /// The art the renderer and exporters draw for `id` (its outlines, projected).
 fn drawn_bounds(s: &Session, id: NodeId) -> Rect {
     let n = node(s, id);
-    vectorcraft_render::effects::reshape(&n, None).unwrap().geometric_bounds().unwrap()
+    vectorcraft_render::effects::reshape(None, &n, None).unwrap().geometric_bounds().unwrap()
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn type_in_perspective_is_projected_and_stays_type() {
     let h = n.projection().expect("drawn through a projection");
     // Really foreshortened: the right plane recedes to the right, so the letters' far end is
     // shorter than their near end.
-    let out = vectorcraft_render::effects::reshape(&n, None).unwrap();
+    let out = vectorcraft_render::effects::reshape(None, &n, None).unwrap();
     let mut pts = vec![];
     out.walk(&mut |c| {
         if let Some(p) = c.path_data() {

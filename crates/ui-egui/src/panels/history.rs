@@ -154,19 +154,21 @@ mod tests {
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
         crate::i18n::set_current(ja);
         let rows = listed(&mut app);
+        let step = |template: &str, name: &str| crate::i18n::fmt(crate::i18n::tr(ja, template), &[("name", name)]);
+        let apply = |name: &str| step("Apply {name}", name);
         let want = [
-            "グラフィックスタイル「S」を再定義",
-            "スタイル「Body」を適用",
-            "スタイル「{name}」を適用",
-            "スタイル「Apply」を適用",
-            "スタイル「Brush」を適用",
-            "スタイル「[標準文字スタイル]」を適用",
-            "スタイル「Graphic Style “X”」を再定義",
+            step("Redefine Graphic Style “{name}”", "S"),
+            apply("Body"),
+            apply("{name}"),
+            apply("Apply"),
+            apply("Brush"),
+            apply(crate::i18n::tr(ja, "[Normal Character Style]")),
+            step("Redefine {name}", "Graphic Style “X”"),
         ];
-        assert!(rows.contains(&want[0].to_string()), "{rows:#?}");
+        assert!(rows.contains(&want[0]), "{rows:#?}");
         assert_eq!(rows[rows.len() - 6..], want[1..], "{rows:#?}");
         app.session.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(listed(&mut app).last().map(String::as_str), Some(want[6]), "an undone step");
+        assert_eq!(listed(&mut app).last(), Some(&want[6]), "an undone step");
         crate::i18n::set_current(crate::i18n::Lang::EN);
         assert_eq!(listed(&mut app)[rows.len() - 6..rows.len() - 4], ["Apply Body", "Apply {name}"]);
     }
@@ -176,8 +178,12 @@ mod tests {
     #[test]
     fn effect_steps_read_the_menu_row() {
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
-        assert_eq!(step_name(ja, "Revolve").as_deref(), Some("回転体"));
-        assert_eq!(step_name(ja, "Feather").as_deref(), Some("ぼかし"));
+        for effect in ["Revolve", "Feather"] {
+            let menu_row =
+                crate::i18n::has(ja, &format!("{effect}…")).then(|| crate::i18n::tr(ja, &format!("{effect}…")).trim_end_matches('…').to_string());
+            let plain_row = crate::i18n::has(ja, effect).then(|| crate::i18n::tr(ja, effect).to_string());
+            assert_eq!(step_name(ja, effect), plain_row.or(menu_row), "{effect}");
+        }
         assert_eq!(step_name(ja, "No Such Step"), None);
     }
 

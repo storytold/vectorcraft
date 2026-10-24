@@ -7,7 +7,7 @@
 # монтажна область, шар, обведення, заливка, контур, опорна точка, зразки, пензель, виділення.
 # Shortcut key names (Shift, Alt, Ctrl, Esc), command ids and placeholders remain unchanged.
 #
-# Coverage: every menu string, tl! literal, plural, status and error message (enforced in tests).
+# Coverage: every menu string, tl! literal, plural, status and error message (`untranslated_report` lists gaps).
 # Product, language, built-in workspace and perspective preset names follow MENU_KEEP_AS_IS.
 # Keep placeholders, ellipses and leading/trailing spaces of fragments when editing.
 	Glowing Edges…	Сяйливі краї…
@@ -188,6 +188,8 @@
 	Anti-aliased Artwork	Згладжений малюнок
 	Anti-aliasing:	Згладжування:
 	Any Kind	Будь-який тип
+	Font Technology	Технологія шрифту
+font-technology	Variable	Варіативні
 	Appearance	Оформлення
 	Appearance Attribute	Атрибут оформлення
 	Appearance Item	Елемент оформлення
@@ -271,6 +273,11 @@
 	Average…	Усереднити…
 	Axis:	Вісь:
 	Background Color:	Колір тла:
+	Show Center Mark	Показати центральну позначку
+	Show Cross Hairs	Показати перехрестя
+	Show Video Safe Areas	Показати безпечні зони відео
+	Video Ruler Pixel Aspect Ratio:	Співвідношення сторін пікселя відео-лінійок:
+	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
 	Background Contents:	Вміст фону:
 	Background:	Фон:
@@ -339,6 +346,15 @@
 	Built-in presets don't change: New… starts an editable copy.	Вбудовані набори не змінюються: «Створити…» створює копію, що редагується.
 	Bulge…	Випуклість…
 	Bullet	Маркер
+	Bullets	Маркери
+	Bullets and Numbering	Маркери та нумерація
+	Apply Bullets	Застосувати маркери
+	Numbered List	Нумерований список
+	Apply Numbers	Застосувати нумерацію
+	Filled Dot	Заповнена крапка
+	Dash	Тире
+	Hollow Circle	Порожнє коло
+	Filled Square	Заповнений квадрат
 	Butt Cap	Пряме закінчення
 	Byte Order:	Порядок байтів:
 	Calligraphic	Каліграфічна
@@ -1063,6 +1079,11 @@
 	Fidelity:	Точність:
 	Figure Space	Цифрова шпація
 	Figure:	Цифри:
+# Artwork drag between document tabs.
+	Drop Artwork	Розмістити графіку
+@msg	{key} must be [x, y] with finite coordinates	{key} має бути [x, y] зі скінченними координатами
+@msg	ids must contain 1–10000 object ids	ids має містити від 1 до 10000 ідентифікаторів об’єктів
+
 	File	Файл
 	File Dimensions	Розміри файлу
 	File Format:	Формат файлу:
@@ -1085,6 +1106,7 @@
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
 	Consider Open Filled Paths as Closed	Вважати відкриті контури із заливкою замкненими
+	In Merge Mode, Clicking Stroke Splits the Path	У режимі об’єднання клацання по обведенню розділяє контур
 	Pick Color From:	Джерело кольору:
 	Artwork	Графіка
 	Cursor Swatch Preview	Зразки біля вказівника
@@ -1092,6 +1114,7 @@
 	Freeform	Довільно
 	Straight Line	Пряма лінія
 	Highlight:	Підсвічування:
+	Stroke When Editable	Обведення, яке можна редагувати
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
 	Fill Rule	Правило заливки
@@ -1378,7 +1401,7 @@ file-filter	Templates	Шаблони
 	Clear History	Очистити історію
 	Set History Limit…	Задати межу історії…
 	History States	Стан історії
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	Застосувати набір даних
 	Area Type	Текст в області
 	Bloat	Роздування
@@ -2232,7 +2255,7 @@ file-filter	Templates	Шаблони
 	Package	Упакувати
 	Package collects a saved document with its linked files and fonts.	Упаковка збирає збережений документ із його пов’язаними файлами та шрифтами.
 	Package created	Пакет створено
-	Packaged {n} file(s) in {folder}{note}	Упаковано файли: {n} {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	Упаковано файли: {n} {folder}{note}
 	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 	Package…	Упакувати…
 	Page	Сторінка
@@ -2295,7 +2318,7 @@ file-filter	Templates	Шаблони
 	Performance	Продуктивність
 diagnostics	render	відмальовування
 diagnostics	ui	інтерфейс
-	Performance & Storage	Продуктивність та зберігання
+	Plug-ins & Scratch Disks	Модулі & Робочі диски
 	Permissions	Дозволи
 	Permissions password:	Пароль дозволів:
 	Perspective	Перспектива
@@ -3087,6 +3110,7 @@ effect	Points	Точки
 	Outlines	Контури
 	Outlines with Source Image	Контури з вихідним зображенням
 	Source Image	Вихідне зображення
+	Press and hold to view the source image	Утримуйте, щоб побачити вихідне зображення
 	Image Trace View	Перегляд трасування зображення
 	Snap Options	Параметри прив’язки
 	Snap to Glyph	Прив’язати до гліфу
@@ -3109,6 +3133,7 @@ effect	Points	Точки
 	Space Before Paragraph	Інтервал перед абзацом
 	Spaces	Пробіли
 	Spacing Guides	Напрямні інтервалів
+	Invoke Distance Guides	Викликати напрямні відстаней
 	Spacing:	Інтервал:
 	Spanish	Іспанська
 	Specified Distance	Задана відстань
@@ -3246,7 +3271,6 @@ effect	Points	Точки
 	Show all open documents	Показати всі відкриті документи
 	Symbol Instance	Екземпляр символу
 	Symbol Libraries	Бібліотеки символів
-	Symbol Libraries (on the roadmap)	Бібліотеки символів (у плані розвитку)
 	Symbol Screener Tool	Інструмент «Прозорість символів»
 	Symbol Scruncher Tool	Інструмент «Стиск символів»
 	Symbol Shifter Tool	Інструмент «Зсув символів»
@@ -3375,6 +3399,13 @@ effect	Points	Точки
 	Transparent Background	Прозоре тло
 	Transverse (the page a quarter turn on the paper)	Поперечна (сторінка повернута на чверть оберту на аркуші)
 	Trap…	Трепінг…
+	Trap	Трепінг
+	Height/Width	Висота/ширина
+	Tint Reduction	Зменшення відтінку
+	Traps with Process Color	Трепінг тріадними кольорами
+	Reverse Traps	Зворотний трепінг
+	Precision	Точність
+	Remove Redundant Points	Вилучити зайві точки
 	Trim	Підрізати
 	Trim mark weight:	Товщина міток підрізування:
 	Trim marks	Мітки підрізування
@@ -3606,7 +3637,7 @@ effect	Points	Точки
 	Zoom Tool	Інструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
-	{count} file(s) in {folder}{note}. Show the package folder?	файлів: {count} {folder}{note}. Показати папку пакета?
+	{count} file(s) in {folder} {note}. Show the package folder?	файлів: {count} {folder}{note}. Показати папку пакета?
 	{count} linked file(s) not found	не знайдено пов’язаних файлів: {count}
 	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	пов’язані зображення ({count}) змінилися з моменту збереження цього документа. Показати нові версії?
@@ -3805,6 +3836,7 @@ axis	Both	Обидві
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не вдалося помістити {name}: документ, у який його перетягли, було закрито
+@msg	Couldn't place {name}: the document it was placed in was closed	Не вдалося помістити {name}: документ, у який його поміщали, було закрито
 @msg	Couldn't read {name}: {e}	Неможливо прочитати {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не вдалося зберегти дані відновлення: {e}
 @msg	Create Outlines: select text objects	Створення контурів: виділіть текстові об’єкти
@@ -3830,6 +3862,7 @@ axis	Both	Обидві
 @msg	Installed plug-in {_1}	Встановлено модуль {_1}
 @msg	Internal error: {msg} (please report this bug)	Внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Об’єднання швидкої заливки: виділіть групу швидкої заливки та контури для додавання
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Швидка заливка приймає контури та складені контури: спершу перетворіть текст, зображення й інші об'єкти на контури
 @msg	Live Paint: select paths or compound paths	Швидка заливка: виділіть контури або складені контури
 @msg	Live Paint: these paths are too degenerate to paint	Швидка заливка: ці контури занадто вироджені для заливки
 @msg	Make Guides: select paths	Створення напрямних: виділіть контури
@@ -3841,8 +3874,9 @@ axis	Both	Обидві
 @msg	Opened {url}	Відкрито {url}
 @msg	Outline Stroke: no stroked paths selected	Обведення контуру: не виділено контури з обведенням
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
+@msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msg	Packaged {n} file(s) in {folder}{note}	Упаковано файли: {n} {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	Упаковано файли: {n} {folder}{note}
 @msg	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
@@ -3895,6 +3929,12 @@ axis	Both	Обидві
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
 @msg	`{key}` must be one of {_1}	`{key}` має бути одним з: {_1}
 @msg	`{key}` must be true or false	`{key}` має бути true або false
+@msg	`select` must be true or false	`select` має бути true або false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` і `maxAnchors` мають бути цілими числами
+@msg	`{key}` must be a number not below 0	`{key}` має бути числом, не меншим за 0
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` має бути [x, y, width, height]: чотири скінченні числа, ширина й висота невід’ємні
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` більше за `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажіть принаймні один із параметрів `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
@@ -3963,6 +4003,7 @@ axis	Both	Обидві
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis має бути "vertical", "horizontal" або кутом у градусах, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: transparent, white, black або колір, наприклад "#ff8800"
 @msg	bad color {v}	неприпустимий колір {v}
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
@@ -4013,7 +4054,7 @@ axis	Both	Обидві
 @msg	give the path `id` and the width point `index`	вкажіть `id` контуру та `index` точки ширини
 @msg	guides are locked	напрямні заблоковані
 @msg	handle must be in or out	handle має бути in або out
-@msg	image '{key}' has no pixels and was left out	зображення '{key}' не має пікселів і було пропущено
+@msg	an image has no pixels and was left out	зображення без пікселів пропущено
 @msg	image data `{_1}` is missing	дані зображення `{_1}` відсутні
 @msg	image would be too large; lower the resolution	зображення буде завеликим; зменште роздільну здатність
 @msg	index must be a number or first, previous, next or last	index має бути числом або first, previous, next, last
@@ -4040,7 +4081,7 @@ axis	Both	Обидві
 @msg	missing index	відсутня index
 @msg	missing number `{key}`	відсутнє число `{key}`
 @msg	missing integer `{key}`	відсутнє ціле число `{key}`
-@msg	multiple windows land with M11.5	кілька вікон з’являться в M11.5
+@msg	New Window isn't available yet: a document opens in one window	Нове вікно поки недоступне: документ відкривається в одному вікні
 @msg	name the file	дайте файлу ім’я
 @msg	no CSS to copy: select objects with CSS of their own	ні CSS для копіювання: виділіть об’єкти з власним CSS
 @msg	no Live Paint edge near that point	поряд з цією точкою немає межі швидкої заливки
@@ -4079,6 +4120,7 @@ axis	Both	Обидві
 @msg	no file system here	тут немає файлової системи
 @msg	no file writer	немає засобу запису файлів
 @msg	no files to place	немає файлів для розміщення
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` не є документом VectorCraft, PDF або файлом .ai, сумісним із PDF
 @msg	no format to export to	немає формату для експорту
 @msg	no free recovery area	немає вільної області відновлення
 @msg	no gradient stop or freeform point is selected	не виділено ні точку переходу градієнта, ні довільну точку
@@ -4171,6 +4213,7 @@ axis	Both	Обидві
 @msg	path is already closed	контур вже замкнутий
 @msg	paths contain invalid coordinates	контури містять неприпустимі координати
 @msg	paths: give at least one file	paths: вкажіть щонайменше один файл
+@msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
 @msg	percent must be above 0 and at most 6400, not {p}	відсоток має бути більше 0 і не більше 6400, а не {p}
@@ -4330,6 +4373,7 @@ axis	Both	Обидві
 @msg	unsupported: {0}	не підтримується: {0}
 @msg	variables are locked	змінні заблоковані
 @msg	variables that aren't text were left out: {kinds}	змінні, що не є текстовими, пропущено: {kinds}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` і `options.{key}: {inner}` суперечать одне одному: вкажіть параметр лише один раз
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файли версії {0} не можуть бути стиснуті: тільки версія {COMPRESSED_SINCE} і новіші відкривають стислі файли
 @msg	width and height are at least 1 pixel	ширина та висота повинні бути не менше 1 пікселя
 @msg	workspace name can't be empty	ім’я робочого середовища не може бути порожнім
@@ -4341,7 +4385,9 @@ axis	Both	Обидві
 @msg	{_1} font families available	доступно сімейства шрифтів: {_1}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} - динамічний ефект (Ефект › Модулі)
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} - модуль експорту (Файл › Експорт › Експортувати як…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` займає {size} байт (межа {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
+@msg	{_1} is reserved by the system	Сполучення {_1} зарезервоване системою
 @msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
 @msg	Updated {_1} linked file(s) changed on disk	Оновлено пов’язаних файлів, змінених на диску: {_1}
@@ -4370,6 +4416,8 @@ axis	Both	Обидві
 @msg	Saving	Збереження
 @msg	Saving {_1}	Збереження {_1}
 @msg	Exporting {_1}	Експорт {_1}
+@msg	Packaging {_1}	Пакування {_1}
+@msg	Placing {_1}	Розміщення {_1}
 @msg	Saving recovery data for {_1}	Збереження даних відновлення для {_1}
 @msg	Discarded {_1} recovered document(s)	Скасовано відновлених документів: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Відновлено документів: {_1}: збережіть їх, щоб залишити
@@ -4473,10 +4521,14 @@ axis	Both	Обидві
 @msg	{key} must be an array of non-negative integer object ids	{key} має бути масивом ідентифікаторів об’єктів, які є невід’ємними цілими числами
 @msg	invalid object id {value}: expected a non-negative integer	неприпустимий ідентифікатор об’єкта {value}: очікується невід’ємне ціле число
 @msg	no such object id {value}	об’єкт з ідентифікатором {value} не існує
+@msg	id {value} is a layer, not an object	ідентифікатор {value} належить шару, а не об’єкту
+@msg	id {value} is a layer, not an object; move layers with layer.move	ідентифікатор {value} належить шару, а не об’єкту; переміщуйте шари за допомогою layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на читання: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для читання {root}: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для читання {roots}: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній
 @msg	automation path rejected: a link that leads nowhere: {path}	шлях автоматизації відхилено: посилання, яке нікуди не веде: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	шлях автоматизації відхилено: не вдається визначити {path}: {e}
@@ -4876,6 +4928,10 @@ lighting	Light	Світло
 	Halftone Pattern	Напівтоновий візерунок
 	Torn Edges…	Порвані краї…
 	Torn Edges	Порвані краї
+	Conté Crayon…	Крейда Конте…
+	Conté Crayon	Крейда Конте
+	Foreground Level	Рівень переднього плану
+	Background Level	Рівень тла
 	Pattern Type	Тип візерунка
 	Dot	Крапка
 # User Interface › Color Scheme
@@ -4927,11 +4983,19 @@ lighting	Light	Світло
 @msg	Persistent libraries not found: {files}	Постійні бібліотеки не знайдено: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` — не панель бібліотеки (див. window.swatchLibrary)
 @msg	library panel `{given}` isn't open	панель бібліотеки `{given}` не відкрита
+@msg	too many changed shortcuts	забагато змінених поєднань
+@msg	library panel `{given}` isn't missing its library	бібліотека панелі бібліотеки `{given}` не відсутня
 @msg	too many library panels were opened in this session	у цьому сеансі відкрито забагато панелей бібліотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Зображення {_1} × {_2} пікселів, понад {LARGE_TRACE_SIDE} з одного боку: трасування виконується, але повільніше. Стиль із нижчою точністю або менша копія зображення трасуються швидше.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Зображення трасовано в розмірі {_1} × {_2} пікселів, зменшене з {_3} × {_4} (щонайбільше {_5} мегапікселів).
+	Snapping	Прив’язка
+	Snap to Tangent	Прив’язати до дотичної
+	Snap to Perpendicular	Прив’язати до перпендикуляра
+@msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Режим «Плоский логотип» трасував зображення в розмірі {_1} × {_2} пікселів, зменшене усередненням з {_3} × {_4}.
 	Artboard {n} of {total}	Монтажна область {n} з {total}
+	File {n} of {total}	Файл {n} з {total}
 	Encoding and writing the file…	Кодування та запис файлу…
 @plural	{n} more export waiting|{n} more exports waiting	Ще {n} експорт в очікуванні|Ще {n} експорти в очікуванні|Ще {n} експортів в очікуванні
 	Continue in Background	Продовжити у фоні
@@ -4948,6 +5012,14 @@ lighting	Light	Світло
 	Minimum must not exceed Desired, nor Desired Maximum.	Мінімум не може перевищувати бажане значення, а бажане — максимум.
 	Minimum	Мінімум
 	Justification	Вирівнювання за шириною
+	Add filters from the list above	Додайте фільтри зі списку вище
+	Add to Stack	Додати до стека
+	Applied Filters	Застосовані фільтри
+	Categories	Категорії
+	Choose a filter	Виберіть фільтр
+	Effect Gallery	Галерея ефектів
+	Filters	Фільтри
+	Select artwork to apply effects	Виберіть графіку, щоб застосувати ефекти
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	змінні та набори даних файлу не прочитано (змінних: {variables}, наборів даних: {data_sets}): панель «Змінні» їх не показує
 # Select by Color (select.color)
 	Select by Color	Виділити за кольором
@@ -4973,6 +5045,7 @@ lighting	Light	Світло
 	Water Paper	Мокрий папір
 	Ruby…	Рубі…
 	Ruby	Рубі
+	Geometric Guides	Геометричні напрямні
 	Ease In	Плавний початок
 	Ease Out	Плавне завершення
 	Ease In Out	Плавний початок і завершення
@@ -4987,3 +5060,94 @@ lighting	Light	Світло
 	Lock All Except Selected	Заблокувати всі, крім вибраних
 	Lock All	Заблокувати всі
 	Unlock Selected	Розблокувати вибрані
+	Effect Gallery…	Галерея ефектів…
+	Effect Gallery Dialog	Діалог «Галерея ефектів»
+	Arc Segment Tool Options	Параметри інструменту «Дуговий сегмент»
+	Base Along:	Основа вздовж:
+	Closed	Замкнений
+	Concave	Увігнутий
+	Convex	Опуклий
+	Fill Arc	Заливка дуги
+	Length X-Axis:	Довжина вздовж осі X:
+	Length Y-Axis:	Довжина вздовж осі Y:
+	Slope:	Ухил:
+axis	X Axis	Вісь X
+axis	Y Axis	Вісь Y
+@msg	Packaged {n} file(s) in {folder}	Упаковано файли: {n} {folder}
+@msg	Packaged {n} file(s) {note}	Упаковано файли: {n} {note}
+@msg	Packaged {n} file(s)	Упаковано файли: {n}
+	Packaged {n} file(s)	Упаковано файли: {n}
+	Packaged {n} file(s) in {folder}	Упаковано файли: {n} {folder}
+	Packaged {n} file(s) {note}	Упаковано файли: {n} {note}
+	{count} file(s) in {folder}. Show the package folder?	файлів: {count} {folder}. Показати папку пакета?
+	Clockwise	За годинниковою стрілкою
+	Dither	Дизеринг
+	Fine noise hides banding in the gradient fill	Дрібний шум приховує смуги в градієнтній заливці
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` застосовується до градієнтних заливок (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` застосовується до градієнтних заливок (paint.setFill)
+@msg	`dither` must be true or false	`dither` має бути true або false
+	Perceptual	Перцептивний
+@msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	Встановити «{name}», якому потрібен великий обчислювальний бюджет?
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Кожен запуск може тривати до {minutes} хвилин і виконувати в {times} разів більше роботи, ніж дозволено іншим модулям. Він працює у фоні, і його можна скасувати.
+	It may take minutes, so it runs in the background, where you can cancel it.	Це може тривати кілька хвилин, тож модуль працює у фоні, де його можна скасувати.
+	The plug-in is computing…	Модуль виконує обчислення…
+	Inspect Plug-in	Перевірити модуль
+	Cancel Plug-in Run	Скасувати запуск модуля
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершився, але документ або модуль тим часом змінився: запустіть його знову
+@msg	Running “{name}”…	Виконується «{name}»…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): встановіть його з `allowHeavy: true`, коли користувач погодиться
+# Actions panel: action sets (#3712).
+	New Set…	Новий набір…
+	New Set	Новий набір
+	Set Options…	Параметри набору…
+	Set Options	Параметри набору
+	Create New Set	Створити новий набір
+	Stop Global Edit	Завершити глобальне редагування
+	Global Edit Options	Параметри глобального редагування
+	Match	Збіг
+	On Artboards	На монтажних областях
+	All Artboards	Усі монтажні області
+	Include Objects On Canvas	Включати об’єкти на полотні
+	Result(s): {count}	Результати: {count}
+@msg	select one object	виберіть один об’єкт
+@msg	Global Edit works on paths, compound paths and symbol instances	Глобальне редагування працює з контурами, складеними контурами та екземплярами символів
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
+	Add to Symbols	Додати до символів
+	Basic Shapes	Базові фігури
+	Open Symbol Library	Відкрити бібліотеку символів
+	Save Symbol Library	Зберегти бібліотеку символів
+	Save Symbol Library…	Зберегти бібліотеку символів…
+	Save Symbols…	Зберегти символи…
+	Selected Symbols Only	Тільки вибрані символи
+	Symbol Libraries Menu	Меню "Бібліотеки символів"
+	Symbol Library	Бібліотека символів
+	User Symbol Library 1	Користувацька бібліотека символів 1
+	User Symbol Library 2	Користувацька бібліотека символів 2
+	User Symbol Library 3	Користувацька бібліотека символів 3
+	User Symbol Library 4	Користувацька бібліотека символів 4
+	User Symbol Library 5	Користувацька бібліотека символів 5
+	User Symbol Library 6	Користувацька бібліотека символів 6
+	User Symbol Library 7	Користувацька бібліотека символів 7
+	User Symbol Library 8	Користувацька бібліотека символів 8
+	User Symbol Library 9	Користувацька бібліотека символів 9
+	User Symbol Library 10	Користувацька бібліотека символів 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	У `{_1}` немає символів для розміщення
+@msg	missing `library` (see symbol.libraries)	не вказано `library` (див. symbol.libraries)
+@msg	no symbol `{n}`	немає символу `{n}`
+@msg	no symbol `{n}` in `{_1}`	немає символу `{n}` у `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	немає бібліотеки символів `{key}` (див. symbol.libraries)
+@msg	the document has no symbols to save	у документі немає символів для збереження
+@msg	Trap: select two or more objects filled with solid colours	Трепінг: виберіть два або більше об’єктів із суцільною заливкою
+@msg	Trap: no edges of different colours meet among the selected objects	Трепінг: серед вибраних об’єктів немає дотичних країв різних кольорів
+@msg	thickness must be from 0.01 to 5000 pt	thickness має бути від 0,01 до 5000 pt
+@msg	heightWidth must be from 1 to 1000 %	heightWidth має бути від 1 до 1000 %
+@msg	tintReduction must be from 0 to 100 %	tintReduction має бути від 0 до 100 %
+	Rectangular Grid Tool Options	Параметри інструменту «Прямокутна сітка»
+	Polar Grid Tool Options	Параметри інструменту «Полярна сітка»
+	Fill Line	Заливка відрізка

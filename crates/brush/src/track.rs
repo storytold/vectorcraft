@@ -156,6 +156,9 @@ impl Track {
     }
 }
 
+/// The most flattened elements of a path kept.
+const MAX_FLATTENED: usize = 4_000_000;
+
 /// Flatten `bp` into tracks (one per subpath) with `tol` accuracy.
 pub fn tracks(bp: &BezPath, tol: f64) -> Vec<Track> {
     let mut out = vec![];
@@ -165,8 +168,20 @@ pub fn tracks(bp: &BezPath, tol: f64) -> Vec<Track> {
             out.push(t);
         }
     };
+    // Far outside any drawing a curve flattens to millions of points; past a few million, the
+    // rest are not kept.
+    let b = bp.control_box();
+    let extent = b.x0.abs().max(b.x1.abs()).max(b.y0.abs()).max(b.y1.abs());
+    // NaN coordinates must be rejected too, so keep the negation of the `<=` check.
+    if extent.is_nan() || extent > 1e9 {
+        return out;
+    }
     let mut els = vec![];
-    kurbo::flatten(bp.iter(), tol.max(1e-4), |el| els.push(el));
+    kurbo::flatten(bp.iter(), tol.max(1e-4), |el| {
+        if els.len() < MAX_FLATTENED {
+            els.push(el);
+        }
+    });
     for el in els {
         match el {
             PathEl::MoveTo(p) => {

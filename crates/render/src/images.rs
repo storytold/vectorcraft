@@ -157,6 +157,12 @@ impl ImageStore {
         }
     }
 
+    /// Bytes of the entries someone besides the store holds (images being painted): eviction can't
+    /// free them.
+    pub(crate) fn pinned_bytes(&self) -> usize {
+        self.entries.values().filter(|e| Arc::strong_count(&e.pm) > 1).map(|e| pixmap_bytes(&e.pm)).sum()
+    }
+
     pub(crate) fn set_budget(&mut self, budget: usize) {
         self.budget = budget;
         self.evict();

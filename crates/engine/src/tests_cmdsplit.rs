@@ -77,6 +77,12 @@ fn leaf_targets_expand_groups_and_stop_at_compound_paths() {
     s.execute("select.set", &json!({"ids": [c.0, d.0]})).unwrap();
     let comp = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
     assert_eq!(leaf_targets(&s, &[comp]).unwrap(), vec![comp]);
+    // A member stands for its compound path, listed once (#3692).
+    let members: Vec<NodeId> = s.doc().unwrap().doc.node(comp).unwrap().children().into_iter().flatten().map(|m| m.id).collect();
+    assert_eq!(members.len(), 2);
+    assert_eq!(leaf_targets(&s, &[members[0]]).unwrap(), vec![comp]);
+    assert_eq!(leaf_targets(&s, &[members[0], comp, members[1]]).unwrap(), vec![comp]);
+    assert_eq!(leaf_targets(&s, &[members[1], members[0]]).unwrap(), vec![comp]);
     // `paint_targets` reads `ids`, then `id`, then the selection.
     assert_eq!(paint_targets(&s, &json!({"ids": [g.0]})).unwrap(), vec![a, b]);
     assert_eq!(paint_targets(&s, &json!({"id": comp.0})).unwrap(), vec![comp]);

@@ -33,14 +33,14 @@ fn fill_gradient(s: &Session, id: NodeId) -> GradientPaint {
 /// A three-stop freeform gradient with a 0.3 midpoint, partial opacity and a placed vector.
 fn three_stops() -> GradientPaint {
     let stop = |offset, color, opacity, midpoint| GradientStop { opacity, midpoint, ..GradientStop::new(offset, color) };
-    let mut g = GradientPaint::new(Gradient {
-        kind: GradientKind::Freeform,
-        stops: vec![
+    let mut g = GradientPaint::new(Gradient::new(
+        GradientKind::Freeform,
+        vec![
             stop(0.0, Color::rgb(1.0, 0.0, 0.0), 1.0, 0.3),
             stop(0.4, Color::cmyk(0.1, 0.2, 0.3, 0.4), 0.5, 0.5),
             stop(1.0, Color::gray(0.25), 0.75, 0.5),
         ],
-    });
+    ));
     g.geom = Some(GradientGeom { start: Point::new(10.0, 20.0), end: Point::new(110.0, 70.0), aspect: 0.5, focal: None });
     g.angle = g.geom.unwrap().angle_deg();
     g
@@ -94,6 +94,33 @@ fn bad_gradients_are_rejected_without_editing() {
     }
     assert_eq!(node(&s, id).appearance, before);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+/// The gradient commands refuse a `reverse` or `stroke` that is not true or false, and an `angle`
+/// or a stop's `tint` that is not a number, given as text or as another value of the wrong kind:
+/// the object and the undo history stay as they were. True, false, numbers and null still work.
+#[test]
+fn gradient_commands_refuse_a_number_or_boolean_given_as_text() {
+    use super::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    let red = s.execute("swatch.new", &json!({"color": "#ff0000", "global": true})).unwrap()["name"].clone();
+    let stops = |tint: Value| json!([{"offset": 0, "color": "#ff0000", "swatch": red, "tint": tint}, {"offset": 1, "color": "#000000"}]);
+    let calls = [
+        not_a_switch("paint.editGradient", json!({"reverse": "true"}), "reverse"),
+        not_a_switch("paint.editGradient", json!({"angle": 45, "stroke": "false"}), "stroke"),
+        not_a_switch("paint.setGradientGeom", json!({"aspect": 50, "stroke": 0}), "stroke"),
+        not_a_number("paint.editGradient", json!({"angle": "45"}), "angle"),
+        ("paint.setFill".to_string(), json!({"gradient": {"angle": "45"}}), "`angle` must be a number, not \"45\"".to_string()),
+        ("paint.editGradient".to_string(), json!({"stops": stops(json!("50"))}), "stop 0: `tint` must be a number".to_string()),
+        ("paint.setFill".to_string(), json!({"gradient": {"stops": stops(json!([50]))}}), "stop 0: `tint` must be a number".to_string()),
+    ];
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("paint.editGradient", &json!({"angle": 30, "reverse": false, "stroke": null, "stops": stops(json!(50))})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert_eq!((g.angle, g.gradient.stops[0].tint), (30.0, 0.5));
 }
 
 #[test]
@@ -375,4 +402,125 @@ fn swatches_and_new_art_fit_a_placed_gradient_to_themselves() {
     let (_, doc) = node(&s, t).proxy_gradient(false, None).unwrap();
     let tb = node(&s, t).geometric_bounds().unwrap();
     assert!(doc.start.distance(tb.center()) < 1e-9 && (doc.aspect - 0.5).abs() < 1e-9, "{doc:?} on {tb:?}");
+}
+
+/// Dither (Illustrator 30's Gradient panel checkbox): set and cleared through the gradient
+/// commands, refused on strokes (it applies to fills), kept by swatches, the params and a native
+/// save and load.
+#[test]
+fn dither_is_a_fill_gradient_option_that_saves_and_loads() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    assert!(!fill_gradient(&s, id).gradient.dither, "off by default");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.editGradient", &json!({"dither": true})).unwrap();
+    assert!(fill_gradient(&s, id).gradient.dither);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // The params carry it, so a swatch and a copied paint keep it.
+    let g = fill_gradient(&s, id);
+    assert_eq!(vectorcraft_tools::params::gradient_params(&g)["dither"], json!(true));
+    let mut q = gradient_param(&g);
+    q["name"] = json!("Smooth");
+    s.execute("swatch.new", &q).unwrap();
+    let Some(Paint::Gradient(sw)) = s.doc().unwrap().doc.swatch("Smooth").map(|w| w.paint.clone()) else { panic!("a gradient swatch") };
+    assert!(sw.gradient.dither);
+    // Saved and opened again.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+    assert!(saved.gradient.dither, "the native file keeps dither");
+    // Written only when on, so files without it (older ones) open with it off.
+    assert_eq!(serde_json::to_value(&saved.gradient).unwrap()["dither"], json!(true));
+    assert!(serde_json::to_value(Gradient::default()).unwrap().get("dither").is_none());
+    let old: Gradient = serde_json::from_value(json!({"kind": "Linear", "stops": []})).unwrap();
+    assert!(!old.dither);
+    s.execute("paint.editGradient", &json!({"dither": false})).unwrap();
+    assert!(!fill_gradient(&s, id).gradient.dither);
+    // Strokes: refused, nothing changed.
+    s.execute("paint.setStroke", &json!({"gradient": {}})).unwrap();
+    let before = node(&s, id).appearance.clone();
+    assert!(s.execute("paint.editGradient", &json!({"dither": true, "stroke": true})).is_err());
+    assert!(s.execute("paint.setStroke", &json!({"gradient": {"dither": true}})).is_err());
+    assert!(s.execute("paint.setStroke", &json!({"swatch": null, "gradient": {"dither": true}})).is_err(), "a null swatch names none");
+    assert!(s.execute("paint.editGradient", &json!({"dither": "yes"})).is_err());
+    assert!(s.execute("paint.setFill", &json!({"gradient": {"dither": 1}})).is_err());
+    assert_eq!(node(&s, id).appearance, before);
+}
+
+/// A stroke ignores dither, so one that holds it anyway (swapped from a fill) outlines to a fill
+/// without it: Outline Stroke keeps the look.
+#[test]
+fn an_outlined_stroke_leaves_dither_behind() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setStroke", &json!({"gradient": {}})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"dither": true}})).unwrap();
+    s.execute("paint.swap", &json!({})).unwrap();
+    let Paint::Gradient(st) = node(&s, id).appearance.stroke_paint() else { panic!("a gradient stroke") };
+    assert!(st.gradient.dither, "the swapped stroke keeps the option");
+    s.execute("object.path.outlineStroke", &json!({})).unwrap();
+    let mut fills = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.fill_paint() {
+            fills.push(g.gradient.dither);
+        }
+    });
+    assert_eq!(fills, [false, false], "the fill and the outline, neither dithered");
+}
+
+/// The Gradient panel's Method (Illustrator 30): `method` set and cleared through the gradient
+/// commands, on fills and strokes, kept by the params, swatches and a native save and load;
+/// anything but classic or perceptual is refused without editing.
+#[test]
+fn method_is_a_gradient_option_that_saves_and_loads() {
+    use vectorcraft_color::GradientMethod;
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let stops = json!([{"offset": 0, "color": "#0000ff"}, {"offset": 1, "color": "#ffff00"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": stops}})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.method, GradientMethod::Classic, "classic by default");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.editGradient", &json!({"method": "perceptual"})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert_eq!(g.gradient.method, GradientMethod::Perceptual);
+    assert_eq!(g.gradient.stops.len(), 2, "the stops stay as they were");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // The params carry it, so a swatch and a copied paint keep it.
+    assert_eq!(vectorcraft_tools::params::gradient_params(&g)["method"], json!("perceptual"));
+    let mut q = gradient_param(&g);
+    q["name"] = json!("Even");
+    s.execute("swatch.new", &q).unwrap();
+    let Some(Paint::Gradient(sw)) = s.doc().unwrap().doc.swatch("Even").map(|w| w.paint.clone()) else { panic!("a gradient swatch") };
+    assert_eq!(sw.gradient.method, GradientMethod::Perceptual);
+    // Saved and opened again.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+    assert_eq!(saved.gradient.method, GradientMethod::Perceptual, "the native file keeps the method");
+    // Strokes take it too.
+    s.execute("paint.setStroke", &json!({"gradient": {"method": "perceptual"}})).unwrap();
+    let Paint::Gradient(st) = node(&s, id).appearance.stroke_paint() else { panic!("a gradient stroke") };
+    assert_eq!(st.gradient.method, GradientMethod::Perceptual);
+    s.execute("paint.editGradient", &json!({"method": "classic", "stroke": true})).unwrap();
+    let Paint::Gradient(st) = node(&s, id).appearance.stroke_paint() else { panic!("a gradient stroke") };
+    assert_eq!(st.gradient.method, GradientMethod::Classic);
+    // Bad values: refused, nothing changed.
+    let before = node(&s, id).appearance.clone();
+    for bad in [json!("smooth"), json!(1), json!(true)] {
+        let e = s.execute("paint.editGradient", &json!({"method": bad})).unwrap_err().to_string();
+        assert!(e.contains("`method` must be classic or perceptual"), "{e}");
+        assert!(s.execute("paint.setFill", &json!({"gradient": {"method": bad}})).is_err());
+    }
+    assert_eq!(node(&s, id).appearance, before);
+    s.execute("paint.editGradient", &json!({"method": "Classic", "stroke": false})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.method, GradientMethod::Classic);
+    assert!(vectorcraft_tools::params::gradient_params(&fill_gradient(&s, id)).get("method").is_none());
+    // With dither: one edit sets both, and the params carry both back.
+    s.execute("paint.editGradient", &json!({"method": "perceptual", "dither": true, "stroke": false})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert!(g.gradient.dither && g.gradient.method == GradientMethod::Perceptual);
+    let p = vectorcraft_tools::params::gradient_params(&g);
+    assert_eq!((&p["method"], &p["dither"]), (&json!("perceptual"), &json!(true)));
+    s.execute("paint.setFill", &json!({"gradient": p})).unwrap();
+    let back = fill_gradient(&s, id);
+    assert!(back.gradient.dither && back.gradient.method == GradientMethod::Perceptual);
 }

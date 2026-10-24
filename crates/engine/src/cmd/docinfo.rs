@@ -101,10 +101,10 @@ type ImageRow = (String, u32, u32, Option<String>);
 /// A Repeat object as Document Info lists it: its `repeatObjects` entry, and its row, which gives
 /// its name and then its kind with the number of instances it draws (for a grid, its rows and
 /// columns, followed by the number it draws when that is fewer).
-fn repeat_entry(n: &Node, spec: &RepeatSpec) -> (Value, (String, String)) {
+fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, String)) {
     let name = n.display_name();
     let count = |n: usize, one: &str, many: &str| if n == 1 { format!("1 {one}") } else { format!("{n} {many}") };
-    let instances = spec.instances();
+    let instances = spec.instances(Some(d));
     let mut entry = json!({ "id": n.id.0, "name": name, "instances": instances });
     let kind = &spec.kind;
     let detail = match kind {
@@ -377,7 +377,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             if let NodeKind::Repeat(spec) = &n.kind {
-                let (entry, row) = repeat_entry(n, spec);
+                let (entry, row) = repeat_entry(d, n, spec);
                 repeats.push(entry);
                 repeat_rows.push(row);
             }
@@ -436,8 +436,11 @@ fn snap_xf(b: Rect, half: bool) -> Affine {
 }
 
 fn pixel_perfect(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids: Vec<NodeId> =
-        if p.get("ids").is_some() { super::edit::outermost(&s.doc()?.doc, targets(s, p)?) } else { super::edit::selected_roots(s)? };
+    let ids: Vec<NodeId> = if p.get("ids").is_some() || p.get("id").is_some() {
+        super::edit::outermost(&s.doc()?.doc, targets(s, p)?)
+    } else {
+        super::edit::selected_roots(s)?
+    };
     let n = ids.len();
     s.edit("Make Pixel Perfect", |d, _| {
         for id in &ids {

@@ -30,15 +30,23 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             flare
         ),
-        cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2} → {id}", has_doc, line),
+        cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
         cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
-        cmd!("shape.arc", "Arc", [], None, "{x1, y1, x2, y2, closed?} → {id}", has_doc, arc),
+        cmd!(
+            "shape.arc",
+            "Arc",
+            [],
+            None,
+            "{x1, y1, x2, y2, closed?, slope?} or {x, y, lengthX, lengthY, reference?, baseAlong?: x|y, slope?, closed?, fillArc?} → {id}",
+            has_doc,
+            arc
+        ),
         cmd!(
             "shape.rectangularGrid",
             "Rectangular Grid",
             [],
             None,
-            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none)} → {id}",
+            "{x, y, width, height, rows=5, columns=5, rowSkew=0, columnSkew=0 (−500…500 %: + crowds the horizontal dividers toward the top, the vertical ones toward the right), frame=true (the outside as one rectangle, else its four sides), fill=false (the current fill, else none), rotation?: deg (about centre)} → {id}",
             has_doc,
             rect_grid
         ),
@@ -47,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polar Grid",
             [],
             None,
-            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none)} → {id}",
+            "{x, y, width, height, concentric=5, radial=5, concentricSkew=0, radialSkew=0 (−500…500 %: + crowds the ellipses toward the outside, the radial dividers clockwise of the top one), compound=false (the ellipses pair up into compound-path rings), fill=false (the current fill, else none), rotation?: deg (about centre)} → {id}",
             has_doc,
             polar_grid
         ),
@@ -65,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Drawing Mode",
             [],
             Some("Shift+D"),
-            "{mode?: normal|behind|inside} (no param cycles; inside needs one selected path)",
+            "{mode?: normal|behind|inside} (inside needs one selected path, compound path or type; no param cycles normal → behind → inside → normal, going from behind back to normal when Draw Inside can't draw into the selection; when the Draw Inside target is isolated, drawing or pasting into it moves isolation to its clip group)",
             has_doc,
             draw_mode
         ),
@@ -74,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style?, color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -88,11 +96,6 @@ pub(crate) fn add_art(s: &mut Session, label: &str, kind: NodeKind, name: Option
     add_look(s, label, kind, look, name)
 }
 
-/// [`add_look`] with just `appearance`.
-pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance: Appearance, name: Option<String>) -> Result<Value> {
-    add_look(s, label, kind, NewArt::plain(appearance), name)
-}
-
 /// Insert a new object looking like `look` (drawing modes apply); select it.
 pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
     insert_look(s, label, kind, look, name, true)
@@ -101,35 +104,63 @@ pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewAr
 /// [`add_look`] that selects the new object only when `select` is set; otherwise the selection
 /// stays as it was.
 pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>, select: bool) -> Result<Value> {
+    insert_look_turned(s, label, kind, look, name, select, 0.0)
+}
+
+/// [`add_art`] for an object made turned by a `rotation` param (degrees, clockwise on the page):
+/// its bounding box turns with it, as after the Rotate tool.
+fn add_art_turned(s: &mut Session, label: &str, kind: NodeKind, rotation: f64) -> Result<Value> {
+    let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    insert_look_turned(s, label, kind, look, None, true, bbox_turn(rotation))
+}
+
+/// The bounding-box angle (counter-clockwise, as `Node::bbox_angle` and the Rotate tool keep it)
+/// of an object made with the clockwise `rotation` param: 0 exactly for none, a whole turn or a
+/// non-finite angle, so such objects are as they were.
+fn bbox_turn(rotation: f64) -> f64 {
+    if !rotation.is_finite() {
+        return 0.0;
+    }
+    let a = vectorcraft_geom::normalize_deg(-rotation);
+    if a == 0.0 { 0.0 } else { a }
+}
+
+/// A polygon's or star's `rotation` when it is the base orientation turned by General › Constrain
+/// Angle (a Shift-drawn or click-made one), so its bounding box turns with it; else 0: a polygon
+/// turned by the drag's direction keeps its box on the page's axes, as before.
+fn constrained_turn(s: &Session, rotation: f64) -> f64 {
+    match vectorcraft_geom::constrain_rotation(s.prefs.constrain_angle) {
+        Some(r) if rotation.is_finite() && vectorcraft_geom::normalize_deg(r - rotation).abs() < 1e-9 => rotation,
+        _ => 0.0,
+    }
+}
+
+/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`.
+fn insert_look_turned(
+    s: &mut Session,
+    label: &str,
+    kind: NodeKind,
+    look: NewArt,
+    name: Option<String>,
+    select: bool,
+    bbox_angle: f64,
+) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
     let mode = s.draw_mode;
     let inside = s.draw_inside;
     let behind_of = s.doc()?.selection.in_paint_order(&s.doc()?.doc).first().copied();
-    let id = s.edit(label, |d, sel| {
+    let (id, into) = s.edit(label, |d, sel| {
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
         look.apply(d, &mut n);
         n.name = name;
+        n.bbox_angle = bbox_angle;
+        let mut into = None;
         match (mode, inside) {
             (crate::DrawMode::Inside, Some(target)) if d.node(target).is_some() => {
-                // Wrap the target once in a clip group [mask copy, target, …new art].
-                let group = match d.parent_of(target).and_then(|p| d.node(p).map(|pn| (p, pn.kind.clone()))) {
-                    Some((p, NodeKind::Group { clip: true, children })) if children.get(1).is_some_and(|c| c.id == target) => p,
-                    _ => {
-                        let (par, idx, _) = d.position(target).ok_or(crate::EngineError::NoNode(target))?;
-                        let mut mask = d.node(target).cloned().ok_or(crate::EngineError::NoNode(target))?;
-                        mask.id = d.alloc_id();
-                        mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0).into();
-                        if let NodeKind::Path { clipping, .. } = &mut mask.kind {
-                            *clipping = true;
-                        }
-                        let gid = d.alloc_id();
-                        d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
-                        d.move_node(target, Some(gid), usize::MAX)?;
-                        gid
-                    }
-                };
+                let group = draw_inside_group(d, target)?;
                 d.insert(Some(group), usize::MAX, n)?;
+                into = Some((target, group));
             }
             (crate::DrawMode::Behind, _) => match behind_of.and_then(|b| d.position(b)) {
                 Some((par, idx, _)) => {
@@ -146,9 +177,61 @@ pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: Ne
         if select {
             sel.set([id]);
         }
-        Ok(id)
+        Ok((id, into))
     })?;
+    if let Some((target, group)) = into {
+        isolate_draw_inside_group(s, target, group)?;
+    }
     Ok(json!({ "id": id.0 }))
+}
+
+/// Draw Inside's clip group for `target`, the object new art goes inside: the clip group
+/// [mask copy, target, …] `target` already is the clipped object of, else one made where `target`
+/// was, holding an unpainted clipping copy of it and then `target`. New art and pastes go on top
+/// of its children.
+pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeId) -> Result<NodeId> {
+    if let Some(p) = d.parent_of(target)
+        && d.node(p).is_some_and(|pn| matches!(&pn.kind, NodeKind::Group { clip: true, children } if children.get(1).is_some_and(|c| c.id == target)))
+    {
+        return Ok(p);
+    }
+    let (par, idx, _) = d.position(target).ok_or(crate::EngineError::NoNode(target))?;
+    // The mask is a copy with ids of its own, its subpaths' too (a compound path's).
+    let original = d.node(target).cloned().ok_or(crate::EngineError::NoNode(target))?;
+    let mut mask = d.reid(&original);
+    mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0).into();
+    if let NodeKind::Path { clipping, .. } = &mut mask.kind {
+        *clipping = true;
+    }
+    let gid = d.alloc_id();
+    d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
+    d.move_node(target, Some(gid), usize::MAX)?;
+    // Copied type whose layout caches `reid` dropped has them again.
+    super::typecmd::refresh_bounds_of(d, &[gid]);
+    Ok(gid)
+}
+
+/// Draw Inside into the isolated object (#3705): isolation mode moves to the clip group the art
+/// went into ([`draw_inside_group`]), so what is drawn or pasted inside the object is in isolation
+/// mode with it, shown undimmed and picked by clicks, instead of locked beside it. Art added in
+/// isolation mode belongs with what is isolated: it takes the isolated art's place when the mode
+/// ends (<https://helpx.adobe.com/illustrator/desktop/manage-objects/select-objects/isolate-objects.html>).
+/// A drag's next preview, replayed on the drag's snapshot, makes the group again under the same
+/// id, so isolation stays on it; cancelling the drag restores the isolation it began with.
+pub(crate) fn isolate_draw_inside_group(s: &mut Session, target: NodeId, group: NodeId) -> Result<()> {
+    let st = s.doc_mut()?;
+    if st.isolation == Some(target) {
+        st.isolation = Some(group);
+    }
+    Ok(())
+}
+
+/// The object Draw Inside would draw into: the one selected object, when it is a path, a compound
+/// path or type.
+fn inside_target(st: &crate::DocState) -> Option<NodeId> {
+    let first = st.selection.objects.first().copied()?;
+    let fits = matches!(st.doc.node(first).map(|n| &n.kind), Some(NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)));
+    (fits && st.selection.len() == 1).then_some(first)
 }
 
 fn draw_mode(s: &mut Session, p: &Value) -> Result<Value> {
@@ -156,22 +239,20 @@ fn draw_mode(s: &mut Session, p: &Value) -> Result<Value> {
         Some("behind") => crate::DrawMode::Behind,
         Some("inside") => crate::DrawMode::Inside,
         Some("normal") => crate::DrawMode::Normal,
+        // Cycling (Shift+D): Draw Behind goes on to Draw Inside only when it can draw inside the
+        // selection, else back to Draw Normal (#3705: with one group selected it stayed in Draw
+        // Behind).
         None => match s.draw_mode {
             crate::DrawMode::Normal => crate::DrawMode::Behind,
-            crate::DrawMode::Behind if s.doc()?.selection.len() == 1 => crate::DrawMode::Inside,
+            crate::DrawMode::Behind if inside_target(s.doc()?).is_some() => crate::DrawMode::Inside,
             _ => crate::DrawMode::Normal,
         },
         Some(o) => return Err(bad("view.drawMode", format!("unknown mode `{o}`"))),
     };
     if mode == crate::DrawMode::Inside {
-        let st = s.doc()?;
-        let target =
-            st.selection.objects.first().copied().filter(|id| {
-                matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)))
-            });
-        match target {
-            Some(t) if st.selection.len() == 1 => s.draw_inside = Some(t),
-            _ => return Err(bad("view.drawMode", "Draw Inside needs exactly one selected path, compound path or text")),
+        match inside_target(s.doc()?) {
+            Some(t) => s.draw_inside = Some(t),
+            None => return Err(bad("view.drawMode", "Draw Inside needs exactly one selected path, compound path or text")),
         }
     } else {
         s.draw_inside = None;
@@ -182,6 +263,35 @@ fn draw_mode(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
     NodeKind::Path { path, rule: FillRule::NonZero, live: live.map(Box::new), clipping: false, guide: false }
+}
+
+/// A click-to-size shape dialog's command `cmd` with `params` drawn along General › Constrain
+/// Angle, as the reference app draws new objects along it
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>):
+/// a box (rectangle, ellipse, grid) runs along the turned axes from `pivot`, the point the dialog
+/// placed at the click (its top-left corner `x`, `y`, or a grid's reference point), which stays
+/// put; a polygon or star turns its base orientation about its centre. The params as they are at
+/// 0° or a whole turn, for other commands and when they already carry a `rotation`.
+pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) -> Value {
+    let base = s.prefs.constrain_angle;
+    let (Some(rotation), Some(axes)) = (vectorcraft_geom::constrain_rotation(base), vectorcraft_geom::constrain_axes(base)) else { return params };
+    let Some(o) = params.as_object_mut().filter(|o| !o.contains_key("rotation")) else { return params };
+    match cmd {
+        "shape.rectangle" | "shape.ellipse" | "shape.rectangularGrid" | "shape.polarGrid" => {
+            let num = |k: &str| o.get(k).and_then(Value::as_f64).filter(|v| v.is_finite());
+            let (Some(x), Some(y), Some(w), Some(h)) = (num("x"), num("y"), num("width"), num("height")) else { return params };
+            // The box's centre along the turned axes from the pivot; the command turns it there.
+            let c = pivot + (axes * Point::new(x + w / 2.0 - pivot.x, y + h / 2.0 - pivot.y)).to_vec2();
+            o.insert("x".into(), json!(c.x - w / 2.0));
+            o.insert("y".into(), json!(c.y - h / 2.0));
+            o.insert("rotation".into(), json!(rotation));
+        }
+        "shape.polygon" | "shape.star" => {
+            o.insert("rotation".into(), json!(rotation));
+        }
+        _ => {}
+    }
+    params
 }
 
 fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {
@@ -203,10 +313,12 @@ fn rect_transform(r: Rect, p: &Value, cmd: &str) -> Result<Affine> {
     if rotation == 0.0 {
         return Ok(Affine::translate(r.origin().to_vec2()));
     }
-    Ok(Affine::translate(r.center().to_vec2()) * Affine::rotate(rotation.to_radians()) * Affine::translate((-r.width() / 2.0, -r.height() / 2.0)))
+    // Exact at quarter turns (a Constrain Angle of 90°).
+    Ok(Affine::translate(r.center().to_vec2()) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate((-r.width() / 2.0, -r.height() / 2.0)))
 }
 
 fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["radius"], "shape.rectangle")?;
     let r = rect_of(p, "shape.rectangle")?;
     let radius = f64_or(p, "radius", 0.0).max(0.0);
     let live = LiveShape::Rectangle {
@@ -218,32 +330,41 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
         xf: rect_transform(r, p, "shape.rectangle")?,
     };
     let label = if radius > 0.0 { "Rounded Rectangle" } else { "Rectangle" };
-    add_art(s, label, path_kind(live.to_path(), Some(live)), None)
+    add_art_turned(s, label, path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
-    add_art(s, "Ellipse", path_kind(live.to_path(), Some(live)), None)
+    add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
 fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.polygon")?, f64_req(p, "cy", "shape.polygon")?);
     let r = f64_req(p, "radius", "shape.polygon")?.abs();
+    check_numbers(p, &["sides", "rotation"], "shape.polygon")?;
     let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
-    let xf = Affine::translate(c.to_vec2()) * Affine::rotate(rot.to_radians());
+    let xf = Affine::translate(c.to_vec2()) * vectorcraft_geom::rotate_deg(rot);
     let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![], radii_relative: false };
-    add_art(s, "Polygon", path_kind(live.to_path(), Some(live)), None)
+    add_art_turned(s, "Polygon", path_kind(live.to_path(), Some(live)), constrained_turn(s, rot))
 }
 
 fn star(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.star")?, f64_req(p, "cy", "shape.star")?);
     let r1 = f64_req(p, "radius1", "shape.star")?.abs();
+    check_numbers(p, &["radius2", "points", "rotation"], "shape.star")?;
     let r2 = f64_or(p, "radius2", r1 / 2.0).abs();
     let n = p.get("points").and_then(Value::as_u64).unwrap_or(5).clamp(2, 1000) as u32;
-    let path = shapes::star(c, r1, r2, n, f64_or(p, "rotation", 0.0));
-    add_art(s, "Star", path_kind(path, None), None)
+    let rot = f64_or(p, "rotation", 0.0);
+    let turn = vectorcraft_geom::rotate_deg(rot);
+    // A quarter or whole turn (a Constrain Angle of 90°, say) turns the upright star exactly.
+    let path = if rot != 0.0 && turn.as_coeffs()[..4].iter().all(|c| c.fract() == 0.0) {
+        shapes::star(Point::ZERO, r1, r2, n, 0.0).transformed(Affine::translate(c.to_vec2()) * turn)
+    } else {
+        shapes::star(c, r1, r2, n, rot)
+    };
+    add_art_turned(s, "Star", path_kind(path, None), constrained_turn(s, rot))
 }
 
 /// Flare tool: a lens flare built from radial-gradient paths in Screen mode — a bright centre, a halo
@@ -251,6 +372,24 @@ fn star(s: &mut Session, p: &Value) -> Result<Value> {
 fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     use vectorcraft_color::{BlendMode, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
     let c = Point::new(f64_req(p, "cx", "shape.flare")?, f64_req(p, "cy", "shape.flare")?);
+    let numbers = [
+        "diameter",
+        "opacity",
+        "brightness",
+        "growth",
+        "fuzziness",
+        "rays",
+        "longest",
+        "rayFuzziness",
+        "rings",
+        "largest",
+        "x2",
+        "y2",
+        "direction",
+        "pathLength",
+        "seed",
+    ];
+    check_numbers(p, &numbers, "shape.flare")?;
     let pct = |k: &str, d: f64| (f64_or(p, k, d) / 100.0).clamp(0.0, 10.0);
     let r = (f64_or(p, "diameter", 100.0) / 2.0).max(0.5);
     let opacity = pct("opacity", 50.0).min(1.0) as f32;
@@ -279,7 +418,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
-        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Radial, stops });
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
         g.geom = Some(GradientGeom { start: centre, end: centre + vectorcraft_geom::Vec2::new(radius, 0.0), aspect: 1.0, focal: None });
         Paint::Gradient(Box::new(g))
     };
@@ -349,9 +488,10 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
     let a = Point::new(f64_req(p, "x1", "shape.line")?, f64_req(p, "y1", "shape.line")?);
     let b = Point::new(f64_req(p, "x2", "shape.line")?, f64_req(p, "y2", "shape.line")?);
     let live = LiveShape::Line { a, b };
-    // Lines are stroked, never filled (Illustrator ignores the fill for new open lines).
+    // Lines are stroked and, unless Fill Line asks for the current fill, not filled.
+    let fill = if switch_or(p, "fill", false, "shape.line")? { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
     let look = s.new_art_look(
-        vectorcraft_color::Paint::None,
+        fill,
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
         s.paint.stroke_width.max(0.1),
     );
@@ -360,25 +500,52 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.spiral")?, f64_req(p, "cy", "shape.spiral")?);
+    check_numbers(p, &["segments"], "shape.spiral")?;
     let path = shapes::spiral(
         c,
         f64_req(p, "radius", "shape.spiral")?,
-        f64_or(p, "decay", 80.0),
+        number_or(p, "decay", 80.0, "shape.spiral")?,
         p.get("segments").and_then(Value::as_u64).unwrap_or(10).clamp(2, 1000) as u32,
-        bool_or(p, "clockwise", true),
+        switch_or(p, "clockwise", true, "shape.spiral")?,
     );
     add_art(s, "Spiral", path_kind(path, None), None)
 }
 
 fn arc(s: &mut Session, p: &Value) -> Result<Value> {
-    let a = Point::new(f64_req(p, "x1", "shape.arc")?, f64_req(p, "y1", "shape.arc")?);
-    let b = Point::new(f64_req(p, "x2", "shape.arc")?, f64_req(p, "y2", "shape.arc")?);
-    add_art(s, "Arc", path_kind(shapes::arc(a, b, 0.0, bool_or(p, "closed", false)), None), None)
+    let closed = switch_or(p, "closed", false, "shape.arc")?;
+    let fill_arc = switch_or(p, "fillArc", false, "shape.arc")?;
+    let base_x = !matches!(p.get("baseAlong").and_then(Value::as_str), Some("y" | "Y"));
+    let path = if p.get("lengthX").is_some() || p.get("lengthY").is_some() {
+        let anchor = Point::new(f64_req(p, "x", "shape.arc")?, f64_req(p, "y", "shape.arc")?);
+        let reference = p.get("reference").and_then(Value::as_u64).unwrap_or(0) as usize;
+        shapes::arc_segment(
+            anchor,
+            reference,
+            number_or(p, "lengthX", 100.0, "shape.arc")?,
+            number_or(p, "lengthY", 100.0, "shape.arc")?,
+            base_x,
+            number_or(p, "slope", 50.0, "shape.arc")?,
+            closed,
+        )
+    } else {
+        let a = Point::new(f64_req(p, "x1", "shape.arc")?, f64_req(p, "y1", "shape.arc")?);
+        let b = Point::new(f64_req(p, "x2", "shape.arc")?, f64_req(p, "y2", "shape.arc")?);
+        let slope = number_or(p, "slope", 100.0, "shape.arc")?;
+        shapes::arc(a, b, slope, closed, base_x)
+    };
+    let fill = if fill_arc { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
+    let look = s.new_art_look(
+        fill,
+        if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
+        s.paint.stroke_width.max(0.1),
+    );
+    add_look(s, "Arc", path_kind(path, None), look, None)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
-/// current fill when `fill`; a path of several subpaths becomes a compound path of them.
-fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>, fill: bool) -> Result<Value> {
+/// current fill when `fill`; a path of several subpaths becomes a compound path of them. The group
+/// and its members get the bounding-box angle `bbox_angle` (a grid drawn along a Constrain Angle).
+fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>, f64), fill: bool) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
     let fill = if fill { s.paint.fill.clone() } else { vectorcraft_color::Paint::None };
     let look = s.new_art_look(fill, s.paint.stroke.clone(), s.paint.stroke_width);
@@ -395,20 +562,25 @@ fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>, fill: bool) ->
                     Node::path(d.alloc_id(), pd, Appearance::default())
                 };
                 look.apply(d, &mut n);
+                n.bbox_angle = bbox_angle;
                 std::sync::Arc::new(n)
             })
             .collect();
         let gid = d.alloc_id();
-        d.insert(parent, usize::MAX, Node::group(gid, children))?;
+        let mut g = Node::group(gid, children);
+        g.bbox_angle = bbox_angle;
+        d.insert(parent, usize::MAX, g)?;
         sel.set([gid]);
         Ok(gid)
     })?;
     Ok(json!({ "id": id.0 }))
 }
 
-/// A grid's divider count `count` with its skew `key` in percent (0 when absent, clamped to
-/// ±[`shapes::GRID_SKEW_MAX`]).
+/// A grid's divider count `count` (an error unless it is a number or null; 5 unless it is a JSON
+/// integer of 0 or more, so 4.0 and 2.5 give 5; at most 999) with its skew `key` in percent (0 when
+/// absent, clamped to ±[`shapes::GRID_SKEW_MAX`]).
 fn dividers(p: &Value, count: &str, key: &str, cmd: &str) -> Result<(u32, f64)> {
+    check_numbers(p, &[count], cmd)?;
     let n = p.get(count).and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
     let skew = match p.get(key) {
         None | Some(Value::Null) => 0.0,
@@ -430,7 +602,7 @@ fn rect_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, CMD)?;
     let paths =
         shapes::rectangular_grid(r, dividers(p, "rows", "rowSkew", CMD)?, dividers(p, "columns", "columnSkew", CMD)?, switch(p, "frame", true, CMD)?);
-    grid_group(s, "Rectangular Grid", paths, switch(p, "fill", false, CMD)?)
+    grid_group(s, "Rectangular Grid", turned_grid(p, r, paths, CMD)?, switch(p, "fill", false, CMD)?)
 }
 
 fn polar_grid(s: &mut Session, p: &Value) -> Result<Value> {
@@ -442,7 +614,24 @@ fn polar_grid(s: &mut Session, p: &Value) -> Result<Value> {
         dividers(p, "radial", "radialSkew", CMD)?,
         switch(p, "compound", false, CMD)?,
     );
-    grid_group(s, "Polar Grid", paths, switch(p, "fill", false, CMD)?)
+    grid_group(s, "Polar Grid", turned_grid(p, r, paths, CMD)?, switch(p, "fill", false, CMD)?)
+}
+
+/// A grid's paths in `r` turned by the `rotation` param about the centre of `r` (a grid drawn
+/// along a Constrain Angle), and their bounding-box angle; as they are without it or at 0.
+fn turned_grid(p: &Value, r: Rect, mut paths: Vec<PathData>, cmd: &str) -> Result<(Vec<PathData>, f64)> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", cmd)? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad(cmd, "rotation must be finite"));
+    }
+    if rotation != 0.0 {
+        let c = r.center().to_vec2();
+        let m = Affine::translate(c) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate(-c);
+        for path in &mut paths {
+            path.transform(m);
+        }
+    }
+    Ok((paths, bbox_turn(rotation)))
 }
 
 /// An anchor `{x, y, in?, out?, smooth?}` given to `cmd` (handles `[x, y]`, at the anchor when
@@ -466,6 +655,8 @@ pub(crate) fn anchor_from_json(v: &Value, cmd: &str) -> Result<Anchor> {
 }
 
 fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
+    // Checked with `d` too, where the path data alone decides whether the path is closed.
+    let closed = switch_or(p, "closed", false, "path.create")?;
     let path = if let Some(d) = str_param(p, "d") {
         let bp = vectorcraft_geom::BezPath::from_svg(d).map_err(|e| bad("path.create", format!("bad path data: {e}")))?;
         PathData::from_bezpath(&bp)
@@ -480,7 +671,7 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
         if anchors.is_empty() {
             return Err(bad("path.create", "need at least one anchor"));
         }
-        PathData::single(SubPath::new(anchors, bool_or(p, "closed", false)))
+        PathData::single(SubPath::new(anchors, closed))
     };
     let mut look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
     // Open paths drawn with a stroke of None would be invisible: mimic Illustrator and keep what the user set.
@@ -495,8 +686,22 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let x = f64_req(p, "x", "text.create")?;
     let y = f64_req(p, "y", "text.create")?;
     super::paint::check_keep_model(p, "text.create")?;
+    check_numbers(p, &["size"], "text.create")?;
+    check_switches(p, &["vertical", "placeholder"], "text.create")?;
+    if let Some(a) = p.get("area") {
+        check_numbers(a, &["width", "height"], "text.create")?;
+    }
     let text = str_param(p, "text").unwrap_or("");
     let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
+    // Turned about the point (the first baseline's start, an area's top-left corner): type set
+    // along a Constrain Angle.
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "text.create")? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad("text.create", "rotation must be finite"));
+    }
+    if rotation != 0.0 {
+        t.xf *= vectorcraft_geom::rotate_deg(rotation);
+    }
     t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
     t.para = new_type_para();
     new_type_alignment(s, p, "text.create", &mut t)?;
@@ -513,7 +718,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
-    let made = add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)?;
+    let made = insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation))?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
     Ok(super::typecmd::with_overflow(s, id.as_slice(), made))

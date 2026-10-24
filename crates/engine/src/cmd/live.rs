@@ -1334,6 +1334,8 @@ fn expand_envelope(d: &mut Document, id: NodeId) -> Result<()> {
     let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let mut g = vectorcraft_render::effects::expanded_live_group(Some(d), &n);
     fix_ids(d, &mut g);
+    // Outlined type's emoji take their pixels into the document.
+    d.adopt_pixels(&mut g);
     // Outlined type repeats its object's id on its pieces.
     vectorcraft_render::effects::fresh_ids(d, &mut g, &mut Default::default());
     *d.node_mut(id).ok_or(EngineError::NoNode(id))? = g;

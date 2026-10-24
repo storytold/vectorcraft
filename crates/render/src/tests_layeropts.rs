@@ -27,6 +27,7 @@ fn doc(layer: impl FnOnce(&mut NodeKind)) -> Document {
             xf: Affine::translate((50.0, 10.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     im.id = d.alloc_id();

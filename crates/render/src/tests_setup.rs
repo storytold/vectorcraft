@@ -10,7 +10,7 @@ fn doc_with_red_image() -> Document {
     image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let (id, layer) = (d.alloc_id(), d.layers[0].id);
-    let im = ImageObject { key: "red".into(), width: 40, height: 40, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+    let im = ImageObject { key: "red".into(), width: 40, height: 40, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
     d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
     d
 }

@@ -38,7 +38,10 @@
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
 //!
-//! Sections the reader doesn't need (brushes, symbols, styles, swatches, filters) are skipped;
+//! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
+//!   default swatches.
+//!
+//! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors.
 
@@ -76,6 +79,9 @@ const MAX_NODES: usize = 4_000_000;
 const MAX_POINTS: usize = 4_000_000;
 /// Largest image read (pixels).
 const MAX_PIXELS: u64 = 1 << 25;
+/// The note for an image past [`MAX_PIXELS`]: the file then opens from its PDF part, which reads
+/// larger images (#1479).
+pub const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
 /// Most hex digits of an image's samples read from comment lines (CMYK and alpha at the largest size).
 const MAX_HEX: usize = (MAX_PIXELS as usize) * 10;
 /// Largest side of the document and its artboards (points).
@@ -515,6 +521,8 @@ struct Reader<'a> {
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
     styles: HashMap<String, super::style::ArtStyle>,
+    /// The swatches (`%AI5_BeginPalette`).
+    palette: super::palette::Palette,
     /// See [`Structure::restyled`].
     restyled: Vec<Rect>,
     /// CMYK samples converted, by value.
@@ -596,7 +604,6 @@ const SKIPPED: &[(&str, &str)] = &[
     ("BeginPluginObject", "EndPluginObject"),
     ("BeginArtStyles", "EndArtStyles"),
     ("BeginArtStyleList", "EndArtStyleList"),
-    ("BeginPalette", "EndPalette"),
     ("BeginSymbolList", "EndSymbolList"),
     ("BeginTextDocument", "EndTextDocument"),
     ("BeginEncoding", "EndEncoding"),
@@ -665,6 +672,7 @@ impl<'a> Reader<'a> {
             group_ended: false,
             layer_state: None,
             styles: HashMap::new(),
+            palette: super::palette::Palette::default(),
             restyled: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),
@@ -755,6 +763,11 @@ impl<'a> Reader<'a> {
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
             self.styles = super::style::art_styles(section);
+            return Ok(());
+        }
+        if m == "BeginPalette" {
+            let section = self.section("EndPalette")?;
+            self.palette = super::palette::palette(section);
             return Ok(());
         }
         if m == "BeginEncoding" {
@@ -1238,7 +1251,7 @@ impl<'a> Reader<'a> {
                 self.paint(&op, hidden, true)?;
             }
             // Colours.
-            "g" | "G" | "k" | "K" | "x" | "X" | "Xa" | "XA" | "Xx" | "XX" | "Xk" | "XK" => self.color(w, &vals),
+            "g" | "G" | "k" | "K" | "x" | "X" | "Xa" | "XA" | "Xx" | "XX" | "Xk" | "XK" | "Xs" | "XS" | "Xz" | "XZ" => self.color(w, &vals),
             "p" | "P" => self.pattern_paint(w, &vals),
             // A pattern's definition ends.
             "E" if self.pattern.is_some() => self.done = true,
@@ -1723,7 +1736,9 @@ impl<'a> Reader<'a> {
 
     fn color(&mut self, w: &str, vals: &[V]) {
         let Some((p, named)) = paint::color_op(w, vals) else { return };
-        match p.color() {
+        // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
+        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ");
+        match p.color().filter(|_| !registration) {
             Some(vectorcraft_color::Color::Rgb { .. }) => self.rgb_colors += 1,
             Some(vectorcraft_color::Color::Cmyk { .. }) => self.cmyk_colors += 1,
             _ => {}
@@ -2009,6 +2024,18 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let gs = self.gs.clone();
+        // One mesh where the patches join up into the grid they say they make; else each patch is
+        // a mesh of its own, in a group.
+        match m.one_mesh() {
+            Ok(one) => {
+                let mut node = self.new_node(NodeKind::Mesh(one), &gs);
+                node.opacity = gs.opacity;
+                node.blend = gs.blend;
+                return self.add(node, hidden);
+            }
+            Err(super::mesh::NotOne::Unjoined) => self.warn("a gradient mesh whose patches don't join up comes in as a group of its patches"),
+            Err(super::mesh::NotOne::Unplaced) => {}
+        }
         let mut patches: Vec<Node> = m.patches.into_iter().map(|p| self.new_node(NodeKind::Mesh(p), &gs)).collect();
         let mut node = match patches.len() {
             1 => patches.pop().unwrap_or_else(|| self.new_node(NodeKind::Group { children: vec![], clip: false }, &gs)),
@@ -2084,7 +2111,11 @@ impl<'a> Reader<'a> {
             return Ok(());
         };
         let (w, h) = (*w as u64, *h as u64);
-        if w == 0 || h == 0 || w.saturating_mul(h) > MAX_PIXELS || ![1.0, 8.0].contains(bits) {
+        if w.saturating_mul(h) > MAX_PIXELS {
+            self.warn(IMAGE_TOO_LARGE);
+            return Ok(());
+        }
+        if w == 0 || h == 0 || ![1.0, 8.0].contains(bits) {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         }
@@ -2180,7 +2211,7 @@ impl<'a> Reader<'a> {
         let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() }, mask, false)
+        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }, mask, false)
     }
 
     /// An image's alpha channel (`w` × `h` bytes) as a grayscale image over the image (`xf`): its
@@ -2196,7 +2227,7 @@ impl<'a> Reader<'a> {
         self.doc.images.entry(key.clone()).or_insert(blob);
         let art = Node::new(
             self.doc.alloc_id(),
-            NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() })),
+            NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None })),
         );
         Some(OpacityMask::new(art, true))
     }
@@ -2241,7 +2272,10 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PREVIEWS);
-        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default() }, hidden)
+        self.add_image(
+            ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None },
+            hidden,
+        )
     }
 
     // ---- the document ----------------------------------------------------------------------
@@ -2329,6 +2363,8 @@ impl<'a> Reader<'a> {
                 locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                show_video_safe_areas: false,
+                video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
             })
             .collect();
@@ -2341,6 +2377,8 @@ impl<'a> Reader<'a> {
                 locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                show_video_safe_areas: false,
+                video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
             }];
         }
@@ -2351,6 +2389,34 @@ impl<'a> Reader<'a> {
         }
         if let Some(u) = self.ruler_units.and_then(ruler_unit) {
             doc.units = u;
+        }
+        // The file's own swatches in place of the defaults, in its order and colour groups.
+        if !self.palette.is_empty() {
+            let palette = std::mem::take(&mut self.palette);
+            let swatch = |e: super::palette::Entry| -> Option<Swatch> {
+                use super::palette::Cell;
+                let (paint, global, spot) = match e.cell {
+                    Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
+                    Cell::Gradient(g) => {
+                        let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                        gp.swatch = Some(e.name.clone());
+                        (Paint::Gradient(Box::new(gp)), false, false)
+                    }
+                    Cell::Pattern(p) => {
+                        doc.patterns.iter().find(|d| d.name == p)?;
+                        (Paint::Pattern { pattern: p, xf: Affine::IDENTITY }, false, false)
+                    }
+                };
+                Some(Swatch { name: e.name, paint, global, spot })
+            };
+            let mut swatches = vec![Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false }];
+            swatches.extend(palette.swatches.into_iter().filter_map(swatch));
+            let groups: Vec<_> = palette
+                .groups
+                .into_iter()
+                .map(|(name, s)| vectorcraft_color::swatch::SwatchGroup { name, swatches: s.into_iter().filter_map(swatch).collect() })
+                .collect();
+            (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
         }
         // The colour operators' definitions first: a gradient, defined before the art, names a
         // global process colour as a stop and would otherwise make it an ink (#1771).

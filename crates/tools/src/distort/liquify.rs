@@ -388,7 +388,8 @@ fn subdivide(sp: &mut SubPath, prm: &LiquifyParams, c: Point, spacing: f64) {
             continue;
         }
         let len = cub.arclen(1e-3);
-        let k = (len / spacing).ceil() as usize;
+        // (No more pieces than the anchors left under the ceiling.)
+        let k = ((len / spacing).ceil() as usize).min(MAX_ANCHORS.saturating_sub(sp.anchors.len()) + 1);
         if k <= 1 {
             seg += 1;
             continue;
@@ -666,12 +667,14 @@ pub struct LiquifyTool {
     hover: Option<Point>,
     /// Time held still since the last sample or repeat (seconds).
     held: f64,
+    /// How many samples the last preview of the stroke had.
+    previewed: usize,
 }
 
 impl LiquifyTool {
     pub fn new(id: &str) -> Self {
         let kind = LiquifyKind::parse(id).unwrap_or(LiquifyKind::Warp);
-        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None, held: 0.0 }
+        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None, held: 0.0, previewed: 0 }
     }
 
     /// The command + params for the stroke so far (with each sample's pressure while Use Pressure
@@ -684,6 +687,26 @@ impl LiquifyTool {
             v["ids"] = crate::json_ids(&cx.selection.objects);
         }
         ("object.liquify".into(), v)
+    }
+
+    /// The preview of the stroke so far, when [`crate::previews_at`] its length.
+    fn preview(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !crate::previews_at(self.points.len()) {
+            return vec![];
+        }
+        self.previewed = self.points.len();
+        let (c, v) = self.command(cx);
+        vec![Action::Preview(c, v)]
+    }
+
+    /// The preview of the whole stroke, when samples came after the last one shown: what is
+    /// committed is the last preview.
+    fn stale_preview(&mut self, cx: &ToolContext) -> Option<Action> {
+        (self.previewed != self.points.len() && !self.points.is_empty()).then(|| {
+            self.previewed = self.points.len();
+            let (c, v) = self.command(cx);
+            Action::Preview(c, v)
+        })
     }
 
     /// Alt-drag from `s` to `p`: the brush grows or shrinks from its size at the press (its edge
@@ -719,6 +742,7 @@ impl Tool for LiquifyTool {
                 self.points = vec![sample];
                 self.active = true;
                 self.held = 0.0;
+                self.previewed = self.points.len();
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.params.kind.label().into()), Action::Preview(c, v)]
             }
@@ -728,13 +752,15 @@ impl Tool for LiquifyTool {
                     self.hover = Some(s.start);
                     return vec![];
                 }
-                if !self.active || self.points.last().is_some_and(|(l, _)| l.distance(p) < cx.tol(2.0)) {
+                if !self.active
+                    || self.points.last().is_some_and(|(l, _)| l.distance(p) < cx.tol(2.0))
+                    || self.points.len() >= crate::MAX_STROKE_SAMPLES
+                {
                     return vec![];
                 }
                 self.points.push(sample);
                 self.held = 0.0;
-                let (c, v) = self.command(cx);
-                vec![Action::Preview(c, v)]
+                self.preview(cx)
             }
             PointerKind::Up => {
                 if self.sizing.take().is_some() {
@@ -744,8 +770,9 @@ impl Tool for LiquifyTool {
                     return vec![];
                 }
                 self.active = false;
+                let out = self.stale_preview(cx).into_iter().chain([Action::Commit]).collect();
                 self.points.clear();
-                vec![Action::Commit]
+                out
             }
             _ => vec![],
         }
@@ -789,10 +816,15 @@ impl Tool for LiquifyTool {
     fn busy(&self) -> bool {
         self.active
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.hover = None;
         self.sizing = None;
-        if std::mem::take(&mut self.active) { vec![Action::Commit] } else { vec![] }
+        if !std::mem::take(&mut self.active) {
+            return vec![];
+        }
+        let out = self.stale_preview(cx).into_iter().chain([Action::Commit]).collect();
+        self.points.clear();
+        out
     }
     /// Held still: every [`HOLD_EVERY`] the last sample repeats (one more dab there).
     fn tick(&mut self, cx: &ToolContext, dt: f64) -> Vec<Action> {
@@ -808,9 +840,13 @@ impl Tool for LiquifyTool {
         }
         self.held = self.held.clamp(0.0, HOLD_EVERY);
         let Some(&last) = self.points.last().filter(|_| n > 0) else { return vec![] };
-        self.points.extend(std::iter::repeat_n(last, n as usize));
-        let (c, v) = self.command(cx);
-        vec![Action::Preview(c, v)]
+        let room = crate::MAX_STROKE_SAMPLES.saturating_sub(self.points.len());
+        // A full stroke takes no sample: the preview it already has stands.
+        if room == 0 {
+            return vec![];
+        }
+        self.points.extend(std::iter::repeat_n(last, (n as usize).min(room)));
+        self.preview(cx)
     }
     fn wants_ticks(&self) -> bool {
         self.active && self.params.kind.holds()
