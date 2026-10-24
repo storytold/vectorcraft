@@ -27,7 +27,8 @@ use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const KIND: &str = "savePdf";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Save PDF").into(), body, confirm, ok: Some("Save PDF"), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("Save PDF").into(), body, confirm, ok: Some("Save PDF"), inputs: |_| &["path"], ..DialogSpec::FORM };
 
 /// The dialog kind of the preset editor (New / Edit in Edit → PDF Presets).
 pub(super) const PRESET_KIND: &str = "pdfPreset";

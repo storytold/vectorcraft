@@ -22,6 +22,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     preview: true,
+    // Load Texture… adds the texture it reads.
+    passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && matches!(d.str("__effect").as_str(), GLASS | TEXTURIZER),
     ..DialogSpec::FORM
 };
 

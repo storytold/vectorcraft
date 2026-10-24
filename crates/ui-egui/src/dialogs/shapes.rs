@@ -14,7 +14,13 @@ use crate::panels::transform::artboard_rect;
 use crate::state::Dialog;
 use crate::widgets;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(d).into(), body, confirm, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |d| title(d).into(),
+    body,
+    confirm,
+    inputs: |kind| if kind == "rectangle" { &["radius"] } else { &[] },
+    ..DialogSpec::FORM
+};
 
 /// The field that marks a dialog opened as its tool's Tool Options rather than by a click.
 const TOOL_OPTIONS: &str = "__toolOptions";

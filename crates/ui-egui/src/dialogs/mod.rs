@@ -174,6 +174,12 @@ pub(crate) struct DialogSpec {
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
     pub preview: bool,
+    /// The fields that a dialog of a kind reads but may not hold yet, which `ui.dialog.set` also
+    /// takes (see [`accepts_field`]).
+    pub inputs: fn(&str) -> &'static [&'static str],
+    /// Whether the dialog passes a field it neither holds nor lists in `inputs` on to what it
+    /// runs (a parameter of the generic dialog's command), so `ui.dialog.set` takes it too.
+    pub passes: fn(&Dialog, &str) -> bool,
     /// The OK button's label when it depends on the app (Export for Screens' "Download" on the
     /// web); `ok` when none. Only with an `ok`.
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
@@ -201,6 +207,8 @@ impl DialogSpec {
         min_width: 320.0,
         max_width: None,
         preview: false,
+        inputs: |_| &[],
+        passes: |_, _| false,
         ok_label: None,
         ok_enabled: None,
     };
@@ -376,6 +384,32 @@ pub fn button_labels() -> Vec<&'static str> {
 fn spec(kind: &str) -> &'static DialogSpec {
     static FALLBACK: DialogSpec = DialogSpec::FORM;
     DialogKind::of(kind).map_or(&FALLBACK, DialogKind::spec)
+}
+
+/// Whether `ui.dialog.set` can set `field` on `d`: a field it holds, a `__` field (the dialog's
+/// own state), `discard` on a dialog with a discard button, `preview` on one with a live preview,
+/// one of its spec's `inputs` for its kind, or one it `passes` on.
+pub fn accepts_field(d: &Dialog, field: &str) -> bool {
+    let spec = spec(&d.kind);
+    d.fields.contains_key(field)
+        || field.starts_with("__")
+        || (field == "discard" && spec.discard.is_some())
+        || (field == "preview" && spec.preview)
+        || (spec.inputs)(&d.kind).contains(&field)
+        || (spec.passes)(d, field)
+}
+
+/// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
+/// `discard`, `preview` and the spec's `inputs` for its kind.
+pub fn field_names(d: &Dialog) -> Vec<String> {
+    let spec = spec(&d.kind);
+    let mut names: Vec<String> = d.fields.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+    names.extend(spec.discard.map(|_| "discard".to_string()));
+    names.extend(spec.preview.then(|| "preview".to_string()));
+    names.extend((spec.inputs)(&d.kind).iter().map(|i| i.to_string()));
+    names.sort_unstable();
+    names.dedup();
+    names
 }
 
 /// Run a command and close the dialog (whether or not the command succeeded).

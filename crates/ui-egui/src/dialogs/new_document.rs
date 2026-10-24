@@ -23,8 +23,8 @@ pub(super) const KIND: &str = "newDocument";
 /// More Settings.
 pub(super) const MORE: &str = "newDocumentMore";
 
-pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
-pub(super) const MORE_SPEC: DialogSpec = DialogSpec::window(show_more, confirm);
+pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show, confirm) };
+pub(super) const MORE_SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show_more, confirm) };
 
 /// The fields `file.new` takes.
 const PARAMS: [&str; 12] = [

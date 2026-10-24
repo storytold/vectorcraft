@@ -27,7 +27,7 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, Live};
 
-pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
+pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["color", "opacity", "location", "spread"], ..DialogSpec::window(show, confirm) };
 
 /// The field holding the frame the popover was first drawn in.
 const OPENED: &str = "__opened";

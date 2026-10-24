@@ -18,7 +18,8 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, inputs: |_| &["path"], ..DialogSpec::FORM };
 
 /// Resolution presets (pixels per inch).
 pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];

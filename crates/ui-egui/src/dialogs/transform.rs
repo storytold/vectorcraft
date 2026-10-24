@@ -13,7 +13,17 @@ use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, inputs, ..DialogSpec::FORM };
+
+/// The fields a transform dialog reads that it may not hold yet: Copy and the object options,
+/// Move's Distance and Angle, Scale's scale options, and the reference point of the others.
+fn inputs(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "move" => &["copy", "objects", "patterns", "distance", "angle"],
+        "scale" => &["copy", "objects", "patterns", "corners", "strokes", "origin"],
+        _ => &["copy", "objects", "patterns", "origin"],
+    }
+}
 
 fn title(kind: &str) -> &'static str {
     match kind {

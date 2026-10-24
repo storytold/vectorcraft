@@ -23,7 +23,15 @@ pub const KIND: &str = "hyphenation";
 /// The field holding the values the dialog opened with.
 const INITIAL: &str = "__initial";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Hyphenation").into(), body, confirm, min_width: 300.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Hyphenation").into(),
+    body,
+    confirm,
+    min_width: 300.0,
+    // A value the paragraphs don't share opens blank, without its field.
+    inputs: |_| &["hyphenate", "wordsLongerThan", "afterFirst", "beforeLast", "hyphenLimit", "hyphenationZone", "hyphenateCapitalized"],
+    ..DialogSpec::FORM
+};
 
 /// Open Hyphenation on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
