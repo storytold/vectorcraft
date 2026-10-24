@@ -144,7 +144,17 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             }
         }
         let optical = if live.len() >= 2 { optical_margin(before, doc, &live) } else { None };
-        let frames: Vec<TextObject> = live.iter().filter_map(|id| text_of(doc, *id).cloned()).collect();
+        let vertical = if live.len() >= 2 { thread_setting(before, doc, &live, |t| t.vertical) } else { None };
+        // The story is measured in each frame with the settings the frame takes.
+        let frames: Vec<TextObject> = live
+            .iter()
+            .filter_map(|id| text_of(doc, *id).cloned())
+            .map(|mut t| {
+                t.optical_margin = optical.unwrap_or(t.optical_margin);
+                t.vertical = vertical.unwrap_or(t.vertical);
+                t
+            })
+            .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
         for (id, part) in live.iter().zip(parts) {
@@ -153,11 +163,13 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 next.runs = part.runs;
                 next.set_paragraph_styles(part.paras);
                 let optical = optical.unwrap_or(t.optical_margin);
-                if next.runs != t.runs || next.para != t.para || next.paras != t.paras || optical != t.optical_margin {
+                let vertical = vertical.unwrap_or(t.vertical);
+                if next.runs != t.runs || next.para != t.para || next.paras != t.paras || optical != t.optical_margin || vertical != t.vertical {
                     t.runs = next.runs;
                     t.para = next.para;
                     t.paras = next.paras;
                     t.optical_margin = optical;
+                    t.vertical = vertical;
                     refresh_bounds(t);
                 }
             }
@@ -172,8 +184,15 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
 /// The Optical Margin Alignment setting that every frame of a thread with the frames `live` takes:
 /// that of the first frame whose setting changed between `before` and `doc`, else the first frame's.
 fn optical_margin(before: &Document, doc: &Document, live: &[NodeId]) -> Option<bool> {
-    let now = |id: &NodeId| text_of(doc, *id).map(|t| t.optical_margin);
-    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(t.optical_margin) != now(id)));
+    thread_setting(before, doc, live, |t| t.optical_margin)
+}
+
+/// The value of the frame setting `get` that every frame of a thread with the frames `live` takes:
+/// that of the first frame whose value changed between `before` and `doc`, or the first frame's value
+/// when none changed.
+fn thread_setting<T: PartialEq>(before: &Document, doc: &Document, live: &[NodeId], get: impl Fn(&TextObject) -> T) -> Option<T> {
+    let now = |id: &NodeId| text_of(doc, *id).map(&get);
+    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(get(t)) != now(id)));
     changed.or(live.first()).and_then(now)
 }
 
@@ -192,6 +211,25 @@ pub(crate) fn share_optical_margin(doc: &mut Document) {
             }
         }
     }
+}
+
+/// Give every frame of each thread the first frame's writing direction, and re-flow each thread in
+/// which that changes a frame: for a document restored from a file as it was saved.
+pub(crate) fn share_orientation(doc: &mut Document) {
+    let before = doc.clone();
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        let Some(vertical) = thread_setting(doc, doc, &live, |t| t.vertical) else { continue };
+        // Only the frames whose direction changes are copied, so only their threads re-flow.
+        let turn: Vec<NodeId> = live.into_iter().filter(|id| text_of(doc, *id).is_some_and(|t| t.vertical != vertical)).collect();
+        for id in turn {
+            if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+                t.vertical = vertical;
+                refresh_bounds(t);
+            }
+        }
+    }
+    reflow(&before, doc);
 }
 
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.
@@ -922,5 +960,144 @@ mod tests {
             assert_eq!(threads(&s), [[a, b]], "{name}");
             assert_eq!((optical(&s, a), optical(&s, b)), ((first, first), (first, first)), "{name}, first frame {first}");
         }
+    }
+
+    /// The writing direction of each of the frames `ids` (true: vertical).
+    fn vertical<const N: usize>(s: &Session, ids: [u64; N]) -> [bool; N] {
+        ids.map(|id| {
+            let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(id)) else { panic!("not area type") };
+            t.vertical
+        })
+    }
+
+    /// Whether each frame of the thread `ids` holds the part of the story that its layout, in its
+    /// writing direction, has room for: the parts that [`vectorcraft_text::thread::distribute`]
+    /// gives the frames as they are now.
+    fn flows_as_laid_out(s: &Session, ids: &[u64]) -> bool {
+        let d = &s.doc().unwrap().doc;
+        let frames: Vec<&TextObject> = ids.iter().map(|id| text_of(d, NodeId(*id)).unwrap()).collect();
+        let story = vectorcraft_text::thread::story(&frames);
+        let paras = vectorcraft_text::thread::story_paras(&frames, &[]);
+        let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &frames, &story, &paras);
+        let texts = |runs: &[TextRun]| runs.iter().map(|r| r.text.as_str()).collect::<String>();
+        parts.iter().zip(&frames).all(|(part, f)| texts(&part.runs) == f.plain_text())
+    }
+
+    /// Type Orientation is a setting of the whole thread: Type › Type Orientation in any frame sets
+    /// it in every frame of the thread, in one undo step, and the story flows through the frames in
+    /// that direction. Typing keeps it, and frames taken out of the thread keep it.
+    #[test]
+    fn type_orientation_is_set_for_every_frame_of_a_thread() {
+        let (mut s, a, b) = setup();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [a]})).unwrap();
+        let r = s.execute("type.orientation.vertical", &json!({})).unwrap();
+        assert_eq!(r, json!({"vertical": true, "ids": [a, b]}));
+        assert_eq!(vertical(&s, [a, b]), [true, true], "the second frame is vertical too");
+        assert!(flows_as_laid_out(&s, &[a, b]));
+        assert_eq!(format!("{}{}", text(&s, a), text(&s, b)), TEXT.repeat(4));
+        // Set back from the second frame, both are horizontal, and one undo makes both vertical.
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        assert_eq!(s.execute("type.orientation.horizontal", &json!({})).unwrap()["ids"], json!([b, a]));
+        assert_eq!(vertical(&s, [a, b]), [false, false]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(vertical(&s, [a, b]), [true, true]);
+        // Typing in the first frame re-flows the story and keeps the direction.
+        s.execute("text.editRange", &json!({"id": a, "start": 0, "end": 0, "insert": "NEW "})).unwrap();
+        assert_eq!(vertical(&s, [a, b]), [true, true]);
+        assert!(flows_as_laid_out(&s, &[a, b]));
+        // Any edit that sets one frame sets the thread.
+        s.edit("Set", |d, _| {
+            let Some(NodeKind::Text(t)) = d.node_mut(NodeId(b)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.vertical = false;
+            refresh_bounds(t);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(vertical(&s, [a, b]), [false, false]);
+        assert!(flows_as_laid_out(&s, &[a, b]));
+        s.execute("edit.undo", &json!({})).unwrap();
+        // Released or unthreaded, each frame keeps it.
+        s.execute("select.set", &json!({"ids": [b]})).unwrap();
+        s.execute("text.thread.releaseSelection", &json!({})).unwrap();
+        assert_eq!(vertical(&s, [a, b]), [true, true]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("text.thread.remove", &json!({})).unwrap();
+        assert!(threads(&s).is_empty());
+        assert_eq!(vertical(&s, [a, b]), [true, true]);
+    }
+
+    /// Threading type gives the joined thread the writing direction of its first frame, and the
+    /// story flows through every frame in that direction.
+    #[test]
+    fn a_thread_takes_its_first_frames_type_orientation() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+        let area = json!({"width": 150, "height": 60});
+        let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": TEXT.repeat(4), "area": area, "vertical": true})).unwrap());
+        let b = new_id(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 60, "height": 200})).unwrap());
+        let c = new_id(s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 150, "height": 200})).unwrap());
+        s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        assert_eq!(vertical(&s, [a, b, c]), [true; 3]);
+        assert!(!text(&s, b).is_empty() && !text(&s, c).is_empty());
+        assert!(flows_as_laid_out(&s, &[a, b, c]), "the middle frame holds what fits it as vertical type");
+        // From `c`'s out port into horizontal area type `d`: `d` joins the thread and becomes vertical.
+        let d = new_id(s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Own text.", "area": {"width": 150, "height": 190}})).unwrap());
+        s.execute("text.thread.add", &json!({"from": c, "to": d})).unwrap();
+        assert_eq!(threads(&s), [[a, b, c, d]]);
+        assert_eq!(vertical(&s, [a, b, c, d]), [true; 4]);
+        assert!(flows_as_laid_out(&s, &[a, b, c, d]));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(vertical(&s, [d]), [false], "undo gives `d` its own direction back");
+    }
+
+    /// A file saved with the frames of one thread in different writing directions opens with the
+    /// first frame's direction in every frame, and the story flows through them in it: a native
+    /// file, and an EPS file restored from the document it carries.
+    #[test]
+    fn a_thread_saved_with_differing_orientations_opens_with_the_first_frames() {
+        let (mut s, a, b) = setup();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        for (first, name) in [(true, "old.vectorcraft"), (false, "old.vectorcraft"), (true, "old.eps"), (false, "old.eps")] {
+            for (id, on) in [(a, first), (b, !first)] {
+                let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+                t.vertical = on;
+                refresh_bounds(t);
+            }
+            let bytes = if name.ends_with(".eps") {
+                let r = s.execute("document.exportEps", &json!({})).unwrap();
+                vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+            } else {
+                vectorcraft_format::save(&s.doc().unwrap().doc, false)
+            };
+            let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+            assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+            assert_eq!(threads(&s), [[a, b]], "{name}");
+            assert_eq!(vertical(&s, [a, b]), [first, first], "{name}, first frame vertical: {first}");
+            assert!(flows_as_laid_out(&s, &[a, b]), "{name}, first frame vertical: {first}");
+            assert_eq!(format!("{}{}", text(&s, a), text(&s, b)), TEXT.repeat(4), "{name}");
+        }
+    }
+
+    /// A thread restored from an EPS file whose frames share one writing direction keeps its text
+    /// in its frames as saved.
+    #[test]
+    fn a_restored_thread_in_one_direction_keeps_its_text_as_saved() {
+        let (mut s, a, b) = setup();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        let story = TEXT.repeat(4);
+        for (id, part) in [(a, &story[..10]), (b, &story[10..])] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.runs = vec![TextRun::new(part.to_string(), t.runs[0].style.clone())];
+            refresh_bounds(t);
+        }
+        let r = s.execute("document.exportEps", &json!({})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        let r = s.execute("document.open", &json!({"name": "saved.eps", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], true, "{r}");
+        assert_eq!((text(&s, a), text(&s, b)), (story[..10].to_string(), story[10..].to_string()));
     }
 }

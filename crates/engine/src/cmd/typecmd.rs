@@ -13,15 +13,21 @@ use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -127,8 +133,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step.
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
     s.edit("Text Orientation", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {

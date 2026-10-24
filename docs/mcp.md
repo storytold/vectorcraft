@@ -395,6 +395,12 @@ For example, create editable Japanese area type with the engine's vertical writi
 for horizontal writing. This is the same option as `text.create` / `text.createInPath`; it does not change
 the engine's existing glyph orientation or CJK composition.
 
+`type.orientation.vertical` and `type.orientation.horizontal` (Type › Type Orientation) switch existing type objects
+(the selection, or `ids`) and reply `{vertical, ids}`. The writing direction is a setting of the whole thread: the
+commands set every frame of a selected frame's thread, and `ids` lists them all. Threading frames gives the thread its
+first frame's direction, frames taken out of a thread keep theirs, and a file whose frames of one thread differ opens
+with the first frame's direction in all of them.
+
 For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`).
 PDF instead uses `options: {"advanced": {"outlineText": true}}`; its default is false (live text).
 
