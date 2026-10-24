@@ -2542,6 +2542,8 @@ font-technology	Variable	Variables
 	Reflect Y	Reflejar Y
 	Reflect…	Reflejar…
 	Refresh	Actualizar
+	Add Font	Añadir fuente
+	Add Font Sources	Añadir orígenes de fuentes
 	Refresh Font List	Actualizar lista de fuentes
 	Missing Fonts	Fuentes que faltan
 	Missing Fonts Dialog	Cuadro de diálogo Fuentes que faltan
@@ -5491,3 +5493,12 @@ axis	Y Axis	Eje Y
 	Rectangular Grid Tool Options	Opciones de la herramienta Cuadrícula rectangular
 	Polar Grid Tool Options	Opciones de la herramienta Cuadrícula polar
 	Fill Line	Rellenar línea
+@msg	give the font file as dataBase64	indica el archivo de fuente como dataBase64
+@msg	{name} is larger than {_1} MB	{name} ocupa más de {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} no es una fuente TrueType, OpenType ni una colección de fuentes
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 no está en base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 tiene 64 dígitos hexadecimales
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} tiene de 1 a {max} caracteres
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	indica de 1 a {MAX_FONT_SOURCES} fuentes
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	indica fonts, una lista de fuentes, cada una con family, url y sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	no se pudo cargar {font} ({reason}): su texto se muestra con otra fuente

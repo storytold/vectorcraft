@@ -1215,6 +1215,12 @@ impl VectorcraftApp {
         self.ui.status = s.into();
     }
 
+    /// A font source (`text.addFontSources`) the host couldn't fetch or add: its type stays in the
+    /// fallback face, which the status line says.
+    pub fn font_source_failed(&mut self, font: &str, reason: &str) {
+        self.status(format!("{font} couldn't be loaded ({reason}): its text shows in another font"));
+    }
+
     fn drain_inbox(&mut self) {
         let arrived: Vec<(String, Vec<u8>)> =
             self.services.inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();

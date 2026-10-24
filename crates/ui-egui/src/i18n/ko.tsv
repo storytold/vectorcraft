@@ -2535,6 +2535,8 @@ mark-style	Japanese	일본식
 	Reflect X	X축 반사
 	Reflect Y	Y축 반사
 	Refresh	새로 고침
+	Add Font	글꼴 추가
+	Add Font Sources	글꼴 소스 추가
 	Refresh Font List	글꼴 목록 새로 고침
 	Missing Fonts	누락된 글꼴
 	Missing Fonts Dialog	누락된 글꼴 대화상자
@@ -5128,3 +5130,12 @@ axis	Y Axis	Y축
 	Rectangular Grid Tool Options	사각형 격자 도구 옵션
 	Polar Grid Tool Options	극좌표 격자 도구 옵션
 	Fill Line	선 채우기
+@msg	give the font file as dataBase64	글꼴 파일을 dataBase64로 지정하세요
+@msg	{name} is larger than {_1} MB	{name}이(가) {_1}MB보다 큽니다
+@msg	{name} is not a TrueType, OpenType or collection font	{name}은(는) TrueType, OpenType 또는 컬렉션 글꼴이 아닙니다
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64가 base64가 아닙니다
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256은(는) 16진수 64자리입니다
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key}은(는) 1~{max}자입니다
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	글꼴을 1~{MAX_FONT_SOURCES}개 지정하세요
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	fonts에 family, url, sha256이 있는 글꼴 목록을 지정하세요
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	{font}을(를) 불러올 수 없습니다({reason}): 해당 텍스트는 다른 글꼴로 표시됩니다

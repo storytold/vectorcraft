@@ -2105,6 +2105,8 @@
 	Reflect Y	Espelhar Y
 	Reflect…	Espelhar…
 	Refresh	Atualizar
+	Add Font	Adicionar Fonte
+	Add Font Sources	Adicionar Origens de Fontes
 	Refresh Font List	Atualizar Lista de Fontes
 	Missing Fonts	Fontes Ausentes
 	Missing Fonts Dialog	Diálogo de Fontes Ausentes
@@ -5466,3 +5468,12 @@ axis	Y Axis	Eixo Y
 	Rectangular Grid Tool Options	Opções da Ferramenta Grade Retangular
 	Polar Grid Tool Options	Opções da Ferramenta Grade Polar
 	Fill Line	Preencher linha
+@msg	give the font file as dataBase64	informe o arquivo da fonte como dataBase64
+@msg	{name} is larger than {_1} MB	{name} é maior que {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} não é uma fonte TrueType, OpenType nem uma coleção de fontes
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 não é base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 tem 64 dígitos hexadecimais
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} tem de 1 a {max} caracteres
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	informe de 1 a {MAX_FONT_SOURCES} fontes
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	informe fonts, uma lista de fontes, cada uma com family, url e sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	não foi possível carregar {font} ({reason}): o texto dela aparece em outra fonte

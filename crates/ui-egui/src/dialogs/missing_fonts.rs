@@ -42,7 +42,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// After a document opened (`document.open`'s result `r`): its Missing Fonts dialog waits for the
 /// dialog slot. On the web the status line shows how many fonts are missing instead, unless it
-/// shows the open's notes.
+/// shows the open's notes; a font a font source supplies is not counted, since the web build is
+/// fetching it (`text.addFontSources`): one that fails to load says so when it does
+/// ([`VectorcraftApp::font_source_failed`]).
 pub fn after_open(app: &mut VectorcraftApp, r: &Value) {
     after_open_for(app, r, cfg!(target_arch = "wasm32"));
 }
@@ -51,7 +53,8 @@ fn after_open_for(app: &mut VectorcraftApp, r: &Value, web: bool) {
     let Some(st) = app.session.active() else { return };
     let uid = st.uid;
     if web {
-        let n = vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).len();
+        let db = vectorcraft_text::FontDb::global();
+        let n = vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).iter().filter(|f| !db.is_pending_source(&f.family)).count();
         if n > 0 && r["warnings"].as_array().is_none_or(Vec::is_empty) {
             app.status(format!("{n} font(s) aren't available here: their text shows in another font"));
         }
@@ -748,5 +751,27 @@ mod tests {
         app.ui.status = "Opened with 1 note(s): fonts".into();
         after_open_for(&mut app, &json!({"warnings": ["fonts"]}), true);
         assert_eq!(app.ui.status, "Opened with 1 note(s): fonts");
+    }
+
+    /// A font a font source supplies isn't counted missing when a document opens on the web: it is
+    /// on its way. One that fails to load says so then.
+    #[test]
+    fn the_web_leaves_out_a_font_a_source_is_fetching() {
+        const FAMILY: &str = "On Its Way 01";
+        let integrity = format!("sha256-{}", vectorcraft_format::base64_encode(&[0xef; 32]));
+        vectorcraft_text::FontDb::global().add_sources(vec![vectorcraft_text::FontSource {
+            family: FAMILY.into(),
+            style: "Regular".into(),
+            url: "fonts/on-its-way.ttf".into(),
+            integrity,
+        }]);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 40, "text": "Coming", "font": FAMILY})).unwrap();
+        app.ui.status.clear();
+        after_open_for(&mut app, &json!({}), true);
+        assert_eq!(app.ui.status, "", "nothing missing while the source is fetched");
+        app.font_source_failed(FAMILY, "HTTP 404");
+        assert_eq!(app.ui.status, "On Its Way 01 couldn't be loaded (HTTP 404): its text shows in another font");
     }
 }

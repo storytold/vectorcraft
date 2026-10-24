@@ -2508,6 +2508,8 @@ mark-style	Japanese	Japanisch
 	Reflect Y	Y spiegeln
 	Reflect…	Spiegeln…
 	Refresh	Aktualisieren
+	Add Font	Schrift hinzufügen
+	Add Font Sources	Schriftquellen hinzufügen
 	Refresh Font List	Schriftliste aktualisieren
 	Missing Fonts	Fehlende Schriften
 	Missing Fonts Dialog	Dialogfeld „Fehlende Schriften“
@@ -5131,3 +5133,12 @@ axis	Y Axis	Y-Achse
 	Rectangular Grid Tool Options	Optionen für das Rechteckiges-Raster-Werkzeug
 	Polar Grid Tool Options	Optionen für das Radiales-Raster-Werkzeug
 	Fill Line	Linie füllen
+@msg	give the font file as dataBase64	geben Sie die Schriftdatei als dataBase64 an
+@msg	{name} is larger than {_1} MB	{name} ist größer als {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} ist keine TrueType-, OpenType- oder Sammlungsschrift
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 ist kein Base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 besteht aus 64 Hexadezimalziffern
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} hat 1 bis {max} Zeichen
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	geben Sie 1 bis {MAX_FONT_SOURCES} Schriften an
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	geben Sie fonts an, eine Liste von Schriften mit je family, url und sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	{font} konnte nicht geladen werden ({reason}): Ihr Text wird in einer anderen Schrift angezeigt

@@ -685,6 +685,11 @@ const MAX_ASPECT: f32 = 10.0;
 /// `px` pixels high: a coverage mask as white with alpha.
 fn render_sample(family: &str, style: &str, text: &str, px: u32) -> Option<egui::ColorImage> {
     let db = vectorcraft_text::FontDb::global();
+    // A font source not loaded yet has no sample: drawing one would fetch every family the menu
+    // shows. Choosing it sets type in it, which fetches it.
+    if db.is_pending_source(family) {
+        return None;
+    }
     let face: Arc<vectorcraft_text::FontFace> = db.face(family, style)?;
     let covers = |s: &str| !s.trim().is_empty() && s.chars().filter(|c| !c.is_whitespace()).all(|c| face.covers(c));
     let text = if covers(text) { text } else { FALLBACK_SAMPLE };

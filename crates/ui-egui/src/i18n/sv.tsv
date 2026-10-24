@@ -2488,6 +2488,8 @@ font-technology	Variable	Variabla
 	Reflect…	Spegla…
 	Refresh	Uppdatera
 	Refresh Font List	Uppdatera typsnittslistan
+	Add Font	Lägg till typsnitt
+	Add Font Sources	Lägg till typsnittskällor
 	Missing Fonts	Saknade typsnitt
 	Missing Fonts Dialog	Dialogruta för saknade typsnitt
 	These fonts aren't available. Their text shows in another font.	De här typsnitten är inte tillgängliga. Deras text visas med ett annat typsnitt.
@@ -5573,3 +5575,12 @@ axis	Y Axis	Y-axel
 	Rectangular Grid Tool Options	Alternativ för verktyget för rektangulärt rutnät
 	Polar Grid Tool Options	Alternativ för verktyget för polärt rutnät
 	Fill Line	Fyll linje
+@msg	give the font file as dataBase64	ange typsnittsfilen som dataBase64
+@msg	{name} is larger than {_1} MB	{name} är större än {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} är inte ett TrueType-, OpenType- eller samlingstypsnitt
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 är inte base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 består av 64 hexadecimala siffror
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} har 1 till {max} tecken
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	ange 1 till {MAX_FONT_SOURCES} typsnitt
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	ange fonts, en lista med typsnitt som vart och ett har family, url och sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	{font} kunde inte läsas in ({reason}): dess text visas med ett annat teckensnitt

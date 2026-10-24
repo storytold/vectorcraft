@@ -3089,6 +3089,8 @@ theme	Appearance	Εμφάνιση
 	Reflect X	Κατοπτρισμός X
 	Reflect Y	Κατοπτρισμός Y
 	Refresh	Ανανέωση
+	Add Font	Προσθήκη γραμματοσειράς
+	Add Font Sources	Προσθήκη πηγών γραμματοσειρών
 	Refresh Font List	Ανανέωση λίστας γραμματοσειρών
 	Missing Fonts	Γραμματοσειρές που λείπουν
 	Missing Fonts Dialog	Παράθυρο γραμματοσειρών που λείπουν
@@ -5501,3 +5503,12 @@ axis	Y Axis	Άξονας Y
 	Rectangular Grid Tool Options	Επιλογές εργαλείου ορθογώνιου πλέγματος
 	Polar Grid Tool Options	Επιλογές εργαλείου πολικού πλέγματος
 	Fill Line	Γέμισμα γραμμής
+@msg	give the font file as dataBase64	δώστε το αρχείο γραμματοσειράς ως dataBase64
+@msg	{name} is larger than {_1} MB	το {name} είναι μεγαλύτερο από {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	το {name} δεν είναι γραμματοσειρά TrueType, OpenType ή συλλογή γραμματοσειρών
+@msg	{name}: dataBase64 is not base64	{name}: το dataBase64 δεν είναι base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	το fonts[{i}].sha256 είναι 64 δεκαεξαδικά ψηφία
+@msg	fonts[{i}].{key} is 1 to {max} characters	το fonts[{i}].{key} έχει 1 έως {max} χαρακτήρες
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	δώστε 1 έως {MAX_FONT_SOURCES} γραμματοσειρές
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	δώστε fonts, μια λίστα γραμματοσειρών, καθεμία με family, url και sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	η γραμματοσειρά {font} δεν φορτώθηκε ({reason}): το κείμενό της εμφανίζεται με άλλη γραμματοσειρά

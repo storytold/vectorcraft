@@ -451,3 +451,18 @@ fn a_preview_stays_put_while_the_menu_is_still() {
     assert_eq!(picked, Some(FontPick::EndPreview));
     assert_eq!(font(&app), "Inter");
 }
+
+/// A font source not loaded yet has no sample in the menu, and showing it asks for nothing (only
+/// type set in it does); once its file is added, its sample draws.
+#[test]
+fn a_font_source_has_no_sample_until_its_file_is_added() {
+    const FAMILY: &str = "Menu Source 1";
+    let db = vectorcraft_text::FontDb::global();
+    let integrity = format!("sha256-{}", vectorcraft_format::base64_encode(&[0xcd; 32]));
+    db.add_sources(vec![vectorcraft_text::FontSource { family: FAMILY.into(), style: "Regular".into(), url: "fonts/menu.ttf".into(), integrity }]);
+    assert!(db.menu_family_list().iter().any(|f| f == FAMILY), "listed in the menus");
+    assert!(crate::font_menu::render_sample_for_test(FAMILY, "Sample", 24).is_none());
+    assert!(db.take_source_requests().iter().all(|r| r.family != FAMILY), "a sample asks for nothing");
+    assert!(db.add_font(vectorcraft_testkit::fonts::renamed(FAMILY)) > 0);
+    assert!(crate::font_menu::render_sample_for_test(FAMILY, "Sample", 24).is_some(), "drawn once added");
+}

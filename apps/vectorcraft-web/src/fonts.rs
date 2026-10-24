@@ -3,6 +3,10 @@
 //! ones before the app starts, [`spawn_background_fonts`] the rest once it runs. The browser checks
 //! each file against its SHA-256 (Subresource Integrity). A face that fails is logged and skipped:
 //! the app runs without it. With `WEB_FONTS` empty (built without craft-fonts) both do nothing.
+//!
+//! Font sources (`text.addFontSources`): the faces a page can supply. [`fetch_requested`] fetches
+//! each one type has asked for (`FontDb::take_source_requests`), checked against its SHA-256, and
+//! keeps the bytes until the app's next frame hands them to `text.addFont` ([`take_fetched`]).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -22,6 +26,42 @@ const BACKGROUND_PARALLEL: usize = 4;
 thread_local! {
     /// The background fetch runs once per page, though a graphics restart creates the app again.
     static BACKGROUND_STARTED: Cell<bool> = const { Cell::new(false) };
+    /// Font sources fetched and not yet added: a name for messages, and the file's bytes.
+    static FETCHED: std::cell::RefCell<Vec<(String, Vec<u8>)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Font sources that failed to fetch, and why, for the status line.
+    static FAILED: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Fetch, each in the background, the font sources type has asked for since the last call; a
+/// fetched file waits for [`take_fetched`], and `ctx` is asked for a frame. A source that fails is
+/// logged; its type stays in the fallback face.
+pub fn fetch_requested(ctx: &egui::Context) {
+    for src in FontDb::global().take_source_requests() {
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            match fetch(&src.url, &src.integrity, BACKGROUND_TIMEOUT_MS).await {
+                Ok(bytes) => {
+                    FETCHED.with(|f| f.borrow_mut().push((format!("{} {}", src.family, src.style), bytes)));
+                    ctx.request_repaint();
+                }
+                Err(e) => {
+                    log::warn!("font source {} {}: {e}", src.family, src.style);
+                    FAILED.with(|f| f.borrow_mut().push((src.family.clone(), e)));
+                    ctx.request_repaint();
+                }
+            }
+        });
+    }
+}
+
+/// The font sources fetched since the last call, for `text.addFont`.
+pub fn take_fetched() -> Vec<(String, Vec<u8>)> {
+    FETCHED.with(|f| std::mem::take(&mut *f.borrow_mut()))
+}
+
+/// The font sources that failed to fetch since the last call: the family, and why.
+pub fn take_failed() -> Vec<(String, String)> {
+    FAILED.with(|f| std::mem::take(&mut *f.borrow_mut()))
 }
 
 /// Fetch and register the `startup` faces (one after the other). Returns how many loaded.

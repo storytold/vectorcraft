@@ -3081,6 +3081,8 @@ mark-style	Japanese	Japán
 	Reflect Y	Y-tükrözés
 	Reflect…	Tükrözés…
 	Refresh	Frissítés
+	Add Font	Betűtípus hozzáadása
+	Add Font Sources	Betűtípusforrások hozzáadása
 	Refresh Font List	Betűtípuslista frissítése
 	Registered Trademark Symbol	Bejegyzett védjegy jele
 	Registration marks	Illesztőjelek
@@ -5535,3 +5537,12 @@ axis	Y Axis	Y tengely
 	Rectangular Grid Tool Options	Téglalaprács beállításai
 	Polar Grid Tool Options	Polárrács beállításai
 	Fill Line	Szakasz kitöltése
+@msg	give the font file as dataBase64	a betűtípusfájlt dataBase64 formában add meg
+@msg	{name} is larger than {_1} MB	{name} nagyobb, mint {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} nem TrueType, OpenType vagy gyűjteményes betűtípus
+@msg	{name}: dataBase64 is not base64	{name}: a dataBase64 nem base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	a fonts[{i}].sha256 64 hexadecimális számjegyből áll
+@msg	fonts[{i}].{key} is 1 to {max} characters	a fonts[{i}].{key} 1–{max} karakter hosszú
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	1–{MAX_FONT_SOURCES} betűtípust adj meg
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	add meg a fonts listát: betűtípusok, mindegyik family, url és sha256 értékkel
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	a(z) {font} nem tölthető be ({reason}); a szövege más betűtípussal jelenik meg

@@ -2444,6 +2444,8 @@ font-script	Japanese	汉字
 	Reflect Y	Y 轴镜像
 	Reflect…	镜像…
 	Refresh	刷新
+	Add Font	添加字体
+	Add Font Sources	添加字体来源
 	Refresh Font List	刷新字体列表
 	Missing Fonts	缺失的字体
 	Missing Fonts Dialog	缺失的字体对话框
@@ -5388,3 +5390,12 @@ axis	Y Axis	Y 轴
 	Rectangular Grid Tool Options	矩形网格工具选项
 	Polar Grid Tool Options	极坐标网格工具选项
 	Fill Line	填充线段
+@msg	give the font file as dataBase64	请以 dataBase64 给出字体文件
+@msg	{name} is larger than {_1} MB	{name} 大于 {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} 不是 TrueType、OpenType 或字体集合文件
+@msg	{name}: dataBase64 is not base64	{name}：dataBase64 不是 base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 是 64 位十六进制数字
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} 为 1 到 {max} 个字符
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	请给出 1 到 {MAX_FONT_SOURCES} 个字体
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	请给出 fonts：字体列表，每项含 family、url 和 sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	无法加载 {font}（{reason}）：使用它的文字以其他字体显示

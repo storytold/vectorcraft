@@ -394,6 +394,19 @@ impl eframe::App for WebShell {
                 });
             }
         }
+        // Font sources: those type asked for are fetched; those fetched join the session, as
+        // `text.addFont` adds a file, and the type set in them redraws.
+        crate::fonts::fetch_requested(ctx);
+        for (name, bytes) in crate::fonts::take_fetched() {
+            let params = serde_json::json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes), "name": name });
+            if let Err(e) = app.run("text.addFont", params) {
+                log::warn!("font source {name}: {e}");
+                app.font_source_failed(&name, &e);
+            }
+        }
+        for (family, reason) in crate::fonts::take_failed() {
+            app.font_source_failed(&family, &reason);
+        }
         app.logic(ctx);
         crate::api::poll_replies();
     }

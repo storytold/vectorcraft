@@ -3122,6 +3122,8 @@ theme	Appearance	Ulkoasu
 	Add Font Files	Lisää fonttitiedostoja
 	Font List	Fonttiluettelo
 	Fonts in Document	Asiakirjan fontit
+	Add Font	Lisää fontti
+	Add Font Sources	Lisää fonttilähteitä
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
 	Select Text by Font	Valitse teksti fontin mukaan
@@ -5580,3 +5582,12 @@ axis	Y Axis	Y-akseli
 	Rectangular Grid Tool Options	Suorakulmaisen ruudukon työkalun asetukset
 	Polar Grid Tool Options	Napakoordinaattiruudukon työkalun asetukset
 	Fill Line	Täytä viiva
+@msg	give the font file as dataBase64	anna fonttitiedosto dataBase64-muodossa
+@msg	{name} is larger than {_1} MB	{name} on suurempi kuin {_1} Mt
+@msg	{name} is not a TrueType, OpenType or collection font	{name} ei ole TrueType-, OpenType- tai kokoelmafontti
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 ei ole base64-muotoa
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 on 64 heksadesimaalinumeroa
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} on 1–{max} merkkiä
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	anna 1–{MAX_FONT_SOURCES} fonttia
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	anna fonts, luettelo fonteista, joista jokaisella on family, url ja sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	fonttia {font} ei voitu ladata ({reason}): sen teksti näytetään toisella fontilla

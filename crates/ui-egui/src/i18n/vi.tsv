@@ -2858,6 +2858,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reflect Y	Phản chiếu Y
 	Reflect…	Phản chiếu…
 	Refresh	Làm mới
+	Add Font	Thêm phông chữ
+	Add Font Sources	Thêm nguồn phông chữ
 	Refresh Font List	Làm mới danh sách phông chữ
 	Registered Trademark Symbol	Ký hiệu nhãn hiệu đã đăng ký
 	Registration marks	Dấu căn chỉnh
@@ -5145,3 +5147,12 @@ axis	Y Axis	Trục Y
 	Rectangular Grid Tool Options	Tùy chọn công cụ Lưới chữ nhật
 	Polar Grid Tool Options	Tùy chọn công cụ Lưới cực
 	Fill Line	Tô đoạn thẳng
+@msg	give the font file as dataBase64	hãy cung cấp tệp phông chữ dưới dạng dataBase64
+@msg	{name} is larger than {_1} MB	{name} lớn hơn {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} không phải phông chữ TrueType, OpenType hay bộ sưu tập phông chữ
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 không phải base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 gồm 64 chữ số thập lục phân
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} dài từ 1 đến {max} ký tự
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	hãy cung cấp từ 1 đến {MAX_FONT_SOURCES} phông chữ
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	hãy cung cấp fonts, danh sách phông chữ, mỗi phông có family, url và sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	không tải được {font} ({reason}): văn bản hiển thị bằng phông khác

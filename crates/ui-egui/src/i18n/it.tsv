@@ -2573,6 +2573,8 @@ mark-style	Japanese	Giapponese
 	Reflect Y	Rifletti Y
 	Reflect…	Rifletti…
 	Refresh	Aggiorna
+	Add Font	Aggiungi font
+	Add Font Sources	Aggiungi origini dei font
 	Refresh Font List	Aggiorna elenco font
 	Missing Fonts	Font mancanti
 	Missing Fonts Dialog	Finestra di dialogo Font mancanti
@@ -5165,3 +5167,12 @@ axis	Y Axis	Asse Y
 	Rectangular Grid Tool Options	Opzioni strumento Griglia rettangolare
 	Polar Grid Tool Options	Opzioni strumento Griglia polare
 	Fill Line	Riempi linea
+@msg	give the font file as dataBase64	specifica il file del font come dataBase64
+@msg	{name} is larger than {_1} MB	{name} supera {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} non è un font TrueType, OpenType né una raccolta di font
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 non è in base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 è di 64 cifre esadecimali
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} ha da 1 a {max} caratteri
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	specifica da 1 a {MAX_FONT_SOURCES} font
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	specifica fonts, un elenco di font, ciascuno con family, url e sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	impossibile caricare {font} ({reason}): il suo testo viene mostrato con un altro font

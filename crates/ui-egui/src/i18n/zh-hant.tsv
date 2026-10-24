@@ -3342,6 +3342,8 @@ font-script	Japanese	漢字
 	Reflect Y	鏡射 Y
 	Reflect…	鏡射…
 	Refresh	重新整理
+	Add Font	加入字體
+	Add Font Sources	加入字體來源
 	Refresh Font List	重新整理字體清單
 	Missing Fonts	遺失的字體
 	Missing Fonts Dialog	遺失的字體對話框
@@ -5184,3 +5186,12 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	矩形格線工具選項
 	Polar Grid Tool Options	極座標格點工具選項
 	Fill Line	填色線段
+@msg	give the font file as dataBase64	請以 dataBase64 提供字體檔案
+@msg	{name} is larger than {_1} MB	{name} 大於 {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} 不是 TrueType、OpenType 或字體集合檔案
+@msg	{name}: dataBase64 is not base64	{name}：dataBase64 不是 base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 是 64 位十六進位數字
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} 為 1 到 {max} 個字元
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	請提供 1 到 {MAX_FONT_SOURCES} 個字體
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	請提供 fonts：字體清單，每項含 family、url 和 sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	無法載入 {font}（{reason}）：使用此字體的文字會以其他字體顯示

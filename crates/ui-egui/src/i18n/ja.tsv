@@ -2541,6 +2541,8 @@ mark-style	Japanese	日本式
 	Reflect X	X 軸でリフレクト
 	Reflect Y	Y 軸でリフレクト
 	Refresh	更新
+	Add Font	フォントを追加
+	Add Font Sources	フォントの提供元を追加
 	Refresh Font List	フォントリストを更新
 	Missing Fonts	見つからないフォント
 	Missing Fonts Dialog	見つからないフォントダイアログ
@@ -5227,3 +5229,12 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	長方形グリッドツールオプション
 	Polar Grid Tool Options	同心円グリッドツールオプション
 	Fill Line	線を塗りつぶす
+@msg	give the font file as dataBase64	フォントファイルを dataBase64 で指定してください
+@msg	{name} is larger than {_1} MB	{name} は {_1} MB を超えています
+@msg	{name} is not a TrueType, OpenType or collection font	{name} は TrueType、OpenType、コレクションのいずれのフォントでもありません
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 が base64 ではありません
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 は 16 進数 64 桁です
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} は 1～{max} 文字です
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	フォントを 1～{MAX_FONT_SOURCES} 個指定してください
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	fonts に、family、url、sha256 を持つフォントのリストを指定してください
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	{font} を読み込めませんでした ({reason}): テキストは別のフォントで表示されます

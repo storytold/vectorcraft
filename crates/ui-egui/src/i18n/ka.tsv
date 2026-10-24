@@ -2757,6 +2757,8 @@ theme	Appearance	იერსახე
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
 	Fonts in Document	დოკუმენტის შრიფტები
+	Add Font	შრიფტის დამატება
+	Add Font Sources	შრიფტის წყაროების დამატება
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
 	Select Text by Font	ტექსტის მონიშვნა შრიფტის მიხედვით
@@ -5465,3 +5467,12 @@ axis	Y Axis	Y ღერძი
 	Rectangular Grid Tool Options	მართკუთხა ბადის ხელსაწყოს პარამეტრები
 	Polar Grid Tool Options	პოლარული ბადის ხელსაწყოს პარამეტრები
 	Fill Line	ხაზის შევსება
+@msg	give the font file as dataBase64	მიუთითეთ შრიფტის ფაილი dataBase64-ის სახით
+@msg	{name} is larger than {_1} MB	{name} {_1} MB-ზე დიდია
+@msg	{name} is not a TrueType, OpenType or collection font	{name} არ არის TrueType, OpenType ან კოლექციის შრიფტი
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 არ არის base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 არის 64 თექვსმეტობითი ციფრი
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} შეიცავს 1-დან {max}-მდე სიმბოლოს
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	მიუთითეთ 1-დან {MAX_FONT_SOURCES}-მდე შრიფტი
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	მიუთითეთ fonts — შრიფტების სია, თითოეული family-ით, url-ით და sha256-ით
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	{font} ვერ ჩაიტვირთა ({reason}): მისი ტექსტი სხვა შრიფტით ჩანს

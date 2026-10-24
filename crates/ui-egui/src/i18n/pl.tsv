@@ -3060,6 +3060,8 @@ theme	Appearance	Wygląd
 	Add Font Files	Dodaj pliki czcionek
 	Font List	Lista czcionek
 	Fonts in Document	Czcionki w dokumencie
+	Add Font	Dodaj czcionkę
+	Add Font Sources	Dodaj źródła czcionek
 	Refresh Font List	Odśwież listę czcionek
 	Replace Font	Zastąp czcionkę
 	Select Text by Font	Zaznacz tekst według czcionki
@@ -5401,3 +5403,12 @@ axis	Y Axis	Oś Y
 	Rectangular Grid Tool Options	Opcje narzędzia Siatka prostokątna
 	Polar Grid Tool Options	Opcje narzędzia Siatka biegunowa
 	Fill Line	Wypełnij odcinek
+@msg	give the font file as dataBase64	podaj plik czcionki jako dataBase64
+@msg	{name} is larger than {_1} MB	{name} jest większy niż {_1} MB
+@msg	{name} is not a TrueType, OpenType or collection font	{name} nie jest czcionką TrueType, OpenType ani kolekcją czcionek
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 nie jest w base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 to 64 cyfry szesnastkowe
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} ma od 1 do {max} znaków
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	podaj od 1 do {MAX_FONT_SOURCES} czcionek
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	podaj fonts, listę czcionek, każdą z family, url i sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	nie udało się wczytać czcionki {font} ({reason}) — jej tekst jest wyświetlany inną czcionką

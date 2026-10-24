@@ -2565,6 +2565,8 @@ mark-style	Japanese	Японський
 	Reflect Y	Відобразити за Y
 	Reflect…	Відобразити…
 	Refresh	Оновити
+	Add Font	Додати шрифт
+	Add Font Sources	Додати джерела шрифтів
 	Refresh Font List	Оновити список шрифтів
 	Missing Fonts	Відсутні шрифти
 	Missing Fonts Dialog	Діалогове вікно «Відсутні шрифти»
@@ -5145,3 +5147,12 @@ axis	Y Axis	Вісь Y
 	Rectangular Grid Tool Options	Параметри інструменту «Прямокутна сітка»
 	Polar Grid Tool Options	Параметри інструменту «Полярна сітка»
 	Fill Line	Заливка відрізка
+@msg	give the font file as dataBase64	вкажіть файл шрифту як dataBase64
+@msg	{name} is larger than {_1} MB	{name} більший за {_1} МБ
+@msg	{name} is not a TrueType, OpenType or collection font	{name} — не шрифт TrueType, OpenType і не колекція шрифтів
+@msg	{name}: dataBase64 is not base64	{name}: dataBase64 — не base64
+@msg	fonts[{i}].sha256 is 64 hexadecimal digits	fonts[{i}].sha256 — це 64 шістнадцяткові цифри
+@msg	fonts[{i}].{key} is 1 to {max} characters	fonts[{i}].{key} має від 1 до {max} символів
+@msg	give 1 to {MAX_FONT_SOURCES} fonts	вкажіть від 1 до {MAX_FONT_SOURCES} шрифтів
+@msg	give fonts, a list of fonts each with a family, a url and a sha256	вкажіть fonts — список шрифтів, кожен із family, url і sha256
+@msg	{font} couldn't be loaded ({reason}): its text shows in another font	не вдалося завантажити шрифт {font} ({reason}); його текст показано іншим шрифтом
