@@ -81,6 +81,13 @@ pub fn start() {
             restarts: 0,
         };
         track_paste(&host.pasted);
+        // `?host=parent`: a same-origin page framing VectorCraft opens documents in it and
+        // stores what it saves (`crate::host`).
+        if query_param("host").as_deref() == Some("parent")
+            && let Some(bridge) = crate::host::Bridge::new()
+        {
+            bridge.install();
+        }
         run(host, canvas, None).await;
     });
 }
@@ -132,6 +139,10 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         if let Err(e) = crate::api::install() {
                             log::error!("vectorcraft-web: couldn't install window.vectorcraft: {}", js_err(e));
                         }
+                        if let Some(bridge) = crate::host::installed() {
+                            bridge.listen(host.inbox.clone(), ctx.clone());
+                            bridge.post_ready();
+                        }
                         VectorcraftApp::new(Session::new(), services).with_control(control_rx)
                     }
                 };
@@ -148,7 +159,12 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 el.remove();
             }
         }
-        (Err(e), None) => notice(&[&format!("VectorCraft failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]),
+        (Err(e), None) => {
+            if let Some(bridge) = crate::host::installed() {
+                bridge.post_failed(&js_err(e.clone()));
+            }
+            notice(&[&format!("VectorCraft failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]);
+        }
         (Err(e), Some(kept)) => {
             log::error!("vectorcraft-web: couldn't restart the graphics: {}", js_err(e));
             give_up(slot.borrow_mut().take(), kept);
@@ -395,6 +411,7 @@ impl eframe::App for WebShell {
             }
         }
         app.logic(ctx);
+        crate::host::report_dirty(app);
         crate::api::poll_replies();
     }
 
@@ -557,6 +574,9 @@ impl RecoveryStore for BrowserStore {
 fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
     if crate::api::capture(path, bytes) {
         return Ok(());
+    }
+    if let Some(posted) = crate::host::deliver(&fileio::file_name(path), bytes) {
+        return posted;
     }
     let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "vectorcraft".into());
