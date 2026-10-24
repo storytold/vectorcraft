@@ -5,7 +5,7 @@
 //! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush) and
-//! `size` (points; Blob Brush and Eraser).
+//! `size` (relative to 1× stroke weight for the Paintbrush; points for the Blob Brush and Eraser).
 
 use serde_json::{Map, Value, json};
 
@@ -96,7 +96,8 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(10.0);
     }
     if d.fields.contains_key("size") {
-        number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
+        let suffix = if d.str("tool") == "paintbrush" { "×" } else { "pt" };
+        number(ui, d, ("size", tl!("Size:")), suffix, 1, (0.1, 1000.0));
     }
     if d.fields.contains_key("fill") {
         check(ui, d, "fill", tl!("Fill new strokes"));
