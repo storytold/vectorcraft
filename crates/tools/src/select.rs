@@ -835,7 +835,7 @@ impl Tool for SelectionTool {
                 c.finish()
             }
             (PointerKind::Drag, State::Pie(mut d)) => {
-                let out = d.drag(cx, p);
+                let out = d.drag(cx, p, m.shift);
                 self.state = State::Pie(d);
                 out
             }

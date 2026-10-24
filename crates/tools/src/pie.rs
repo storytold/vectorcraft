@@ -2,7 +2,8 @@
 //! End Angle. Where the two coincide, as on a whole ellipse (0° to 360°), a press takes the End
 //! widget. The Selection tool shows them while the bounding box shows. Dragging one sets its angle
 //! (`object.setLiveShape`'s `pieStart` or `pieEnd`) to the angle of the outline's point that lies
-//! in the direction of the pointer from the ellipse's center, in one undo step; double-clicking
+//! in the direction of the pointer from the ellipse's center, in one undo step; Shift snaps that
+//! angle to 90° steps from General → Constrain Angle (quarter and semicircle arcs). Double-clicking
 //! either makes the shape a whole ellipse again. The Selection tool hits the widgets and the canvas
 //! draws them from the same geometry.
 
@@ -91,6 +92,17 @@ impl Ellipse {
     }
 }
 
+/// When `shift`, snaps `deg` (the pie angle in the ellipse's own frame, from
+/// [`Ellipse::angle_toward`]) to the nearest 90° step from `base_deg` (General → Constrain Angle).
+/// Otherwise returns `deg` unchanged.
+fn snap_pie_angle(deg: f64, shift: bool, base_deg: f64) -> f64 {
+    if !shift || !deg.is_finite() {
+        return deg;
+    }
+    let off = (deg - base_deg).rem_euclid(360.0);
+    (base_deg + (off / 90.0).round() * 90.0).rem_euclid(360.0)
+}
+
 impl PieWidget {
     /// The widgets of the selected live ellipses at `zoom` (screen px per document point), each
     /// ellipse's End widget before its Start widget. Empty while anchors are Direct-Selected.
@@ -166,7 +178,7 @@ impl PieDrag {
         Some(Self { widget, ellipse, start: ev.pos, began: false, angle: 0.0, at: ev.pos })
     }
 
-    pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+    pub fn drag(&mut self, cx: &ToolContext, p: Point, shift: bool) -> Vec<Action> {
         let mut out = vec![];
         if !self.began {
             if p.distance(self.start) < cx.tol(3.0) {
@@ -175,7 +187,7 @@ impl PieDrag {
             self.began = true;
             out.push(Action::Begin("Live Shape".into()));
         }
-        self.angle = self.ellipse.angle_toward(p);
+        self.angle = snap_pie_angle(self.ellipse.angle_toward(p), shift, cx.constrain_angle);
         self.at = p;
         let mut params = json!({ "id": self.widget.id.0 });
         params[self.widget.end.key()] = json!(self.angle);
@@ -307,6 +319,71 @@ mod tests {
             let a = t.pointer(&c, &ev(PointerKind::Drag, center + (xf * Point::new(w / 2.0, 0.0) - center) * 2.0));
             assert!(matches!(&a[1], Action::Preview(_, v) if v.get("pieEnd").is_some() && v.get("pieStart").is_none()), "{a:?}");
         }
+    }
+
+    /// Shift snaps the dragged pie angle to the nearest quarter turn.
+    #[test]
+    fn shift_snaps_the_pie_angle_to_quarter_turns() {
+        let (d, _, s) = doc_with_ellipse((0.0, 360.0));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, Point::new(312.0, 150.0)));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 235.0, 55.0).with_mods(shift));
+        let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+        assert!((v["pieEnd"].as_f64().unwrap() - 90.0).abs() < 1e-9, "{v}");
+        let mut plain = SelectionTool::default();
+        plain.pointer(&c, &ev(PointerKind::Down, Point::new(312.0, 150.0)));
+        let a2 = plain.pointer(&c, &ev(PointerKind::Drag, Point::new(235.0, 55.0)));
+        let Action::Preview(_, v2) = &a2[1] else { panic!("{a2:?}") };
+        let free = v2["pieEnd"].as_f64().unwrap();
+        assert!((free - 90.0).abs() > 1.0 && (free - 45.0).abs() > 1.0, "{free}");
+    }
+
+    /// Shift snaps to 90° steps from General → Constrain Angle (45° → 45°, 135°, …).
+    #[test]
+    fn shift_snaps_from_the_constrain_angle_on_an_unrotated_ellipse() {
+        let (d, _, s) = doc_with_ellipse((0.0, 360.0));
+        let p = paint();
+        let c = ToolContext { constrain_angle: 45.0, ..cx(&d, &s, &p) };
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, Point::new(312.0, 150.0)));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 235.0, 55.0).with_mods(shift));
+        let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+        assert!((v["pieEnd"].as_f64().unwrap() - 45.0).abs() < 1e-9, "{v}");
+    }
+
+    /// On a rotated ellipse, Shift still snaps in the shape's local angles (15° + k·90°).
+    #[test]
+    fn shift_snaps_in_the_ellipse_frame_when_rotated() {
+        use std::f64::consts::PI;
+        let rot = 30.0 * PI / 180.0;
+        let xf = Affine::translate((100.0, 100.0)) * Affine::rotate(rot);
+        let (d, _, s) = ellipse_doc(200.0, 100.0, (0.0, 360.0), xf);
+        let p = paint();
+        let c = ToolContext { constrain_angle: 15.0, ..cx(&d, &s, &p) };
+        let center = xf * Point::new(100.0, 50.0);
+        let local_deg: f64 = 40.0;
+        let rad = local_deg.to_radians();
+        let on = xf * Point::new(100.0 + 100.0 * rad.cos(), 50.0 - 50.0 * rad.sin());
+        let drag = center + (on - center) * 1.05;
+        let ws = PieWidget::of(&d, &s, 1.0);
+        let down = ws[0].at;
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, down));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, drag.x, drag.y).with_mods(shift));
+        let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+        assert!((v["pieEnd"].as_f64().unwrap() - 15.0).abs() < 1e-9, "{v}");
+        let mut plain = SelectionTool::default();
+        plain.pointer(&c, &ev(PointerKind::Down, down));
+        let a2 = plain.pointer(&c, &ev(PointerKind::Drag, drag));
+        let Action::Preview(_, v2) = &a2[1] else { panic!("{a2:?}") };
+        let free = v2["pieEnd"].as_f64().unwrap();
+        assert!((free - local_deg).abs() < 2.0, "{free}");
+        assert!((free - 15.0).abs() > 1.0 && (free - 105.0).abs() > 1.0, "{free}");
     }
 
     /// The Start widget sets Pie Start Angle and leaves the end where it is.
