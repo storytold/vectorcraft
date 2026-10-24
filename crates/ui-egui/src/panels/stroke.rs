@@ -127,10 +127,11 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
     (!mixed.weight).then(|| st.map_or(app.session.paint.stroke_width, |s| s.width))
 }
 
-/// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
+/// The weight spinner (Stroke panel, Control bar, Properties): Units > Stroke, presets, the weight
+/// ladder ([`widgets::weight_spin_field`]), blank when mixed.
 pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
     let unit = app.session.stroke_unit();
-    if let Some(w) = widgets::spin_field(ui, id, weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
+    if let Some(w) = widgets::weight_spin_field(ui, id, weight, unit, width, &weight_presets(unit)) {
         set(app, json!({"weight": w}));
     }
 }
@@ -736,7 +737,8 @@ mod tests {
         };
         // The weight and the limit.
         let stroke = |app: &VectorcraftApp| current_stroke(app).map(|s| [s.width, s.miter_limit]).unwrap();
-        for (shown, after, which, low) in [("1 pt", "0 pt", 0, 0.0), ("2 x", "1 x", 1, 1.0)] {
+        // (`above`: one step above the bound; a weight steps by quarters below 1 pt.)
+        for (shown, after, which, low, above) in [("1 pt", "0 pt", 0, 0.0, "0.25 pt"), ("2 x", "1 x", 1, 1.0, "2 x")] {
             let texts = frame(&mut app, vec![]);
             let at = texts.iter().find(|(t, _)| t == shown).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {shown:?} in {texts:?}"));
             let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
@@ -759,7 +761,7 @@ mod tests {
             let key = |key| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
             frame(&mut app, vec![key(egui::Key::ArrowDown), key(egui::Key::ArrowUp)]);
             let texts = frame(&mut app, vec![]);
-            assert!(texts.iter().any(|(t, _)| t == shown), "{after}, down and up → {shown}: {texts:?}");
+            assert!(texts.iter().any(|(t, _)| t == above), "{after}, down and up → {above}: {texts:?}");
         }
     }
 }

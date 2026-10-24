@@ -297,6 +297,7 @@ fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Run this frame's keyboard shortcuts: keymap commands, tools and panels, nudges, Delete/Backspace (left to a Layers or Appearance row that has the keys) and single-key tool shortcuts.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Taken before anything returns, so a press in a field or a dialog ends a pair of Escapes.
     let mut escape_pair = escape_press(ctx);
@@ -581,8 +582,17 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     // Command, panel and tool shortcuts. Keys that type a character without Cmd/Alt/Ctrl are
-    // handled below as text (tool shortcuts, X, D, /, `,` and `.`).
-    let hits = dispatch(app, ctx, |hit| !(hit.trigger.chord.is_plain() && types_text(hit.trigger.chord.key)));
+    // handled below as text (tool shortcuts, X, D, /, `,` and `.`). A plain Delete or Backspace
+    // after a click on a Layers or Appearance row is that panel's (it removes the highlighted
+    // rows), not Edit › Clear's.
+    let rows_keys = crate::panels::rows_take_delete(ctx);
+    let row_key = |chord: &craft_keymap::Chord| {
+        rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
+    };
+    let hits = dispatch(app, ctx, |hit| {
+        let chord = &hit.trigger.chord;
+        !(chord.is_plain() && types_text(chord.key) || row_key(chord))
+    });
     let ran = !hits.is_empty();
     for c in hits {
         run_hit(app, ctx, &c);
@@ -620,7 +630,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     // Delete / Backspace clear the selection.
-    if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
+    if !rows_keys
+        && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace))
+        && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
     {
         let _ = app.run("edit.clear", json!({}));
     }

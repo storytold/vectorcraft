@@ -126,16 +126,15 @@ struct ColumnDrag {
     ids: Vec<u64>,
 }
 
+/// The memory key of the Layers panel's state `name`.
 fn key(name: &str) -> egui::Id {
     egui::Id::new(("layers-panel", name))
 }
 
+/// The memory key of the row being renamed.
 fn rename_id() -> egui::Id {
     egui::Id::new("layers-rename")
 }
-
-/// Ghost rows are drawn at this opacity.
-const GHOST_OPACITY: f32 = 0.5;
 
 /// The colour of the layer holding `id`.
 fn layer_colour(doc: &Document, id: NodeId) -> Color32 {
@@ -168,24 +167,22 @@ fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
     let Some(n) = node_arc(doc, src) else { return };
     let n = &n;
     let (grab, width, depth) = ui.data(|d| d.get_temp::<(egui::Vec2, f32, usize)>(key("grab"))).unwrap_or((vec2(h, h / 2.0), 240.0, 0));
-    // A plain Ui on the tooltip layer, not an Area: a new Area is invisible for a frame and fades in.
     let r = egui::Rect::from_min_size(pos - grab, vec2(width, h));
-    let id = key("ghost");
-    let mut ui = Ui::new(ui.ctx().clone(), id, egui::UiBuilder::new().layer_id(egui::LayerId::new(egui::Order::Tooltip, id)).max_rect(r));
-    ui.set_opacity(GHOST_OPACITY);
-    let p = ui.painter();
-    p.rect_filled(r, 0.0, t.row_selected);
-    p.rect_stroke(r, 0.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
-    let mut x = r.left() + 2.0 * COLUMN + 2.0;
-    colour_bar(&ui, n, r, x, layer_colour(doc, src));
-    x += 22.0 + depth as f32 * INDENT;
-    if view.opts.thumb(n) {
-        x = row_thumb(&ui, view, n, r, x).right() + 4.0;
-    }
-    let label = n.identify_label(view.identify_xml_id);
-    let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
-    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
+    widgets::drag_ghost(ui.ctx(), key("ghost"), r, |ui, r| {
+        let mut x = r.left() + 2.0 * COLUMN + 2.0;
+        colour_bar(ui, n, r, x, layer_colour(doc, src));
+        x += 22.0 + depth as f32 * INDENT;
+        if view.opts.thumb(n) {
+            x = row_thumb(ui, view, n, r, x).right() + 4.0;
+        }
+        let label = n.identify_label(view.identify_xml_id);
+        let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
+        ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
+    });
 }
+
+/// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
+pub(crate) const ROW_KEYS: &str = "ly-keys";
 
 /// Where a dragged row goes relative to the row it is dropped on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -521,6 +518,7 @@ struct Out {
     toggle: Vec<(NodeId, bool)>,
 }
 
+/// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace after a row click delete the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
@@ -689,18 +687,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !released
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let LayersDrag::Rows(ids) = &*drag
-        && let Some(src) = ids.first()
+        && let Some(&grabbed) = ui.data(|d| d.get_temp::<NodeId>(key("grabbed"))).as_ref().or(ids.first())
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
     {
-        drag_ghost(ui, &view, *src, pos);
+        drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
     }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
+    // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    if pressed_outside {
-        ui.data_mut(|d| d.insert_temp(key("focus"), false));
-    }
-    let focus: bool = ui.data(|d| d.get_temp(key("focus"))).unwrap_or(false);
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
         && !view.rows.is_empty()
         && ui.ctx().memory(|m| m.focused().is_none())
@@ -854,7 +852,7 @@ fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc: &Document
         let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
             || (cmd == "layer.delete" && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
         if over {
-            child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            widgets::drop_target_outline(&child, button.rect);
         }
     }
     if widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0).clicked() {
@@ -873,22 +871,19 @@ fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc: &Document
 fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
-    ui.data_mut(|d| d.insert_temp(key("focus"), true));
-    let at = |id: NodeId| list.iter().position(|r| r.node.id == id);
-    if m.shift
-        && let Some(a) = anchor.or(view.rows.last().copied())
-        && let (Some(i), Some(j)) = (at(a), at(id))
-    {
-        let range: Vec<u64> = list.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.node.id.0).collect();
-        out.actions.push(("layer.highlight".into(), json!({"ids": range, "mode": if m.command { "add" } else { "set" }})));
-        return;
+    super::set_row_keys(ui.ctx(), ROW_KEYS, true);
+    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
+    let click = widgets::row_click(&order, &view.rows, anchor, id, m);
+    if click.moves_anchor() {
+        ui.data_mut(|d| d.insert_temp(key("anchor"), id));
     }
-    ui.data_mut(|d| d.insert_temp(key("anchor"), id));
-    if m.command {
-        out.actions.push(("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})));
-    } else {
-        out.actions.push(("layer.setCurrent".into(), json!({"id": id.0})));
-    }
+    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    out.actions.push(match click {
+        widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
+        widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),
+        widgets::RowClick::Range(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "set"})),
+        widgets::RowClick::AddRange(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "add"})),
+    });
 }
 
 /// Whether row `n` can take `drag` inside it.
@@ -1126,7 +1121,10 @@ fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Rows(ids));
         let grab = resp.interact_pointer_pos().map_or(vec2(h, h / 2.0), |p| p - r.min);
-        ui.data_mut(|d| d.insert_temp(key("grab"), (grab, r.width(), depth)));
+        ui.data_mut(|d| {
+            d.insert_temp(key("grab"), (grab, r.width(), depth));
+            d.insert_temp(key("grabbed"), n.id);
+        });
     }
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);

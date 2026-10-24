@@ -298,6 +298,7 @@ impl Dialog {
             _ => d,
         }
     }
+    /// Field `k` as text: a string as it is, another value as JSON, empty when missing.
     pub fn str(&self, k: &str) -> String {
         match self.fields.get(k) {
             Some(Value::String(s)) => s.clone(),
@@ -305,6 +306,7 @@ impl Dialog {
             None => String::new(),
         }
     }
+    /// Field `k` as a bool; `false` when it is missing or not a bool.
     pub fn bool(&self, k: &str) -> bool {
         self.fields.get(k).and_then(Value::as_bool).unwrap_or(false)
     }
@@ -330,6 +332,13 @@ pub struct UiState {
     /// Icon panel currently popped out of the collapsed column (also `properties`, `layers` or
     /// `libraries` while the dock is collapsed).
     pub open_panel: Option<String>,
+    /// `open_panel` was opened as a row's popup (the Appearance panel's links): while it is the open
+    /// panel, a press outside it closes it, whatever Auto-Collapse Iconic Panels says.
+    #[serde(skip)]
+    pub transient_panel: Option<String>,
+    /// That popup's first text field is still to take the keyboard.
+    #[serde(skip)]
+    pub transient_focus: bool,
     pub control_bar: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -836,6 +845,7 @@ impl UiState {
 }
 
 impl Default for UiState {
+    /// The interface of a first start.
     fn default() -> Self {
         Self {
             legacy_language: None,
@@ -844,6 +854,8 @@ impl Default for UiState {
             dock_tab_order: Vec::new(),
             dock_collapsed: false,
             open_panel: None,
+            transient_panel: None,
+            transient_focus: false,
             control_bar: false,
             toolbar: true,
             toolbar_double: false,

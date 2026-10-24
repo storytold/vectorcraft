@@ -12,11 +12,12 @@ use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, appearance_targets, index_param, item_target, item_target_at};
+use super::appearance::{ItemTarget, appearance_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
 use super::*;
 
+/// The effect commands of the Effect menu and the Appearance panel.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -42,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Effect",
             [],
             None,
-            "{index: int (position in the effect list), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?|id?: [..], target?: \"object\"|\"contents\"} → {ids}",
+            "{index: int (position in the effect list), indices?: [int] (several positions in the same list instead of index, removed in one undo step; every one must exist), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?|id?: [..], target?: \"object\"|\"contents\"} → {ids}",
             has_doc,
             remove
         ),
@@ -78,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Effect",
             [],
             None,
-            "{index: int, item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\"} insert a copy of the effect right after it → {ids}",
+            "{index: int, indices?: [int] (several positions in the same list instead of index; every one must exist), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\"} insert a copy of each effect right after it, in one undo step → {ids}",
             has_doc,
             duplicate
         ),
@@ -87,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Effect",
             [],
             None,
-            "{from: int (position in the source list), to: int (its position in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?|id?: [..], target?: \"object\"|\"contents\"} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
+            "{from: int|[int] (position in the source list; a list moves several effects of that list, which keep their order and land together), to: int (the position of the (first) moved effect in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?|id?: [..], target?: \"object\"|\"contents\"} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
             has_doc,
             move_effect
         ),
@@ -209,6 +210,7 @@ fn loose_for_pathfinder(s: &Session, p: &Value, id: &str) -> Result<Option<Vec<N
     Ok((roots.len() >= 2 && !grouped).then_some(roots))
 }
 
+/// `effect.list`: the effect catalog (built-in and plug-in effects) and the effects applied to the selection, with the active item.
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
     let catalog: Vec<Value> = effects::effect_catalog()
         .into_iter()
@@ -237,33 +239,66 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "catalog": catalog, "applied": applied, "activeItem": s.appearance_item() }))
 }
 
+/// The effects `effect.remove` / `effect.duplicate` act on: `indices`, else `index` (ascending, no
+/// repeats), and the "no effect" message naming them.
+fn effect_indices(p: &Value, cmd: &str) -> Result<(Vec<usize>, String)> {
+    let idx = item_indices(p, cmd)?;
+    let list = idx.iter().map(usize::to_string).collect::<Vec<_>>().join(", ");
+    let none = if idx.len() == 1 { format!("{cmd}: no effect at index {list}") } else { format!("{cmd}: no effects at indices {list}") };
+    Ok((idx, none))
+}
+
+/// `effect.remove`: removes effect `index`, or every one of `indices`, from the object's list or fill/stroke `item`'s, in one undo step.
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.remove";
-    let index = index_param(p, "index", C)?;
+    let (idx, none) = effect_indices(p, C)?;
     let item = item_target(s, p, C)?;
-    let ids = edit_effects(s, p, item, C, "Remove Effect", &format!("{C}: no effect at index {index}"), |fx| {
-        (index < fx.len()).then(|| fx.remove(index)).is_some()
+    let label = if idx.len() == 1 { "Remove Effect" } else { "Remove Effects" };
+    let ids = edit_effects(s, p, item, C, label, &none, |fx| {
+        // Every effect must exist; from the top down, so the lower positions stay valid.
+        if idx.iter().any(|i| *i >= fx.len()) {
+            return false;
+        }
+        for &i in idx.iter().rev() {
+            fx.remove(i);
+        }
+        true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+/// `effect.duplicate`: copies effect `index`, or each of `indices`, right after its original, in one undo step.
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.duplicate";
-    let index = index_param(p, "index", C)?;
+    let (idx, none) = effect_indices(p, C)?;
     let item = item_target(s, p, C)?;
-    let ids = edit_effects(s, p, item, C, "Duplicate Effect", &format!("{C}: no effect at index {index}"), |fx| match fx.get(index).cloned() {
-        Some(e) => {
-            fx.insert(index + 1, e);
-            true
+    let label = if idx.len() == 1 { "Duplicate Effect" } else { "Duplicate Effects" };
+    let ids = edit_effects(s, p, item, C, label, &none, |fx| {
+        if idx.iter().any(|i| *i >= fx.len()) {
+            return false;
         }
-        None => false,
+        // From the top down, so each copy goes right after its original.
+        for &i in idx.iter().rev() {
+            if let Some(e) = fx.get(i).cloned() {
+                fx.insert(i + 1, e);
+            }
+        }
+        true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+/// `effect.move`: moves (with `copy`: copies) effect `from`, or the effects `from` lists as one block in their order, to `to` in its own list or in `toItem`'s.
 fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.move";
-    let from = index_param(p, "from", C)?;
+    // One position or several (ascending, no repeats).
+    let from = match p.get("from") {
+        Some(Value::Array(_)) => {
+            let list = json!({ "indices": p["from"] });
+            item_indices(&list, C)?
+        }
+        _ => vec![index_param(p, "from", C)?],
+    };
     let to = index_param(p, "to", C)?;
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
@@ -276,17 +311,20 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &roots {
             let Some(n) = d.node_mut(*id) else { continue };
             let (si, di) = (src.effects_item(&n.appearance, C)?, dst.effects_item(&n.appearance, C)?);
-            let Some(fx) = n.appearance.effects_mut(si).filter(|fx| from < fx.len()) else { continue };
-            let e = if copy { fx[from].clone() } else { fx.remove(from) };
+            let Some(fx) = n.appearance.effects_mut(si).filter(|fx| from.iter().all(|i| *i < fx.len())) else { continue };
+            // Taken out from the top down, so the lower positions stay valid; put back in order.
+            let mut taken: Vec<Effect> = from.iter().rev().filter_map(|&i| if copy { fx.get(i).cloned() } else { Some(fx.remove(i)) }).collect();
+            taken.reverse();
             let Some(fx) = n.appearance.effects_mut(di) else { continue };
             let at = to.min(fx.len());
-            fx.insert(at, e);
+            fx.splice(at..at, taken);
             check_revolve_count(n, C)?;
             landed.get_or_insert((at, di));
             done.push(*id);
         }
         if done.is_empty() {
-            return Err(EngineError::Other(format!("{C}: no effect at index {from}")));
+            let list = from.iter().map(usize::to_string).collect::<Vec<_>>().join(", ");
+            return Err(EngineError::Other(format!("{C}: no effect at index {list}")));
         }
         Ok(done)
     })?;
@@ -1133,6 +1171,7 @@ mod tests {
         assert!((left - (10_000.0 - glyph_area)).abs() < 0.5, "{left} left of the square for a glyph area of {glyph_area}");
     }
 
+    /// A Pathfinder effect on a group renders live and expands to its result.
     #[test]
     fn pathfinder_effect_on_a_group_renders_live_and_expands() {
         let (mut s, a) = session_with_rect();
@@ -1152,6 +1191,7 @@ mod tests {
         assert_eq!(ch.len(), 1);
         assert!((ch[0].geometric_bounds().unwrap().width() - 50.0).abs() < 1e-6);
     }
+    /// Expand Appearance on a Transform effect with copies gives each copy its own gradient.
     #[test]
     fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
         use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
@@ -1174,5 +1214,69 @@ mod tests {
             }
         });
         assert_eq!(boxes, vec![100.0; 3], "three squares, each with its own gradient");
+    }
+
+    /// The object's own effect ids, in order.
+    fn object_effects(s: &Session, id: NodeId) -> Vec<String> {
+        node(s, id).appearance.effects.iter().map(|e| e.id.clone()).collect()
+    }
+
+    /// A rectangle with Drop Shadow, Outer Glow and Twist on the object.
+    fn three_effects() -> (Session, NodeId) {
+        let (mut s, id) = session_with_rect();
+        for e in ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"] {
+            s.execute("effect.apply", &json!({"effect": e, "ids": [id.0], "item": null})).unwrap();
+        }
+        assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+        (s, id)
+    }
+
+    /// `effect.remove` with `indices` removes several effects in one undo step.
+    #[test]
+    fn remove_takes_several_effects_in_one_undo_step() {
+        let (mut s, id) = three_effects();
+        s.execute("effect.remove", &json!({"indices": [2, 0], "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(object_effects(&s, id), ["stylize.outerGlow"]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+        // An index past the list fails and changes nothing; so does an empty list.
+        for bad in [json!([0, 3]), json!([]), json!(["x"])] {
+            assert!(s.execute("effect.remove", &json!({"indices": bad, "ids": [id.0], "item": null})).is_err(), "{bad}");
+            assert_eq!(object_effects(&s, id).len(), 3, "{bad}");
+        }
+    }
+
+    /// `effect.duplicate` with `indices` puts each copy right after its original.
+    #[test]
+    fn duplicate_takes_several_effects_each_copy_after_its_original() {
+        let (mut s, id) = three_effects();
+        s.execute("effect.duplicate", &json!({"indices": [0, 2], "ids": [id.0], "item": null})).unwrap();
+        assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.dropShadow", "stylize.outerGlow", "distort.twist", "distort.twist"]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(object_effects(&s, id).len(), 3);
+        assert!(s.execute("effect.duplicate", &json!({"indices": [1, 5], "ids": [id.0], "item": null})).is_err());
+        assert_eq!(object_effects(&s, id).len(), 3);
+    }
+
+    /// `effect.move` with several `from` lands them together, in their order.
+    #[test]
+    fn move_takes_several_effects_that_land_together_in_order() {
+        // [Shadow, Glow, Twist]: Shadow and Twist moved to the end of the list land as one block.
+        let (mut s, id) = three_effects();
+        let r = s.execute("effect.move", &json!({"from": [0, 2], "to": 1, "ids": [id.0], "fromItem": null})).unwrap();
+        assert_eq!(object_effects(&s, id), ["stylize.outerGlow", "stylize.dropShadow", "distort.twist"]);
+        assert_eq!(r["index"], json!(1), "where the first of them landed");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+        // Into the stroke's list (item 1), copying: the object keeps its effects.
+        s.execute("effect.move", &json!({"from": [1, 2], "to": 0, "fromItem": null, "toItem": 1, "copy": true, "ids": [id.0]})).unwrap();
+        let n = node(&s, id);
+        let on_stroke: Vec<_> = n.appearance.items[1].effects().iter().map(|e| e.id.clone()).collect();
+        assert_eq!(on_stroke, ["stylize.outerGlow", "distort.twist"]);
+        assert_eq!(object_effects(&s, id).len(), 3);
+        // A bad index fails and changes nothing.
+        let before = node(&s, id).appearance;
+        assert!(s.execute("effect.move", &json!({"from": [0, 9], "to": 0, "fromItem": null, "ids": [id.0]})).is_err());
+        assert_eq!(node(&s, id).appearance, before);
     }
 }
