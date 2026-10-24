@@ -64,6 +64,14 @@ fn export_is_valid_pdf() {
 }
 
 #[test]
+fn artboard_background_color_is_drawn_on_pdf_export() {
+    let mut d = doc(200.0, 150.0);
+    d.artboards[0].color = Some(Color::from_hex("#336699").unwrap());
+    let plain = uncompressed(&d);
+    assert!(plain.contains("0.2 0.4 0.6 rg") || plain.contains("0.2 0.4 0.6 RG"), "{plain}");
+}
+
+#[test]
 fn metadata_creator_and_title() {
     let mut d = doc(100.0, 100.0);
     d.title = "Poster".into();

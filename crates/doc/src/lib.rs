@@ -470,8 +470,9 @@ pub struct Artboard {
     pub video_ruler_pixel_aspect_ratio: f64,
     /// Background color (Properties › Artboards › Fill, Artboard Options). The canvas draws the
     /// artboard's paper in it, multiplied with the Simulate Colored Paper color while that is on;
-    /// without one the paper is white, or the Simulate Colored Paper color. Exports and print leave
-    /// it out.
+    /// without one the paper is white, or the Simulate Colored Paper color. PDF export and
+    /// single-artboard SVG export write it as a background behind the art; print and other exports
+    /// still omit it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<vectorcraft_color::Color>,
 }

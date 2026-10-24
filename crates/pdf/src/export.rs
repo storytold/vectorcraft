@@ -136,6 +136,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
             clip: m != r,
             marks: art.as_ref(),
             negative: false,
+            background: doc.artboards.get(i).and_then(|a| a.color),
         };
         w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
     }
@@ -273,6 +274,8 @@ pub(crate) struct Sheet<'a> {
     pub marks: Option<&'a Node>,
     /// Invert the page: paper black, ink clear (a film negative).
     pub negative: bool,
+    /// Artboard background (Properties › Artboards › Fill), drawn behind the art on the trim box.
+    pub background: Option<Color>,
 }
 
 impl Writer {
@@ -349,6 +352,18 @@ impl Writer {
         // A page whose art or marks would be placed beyond [`MAX_COORD`] is left blank.
         let fits = writable(&s, sheet.view, Rect::ZERO) && writable(&s, sheet.view * sheet.place, Rect::ZERO);
         s.push_transform(&xf(sheet.view));
+        if fits && let Some(c) = sheet.background {
+            if let Some(p) = to_path(&s, &sheet.trim.to_path(0.1)) {
+                s.set_stroke(None);
+                s.set_fill(Some(Fill {
+                    paint: ex.col(&c).into(),
+                    opacity: NormalizedF32::ONE,
+                    rule: krilla::paint::FillRule::NonZero,
+                }));
+                s.draw_path(&p);
+            }
+            s.set_fill(None);
+        }
         let window = sheet.window.and_then(|r| to_path(&s, &r.to_path(0.1)));
         if let Some(clip) = &window {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
