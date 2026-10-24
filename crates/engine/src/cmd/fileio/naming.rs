@@ -100,13 +100,26 @@ pub fn render(template: &str, p: &NameParts<'_>) -> String {
 
 /// `YYYY-MM-DD` (or `YYYYMMDD`) as `[year, month, day, 0, 0, 0]`; `None` when it isn't a date.
 pub fn parse_date(s: &str) -> Option<[i64; 6]> {
-    let digits: String = s.trim().chars().filter(|c| *c != '-').collect();
+    let s = s.trim();
+    let digits: String = match s.len() {
+        8 => s.to_string(),
+        10 if s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' => s.chars().filter(|c| *c != '-').collect(),
+        _ => return None,
+    };
     if digits.len() != 8 || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
     let num = |a: usize, b: usize| digits.get(a..b).and_then(|t| t.parse::<i64>().ok());
     let (y, m, d) = (num(0, 4)?, num(4, 6)?, num(6, 8)?);
-    ((1..=12).contains(&m) && (1..=31).contains(&d)).then_some([y, m, d, 0, 0, 0])
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let days = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return None,
+    };
+    (1..=days).contains(&d).then_some([y, m, d, 0, 0, 0])
 }
 
 #[cfg(test)]
@@ -147,6 +160,14 @@ mod tests {
         // A long counter is padded, a short run is not cut.
         assert_eq!(render("########", &NameParts { counter: 123, ..parts() }), "00000123");
         assert_eq!(render("#", &NameParts { counter: 12345, ..parts() }), "12345");
+    }
+
+    #[test]
+    fn dates_are_strict_about_hyphens_and_days() {
+        for bad in ["2026-1-011", "2-0-2-6-1-0-1-6", "2026--10--16", "2026-02-31", "2026-10-16-", "202610-16"] {
+            assert_eq!(parse_date(bad), None, "{bad}");
+        }
+        assert_eq!(parse_date("2024-02-29"), Some([2024, 2, 29, 0, 0, 0]));
     }
 
     #[test]
