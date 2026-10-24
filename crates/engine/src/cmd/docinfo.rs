@@ -502,6 +502,7 @@ mod tests {
         let length = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["pathLength"].as_f64().unwrap();
         assert!((length(&mut s, json!({})) - 132.0).abs() < 1e-6);
         s.execute("select.set", &json!({"ids": [line]})).unwrap();
+        assert!((length(&mut s, json!({})) - 132.0).abs() < 1e-6, "without Selection Only: document total, not the selection");
         assert!((length(&mut s, json!({"selectionOnly": true})) - 72.0).abs() < 1e-6);
         let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
         assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "25.4 mm"]]));
