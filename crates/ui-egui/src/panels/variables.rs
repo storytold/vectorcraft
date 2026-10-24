@@ -474,6 +474,8 @@ mod tests {
 
     /// Load Variable Library's warning about variables that aren't text shows in the status bar,
     /// translated in every language but English.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn the_variable_library_warning_shows_in_the_status_bar() {
         use crate::i18n::{Lang, message};

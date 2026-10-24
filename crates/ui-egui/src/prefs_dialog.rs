@@ -354,7 +354,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 });
             }
             PrefKind::Text if sp.key == "interfaceLanguage" => {
-                // `auto` plus every registered language, by its own name.
+                // `auto` plus every language compiled in, by its own name.
                 labeled(ui, sp.label, |ui| {
                     let cur = v.as_str().unwrap_or("auto");
                     let codes: Vec<&str> = std::iter::once("auto").chain(crate::i18n::Lang::for_picker().into_iter().map(|l| l.code())).collect();

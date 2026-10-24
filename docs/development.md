@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-10-24 · **Change:** choosing the translations (a `lang-<code>` feature per language).
 > **Last updated:** 2026-10-23 · **Change:** Tests: cargo xtask test, one integration-test binary per crate, the dev profile's debug info.
 > **Last updated:** 2026-10-21 · **Change:** the interface faces as vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels itself.
 > **Last updated:** 2026-10-21 · **Change:** leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's and vectorcraft-mcp's `bundled-fonts` features).
@@ -196,10 +197,11 @@ context's font definitions, so the embedder's own fonts are added after it.
   vectorcraft-text`, and the same for `vectorcraft-mcp`), and with them do; a test of either can't
   see that configuration, since their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
-  configuration without them, and `cargo test -p vectorcraft-ui-egui --no-default-features --test
-  install_fonts` that the panels without their interface faces still bind every family; the same
-  step lints `vectorcraft-ui-egui` without its default features. Of the crate's other tests, those
-  about the interface faces need them.
+  configuration without them, and `cargo nextest run -p vectorcraft-ui-egui --no-default-features`
+  (`cargo test` without nextest, as the test step runs) runs the panels' tests without their
+  interface faces or any translation, among them `install_fonts` (the panels still bind every
+  family); the same step lints `vectorcraft-ui-egui` without its default features. The crate's tests about the interface faces need them, and are left out of
+  that run.
 
 ### Arabic fonts and the web build
 
@@ -255,11 +257,14 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   code; `auto` follows the system locale: `VECTORCRAFT_LOCALE`, then `LC_ALL`/`LC_MESSAGES`/`LANG`/`LANGUAGE`,
   the macOS preferred languages, the Windows user locale; on the web, `?lang=<code>` in the address, then
   the browser's `navigator.languages`). The Preferences dialog previews the chosen language before OK.
-- To add a language: add `<code>.tsv` and one row in `i18n::LANGUAGES` (code, native name, catalog, plural
-  rule). The Language menu, the dropdown, locale matching and the catalog tests (well-formed, no duplicates,
-  placeholders and ellipses agree, command ids exist, every row of a partial catalog is a string the UI
-  shows, the UI fonts have every glyph, no Simplified characters in `zh-hant`) pick it up. Set `complete_menus`
-  once the menus and `tl!` literals are translated; the untranslated report then lists what the catalog lacks
+- To add a language: add `<code>.tsv`, one row in `i18n::LANGUAGES` (code, native name, catalog as
+  `catalog_tsv!("<code>.tsv", "lang-<code>")`, plural rule) and the feature `lang-<code>` in
+  `crates/ui-egui/Cargo.toml`, listed in `translations` (and in `FEATURE_ON`,
+  `i18n/tests_compiled_in.rs`). The Language menu, the dropdown, locale matching and the catalog
+  tests (well-formed, no duplicates, placeholders and ellipses agree, command ids exist, every row
+  of a partial catalog is a string the UI shows, the UI fonts have every glyph, no Simplified
+  characters in `zh-hant`) pick it up. Set `complete_menus` once the menus and `tl!` literals are
+  translated; the untranslated report then lists what the catalog lacks
   (`VECTORCRAFT_I18N_DUMP=strings.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists every
   English string).
 - A missing translation never fails a test or a build: the interface shows the English text until a translator
@@ -289,6 +294,37 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   is drawn with craft-fonts' BIZ UDPGothic when the build embeds it (see Fonts above), else with an installed
   system font; the glyph test checks Latin and Cyrillic catalogs always and the CJK ones only with craft-fonts.
   A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
+
+### Choosing the translations (embedders)
+
+The interface's translations, one catalog per language in `crates/ui-egui/src/i18n/*.tsv`, are
+compiled into `vectorcraft-ui-egui` one feature per language, named after the catalog's file:
+`lang-de`, `lang-ja`, `lang-pt-br`, `lang-zh-hant` and so on. The `translations` feature turns on
+every one (about 6.6 MB of the binary), and is on by default, so the apps have every language. An
+embedder that wants only some of them depends on `vectorcraft-ui-egui` with
+`default-features = false` and lists those, for example `features = ["lang-de", "lang-fr"]`; with
+none, the interface is English only and ships no catalog. All the catalogs are about 6.6 MB of
+text, 2.0 MB with `gzip -9` and 1.1 MB with `brotli -q 11` (2026-10-21;
+`cat crates/ui-egui/src/i18n/*.tsv | gzip -9 | wc -c`, and the same with `brotli -q 11 -c`).
+
+A language whose feature is off is left out: `Lang::all` doesn't offer it, `Lang::from_code` doesn't
+know its code, and it claims no complete menus. A system locale for it is skipped: the next language
+in the system's list that is compiled in is taken, else English. A preference saved by a build that
+had it, such as `interfaceLanguage: "fr"`, is read as an unknown code is: it follows the system
+locale, as Automatic does (Preferences shows the code as it is), and `app.language` refuses the
+code. Preferences and the Language menu offer Automatic, English and the languages compiled in.
+
+- The catalog tests (`i18n/tests.rs`) and the tests that read another language's catalog run with
+  every language (`#[cfg(feature = "translations")]`); every other test of the crate also passes
+  English only.
+- `i18n/tests_compiled_in.rs` checks what a left-out language does with a registry of its own, in
+  which one language is compiled in and another is not, so the default test run covers it; that a
+  catalog is empty without its feature (one no build has) and its file with it; and that each
+  `catalog_tsv!` names the feature after its own file, each row reads its own file and
+  `translations` lists every language's feature.
+- `cargo xtask ci`'s `no-bundled-fonts` step lints and runs the crate's tests with no default
+  feature, so with no language feature, as an English-only embedder builds it: a new test that
+  reads another language's catalog without that `cfg` fails there.
 
 ## Cursors
 
@@ -489,6 +525,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-24 | minor | Document the language features of vectorcraft-ui-egui (Localisation › Choosing the translations). |
 | 2026-10-23 | minor | Tests: `cargo xtask test` (nextest, then doctests), one integration-test binary per crate and the files that keep their own, the dev profile's debug info. |
 | 2026-10-21 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels without `VectorcraftApp::logic`. |
 | 2026-10-21 | minor | M3: highlighted-text Eyedropper sampling preserves ranges and rejects unsupported source/target transparency atomically; regression-tested; scores and estimates unchanged. |

@@ -226,16 +226,25 @@ fn has_nextest() -> bool {
 /// The workspace's unit and integration tests, without examples (clippy still checks those).
 /// nextest runs each test in its own process, in parallel across all test binaries.
 fn cmd_test() -> Result<(), String> {
+    run_tests(&["--workspace"])
+}
+
+/// The unit and integration tests of `scope` (`--workspace`, or `-p <crate>` and its features),
+/// without examples, run as [`cmd_test`] runs them: by cargo nextest when installed, each test in
+/// its own process, else by cargo test.
+fn run_tests(scope: &[&str]) -> Result<(), String> {
     const TARGETS: [&str; 3] = ["--lib", "--bins", "--tests"];
     let mut c = cargo();
-    if has_nextest() {
-        c.args(["nextest", "run", "--workspace"]).args(TARGETS);
-        run(c, "cargo nextest run --workspace --lib --bins --tests")
+    let runner = if has_nextest() {
+        c.args(["nextest", "run"]);
+        "cargo nextest run"
     } else {
         eprintln!("note: cargo-nextest is not installed; running cargo test (cargo install cargo-nextest for faster runs)");
-        c.args(["test", "--workspace"]).args(TARGETS);
-        run(c, "cargo test --workspace --lib --bins --tests")
-    }
+        c.arg("test");
+        "cargo test"
+    };
+    c.args(scope).args(TARGETS);
+    run(c, &format!("{runner} {} {}", scope.join(" "), TARGETS.join(" ")))
 }
 
 /// The doctests, which nextest doesn't run.
@@ -278,14 +287,16 @@ fn cmd_ci() -> Result<(), String> {
                 // The egui panels and the MCP server as such an embedder builds them: nothing turns
                 // the fonts back on.
                 libraries_without_bundled_fonts()?;
-                // The panels without their interface faces lint clean and still bind every family
-                // they draw in.
+                // The panels without their interface faces or any language (English only), as
+                // such an embedder builds them: they lint clean, and their tests pass, among them
+                // install_fonts (every family they draw in is still bound). They run as the test
+                // step runs them: their tests share the process-wide font database, which some of
+                // them add test fonts to, so one process per test under nextest. What a left-out
+                // language does is tested in the test step (i18n::tests_compiled_in).
                 let mut c = cargo();
                 c.args(["clippy", "-p", "vectorcraft-ui-egui", "--no-default-features", "--all-targets", "--", "-D", "warnings"]);
                 run(c, "cargo clippy -p vectorcraft-ui-egui --no-default-features --all-targets -- -D warnings")?;
-                let mut c = cargo();
-                c.args(["test", "-p", "vectorcraft-ui-egui", "--no-default-features", "--test", "install_fonts"]);
-                run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts")
+                run_tests(&["-p", "vectorcraft-ui-egui", "--no-default-features"])
             }),
         ),
         ("pdf-deps", Box::new(|| pdf_deps::run(&root()))),

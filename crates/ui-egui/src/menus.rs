@@ -4516,6 +4516,8 @@ mod tests {
     /// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it
     /// (`panels::history::step_name`), including a step named after an effect whose catalog holds
     /// only the effect's menu row with an ellipsis, as Japanese does for Feather.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn undo_and_redo_name_the_step_as_the_history_panel_does() {
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
@@ -4636,6 +4638,8 @@ mod tests {
 
     /// Edit › Undo and Edit › Redo name a step named after a style as the History panel lists it:
     /// the template's translation with the style's name in it.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn undo_and_redo_name_a_style_step_around_the_style_name() {
         let mut app = app_with_a_rectangle();

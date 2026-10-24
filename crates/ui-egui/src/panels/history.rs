@@ -118,6 +118,8 @@ mod tests {
 
     /// The step names the panel paints, top to bottom. Without an image loader, each row's icon
     /// paints a `⚠` instead, which is left out.
+    // Used only by the tests that read catalogs other than English.
+    #[cfg(feature = "translations")]
     fn listed(app: &mut VectorcraftApp) -> Vec<String> {
         let ctx = egui::Context::default();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
@@ -135,6 +137,8 @@ mod tests {
     /// the document holds it, also when the name looks like a template, like a step with a row of
     /// its own (`Apply Brush`) or like another template's name; the Normal style's name is
     /// translated as the Character Styles panel shows it. Undone steps keep their names.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn steps_named_after_a_style_list_the_template_around_the_name() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -175,6 +179,8 @@ mod tests {
 
     /// A step named after an effect whose catalog row has only the menu label with its ellipsis
     /// takes that row's translation without the ellipsis; a name with no row has none.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn effect_steps_read_the_menu_row() {
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");

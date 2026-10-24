@@ -695,6 +695,8 @@ fn simplify_dialog_show_original_path_outlines_the_paths_before_the_preview() {
     assert!(super::path_ops::original_paths(&app).is_empty());
 }
 
+// Reads catalogs other than English.
+#[cfg(feature = "translations")]
 #[test]
 fn printer_mark_labels_are_distinct_from_language_names() {
     let cs = crate::i18n::Lang::from_code("cs").unwrap();

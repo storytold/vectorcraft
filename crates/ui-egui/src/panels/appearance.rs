@@ -1279,6 +1279,8 @@ mod tests {
     /// Those choices read as their dialogs show them in the UI language: in French, the channel's
     /// RGB as the "effect" row translates it, and in Spanish, Extrude & Bevel's Rounded as the "3d"
     /// row does, not the plain row. Rasterize names the document's color mode.
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn the_effect_editor_shows_those_choices_as_their_dialogs_do() {
         let fr = crate::i18n::Lang::from_code("fr").unwrap();

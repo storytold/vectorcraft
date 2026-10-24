@@ -126,6 +126,8 @@ fn settings_lists_every_preferences_page() {
 
 /// Language ▸: Automatic, then each language in its own name (in any UI language), the
 /// preference checked; Appearance ▸: the UI brightness choices, the current one checked.
+// Reads catalogs other than English.
+#[cfg(feature = "translations")]
 #[test]
 fn language_and_appearance_are_in_the_app_menu() {
     let mut app = app(false);

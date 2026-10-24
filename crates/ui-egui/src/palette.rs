@@ -142,8 +142,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "translations")]
     use crate::i18n::Lang;
 
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn entries_are_built_once_per_language_and_match_english_shown_text_and_ids() {
         let ctx = egui::Context::default();

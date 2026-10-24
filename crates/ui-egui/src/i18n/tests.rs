@@ -1,3 +1,6 @@
+// The catalog tests read the translations, which are compiled in with the `translations` feature.
+#![cfg(feature = "translations")]
+
 use super::catalog::{Catalog, parse_entries, placeholders};
 use super::*;
 

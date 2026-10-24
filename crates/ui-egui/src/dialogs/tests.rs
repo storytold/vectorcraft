@@ -499,6 +499,8 @@ fn menu_parameter_dialogs_are_compact() {
 
 /// A list mixing built-in labels with names translates only the built-in entries: names that
 /// happen to be catalog keys ("Black", "Regular") are shown as they are.
+// Reads catalogs other than English.
+#[cfg(feature = "translations")]
 #[test]
 fn mixed_lists_translate_only_their_built_in_entries() {
     use crate::i18n::{Lang, tr};

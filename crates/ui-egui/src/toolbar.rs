@@ -1196,6 +1196,8 @@ pub(crate) mod tests {
 
     /// #1616: in every language a flyout is wide enough that no tool's name runs into its shortcut
     /// (the Spanish Live Paint names need more than the 250 pt the English ones fit in).
+    // Reads catalogs other than English.
+    #[cfg(feature = "translations")]
     #[test]
     fn a_flyout_is_as_wide_as_its_longest_translated_row() {
         let ctx = egui::Context::default();

@@ -9,7 +9,7 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 workspace = true
 
 [features]
-default = ["bundled-fonts", "interface-fonts"]
+default = ["bundled-fonts", "interface-fonts", "translations"]
 # The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`. Off, for
 # an embedder that supplies every document font at run time (`vectorcraft_text::FontDb::add_font`);
 # the interface's own faces are `interface-fonts`.
@@ -18,6 +18,35 @@ bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 # panels and dialogs draw in egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓);
 # `theme::install_fonts` binds their families either way.
 interface-fonts = []
+
+# The interface's translations (`src/i18n/*.tsv`, about 6.6 MB of the binary), one feature per
+# language (`lang-<code>`, the catalog's file name); `translations` turns on every one. A language
+# whose feature is off is left out and not offered; with none on, the interface is English only.
+translations = ["lang-bg", "lang-cs", "lang-da", "lang-de", "lang-el", "lang-es", "lang-fi", "lang-fr", "lang-hu", "lang-id", "lang-it", "lang-ja", "lang-ka", "lang-ko", "lang-nl", "lang-pl", "lang-pt-br", "lang-ru", "lang-sv", "lang-tr", "lang-uk", "lang-vi", "lang-zh-hans", "lang-zh-hant"]
+lang-bg = []
+lang-cs = []
+lang-da = []
+lang-de = []
+lang-el = []
+lang-es = []
+lang-fi = []
+lang-fr = []
+lang-hu = []
+lang-id = []
+lang-it = []
+lang-ja = []
+lang-ka = []
+lang-ko = []
+lang-nl = []
+lang-pl = []
+lang-pt-br = []
+lang-ru = []
+lang-sv = []
+lang-tr = []
+lang-uk = []
+lang-vi = []
+lang-zh-hans = []
+lang-zh-hant = []
 
 [dependencies]
 craft-ui = { workspace = true }
@@ -63,6 +92,8 @@ vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 wat = { workspace = true }
+# i18n::tests_compiled_in reads this manifest's language features (already a build-dependency).
+toml = "1"
 
 [build-dependencies]
 serde_json = { workspace = true }
