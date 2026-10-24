@@ -138,6 +138,33 @@ fn a_crash_leaves_copies_that_restore_modified_and_titled() {
     assert!(s.execute("file.recovery.restore", &json!({"file": format!("{mine}/Poster-1")})).is_err(), "an open document's copy");
 }
 
+/// A threaded frame whose first paragraph continues from the frame before is restored without
+/// that paragraph's first-line indent.
+#[test]
+fn a_restored_copy_keeps_continued_paragraphs_in_threaded_frames() {
+    let store = Arc::new(MemoryStore::default());
+    let mut s = relaunch(&store);
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame of this story. ".repeat(4);
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "leftIndent": 0, "firstLineIndent": 24})).unwrap();
+    let continues = |s: &Session| match &s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(b)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.first_para_continues,
+        _ => panic!("not text"),
+    };
+    assert!(continues(&s));
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    drop(s);
+
+    let mut s = relaunch(&store);
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    assert!(continues(&s), "the second frame continues the first frame's paragraph");
+}
+
 #[test]
 fn a_restored_copy_still_refuses_to_replace_the_file_an_import_left_things_out_of() {
     let (mut s, store) = session();
