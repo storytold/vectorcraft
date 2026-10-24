@@ -201,6 +201,64 @@ fn run_refuses_malformed_commands_naming_the_step() {
     assert_eq!(printed, 2);
 }
 
+/// `--help` and `-h` right after a subcommand print the usage that `vectorcraft-cli help` prints.
+#[test]
+fn help_after_a_subcommand_prints_the_usage() {
+    let usage = Command::new(BIN).arg("help").output().unwrap();
+    assert!(usage.status.success() && String::from_utf8_lossy(&usage.stdout).contains("USAGE:"));
+    for sub in ["mcp", "run", "commands", "convert", "info", "bench", "perf"] {
+        for flag in ["--help", "-h"] {
+            let out = Command::new(BIN).args([sub, flag]).stdin(Stdio::null()).output().unwrap();
+            assert!(out.status.success(), "{sub} {flag}: {}", String::from_utf8_lossy(&out.stderr));
+            assert!(out.stdout == usage.stdout, "{sub} {flag}: {}", String::from_utf8_lossy(&out.stdout));
+        }
+    }
+}
+
+/// `--help` and `-h` after other arguments print the usage too, before the subcommand does anything
+/// with them.
+#[test]
+fn help_later_in_the_line_prints_the_usage() {
+    let usage = Command::new(BIN).arg("help").output().unwrap();
+    let mut wrong = vec![];
+    for args in [
+        &["mcp", "--headless", "--help"][..],
+        &["mcp", "--headless", "-h"],
+        &["mcp", "--connect", "127.0.0.1:1", "--help"],
+        &["run", "--cmd", "file.new", "--help"],
+        &["run", "--in", "missing.svg", "-h"],
+        &["run", "--commands", "missing.json", "--help"],
+        &["run", "--cmd", "file.new", "--params", "not json", "-h"],
+        &["commands", "x", "-h"],
+        &["convert", "missing.svg", "out.png", "--help"],
+        &["convert", "missing.svg", "--scale", "2", "-h"],
+        &["info", "missing.svg", "--help"],
+        &["bench", "missing.svg", "-h"],
+        &["bench", "--size", "10x10", "--help"],
+        &["bench", "--size", "bad", "-h"],
+        &["perf", "--paths", "10", "--help"],
+        &["perf", "--paths", "many", "-h"],
+        &["convert", "--decimals", "many", "--help"],
+    ] {
+        let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
+        if !out.status.success() || out.stdout != usage.stdout {
+            wrong.push(format!("{args:?}: {}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout)));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Further along the line, `-h` is the value of the option before it.
+#[test]
+fn help_as_an_option_value_goes_to_the_option() {
+    let out = Command::new(BIN).args(["run", "--cmd", "-h"]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("vectorcraft-cli: step 0 (-h):") && out.stdout.is_empty(), "{err}");
+    let out = Command::new(BIN).args(["convert", "in.svg", "--range", "-h"]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("convert needs IN and OUT") && out.stdout.is_empty(), "{err}");
+}
+
 #[test]
 fn mcp_headless_over_stdio() {
     let mut child = Command::new(BIN).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
@@ -319,7 +377,10 @@ fn automation_roots(base: &std::path::Path) {
     fails(&["mcp", "--automation-read-root", &dir("missing")], "cannot open the automation read root");
     fails(&["mcp", "--automation-read-root", &dir("in"), "--automation-read-root", &dir("missing")], "cannot open the automation read root");
     fails(&["mcp", "--automation-write-root"], "needs a folder");
-    fails(&["mcp", "--connect", "127.0.0.1:1", &format!("--automation-write-root={}", dir("out"))], "a running app enforces its own roots");
+    fails(
+        &["mcp", "--connect", "127.0.0.1:1", &format!("--automation-write-root={}", dir("out"))],
+        "a running app enforces its own roots: start it with `vectorcraft --control <port>",
+    );
 
     let mut child = Command::new(BIN)
         .args(["mcp", "--automation-read-root", &dir("in"), &format!("--automation-write-root={}", dir("out"))])

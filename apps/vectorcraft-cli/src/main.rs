@@ -134,6 +134,29 @@ fn usage() -> String {
     format!("{USAGE}\nReadable formats: .{}\nWritable formats: .{}\n", OPEN_EXTS.join(", ."), export_extensions().join(", ."))
 }
 
+/// Does a subcommand's `args` ask for the usage? `--help` or `-h` counts where an option goes, not as
+/// the value of one of the `valued` options before it, so `run --cmd -h` keeps `-h` for `--cmd`. The
+/// subcommands check this before they parse or read anything else.
+fn help_requested(args: &[String], valued: &[&str]) -> bool {
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--help" | "-h" => return true,
+            a if valued.contains(&a) => {
+                it.next();
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Prints the usage, for `help`, `--help` and `-h`.
+fn help() -> Result<(), String> {
+    out!("{}", usage());
+    Ok(())
+}
+
 fn main() -> ExitCode {
     // Before any font lookup: the fonts font services load (#579).
     #[cfg(all(windows, not(target_vendor = "win7")))]
@@ -143,6 +166,9 @@ fn main() -> ExitCode {
     prefs_dir::install_fonts();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let r = match args.first().map(String::as_str) {
+        // `commands` and `info` take no options, so `--help` or `-h` anywhere after them prints the
+        // usage. The other subcommands check for it themselves.
+        Some("commands" | "info") if help_requested(&args[1..], &[]) => help(),
         Some("mcp") => mcp(&args[1..]),
         Some("run") => run(&args[1..]),
         Some("commands") => commands(),
@@ -150,10 +176,7 @@ fn main() -> ExitCode {
         Some("info") => info(&args[1..]),
         Some("bench") => bench(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
-        Some("-h" | "--help" | "help") | None => {
-            out!("{}", usage());
-            Ok(())
-        }
+        Some("-h" | "--help" | "help") | None => help(),
         Some("-V" | "--version") => {
             outln!("vectorcraft-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -180,6 +203,9 @@ fn with_stores(mut h: Headless) -> Headless {
 }
 
 fn mcp(args: &[String]) -> Result<(), String> {
+    if help_requested(args, &["--connect", "--automation-read-root", "--automation-write-root"]) {
+        return help();
+    }
     let mut connect: Option<String> = None;
     let mut headless = false;
     let (mut read_roots, mut write_roots): (Vec<String>, Vec<String>) = (vec![], vec![]);
@@ -207,7 +233,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
     let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
     let roots = AutomationRoots::new(&read, &write)?;
     if roots.is_some() && connect.is_some() {
-        return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots:                     start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
+        return Err("--automation-read-root and --automation-write-root confine the headless server; a running app enforces its own roots: start it with `vectorcraft --control <port> --automation-read-root <dir> --automation-write-root <dir>`"
             .into());
     }
     let backend: Box<dyn Backend> = if let Some(roots) = roots {
@@ -243,6 +269,10 @@ fn commands() -> Result<(), String> {
 }
 
 fn convert(args: &[String]) -> Result<(), String> {
+    let valued = ["--scale", "-s", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
+    if help_requested(args, &valued) {
+        return help();
+    }
     let mut files = vec![];
     let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data) =
         (1.0f64, None::<u64>, None::<String>, false, false, false);
@@ -422,6 +452,10 @@ fn command_step(v: Value) -> Result<Step, String> {
 }
 
 fn run(args: &[String]) -> Result<(), String> {
+    let valued = ["--in", "-i", "--cmd", "-c", "--params", "-p", "--commands", "--export", "-o", "--scale", "-s"];
+    if help_requested(args, &valued) {
+        return help();
+    }
     let mut input: Option<String> = None;
     let mut steps: Vec<Step> = vec![];
     // The step of the `--cmd` just given, which a `--params` sets.
@@ -522,6 +556,9 @@ fn run(args: &[String]) -> Result<(), String> {
 }
 
 fn bench(args: &[String]) -> Result<(), String> {
+    if help_requested(args, &["--size", "--iters"]) {
+        return help();
+    }
     let mut file = None;
     let (mut w, mut h, mut iters) = (2880u32, 1800u32, 5u32);
     let mut it = args.iter();

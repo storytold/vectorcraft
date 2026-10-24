@@ -341,6 +341,9 @@ fn deep(n: usize) -> Result<(), String> {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    if crate::help_requested(args, &["--paths"]) {
+        return crate::help();
+    }
     let mut n = 50_000usize;
     let mut want_deep = false;
     let mut it = args.iter();
