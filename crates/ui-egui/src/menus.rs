@@ -3322,6 +3322,29 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
+    // Managing artboards from the canvas: with the Artboard tool, the menu locks and unlocks them
+    // (`artboard.setProps` with `locked` for each artboard named; an entry with none to change is left out).
+    if app.session.tool_id() == "artboard" {
+        let n = st.doc.artboards.len();
+        let sel = crate::panels::artboards::picked(app, n);
+        let others: Vec<usize> = (0..n).filter(|i| !sel.contains(i)).collect();
+        let entry = |label, idx: Vec<usize>, locked: bool| {
+            let list: Vec<Value> = idx.iter().map(|i| json!({ "index": i, "locked": locked })).collect();
+            (!list.is_empty()).then(|| cp(label, "artboard.setProps", json!({ "artboards": list })))
+        };
+        let lock: Vec<Item> =
+            [entry("Lock Selected", sel.clone(), true), entry("Lock All Except Selected", others, true), entry("Lock All", (0..n).collect(), true)]
+                .into_iter()
+                .flatten()
+                .collect();
+        let unlock: Vec<Item> = [entry("Unlock Selected", sel, false), entry("Unlock All", (0..n).collect(), false)].into_iter().flatten().collect();
+        for (label, items) in [("Lock Artboards", lock), ("Unlock Artboards", unlock)] {
+            if !items.is_empty() {
+                v.push(sub(label, items));
+            }
+        }
+        v.push(Sep);
+    }
     // The locked objects under the pointer at the right-click, each unlocked as the Layers panel's
     // lock column does. `unlock_item_label` shows each object's name.
     let unlock: Vec<Item> = app
@@ -4200,6 +4223,12 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
 pub const CONTEXT_LABELS: &[&str] = &[
     "Isolate Selected Group",
     "Exit Isolation Mode",
+    "Lock Artboards",
+    "Lock Selected",
+    "Lock All Except Selected",
+    "Lock All",
+    "Unlock Artboards",
+    "Unlock Selected",
     "Unlock",
     "Make Clipping Mask",
     "Release Clipping Mask",

@@ -5054,6 +5054,12 @@ lighting	Light	Світло
 	Shift:	Зсув:
 	Fresco…	Фреска…
 	Fresco	Фреска
+	Lock Artboards	Заблокувати монтажні області
+	Unlock Artboards	Розблокувати монтажні області
+	Lock Selected	Заблокувати вибрані
+	Lock All Except Selected	Заблокувати всі, крім вибраних
+	Lock All	Заблокувати всі
+	Unlock Selected	Розблокувати вибрані
 	Effect Gallery…	Галерея ефектів…
 	Effect Gallery Dialog	Діалог «Галерея ефектів»
 	Arc Segment Tool Options	Параметри інструменту «Дуговий сегмент»

@@ -283,6 +283,11 @@ fn every_context_label_is_a_menu_string() {
     app.run("layer.setProps", json!({"ids": [a.0], "locked": true})).unwrap();
     app.ui.context_locked = Some((app.session.active().unwrap().uid, vec![a]));
     shown.extend(labels(&menus::context_items(&app)));
+    // The Lock Artboards and Unlock Artboards submenus of the Artboard tool.
+    app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.run("artboard.setProps", json!({"index": 0, "locked": true})).unwrap();
+    app.select_tool("artboard");
+    shown.extend(labels(&menus::context_items(&app)));
     let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(**l)).collect();
     assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");
     for label in menus::CONTEXT_LABELS {

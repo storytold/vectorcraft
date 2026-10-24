@@ -5484,6 +5484,12 @@ font-script	Japanese	Japanska
 	Shift:	Förskjutning:
 	Fresco…	Fresk…
 	Fresco	Fresk
+	Lock Artboards	Lås ritytor
+	Unlock Artboards	Lås upp ritytor
+	Lock Selected	Lås markerade
+	Lock All Except Selected	Lås alla utom markerade
+	Lock All	Lås alla
+	Unlock Selected	Lås upp markerade
 	Effect Gallery…	Effektgalleri…
 	Effect Gallery Dialog	Dialogrutan Effektgalleri
 	Arc Segment Tool Options	Alternativ för bågsegmentsverktyget

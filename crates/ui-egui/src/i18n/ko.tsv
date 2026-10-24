@@ -5037,6 +5037,12 @@ lighting	Light	광원
 	Shift:	이동:
 	Fresco…	프레스코…
 	Fresco	프레스코
+	Lock Artboards	아트보드 잠그기
+	Unlock Artboards	아트보드 잠금 해제
+	Lock Selected	선택 항목 잠그기
+	Lock All Except Selected	선택 항목 외 모두 잠그기
+	Lock All	모두 잠그기
+	Unlock Selected	선택 항목 잠금 해제
 	Effect Gallery…	효과 갤러리…
 	Effect Gallery Dialog	효과 갤러리 대화 상자
 	Arc Segment Tool Options	호 세그먼트 도구 옵션

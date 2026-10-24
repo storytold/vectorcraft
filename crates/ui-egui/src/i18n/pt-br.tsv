@@ -5377,6 +5377,12 @@ mark-style	Japanese	Japonesas
 	Shift:	Deslocamento:
 	Fresco…	Afresco…
 	Fresco	Afresco
+	Lock Artboards	Bloquear Mesas de Trabalho
+	Unlock Artboards	Desbloquear Mesas de Trabalho
+	Lock Selected	Bloquear selecionadas
+	Lock All Except Selected	Bloquear todas exceto as selecionadas
+	Lock All	Bloquear tudo
+	Unlock Selected	Desbloquear selecionadas
 	Effect Gallery…	Galeria de Efeitos…
 	Effect Gallery Dialog	Caixa de diálogo Galeria de Efeitos
 	Arc Segment Tool Options	Opções da Ferramenta Segmento de Arco

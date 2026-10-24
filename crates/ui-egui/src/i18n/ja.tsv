@@ -5121,6 +5121,12 @@ lighting	Light	ライト
 	Shift:	シフト:
 	Fresco…	フレスコ…
 	Fresco	フレスコ
+	Lock Artboards	アートボードをロック
+	Unlock Artboards	アートボードのロックを解除
+	Lock Selected	選択をロック
+	Lock All Except Selected	選択以外をすべてロック
+	Lock All	すべてをロック
+	Unlock Selected	選択のロックを解除
 
 # Keyboard Shortcuts editor (File › Keyboard Shortcuts…) and the Print dialog's overprint note.
 	Keyboard Shortcuts	キーボードショートカット

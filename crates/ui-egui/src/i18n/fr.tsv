@@ -5459,6 +5459,12 @@ theme	Appearance	Apparence
 	Shift:	Décalage :
 	Fresco…	Fresque…
 	Fresco	Fresque
+	Lock Artboards	Verrouiller les plans de travail
+	Unlock Artboards	Déverrouiller les plans de travail
+	Lock Selected	Verrouiller la sélection
+	Lock All Except Selected	Tout verrouiller sauf la sélection
+	Lock All	Tout verrouiller
+	Unlock Selected	Déverrouiller la sélection
 	Effect Gallery…	Galerie d'effets…
 	Effect Gallery Dialog	Boîte de dialogue Galerie d'effets
 	Arc Segment Tool Options	Options de l’outil Segment d’arc

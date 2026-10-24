@@ -421,16 +421,10 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   segments for drawn lines. Controls are saved under Preferences › Smart Guides › Geometric Guides
   and available from Control bar › Snapping; both default to on. Existing-line endpoint editing and
   other tool cases remain unverified. [Public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-perpendicular.html).
-- **Missing:** gradient perceptual blending and gradient presets (30.0); remaining tangent/perpendicular snapping cases and the consolidated snapping options (30.0); artboard locking, artboard colors in exports and print, and managing
-- **Missing:** gradient presets (30.0); tangent and perpendicular
-- **Missing:** gradient perceptual blending and gradient presets (30.0); tangent and perpendicular
-- **Partial (#2530):** tangent snapping to curves and perpendicular snapping to straight target
-  segments for drawn lines. Controls are saved under Preferences › Smart Guides › Geometric Guides
-  and available from Control bar › Snapping; both default to on. Existing-line endpoint editing and
-  other tool cases remain unverified. [Public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-perpendicular.html).
-- **Missing:** gradient perceptual blending and gradient presets (30.0); remaining tangent/perpendicular snapping cases and the consolidated snapping options (30.0); artboard locking, artboard colors in exports and print, and managing
-  snapping and the consolidated snapping options (30.0); artboard locking, artboard colors in exports and print, and managing
-  artboards from the canvas (30.0); the Blend panel with ease in/out and separate colour acceleration (30.7);
+- **Missing:** gradient presets (30.0); remaining tangent/perpendicular snapping cases and the consolidated
+  snapping options (30.0); artboard colors in exports and print, and managing artboards from the canvas other
+  than locking and unlocking them from the Artboard tool's right-click menu (30.0); the Blend panel with ease
+  in/out and separate colour acceleration (30.7);
   the Dimension tool (28.x).
 - **Evidence:** Adobe's 30.0 and 30.7 release announcements, see
   [target-app-parity.md](target-app-parity.md#how-this-was-measured-2026-10-10).

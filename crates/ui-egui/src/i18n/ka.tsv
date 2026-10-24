@@ -5365,6 +5365,12 @@ imageTrace	Outline	კონტური
 	Shift:	წანაცვლება:
 	Fresco…	ფრესკა…
 	Fresco	ფრესკა
+	Lock Artboards	სამუშაო დაფების ჩაკეტვა
+	Unlock Artboards	სამუშაო დაფების განბლოკვა
+	Lock Selected	მონიშნულის ჩაკეტვა
+	Lock All Except Selected	მონიშნულის გარდა ყველაფრის ჩაკეტვა
+	Lock All	ყველაფრის ჩაკეტვა
+	Unlock Selected	მონიშნულის განბლოკვა
 	Effect Gallery	ეფექტების გალერეა
 	Add filters from the list above	დაამატეთ ფილტრები ზემოთ მოცემული სიიდან
 	Add to Stack	დასტაში დამატება

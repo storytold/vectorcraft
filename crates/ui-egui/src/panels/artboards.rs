@@ -1745,4 +1745,31 @@ mod tests {
         assert_eq!(names, ["Artboard 1", "Artboard 2"]);
         assert_eq!((selected(&app, 2), app.session.tool_options()["active"].clone()), (1, json!(1)));
     }
+    /// With the Artboard tool, the canvas context menu locks and unlocks artboards: Lock Selected
+    /// locks the selected one (the others stay free), Unlock All frees every artboard.
+    #[test]
+    fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
+        use crate::menus::Item;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+        let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
+        let run = |app: &mut VectorcraftApp, menu: &str, label: &str| {
+            let items = crate::menus::context_items(app);
+            let Some(Item::Sub(_, subs)) = items.iter().find(|i| matches!(i, Item::Sub(t, _) if *t == menu)) else { panic!("no {menu}") };
+            let Some(Item::Cmd(_, id, p)) = subs.iter().find(|i| matches!(i, Item::Cmd(l, ..) if *l == label)) else { panic!("no {label}") };
+            crate::menus::invoke(app, id, p.clone());
+        };
+        // Without the Artboard tool the menu has no such submenu.
+        assert!(!crate::menus::context_items(&app).iter().any(|i| matches!(i, Item::Sub(t, _) if *t == "Lock Artboards")));
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        run(&mut app, "Lock Artboards", "Lock Selected");
+        assert_eq!(locked(&app), [false, true, false]);
+        run(&mut app, "Lock Artboards", "Lock All Except Selected");
+        assert_eq!(locked(&app), [true, true, true], "the others lock, the locked one stays");
+        run(&mut app, "Unlock Artboards", "Unlock Selected");
+        assert_eq!(locked(&app), [true, false, true]);
+        run(&mut app, "Unlock Artboards", "Unlock All");
+        assert_eq!(locked(&app), [false, false, false]);
+    }
 }

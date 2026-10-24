@@ -5403,6 +5403,12 @@ theme	Appearance	Външен вид
 	Shift:	Изместване:
 	Fresco…	Фреска…
 	Fresco	Фреска
+	Lock Artboards	Заключване на работни области
+	Unlock Artboards	Отключване на работни области
+	Lock Selected	Заключване на избраните
+	Lock All Except Selected	Заключване на всички без избраните
+	Lock All	Заключване на всички
+	Unlock Selected	Отключване на избраните
 	Effect Gallery…	Галерия с ефекти…
 	Effect Gallery Dialog	Диалог „Галерия с ефекти“
 	Arc Segment Tool Options	Опции на инструмента „Дъгов сегмент“

@@ -5412,6 +5412,12 @@ effect	Points	Σημεία
 	Shift:	Μετατόπιση:
 	Fresco…	Νωπογραφία…
 	Fresco	Νωπογραφία
+	Lock Artboards	Κλείδωμα πινάκων σχεδίασης
+	Unlock Artboards	Ξεκλείδωμα πινάκων σχεδίασης
+	Lock Selected	Κλείδωμα επιλεγμένων
+	Lock All Except Selected	Κλείδωμα όλων εκτός από τα επιλεγμένα
+	Lock All	Κλείδωμα όλων
+	Unlock Selected	Ξεκλείδωμα επιλεγμένων
 	Effect Gallery…	Συλλογή εφέ…
 	Effect Gallery Dialog	Παράθυρο διαλόγου Συλλογή εφέ
 	Arc Segment Tool Options	Επιλογές εργαλείου τμήματος τόξου

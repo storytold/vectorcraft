@@ -5491,6 +5491,12 @@ swatch	Bright Violet	Kirkas violetti
 	Shift:	Siirtymä:
 	Fresco…	Fresko…
 	Fresco	Fresko
+	Lock Artboards	Lukitse piirtoalustat
+	Unlock Artboards	Avaa piirtoalustojen lukitus
+	Lock Selected	Lukitse valitut
+	Lock All Except Selected	Lukitse kaikki paitsi valitut
+	Lock All	Lukitse kaikki
+	Unlock Selected	Avaa valittujen lukitus
 	Effect Gallery…	Tehostegalleria…
 	Effect Gallery Dialog	Tehostegalleria-valintaikkuna
 	Arc Segment Tool Options	Kaarisegmenttityökalun asetukset

@@ -5298,6 +5298,12 @@ lighting	Light	光源
 	Shift:	偏移：
 	Fresco…	壁画…
 	Fresco	壁画
+	Lock Artboards	锁定画板
+	Unlock Artboards	解锁画板
+	Lock Selected	锁定所选
+	Lock All Except Selected	锁定除所选以外的全部
+	Lock All	全部锁定
+	Unlock Selected	解锁所选
 	Effect Gallery…	效果库…
 	Effect Gallery Dialog	效果库对话框
 	Arc Segment Tool Options	弧段工具选项

@@ -5312,6 +5312,12 @@ mark-style	Japanese	Japońskie
 	Shift:	Przesunięcie:
 	Fresco…	Fresk…
 	Fresco	Fresk
+	Lock Artboards	Zablokuj obszary kompozycji
+	Unlock Artboards	Odblokuj obszary kompozycji
+	Lock Selected	Zablokuj zaznaczone
+	Lock All Except Selected	Zablokuj wszystkie oprócz zaznaczonych
+	Lock All	Zablokuj wszystkie
+	Unlock Selected	Odblokuj zaznaczone
 	Effect Gallery…	Galeria efektów…
 	Effect Gallery Dialog	Okno dialogowe Galeria efektów
 	Arc Segment Tool Options	Opcje narzędzia Segment łuku

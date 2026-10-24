@@ -5040,6 +5040,12 @@ effect	Soft	Weich
 	Shift:	Verschiebung:
 	Fresco…	Fresko…
 	Fresco	Fresko
+	Lock Artboards	Zeichenflächen sperren
+	Unlock Artboards	Zeichenflächen entsperren
+	Lock Selected	Auswahl sperren
+	Lock All Except Selected	Alle außer Auswahl sperren
+	Lock All	Alle sperren
+	Unlock Selected	Auswahl entsperren
 	Effect Gallery…	Effekt-Galerie…
 	Effect Gallery Dialog	Dialogfeld „Effekt-Galerie“
 	Arc Segment Tool Options	Optionen für das Bogensegment-Werkzeug
