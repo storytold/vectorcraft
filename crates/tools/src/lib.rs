@@ -161,6 +161,33 @@ pub enum Action {
     Notify(String),
 }
 
+/// The font, style and size last set on type (the font menus, the Character panel): the type
+/// the Type tools make next takes them, as in Illustrator (#1655). `None`: the type command's
+/// default.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TypeDefaults {
+    pub font: Option<String>,
+    pub style: Option<String>,
+    /// Points.
+    pub size: Option<f64>,
+}
+
+impl TypeDefaults {
+    /// Nothing set yet.
+    pub const NONE: TypeDefaults = TypeDefaults { font: None, style: None, size: None };
+
+    /// `params` of a command that makes type (`text.create`, `text.createInPath`) with them.
+    pub fn add_to(&self, params: &mut Value) {
+        for (key, v) in
+            [("font", self.font.clone().map(Value::from)), ("style", self.style.clone().map(Value::from)), ("size", self.size.map(Value::from))]
+        {
+            if let (Some(v), Some(m)) = (v, params.as_object_mut()) {
+                m.insert(key.into(), v);
+            }
+        }
+    }
+}
+
 /// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaintDefaults {
@@ -337,6 +364,8 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// The font, style and size the Type tools give new type.
+    pub type_defaults: &'a TypeDefaults,
     /// Smart Guides → Color: the smart guides' lines and labels (RGB).
     pub smart_guide_color: [u8; 3],
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
@@ -1078,6 +1107,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            type_defaults: &TypeDefaults::NONE,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,

@@ -669,6 +669,36 @@ pub(crate) fn local_type_value(t: &TextObject, value: f64, limits: (f64, f64), h
     Ok(local)
 }
 
+impl Session {
+    /// Remember for the type the Type tools make next ([`vectorcraft_tools::TypeDefaults`]) the
+    /// font and style the command that just styled bytes `range` of type `id` set (`face`: its
+    /// change, applied to the style of the range's first character, so an empty range that styled
+    /// nothing still gives what was asked for), and the `size` it set (points, as given). A preview
+    /// (a font menu's hover) chooses nothing and isn't remembered.
+    pub(crate) fn remember_type(
+        &mut self,
+        id: NodeId,
+        range: (usize, usize),
+        face: Option<&dyn Fn(&mut vectorcraft_doc::CharStyle)>,
+        size: Option<f64>,
+    ) {
+        if self.in_interaction() {
+            return;
+        }
+        if let Some(face) = face
+            && let Some(NodeKind::Text(t)) = self.active().and_then(|d| d.doc.node(id)).map(|n| &n.kind)
+        {
+            let mut st = vectorcraft_text::edit::insertion_style(&t.runs, range.0, range.1);
+            face(&mut st);
+            self.type_defaults.font = Some(st.font_family);
+            self.type_defaults.style = Some(st.font_style);
+        }
+        if let Some(v) = size {
+            self.type_defaults.size = Some(v.clamp(0.1, 1296.0));
+        }
+    }
+}
+
 /// Optional `start`/`end` byte offsets of a text command: the character range it styles and the
 /// paragraphs it touches. Without either, the command applies to all the text.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -869,6 +899,18 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    if let Some(first) = ids.first() {
+        let at = range.map_or((0, usize::MAX), |r| (r.start.unwrap_or(0), r.end.unwrap_or(usize::MAX)));
+        let face = |st: &mut vectorcraft_doc::CharStyle| {
+            if let Some(f) = &font {
+                st.font_family.clone_from(f);
+            }
+            if let Some(f) = &style {
+                st.font_style.clone_from(f);
+            }
+        };
+        s.remember_type(*first, at, (font.is_some() || style.is_some()).then_some(&face as &dyn Fn(&mut vectorcraft_doc::CharStyle)), size);
+    }
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
 

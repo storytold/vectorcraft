@@ -302,10 +302,9 @@ impl TypeTool {
             let on_path = self.mode == Mode::OnPath;
             if let Some(pid) = Self::path_at(cx, start, !on_path) {
                 let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec(
-                    "text.createInPath".into(),
-                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": self.vertical, "placeholder": cx.placeholder_text}),
-                ));
+                let mut params = json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": self.vertical, "placeholder": cx.placeholder_text});
+                cx.type_defaults.add_to(&mut params);
+                out.push(Action::Exec("text.createInPath".into(), params));
                 out.push(Action::Notify("text.editNew".into()));
                 return out;
             }
@@ -322,6 +321,7 @@ impl TypeTool {
         }
         params["vertical"] = json!(self.vertical);
         params["placeholder"] = json!(cx.placeholder_text);
+        cx.type_defaults.add_to(&mut params);
         out.push(Action::Exec("text.create".into(), params));
         out.push(Action::Notify("text.editNew".into()));
         out
