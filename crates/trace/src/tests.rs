@@ -214,6 +214,70 @@ fn overlapping_layers_stack() {
     assert_eq!(ov.paths[1].color, [0, 0, 0]);
 }
 
+/// Overlapping with Shapes: a black disc on the light half is written once. The blue layer, between
+/// light and black in the stack, does not reach under it: the disc holds no blue.
+#[test]
+fn overlapping_writes_no_copy_of_a_shape_under_a_color_it_does_not_touch() {
+    let (light, blue) = ([240, 240, 220, 255], [40, 120, 240, 255]);
+    let img = Raster::from_fn(600, 400, |x, y| {
+        let disc = |cx: f64, cy: f64| Point::new(f64::from(x) + 0.5, f64::from(y) + 0.5).distance(Point::new(cx, cy)) <= 12.0;
+        if disc(100.0, 100.0) || disc(200.0, 300.0) || (400..500).contains(&x) && (150..250).contains(&y) {
+            BLACK
+        } else if x >= 300 {
+            blue
+        } else {
+            light
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::Limited,
+        colors: 3,
+        paths: 90.0,
+        corners: 50.0,
+        noise: 2,
+        method: Method::Overlapping,
+        shapes: true,
+        ..TraceParams::default()
+    };
+    let res = trace(&img, &params);
+    let ellipses = res.paths.iter().filter(|p| matches!(p.shape, Some(TracedShape::Ellipse { .. }))).count();
+    let rectangles = res.paths.iter().filter(|p| matches!(p.shape, Some(TracedShape::Rectangle { .. }))).count();
+    // The two discs; the light ground, the blue half (the black square touches it) and the square.
+    assert_eq!((ellipses, rectangles), (2, 3), "{:?}", res.paths.iter().map(|p| (p.color, p.shape)).collect::<Vec<_>>());
+    let bounds: Vec<_> = res.paths.iter().filter(|p| p.shape.is_some()).filter_map(|p| p.path.bounds()).collect();
+    for (i, a) in bounds.iter().enumerate() {
+        for b in &bounds[i + 1..] {
+            let same = [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(u, v)| (u - v).abs() <= 0.5);
+            assert!(!same, "two shapes at {a:?}");
+        }
+    }
+}
+
+/// Overlapping: a black line on the light ground gets no blue path under it, though blue lies
+/// between light and black in the stack.
+#[test]
+fn overlapping_layers_leave_out_areas_without_their_color() {
+    let (light, blue) = ([240, 240, 220, 255], [40, 120, 240, 255]);
+    let img = Raster::from_fn(400, 400, |x, y| {
+        if (170..230).contains(&x) && (170..230).contains(&y) {
+            blue
+        } else if (50..350).contains(&x) && (320..330).contains(&y) {
+            BLACK
+        } else {
+            light
+        }
+    });
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 3, method: Method::Overlapping, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    let blues: Vec<_> = res.paths.iter().filter(|p| p.color[0] < 100 && p.color[2] > 150).collect();
+    assert!(!blues.is_empty(), "{:?}", res.palette);
+    for p in blues {
+        let b = p.path.bounds().unwrap();
+        assert!(b.x1 <= 50.0 || b.x0 >= 350.0 || b.y1 <= 320.0 || b.y0 >= 330.0, "a blue path over the line: {b:?}");
+    }
+}
+
 #[test]
 fn transparent_pixels_are_not_traced() {
     let img = Raster::from_fn(40, 40, |x, _| if x < 20 { [0, 0, 0, 0] } else { BLACK });
@@ -474,9 +538,8 @@ fn parallel_layers_keep_their_order() {
     for _ in 0..4 {
         assert_eq!(trace(&img, &p), a);
     }
-    // Overlapping: each layer's shapes cover the layers above, so the pixel counts fall upwards.
-    let firsts: Vec<usize> = a.palette.iter().filter_map(|c| a.paths.iter().find(|t| t.color == *c).map(|t| t.pixels)).collect();
-    assert!(firsts.windows(2).all(|w| w[0] >= w[1]), "{firsts:?}");
+    // Overlapping: the bottom layer comes first and covers the whole image.
+    assert_eq!(a.paths.first().map(|t| t.pixels), Some(90 * 90));
 }
 
 /// A PNG whose header says `w` × `h` pixels, with no image data.
@@ -1099,11 +1162,12 @@ fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
     let params = TraceParams { mode: Mode::Grayscale, colors: 4, noise: 0, method: Method::Overlapping, ..TraceParams::default() };
     let tones = |res: &TraceResult| res.paths.iter().map(|p| p.color[0]).collect::<Vec<u8>>();
     // The largest colour is light, so the stack starts at the light end.
-    // (Each layer reaches under those above it: under the black stripe too, a part of its own.)
-    assert_eq!(tones(&trace(&img, &params)), [255, 200, 200, 120, 120, 0]);
+    // (Each layer reaches under those above it only where it is part of the area: the black stripe
+    // holds no gray, so no gray layer reaches under it.)
+    assert_eq!(tones(&trace(&img, &params)), [255, 200, 120, 0]);
     // Without white, no layer reaches under where it was.
     let res = trace(&img, &TraceParams { ignore_white: true, ..params });
-    assert_eq!(tones(&res), [200, 200, 120, 120, 0]);
+    assert_eq!(tones(&res), [200, 120, 0]);
     for p in &res.paths {
         let b = p.path.bounds().unwrap();
         assert!(b.x1 <= 20.5 || b.x0 >= 39.5, "a {} layer covers the white stripe: {b:?}", p.color[0]);
