@@ -4,7 +4,8 @@ use super::DialogSpec;
 use crate::{VectorcraftApp, state::Dialog, theme::Tokens, widgets};
 use egui::{RichText, Ui};
 use serde_json::{Value, json};
-use vectorcraft_doc::dimension::DimensionOptions;
+use vectorcraft_doc::Arrowhead;
+use vectorcraft_doc::dimension::{DimensionOptions, arrow_style_json, parse_arrow_style};
 
 pub const KIND: &str = "dimensionOptions";
 pub(super) const SPEC: DialogSpec = DialogSpec {
@@ -31,7 +32,6 @@ const UNITS: Choices = &[
     ("yd", "Yards"),
 ];
 const LINE_TYPES: Choices = &[("solid", "Solid"), ("dashed", "Dashed"), ("dotted", "Dotted")];
-const ARROWS: Choices = &[("filled", "Filled"), ("open", "Open"), ("tick", "Tick"), ("none", "None")];
 const POSITIONS: Choices = &[("away", "Away from the Line"), ("between", "Between Line and Object")];
 const ALIGNMENTS: Choices = &[("left", "Left"), ("center", "Center"), ("right", "Right")];
 
@@ -54,6 +54,21 @@ fn read(fields: &serde_json::Map<String, Value>) -> Result<DimensionOptions, Str
 }
 
 /// A dropdown row: `fields[key]` is one of `choices`' values.
+fn arrow_style(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, id: &str) -> bool {
+    let cur = match fields.get("arrowStyle") {
+        None => Some(Arrowhead::Triangle),
+        Some(v) => parse_arrow_style(v).unwrap_or(None),
+    };
+    let mut changed = false;
+    widgets::label_row(ui, tl!("Arrow Style:"), 96.0, |ui| {
+        if let Some(picked) = crate::panels::stroke::pick_arrowhead(ui, id, cur, true) {
+            fields.insert("arrowStyle".into(), arrow_style_json(picked));
+            changed = true;
+        }
+    });
+    changed
+}
+
 fn choose(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, key: &str, label: &str, choices: Choices) -> bool {
     let mut changed = false;
     widgets::label_row(ui, tl!(label), 96.0, |ui| {
@@ -151,7 +166,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             color(ui, f, "lineColor");
         });
         ui.horizontal(|ui| {
-            choose(ui, f, "arrowStyle", "Arrow Style:", ARROWS);
+            arrow_style(ui, f, "dimension-arrow");
             number(ui, f, "arrowScale", "Arrow Scale:", (1.0, 1000.0), "%");
         });
     });
@@ -290,7 +305,7 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         changed |= number(ui, &mut f, "lineWeight", "Line Weight:", (0.1, 100.0), "pt");
         changed |= color(ui, &mut f, "lineColor");
     });
-    ui.horizontal(|ui| changed |= choose(ui, &mut f, "arrowStyle", "Arrow Style:", ARROWS));
+    ui.horizontal(|ui| changed |= arrow_style(ui, &mut f, "props-dimension-arrow"));
     ui.horizontal(|ui| {
         changed |= number(ui, &mut f, "fontSize", "Font Size:", (1.0, 1000.0), "pt");
         changed |= color(ui, &mut f, "textColor");
@@ -344,6 +359,15 @@ mod tests {
         assert!(super::super::confirm(&mut app).is_err());
         app.ui.dialog = None;
         assert_eq!(app.session.tool_options_of("dimension")["style"]["scale"], "1:10");
+    }
+
+    #[test]
+    fn dimension_arrow_style_accepts_stroke_arrowheads() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("arrowStyle".into(), json!("Barbed"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of("dimension")["style"]["arrowStyle"], "Barbed");
     }
 
     /// A selected dimension shows its style in Properties, with Apply to All and Set as Default.

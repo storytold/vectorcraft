@@ -1,5 +1,6 @@
 //! Linked measurements, history, portable artwork and hostile command input.
 use serde_json::{Value, json};
+use vectorcraft_doc::{Arrowhead, dimension::parse_arrow_style};
 use vectorcraft_engine::{
     Session, ViewInfo,
     doc::{Document, NodeId, NodeKind},
@@ -35,6 +36,26 @@ fn recipe(s: &Session, id: u64) -> vectorcraft_doc::dimension::Dimension {
 }
 fn ev(s: &mut Session, kind: PointerKind, x: f64, y: f64) {
     s.pointer(&PointerEvent::new(kind, x, y), ViewInfo::default()).unwrap();
+}
+
+#[test]
+fn dimension_arrow_style_legacy_and_stroke_heads() {
+    assert_eq!(parse_arrow_style(&json!("filled")).unwrap(), Some(Arrowhead::Triangle));
+    assert_eq!(parse_arrow_style(&json!("none")).unwrap(), None);
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[10,10],"b":[110,10],"options":{"arrowStyle":"Barbed","precision":0,"units":"pt"}}))["id"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(recipe(&s, id).options.arrow_style, Some(Arrowhead::Barbed));
+    let dim = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+    let stroke = dim
+        .children()
+        .unwrap()
+        .iter()
+        .find_map(|n| n.appearance.stroke().filter(|s| s.start_arrow.is_some() || s.end_arrow.is_some()))
+        .expect("dimension line stroke");
+    assert_eq!(stroke.start_arrow, Some(Arrowhead::Barbed));
+    assert_eq!(stroke.end_arrow, Some(Arrowhead::Barbed));
 }
 
 #[test]

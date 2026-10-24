@@ -2716,6 +2716,8 @@ mod tests {
 }
 
 #[cfg(test)]
+mod dimension_arrow_style_tests;
+#[cfg(test)]
 mod tests_lookups;
 #[cfg(test)]
 mod tests_slices;

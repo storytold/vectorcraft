@@ -3,8 +3,8 @@ use super::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::dimension::{Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
+use vectorcraft_doc::{Appearance, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, offset?: pt, options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, offset?: pt, options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: none|filled|open|tick|stroke arrowhead name, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -307,12 +307,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
             LineType::Solid => None,
         };
         if arrows {
-            let head = match o.arrow_style {
-                ArrowStyle::Filled => Some(Arrowhead::Triangle),
-                ArrowStyle::Open => Some(Arrowhead::TriangleOpen),
-                ArrowStyle::Tick => Some(Arrowhead::Slash),
-                ArrowStyle::None => None,
-            };
+            let head = o.arrow_style;
             st.start_arrow = head;
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);

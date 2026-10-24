@@ -1,4 +1,5 @@
 //! Persistent dimension recipes. Children are ordinary paths and type for all renderers/exporters.
+use crate::appearance::Arrowhead;
 use crate::{Document, NodeId, Unit};
 use serde::{Deserialize, Serialize};
 use vectorcraft_geom::{Affine, Point, Vec2};
@@ -91,14 +92,48 @@ pub enum LineType {
     Dotted,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ArrowStyle {
-    #[default]
-    Filled,
-    Open,
-    Tick,
-    None,
+/// Parse a dimension arrow style from tool/command JSON (`arrowStyle`).
+pub fn parse_arrow_style(v: &serde_json::Value) -> Result<Option<Arrowhead>, String> {
+    use serde_json::Value;
+    match v {
+        Value::Null => Ok(None),
+        Value::String(s) => match s.as_str() {
+            "none" => Ok(None),
+            "filled" => Ok(Some(Arrowhead::Triangle)),
+            "open" => Ok(Some(Arrowhead::TriangleOpen)),
+            "tick" => Ok(Some(Arrowhead::Slash)),
+            _ => serde_json::from_value(Value::String(s.clone())).map_err(|e| e.to_string()),
+        },
+        other => serde_json::from_value(other.clone()).map_err(|e| e.to_string()),
+    }
+}
+
+/// Serialize a dimension arrow style for tool/command JSON (`arrowStyle`).
+pub fn arrow_style_json(a: Option<Arrowhead>) -> serde_json::Value {
+    match a {
+        None => serde_json::Value::String("none".into()),
+        Some(h) => serde_json::to_value(h).unwrap_or(serde_json::Value::Null),
+    }
+}
+
+mod arrow_style_serde {
+    use super::{Arrowhead, arrow_style_json, parse_arrow_style};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(value: &Option<Arrowhead>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        arrow_style_json(*value).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Arrowhead>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        parse_arrow_style(&v).map_err(serde::de::Error::custom)
+    }
 }
 
 /// Where the label sits across the dimension line.
@@ -133,7 +168,8 @@ pub struct DimensionOptions {
     pub line_weight: f64,
     pub line_type: LineType,
     pub line_color: [u8; 3],
-    pub arrow_style: ArrowStyle,
+    #[serde(with = "arrow_style_serde")]
+    pub arrow_style: Option<Arrowhead>,
     pub arrow_scale: f64,
     pub extension_weight: f64,
     pub extension_type: LineType,
@@ -162,7 +198,7 @@ impl Default for DimensionOptions {
             line_weight: 0.5,
             line_type: LineType::Solid,
             line_color: [0, 0, 0],
-            arrow_style: ArrowStyle::Filled,
+            arrow_style: Some(Arrowhead::Triangle),
             arrow_scale: 100.0,
             extension_weight: 0.5,
             extension_type: LineType::Solid,

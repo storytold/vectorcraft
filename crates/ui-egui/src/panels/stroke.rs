@@ -268,10 +268,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (sa, ea) = (st.as_ref().and_then(|s| s.start_arrow), st.as_ref().and_then(|s| s.end_arrow));
     ui.horizontal(|ui| {
         row_label(ui, tl!("Arrowheads:"));
-        if let Some(a) = arrow_dropdown(ui, "arrow-start", sa, true) {
+        if let Some(a) = pick_arrowhead(ui, "arrow-start", sa, true) {
             set(app, json!({"startArrow": a.map(|a| format!("{a:?}"))}));
         }
-        if let Some(a) = arrow_dropdown(ui, "arrow-end", ea, false) {
+        if let Some(a) = pick_arrowhead(ui, "arrow-end", ea, false) {
             set(app, json!({"endArrow": a.map(|a| format!("{a:?}"))}));
         }
         if widgets::icon_button_enabled(ui, "arrow-left-right", tl!("Swap start and end arrowheads"), false, st.is_some(), 22.0).clicked() {
@@ -358,7 +358,7 @@ fn paint_arrow(ui: &Ui, r: Rect, a: Option<Arrowhead>, start: bool, color: Color
 }
 
 /// Dropdown whose button and items show drawn arrowhead previews. Returns Some(choice).
-fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) -> Option<Option<Arrowhead>> {
+pub fn pick_arrowhead(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) -> Option<Option<Arrowhead>> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(64.0, 24.0), Sense::click());
     ui.painter().rect_filled(r, 2, t.input);
