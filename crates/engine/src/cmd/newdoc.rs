@@ -302,8 +302,8 @@ impl DocSettings {
                 "spacing" => {
                     self.spacing = v
                         .as_f64()
-                        .filter(|s| (0.0..=MAX_SPACING).contains(s))
-                        .ok_or_else(|| bad(cmd, format!("artboardLayout.spacing must be 0–{MAX_SPACING} pt")))?
+                        .filter(|s| (-MAX_SPACING..=MAX_SPACING).contains(s))
+                        .ok_or_else(|| bad(cmd, format!("artboardLayout.spacing must be -{MAX_SPACING}–{MAX_SPACING} pt")))?
                 }
                 "rightToLeft" => self.right_to_left = v.as_bool().ok_or_else(|| bad(cmd, "artboardLayout.rightToLeft must be true or false"))?,
                 _ => return Err(bad(cmd, format!("unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)"))),
@@ -352,7 +352,8 @@ impl DocSettings {
 
 /// Largest artboard side `file.new` accepts, points.
 const MAX_SIDE: f64 = 16383.0 * 10.0;
-/// Largest artboard spacing, points.
+/// Largest artboard spacing either way, points: a negative spacing overlaps the artboards, as
+/// `artboard.rearrange` allows.
 const MAX_SPACING: f64 = 1.0e5;
 
 pub fn color_mode_id(m: ColorMode) -> &'static str {

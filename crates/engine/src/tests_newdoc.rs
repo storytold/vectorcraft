@@ -42,6 +42,19 @@ fn four_artboards_in_two_columns_make_a_two_by_two_grid() {
     assert_eq!(boards(&s)[1].x0, 120.0);
 }
 
+/// A negative spacing overlaps the artboards, for tiling artwork (#2262), as Rearrange All
+/// Artboards already allows; beyond the largest spacing either way it is an error.
+#[test]
+fn negative_spacing_overlaps_the_artboards() {
+    let s = new_doc(json!({"width": 100, "height": 50, "artboards": 4, "artboardLayout": {"columns": 2, "spacing": -10}}));
+    assert_eq!(boards(&s).iter().map(|r| (r.x0, r.y0)).collect::<Vec<_>>(), [(0.0, 0.0), (90.0, 0.0), (0.0, 40.0), (90.0, 40.0)]);
+    for spacing in [-1.0e6, 1.0e6] {
+        let mut s = Session::new();
+        let p = json!({"width": 100, "height": 50, "artboards": 2, "artboardLayout": {"spacing": spacing}});
+        assert!(s.execute("file.new", &p).is_err(), "spacing {spacing}");
+    }
+}
+
 #[test]
 fn orientation_swaps_width_and_height() {
     let s = new_doc(json!({"width": 612, "height": 792, "orientation": "landscape"}));
