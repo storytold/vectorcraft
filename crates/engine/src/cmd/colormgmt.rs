@@ -195,6 +195,12 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let info = cms::register_icc(&bytes, None).map_err(|e| bad(C, e.to_string()))?;
     // The bytes are kept, not the path: the file may move or go away.
     let remembered = s.store_profile(&info.name, &bytes);
+    // A new file of a working space: the active settings still hold the old one.
+    let working = cms::active_settings();
+    if working.rgb == info.name || working.cmyk == info.name {
+        cms::set_active(&working).map_err(|e| bad(C, e.to_string()))?;
+        touch_all(s);
+    }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
 }
 

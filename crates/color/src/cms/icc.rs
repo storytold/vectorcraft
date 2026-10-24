@@ -1,6 +1,7 @@
 //! ICC profiles through `moxcms` (pure Rust): built-in RGB spaces and user-supplied `.icc` files,
 //! and the profiles exports embed ([`encode_builtin`]), written in code from the CMS.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use moxcms::{
@@ -8,7 +9,7 @@ use moxcms::{
     RenderingIntent, ToneReprCurve, TransformF32Executor, TransformOptions, Vector3d,
 };
 
-use super::{CmsError, Intent, ProfileKind, lab};
+use super::{CmsError, Intent, ProfileKind, lab, profiles_generation};
 
 fn moxcms_intent(i: Intent) -> RenderingIntent {
     match i {
@@ -27,12 +28,17 @@ fn intent_index(i: Intent) -> usize {
 
 type Xf = Option<Arc<TransformF32Executor>>;
 
-/// A direct transform's cache key: destination name, intent index, black-point compensation.
-type DirectKey = (String, usize, bool);
+/// A direct transform's cache key: destination [`IccProfile::id`], [`profiles_generation`] it was
+/// built in, intent index, black-point compensation. The id tells a reloaded profile from the old
+/// one of the same name, which settings built before the reload still convert into; the
+/// generation only lets the cache drop what reloads left behind.
+type DirectKey = (u64, u64, usize, bool);
 
 /// A parsed ICC profile plus lazily-built transforms to/from sRGB.
 pub struct IccProfile {
     pub name: String,
+    /// Unique to this instance: never reused, unlike its name or address.
+    id: u64,
     pub kind: ProfileKind,
     /// The file it was loaded from (empty for profiles made in code).
     source: Vec<u8>,
@@ -82,8 +88,10 @@ impl IccProfile {
             other => return Err(CmsError::Unsupported(format!("profile colour space {other:?} is not RGB, CMYK or Gray"))),
         };
         let name = name.or_else(|| text(&profile.description)).unwrap_or_else(|| format!("Untitled {kind:?} profile"));
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         Ok(Self {
             name,
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             kind,
             source: Vec::new(),
             profile,
@@ -182,8 +190,11 @@ impl IccProfile {
         if dest.kind != ProfileKind::Rgb {
             return None;
         }
-        let key = (dest.name.clone(), intent_index(intent), bpc);
+        let generation = profiles_generation();
+        let key = (dest.id, generation, intent_index(intent), bpc);
         let mut cache = self.direct.lock().unwrap_or_else(|e| e.into_inner());
+        // an older generation's entries can't match again: drop them so reloads don't pile up
+        cache.retain(|(k, _)| k.1 == generation);
         if let Some((_, t)) = cache.iter().find(|(k, _)| *k == key) {
             return t.clone();
         }
