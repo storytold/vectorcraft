@@ -338,8 +338,9 @@ pub(crate) fn fold_tones(pix: &[Px], mut palette: Vec<[u8; 3]>) -> Vec<[u8; 3]> 
 
 /// The color of the ground a flat bar two pixels wide lies on, if the pixel at (`x`, `y`) is one of
 /// the bar's. Across the bar (down or across the image) the pixel and one neighbor are the bar, and
-/// the pixels on either side of the two are the ground; along the bar, the pixel's neighbors on
-/// both sides are bar and ground in the same way. Every bar pixel lies within √12, about 3.5 (in
+/// the pixels on either side of the two are the ground; along the bar, three pixels in a row that
+/// include the pixel (at either end or in the middle) are bar and ground in the same way, so all
+/// six pixels of a bar three pixels long count. Every bar pixel lies within √12, about 3.5 (in
 /// RGB), of the pixel's color; the ground's pixels lie within 10 (in RGB) of the first one and at
 /// least 25 from the pixel's color. `at` is the opaque color at a pixel, `None` outside the image or where it is
 /// not opaque.
@@ -350,12 +351,15 @@ fn bar_ground(at: &impl Fn(isize, isize) -> Option<[f64; 3]>, x: isize, y: isize
             // Across the bar: ground, the pixel, its partner, ground.
             let Some(g) = at(x + 2 * s * bx, y + 2 * s * by) else { continue };
             let ground = |q: Option<[f64; 3]>| q.is_some_and(|q| dist2(q, g) < 100.0 && dist2(q, c) >= 625.0);
-            let flat = (-1..=1).all(|k| {
-                let (px, py) = (x + k * ax, y + k * ay);
-                bar(at(px, py))
-                    && bar(at(px + s * bx, py + s * by))
-                    && ground(at(px - s * bx, py - s * by))
-                    && ground(at(px + 2 * s * bx, py + 2 * s * by))
+            // Along the bar: three pixels in a row, the pixel at either end of them or in the middle.
+            let flat = (-1..=1).any(|o| {
+                (o - 1..=o + 1).all(|k| {
+                    let (px, py) = (x + k * ax, y + k * ay);
+                    bar(at(px, py))
+                        && bar(at(px + s * bx, py + s * by))
+                        && ground(at(px - s * bx, py - s * by))
+                        && ground(at(px + 2 * s * bx, py + 2 * s * by))
+                })
             });
             if flat {
                 return Some(g);
@@ -498,6 +502,31 @@ mod tests {
         // that lies on no ink's line from white.
         let groups = vec![([30, 90, 200], 50), ([143, 173, 228], 40), ([210, 40, 50], 30), ([240, 150, 40], 5)];
         assert_eq!(fold_fringes(groups), vec![[30, 90, 200], [210, 40, 50], [240, 150, 40]]);
+    }
+
+    #[test]
+    fn a_bar_two_pixels_wide_and_three_long_is_an_unexplained_color() {
+        // A red bar two pixels wide on white beside a black block, three and four pixels long,
+        // lying across and down the image. Only the bar three pixels long needs its end pixels
+        // counted to reach the three pixels a color needs.
+        const RED: [u8; 3] = [210, 40, 50];
+        for long in [3, 4] {
+            for across in [true, false] {
+                let (w, h) = (16, 12);
+                let pix = blocks(w, h, |x, y| {
+                    let (along, side) = if across { (x, y) } else { (y, x) };
+                    if x < 3 {
+                        [0, 0, 0, 255]
+                    } else if (6..6 + long).contains(&along) && (5..7).contains(&side) {
+                        [RED[0], RED[1], RED[2], 255]
+                    } else {
+                        [255, 255, 255, 255]
+                    }
+                });
+                let residual = vec![1.0; w * h];
+                assert_eq!(unexplained_colours(&pix, w, h, &residual, &[[0, 0, 0]]), vec![RED], "{long} long, across: {across}");
+            }
+        }
     }
 
     #[test]
