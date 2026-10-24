@@ -87,12 +87,31 @@ fn arabic_joining_forms_are_not_alternates() {
     assert_eq!(alternates(&t), 0);
 }
 
-/// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either.
+/// Whether the face makes the lam-alef ligature with a required feature: laid out again with the
+/// optional features off, the same letters come out as the same glyphs. Arial (Windows and macOS)
+/// joins them with a standard ligature instead, which Highlight Alternate Glyphs does mark, so the
+/// required-ligature case doesn't apply to it.
+fn lam_alef_is_required(t: &vectorcraft_doc::text::TextObject) -> bool {
+    let mut shaped: Vec<((usize, usize), u32)> = glyphs(t).into_iter().map(|(byte, len, gid)| ((byte, len), gid)).collect();
+    shaped.sort_unstable();
+    let mut required: Vec<((usize, usize), u32)> =
+        required_shaping(t).into_iter().flat_map(|(cluster, glyphs)| glyphs.into_iter().map(move |(_, gid)| (cluster, gid))).collect();
+    required.sort_unstable();
+    shaped == required
+}
+
+/// #394: the lam-alef ligature is required (`rlig`) in the fonts that have it as one, so it isn't
+/// highlighted either.
 #[test]
 fn lam_alef_is_not_an_alternate() {
     let Some(style) = arabic_style("lam_alef_is_not_an_alternate") else { return };
     for s in ["لا", "سلام", "الاسم"] {
-        assert_eq!(alternates(&text(s, style.clone())), 0, "{s}");
+        let t = text(s, style.clone());
+        if !lam_alef_is_required(&t) {
+            eprintln!("SKIPPED: lam_alef_is_not_an_alternate; {} joins lam and alef with an optional feature", style.font_family);
+            return;
+        }
+        assert_eq!(alternates(&t), 0, "{s}");
     }
 }
 
