@@ -5,7 +5,8 @@
 //!
 //! Fields: `scaleH`, `scaleV` (%), `moveH`, `moveV` (pt), `rotate` (°), `reflectX`, `reflectY`,
 //! `random`, `reference` (0..8, the 9-point grid), `copy`, `objects`, `patterns`, `corners`,
-//! `strokes` (the last two default to the preferences, which OK updates) and `preview`.
+//! `strokes` (the last two default to the preferences, which OK updates), `preview` and `__uniform`
+//! (linked horizontal and vertical scale, UI-only).
 
 use serde_json::{Value, json};
 
@@ -26,14 +27,55 @@ pub(super) const SPEC: DialogSpec =
 
 /// The fields a fresh dialog starts with.
 pub fn fields() -> Value {
-    json!({"scaleH": 100, "scaleV": 100, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": false, "reference": 4, "copy": false})
+    json!({
+        "scaleH": 100, "scaleV": 100, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": false, "reference": 4, "copy": false,
+        "__uniform": false,
+    })
+}
+
+/// Are horizontal and vertical scale linked (`__uniform`)? When that key is absent, linked only if
+/// the two scale values already match.
+fn uniform(d: &Dialog) -> bool {
+    d.fields
+        .get("__uniform")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| (d.f64("scaleH", 100.0) - d.f64("scaleV", 100.0)).abs() < 1e-9)
+}
+
+fn scale_pair_key(key: &str) -> Option<(&'static str, &'static str)> {
+    match key {
+        "scaleH" => Some(("scaleH", "scaleV")),
+        "scaleV" => Some(("scaleV", "scaleH")),
+        _ => None,
+    }
+}
+
+/// Set one scale field; while [`uniform`] is on, set the other to the same value.
+fn set_scale(d: &mut Dialog, key: &str, value: f64) {
+    d.fields.insert(key.into(), json!(value));
+    if uniform(d) && let Some((_, other)) = scale_pair_key(key) {
+        d.fields.insert(other.into(), json!(value));
+    }
+}
+
+/// After a slider may have changed `key`, mirror to the other axis when linked.
+fn mirror_scale_slider(d: &mut Dialog, key: &str, before: f64) {
+    if !uniform(d) {
+        return;
+    }
+    let after = d.f64(key, 100.0);
+    if (after - before).abs() > 1e-9 && let Some((_, other)) = scale_pair_key(key) {
+        d.fields.insert(other.into(), json!(after));
+    }
 }
 
 /// The command's parameters without the scale options.
 fn params(d: &Dialog) -> Value {
     let f = |k: &str, v: f64| d.f64(k, v);
+    let scale_h = f("scaleH", 100.0);
+    let scale_v = if uniform(d) { scale_h } else { f("scaleV", 100.0) };
     json!({
-        "scaleH": f("scaleH", 100.0), "scaleV": f("scaleV", 100.0), "moveH": f("moveH", 0.0), "moveV": f("moveV", 0.0),
+        "scaleH": scale_h, "scaleV": scale_v, "moveH": f("moveH", 0.0), "moveV": f("moveV", 0.0),
         "rotate": f("rotate", 0.0), "reflectX": d.bool("reflectX"), "reflectY": d.bool("reflectY"), "random": d.bool("random"),
         "reference": f("reference", 4.0).clamp(0.0, 8.0) as u64, "copy": d.bool("copy"),
     })
@@ -54,14 +96,24 @@ pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc
     let track = move |_| rail;
     let axes = |h, v| [(h, tl!("Horizontal:")), (v, tl!("Vertical:"))];
     widgets::subheader(ui, tl!("Scale"));
-    for (key, label) in axes("scaleH", "scaleV") {
+    let linked = uniform(d);
+    let tip = tl!("Constrain Width and Height Proportions");
+    for (i, (key, label)) in axes("scaleH", "scaleV").into_iter().enumerate() {
+        let before = d.f64(key, 100.0);
         widgets::label_row(ui, label, LABEL_W, |ui| {
             let shown = widgets::SliderValue::field(d.f64(key, 100.0).clamp(-MAX_SCALE, MAX_SCALE), 0.0..=200.0, "%", 2);
             form::slider_rail_valued(ui, d, key, label, 0.0..=200.0, Some(shown), &track);
             if let Some(n) = widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W) {
-                d.fields.insert(key.into(), json!(n));
+                set_scale(d, key, n);
+            }
+            if i == 0 && widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 22.0).clicked() {
+                d.fields.insert("__uniform".into(), json!(!linked));
+                if !linked {
+                    d.fields.insert("scaleV".into(), json!(d.f64("scaleH", 100.0)));
+                }
             }
         });
+        mirror_scale_slider(d, key, before);
     }
     widgets::subheader(ui, tl!("Move"));
     for (key, label) in axes("moveH", "moveV") {
@@ -157,5 +209,29 @@ mod tests {
         assert_eq!(n.appearance.stroke_width(), 1.0, "strokes kept their weight");
         let (cmd, p) = app.session.journal.last().unwrap();
         assert_eq!((cmd.as_str(), &p["strokes"], &p["objects"]), (CMD, &json!(false), &json!(true)), "#1448: Transform Objects goes along");
+    }
+
+    #[test]
+    fn linked_scales_keep_horizontal_and_vertical_equal() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 20})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("ui.menuDialog", json!({ "command": CMD })).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(!d.bool("__uniform"), "scales start unlinked so the first field is horizontal scale alone");
+        set_scale(d, "scaleH", 150.0);
+        assert_eq!((d.f64("scaleH", 0.0), d.f64("scaleV", 0.0)), (150.0, 100.0));
+        d.fields.insert("__uniform".into(), json!(true));
+        set_scale(d, "scaleH", 150.0);
+        assert_eq!((d.f64("scaleH", 0.0), d.f64("scaleV", 0.0)), (150.0, 150.0));
+        d.fields.insert("__uniform".into(), json!(false));
+        set_scale(d, "scaleV", 80.0);
+        assert_eq!((d.f64("scaleH", 0.0), d.f64("scaleV", 0.0)), (150.0, 80.0));
+        let p = params(d);
+        assert_eq!((&p["scaleH"], &p["scaleV"]), (&json!(150.0), &json!(80.0)));
+        d.fields.insert("__uniform".into(), json!(true));
+        let p = params(d);
+        assert_eq!((&p["scaleH"], &p["scaleV"]), (&json!(150.0), &json!(150.0)));
     }
 }
