@@ -6,7 +6,7 @@ use serde_json::json;
 use vectorcraft_doc::text::TextKind;
 use vectorcraft_doc::{Node, NodeKind, SymbolBoxes, Unit};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
-use vectorcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
+use vectorcraft_tools::{Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind};
 
 use crate::opening;
 use crate::state::View;
@@ -193,13 +193,33 @@ fn pen_pressure(ui: &Ui, app: &VectorcraftApp, pressed: bool) -> f32 {
     p
 }
 
+/// The tilt and rotation of the pen in the host's feed while a pen is the pointer that moved last
+/// ([`crate::Services::stylus`], [`StylusFeed::pose`]), its tilt turned onto the page
+/// ([`pose_on_page`]); `None` for a mouse, or a pen that reads neither.
+fn pen_pose(app: &VectorcraftApp, xf: &Xf) -> Option<PenPose> {
+    app.services.stylus.as_ref().and_then(StylusFeed::pose).map(|q| pose_on_page(q, xf))
+}
+
+/// `pose` with its tilt, given in screen axes, turned into the document's (the view rotated by
+/// Rotate View): the pen leans the same way on the page as on the screen. The rotation is kept.
+pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
+    let tilt = pose.tilt.map(|[x, y]| {
+        // The direction the pen leans in, as `to_doc` turns a screen offset.
+        let (tx, ty) = (f64::from(x).to_radians().tan(), f64::from(y).to_radians().tan());
+        let (sn, cs) = xf.rot.sin_cos();
+        let (u, v) = (tx * cs + ty * sn, -tx * sn + ty * cs);
+        [u.atan().to_degrees() as f32, v.atan().to_degrees() as f32]
+    });
+    PenPose { tilt, ..pose }
+}
+
 /// The positions this frame's pointer moves passed through before its last one, each with the
 /// pen force a touch event gave just before it, or the pressure the host's feed kept for that move
-/// ([`StylusFeed::take_moves`], macOS), if any. The last move is the pointer's position. Only for
-/// pens and fingers (frames with touch events or with the feed's moves): a mouse's moves are left
-/// as they were.
-fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Option<f32>)> {
-    let pressures = stylus.map(StylusFeed::take_moves).unwrap_or_default();
+/// ([`StylusFeed::take_moves`], macOS), if any, and the tilt and rotation the feed kept for that
+/// move (empty when the pen read neither), if any. The last move is the pointer's position. Only for pens and fingers (frames with
+/// touch events or with the feed's moves): a mouse's moves are left as they were.
+fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Option<f32>, Option<PenPose>)> {
+    let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
@@ -207,16 +227,16 @@ fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<(Pos2, Option<f32>)>
             for e in &i.events {
                 match e {
                     egui::Event::Touch { force: Some(f), .. } if f.is_finite() && *f > 0.0 => force = Some(f.clamp(0.0, 1.0)),
-                    egui::Event::PointerMoved(p) => moves.push((*p, force)),
+                    egui::Event::PointerMoved(p) => moves.push((*p, force, None)),
                     _ => {}
                 }
             }
-        } else if !pressures.is_empty() {
-            // The feed's last pressure is the last move's: pair them from the end. A lift's 0 is
+        } else if !samples.is_empty() {
+            // The feed's last sample is the last move's: pair them from the end. A lift's 0 is
             // no pressure (the press keeps its last touch).
             let points: Vec<Pos2> = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some(*p) } else { None }).collect();
-            let forces = pressures.iter().rev().map(|f| (*f > 0.0).then_some(*f)).chain(std::iter::repeat(None));
-            moves = points.into_iter().rev().zip(forces).collect();
+            let kept = samples.iter().rev().map(|&(f, q)| ((f > 0.0).then_some(f), Some(q)));
+            moves = points.into_iter().rev().zip(kept.chain(std::iter::repeat((None, None)))).map(|(p, (f, q))| (p, f, q)).collect();
             moves.reverse();
         }
         moves.pop();
@@ -1084,7 +1104,13 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation, snaps: !space }
             } else {
                 // Cmd with another tool drags with the selection tool used last (the session lends it).
-                let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, true) };
+                let ev = PointerEvent {
+                    kind: PointerKind::Down,
+                    pos: xf.to_doc(p),
+                    mods: mods(m, space),
+                    pressure: pen_pressure(ui, app, true),
+                    pen: pen_pose(app, &xf),
+                };
                 dispatch(app, &ev, view);
                 crate::document_drag::begin(app, ui.ctx(), ev.pos);
                 Drag::Tool
@@ -1156,8 +1182,13 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 Drag::Art if on_canvas(ui, resp, p) => {
                     // Back on the canvas: the move goes on from where it left, with the pointer.
                     egui::DragAndDrop::clear_payload(ui.ctx());
-                    let ev =
-                        PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                    let ev = PointerEvent {
+                        kind: PointerKind::Drag,
+                        pos: xf.to_doc(p),
+                        mods: mods(m, space),
+                        pressure: pen_pressure(ui, app, false),
+                        pen: pen_pose(app, &xf),
+                    };
                     dispatch(app, &ev, view);
                     ui.data_mut(|dd| {
                         dd.insert_temp(drag_id(), Drag::Tool);
@@ -1175,12 +1206,22 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         // stroke keeps its curve (a pen reports far more often than frames come).
                         // Mouse events, a pen's on X11 among them, give the last position only, with
                         // the host's latest pressure.
-                        for (at, force) in frame_moves(ui, app.services.stylus.as_ref()) {
+                        for (at, force, pose) in frame_moves(ui, app.services.stylus.as_ref()) {
                             let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
-                            dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure }, view);
+                            // The pose the feed kept for this move, else the latest.
+                            let pen = match pose {
+                                Some(q) => (q != PenPose::default()).then(|| pose_on_page(q, &xf)),
+                                None => pen_pose(app, &xf),
+                            };
+                            dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure, pen }, view);
                         }
-                        let ev =
-                            PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                        let ev = PointerEvent {
+                            kind: PointerKind::Drag,
+                            pos: xf.to_doc(p),
+                            mods: mods(m, space),
+                            pressure: pen_pressure(ui, app, false),
+                            pen: pen_pose(app, &xf),
+                        };
                         dispatch(app, &ev, view);
                     }
                     // Time held (Twirl, Pucker and Bloat keep applying); a stalled frame counts
@@ -1236,27 +1277,38 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     if let Some(last) = last_drag
                         && last != xf.to_doc(p)
                     {
-                        let ev =
-                            PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                        let ev = PointerEvent {
+                            kind: PointerKind::Drag,
+                            pos: xf.to_doc(p),
+                            mods: mods(m, space),
+                            pressure: pen_pressure(ui, app, false),
+                            pen: pen_pose(app, &xf),
+                        };
                         dispatch(app, &ev, view);
                     }
-                    let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                    let ev = PointerEvent {
+                        kind: PointerKind::Up,
+                        pos: xf.to_doc(p),
+                        mods: mods(m, space),
+                        pressure: pen_pressure(ui, app, false),
+                        pen: pen_pose(app, &xf),
+                    };
                     dispatch(app, &ev, view);
                 }
                 Drag::Art if on_canvas(ui, resp, p) => {
                     // Came back to the canvas and released in one frame: finish the move here.
                     egui::DragAndDrop::clear_payload(ui.ctx());
-                    let pressure = pen_pressure(ui, app, false);
+                    let (pressure, pen) = (pen_pressure(ui, app, false), pen_pose(app, &xf));
                     let pos = xf.to_doc(p);
-                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos, mods: mods(m, space), pressure }, view);
-                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos, mods: mods(m, space), pressure }, view);
+                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos, mods: mods(m, space), pressure, pen }, view);
+                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos, mods: mods(m, space), pressure, pen }, view);
                 }
                 Drag::Art => {
                     // Released over a panel: the move goes back. (The app ends it before the panels
                     // see the release, so a panel can take the art; this is the headless path.)
                     // With no document open there is nothing to roll back; the tool still gets its up.
                     let _ = app.session.cancel_interaction();
-                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+                    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0, pen: None }, view);
                 }
                 Drag::Gesture | Drag::Present => {}
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}
@@ -1265,7 +1317,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     } else if let Some(p) = hover_tool
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
-        let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+        let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0, pen: None };
         dispatch(app, &ev, view);
     }
     // The pointer left the canvas (for a panel, or out of the window) or went under a floating
@@ -1294,7 +1346,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
         if let Some(i) = artboard_name_at(app, ui, &xf, p) {
             begin_artboard_name_edit(ui, app, i);
         } else {
-            let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+            let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0, pen: None };
             let before = app.session.tool_id().to_string();
             dispatch(app, &ev, view);
             // A double-click on type switched a selection tool to the Type tool: the caret goes where
@@ -1680,7 +1732,7 @@ fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewI
             // and would otherwise outlive the drag that owns it (#2826).
             // Nothing to roll back without a document; the tool still gets its mouse-up.
             let _ = app.session.cancel_interaction();
-            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0, pen: None }, view);
             egui::DragAndDrop::clear_payload(ui.ctx());
         }
         Some(_) => {}
@@ -1726,7 +1778,7 @@ pub(crate) fn release_over_panel(app: &mut VectorcraftApp, ctx: &egui::Context) 
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();
-    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0, pen: None }, view);
     ctx.data_mut(|d| d.remove::<Drag>(drag_id()));
 }
 
@@ -1967,7 +2019,13 @@ fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui
             // The new guide shows even if guides were hidden.
             app.ui.view.guides = true;
         }
-        let ev = PointerEvent { kind, pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)), mods: mods(ui.input(|i| i.modifiers), false), pressure: 1.0 };
+        let ev = PointerEvent {
+            kind,
+            pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)),
+            mods: mods(ui.input(|i| i.modifiers), false),
+            pressure: 1.0,
+            pen: None,
+        };
         if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
             app.status(e.to_string());
         }
@@ -4364,7 +4422,7 @@ mod tests {
         let view = app.view_info();
         let at = boards[2].center();
         for kind in [PointerKind::Down, PointerKind::Up] {
-            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), pressure: 1.0 }, view);
+            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), pressure: 1.0, pen: None }, view);
         }
         assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
         let ids: Vec<vectorcraft_doc::NodeId> = app.run("edit.pasteInPlace", json!({})).unwrap()["ids"]
@@ -4397,7 +4455,7 @@ mod tests {
         let view = app.view_info();
         let shift = Mods { shift: true, ..Default::default() };
         for kind in [PointerKind::Down, PointerKind::Up] {
-            dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, pressure: 1.0 }, view);
+            dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, pressure: 1.0, pen: None }, view);
         }
         assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
         assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
@@ -4452,7 +4510,7 @@ mod tests {
         let view = app.view_info();
         let shift = Mods { shift: true, ..Default::default() };
         for kind in [PointerKind::Down, PointerKind::Up] {
-            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, pressure: 1.0 }, view);
+            dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, pressure: 1.0, pen: None }, view);
         }
         assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
         assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
@@ -8718,15 +8776,20 @@ mod tests {
         let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None));
         out.textures_delta.clear();
         assert!(mouse.is_empty());
-        // A macOS pen: the feed kept a pressure for each move, the last for the last.
+        // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
         let feed = StylusFeed::default();
-        for p in [0.9, 0.3, 0.0, 0.5] {
-            feed.set_move(crate::stylus::PenSample { pressure: p, eraser: false });
+        let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+        for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
+            feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
         }
         let mut samples = vec![];
         let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
         out.textures_delta.clear();
-        assert_eq!(samples, [(a, Some(0.3)), (b, None)], "paired from the end; a lift's 0 is no pressure");
+        assert_eq!(
+            samples,
+            [(a, Some(0.3), Some(leaning)), (b, None, Some(PenPose::default()))],
+            "paired from the end, each with its own pose; a lift's 0 is no pressure"
+        );
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
         out.textures_delta.clear();
         assert!(samples.is_empty(), "the moves were taken: a mouse's moves again");
@@ -8734,7 +8797,7 @@ mod tests {
         let mut samples = vec![];
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
         out.textures_delta.clear();
-        assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+        assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
         let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
         out.textures_delta.clear();
@@ -8948,7 +9011,7 @@ mod tests {
 
     /// The pen turned to its eraser end, with `pressure`.
     fn eraser_end(pressure: f32) -> Option<crate::stylus::PenSample> {
-        Some(crate::stylus::PenSample { pressure, eraser: true })
+        Some(crate::stylus::PenSample { pressure, eraser: true, ..Default::default() })
     }
 
     /// #764: turning the pen to its eraser end selects the Eraser, and turning it back to the tip
@@ -9125,6 +9188,55 @@ mod tests {
         frame(&mut app, &ctx, vec![]);
         assert_eq!(app.session.tool_id(), "perspectiveGrid");
         assert!(!visible(&app), "the grid stays hidden");
+    }
+
+    /// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
+    /// the tilt turned onto the page when the view is rotated; a mouse's points carry neither.
+    #[test]
+    fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let feed = StylusFeed::default();
+        app.services.stylus = Some(feed.clone());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("paintbrush");
+        // A stroke at `y`, one frame per sample, with the pen held as `pose` (`None`: a mouse); the
+        // tilt x, tilt y and rotation of each of its points.
+        let stroke = |app: &mut VectorcraftApp, y: f64, pose: Option<PenPose>| -> Vec<[Option<f64>; 3]> {
+            let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+            let button =
+                |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            let mut at = Pos2::ZERO;
+            for (i, x) in [360.0, 400.0, 440.0].into_iter().enumerate() {
+                match pose {
+                    Some(pose) => feed.set_sample(Some(crate::stylus::PenSample { pressure: 0.5, pose, ..Default::default() })),
+                    None => feed.set(None),
+                }
+                at = xf.to_screen(Point::new(x, y));
+                let mut events = vec![egui::Event::PointerMoved(at)];
+                if i == 0 {
+                    events.push(button(at, true));
+                }
+                frame(app, &ctx, events);
+            }
+            frame(app, &ctx, vec![button(at, false)]);
+            let (cmd, p) = app.session.journal.last().unwrap().clone();
+            assert_eq!(cmd, "path.freehand");
+            p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
+        };
+        let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+        let points = stroke(&mut app, 260.0, Some(leaning));
+        assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
+        // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
+        // page; the barrel's rotation stays as it was.
+        app.run("view.rotate", json!({"angle": 90})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let points = stroke(&mut app, 340.0, Some(leaning));
+        let up = |p: &[Option<f64>; 3]| matches!(*p, [Some(x), Some(y), Some(r)] if x.abs() < 0.01 && (y + 30.0).abs() < 0.01 && r == 45.0);
+        assert!(!points.is_empty() && points.iter().all(up), "{points:?}");
+        let points = stroke(&mut app, 300.0, None);
+        assert!(!points.is_empty() && points.iter().all(|p| *p == [None; 3]), "a mouse: {points:?}");
     }
 
     /// #491: a pen tap whose press and lift come in one frame selects what it tapped, and the

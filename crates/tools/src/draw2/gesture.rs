@@ -8,7 +8,9 @@
 //! key toggles to Smooth Tool off) draws a straight line at any angle. The Pencil's new path starts and ends on
 //! Smart Guides ([`DrawSnap`]: an anchor, a path, in line with the art), hovering too; the points
 //! between follow the hand. The Paintbrush records the pen pressure of each point (a stroke a pen
-//! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes. The
+//! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
+//! the pen's tilt and barrel rotation where the pen reads them (`[x, y, pressure, tiltX, tiltY,
+//! rotation]` points, `null` for what a point lacks) for brushes that vary with them. The
 //! other tools collect the drag polyline (shown as an overlay) and run
 //! one command on release. With Shift held, the Blob Brush's points stay on the horizontal or
 //! vertical line through the press point.
@@ -19,7 +21,7 @@ use vectorcraft_geom::Point;
 
 use super::{FEEDBACK, points_json, polyline};
 use crate::guides::DrawSnap;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]).
@@ -28,6 +30,8 @@ pub struct GestureTool {
     points: Vec<Point>,
     /// The pen pressure of each of `points` (the Paintbrush only).
     pressures: Vec<f32>,
+    /// The pen's tilt and rotation at each of `points` (the Paintbrush only).
+    poses: Vec<Option<PenPose>>,
     active: bool,
     began: bool,
     /// A release where the pointer last dragged to would close the stroke because it ends near
@@ -94,6 +98,7 @@ impl GestureTool {
             previewed: 0,
             points: vec![],
             pressures: vec![],
+            poses: vec![],
             active: false,
             began: false,
             near_start: false,
@@ -127,8 +132,8 @@ impl GestureTool {
         matches!(self.id, "pencil" | "paintbrush")
     }
 
-    /// Add a stroke sample.
-    fn push(&mut self, p: Point, pressure: f32) {
+    /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
+    fn push(&mut self, p: Point, ev: &PointerEvent) {
         let raw = self.shift_next.take();
         if self.points.is_empty() {
             self.shift_raw.clear();
@@ -137,7 +142,8 @@ impl GestureTool {
         }
         self.points.push(p);
         if self.id == "paintbrush" {
-            self.pressures.push(pressure);
+            self.pressures.push(ev.pressure);
+            self.poses.push(ev.pen.map(PenPose::sanitized));
         }
     }
 
@@ -190,15 +196,29 @@ impl GestureTool {
     fn clear(&mut self) {
         self.points.clear();
         self.pressures.clear();
+        self.poses.clear();
         self.previewed = 0;
         self.shift_line = None;
     }
 
-    /// The stroke's points, each `[x, y, pressure]` when a pen pressed less than fully anywhere
-    /// along it (a mouse always presses fully).
+    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation]` when a pen read its tilt or
+    /// rotation anywhere along it (`null` for what a point lacks, and for the pressure of a stroke
+    /// pressed fully all along), else `[x, y, pressure]` when a pen pressed less than fully
+    /// anywhere (a mouse always presses fully), else `[x, y]`.
     fn stroke_json(&self) -> Value {
-        if self.pressures.len() == self.points.len() && self.pressures.iter().any(|p| *p < 1.0) {
-            Value::Array(self.points.iter().zip(&self.pressures).map(|(p, f)| json!([p.x, p.y, (f64::from(*f) * 1000.0).round() / 1000.0])).collect())
+        let n = self.points.len();
+        let pressed = self.pressures.len() == n && self.pressures.iter().any(|p| *p < 1.0);
+        let posed = self.poses.len() == n && self.poses.iter().flatten().any(|q| q.tilt.is_some() || q.rotation.is_some());
+        let round = |v: f32, k: f64| (f64::from(v) * k).round() / k;
+        if posed {
+            let points = self.points.iter().zip(&self.pressures).zip(&self.poses).map(|((p, f), q)| {
+                let q = q.unwrap_or_default();
+                let (tilt, rotation) = (q.tilt.map(|t| t.map(|v| round(v, 100.0))), q.rotation.map(|r| round(r, 100.0)));
+                json!([p.x, p.y, pressed.then(|| round(*f, 1000.0)), tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+            });
+            Value::Array(points.collect())
+        } else if pressed {
+            Value::Array(self.points.iter().zip(&self.pressures).map(|(p, f)| json!([p.x, p.y, round(*f, 1000.0)])).collect())
         } else {
             points_json(&self.points)
         }
@@ -363,7 +383,7 @@ impl Tool for GestureTool {
                     p
                 };
                 self.clear();
-                self.push(start, ev.pressure);
+                self.push(start, ev);
                 vec![]
             }
             PointerKind::Drag => {
@@ -405,7 +425,7 @@ impl Tool for GestureTool {
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     return vec![];
                 }
-                self.push(p, ev.pressure);
+                self.push(p, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
                 if !self.draws_path() || self.smoothing {
                     return vec![];
@@ -432,12 +452,12 @@ impl Tool for GestureTool {
                 if self.straight {
                     self.points.truncate(1);
                     if self.points.first().is_some_and(|s| s.distance(end) >= cx.tol(1.0)) {
-                        self.push(end, ev.pressure);
+                        self.push(end, ev);
                     } else {
                         cancel = self.began;
                     }
                 } else if self.points.last().is_some_and(|l| l.distance(p) >= cx.tol(1.0)) {
-                    self.push(end, ev.pressure);
+                    self.push(end, ev);
                 } else if self.snaps()
                     && !self.smoothing
                     && self.points.len() > 1
@@ -657,6 +677,36 @@ mod tests {
         assert_eq!(stroke("paintbrush", [0.25, 0.5, 1.0]), json!([[0.0, 0.0, 0.25], [40.0, 0.0, 0.5], [80.0, 0.0, 1.0]]));
         assert_eq!(stroke("paintbrush", [1.0; 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
         assert_eq!(stroke("pencil", [0.25, 0.5, 1.0]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    }
+
+    /// #764: the Paintbrush sends each point's pen tilt and barrel rotation where the pen reads
+    /// them, `null` for what a point lacks; the Pencil sends plain points.
+    #[test]
+    fn paintbrush_sends_pen_tilt_and_rotation() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let stroke = |id: &str, pressure: f32, poses: [Option<PenPose>; 3]| {
+            let mut t = GestureTool::new(id);
+            let kinds = [PointerKind::Down, PointerKind::Drag, PointerKind::Up];
+            let mut last = vec![];
+            for ((k, x), pen) in kinds.into_iter().zip([0.0, 40.0, 80.0]).zip(poses) {
+                last = t.pointer(&cx, &PointerEvent { pressure, pen, ..PointerEvent::new(k, x, 0.0) });
+            }
+            let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
+            v["points"].clone()
+        };
+        let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+        assert_eq!(
+            stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
+            json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
+        );
+        // A pen without a rotation axis, pressing fully: no pressure, the tilt alone.
+        assert_eq!(stroke("paintbrush", 1.0, [leaning(30.0, None); 3])[1], json!([40.0, 0.0, null, 30.0, -10.0, null]));
+        // A pose that reads nothing is a mouse's.
+        assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+        assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
     }
 
     #[test]

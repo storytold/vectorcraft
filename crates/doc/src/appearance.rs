@@ -1,6 +1,8 @@
 //! The appearance model: a stack of fills and strokes, each with its own opacity, blend mode and
 //! effects, plus object-level effects.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{BlendMode, Color, Paint};
 
@@ -295,7 +297,8 @@ impl WidthProfile {
 
 /// Pen pressure recorded along a stroke (the Paintbrush with a graphics tablet): (position 0..1
 /// along the path, pressure 0..1) samples in order, positions measured as a [`WidthProfile`]'s
-/// are. Calligraphic brushes with Pressure variation read it; everything else ignores it.
+/// are. The pen's tilt is kept the same way ([`StrokeLayer::tilt`]). Calligraphic and Scatter
+/// brushes with Pressure or Tilt variation read them; everything else ignores them.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PressureProfile {
     pub points: Vec<(f64, f64)>,
@@ -312,18 +315,7 @@ impl PressureProfile {
 
     /// The pressure at `t` (0..1), linear between samples; [`Self::MID`] without any.
     pub fn at(&self, t: f64) -> f64 {
-        let p = &self.points;
-        let (Some(first), Some(last)) = (p.first(), p.last()) else { return Self::MID };
-        // (Positions go forward; a profile read from a file is searched as if they do, in log time.)
-        let v = if t <= first.0 {
-            first.1
-        } else {
-            let i = p.partition_point(|q| q.0 < t);
-            match (i.checked_sub(1).and_then(|j| p.get(j)), p.get(i)) {
-                (Some(a), Some(b)) => a.1 + (b.1 - a.1) * ((t - a.0) / (b.0 - a.0).max(1e-9)).clamp(0.0, 1.0),
-                _ => last.1,
-            }
-        };
+        let v = interpolated(&self.points, t).unwrap_or(Self::MID);
         if v.is_finite() { v.clamp(0.0, 1.0) } else { Self::MID }
     }
 
@@ -333,50 +325,163 @@ impl PressureProfile {
     pub fn from_samples(samples: impl IntoIterator<Item = (f64, f64)>) -> Option<Self> {
         let pts: Vec<(f64, f64)> =
             samples.into_iter().filter(|(t, p)| t.is_finite() && p.is_finite()).map(|(t, p)| (t.clamp(0.0, 1.0), p.clamp(0.0, 1.0))).collect();
-        if pts.is_empty() {
-            return None;
-        }
-        // Simplifying is quadratic at worst: a huge stroke is thinned evenly first.
-        let mut pts = thin(pts, 16 * Self::MAX_POINTS);
-        // Positions only ever go forward.
-        let mut prev = 0.0;
-        for p in &mut pts {
-            p.0 = p.0.max(prev);
-            prev = p.0;
-        }
-        let keep = simplify_1d(&pts, Self::TOLERANCE);
-        let pts = thin(pts.iter().zip(keep).filter(|(_, k)| *k).map(|(p, _)| *p).collect(), Self::MAX_POINTS);
-        let round = |v: f64| (v * 1e4).round() / 1e4;
-        Some(Self { points: pts.into_iter().map(|(t, p)| (round(t), round(p))).collect() })
+        simplified(pts, Self::TOLERANCE).map(|points| Self { points })
     }
 
     /// The pressure of a path `old_len` long (`old`; None: drawn without pressure) continued at its
     /// end by a stroke `added_len` long (`added`). None when neither has pressure.
     pub fn extended(old: Option<&Self>, old_len: f64, added: Option<&Self>, added_len: f64) -> Option<Self> {
-        if old.is_none() && added.is_none() {
-            return None;
+        match extended_points(old.map(|p| p.points.as_slice()), old_len, added.map(|p| p.points.as_slice()), added_len, Self::MID)? {
+            Cow::Borrowed(points) => Some(Self { points: points.to_vec() }),
+            Cow::Owned(points) => Self::from_samples(points),
         }
-        let (old_len, added_len) = (old_len.max(0.0), added_len.max(0.0));
-        let total = old_len + added_len;
-        if !total.is_finite() || total <= 1e-9 {
-            return old.or(added).cloned();
-        }
-        let flat = Self { points: vec![(0.0, Self::MID), (1.0, Self::MID)] };
-        let (old, added) = (old.unwrap_or(&flat), added.unwrap_or(&flat));
-        let o = old_len / total;
-        let old_pts = old.points.iter().map(|&(t, p)| (t * o, p));
-        Self::from_samples(old_pts.chain(added.points.iter().map(|&(u, p)| (o + u * (1.0 - o), p))))
     }
 
     /// The pressure of the path reversed.
     pub fn reversed(&self) -> Self {
-        Self { points: self.points.iter().rev().map(|&(t, p)| (1.0 - t, p)).collect() }
+        Self { points: reversed_points(&self.points) }
     }
 
     /// A light–heavy–light stroke, for previews of pressure-sensitive brushes.
     pub fn sample() -> Self {
         Self { points: vec![(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)] }
     }
+}
+
+/// A pen angle recorded along a stroke (the Paintbrush with a tablet that reads it): (position 0..1
+/// along the path, degrees) samples in order, positions measured as a [`PressureProfile`]'s are.
+/// Each sample is joined to the one before it the shorter way round, so the degrees can run past
+/// ±180° and the angle read between two samples turns through the smaller angle between them.
+/// Calligraphic and Scatter brushes with Bearing or Rotation variation read it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AngleProfile {
+    pub points: Vec<(f64, f64)>,
+}
+
+impl AngleProfile {
+    /// How far (in degrees) simplifying may move the recorded curve.
+    const TOLERANCE: f64 = 1.0;
+
+    /// The angle at `t` (0..1), linear between samples, in degrees above −180 up to 180; 0
+    /// without any samples.
+    pub fn at(&self, t: f64) -> f64 {
+        let v = interpolated(&self.points, t).unwrap_or(0.0);
+        if v.is_finite() { vectorcraft_geom::normalize_deg(v) } else { 0.0 }
+    }
+
+    /// A profile from (position, degrees) samples in order along the stroke: non-finite ones are
+    /// dropped, each sample is joined to the one before it the shorter way round, and the curve is
+    /// simplified to within 1° and kept to [`PressureProfile::MAX_POINTS`]. `None` without a sample.
+    pub fn from_samples(samples: impl IntoIterator<Item = (f64, f64)>) -> Option<Self> {
+        let mut prev: Option<f64> = None;
+        let pts: Vec<(f64, f64)> = samples
+            .into_iter()
+            .filter(|(t, a)| t.is_finite() && a.is_finite())
+            .map(|(t, a)| {
+                let a = prev.map_or(vectorcraft_geom::normalize_deg(a), |p| p + vectorcraft_geom::normalize_deg(a - p));
+                prev = Some(a);
+                (t.clamp(0.0, 1.0), a)
+            })
+            .collect();
+        simplified(pts, Self::TOLERANCE).map(|points| Self { points })
+    }
+
+    /// The angle of a path `old_len` long (`old`; None: drawn without it, 0°) continued at its end
+    /// by a stroke `added_len` long (`added`). None when neither has one. Each part keeps the turns
+    /// it recorded, more than half a turn between two samples included; the added part is moved by
+    /// whole turns so that it starts the shorter way round from where the old part ends.
+    pub fn extended(old: Option<&Self>, old_len: f64, added: Option<&Self>, added_len: f64) -> Option<Self> {
+        let end = old.map_or(Some(0.0), |o| o.points.last().map(|p| p.1));
+        let added = added.map(|a| {
+            let shift = match (end, a.points.first()) {
+                (Some(end), Some(&(_, start))) => end + vectorcraft_geom::normalize_deg(start - end) - start,
+                _ => 0.0,
+            };
+            Self { points: a.points.iter().map(|&(t, v)| (t, v + shift)).collect() }
+        });
+        match extended_points(old.map(|p| p.points.as_slice()), old_len, added.as_ref().map(|p| p.points.as_slice()), added_len, 0.0)? {
+            Cow::Borrowed(points) => Some(Self { points: points.to_vec() }),
+            Cow::Owned(points) => {
+                let pts = points.into_iter().filter(|(t, a)| t.is_finite() && a.is_finite()).map(|(t, a)| (t.clamp(0.0, 1.0), a)).collect();
+                simplified(pts, Self::TOLERANCE).map(|points| Self { points })
+            }
+        }
+    }
+
+    /// The angle along the path reversed (the angles stay as they were on the page).
+    pub fn reversed(&self) -> Self {
+        Self { points: reversed_points(&self.points) }
+    }
+
+    /// One turn through every angle along the stroke, for previews of brushes that vary with one.
+    pub fn sample() -> Self {
+        Self { points: vec![(0.0, -179.0), (1.0, 179.0)] }
+    }
+}
+
+/// The value of samples `p` (position, value) at `t`, linear between them; `None` without any.
+fn interpolated(p: &[(f64, f64)], t: f64) -> Option<f64> {
+    let (first, last) = (p.first()?, p.last()?);
+    if t <= first.0 {
+        return Some(first.1);
+    }
+    // (Positions go forward; a profile read from a file is searched as if they do, in log time.)
+    let i = p.partition_point(|q| q.0 < t);
+    Some(match (i.checked_sub(1).and_then(|j| p.get(j)), p.get(i)) {
+        (Some(a), Some(b)) => a.1 + (b.1 - a.1) * ((t - a.0) / (b.0 - a.0).max(1e-9)).clamp(0.0, 1.0),
+        _ => last.1,
+    })
+}
+
+/// Samples (position, value) with positions in 0..1 and finite values, simplified to within `tol`
+/// of the value and kept to [`PressureProfile::MAX_POINTS`]. `None` without a sample.
+fn simplified(pts: Vec<(f64, f64)>, tol: f64) -> Option<Vec<(f64, f64)>> {
+    if pts.is_empty() {
+        return None;
+    }
+    // Simplifying is quadratic at worst: a huge stroke is thinned evenly first.
+    let mut pts = thin(pts, 16 * PressureProfile::MAX_POINTS);
+    // Positions only ever go forward.
+    let mut prev = 0.0;
+    for p in &mut pts {
+        p.0 = p.0.max(prev);
+        prev = p.0;
+    }
+    let keep = simplify_1d(&pts, tol);
+    let pts = thin(pts.iter().zip(keep).filter(|(_, k)| *k).map(|(p, _)| *p).collect(), PressureProfile::MAX_POINTS);
+    let round = |v: f64| (v * 1e4).round() / 1e4;
+    Some(pts.into_iter().map(|(t, p)| (round(t), round(p))).collect())
+}
+
+/// The samples of a path `old_len` long (`old`) continued at its end by a stroke `added_len` long
+/// (`added`), in order along the whole path, a side without samples (`None`) flat at `none`.
+/// `None` when neither side has samples; the side that has them, as they are, when the two
+/// lengths add up to no length.
+fn extended_points<'a>(
+    old: Option<&'a [(f64, f64)]>,
+    old_len: f64,
+    added: Option<&'a [(f64, f64)]>,
+    added_len: f64,
+    none: f64,
+) -> Option<Cow<'a, [(f64, f64)]>> {
+    if old.is_none() && added.is_none() {
+        return None;
+    }
+    let (old_len, added_len) = (old_len.max(0.0), added_len.max(0.0));
+    let total = old_len + added_len;
+    if !total.is_finite() || total <= 1e-9 {
+        return old.or(added).map(Cow::Borrowed);
+    }
+    let flat = [(0.0, none), (1.0, none)];
+    let (old, added) = (old.unwrap_or(&flat), added.unwrap_or(&flat));
+    let o = old_len / total;
+    let old_pts = old.iter().map(|&(t, p)| (t * o, p));
+    Some(Cow::Owned(old_pts.chain(added.iter().map(|&(u, p)| (o + u * (1.0 - o), p))).collect()))
+}
+
+/// Samples (position, value) of a path, for the path reversed.
+fn reversed_points(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    points.iter().rev().map(|&(t, p)| (1.0 - t, p)).collect()
 }
 
 /// At most `max` of `pts`, evenly spread (the ends kept).
@@ -514,6 +619,21 @@ pub struct StrokeLayer {
     /// art leave it behind ([`Appearance::without_pressure`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pressure: Option<PressureProfile>,
+    /// How far the pen leaned from upright along the stroke (Paintbrush with a tablet that reads
+    /// tilt): 0 upright to 1 lying flat (90°). Brushes with Tilt variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tilt: Option<PressureProfile>,
+    /// Which way the pen leaned along the stroke, in degrees counter-clockwise on the page from the
+    /// x axis. Brushes with Bearing variation vary with it. Like the pressure, it stays with this
+    /// path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bearing: Option<AngleProfile>,
+    /// How far the pen's barrel was turned along the stroke, in degrees counter-clockwise (a pen
+    /// that reads barrel rotation). Brushes with Rotation variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<AngleProfile>,
 }
 
 /// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
@@ -585,6 +705,9 @@ impl StrokeLayer {
             overprint: false,
             gradient_mode: StrokeGradientMode::Within,
             pressure: None,
+            tilt: None,
+            bearing: None,
+            rotation: None,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
@@ -658,6 +781,8 @@ pub fn stroke_paint_bounds(geometric: vectorcraft_geom::Rect, width: f64) -> vec
 }
 
 /// One entry of the appearance stack.
+// A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AppearanceItem {
@@ -770,11 +895,15 @@ impl Appearance {
     pub fn stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
         self.items.iter_mut().rev().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
     }
-    /// This appearance for other art: the pen pressure its strokes were drawn with stays with them.
+    /// This appearance for other art: the pen pressure, tilt, bearing and rotation its strokes
+    /// were drawn with stay with them.
     pub fn without_pressure(mut self) -> Self {
         for it in &mut self.items {
             if let AppearanceItem::Stroke(s) = it {
                 s.pressure = None;
+                s.tilt = None;
+                s.bearing = None;
+                s.rotation = None;
             }
         }
         self
@@ -1279,11 +1408,50 @@ mod tests {
         assert_eq!(old.reversed().points, vec![(0.0, 1.0), (1.0, 0.0)]);
     }
 
+    /// #764: a pen's bearing or barrel rotation is kept the shorter way round between samples, so
+    /// 170° then −170° turns through 180°, not through 0°.
+    #[test]
+    fn angle_profiles_join_samples_the_shorter_way_round() {
+        let across = AngleProfile::from_samples([(0.0, 170.0), (1.0, -170.0)]).unwrap();
+        assert_eq!(across.points, vec![(0.0, 170.0), (1.0, 190.0)]);
+        assert_eq!(across.at(0.5), 180.0);
+        assert!((across.at(0.75) + 175.0).abs() < 1e-9, "{}", across.at(0.75));
+        // Turns past a whole turn keep counting, and read back within −180..180°.
+        let spin = AngleProfile::from_samples((0..=40).map(|i| (f64::from(i) / 40.0, f64::from(i * 30) - 180.0))).unwrap();
+        assert!((spin.points.last().unwrap().1 - 1380.0).abs() < 1e-9, "{spin:?}");
+        assert!((spin.at(1.0) + 60.0).abs() < 1e-9 && spin.points.len() == 2, "{spin:?}");
+        // Junk is dropped; nothing at all is no profile, and no profile reads 0°.
+        let junk = AngleProfile::from_samples([(f64::NAN, 5.0), (0.5, f64::INFINITY), (0.2, 400.0)]).unwrap();
+        assert_eq!(junk.points, vec![(0.2, 40.0)]);
+        assert!(AngleProfile::from_samples([(0.5, f64::NAN)]).is_none());
+        assert_eq!(AngleProfile::default().at(0.3), 0.0);
+        let noisy = AngleProfile::from_samples((0..1_000_000).map(|i| (f64::from(i) / 1e6, f64::from(i % 2) * 90.0))).unwrap();
+        assert!(noisy.points.len() <= PressureProfile::MAX_POINTS);
+        // Continued: the old part, then the new one; a side without an angle is 0°. Reversed, the
+        // angles stay what they were.
+        let old = AngleProfile { points: vec![(0.0, 90.0), (1.0, 90.0)] };
+        let joined = AngleProfile::extended(Some(&old), 30.0, None, 10.0).unwrap();
+        assert!((joined.at(0.5) - 90.0).abs() < 1e-9 && joined.at(1.0) == 0.0, "{joined:?}");
+        assert!(AngleProfile::extended(None, 10.0, None, 10.0).is_none());
+        assert_eq!(AngleProfile::extended(Some(&old), 0.0, None, 0.0), Some(old.clone()));
+        assert_eq!(across.reversed().points, vec![(0.0, 190.0), (1.0, 170.0)]);
+        // A part that turned more than half a turn between two of its samples keeps that turn when
+        // the path is continued, and so does the new part.
+        let quarter_turns = AngleProfile::from_samples([(0.0, 0.0), (1.0 / 3.0, 90.0), (2.0 / 3.0, 180.0), (1.0, 270.0)]).unwrap();
+        assert_eq!(quarter_turns.points, vec![(0.0, 0.0), (1.0, 270.0)]);
+        let added = AngleProfile { points: vec![(0.0, -80.0), (1.0, 280.0)] };
+        let joined = AngleProfile::extended(Some(&quarter_turns), 10.0, Some(&added), 10.0).unwrap();
+        assert!((joined.at(0.25) - 135.0).abs() < 1e-9, "{joined:?}");
+        assert!((joined.at(0.75) - 100.0).abs() < 1e-9, "{joined:?}");
+    }
+
     /// Strokes saved before pen pressure load as they were, and are written without it.
     #[test]
     fn strokes_without_pressure_round_trip_unchanged() {
         let json = serde_json::to_value(StrokeLayer::new(Paint::None, 2.0)).unwrap();
-        assert!(json.get("pressure").is_none());
+        for key in ["pressure", "tilt", "bearing", "rotation"] {
+            assert!(json.get(key).is_none(), "{key}");
+        }
         let st: StrokeLayer = serde_json::from_value(json).unwrap();
         assert_eq!(st.pressure, None);
         let pressed = StrokeLayer { pressure: Some(PressureProfile::sample()), ..st };
@@ -1292,6 +1460,19 @@ mod tests {
         let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
         ap.stroke_mut().unwrap().pressure = Some(PressureProfile::sample());
         assert_eq!(ap.without_pressure().stroke().unwrap().pressure, None);
+        // The pen's tilt, bearing and rotation load, save and stay behind the same way.
+        let posed = StrokeLayer {
+            tilt: Some(PressureProfile::sample()),
+            bearing: Some(AngleProfile::sample()),
+            rotation: Some(AngleProfile { points: vec![(0.0, -45.0)] }),
+            ..back
+        };
+        let again: StrokeLayer = serde_json::from_value(serde_json::to_value(&posed).unwrap()).unwrap();
+        assert_eq!(again, posed);
+        let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
+        *ap.stroke_mut().unwrap() = posed;
+        let st = ap.without_pressure().stroke().cloned().unwrap();
+        assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation), (None, None, None, None));
     }
 
     #[test]

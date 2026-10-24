@@ -2696,6 +2696,7 @@ lighting	Light	Cahaya
 	Total Width:	Lebar total:
 	Width Point Edit	Edit titik lebar
 	Art	Seni
+	Bearing	Arah
 	Bristle	Bristle
 	Calligraphic	Kaligrafis
 	Dots	Titik
@@ -2703,6 +2704,7 @@ lighting	Light	Cahaya
 	Pressure	Tekanan
 	Random	Acak
 	Scatter	Sebar
+	Tilt	Kemiringan
 	Color Burn	Bakar warna
 	Color Dodge	Dodge warna
 	Darken	Menggelapkan

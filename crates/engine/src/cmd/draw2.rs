@@ -7,7 +7,7 @@ use std::sync::Arc;
 use kurbo::{CubicBez, ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
+use vectorcraft_doc::{AngleProfile, Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection, StrokeLayer};
 use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops as po;
@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic brushes with Pressure variation; a point without one presses fully), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: it is not, and the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end; redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
+            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic and Scatter brushes with Pressure variation; a point without one presses fully. Pen tilt in degrees, each −90..90, x positive leaning right and y leaning down the page, and barrel rotation in degrees clockwise: the stroke keeps how far the pen leaned, which way and how far its barrel turned, for brushes with Tilt, Bearing and Rotation variation; null for what a point lacks), fidelity?: pt (1.5), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: it is not, and the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end; redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
             has_doc,
             freehand
         ),
@@ -154,8 +154,25 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// `[[x,y]…]` or `[{x,y}…]`.
 fn points_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Point>> {
-    Ok(samples_param(p, key, cmd)?.into_iter().map(|(pt, _)| pt).collect())
+    Ok(samples_param(p, key, cmd)?.into_iter().map(|s| s.pt).collect())
 }
+
+/// One point of a stroke, with what a pen read there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Sample {
+    pt: Point,
+    /// Pressure, 0..1.
+    pressure: Option<f64>,
+    /// Tilt `[x, y]` in degrees, each −90..90, in document axes (x positive leaning right, y
+    /// positive leaning down the page).
+    tilt: Option<[f64; 2]>,
+    /// Barrel rotation, degrees clockwise.
+    rotation: Option<f64>,
+}
+
+/// The keys of a point's pen values, in the order a point given as an array holds them after its
+/// x and y.
+const PEN_KEYS: [&str; 4] = ["pressure", "tiltX", "tiltY", "rotation"];
 
 /// The point `[x, y, …]` or `{x, y, …}` that `v` holds, or an error when its x or y is not a finite
 /// number.
@@ -168,22 +185,31 @@ fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
     xy.filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)).ok_or_else(|| bad(cmd, "x and y must both be numbers"))
 }
 
-/// [`points_param`] with each point's pen pressure, if it has one: `[[x,y,pressure]…]` or
-/// `[{x,y,pressure}…]` (0..1). A point whose x or y is not a number, or whose pressure is neither a
-/// number nor null, is an error.
-fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f64>)>> {
+/// [`points_param`] with what a pen read at each point, as far as it is given:
+/// `[[x,y,pressure,tiltX,tiltY,rotation]…]` or `[{x,y,pressure,tiltX,tiltY,rotation}…]`. Pressure
+/// is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0); rotation in
+/// degrees clockwise. A point whose x or y is not a number, or whose pressure, tilt or rotation is
+/// neither a number nor null, is an error.
+fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sample>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
-    let pts: Vec<(Point, Option<f64>)> = a
+    let pts: Vec<Sample> = a
         .iter()
         .map(|v| {
-            let pressure = match v {
-                Value::Array(xy) => xy.get(2),
-                _ => v.get("pressure"),
-            };
-            match pressure {
-                None | Some(Value::Null) | Some(Value::Number(_)) => Ok((point_entry(v, cmd)?, pressure.and_then(Value::as_f64))),
-                Some(f) => Err(bad(cmd, format!("`pressure` must be a number, not {f}"))),
+            let mut pen = [None; 4];
+            for (i, (key, slot)) in PEN_KEYS.iter().zip(&mut pen).enumerate() {
+                let given = match v {
+                    Value::Array(xy) => xy.get(i + 2),
+                    _ => v.get(*key),
+                };
+                *slot = match given {
+                    None | Some(Value::Null) => None,
+                    Some(n @ Value::Number(_)) => n.as_f64(),
+                    Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
+                };
             }
+            let [pressure, tx, ty, rotation] = pen;
+            let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0).clamp(-90.0, 90.0)));
+            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation })
         })
         .collect::<Result<_>>()?;
     if pts.is_empty() {
@@ -192,23 +218,117 @@ fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f
     Ok(pts)
 }
 
-/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
-/// its samples has one; samples without one count as full pressure, as a pen event without one.
-fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<PressureProfile> {
-    if samples.iter().all(|(_, p)| p.is_none()) {
-        return None;
-    }
+/// Where each sample of a freehand stroke is along its polyline, as a fraction of its length.
+fn along(samples: &[Sample]) -> Vec<f64> {
     let mut at = 0.0;
     let mut prev: Option<Point> = None;
-    let along: Vec<(f64, f64)> = samples
+    let dist: Vec<f64> = samples
         .iter()
-        .map(|(pt, p)| {
-            at += prev.map_or(0.0, |q| q.distance(*pt));
-            prev = Some(*pt);
-            (at, p.unwrap_or(1.0))
+        .map(|s| {
+            at += prev.map_or(0.0, |q| q.distance(s.pt));
+            prev = Some(s.pt);
+            at
         })
         .collect();
-    PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+    dist.into_iter().map(|s| if at > 1e-9 { s / at } else { 0.0 }).collect()
+}
+
+/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
+/// its samples has one; samples without one count as full pressure, as a pen event without one.
+fn stroke_pressure(samples: &[Sample]) -> Option<PressureProfile> {
+    if samples.iter().all(|s| s.pressure.is_none()) {
+        return None;
+    }
+    PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.pressure.unwrap_or(1.0))))
+}
+
+/// A pen that leans less than this many degrees from upright leans no way in particular: its
+/// bearing is the one before it.
+const UPRIGHT: f64 = 1.0;
+
+/// How far the pen leaned from upright (0 upright to 1 flat), which way (degrees
+/// counter-clockwise on the page from the x axis) and how far its barrel turned (degrees
+/// counter-clockwise) along a freehand stroke, each when any sample has it. A sample without the
+/// tilt or the rotation that others have counts as half way over (45°) or unturned, which draws a
+/// brush's own value. The bearing of a pen within 1° of upright is the bearing before it (the
+/// first one the stroke has, at its start).
+fn stroke_pose(samples: &[Sample]) -> (Option<PressureProfile>, Option<AngleProfile>, Option<AngleProfile>) {
+    let at = along(samples);
+    // The tilt's lean as a direction on the page, and the angle from upright (as Pointer Events'
+    // tiltX and tiltY convert to an altitude and an azimuth).
+    let lean = |t: [f64; 2]| t.map(|d| d.to_radians().tan());
+    let from_upright = |t: [f64; 2]| {
+        let [x, y] = lean(t);
+        x.hypot(y).atan().to_degrees()
+    };
+    let tilt = samples.iter().any(|s| s.tilt.is_some()).then(|| {
+        let tilts = at.iter().zip(samples).map(|(t, s)| (*t, s.tilt.map_or(PressureProfile::MID, |q| from_upright(q) / 90.0)));
+        PressureProfile::from_samples(tilts)
+    });
+    let bearing = samples.iter().any(|s| s.tilt.is_some()).then(|| {
+        let leans: Vec<Option<f64>> =
+            samples.iter().map(|s| s.tilt.filter(|q| from_upright(*q) >= UPRIGHT).map(lean).map(|[x, y]| (-y).atan2(x).to_degrees())).collect();
+        let mut last = leans.iter().flatten().next().copied().unwrap_or(0.0);
+        AngleProfile::from_samples(at.iter().zip(leans).map(|(t, b)| {
+            last = b.unwrap_or(last);
+            (*t, last)
+        }))
+    });
+    let rotation = samples
+        .iter()
+        .any(|s| s.rotation.is_some())
+        .then(|| AngleProfile::from_samples(at.iter().zip(samples).map(|(t, s)| (*t, -s.rotation.unwrap_or(0.0)))));
+    (tilt.flatten(), bearing.flatten(), rotation.flatten())
+}
+
+/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing` and
+/// `rotation`).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct PenRecord {
+    pressure: Option<PressureProfile>,
+    tilt: Option<PressureProfile>,
+    bearing: Option<AngleProfile>,
+    rotation: Option<AngleProfile>,
+}
+
+impl PenRecord {
+    /// What a freehand stroke's samples recorded.
+    fn of_samples(samples: &[Sample]) -> Self {
+        let (tilt, bearing, rotation) = stroke_pose(samples);
+        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation }
+    }
+    fn of(st: &StrokeLayer) -> Self {
+        Self { pressure: st.pressure.clone(), tilt: st.tilt.clone(), bearing: st.bearing.clone(), rotation: st.rotation.clone() }
+    }
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+    /// The record of a path `old_len` long (this one) continued at its end by a stroke
+    /// `added_len` long (`added`).
+    fn extended(&self, old_len: f64, added: &Self, added_len: f64) -> Self {
+        Self {
+            pressure: PressureProfile::extended(self.pressure.as_ref(), old_len, added.pressure.as_ref(), added_len),
+            tilt: PressureProfile::extended(self.tilt.as_ref(), old_len, added.tilt.as_ref(), added_len),
+            bearing: AngleProfile::extended(self.bearing.as_ref(), old_len, added.bearing.as_ref(), added_len),
+            rotation: AngleProfile::extended(self.rotation.as_ref(), old_len, added.rotation.as_ref(), added_len),
+        }
+    }
+    /// The record along the path reversed.
+    fn reversed(&self) -> Self {
+        Self {
+            pressure: self.pressure.as_ref().map(PressureProfile::reversed),
+            tilt: self.tilt.as_ref().map(PressureProfile::reversed),
+            bearing: self.bearing.as_ref().map(AngleProfile::reversed),
+            rotation: self.rotation.as_ref().map(AngleProfile::reversed),
+        }
+    }
+    /// Keep the record on stroke `st`.
+    fn write(self, st: &mut StrokeLayer) {
+        st.pressure = self.pressure;
+        st.tilt = self.tilt;
+        st.bearing = self.bearing;
+        st.rotation = self.rotation;
+    }
 }
 
 /// The length of a subpath.
@@ -659,11 +779,11 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: f64, within: f64) -> Option
 fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.freehand";
     let samples = samples_param(p, "points", C)?;
-    if samples.iter().any(|(q, _)| !within_input_bound(*q)) {
+    if samples.iter().any(|q| !within_input_bound(q.pt)) {
         return Err(bad(C, "x and y must be finite"));
     }
-    let pressure = stroke_pressure(&samples);
-    let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
+    let pen = PenRecord::of_samples(&samples);
+    let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let tol = number_or(p, "fidelity", 1.5, C)?.clamp(0.05, 100.0);
     let closed = switch_or(p, "closed", false, C)?;
     let brush = str_param(p, "style") == Some("brush");
@@ -712,12 +832,13 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
         }
-        // The path's pressure (in the direction it is continued in) followed by the stroke's.
-        let old_pressure = s.doc()?.doc.node(id).and_then(|n| n.appearance.stroke()).and_then(|st| st.pressure.clone());
-        let joined = (old_pressure.is_some() || pressure.is_some()).then(|| {
-            let old = old_pressure.map(|p| if at_start { p.reversed() } else { p });
+        // What the pen recorded along the path (in the direction it is continued in), followed by
+        // what it recorded along the stroke.
+        let old = s.doc()?.doc.node(id).and_then(|n| n.appearance.stroke()).map(PenRecord::of).unwrap_or_default();
+        let joined = (!old.is_empty() || !pen.is_empty()).then(|| {
+            let old = if at_start { old.reversed() } else { old };
             let total = subpath_len(&sp);
-            PressureProfile::extended(old.as_ref(), old_len, pressure.as_ref(), total - old_len)
+            old.extended(old_len, &pen, total - old_len)
         });
         s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
             let reverse = at_start && !sp.closed;
@@ -728,7 +849,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(joined) = joined
                 && let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut())
             {
-                st.pressure = if reverse { joined.map(|p| p.reversed()) } else { joined };
+                if reverse { joined.reversed() } else { joined }.write(st);
             }
             if keep_selected {
                 sel.set([id]);
@@ -746,8 +867,9 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "redraw within must be a finite distance of 0 or more"));
         }
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
-        // shortcut: a stroke pressure profile is left as it was, measured along the old path; fit
-        // it to the new length if Calligraphic pressure strokes get redrawn.
+        // shortcut: a stroke's pressure, tilt, bearing and rotation profiles are left as they
+        // were, measured along the old path; fit them to the new length if strokes drawn with a
+        // pen get redrawn.
         if let Some((si, sp)) = redraw_section(&pd, &pts, tol, within) {
             s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
                 *path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| bad(C, "no such subpath"))? = sp;
@@ -771,7 +893,7 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
     let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
     if let Some(st) = look.appearance.stroke_mut() {
-        st.pressure = pressure;
+        pen.write(st);
     }
     insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)
 }

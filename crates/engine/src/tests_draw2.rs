@@ -937,8 +937,9 @@ fn pencil_refuses_a_fidelity_or_within_given_as_text() {
 }
 
 /// The drawing tools' commands refuse a point whose x or y is not a number, such as "10" or a point
-/// written as text, and a pen pressure given as text, instead of leaving the point out or drawing it
-/// at full pressure; the document stays as it was.
+/// written as text, and a pen pressure, tilt or rotation given as text or another value that is not
+/// a number, instead of leaving the point out or drawing it at full pressure; the document stays as
+/// it was.
 #[test]
 fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
     let mut s = session();
@@ -957,9 +958,20 @@ fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
             let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
             refuses_with(&mut s, cmd, &json!({"points": points}), "`pressure` must be a number, not \"0.5\"");
         }
+        // The pen's tilt and rotation the same way.
+        for (bad, want) in [
+            (json!([150, 150, 0.5, "30", 0]), "`tiltX` must be a number, not \"30\""),
+            (json!([150, 150, null, 0, true]), "`tiltY` must be a number, not true"),
+            (json!({"x": 150, "y": 150, "rotation": [90]}), "`rotation` must be a number, not [90]"),
+        ] {
+            let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
+            refuses_with(&mut s, cmd, &json!({"points": points}), want);
+        }
     }
     let pressed = json!({"points": [[100, 400], [150, 420, null], {"x": 200, "y": 400, "pressure": 0.5}], "keepSelected": false});
     s.execute("path.freehand", &pressed).unwrap();
+    let posed = json!({"points": [[100, 500, 0.5, 30, null, null], [150, 520, null, null, -20], {"x": 200, "y": 500, "rotation": 45}], "keepSelected": false});
+    s.execute("path.freehand", &posed).unwrap();
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, width, radius,

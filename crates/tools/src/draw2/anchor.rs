@@ -763,7 +763,7 @@ mod tests {
         let shift = Mods { shift: true, ..Mods::default() };
         let mut tool = AnchorTool::new("anchorPoint");
         tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
-        let drag = PointerEvent { kind: PointerKind::Drag, pos: Point::new(200.0, 340.0), mods: shift, pressure: 1.0 };
+        let drag = PointerEvent { kind: PointerKind::Drag, pos: Point::new(200.0, 340.0), mods: shift, pressure: 1.0, pen: None };
         let actions = tool.pointer(&c, &drag);
         // The pointer (40, 30) keeps its length of 50; Shift snaps it to 45 degrees.
         assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))

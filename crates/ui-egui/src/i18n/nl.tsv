@@ -2710,6 +2710,7 @@ lighting	Light	Licht
 	Total Width:	Totale breedte:
 	Width Point Edit	Breedtepunt bewerken
 	Art	Illustratie
+	Bearing	Richting
 	Bristle	Borstel
 	Calligraphic	Kalligrafisch
 	Dots	Stippen
@@ -2717,6 +2718,7 @@ lighting	Light	Licht
 	Pressure	Druk
 	Random	Willekeurig
 	Scatter	Strooi
+	Tilt	Kanteling
 	Color Burn	Na branden
 	Color Dodge	Kleur ontwijken
 	Darken	Donkerder

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
+use vectorcraft_doc::{AngleProfile, Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -30,8 +30,9 @@ pub fn brushes(app: &mut VectorcraftApp) -> (Vec<(String, String)>, Option<Strin
 }
 
 /// A stroke preview for brush definition `def`, rendered at `size` and cached by the definition's
-/// JSON. The stroke goes from light to heavy pen pressure and back, so pressure-sensitive brushes
-/// show how they vary.
+/// JSON. The stroke goes from light to heavy pen pressure and back, from an upright pen to one
+/// lying flat and back, and once round every bearing and barrel rotation, so brushes that vary
+/// with the pen show how they vary.
 fn preview(ui: &Ui, def: &Value, size: egui::Vec2) -> Option<egui::TextureHandle> {
     widgets::doc_preview(ui, &format!("brush:{def}"), size, |w, h| {
         let mut doc = Document::new(w, h);
@@ -41,6 +42,9 @@ fn preview(ui: &Ui, def: &Value, size: egui::Vec2) -> Option<egui::TextureHandle
         let st = ap.stroke_mut()?;
         st.brush = Some(name);
         st.pressure = Some(PressureProfile::sample());
+        st.tilt = Some(PressureProfile::sample());
+        st.bearing = Some(AngleProfile::sample());
+        st.rotation = Some(AngleProfile::sample());
         // A gentle S-curve across the swatch.
         let mut bp = vectorcraft_geom::BezPath::new();
         let (x0, x1) = (h * 0.5, w - h * 0.5);
