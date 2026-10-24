@@ -1077,6 +1077,7 @@ impl<'a> Reader<'a> {
     /// `kids` with the clipping paths among them (indexes `clips`) first, several as one compound
     /// path → the children and whether they clip.
     fn clip_first(&mut self, kids: Vec<Node>, clips: &[usize]) -> (Vec<Arc<Node>>, bool) {
+        let clips: std::collections::HashSet<usize> = clips.iter().copied().collect();
         let (mut clip, rest): (Vec<Indexed>, Vec<Indexed>) = kids.into_iter().enumerate().partition(|(i, _)| clips.contains(i));
         let clip_node = match clip.len() {
             0 => None,

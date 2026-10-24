@@ -75,7 +75,8 @@ fn sheet(p: &PrintPage, job: &PrintJob) -> Result<(String, Vec<Page>), String> {
     let (wi, hi) = (w.ceil() as i64, h.ceil() as i64);
     let _ = writeln!(s, "%%PageBoundingBox: 0 0 {wi} {hi}");
     if let Some((name, _, _)) = p.ink {
-        let _ = writeln!(s, "%%PlateColor: {name}");
+        // A line break would end the comment and the rest would run as PostScript.
+        let _ = writeln!(s, "%%PlateColor: {}", name.replace(['\r', '\n'], " "));
     }
     s.push_str("%%BeginPageSetup\n");
     let _ = writeln!(s, "/setpagedevice where {{pop << /PageSize [{} {}] >> setpagedevice}} if", ps::num(w), ps::num(h));

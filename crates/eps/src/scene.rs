@@ -39,6 +39,10 @@ const UNDECODED: &str = "an image couldn't be decoded and is missing from the pi
 const LARGE_IMAGE: &str = "an image that is too large for EPS was left out";
 const SPOT_GRADIENTS: &str = "gradients of spot colours are written in process colours";
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
+const TOO_LARGE: &str = "the artwork is too large for EPS: what follows 256 MB of PostScript was left out";
+/// The most PostScript the page body may grow to: symbols and patterns that hold one another
+/// expand into every instance, so nesting depth alone doesn't bound the output.
+const MAX_BODY: usize = 256 << 20;
 
 /// What the walk wrote: definitions for the setup, the page, the spot colours it uses (name and
 /// CMYK equivalent) and the warnings.
@@ -264,12 +268,17 @@ impl<'a> Scene<'a> {
         if let NodeKind::Layer { template: true, .. } = n.kind {
             return;
         }
+        if self.body.len() >= MAX_BODY {
+            self.warn(TOO_LARGE);
+            return;
+        }
         match n.visual_bounds_with(&self.symbols) {
             Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
             None if !n.is_container() => return,
             _ => {}
         }
         self.note_losses(n);
+        let was = self.body.len();
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -312,6 +321,10 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+        }
+        if self.body.len() > MAX_BODY {
+            self.body.truncate(was);
+            self.warn(TOO_LARGE);
         }
     }
 
@@ -889,6 +902,10 @@ impl<'a> Scene<'a> {
     /// Draw an image of [`Self::encode_image`] on the unit square mapped by `place`.
     fn place_image(&mut self, encoded: &str, place: Affine) {
         if !invertible(place) {
+            return;
+        }
+        if self.body.len().saturating_add(encoded.len()).saturating_add(64) > MAX_BODY {
+            self.warn(TOO_LARGE);
             return;
         }
         self.line("q");

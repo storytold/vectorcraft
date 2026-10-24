@@ -381,7 +381,13 @@ impl<'a> Interp<'a> {
                 None => Ok(()),
             },
             Obj::ExecStr(s) => self.run_program(&s.to_vec()),
-            Obj::Op(op) => self.op(op),
+            // Through the depth guard: `stopped` and the like call back into here.
+            Obj::Op(op) => {
+                self.enter()?;
+                let r = self.op(op);
+                self.depth -= 1;
+                r
+            }
             Obj::Exec(name) => {
                 self.enter()?;
                 let r = match self.lookup(&name) {
@@ -819,6 +825,8 @@ impl<'a> Interp<'a> {
             }
             Cvn => {
                 let s = self.pop_str()?;
+                // The name is a copy of the string (a bigger one when bytes are replaced).
+                self.alloc(s.len().saturating_mul(3))?;
                 let n: Rc<str> = Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref());
                 self.push(Obj::Name(n))?;
             }
@@ -1055,7 +1063,7 @@ impl<'a> Interp<'a> {
             Bind => {
                 let o = self.pop()?;
                 if let Obj::Array { items, .. } = &o {
-                    self.bind(items, 0);
+                    self.bind(items, 0)?;
                 }
                 self.push(o)?;
             }
@@ -1171,7 +1179,11 @@ impl<'a> Interp<'a> {
                 }
             }
             Obj::Array { items, exec } => {
-                let from = self.pop_array()?.to_vec();
+                let source = self.pop_array()?;
+                // Its elements are read and written: work in proportion, and a copy held meanwhile.
+                self.spend(source.len() as u64)?;
+                self.alloc(source.len().saturating_mul(std::mem::size_of::<Obj>()))?;
+                let from = source.to_vec();
                 if !items.write(0, &from) {
                     return ps_err("rangecheck", "copy");
                 }
@@ -1246,11 +1258,13 @@ impl<'a> Interp<'a> {
 
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
-    fn bind(&mut self, items: &Shared<Obj>, depth: u32) {
+    fn bind(&mut self, items: &Shared<Obj>, depth: u32) -> Res {
         if depth > 64 {
-            return;
+            return Ok(());
         }
         for i in 0..items.len() {
+            // Procedures that hold one another twice would be visited exponentially often.
+            self.tick()?;
             match items.get(i) {
                 Some(Obj::Exec(name)) => {
                     if let Some(o @ Obj::Op(_)) = self.lookup(&name) {
@@ -1258,10 +1272,11 @@ impl<'a> Interp<'a> {
                         items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1),
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1)?,
                 _ => {}
             }
         }
+        Ok(())
     }
 
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
