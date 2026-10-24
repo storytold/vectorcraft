@@ -202,3 +202,24 @@ fn cut_direct_selected_anchors_retains_anchor_deletion() {
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().path_data().unwrap().anchor_count(), 3);
     assert_eq!(s.active().unwrap().doc.parent_of(b), Some(c));
 }
+
+#[test]
+fn clear_explicit_ids_preserves_unrelated_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r1 = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let r2 = NodeId(s.execute("shape.rectangle", &json!({"x": 50, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [r1.0, r2.0]})).unwrap();
+    assert_eq!(s.active().unwrap().selection.objects, vec![r1, r2]);
+
+    // Clearing r1 explicitly should remove r1 from doc and from selection, keeping r2 selected.
+    s.execute("edit.clear", &json!({"ids": [r1.0]})).unwrap();
+    assert!(s.active().unwrap().doc.node(r1).is_none());
+    assert!(s.active().unwrap().doc.node(r2).is_some());
+    assert_eq!(s.active().unwrap().selection.objects, vec![r2]);
+
+    // Parameterless clear clears the rest of the selection.
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.active().unwrap().doc.node(r2).is_none());
+    assert!(s.active().unwrap().selection.is_empty());
+}

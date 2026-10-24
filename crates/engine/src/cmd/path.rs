@@ -693,7 +693,7 @@ fn without_anchors(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
 }
 
 /// Remove connections, splitting open/closed contours into their surviving open runs.
-fn without_segments(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
+pub(super) fn without_segments(sp: SubPath, removed: &BTreeSet<usize>) -> Vec<SubPath> {
     let cuts: BTreeSet<usize> = removed.iter().copied().filter(|&i| i < sp.segment_count()).collect();
     let Some(&first) = cuts.first() else { return vec![sp] };
     let n = sp.anchors.len();

@@ -145,7 +145,7 @@ fn insert_look_turned(
     select: bool,
     bbox_angle: f64,
 ) -> Result<Value> {
-    let parent = s.doc()?.target_parent()?;
+    let parent = if matches!(kind, NodeKind::Path { .. }) { s.doc()?.target_parent_for_path()? } else { s.doc()?.target_parent()? };
     let mode = s.draw_mode;
     let inside = s.draw_inside;
     let behind_of = s.doc()?.selection.in_paint_order(&s.doc()?.doc).first().copied();
@@ -153,6 +153,12 @@ fn insert_look_turned(
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
         look.apply(d, &mut n);
+        if parent.and_then(|p| d.node(p)).is_some_and(|pn| matches!(pn.kind, NodeKind::Compound { .. })) {
+            n.appearance = Default::default();
+            if let NodeKind::Path { live, .. } = &mut n.kind {
+                *live = None;
+            }
+        }
         n.name = name;
         n.bbox_angle = bbox_angle;
         let mut into = None;
