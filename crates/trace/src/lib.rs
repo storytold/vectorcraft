@@ -642,7 +642,12 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
     let at_a_time = ((512 << 20) / (largest * 10)).max(1);
     for (paths, &(_, ci)) in parallel_map_at_most(at_a_time, &layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
-        out.paths.extend(paths.ok_or(TraceError::TooComplex { max: max_anchors })?);
+        let paths = paths.ok_or(TraceError::TooComplex { max: max_anchors })?;
+        // A layer with no paths adds no color to the palette.
+        if paths.is_empty() {
+            continue;
+        }
+        out.paths.extend(paths);
         let color = q.palette[ci];
         if !out.palette.contains(&color) {
             out.palette.push(color);

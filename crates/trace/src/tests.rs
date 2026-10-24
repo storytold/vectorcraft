@@ -1356,6 +1356,46 @@ fn a_traced_pixel_that_straightens_to_no_area_is_left_out_of_fills_and_kept_as_a
 }
 
 #[test]
+fn a_color_whose_every_path_straightens_to_no_area_is_left_out_of_the_palette() {
+    // A light rectangle with a black block on it and a one-pixel row of a pale blue along its lower
+    // edge, on a transparent background. Traced with a library of the light, the black and a
+    // blue, the row is the only part in the blue.
+    const BLUE: [u8; 3] = [40, 120, 240];
+    let img = Raster::from_fn(200, 120, |x, y| {
+        if (60..140).contains(&x) && (70..90).contains(&y) {
+            BLACK
+        } else if (20..180).contains(&x) && (20..100).contains(&y) {
+            [240, 240, 220, 255]
+        } else if y == 100 && (30..170).contains(&x) {
+            [140, 180, 230, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::DocumentLibrary,
+        swatches: vec![[240, 240, 220], [0, 0, 0], BLUE],
+        colors: 3,
+        paths: 90.0,
+        corners: 60.0,
+        noise: 25,
+        method: Method::Abutting,
+        ..TraceParams::default()
+    };
+    let used = |res: &TraceResult| res.palette.iter().all(|c| res.paths.iter().any(|p| p.color == *c));
+    // Left alone, the row is a path in the blue, and the blue is in the palette.
+    let res = trace(&img, &params);
+    assert!(res.paths.iter().any(|p| p.color == BLUE), "{:?}", res.paths.iter().map(|p| (p.color, p.path.bounds())).collect::<Vec<_>>());
+    assert!(res.palette.contains(&BLUE) && used(&res), "{:?}", res.palette);
+    // Snapped, both sides of the row straighten onto one line and its path is left out: no path is
+    // in the blue, and the palette leaves it out too.
+    let res = trace(&img, &TraceParams { snap_curves_to_lines: true, ..params });
+    assert!(res.paths.iter().all(|p| p.color != BLUE), "{:?}", res.paths.iter().map(|p| (p.color, p.path.bounds())).collect::<Vec<_>>());
+    assert!(!res.palette.contains(&BLUE) && used(&res), "{:?}", res.palette);
+}
+
+#[test]
 fn a_straight_anti_aliased_line_is_two_anchors_in_its_middle_as_wide_as_its_ink() {
     // 2.6 px wide, from (20.3, 30.7) to (170.6, 52.2): a little off the pixel rows.
     let (a, b) = (Point::new(20.3, 30.7), Point::new(170.6, 52.2));
