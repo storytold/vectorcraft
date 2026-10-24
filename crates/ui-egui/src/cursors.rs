@@ -409,7 +409,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 79] = [
+const GLYPHS: [Cursor; 80] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -465,6 +465,7 @@ const GLYPHS: [Cursor; 79] = [
     Cursor::Pencil,
     Cursor::PencilClose,
     Cursor::PencilStraight,
+    Cursor::PencilContinue,
     Cursor::Paintbrush,
     Cursor::PaintbrushClose,
     Cursor::BlobBrush,
@@ -523,6 +524,14 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PencilStraight => {
             crosshair(ink, p);
             line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
+        }
+        // The straight-line cursor's line leaving a filled square: the end point a line continues from.
+        Cursor::PencilContinue => {
+            crosshair(ink, p);
+            // The square first, so its halo does not cover the line.
+            let end = p + vec2(5.0, 12.0);
+            poly(ink, [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)].map(|(x, y)| end + vec2(x, y)).to_vec(), INK, INK);
+            line(ink, end, p + vec2(12.0, 5.0));
         }
         Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),
@@ -916,6 +925,29 @@ mod tests {
             // Along the line, not across it: no ink off its ends.
             assert!(!inked(at(&img, 5.0, 5.0)) && !inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
             assert_ne!(img, ring, "at {ppp}");
+            assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
+        }
+    }
+
+    /// The Pencil's continuation cursor is the straight-line cursor with a filled square on the
+    /// line's lower end, beside the line where the straight-line cursor has no ink.
+    #[test]
+    fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point() {
+        for ppp in [1.0, 2.0] {
+            let cross = rasterize(Cursor::Crosshair, ppp).unwrap();
+            let img = rasterize(Cursor::PencilContinue, ppp).unwrap();
+            let straight = rasterize(Cursor::PencilStraight, ppp).unwrap();
+            assert_eq!(img.hotspot, cross.hotspot, "at {ppp}");
+            let at = |img: &CustomCursorImage, dx: f32, dy: f32| {
+                let [hx, hy] = img.hotspot.map(usize::from);
+                let (x, y) = ((hx as f32 + dx * ppp) as usize, (hy as f32 + dy * ppp) as usize);
+                if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y) } else { [0; 4] }
+            };
+            let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+            assert!(inked(at(&img, 8.5, 8.5)), "the line crosses the badge's middle at {ppp}");
+            assert!(inked(at(&img, 3.5, 13.5)), "the end point's square at {ppp}");
+            assert!(!inked(at(&straight, 3.5, 13.5)), "the straight-line cursor has no end point at {ppp}");
+            assert!(!inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
             assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
         }
     }

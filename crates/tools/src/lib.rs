@@ -582,6 +582,10 @@ pub enum Cursor {
     /// The Pencil tool before a press that draws a straight line (Shift or Alt held). A crosshair with a
     /// short straight line.
     PencilStraight,
+    /// The Pencil tool before a press that draws a straight line (Shift or Alt held), over an end of
+    /// a selected open path: the line continues the path from that end. A crosshair with a short
+    /// straight line leaving a square end point.
+    PencilContinue,
     /// The Paintbrush tool.
     Paintbrush,
     /// The Paintbrush tool with Alt held: releasing the mouse button with Alt still held closes
@@ -700,6 +704,7 @@ impl Cursor {
             | Cursor::Pencil
             | Cursor::PencilClose
             | Cursor::PencilStraight
+            | Cursor::PencilContinue
             | Cursor::Paintbrush
             | Cursor::PaintbrushClose
             | Cursor::BlobBrush

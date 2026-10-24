@@ -551,6 +551,13 @@ hotspot = "The lead tip."
 look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
 
 [[cursor]]
+id = "PencilContinue"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool over an end of a selected open path, within Edit Selected Paths, with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line that continues the path from that end."]
+hotspot = "The lead tip."
+look = "PencilStraight's badge with a small filled square at the line's lower end (the end point the line continues from)."
+
+[[cursor]]
 id = "Paintbrush"
 group = "Drawing and editing tools"
 shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it."]

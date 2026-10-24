@@ -898,7 +898,7 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::Width | Cursor::WidthAdd => C::Crosshair,
         Cursor::WidthPoint => C::Move,
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
-        Cursor::PencilClose | Cursor::PencilStraight | Cursor::PaintbrushClose => C::Crosshair,
+        Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
         Cursor::TypeVertical => C::VerticalText,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
@@ -3876,6 +3876,7 @@ mod tests {
             Cursor::ShapeBuilder,
             Cursor::ShapeBuilderErase,
             Cursor::PencilStraight,
+            Cursor::PencilContinue,
         ] {
             assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
             assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");

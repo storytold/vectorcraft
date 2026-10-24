@@ -517,15 +517,16 @@ impl Tool for GestureTool {
         o.push(Overlay::Path { path: polyline(&self.points), color, width, dashed: self.id == "knife" });
         o
     }
-    fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // A drag that smooths, or Alt before a Pencil stroke has begun to draw (a stroke that
         // has begun keeps drawing with Alt).
         if self.smoothing || (self.id == "pencil" && self.alt_smooth && m.alt && !self.began) {
             return Cursor::Smooth;
         }
-        // Before a press that would draw a straight line.
+        // Before a press that would draw a straight line: over an end of a selected open path,
+        // the line continues that path from the end (`PointerKind::Down`).
         if !self.active && self.straight_at_press(m) {
-            return Cursor::PencilStraight;
+            return if self.find_extend(cx, p).is_some() { Cursor::PencilContinue } else { Cursor::PencilStraight };
         }
         // Alt held at the release closes the path (`finish`).
         // A straight line stays open, so its release has nothing to close, and before a press Alt
@@ -950,6 +951,66 @@ mod tests {
         let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
         assert_eq!(v["extend"], json!({"id": id.0, "end": "end"}));
         assert_eq!(v["points"], json!([[400.0, 300.0], [400.0 + 100f64.hypot(4.0), 300.0]]));
+    }
+
+    /// Before a press over an end of a selected open path, the Pencil shows its continuation cursor
+    /// exactly when the press would draw a straight line that continues the path; away from the
+    /// ends, with nothing selected, with Edit Selected Paths off, once the press is down and with
+    /// the Paintbrush, it does not.
+    #[test]
+    fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+            vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+            vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+        ]));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let shift = Mods { shift: true, ..Default::default() };
+        let alt = Mods { alt: true, ..Default::default() };
+        let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
+        // The release's stroke: a straight line that continues the path.
+        let continues = |acts: &[Vec<Action>]| {
+            acts.last().and_then(|a| a.first()).is_some_and(
+                |a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some() && v["points"].as_array().is_some_and(|q| q.len() == 2)),
+            )
+        };
+        for alt_smooth in [false, true] {
+            for m in [Mods::default(), shift, alt, shift_alt] {
+                for (at, other_end) in [(Point::new(405.0, 303.0), (500.0, 296.0)), (Point::new(296.0, 302.0), (200.0, 310.0))] {
+                    let mut t = GestureTool::new("pencil");
+                    t.set_option("altSmooth", &json!(alt_smooth));
+                    let shown = t.cursor(&cx, at, m) == Cursor::PencilContinue;
+                    let acts = drag_held(&mut t, &cx, &[(at.x, at.y), (450.0, 250.0), other_end], m);
+                    assert_eq!(shown, continues(&acts), "altSmooth {alt_smooth}, {m:?} at {at:?}");
+                }
+            }
+        }
+        let mut t = GestureTool::new("pencil");
+        let end = Point::new(405.0, 303.0);
+        assert_eq!(t.cursor(&cx, end, shift), Cursor::PencilContinue);
+        assert_eq!(t.cursor(&cx, end, alt), Cursor::PencilContinue, "Alt alone continues at any angle");
+        assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "without Shift or Alt the stroke is freehand");
+        assert_eq!(t.cursor(&cx, Point::new(350.0, 360.0), shift), Cursor::PencilStraight, "away from the ends");
+        // While the line is drawn, the Pencil's own cursor.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, end.x, end.y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 303.0).with_mods(shift));
+        assert_eq!(t.cursor(&cx, end, shift), Cursor::Pencil, "while the line is drawn");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 450.0, 303.0).with_mods(shift));
+        // Edit Selected Paths off: the press draws a new line.
+        t.set_option("editWithin", &json!(0.0));
+        assert_eq!(t.cursor(&cx, end, shift), Cursor::PencilStraight, "Edit Selected Paths off");
+        let none = Selection::default();
+        let cx_none = crate::testutil::cx(&d, &none, &p);
+        assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
+        assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
+        assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
     }
 
     /// #3846: Alt during a Shift line doesn't promise a close the release can't do, and with Alt
