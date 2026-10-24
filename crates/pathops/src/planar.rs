@@ -120,6 +120,15 @@ struct RectIndex<T> {
 /// a hatch cuts a shape into) is filed under the cells along it, while a rectangle covering most
 /// of the grid costs more to file and to read than to scan for every point.
 const CELLS_PER_FOOTPRINT: usize = 64;
+/// The cell references a grid of `cells` cells holds for `n` items before the remaining items go
+/// to the scanned list: a few per item, plus a few rows or columns' worth (a long segment is filed
+/// under a cell of each row or column it crosses, about `sqrt(cells)` of them in a square grid).
+/// Coincident segments make a grid of one column and a row per segment, where each would be filed
+/// under every row: a quadratic number of references, which this keeps to `n·sqrt(n)`.
+fn reference_budget(n: usize, cells: usize) -> usize {
+    let across = (cells as f64).sqrt().ceil().min(1e9) as usize;
+    n.saturating_mul(64 + 4 * across).saturating_add(1024)
+}
 
 /// The cells (columns or rows) an interval `lo..=hi` touches on one axis of a grid: clamped to the
 /// grid, so an interval past its edge gets the nearest cell (whose items `contains` then rejects),
@@ -157,6 +166,7 @@ impl<T> RectIndex<T> {
         }
         let cell = ((all.width() / cols as f64).max(1e-9), (all.height() / rows as f64).max(1e-9));
         let cap = CELLS_PER_FOOTPRINT.max(2 * cols.max(rows));
+        let mut budget = reference_budget(n, cols * rows);
         let mut cells: Vec<Vec<u32>> = vec![Vec::new(); cols * rows];
         let mut rest = Vec::new();
         for (i, (r, t)) in items.iter().enumerate() {
@@ -166,22 +176,36 @@ impl<T> RectIndex<T> {
                 continue;
             };
             let mut scan = !r.is_finite();
+            let mut spans = Vec::new();
             for f in if scan { Vec::new() } else { footprint(r, t, cell.0.min(cell.1)) } {
                 match (cell_span(f.x0, f.x1, all.x0, cell.0, cols), cell_span(f.y0, f.y1, all.y0, cell.1, rows)) {
-                    (Some(xs), Some(ys)) if (xs.end() - xs.start() + 1) * (ys.end() - ys.start() + 1) <= cap => {
-                        for y in ys {
-                            for x in xs.clone() {
-                                if let Some(c) = cells.get_mut(y * cols + x) {
-                                    c.push(index);
-                                }
-                            }
-                        }
-                    }
+                    (Some(xs), Some(ys)) if (xs.end() - xs.start() + 1) * (ys.end() - ys.start() + 1) <= cap => spans.push((xs, ys)),
                     _ => scan = true,
                 }
             }
+            // The item's cells, counted before they are filed: past the grid's budget the item,
+            // and the ones after it, are scanned instead (the index stays bounded in memory).
+            let needed: usize = spans.iter().map(|(xs, ys)| (xs.end() - xs.start() + 1) * (ys.end() - ys.start() + 1)).sum();
+            if !scan && needed > budget {
+                scan = true;
+            }
             if scan {
                 rest.push(i);
+                continue;
+            }
+            budget -= needed;
+            for (xs, ys) in spans {
+                for y in ys {
+                    for x in xs.clone() {
+                        // Pieces of one segment that fall in the same cell (a degenerate grid's
+                        // tiny cells) file it once: the item's pieces come in order.
+                        if let Some(c) = cells.get_mut(y * cols + x)
+                            && c.last() != Some(&index)
+                        {
+                            c.push(index);
+                        }
+                    }
+                }
             }
         }
         Self { items, origin: all.origin(), cell, cols, cells, rest }
@@ -2077,6 +2101,35 @@ mod tests {
         assert_eq!(index.at(Point::new(333.3, 0.0), 0.1).count(), 10);
         assert_eq!(index.at(Point::new(1000.0, 0.0), 0.1).count(), 10);
         assert_eq!(index.at(Point::new(-5.0, 0.0), 0.1).count(), 0);
+    }
+
+    /// The grid's memory stays linear in the item count: pieces of one segment falling in the same
+    /// cell file it once, and coincident segments (each along every cell of a one-column grid) go
+    /// to the scanned list once the grid holds its budget of references, and are still all found.
+    #[test]
+    fn rect_index_holds_a_bounded_number_of_references() {
+        // Ten collinear horizontal lines: a grid of 10 cells a hundred points wide and a hair tall,
+        // so each line's 4096 pieces fall about 400 per cell; filed once per cell.
+        let line = PathSeg::Line(kurbo::Line::new((0.0, 0.0), (1000.0, 0.0)));
+        let items: Vec<_> = (0..10).map(|k| (line.bounding_box(), (line, k))).collect();
+        let index = RectIndex::with_footprint(items, |r, (s, _), cell| segment_footprint(r, s, cell));
+        assert!(index.cells.iter().all(|c| c.len() <= 10), "{:?}", index.cells.iter().map(Vec::len).collect::<Vec<_>>());
+        assert_eq!(index.at(Point::new(500.0, 0.0), 0.1).count(), 10);
+        // 4,096 coincident vertical segments: one column, a row per segment, every segment along
+        // every row would be 16 million references; the budget keeps it to a few hundred per item.
+        let n = 4096u32;
+        let seg = PathSeg::Line(kurbo::Line::new((50.0, 0.0), (50.0, 200.0)));
+        let items: Vec<_> = (0..n).map(|k| (seg.bounding_box(), (seg, k))).collect();
+        let index = RectIndex::with_footprint(items, |r, (s, _), cell| segment_footprint(r, s, cell));
+        let references: usize = index.cells.iter().map(Vec::len).sum();
+        assert!(references <= reference_budget(n as usize, index.cells.len()), "{references} references");
+        assert!(references < 2_000_000, "{references} references");
+        assert!(!index.rest.is_empty() && index.rest.len() < n as usize, "{} scanned", index.rest.len());
+        let mut got: Vec<u32> = index.at(Point::new(50.0, 100.0), 0.1).map(|(_, k)| *k).collect();
+        got.sort_unstable();
+        assert_eq!(got.len(), n as usize);
+        assert_eq!(got, (0..n).collect::<Vec<_>>());
+        assert_eq!(index.at(Point::new(60.0, 100.0), 0.1).count(), 0);
     }
 
     fn poly(pts: &[(f64, f64)], closed: bool) -> SubPath {
