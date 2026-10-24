@@ -4226,6 +4226,9 @@ thread. When `effect.expandAppearance` keeps a frame as type in a group (type wi
 effects are shadows, outer glows or Crop Marks), the type stays in the thread in the frame's place. Object › Expand
 (`object.expand`) outlines type with these two commands. `object.flattenTransparency` takes each frame of threaded text
 that it outlines (`textToOutlines`) or turns into flat regions or an image out of its thread in the same way.
+`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol) take each frame of threaded text in the selection out
+of its thread in the same way, and the symbol's art holds a copy of the frame with the text it shows. When every frame
+of a thread goes into the symbol, the copy of the last frame keeps the text it has no room for.
 
 ## Converting between point type and area type
 

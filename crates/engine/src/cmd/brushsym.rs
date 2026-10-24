@@ -146,7 +146,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array} make a symbol from the selection and replace it with an instance; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice}",
             has_selection,
             symbol_new
         ),
@@ -191,7 +191,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Symbol",
             [],
             None,
-            "{name, ids?|id?} replace the symbol's art with the selection (instances update; the selection becomes an instance) → {name, id}",
+            "{name, ids?|id?} replace the symbol's art with the selection (instances update; the selection becomes an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds) → {name, id}",
             has_selection,
             symbol_update
         ),
@@ -874,7 +874,8 @@ fn replace_with_instance(d: &mut Document, ids: &[NodeId], name: &str, xf: Affin
 fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "symbol.new";
     let ids = roots(s, p)?;
-    let art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    super::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("New Symbol"));
     let reg = registration_param(p, C)?.unwrap_or(SymbolRegistration::CENTER);
@@ -890,7 +891,10 @@ fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
         d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+        let threaded = super::threads::frames(d);
         let id = replace_with_instance(d, &ids, &name, place)?;
+        // Frames of threaded text in the symbol leave their threads with the text they show.
+        super::threads::leave_threads(d, &threaded);
         sel.set([id]);
         Ok(id)
     })?;
@@ -1070,7 +1074,8 @@ fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("no symbol named `{name}`")));
     }
     let ids = roots(s, p)?;
-    let art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    super::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let old = natural_size(&s.doc()?.doc, &name);
     let id = s.edit("Redefine Symbol", |d, sel| {
@@ -1086,7 +1091,10 @@ fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         let reg = d.symbol_registration(&name);
+        let threaded = super::threads::frames(d);
         let id = replace_with_instance(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
+        // Frames of threaded text in the symbol leave their threads with the text they show.
+        super::threads::leave_threads(d, &threaded);
         sel.set([id]);
         Ok(id)
     })?;
