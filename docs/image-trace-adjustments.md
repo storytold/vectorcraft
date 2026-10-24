@@ -32,6 +32,13 @@ white beside a cream), at most six; scattered specks of a colour add none. Adobe
 its own palettes are chosen; this is VectorCraft's own method (see
 [image-trace-quality.md](image-trace-quality.md#auto-color-keeps-rare-colours)).
 
+**Ignore Color, background only.** Ignore Color leaves out every area of the chosen color. With
+`"ignoreBackground": true` beside `"ignoreWhite": true` in the params of `imageTrace.make` or
+`imageTrace.makeAndExpand`, it leaves out only the areas of that color that reach the image's edge,
+joined through pixels above, below or to either side, and traces the areas of it that other colors
+enclose: black line work inside a panel stays when the black around the panel is left out. Flat Logo
+leaves out every white area whatever `ignoreBackground` is.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)
