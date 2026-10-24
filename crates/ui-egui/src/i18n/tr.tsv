@@ -525,6 +525,11 @@ font-technology	Variable	Değişken
 	Color Table ({n} colors)	Renk Tablosu ({n} renkleri)
 	Color Theme	Renk Teması
 	Color Themes	Renk Temaları
+	Color Wheel	Renk Tekerleği
+	Hue ring	Renk tonu halkası
+	Saturation and brightness	Doygunluk ve parlaklık
+	Color field	Renk seçim alanı
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir

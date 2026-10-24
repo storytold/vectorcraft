@@ -15,6 +15,7 @@ pub mod character;
 pub mod color;
 pub mod color_guide;
 pub mod color_themes;
+pub mod color_wheel;
 pub mod css_properties;
 pub mod doc_info;
 pub mod flattener_preview;
@@ -175,6 +176,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         svg_interactivity::ID => svg_interactivity::show(app, ui),
         variables::ID => variables::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
+        color_wheel::ID => color_wheel::show(app, ui),
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
@@ -602,6 +604,8 @@ mod tests_appearance;
 mod tests_asset_export;
 #[cfg(test)]
 mod tests_blend;
+#[cfg(test)]
+mod tests_color_wheel;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]

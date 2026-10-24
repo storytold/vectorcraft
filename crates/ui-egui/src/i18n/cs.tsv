@@ -631,6 +631,11 @@
 	Color	Barva
 	Color Guide	Průvodce barvami
 	Color Themes	Barevné motivy
+	Color Wheel	Barevné kolo
+	Hue ring	Prstenec odstínů
+	Saturation and brightness	Sytost a jas
+	Color field	Barevné pole
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení

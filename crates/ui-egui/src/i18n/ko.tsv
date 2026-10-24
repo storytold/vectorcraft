@@ -604,6 +604,11 @@ font-technology	Variable	가변
 	Color	색상
 	Color Guide	색상 가이드
 	Color Themes	색상 테마
+	Color Wheel	색상환
+	Hue ring	색조 링
+	Saturation and brightness	채도 및 밝기
+	Color field	색상 필드
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기

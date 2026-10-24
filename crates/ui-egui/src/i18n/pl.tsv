@@ -581,6 +581,11 @@
 	Color	Kolor
 	Color Guide	Przewodnik kolorów
 	Color Themes	Motywy kolorów
+	Color Wheel	Koło kolorów
+	Hue ring	Pierścień barwy
+	Saturation and brightness	Nasycenie i jasność
+	Color field	Pole koloru
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	Właściwości CSS
 	Document Info	Informacje o dokumencie
 	Flattener Preview	Podgląd spłaszczania

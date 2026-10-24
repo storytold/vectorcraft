@@ -522,6 +522,11 @@ font-technology	Variable	Variabel
 	Color Table ({n} colors)	Farbtabelle ({n} Farben)
 	Color Theme	Farbthema
 	Color Themes	Farbthemen
+	Color Wheel	Farbkreis
+	Hue ring	Farbtonring
+	Saturation and brightness	Sättigung und Helligkeit
+	Color field	Farbauswahlfeld
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Farbart:
 	Color:	Farbe:
 	Colorize	Einfärben
