@@ -475,6 +475,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
         })
         .collect();
+    let doc_paths: Vec<Option<String>> = app.session.documents().iter().map(|d| d.path.clone()).collect();
     let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + 50.0).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
@@ -482,6 +483,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
+    let mut clicked_cmd: Option<(&'static str, serde_json::Value)> = None;
     let mut hovering_art = false;
     for (i, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
         if x + w > strip.left() + room && Some(i) != active {
@@ -503,6 +505,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let xresp = ui.interact(xr.expand(3.0), ui.id().with(("tabx", i)), Sense::click());
         icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
         ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
+        resp.context_menu(|ui| {
+            render_tab_menu(ui, true, i, doc_paths.get(i).and_then(|p| p.as_ref()), &mut close, &mut clicked_cmd);
+        });
         hovering_art |= crate::document_drag::hover_tab(app, &resp, i, xr.expand(3.0));
         if xresp.clicked() {
             close = Some(i);
@@ -510,6 +515,14 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             activate = Some(i);
         }
         x += w;
+    }
+    let empty_right = if overflow { strip.right() - MORE } else { strip.right() };
+    if empty_right > x {
+        let empty_r = egui::Rect::from_min_max(egui::pos2(x, strip.top()), egui::pos2(empty_right, strip.bottom() - 1.0));
+        let empty_resp = ui.interact(empty_r, ui.id().with("tabs-empty-space"), Sense::click());
+        empty_resp.context_menu(|ui| {
+            render_tab_menu(ui, false, active.unwrap_or(0), None, &mut close, &mut clicked_cmd);
+        });
     }
     crate::document_drag::finish_tabs(ui.ctx(), hovering_art);
     // The » button: every open document, the active one checked.
@@ -528,7 +541,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    if let Some(i) = close {
+    if let Some((cmd, params)) = clicked_cmd {
+        crate::menus::invoke(app, cmd, params);
+    } else if let Some(i) = close {
         if let Err(e) = crate::unsaved::close(app, i) {
             app.status(e);
         }
@@ -544,6 +559,75 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Clicking the current tab keeps its existing multiselection and tool options.
             let selected = crate::panels::artboards::selected(app, n);
             crate::panels::artboards::select(app, selected);
+        }
+    }
+}
+
+/// Helper to render the tab or strip context menu with macOS native styling.
+fn render_tab_menu(
+    ui: &mut egui::Ui,
+    is_tab: bool,
+    tab_idx: usize,
+    doc_path: Option<&String>,
+    close: &mut Option<usize>,
+    clicked_cmd: &mut Option<(&'static str, serde_json::Value)>,
+) {
+    ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 1.0);
+    ui.style_mut().spacing.button_padding = egui::vec2(10.0, 4.0);
+
+    let menu_row = |ui: &mut egui::Ui, text: &str, enabled: bool| -> bool {
+        let text = format!("  {text}");
+        let rich = egui::RichText::new(text).size(13.0);
+        let btn = egui::Button::new(rich)
+            .min_size(egui::vec2(185.0, 22.0))
+            .frame_when_inactive(false);
+        let resp = ui.add_enabled(enabled, btn);
+        resp.clicked()
+    };
+
+    let menu_sep = |ui: &mut egui::Ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(185.0, 7.0), egui::Sense::hover());
+        let t = Tokens::get(ui.ctx());
+        ui.painter().line_segment(
+            [egui::pos2(rect.left() + 8.0, rect.center().y), egui::pos2(rect.right() - 8.0, rect.center().y)],
+            egui::Stroke::new(1.0, t.divider.gamma_multiply(0.5)),
+        );
+    };
+
+    menu_row(ui, tl!("Consolidate All to Here"), false);
+
+    if menu_row(ui, tl!("Close"), true) {
+        *close = Some(tab_idx);
+        ui.close();
+    }
+    if menu_row(ui, tl!("Close All"), true) {
+        *clicked_cmd = Some(("file.closeAll", serde_json::json!({})));
+        ui.close();
+    }
+    if is_tab {
+        menu_row(ui, tl!("Move to New Window"), false);
+    }
+
+    menu_sep(ui);
+
+    if menu_row(ui, tl!("New Document…"), true) {
+        *clicked_cmd = Some(("file.newDialog", serde_json::json!({})));
+        ui.close();
+    }
+    if menu_row(ui, tl!("Open Document…"), true) {
+        *clicked_cmd = Some(("file.open", serde_json::json!({})));
+        ui.close();
+    }
+
+    if is_tab {
+        menu_sep(ui);
+        let reveal_label = if cfg!(target_os = "macos") { tl!("Reveal in Finder") } else { tl!("Show in Folder") };
+        let has_path = doc_path.is_some();
+        if menu_row(ui, reveal_label, has_path) {
+            if let Some(path) = doc_path {
+                *clicked_cmd = Some(("file.reveal", serde_json::json!({ "path": path })));
+            }
+            ui.close();
         }
     }
 }
