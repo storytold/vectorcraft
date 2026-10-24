@@ -12,7 +12,8 @@
 //! one, drag one to move it (Alt drags a copy), drag it off the bar to delete it, and drag a
 //! diamond above the bar to move a midpoint. Double-clicking a stop opens its popover. The
 //! selected stop (`gradient.selectStop`) is shared with the Gradient and Color panels: Delete or
-//! Backspace removes it (never below two stops) and the arrow keys nudge it.
+//! Backspace removes it (never below two stops) and the arrow keys nudge it by the keyboard
+//! increment along the gradient vector (Shift ×10).
 //!
 //! A radial gradient also shows its extent: a dashed ellipse around the centre (the start, a
 //! ring). Drag the dot on the ellipse across the bar to change the aspect ratio and the ellipse
@@ -58,9 +59,19 @@ const CENTRE_HIT: f64 = 8.0;
 const OFF_BAR: f64 = 24.0;
 /// A press becomes a drag after this much movement.
 const DRAG_START: f64 = 3.0;
-/// Arrow-key nudges of the selected stop (Shift: the big step).
+/// Fallback offset step when the gradient vector has no length (1% / 10%).
 const NUDGE: f32 = 0.01;
 const NUDGE_BIG: f32 = 0.1;
+
+/// How far a stop moves along the bar for one arrow-key press, as a fraction of the gradient length.
+fn stop_nudge_step(cx: &ToolContext, geom: &GradientGeom, big: bool) -> f32 {
+    let len = geom.end.distance(geom.start);
+    if len < 1e-9 {
+        return if big { NUDGE_BIG } else { NUDGE };
+    }
+    let k = cx.keyboard_increment * if big { 10.0 } else { 1.0 };
+    (k / len) as f32
+}
 
 /// The gradient annotator: the linear or radial gradient behind the active proxy of the first
 /// selected object that has one, placed in document coordinates.
@@ -535,7 +546,7 @@ impl Tool for GradientTool {
                 None => return vec![],
             },
             _ => {
-                let step = if mods.shift { NUDGE_BIG } else { NUDGE };
+                let step = stop_nudge_step(cx, &a.geom, mods.shift);
                 move_stop(stops, i, stops[i].offset + if key == ToolKey::Left { -step } else { step })
             }
         };
@@ -834,6 +845,18 @@ mod tests {
         let a = t.key(&cx, ToolKey::Backspace, Mods::default());
         assert_eq!(offsets(exec(&a[0]).1), vec![0.0, 100.0]);
         assert_eq!(a[1], GradientTool::select_stop(1));
+    }
+
+    #[test]
+    fn gradient_stop_nudge_uses_keyboard_increment_along_the_bar() {
+        let (d, s) = graded(two());
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.gradient_stop = Some(1);
+        cx.keyboard_increment = 5.0;
+        let mut t = GradientTool::default();
+        let a = t.key(&cx, ToolKey::Left, Mods::default());
+        assert_eq!(offsets(exec(&a[0]).1), vec![0.0, 95.0]);
     }
 
     #[test]
