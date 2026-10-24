@@ -72,11 +72,11 @@ fn arrowheads_are_part_of_the_outline() {
 }
 
 #[test]
-fn a_lens_profile_outlines_to_half_the_rectangle() {
+fn a_lens_profile_outlines_to_two_thirds_of_the_rectangle() {
     let mut s = session();
     line(&mut s, json!({"weight": 10, "profile": "lens"}));
     let n = outline(&mut s);
-    assert!(near(area(&n), 0.5 * 10.0 * 100.0, 2.0), "{}", area(&n));
+    assert!(near(area(&n), 2.0 / 3.0 * 10.0 * 100.0, 2.0), "{}", area(&n));
 }
 
 #[test]

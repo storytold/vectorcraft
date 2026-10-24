@@ -27,7 +27,7 @@ pub(crate) fn end_tangent(c: &CubicBez) -> Vec2 {
 ///
 /// `t0` is the unit tangent leaving `pts[0]`; `t1` is the unit tangent arriving at the last point
 /// (forward direction). Consecutive output cubics are G1 continuous.
-pub(crate) fn fit_cubics(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<CubicBez> {
+pub fn fit_cubics(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64) -> Vec<CubicBez> {
     let mut out = Vec::new();
     let pts = dedup(pts);
     if pts.len() < 2 {
