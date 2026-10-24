@@ -999,6 +999,14 @@ fn span(sp: &SubPath, u0: f64, u1: f64) -> Option<SubPath> {
     segs_to_subpath(&segs, false)
 }
 
+/// What is left of input `shape` when the faces that hold `merged` merge on their own, with the
+/// inputs that cover them marked in `cover` ([`Map::merge`]).
+pub(crate) struct Rest {
+    pub(crate) shape: usize,
+    pub(crate) merged: Vec<Point>,
+    pub(crate) cover: Vec<bool>,
+}
+
 /// The planar graph of `shapes` (in the sweep's frame) with its faces walked: what [`build`] makes
 /// Live Paint faces and edges from, and what [`Map::merge`] merges faces in.
 pub(crate) struct Map {
@@ -1009,6 +1017,9 @@ pub(crate) struct Map {
     /// hold a point, so finding the face around one tests only those.
     faces: Vec<(Vec<usize>, BezPath, f64)>,
     face_index: RectIndex<usize>,
+    /// Bounded faces left out as slivers ([`is_sliver`]): their cycle of half-edges and the inputs
+    /// whose fill covers them (none for a gap, such as a thin cutout).
+    slivers: Vec<(Vec<usize>, Vec<usize>)>,
     /// Outer boundaries of connected pieces, and the face each one is a hole in.
     holes: Vec<(Vec<usize>, BezPath)>,
     face_holes: Vec<Vec<usize>>,
@@ -1018,7 +1029,9 @@ pub(crate) struct Map {
     snap: f64,
 }
 
-pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
+/// With `cover`, also finds which inputs cover each sliver, which only [`Map::merge`] reads;
+/// without it the slivers' lists of inputs stay empty.
+pub(crate) fn map(shapes: &[Shape], cover: bool) -> Option<Map> {
     let mut inputs: Vec<(BezPath, usize)> = Vec::new();
     for (i, s) in shapes.iter().enumerate() {
         let mut bp = BezPath::new();
@@ -1225,6 +1238,7 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
     // face around them, if any).
     let mut seen = vec![false; 2 * edges.len()];
     let mut faces: Vec<(Vec<usize>, BezPath, f64)> = Vec::new();
+    let mut slivers: Vec<(Vec<usize>, BezPath)> = Vec::new();
     let mut holes: Vec<(Vec<usize>, BezPath)> = Vec::new();
     for start in 0..2 * edges.len() {
         if seen.get(start).copied().unwrap_or(true) {
@@ -1248,6 +1262,8 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
         let area = bp.area();
         if area > 0.0 && !is_sliver(&bp, tidy.precision) {
             faces.push((cycle, bp, area));
+        } else if area > 0.0 {
+            slivers.push((cycle, bp));
         } else if area < -(tidy.precision * tidy.precision) {
             holes.push((cycle, bp));
         }
@@ -1270,21 +1286,41 @@ pub(crate) fn map(shapes: &[Shape]) -> Option<Map> {
         }
     }
 
+    // The inputs that cover each sliver, tested at a point inside it.
+    let fills: Vec<Fill> = if slivers.is_empty() || !cover { Vec::new() } else { shapes.iter().map(Fill::new).collect() };
+    let slivers: Vec<(Vec<usize>, Vec<usize>)> = slivers
+        .into_iter()
+        .map(|(cycle, mut bp)| {
+            if !cover {
+                return (cycle, Vec::new());
+            }
+            bp.apply_affine(UNSHEAR);
+            let sources = interior_point(&PathData::from_bezpath(&bp))
+                .map(|p| fills.iter().enumerate().filter(|(_, f)| f.contains(p)).map(|(i, _)| i).collect())
+                .unwrap_or_default();
+            (cycle, sources)
+        })
+        .collect();
+
     // The inputs' anchors, which results land on again up to the sweep's tolerance.
     let snap = 2.0 * eps;
     let mut anchors: Vec<Point> = shapes.iter().flat_map(|s| s.path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
     anchors.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
-    Some(Map { edges, around, slot_of, faces, face_index, holes, face_holes, tidy, anchors, snap })
+    Some(Map { edges, around, slot_of, faces, face_index, slivers, holes, face_holes, tidy, anchors, snap })
 }
 
 impl Map {
     /// The union of the faces that hold `inside` (document points, one per face), traced along the
     /// map's own edges: those between two merged faces drop out exactly, where a boolean union of
     /// the faces' outlines can leave them in when its sweep rounds their shared corners apart
-    /// (#893). Outer outlines come out positive, holes negative. None when a point is in no face.
-    pub(crate) fn merge(&self, inside: &[Point]) -> Option<PathData> {
+    /// (#893). A sliver next to a merged face that only inputs marked in `cover` fill merges with
+    /// them, so it doesn't stay as a hairline gap between them. With `rest`, a sliver goes in only
+    /// when its input covers it, and not when the merge of the faces merged on their own takes it
+    /// in. Outer outlines come out positive, holes negative. None when a point is in no face.
+    pub(crate) fn merge(&self, inside: &[Point], cover: &[bool], rest: Option<&Rest>) -> Option<PathData> {
         let halves = 2 * self.edges.len();
-        // The face on each half-edge's side; holes bound the face around them.
+        // The face on each half-edge's side; holes bound the face around them. Slivers come after
+        // the faces.
         let mut face_of: Vec<Option<usize>> = vec![None; halves];
         for (i, (cycle, ..)) in self.faces.iter().enumerate() {
             let hole_cycles = self.face_holes.get(i)?.iter().filter_map(|&k| self.holes.get(k)).map(|(c, _)| c);
@@ -1292,17 +1328,40 @@ impl Map {
                 *face_of.get_mut(h)? = Some(i);
             }
         }
-        let mut picked = vec![false; self.faces.len()];
-        for &p in inside {
+        for (k, (cycle, _)) in self.slivers.iter().enumerate() {
+            for &h in cycle {
+                *face_of.get_mut(h)? = Some(self.faces.len() + k);
+            }
+        }
+        // The smallest face around a point: faces of a piece inside a hole lie within the face around.
+        let face_at = |p: Point| {
             let q = SHEAR * p;
-            // The smallest face around it: faces of a piece inside a hole lie within the face around.
-            let (i, _) = self
-                .face_index
+            self.face_index
                 .at(q, 0.0)
                 .filter_map(|&i| self.faces.get(i).map(|f| (i, f)))
                 .filter(|(_, (_, bp, _))| bp.winding(q) != 0)
-                .min_by(|a, b| a.1.2.total_cmp(&b.1.2))?;
-            *picked.get_mut(i)? = true;
+                .min_by(|a, b| a.1.2.total_cmp(&b.1.2))
+                .map(|(i, _)| i)
+        };
+        let mut picked = vec![false; self.faces.len() + self.slivers.len()];
+        for &p in inside {
+            *picked.get_mut(face_at(p)?)? = true;
+        }
+        let mut other = vec![false; self.faces.len()];
+        for i in rest.iter().flat_map(|r| &r.merged).filter_map(|&p| face_at(p)) {
+            if let Some(o) = other.get_mut(i) {
+                *o = true;
+            }
+        }
+        let next_to = |cycle: &[usize], marked: &[bool]| {
+            cycle.iter().any(|&h| face_of.get(twin(h)).copied().flatten().is_some_and(|f| f < self.faces.len() && marked.get(f) == Some(&true)))
+        };
+        for (k, (cycle, sources)) in self.slivers.iter().enumerate() {
+            let within = |c: &[bool]| !sources.is_empty() && sources.iter().all(|&i| c.get(i) == Some(&true));
+            let ours = rest.is_none_or(|r| sources.contains(&r.shape) && !(within(&r.cover) && next_to(cycle, &other)));
+            if within(cover) && ours && next_to(cycle, &picked) {
+                *picked.get_mut(self.faces.len() + k)? = true;
+            }
         }
         let merged = |h: usize| face_of.get(h).copied().flatten().is_some_and(|f| picked.get(f) == Some(&true));
         let boundary = |h: usize| merged(h) && !merged(twin(h));
@@ -1338,7 +1397,7 @@ impl Map {
 }
 
 fn build(shapes: &[Shape]) -> Option<(Vec<Region>, Vec<Shape>)> {
-    let m = map(shapes)?;
+    let m = map(shapes, false)?;
     let Map { edges, around, faces, holes, face_holes, tidy, anchors, snap, .. } = &m;
     let snap = *snap;
     let fills: Vec<Fill> = shapes.iter().map(Fill::new).collect();
@@ -1775,11 +1834,11 @@ mod tests {
         let (faces, _) = live_paint(&s);
         let cell = |x: f64, y: f64| at(&faces, x, y)[0];
         let merger = crate::FaceMerger::new(&s);
-        let m = map(&s).unwrap();
+        let m = map(&s, true).unwrap();
         let check = |picked: &[&Region], subpaths: usize, area_want: f64| {
             // Merged in the map itself, not by the fallback union.
             let inside: Vec<Point> = picked.iter().map(|f| interior_point(&f.path).unwrap()).collect();
-            assert_eq!(m.merge(&inside).as_ref(), Some(&merger.merge(picked)));
+            assert_eq!(m.merge(&inside, &crate::pathfinder::cover(picked, s.len()), None).as_ref(), Some(&merger.merge(picked)));
             let m = merger.merge(picked);
             assert_eq!(m.subpaths.len(), subpaths, "{m:?}");
             assert!((crate::area(&m, FillRule::NonZero) - area_want).abs() < 1e-6, "{}", crate::area(&m, FillRule::NonZero));
@@ -1792,6 +1851,34 @@ mod tests {
             [(5., 5.), (15., 5.), (25., 5.), (5., 15.), (25., 15.), (5., 25.), (15., 25.), (25., 25.)].iter().map(|&(x, y)| cell(x, y)).collect();
         check(&ring, 2, 800.0);
         check(&[cell(5.0, 5.0), cell(15.0, 15.0)], 2, 200.0);
+    }
+
+    /// Merging in the map takes in a sliver next to the merged faces that only their shapes fill,
+    /// such as the overlap of two squares that overlap by 0.001, and leaves a thin cutout that
+    /// nothing fills as it is.
+    #[test]
+    fn faces_merge_in_the_map_with_the_slivers_their_shapes_fill() {
+        let far = line((400.0, 400.0), (450.0, 450.0), 2);
+        let s = [rect(100.0, 100.0, 200.0, 200.0, 0), rect(199.999, 100.0, 299.999, 200.0, 1), far.clone()];
+        let regions = shape_builder(&s, false).regions;
+        assert_eq!(regions.len(), 2, "the overlap is a sliver: {regions:?}");
+        let both: Vec<&Region> = regions.iter().collect();
+        let merged = crate::FaceMerger::new(&s).merge(&both);
+        assert_eq!(merged.subpaths.len(), 1, "{merged:?}");
+        assert!((crate::area(&merged, FillRule::NonZero) - 19999.9).abs() < 1e-6, "{}", crate::area(&merged, FillRule::NonZero));
+        // Live Paint's map does not test which inputs cover the sliver.
+        let covered = |cover: bool| map(&s, cover).unwrap().slivers.into_iter().map(|(_, sources)| sources).collect::<Vec<_>>();
+        assert_eq!(covered(true), [vec![0, 1]]);
+        assert_eq!(covered(false), [Vec::<usize>::new()]);
+        // A square with a cutout 0.005 wide.
+        let mut frame = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+        frame.subpaths.extend(shapes::rectangle(Rect::new(50.0, 10.0, 50.005, 90.0)).subpaths);
+        let s = [Shape::new(frame, FillRule::EvenOdd, 0), far];
+        let regions = shape_builder(&s, false).regions;
+        assert_eq!(regions.len(), 1, "{regions:?}");
+        let merged = crate::FaceMerger::new(&s).merge(&[&regions[0]]);
+        assert_eq!(merged.subpaths.len(), 2, "the cutout stays: {merged:?}");
+        assert!((crate::area(&merged, FillRule::EvenOdd) - 9999.6).abs() < 1e-6, "{}", crate::area(&merged, FillRule::EvenOdd));
     }
 
     #[test]

@@ -373,7 +373,8 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                 let mut rest = if in_union {
                     // What is left of it: its faces not merged or deleted, united. They share their
                     // edges with the merged faces exactly, where subtracting the merged shape left
-                    // slivers of the outline along them (#569).
+                    // slivers of the outline along them (#569). A sliver goes in only where the
+                    // shape covers it and the merged shape does not take it in.
                     let kept: Vec<&po::Region> = map
                         .regions
                         .iter()
@@ -381,7 +382,7 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                         .filter(|(k, (r, ..))| r.sources.contains(&i) && !touched.regions.contains(k))
                         .map(|(_, (r, ..))| r)
                         .collect();
-                    if kept.is_empty() { PathData::default() } else { faces.merge(&kept) }
+                    if kept.is_empty() { PathData::default() } else { faces.merge_rest(i, &kept, &picked) }
                 } else {
                     b::node_outline(leaf).map_or_else(|| sh.path.clone(), |o| o.0)
                 };
