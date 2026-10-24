@@ -338,6 +338,11 @@ pub struct UiState {
     pub toolbar_advanced: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
+    /// The Discord button in the header and on Home (Preferences ▸ General). On by default, as
+    /// it has always been; turning it off hides both buttons, while Help and About keep their
+    /// Discord link.
+    #[serde(default = "yes")]
+    pub show_discord: bool,
     /// Where the Contextual Task Bar was dragged or pinned. Not saved, as in Illustrator: the bar
     /// starts under the selection at every launch.
     #[serde(skip)]
@@ -840,6 +845,7 @@ impl Default for UiState {
             toolbar_double: false,
             toolbar_advanced: false,
             task_bar: true,
+            show_discord: true,
             task_bar_place: TaskBarPlace::default(),
             context_locked: None,
             slot_tool: Default::default(),

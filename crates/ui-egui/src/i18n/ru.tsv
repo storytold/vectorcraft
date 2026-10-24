@@ -946,6 +946,7 @@ font-technology	Variable	Вариативные
 	Enable Background Export	Включить фоновый экспорт
 	Enable Background Save	Включить фоновое сохранение
 	Enable Contextual Task Bar	Включить контекстную панель задач
+	Show the Discord button in the title bar	Показывать кнопку Discord в заголовке окна
 	Enable copying of text, images and other content	Разрешить копирование текста, изображений и другого содержимого
 	Enable in-menu font previews	Включить предварительный просмотр шрифтов в меню
 	Enable Missing Glyph Protection	Включить защиту отсутствующих глифов

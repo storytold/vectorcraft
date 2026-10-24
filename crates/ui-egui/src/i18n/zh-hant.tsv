@@ -910,6 +910,7 @@ font-technology	Variable	可變
 	Enable Background Export	啟用背景匯出
 	Enable Background Save	啟用背景儲存
 	Enable Contextual Task Bar	啟用快捷工作列
+	Show the Discord button in the title bar	在標題列中顯示 Discord 按鈕
 	Enable copying of text, images and other content	啟用複製文字、影像與其他內容
 	Enable in-menu font previews	啟用選單內字體預覽
 	Enable Missing Glyph Protection	啟用遺失字符保護
