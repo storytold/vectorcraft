@@ -2047,6 +2047,91 @@ fn image_trace_make_places_paths_over_the_image() {
     assert_eq!(paths[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 0)));
 }
 
+#[test]
+fn image_trace_keep_colors_traces_only_the_colors_listed() {
+    // A light field with a black ring, a red square and a blue bar on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (30..70).contains(&y) {
+            [200, 40, 50, 255]
+        } else if (30..170).contains(&x) && (110..130).contains(&y) {
+            [40, 80, 200, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let traced = |keep: Value| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "color", "palette": "limited", "colors": 4, "keepColors": keep}});
+        let r = s.execute("imageTrace.makeAndExpand", &params)?;
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let fills: Vec<Paint> = g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect();
+        Ok::<_, EngineError>((r["colors"].clone(), fills))
+    };
+    let (black, red, blue, light) = (Color::rgb8(0, 0, 0), Color::rgb8(200, 40, 50), Color::rgb8(40, 80, 200), Color::rgb8(240, 240, 220));
+    let has = |fills: &[Paint], c: Color| fills.contains(&Paint::solid(c));
+    // Nothing listed: every color.
+    let (colors, fills) = traced(json!([])).unwrap();
+    assert_eq!(colors, 4);
+    assert!([black, red, blue, light].into_iter().all(|c| has(&fills, c)), "{fills:?}");
+    // The black and the red only.
+    let (colors, fills) = traced(json!(["#000000", "#c8283c"])).unwrap();
+    assert_eq!(colors, 2);
+    assert!(has(&fills, black) && has(&fills, red), "{fills:?}");
+    assert!(fills.iter().all(|f| *f == Paint::solid(black) || *f == Paint::solid(red)), "{fills:?}");
+    // A color that is none is refused.
+    let e = traced(json!(["#000000", "black"])).unwrap_err().to_string();
+    assert!(e.contains("\"black\"") && e.contains("#rrggbb"), "{e}");
+    assert!(find_command("imageTrace.make").unwrap().params.contains("keepColors?: [\"#rrggbb\"…]"));
+    assert!(find_command("imageTrace.makeAndExpand").unwrap().params.contains("warnings: [text…] (as imageTrace.make)"));
+}
+
+#[test]
+fn image_trace_keep_colors_warns_about_colors_that_match_nothing() {
+    // A light field with a black ring and a red square on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (30..70).contains(&y) {
+            [200, 40, 50, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let traced = |params: Value| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let r = s.execute("imageTrace.makeAndExpand", &json!({ "params": params })).unwrap();
+        (r["paths"].as_u64().unwrap(), r["warnings"].clone())
+    };
+    let color = |keep: Value| traced(json!({"mode": "color", "palette": "limited", "colors": 3, "keepColors": keep}));
+    // Every color listed is in the image: no warning.
+    let (paths, warnings) = color(json!(["#000000", "#c8283c"]));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!([]));
+    // No color matches: nothing is traced, and the reply says why.
+    assert_eq!(
+        color(json!(["#ff00ff", "#00ffff"])),
+        (0, json!(["Nothing was traced: none of the colors the trace found matches keepColors (#ff00ff, #00ffff)."]))
+    );
+    // One color matches nothing: the others are traced, and that one is named.
+    let (paths, warnings) = color(json!(["#000000", "#00ffff"]));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!(["keepColors: none of the colors the trace found matches #00ffff, so nothing of it is traced."]));
+    // Ignore Color leaves out the only color listed.
+    let ignored =
+        traced(json!({"mode": "color", "palette": "limited", "colors": 3, "keepColors": ["#000000"], "ignoreWhite": true, "ignoreColor": "#000000"}));
+    assert_eq!(ignored, (0, json!(["Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists."])));
+    // Flat Logo mode does not use the list.
+    let (paths, warnings) = traced(json!({"mode": "logo", "keepColors": ["#ff00ff"]}));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!(["Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds."]));
+}
+
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
 /// circle as its traced path; without the option it is a plain path.
 #[test]

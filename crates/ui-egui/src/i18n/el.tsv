@@ -5337,6 +5337,10 @@ effect	Points	Σημεία
 	Snap to Perpendicular	Προσκόλληση σε κάθετο
 @msg	unknown snap option `{key}` (use {options})	άγνωστη επιλογή προσκόλλησης `{key}` (χρησιμοποιήστε {options})
 	Gap Length:	Μήκος κενού:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Η λειτουργία Επίπεδο λογότυπο δεν χρησιμοποιεί το keepColors: ανιχνεύει τα χρώματα που ορίζονται στο logoColors ή τα χρώματα που βρίσκει.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Δεν ανιχνεύτηκε τίποτα: κανένα από τα χρώματα που βρήκε η ανίχνευση δεν αντιστοιχεί στο keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Δεν ανιχνεύτηκε τίποτα: η Παράβλεψη χρώματος παραλείπει κάθε περιοχή των χρωμάτων που ορίζει το keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: κανένα από τα χρώματα που βρήκε η ανίχνευση δεν αντιστοιχεί στο {c}, οπότε τίποτα από αυτό δεν ανιχνεύεται.
 	Artboard {n} of {total}	Πίνακας σχεδίασης {n} από {total}
 	File {n} of {total}	Αρχείο {n} από {total}
 	Encoding and writing the file…	Κωδικοποίηση και εγγραφή του αρχείου…

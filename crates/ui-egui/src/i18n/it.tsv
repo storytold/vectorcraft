@@ -4998,6 +4998,10 @@ lighting	Light	Luce
 	Snap to Perpendicular	Aggancia alla perpendicolare
 @msg	unknown snap option `{key}` (use {options})	opzione di aggancio sconosciuta `{key}` (usare {options})
 	Gap Length:	Lunghezza lacuna:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	La modalità Logo piatto non usa keepColors: vettorializza i colori indicati in logoColors o i colori che trova.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Non è stato vettorializzato nulla: nessuno dei colori trovati dalla vettorializzazione corrisponde a keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Non è stato vettorializzato nulla: Ignora colore esclude ogni area dei colori elencati in keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: nessuno dei colori trovati dalla vettorializzazione corrisponde a {c}, quindi non ne viene vettorializzato nulla.
 	Artboard {n} of {total}	Tavola da disegno {n} di {total}
 	File {n} of {total}	File {n} di {total}
 	Encoding and writing the file…	Codifica e scrittura del file…

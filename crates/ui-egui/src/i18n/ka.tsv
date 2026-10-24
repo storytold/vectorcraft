@@ -5225,6 +5225,10 @@ imageTrace	Outline	კონტური
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„შენახვა“ წერს ფორმატს {_1} და არა {_2}: ამისთვის გამოიყენეთ file.saveAsTemplate
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	გამოსახულება არის {_1} × {_2} პიქსელი, ანუ ერთ მხარეზე {LARGE_TRACE_SIDE}-ზე მეტი: ის ვექტორიზდება, მაგრამ უფრო ნელა. ნაკლები სიზუსტის პრესეტი ან გამოსახულების უფრო პატარა ასლი უფრო სწრაფად ვექტორიზდება.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, შემცირდა {_3} × {_4}-დან (მაქსიმუმ {_5} მეგაპიქსელი).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	ბრტყელი ლოგოს რეჟიმი keepColors-ს არ იყენებს: ის ვექტორიზებს logoColors-ში მითითებულ ფერებს ან მის მიერ ნაპოვნ ფერებს.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	არაფერი ვექტორიზდა: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება keepColors-ს ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	არაფერი ვექტორიზდა: ფერის იგნორირება გამოტოვებს keepColors-ში ჩამოთვლილი ფერების ყველა არეს.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ვექტორიზაციის მიერ ნაპოვნი არცერთი ფერი არ შეესაბამება {c}-ს, ამიტომ მისგან არაფერი ვექტორიზდება.
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` ბიბლიოთეკის პანელი არ არის (იხ. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` უნდა იყოს #rrggbb ფერი
 @msg	a key object sits on that point	ამ წერტილზე საკვანძო ობიექტი მდებარეობს

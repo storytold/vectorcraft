@@ -4978,6 +4978,10 @@ lighting	Light	Світло
 	Snap to Perpendicular	Прив’язати до перпендикуляра
 @msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не використовує keepColors: він трасує кольори, вказані в logoColors, або знайдені ним кольори.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Нічого не трасовано: жоден із кольорів, знайдених під час трасування, не відповідає keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Нічого не трасовано: «Ігнорувати колір» пропускає всі області кольорів, перелічених у keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: жоден із кольорів, знайдених під час трасування, не відповідає {c}, тому з нього нічого не трасується.
 	Artboard {n} of {total}	Монтажна область {n} з {total}
 	File {n} of {total}	Файл {n} з {total}
 	Encoding and writing the file…	Кодування та запис файлу…

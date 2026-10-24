@@ -5237,6 +5237,10 @@ mark-style	Japanese	Japońskie
 	Snap to Perpendicular	Przyciągaj do prostopadłych
 @msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tryb Płaskie logo nie używa keepColors: obrysowuje kolory podane w logoColors lub kolory, które znajdzie.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nie zostało obrysowane: żaden z kolorów znalezionych podczas obrysowania nie pasuje do keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nie zostało obrysowane: Ignoruj kolor pomija każdy obszar kolorów wymienionych w keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: żaden z kolorów znalezionych podczas obrysowania nie pasuje do {c}, więc nic z niego nie jest obrysowywane.
 	Artboard {n} of {total}	Obszar kompozycji {n} z {total}
 	File {n} of {total}	Plik {n} z {total}
 	Encoding and writing the file…	Kodowanie i zapisywanie pliku…

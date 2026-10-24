@@ -5341,6 +5341,10 @@ theme	Appearance	Utseende
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
 	Gap Length:	Lucklängd:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Läget Platt logotyp använder inte keepColors: det vektoriserar färgerna som anges i logoColors eller färgerna det hittar.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ingenting vektoriserades: ingen av färgerna som vektoriseringen hittade motsvarar keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ingenting vektoriserades: Ignorera färg utelämnar alla områden med färgerna som keepColors anger.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ingen av färgerna som vektoriseringen hittade motsvarar {c}, så ingenting av den vektoriseras.
 	Artboard {n} of {total}	Rityta {n} av {total}
 	File {n} of {total}	Fil {n} av {total}
 	Encoding and writing the file…	Kodar och skriver filen…

@@ -5378,6 +5378,10 @@ swatch	Bright Violet	Felviolet
 @msg	too many library panels were opened in this session	er zijn in deze sessie te veel bibliotheekpanelen geopend
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	De afbeelding is {_1} × {_2} pixels, meer dan {LARGE_TRACE_SIDE} aan één zijde: ze wordt getraceerd, maar langzamer. Een voorinstelling met minder detail of een kleinere kopie van de afbeelding traceert sneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	De afbeelding is getraceerd op {_1} × {_2} pixels, verkleind van {_3} × {_4} (maximaal {_5} megapixels).
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	De modus Plat logo gebruikt keepColors niet: hij traceert de kleuren die in logoColors staan, of de kleuren die hij vindt.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Er is niets getraceerd: geen van de kleuren die het traceren vond, komt overeen met keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Er is niets getraceerd: Kleur negeren laat elk gebied van de kleuren in keepColors weg.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: geen van de kleuren die het traceren vond, komt overeen met {c}, dus daarvan wordt niets getraceerd.
 	Artboard {n} of {total}	Tekengebied {n} van {total}
 	File {n} of {total}	Bestand {n} van {total}
 	Encoding and writing the file…	Bestand coderen en schrijven…

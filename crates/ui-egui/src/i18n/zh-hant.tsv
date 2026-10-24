@@ -2364,6 +2364,10 @@ file-filter	Templates	範本
 @msg	too many library panels were opened in this session	本次工作階段開啟的資料庫面板過多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	影像為 {_1} × {_2} 像素，有一邊超過 {LARGE_TRACE_SIDE}：仍會描圖，但速度較慢。使用精確度較低的預設集或較小的影像拷貝，描圖會較快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	影像已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 縮小而來 (最多 {_5} 百萬像素)。
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	「扁平標誌」模式不使用 keepColors：它會描圖 logoColors 中指定的顏色，或它找到的顏色。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	未描圖任何內容：描圖找到的顏色中沒有一種與 keepColors ({_1}) 相符。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	未描圖任何內容：「忽略顏色」排除了 keepColors 所列顏色的所有區域。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors：描圖找到的顏色中沒有一種與 {c} 相符，因此該顏色未被描圖。
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	只有 http、https 和 mailto URL 會在瀏覽器中開啟，「{url}」不會

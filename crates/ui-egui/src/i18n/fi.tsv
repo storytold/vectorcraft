@@ -5349,6 +5349,10 @@ mark-style	Japanese	Japanilainen
 	Snap to Perpendicular	Kohdista kohtisuoraan
 @msg	unknown snap option `{key}` (use {options})	tuntematon tartuntavalinta `{key}` (käytä: {options})
 	Gap Length:	Aukon pituus:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tasainen logo -tila ei käytä keepColors-asetusta: se jäljittää logoColors-asetuksessa nimetyt värit tai löytämänsä värit.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Mitään ei jäljitetty: mikään jäljityksen löytämistä väreistä ei vastaa keepColors-asetusta ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Mitään ei jäljitetty: Ohita väri jättää pois kaikki keepColors-asetuksen värien alueet.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: mikään jäljityksen löytämistä väreistä ei vastaa väriä {c}, joten siitä ei jäljitetä mitään.
 	Artboard {n} of {total}	Piirtoalusta {n}/{total}
 	File {n} of {total}	Tiedosto {n}/{total}
 	Encoding and writing the file…	Tiedostoa koodataan ja kirjoitetaan…

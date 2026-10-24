@@ -32,6 +32,19 @@ white beside a cream), at most six; scattered specks of a colour add none. Adobe
 its own palettes are chosen; this is VectorCraft's own method (see
 [image-trace-quality.md](image-trace-quality.md#auto-color-keeps-rare-colours)).
 
+**Keep Colors.** `"keepColors": ["#rrggbb", …]` in the params of `imageTrace.make` or
+`imageTrace.makeAndExpand` traces only the palette colors within about 30 levels of a listed color,
+the distance Ignore Color matches by, and leaves the other colors out. With Method Abutting, the paths
+of the kept colors are the same as in a trace of every color. With Method Overlapping, a kept color's
+paths reach under the kept colors above it in the stack and not under the colors left out, as with
+Ignore Color. An empty list traces every color, and a value that is not a six-digit hex color is
+refused. With Ignore Color as well, a kept color that Ignore Color matches is still left out. Flat
+Logo does not use `keepColors`: it traces the colors named in `logoColors`, or the colors it finds.
+The reply's `warnings` name each listed color that matches none of the colors the trace found. When
+nothing is traced because no listed color matches, or because Ignore Color leaves out every area of
+the ones that match, the first warning says so, and the status bar shows it. In Flat Logo mode the
+warning says that `keepColors` is not used.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)

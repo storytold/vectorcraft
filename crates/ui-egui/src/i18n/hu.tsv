@@ -5371,6 +5371,10 @@ imageTrace	Outline	Körvonal
 	Snap to Perpendicular	Illesztés merőlegesre
 @msg	unknown snap option `{key}` (use {options})	ismeretlen illesztési beállítás: `{key}` (használható: {options})
 	Gap Length:	Rés hossza:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Az Egyszínű logó mód nem használja a keepColors beállítást: a logoColors beállításban megadott színeket vagy az általa talált színeket vektorizálja.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Semmi sem lett vektorizálva: a vektorizálás által talált színek egyike sem felel meg a keepColors beállításnak ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Semmi sem lett vektorizálva: a Szín figyelmen kívül hagyása kihagyja a keepColors beállításban felsorolt színek minden területét.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: a vektorizálás által talált színek egyike sem felel meg ennek: {c}, így belőle semmi sem lesz vektorizálva.
 	Artboard {n} of {total}	Rajztábla: {n} / {total}
 	File {n} of {total}	Fájl: {n} / {total}
 	Encoding and writing the file…	A fájl kódolása és írása…

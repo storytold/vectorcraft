@@ -5384,6 +5384,10 @@ theme	Appearance	Apparence
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
 @msg	unknown snap option `{key}` (use {options})	option de magnétisme inconnue `{key}` (utilisez {options})
 	Gap Length:	Longueur de lacune :
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Le mode Logo en aplats n’utilise pas keepColors : il vectorise les couleurs indiquées dans logoColors ou celles qu’il trouve.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Rien n’a été vectorisé : aucune des couleurs trouvées par la vectorisation ne correspond à keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Rien n’a été vectorisé : Ignorer la couleur omet toutes les zones des couleurs indiquées dans keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors : aucune des couleurs trouvées par la vectorisation ne correspond à {c}, donc rien n’en est vectorisé.
 	Artboard {n} of {total}	Plan de travail {n} sur {total}
 	File {n} of {total}	Fichier {n} sur {total}
 	Encoding and writing the file…	Encodage et écriture du fichier…

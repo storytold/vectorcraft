@@ -4961,6 +4961,10 @@ lighting	Light	광원
 	Snap to Perpendicular	수직선에 스냅
 @msg	unknown snap option `{key}` (use {options})	알 수 없는 스냅 옵션 `{key}` ({options} 중에서 사용하세요)
 	Gap Length:	간격 길이:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	단색 로고 모드는 keepColors를 사용하지 않습니다. logoColors에 지정한 색상 또는 찾은 색상을 추적합니다.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	아무것도 추적하지 않았습니다. 추적에서 찾은 색상 중 keepColors({_1})와 일치하는 색상이 없습니다.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	아무것도 추적하지 않았습니다. 색상 무시가 keepColors에 나열된 색상의 모든 영역을 제외합니다.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: 추적에서 찾은 색상 중 {c}와 일치하는 색상이 없어 이 색상은 추적하지 않습니다.
 	Artboard {n} of {total}	아트보드 {n} / {total}
 	File {n} of {total}	파일 {n} / {total}
 	Encoding and writing the file…	파일을 인코딩하고 쓰는 중…

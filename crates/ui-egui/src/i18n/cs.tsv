@@ -5385,6 +5385,10 @@ mark-style	Japanese	Japonské
 	Snap to Perpendicular	Přichytávat ke kolmici
 @msg	unknown snap option `{key}` (use {options})	neznámá možnost přichytávání `{key}` (použijte {options})
 	Gap Length:	Délka mezery:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Režim Ploché logo nepoužívá keepColors: vektorizuje barvy uvedené v logoColors nebo barvy, které najde.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nic nebylo vektorizováno: žádná z barev, které vektorizace našla, neodpovídá keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nic nebylo vektorizováno: Ignorovat barvu vynechává všechny oblasti barev uvedených v keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: žádná z barev, které vektorizace našla, neodpovídá {c}, takže z ní není nic vektorizováno.
 	Artboard {n} of {total}	Pracovní plocha {n} z {total}
 	File {n} of {total}	Soubor {n} z {total}
 	Encoding and writing the file…	Kódování a zápis souboru…

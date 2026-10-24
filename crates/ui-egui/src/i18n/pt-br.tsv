@@ -5302,6 +5302,10 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar à Perpendicular
 @msg	unknown snap option `{key}` (use {options})	opção de ajuste desconhecida `{key}` (use {options})
 	Gap Length:	Comprimento da Lacuna:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	O modo Logotipo Plano não usa keepColors: ele traça as cores indicadas em logoColors ou as cores que encontra.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nada foi traçado: nenhuma das cores que o traçado encontrou corresponde a keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nada foi traçado: Ignorar Cor deixa de fora todas as áreas das cores listadas em keepColors.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: nenhuma das cores que o traçado encontrou corresponde a {c}, então nada dela é traçado.
 	Artboard {n} of {total}	Mesa de Trabalho {n} de {total}
 	File {n} of {total}	Arquivo {n} de {total}
 	Encoding and writing the file…	Codificando e gravando o arquivo…

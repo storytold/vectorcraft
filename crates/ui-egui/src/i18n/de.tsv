@@ -4964,6 +4964,10 @@ effect	Soft	Weich
 	Snap to Perpendicular	An Senkrechter ausrichten
 @msg	unknown snap option `{key}` (use {options})	unbekannte Einrastoption `{key}` (möglich: {options})
 	Gap Length:	Lückenlänge:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Der Modus „Flaches Logo“ verwendet keepColors nicht: Er zeichnet die in logoColors genannten Farben nach oder die Farben, die er findet.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nichts wurde nachgezeichnet: Keine der beim Nachzeichnen gefundenen Farben entspricht keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nichts wurde nachgezeichnet: „Farbe ignorieren“ lässt jeden Bereich der in keepColors aufgeführten Farben aus.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: Keine der beim Nachzeichnen gefundenen Farben entspricht {c}, daher wird davon nichts nachgezeichnet.
 	Artboard {n} of {total}	Zeichenfläche {n} von {total}
 	File {n} of {total}	Datei {n} von {total}
 	Encoding and writing the file…	Datei wird codiert und geschrieben…
