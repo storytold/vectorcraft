@@ -224,3 +224,5 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 | 2026-10-10 | major | Re-measured against Illustrator 2026 (30.x) from code counts, 71 open issues and public docs; stage set to alpha; moved the parity estimate, honest assessment and "Shipped so far" to `docs/target-app-parity.md`, the gap list to `docs/gaps.md`, milestones to `docs/roadmap.md`, the `.ai` scope to `docs/file-format-parity.md` |
 | 2026-10-05 | major | Honest assessment by dimension and the prioritized gap list |
 | 2026-10-02 | major | First 22-area weighted parity estimate |
+
+- 2026-10-19: macOS shortcut consistency: Settings ⌘,, Hide ⌘H, Minimize ⌘M; conflicting creative defaults use Control–Command variants. Details and public references: [macOS shortcuts](docs/macos-shortcuts.md). Suite tracker: storytold/designcraft#1317. Native-menu collision tests exercise both Mac and non-Mac edge bindings on every host (including FreeBSD).

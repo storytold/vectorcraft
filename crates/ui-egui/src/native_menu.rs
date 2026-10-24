@@ -5,13 +5,13 @@
 //! Pure and platform-free, so it is tested everywhere and builds for the web; only the backend
 //! touches AppKit. What the layout does ([`mac_layout`], Illustrator on the Mac as the reference):
 //! - an **app menu** named VectorCraft: About; Settings, a submenu with one item per Preferences
-//!   page (General… ⌘K first); Language; Appearance (the UI brightness); Services; Hide VectorCraft
-//!   ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All; and Quit ⌘Q, still the app's own
+//!   page (General… ⌘, first on macOS); Language; Appearance (the UI brightness); Services; Hide VectorCraft
+//!   ⌘H (Hide Edges uses ⌃⌘H on macOS), Hide Others ⌥⌘H, Show All; and Quit ⌘Q, still the app's own
 //!   `app.quit`, so documents with unsaved changes are asked about. Language and Appearance have
 //!   no in-window menu (as in PhotoCraft) and are synthesized here; Quit is File › Exit in the
 //!   window and reads as Quit in the App menu. These leave the other menus (Edit › Preferences…,
 //!   Help › About), and Join Our Discord stays under Help only;
-//! - **Window** gets Minimize ⌃⌘M, Zoom and Bring All to Front, and **Help** the system's search
+//! - **Window** gets Minimize ⌘M, Zoom and Bring All to Front, and **Help** the system's search
 //!   field;
 //! - a system key already bound to a command keeps the command's: the system item goes without.
 //!
@@ -39,11 +39,11 @@ use crate::menus::{self, Entry};
 use crate::theme::Brightness;
 
 pub const APP_NAME: &str = "VectorCraft";
-/// Hide VectorCraft: an item of ours (AppKit's always takes ⌘H, which is View › Hide Edges).
+/// Hide VectorCraft, with the standard macOS ⌘H binding.
 pub const HIDE: &str = "app.hide";
 /// Hide Others: an item of ours, so a command bound to ⌥⌘H keeps it.
 pub const HIDE_OTHERS: &str = "app.hideOthers";
-/// Minimize: an item of ours with ⌃⌘M (AppKit's always takes ⌘M).
+/// Minimize, with the standard macOS ⌘M binding.
 pub const MINIMIZE: &str = "window.minimize";
 
 /// The labels the Mac layout adds to the menus (translated like every menu string:
@@ -312,9 +312,9 @@ pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
             None => Some(sc),
         }
     };
-    let hide = Item::system(HIDE, "Hide VectorCraft", key("Ctrl+Cmd+H", "Hide"), lang);
+    let hide = Item::system(HIDE, "Hide VectorCraft", key("Cmd+H", "Hide"), lang);
     let hide_others = Item::system(HIDE_OTHERS, "Hide Others", key("Cmd+Alt+H", "Hide Others"), lang);
-    let minimize = Item::system(MINIMIZE, "Minimize", key("Ctrl+Cmd+M", "Minimize"), lang);
+    let minimize = Item::system(MINIMIZE, "Minimize", key("Cmd+M", "Minimize"), lang);
 
     // What the application menu takes from the others (every copy: About is in Help too, Settings
     // in Edit as Preferences…).

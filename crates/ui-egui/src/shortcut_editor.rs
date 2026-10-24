@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn override_beats_default_and_empty_removes() {
         let mut ov = BTreeMap::new();
-        assert_eq!(effective_in(&ov, "edit.preferences").as_deref(), Some("Cmd+K"));
+        assert_eq!(effective_in(&ov, "edit.preferences").as_deref(), Some(menus::SETTINGS_SHORTCUT));
         ov.insert("edit.preferences".to_string(), "Cmd+Alt+Shift+9".to_string());
         assert_eq!(effective_in(&ov, "edit.preferences").as_deref(), Some("Cmd+Alt+Shift+9"));
         ov.insert("edit.preferences".to_string(), String::new());
@@ -930,21 +930,21 @@ mod tests {
     #[test]
     fn assign_detects_conflicts() {
         let mut ov = BTreeMap::new();
-        // ⌘K is Preferences.
-        let err = assign(&mut ov, "file.revert", Some("Cmd+K"), false).unwrap_err();
+        // The platform default belongs to Preferences.
+        let err = assign(&mut ov, "file.revert", Some(menus::SETTINGS_SHORTCUT), false).unwrap_err();
         assert!(err.contains("Preferences"), "{err}");
         assert!(ov.is_empty());
-        assert_eq!(conflicts_with(&ov, "Cmd+K", "file.revert"), vec!["edit.preferences".to_string()]);
+        assert_eq!(conflicts_with(&ov, menus::SETTINGS_SHORTCUT, "file.revert"), vec!["edit.preferences".to_string()]);
     }
 
     #[test]
     fn forced_assign_moves_the_chord() {
         let mut ov = BTreeMap::new();
-        let removed = assign(&mut ov, "file.revert", Some("Cmd+K"), true).unwrap();
+        let removed = assign(&mut ov, "file.revert", Some(menus::SETTINGS_SHORTCUT), true).unwrap();
         assert_eq!(removed, vec!["edit.preferences".to_string()]);
-        assert_eq!(effective_in(&ov, "file.revert").as_deref(), Some("Cmd+K"));
+        assert_eq!(effective_in(&ov, "file.revert").as_deref(), Some(normalize(menus::SETTINGS_SHORTCUT).unwrap().as_str()));
         assert_eq!(effective_in(&ov, "edit.preferences"), None);
-        assert!(conflicts_with(&ov, "Cmd+K", "file.revert").is_empty());
+        assert!(conflicts_with(&ov, menus::SETTINGS_SHORTCUT, "file.revert").is_empty());
     }
 
     #[test]

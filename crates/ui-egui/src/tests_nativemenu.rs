@@ -96,14 +96,14 @@ fn vectorcraft_gets_a_mac_app_menu() {
     };
     assert_eq!(shown("help.about"), ("About VectorCraft", None));
     assert_eq!(shown("app.quit"), ("Quit VectorCraft", Some("Cmd+Q")), "Quit is the app's own, so unsaved documents are asked about");
-    // ⌘H stays View › Hide Edges (Illustrator's); Hide takes ⌃⌘H.
-    assert_eq!(shown(native_menu::HIDE), ("Hide VectorCraft", Some("Ctrl+Cmd+H")));
+    // Mac defaults leave ⌘H to Hide; non-Mac defaults still bind it to edges.
+    assert_eq!(shown(native_menu::HIDE), ("Hide VectorCraft", cfg!(target_os = "macos").then_some("Cmd+H")));
     assert_eq!(shown(native_menu::HIDE_OTHERS), ("Hide Others", Some("Cmd+Alt+H")));
-    assert_eq!(find(&bar, "view.edges").shortcut, Some("Cmd+H"));
+    assert_eq!(find(&bar, "view.edges").shortcut, Some(menus::EDGES_SHORTCUT));
     assert_eq!(bar.menu(MenuRole::Help).map(|m| m.title.as_str()), Some("Help"));
 }
 
-/// Settings ▸ lists the Preferences dialog's own pages, General… with ⌘K, and each opens the
+/// Settings ▸ lists the Preferences dialog's own pages, General… with the Settings shortcut, and each opens the
 /// dialog on its page.
 #[test]
 fn settings_lists_every_preferences_page() {
@@ -111,7 +111,7 @@ fn settings_lists_every_preferences_page() {
     let bar = bar(&app);
     let pages = items(submenu(&bar.menus[0].children, "Settings"));
     assert_eq!(pages.len(), PREF_CATEGORIES.len());
-    assert_eq!((pages[0].label.as_str(), pages[0].shortcut), ("General…", Some("Cmd+K")));
+    assert_eq!((pages[0].label.as_str(), pages[0].shortcut), ("General…", Some(menus::SETTINGS_SHORTCUT)));
     assert!(pages[1..].iter().all(|it| it.shortcut.is_none()));
     for (it, page) in pages.iter().zip(PREF_CATEGORIES) {
         assert_eq!((it.command, &it.params, it.label.clone()), (Some("edit.preferences"), &json!({"category": page}), format!("{page}…")));
@@ -200,7 +200,7 @@ fn the_window_menu_has_the_system_items() {
     assert_eq!(window[..3], [native_menu::MINIMIZE.to_string(), "<Zoom>".into(), "---".into()]);
     assert_eq!(window[window.len() - 2..], ["---".to_string(), "<BringAllToFront>".into()]);
     assert_eq!(window[3], "window.newWindow", "then VectorCraft's own items");
-    assert_eq!(find(&bar, native_menu::MINIMIZE).shortcut, Some("Ctrl+Cmd+M"));
+    assert_eq!(find(&bar, native_menu::MINIMIZE).shortcut, Some("Cmd+M"));
     assert!(!window.iter().any(|i| i == "window.brightness"), "the theme is only in the app menu");
     assert_eq!(Standard::Zoom.label(), "Zoom");
 }
@@ -209,15 +209,26 @@ fn the_window_menu_has_the_system_items() {
 /// user's shortcuts show in the menus.
 #[test]
 fn a_command_keeps_a_system_key_it_is_bound_to() {
-    let mut app = app(true);
-    app.ui.shortcut_overrides.insert("view.grid".into(), "Ctrl+Cmd+H".into());
-    crate::shortcut_editor::sync(&app.ui);
-    let layout = native_menu::mac_layout(&app, &native_menu::from_tree(&app, &menus::menu_tree()), Lang::EN);
-    app.ui.shortcut_overrides.clear();
-    crate::shortcut_editor::sync(&app.ui);
-    assert_eq!(find(&layout.bar, native_menu::HIDE).shortcut, None);
-    assert_eq!(find(&layout.bar, "view.grid").shortcut, Some("Ctrl+Cmd+H"), "the user's override shows in the menu");
-    assert_eq!(layout.clashes.iter().map(|c| (c.shortcut, c.command)).collect::<Vec<_>>(), [("Ctrl+Cmd+H", "view.grid")]);
+    // Exercise both platforms' edge bindings on every host: non-Mac defaults still use Cmd+H.
+    for edges in ["Cmd+H", "Ctrl+Cmd+H"] {
+        let mut app = app(true);
+        app.ui.shortcut_overrides.insert("view.edges".into(), edges.into());
+        app.ui.shortcut_overrides.insert("view.grid".into(), "Cmd+M".into());
+        crate::shortcut_editor::sync(&app.ui);
+        let layout = native_menu::mac_layout(&app, &native_menu::from_tree(&app, &menus::menu_tree()), Lang::EN);
+        app.ui.shortcut_overrides.clear();
+        crate::shortcut_editor::sync(&app.ui);
+        assert_eq!(find(&layout.bar, native_menu::MINIMIZE).shortcut, None);
+        assert_eq!(find(&layout.bar, "view.grid").shortcut, Some("Cmd+M"), "the user's override shows in the menu");
+        assert_eq!(find(&layout.bar, "view.edges").shortcut, Some(edges));
+        assert_eq!(find(&layout.bar, native_menu::HIDE).shortcut, (edges != "Cmd+H").then_some("Cmd+H"));
+        let mut expected = Vec::new();
+        if edges == "Cmd+H" {
+            expected.push(("Cmd+H", "view.edges"));
+        }
+        expected.push(("Cmd+M", "view.grid"));
+        assert_eq!(layout.clashes.iter().map(|c| (c.shortcut, c.command)).collect::<Vec<_>>(), expected);
+    }
 }
 
 /// A native menu can't turn a plain item into a check item in place: opening a document or
