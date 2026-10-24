@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextRun};
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{FillRule, PathData, Rect, Shape};
 
 use super::typecmd::refresh_bounds;
 use super::*;
@@ -138,24 +138,27 @@ pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
 /// art of a placed document (`d` as [`Document::with_placed_art`] gives it, for that art's
 /// resources).
 pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> (BTreeSet<UsedFont>, BTreeSet<NodeId>) {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    let mut walk = Printed::new(d, &[]);
     for l in layers {
         walk.node(l, Some(areas));
     }
     (walk.fonts, walk.overflow)
 }
 
-/// The warning of an export that draws `layers` of `d` over `areas` (document space; `None`: the
-/// whole of them) about the area type and type on a path that it draws and whose text doesn't fit,
-/// found as [`printed_type`] finds them for Print: visible objects of the document that aren't on
-/// a template layer.
-pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas: Option<&[Rect]>) -> Option<String> {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+/// The warnings of an export that draws `layers` of `d` over `areas` (document space, each one a
+/// page or file the export crops to; `None`: the whole of them) about the type it draws, found as
+/// [`printed_type`] finds it for Print (visible objects of the document that aren't on a template
+/// layer): area type and type on a path whose text doesn't fit, and type whose glyphs run over the
+/// edge of an area they are drawn on (#3784), where the part past it isn't drawn. Type wholly
+/// outside every area, or cut only by its own clipping paths, is left alone.
+pub(super) fn export_type_warnings(d: &Document, layers: &[Arc<Node>], areas: Option<&[Rect]>) -> Vec<String> {
+    let mut walk = Printed::new(d, areas.unwrap_or_default());
     for l in layers {
         walk.node(l, areas);
     }
     let overflow: Vec<NodeId> = walk.overflow.into_iter().collect();
-    super::typecmd::export_overflow_warning(&overflow)
+    let cut: Vec<NodeId> = walk.cut.into_iter().collect();
+    super::typecmd::export_overflow_warning(&overflow).into_iter().chain(super::typecmd::export_edge_warning(&cut)).collect()
 }
 
 /// The walk of [`printed_type`].
@@ -169,9 +172,28 @@ struct Printed<'a> {
     /// The symbols and patterns whose art was walked.
     symbols: BTreeSet<String>,
     patterns: BTreeSet<String>,
+    /// The areas an export crops to (empty: none is checked), the bounds of the clip groups around
+    /// the object walked, and the objects of the document whose glyphs run over an area's edge.
+    pages: &'a [Rect],
+    clips: Vec<Clip>,
+    cut: BTreeSet<NodeId>,
 }
 
-impl Printed<'_> {
+impl<'a> Printed<'a> {
+    fn new(d: &'a Document, pages: &'a [Rect]) -> Self {
+        Printed {
+            d,
+            own: true,
+            fonts: BTreeSet::new(),
+            overflow: BTreeSet::new(),
+            symbols: BTreeSet::new(),
+            patterns: BTreeSet::new(),
+            pages,
+            clips: vec![],
+            cut: BTreeSet::new(),
+        }
+    }
+
     /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
     /// while [`Printed::own`] is set: those whose bounds meet one of `areas`, or with `None` (in the
     /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
@@ -229,10 +251,25 @@ impl Printed<'_> {
                 }
             }
         }
+        // The members of a clip group show inside its clipping path's bounds, with effects or not
+        // (a shadow of the group painting past the path shows no more of them).
+        let clipping = match &n.kind {
+            NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => children.first().and_then(|c| {
+                let bounds = c.geometric_bounds_with(&self.d.symbol_boxes())?;
+                let shape = vectorcraft_render::effects::clip_outline(c).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule));
+                Some(Clip { bounds, shape })
+            }),
+            _ => None,
+        };
+        let clipped = clipping.is_some();
+        self.clips.extend(clipping);
         match &n.kind {
-            NodeKind::Text(_) => {
+            NodeKind::Text(t) => {
                 if overflows && self.own {
                     self.overflow.insert(n.id);
+                }
+                if self.own && self.runs_over_a_page(t) {
+                    self.cut.insert(n.id);
                 }
                 for r in runs {
                     self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
@@ -265,6 +302,9 @@ impl Printed<'_> {
                 }
             }
         }
+        if clipped {
+            self.clips.pop();
+        }
     }
 
     /// Adds the fonts of symbol `name`'s art, the first time it is shown.
@@ -291,10 +331,60 @@ impl Printed<'_> {
         vectorcraft_render::painted_bounds(self.d, n).is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
     }
 
+    /// Whether the glyphs of `t` that show inside the clip groups around it meet one of the pages
+    /// without lying inside it: that page cuts them off (also when another page holds them).
+    fn runs_over_a_page(&self, t: &vectorcraft_doc::TextObject) -> bool {
+        // Glyph edges that touch a page's edge aren't cut by it.
+        const SLACK: f64 = 0.01;
+        if self.pages.is_empty() {
+            return false;
+        }
+        let outline = super::pathops::text_outline(t);
+        let Some(glyphs) = outline.bounds() else { return false };
+        // What the characters' strokes paint round the glyphs, their miter spikes included, at the
+        // weight the type's transform scales them to.
+        let k = vectorcraft_doc::Scaling::factor(t.xf).unwrap_or(1.0);
+        let mut strokes: Vec<vectorcraft_doc::StrokeLayer> = vec![];
+        for r in t.runs.iter().filter(|r| r.style.has_stroke()) {
+            let mut st = r.style.stroke_layer();
+            st.width *= k;
+            if !strokes.contains(&st) {
+                strokes.push(st);
+            }
+        }
+        let bp = (!strokes.is_empty()).then(|| outline.to_bezpath());
+        let ink = bp.map_or(glyphs, |bp| strokes.iter().fold(glyphs, |b, st| b.union(st.bounds_on(&bp, glyphs))));
+        let shown = self.clips.iter().try_fold(ink, |b, c| c.shown(b));
+        let Some(shown) = shown else { return false };
+        self.pages.iter().any(|p| shown.intersect(*p).area() > 0.0 && !p.inflate(SLACK, SLACK).contains_rect(shown))
+    }
+
     /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
     fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
         let Some(c) = vectorcraft_render::painted_bounds(self.d, n) else { return areas.to_vec() };
         areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
+    }
+}
+
+/// A clip group's clipping path, as [`Printed`] judges what it shows.
+struct Clip {
+    bounds: Rect,
+    /// Its outline and fill rule (None when it has nothing to clip by, as a symbol instance or a
+    /// guide: the clipped art is then hidden).
+    shape: Option<(PathData, FillRule)>,
+}
+
+impl Clip {
+    /// The bounds of what this clipping path shows of box `b` (None when it shows none of it):
+    /// the box cut to the path's shape, so a compound or curved path is judged by where it lies
+    /// over the box, not by its own bounds. With nothing to clip by it shows nothing, as the
+    /// renderer and the PDF and SVG writers hide the clipped art.
+    fn shown(&self, b: Rect) -> Option<Rect> {
+        let b = Some(b.intersect(self.bounds)).filter(|r| r.area() > 0.0)?;
+        let (path, rule) = self.shape.as_ref()?;
+        let rect = PathData::from_bezpath(&b.to_path(0.1));
+        let cut = vectorcraft_pathops::boolean(&rect, FillRule::NonZero, path, *rule, vectorcraft_pathops::BoolOp::Intersect);
+        cut.bounds().filter(|r| r.area() > 0.0)
     }
 }
 

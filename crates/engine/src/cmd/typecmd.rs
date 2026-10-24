@@ -469,14 +469,32 @@ pub(crate) fn export_overflow_warning(ids: &[NodeId]) -> Option<String> {
     overflow_note(ids, "isn't drawn in the export")
 }
 
-/// [`overflow_warning`], saying that the text past the end of the frames `left_out`.
-fn overflow_note(ids: &[NodeId], left_out: &str) -> Option<String> {
+/// The warning of an export that crops to artboards about `ids`, type whose glyphs run over the
+/// edge of an artboard it is drawn on (#3784): the part past the edge isn't drawn. It names the
+/// first 20 ids and counts the rest; `None` when `ids` is empty.
+pub(crate) fn export_edge_warning(ids: &[NodeId]) -> Option<String> {
+    let list = id_list(ids);
+    match ids {
+        [] => None,
+        [_] => Some(format!("1 text object runs over the edge of its artboard: the part past the edge isn't drawn in the export (id {list})")),
+        _ => Some(format!(
+            "{} text objects run over the edges of their artboards: the parts past the edges aren't drawn in the export (ids {list})",
+            ids.len()
+        )),
+    }
+}
+
+/// The first 20 of `ids`, with a count of the rest.
+fn id_list(ids: &[NodeId]) -> String {
     const NAMED: usize = 20;
     let (named, rest) = ids.split_at(ids.len().min(NAMED));
-    let mut list = named.iter().map(|i| i.0.to_string()).collect::<Vec<_>>().join(", ");
-    if !rest.is_empty() {
-        list = format!("{list} and {} more", rest.len());
-    }
+    let list = named.iter().map(|i| i.0.to_string()).collect::<Vec<_>>().join(", ");
+    if rest.is_empty() { list } else { format!("{list} and {} more", rest.len()) }
+}
+
+/// [`overflow_warning`], saying that the text past the end of the frames `left_out`.
+fn overflow_note(ids: &[NodeId], left_out: &str) -> Option<String> {
+    let list = id_list(ids);
     match ids {
         [] => None,
         [_] => Some(format!("1 text object doesn't fit its frame: the text past the end of the frame {left_out} (id {list})")),

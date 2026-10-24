@@ -309,7 +309,7 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
             }
         }
     }
-    enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
+    enc.warnings.extend(crate::cmd::fonts::export_type_warnings(doc, &doc.layers, Some(&regions)));
     Ok(enc)
 }
 

@@ -173,7 +173,7 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     // A chosen artboard's file holds the art over it; otherwise the file holds all of it.
     let regions: Option<Vec<vectorcraft_geom::Rect>> =
         chosen.then(|| boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect());
-    let overflow = crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, regions.as_deref());
+    let overflow = crate::cmd::fonts::export_type_warnings(doc, &doc.layers, regions.as_deref());
     // SVG has no filters for the Photoshop-style effects: their objects go in as images.
     let flat = crate::cmd::rasterfx::flatten_pixel_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);

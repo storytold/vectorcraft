@@ -43,7 +43,7 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
         return Err(bad(C, "the document has no artboard"));
     }
     let regions: Vec<vectorcraft_geom::Rect> = enc.files.iter().filter_map(|(b, _)| b.and_then(|b| doc.artboards.get(b))).map(|a| a.rect).collect();
-    enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
+    enc.warnings.extend(crate::cmd::fonts::export_type_warnings(doc, &doc.layers, Some(&regions)));
     Ok(enc)
 }
 

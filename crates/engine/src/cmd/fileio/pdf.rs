@@ -265,19 +265,20 @@ pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<Stri
     let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
     let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
     warnings.extend(drawn_warnings);
-    warnings.extend(overflow_warning(cmd, &full, p)?);
+    warnings.extend(type_warnings(cmd, &full, p)?);
     Ok((bytes, warnings))
 }
 
-/// The warning about the type that the pages of a PDF of `doc` with the options in `p` draw and
-/// whose text doesn't fit (see [`crate::cmd::fonts::export_overflow_warning`]): on the pages
-/// chosen, leaving out the layers that don't print unless the PDF writes them.
-fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<String>> {
+/// The warnings about the type that the pages of a PDF of `doc` with the options in `p` draw:
+/// text that doesn't fit and type over a page's edge (see
+/// [`crate::cmd::fonts::export_type_warnings`]), on the pages chosen, leaving out the layers that
+/// don't print unless the PDF writes them.
+fn type_warnings(cmd: &str, doc: &Document, p: &Value) -> Result<Vec<String>> {
     let opts = options(cmd, doc, p)?;
     let areas = vectorcraft_pdf::page_areas(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     let set = &opts.settings;
     let printed = if set.include_non_printing || set.create_layers { None } else { without_non_printing(&doc.layers) };
-    Ok(crate::cmd::fonts::export_overflow_warning(doc, printed.as_deref().unwrap_or(&doc.layers), Some(&areas)))
+    Ok(crate::cmd::fonts::export_type_warnings(doc, printed.as_deref().unwrap_or(&doc.layers), Some(&areas)))
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the
