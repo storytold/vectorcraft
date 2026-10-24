@@ -76,6 +76,27 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
   (~170–270 h one agent, ~50–80 h with 4–6 agents).
 - **1.0:** feature parity plus the fidelity pass, hardening and packaging for all three desktop OSes and the web.
 
+## Outline Stroke submission evidence
+
+**Feature evidence last updated:** 2026-10-23.
+
+The shared assessment status line and revision table retain the feature-base snapshot; merging retains upstream's current shared assessment and history. This dated section records the submission's feature evidence and does not rescore upstream or claim a new combined build or runtime measurement.
+
+- Current-main conflict reconciliation retains upstream and feature behavior; scores and estimates unchanged
+- Outline Stroke preserves open- and closed-contour fills as separate editable objects alongside filled stroke outlines; Group Selection distinguishes clicking up the group hierarchy from dragging a selected object. Validation of this correction is recorded separately from prior deletion behavior.
+
+Public behavior references: [Outline Stroke](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/convert-strokes-to-compound-paths.html), [fills on open paths](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/about-fills-and-strokes.html), and [selecting objects within groups](https://helpx.adobe.com/ca/illustrator/desktop/manage-objects/select-objects/select-object-groups-and-nested-object-groups.html).
+
+### Feature revisions
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-23 | correction | Supersede the proposed open-fill deletion: preserve original fills and outline strokes separately. Cover independent Group Selection drags without promoting the selection on press; repeated clicks still select enclosing groups. No score or hours change; fresh review required. |
+| 2026-10-21 | minor | Reconcile feature status and revision evidence in a dated section; retain shared baseline metadata for independent upstream updates. Scores and estimates are not reassessed. |
+| 2026-10-21 | minor | Reconcile this feature with current main, preserving both sets of behavior and progress evidence; scores and estimates unchanged. |
+| 2026-10-20 | minor | Historical proposal (superseded 2026-10-23): Outline Stroke follow-up: preserve closed compound fill members and their individual editing while filtering open contours; scores and hours unchanged. |
+| 2026-10-20 | minor | Historical proposal (superseded 2026-10-23): Outline Stroke consumes open-contour fills and preserves closed-contour fills, including mixed paths; scores and hours unchanged. |
+
 ## Milestones
 
 | # | Milestone | Status | Est. remaining, one agent (h) |

@@ -721,6 +721,8 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
         return None;
     }
     let (path, rule) = node_path(l)?;
+    // A fill belongs to the source path, whether open or closed. Converting its stroke
+    // preserves that fill on a separate copy (including compound member geometry).
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
     for item in &l.appearance.items {
