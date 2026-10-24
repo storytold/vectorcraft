@@ -488,10 +488,8 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- placeholder / insert ----------
 
-/// VectorCraft's own placeholder copy (not the classical Latin text).
-pub(crate) const PLACEHOLDER: &str = "Sample copy flows here while the layout takes shape. Swap these words for real text once the \
-design is settled. Every line is only a stand-in that shows size, rhythm and colour. Headlines, captions and body text all \
-start as rough drafts like this one. Keep going until the frame is full and the page feels balanced.";
+/// VectorCraft's placeholder copy.
+pub(crate) const PLACEHOLDER: &str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
 
 fn fill_placeholder(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = texts(s, p, "type.fillPlaceholder")?;
@@ -512,7 +510,7 @@ fn fill_placeholder(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Replace `t`'s text with placeholder text in its first style: area type is filled to its frame,
-/// other type gets a sentence (Type › Fill with Placeholder Text, and new type with Preferences ›
+/// other type gets "Lorem ipsum" (Type › Fill with Placeholder Text, and new type with Preferences ›
 /// Type › Fill New Type Objects With Placeholder Text).
 pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
     let style = t.first_style();
@@ -536,7 +534,7 @@ pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
             }
             out
         }
-        _ => PLACEHOLDER.split(". ").next().unwrap_or(PLACEHOLDER).to_string() + ".",
+        _ => "Lorem ipsum".to_string(),
     };
     t.runs = vec![TextRun { text, style, inline: None }];
     refresh_bounds(t);

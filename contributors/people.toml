@@ -159,3 +159,8 @@ display_name = "Aditya Sisodiya"
 real_name = "Angelo Bernardini"
 display_name = "Angelo Bernardini"
 sync_github_name = false
+
+[people.MajedAlaejem]
+real_name = "Majed Alaejem"
+sync_github_name = true
+
