@@ -4448,9 +4448,37 @@ Type › Bullets and Numbering › Apply Bullets and the canvas context menu's B
 same menus runs `type.applyNumbers {number?}`. Without `number` it runs `text.setFormat {list: "number"}`, and with it
 it runs `text.setFormat {number}`.
 
+Type › Bullets and Numbering › Convert to Text runs `type.convertListToText` on the selected type's paragraphs, or on
+those the Type tool's selection touches, and that runs `text.convertListToText {ids?, start?, end?}`. The marker of
+each list paragraph becomes characters at the start of the paragraph: the bullet, or the number and its period as the
+paragraph showed it, then a tab. They are set in the marker's font, size and color: the style of the paragraph's first
+character without the attributes the marker leaves out. The paragraph leaves its list. When the marker's tab went to
+the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, so that
+the text after the tab starts where it started after the marker. When the marker's tab went to a tab stop, the
+converted tab goes to the same place when that stop is left-aligned and no stop there or past it has a leader. When a
+stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker
+and the place its tab ended, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in
+place of any stop there and of those right, center and decimal stops before it. A paragraph that holds a tab of its
+own keeps its stops past the left indent as they are. The characters are text like any other: they can be selected,
+styled, edited and deleted, and copied text includes them. In threaded type the numbers are the ones the story counted
+through its frames, and a paragraph that continues into the next frame gets its characters once, where its text
+starts. An empty list paragraph has no marker and only leaves the list. A numbered paragraph after the converted ones
+that stays in its list counts from 1 again, as after any paragraph in no list. A paragraph with no direction set runs
+the way its first strong character does; when a letter or a roman numeral put before right-to-left text would make it
+run left to right, the paragraph gets the Right to Left direction. A right-to-left paragraph that leaves its list no
+longer has its indents mirrored, and on a path the tab takes its own width, as every tab on a path does. With the
+Every-line Composer, a paragraph that holds a tab is broken line by line, so a converted paragraph of several lines
+can break at other places than its list paragraph did. The change is one undo step, and the reply gives the `ids` of
+the type it changed, how many paragraphs were `converted`, and the characters `inserted`, each with the type object's
+`id`, the byte `at` which they went in (counted in the text before the change) and their `length` in bytes. While the
+Type tool edits, `type.convertListToText` moves its anchor and caret past the characters inserted at or before them.
+In threaded type, when the caret's character moved to another frame, the Type tool edits that frame with the caret
+next to the same character, and that frame becomes the selection when it was not selected.
+
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bullet":"square"}}}
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"number":"upperRoman"}}}
+{"name":"run_command","arguments":{"command":"text.convertListToText","params":{}}}
 ```
 
 ## Small Caps, Superscript and Subscript
