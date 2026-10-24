@@ -702,6 +702,15 @@ const MAX_FIELD_PX: f64 = 512.0;
 /// Most pixels along a side of a linear or radial gradient's image.
 const MAX_GRADIENT_PX: f64 = 4096.0;
 
+/// The minimum requested resolution (ppi) for PDF raster effects and freeform gradients.
+/// Existing pixel budgets take precedence: large images can have a lower effective resolution.
+pub const MIN_RASTER_PPI: f64 = 150.0;
+
+/// The ppi to rasterise at: the document's, but at least [`MIN_RASTER_PPI`].
+pub fn pdf_raster_ppi(doc_ppi: f64) -> f64 {
+    if doc_ppi.is_finite() && doc_ppi >= MIN_RASTER_PPI { doc_ppi } else { MIN_RASTER_PPI }
+}
+
 /// The largest magnitude a coordinate, length or transform entry may have in the content stream it
 /// is drawn into (for glyph spacing, in thousandths of an em). Art that would go beyond it is left
 /// out. A PDF/A-2 file may hold only integers from -2,147,483,648 to 2,147,483,647 (ISO 19005-2,
@@ -1417,10 +1426,11 @@ impl Exporter<'_> {
     }
 
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
-    /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
-    /// scaled type gets its pixels too): a freeform gradient's colour field (at most
+    /// raster effects resolution (with a [`MIN_RASTER_PPI`] floor) where it is drawn (`area` as the
+    /// current transform sizes it, so scaled type gets its pixels too): a freeform gradient's colour field (at most
     /// [`MAX_FIELD_PX`] a side), or a linear or radial gradient (at most [`MAX_GRADIENT_PX`] a side),
-    /// with dither's noise when it paints a fill (`fill`).
+    /// with dither's noise when it paints a fill (`fill`). The side limits take precedence over the
+    /// requested resolution.
     fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect, fill: bool) {
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
@@ -1434,7 +1444,7 @@ impl Exporter<'_> {
         }
         let freeform = g.gradient.kind == GradientKind::Freeform;
         let max = if freeform { MAX_FIELD_PX } else { MAX_GRADIENT_PX };
-        let k = (self.doc.raster_effects_ppi / 72.0).min(max / long);
+        let k = (pdf_raster_ppi(self.doc.raster_effects_ppi) / 72.0).min(max / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, max) as u16;
         let (cols, rows) = (along(w), along(h));
         let rgba: Vec<u8> = if freeform {
@@ -2099,6 +2109,14 @@ fn break_hyphen(g: &vectorcraft_text::PositionedGlyph) -> Option<std::ops::Range
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raster_ppi_has_a_150_floor() {
+        assert_eq!(pdf_raster_ppi(72.0), MIN_RASTER_PPI);
+        assert_eq!(pdf_raster_ppi(f64::NAN), MIN_RASTER_PPI);
+        // A higher document ppi still wins.
+        assert_eq!(pdf_raster_ppi(300.0), 300.0);
+    }
 
     #[test]
     fn writable_bounds_values_the_transform_and_values_through_it() {
