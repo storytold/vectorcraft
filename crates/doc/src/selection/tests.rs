@@ -209,6 +209,9 @@ fn deselect_uneditable_matches_removing_one_at_a_time() {
         for o in s.objects.iter().copied().filter(|o| !d.is_editable(*o)) {
             expected.remove(o);
         }
+        if expected.target.is_some_and(|t| !d.is_editable(t)) {
+            expected.target = None;
+        }
         let mut actual = s.clone();
         actual.deselect_uneditable(&d);
         assert_eq!(actual, expected, "seed {seed}");

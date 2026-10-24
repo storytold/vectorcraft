@@ -1721,6 +1721,22 @@ impl Document {
         }
         None
     }
+    /// Can the node be selected: is it editable ([`Document::is_editable`]) and neither a template
+    /// layer nor inside one, locked or not?
+    pub fn is_selectable(&self, id: NodeId) -> bool {
+        self.is_selectable_with(&self.locked_artboards(), id)
+    }
+    /// [`Document::is_selectable`] with the locked artboards `locks` of this document, measured
+    /// once for many ids.
+    pub fn is_selectable_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
+        self.is_editable_with(locks, id) && self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.is_template())))
+    }
+    /// [`Document::is_selectable`] for many ids: the art on the locked artboards is measured once
+    /// for all of them.
+    pub fn selectable(&self) -> impl Fn(NodeId) -> bool + '_ {
+        let locks = self.locked_artboards();
+        move |id| self.is_selectable_with(&locks, id)
+    }
     pub fn is_visible(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible)))
     }

@@ -223,7 +223,8 @@ fn walk_pickable<'a>(doc: &'a vectorcraft_doc::Document, scope: Option<NodeId>, 
     }
 }
 
-/// The spines of the editable blends, topmost first: (blend, spine).
+/// The spines of the selectable blends ([`vectorcraft_doc::Document::is_selectable`]), topmost
+/// first: (blend, spine).
 pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
     let mut v = vec![];
     walk_pickable(cx.doc, cx.isolation, |n| {
@@ -234,8 +235,8 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
         }
     });
     v.reverse();
-    let editable = cx.doc.editable();
-    v.retain(|(id, _)| editable(*id));
+    let selectable = cx.doc.selectable();
+    v.retain(|(id, _)| selectable(*id));
     v
 }
 
@@ -283,7 +284,8 @@ fn editable_path(n: &Node) -> Option<Cow<'_, PathData>> {
     }
 }
 
-/// The editable objects `f` accepts, topmost first.
+/// The selectable objects `f` accepts ([`vectorcraft_doc::Document::is_selectable`]), topmost
+/// first.
 fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
     let mut v = vec![];
     walk_pickable(cx.doc, cx.isolation, |n| {
@@ -292,8 +294,8 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
         }
     });
     v.reverse();
-    let editable = cx.doc.editable();
-    v.retain(|id| editable(*id));
+    let selectable = cx.doc.selectable();
+    v.retain(|id| selectable(*id));
     v
 }
 
@@ -873,7 +875,7 @@ impl Tool for DirectSelectionTool {
                     let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": ids }));
                     return std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, true)).collect();
                 }
-                // Anchors inside the rect, on editable paths inside isolation mode.
+                // Anchors inside the rect, on selectable paths inside isolation mode.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
                 walk_pickable(cx.doc, cx.isolation, |n| {
                     if let NodeKind::Path { path, .. } = &n.kind {
@@ -891,8 +893,8 @@ impl Tool for DirectSelectionTool {
                         sel.push((id, vec![]));
                     }
                 }
-                let editable = cx.doc.editable();
-                sel.retain(|(id, _)| editable(*id));
+                let selectable = cx.doc.selectable();
+                sel.retain(|(id, _)| selectable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
                 let art = Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}));
                 std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, false)).collect()
@@ -1425,6 +1427,35 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
+    }
+
+    /// Direct Selection passes over the art of a template layer, also when it is unlocked, as it
+    /// passes over a locked layer's: a press on a path's anchor or a blend's spine point, and a
+    /// marquee around an anchor.
+    #[test]
+    fn template_layers_are_passed_over_as_locked_ones_are() {
+        let picks = |d: &vectorcraft_doc::Document| {
+            let (s, p) = (Selection::default(), paint());
+            let c = cx(d, &s, &p);
+            let mut t = DirectSelectionTool::new(false);
+            let mut out = vec![];
+            for (x, y) in [(100.0, 100.0), (110.0, 310.0)] {
+                out.push(t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y)));
+                out.push(t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y)));
+            }
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
+            out.push(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 250.0, 150.0)));
+            out
+        };
+        let (mut locked, ..) = blend_doc();
+        let (mut template, ..) = blend_doc();
+        let l = locked.layers[0].id;
+        locked.node_mut(l).unwrap().locked = true;
+        let Some(NodeKind::Layer { template: on, .. }) = template.node_mut(l).map(|n| &mut n.kind) else { panic!("a layer") };
+        *on = true;
+        assert_ne!(picks(&blend_doc().0), picks(&locked));
+        assert_eq!(picks(&template), picks(&locked));
     }
 
     #[test]

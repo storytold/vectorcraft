@@ -2223,6 +2223,7 @@ file-filter	Templates	範本
 @msg	Couldn't copy to the system clipboard: {e}	無法複製到系統剪貼簿：{e}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	nothing selected	未選取任何物件
+@msg	template layers and their objects can't be selected	無法選取範本圖層及其物件
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多個工具的工具列群組中

@@ -209,11 +209,15 @@ impl Selection {
         }
     }
     /// Deselect the objects that are hidden or locked, themselves or through a group or layer
-    /// around them (and so the key object when it is one): hidden or locked art can't stay
-    /// selected.
+    /// around them, or that are on a template layer ([`Document::is_selectable`]), and so the key
+    /// object when it is one: such art can't stay selected. A target that can't be selected is
+    /// cleared too, also a layer with no art selected.
     pub fn deselect_uneditable(&mut self, doc: &Document) {
-        let locks = doc.locked_artboards();
-        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable_with(&locks, *o)).collect();
+        let selectable = doc.selectable();
+        if self.target.is_some_and(|t| !selectable(t)) {
+            self.target = None;
+        }
+        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !selectable(*o)).collect();
         self.deselect_all(&uneditable);
     }
     /// Deselect the objects on a locked artboard ([`crate::LockedArtboards::holds_id`]), whatever
