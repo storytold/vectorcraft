@@ -931,12 +931,11 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
 /// Dispatch canvas pointer, keyboard and drop events through the active document view.
 fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     let line = ui.ctx().options(|o| o.input_options.line_scroll_speed);
-    let wheel_zooms = app.session.prefs.zoom_with_mouse_wheel;
     let turn_id = egui::Id::new("canvas-wheel-turn");
     let turn_before: WheelTurn = ui.data(|d| d.get_temp(turn_id)).unwrap_or_default();
     let mut turn = turn_before;
     let (pointer, m, space, (factor, scroll)) =
-        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, wheel_zooms, line, rect.height(), &mut turn)));
+        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, &app.session.prefs, line, rect.height(), &mut turn)));
     if turn != turn_before {
         ui.data_mut(|d| d.insert_temp(turn_id, turn));
     }
@@ -1311,6 +1310,13 @@ const WHEEL_GLIDE: f64 = 0.05;
 struct WheelTurn {
     /// The last wheel turn was an Alt-wheel one.
     alt: bool,
+    /// The modifiers egui's wheel state holds, followed while Zoom with Mouse Wheel is off: each
+    /// wheel event's own, or, through a trackpad gesture, all those held since it began; none
+    /// while the wheel is idle.
+    held: egui::Modifiers,
+    /// A trackpad gesture is under way: egui has seen its Start phase and has not yet seen its End
+    /// or Cancel phase.
+    gesture: bool,
     /// The zoom (natural log) wheel notches still have to glide in.
     glide: f64,
 }
@@ -1558,20 +1564,57 @@ fn marquee_through(p: &egui::Painter, q: &[Pos2]) {
 
 /// What the wheel, a pinch and a two-finger drag on a touch screen did over the canvas this frame:
 /// a zoom factor (about the pointer) and a scroll (screen points the content moves). The wheel scrolls, Cmd- and Alt-wheel (Option
-/// on the Mac) zoom. With General › Zoom with Mouse Wheel (`wheel_zooms`) the wheel and Alt-wheel
-/// zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line` and `page`: points
-/// per wheel line and page. `turn`: kept by the caller across frames. A mouse wheel's notches zoom
-/// in a glide over a few frames, as scrolling does (#888); a trackpad's fine steps at once.
-fn wheel(i: &egui::InputState, wheel_zooms: bool, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
+/// on the Mac) zoom; with General › Scroll Sideways with Cmd/Ctrl + Wheel, Cmd/Ctrl-wheel scrolls
+/// sideways instead, and Alt + Cmd/Ctrl-wheel still zooms. With General › Zoom with Mouse Wheel the
+/// wheel and Alt-wheel zoom, Shift-wheel scrolls up and down and Cmd/Ctrl-wheel sideways. `line`
+/// and `page`: points per wheel line and page. `turn`: kept by the caller across frames. A mouse
+/// wheel's notches zoom in a glide over a few frames, as scrolling does (#888); a trackpad's fine
+/// steps at once.
+fn wheel(i: &egui::InputState, prefs: &vectorcraft_engine::Prefs, line: f32, page: f32, turn: &mut WheelTurn) -> (f64, egui::Vec2) {
     // Fingers on a touch screen pan the content with them (a trackpad sends scrolls instead).
     let pan = i.multi_touch().map_or(egui::Vec2::ZERO, |t| t.translation_delta);
-    if !wheel_zooms {
+    if !prefs.zoom_with_mouse_wheel {
         // egui makes Cmd-wheel (and a pinch) its zoom and the rest a scroll it spreads over a few
         // frames: the rest of an Alt-wheel turn zooms too, however soon Alt is let go.
         if let Some(m) = i.events.iter().rev().find_map(|e| if let egui::Event::MouseWheel { modifiers, .. } = e { Some(modifiers) } else { None }) {
             turn.alt = m.alt && !m.command;
         }
-        let (zoom, scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
+        // Each wheel event changes `turn.held` and `turn.gesture` as `WheelState::on_wheel_event`
+        // changes egui's wheel modifiers and status. Both are cleared while egui's wheel is idle.
+        for e in &i.events {
+            if let egui::Event::MouseWheel { phase, modifiers, .. } = e {
+                match phase {
+                    egui::TouchPhase::Start => {
+                        turn.gesture = true;
+                        turn.held = *modifiers;
+                    }
+                    egui::TouchPhase::Move if turn.gesture => turn.held |= *modifiers,
+                    egui::TouchPhase::Move => turn.held = *modifiers,
+                    egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                        turn.gesture = false;
+                        turn.held = egui::Modifiers::NONE;
+                    }
+                }
+            }
+        }
+        if !i.is_scrolling() {
+            turn.gesture = false;
+            turn.held = egui::Modifiers::NONE;
+        }
+        let (mut zoom, mut scroll) = (f64::from(i.zoom_delta()), i.smooth_scroll_delta);
+        // Scroll Sideways with Cmd/Ctrl + Wheel: while egui's wheel state holds Cmd/Ctrl without
+        // Alt, egui's zoom, less the pinches', is `exp(points × scroll_zoom_speed)`, at egui's
+        // default speed, which the app keeps. The canvas scrolls sideways by those points instead.
+        // A trackpad or web pinch still zooms. With fingers on a touch screen, egui's zoom is the
+        // fingers' alone, and the canvas leaves it as it is.
+        if prefs.ctrl_wheel_scrolls_sideways && turn.held.command && !turn.held.alt && i.multi_touch().is_none() {
+            let pinch: f64 = i.events.iter().filter_map(|e| if let egui::Event::Zoom(f) = e { Some(f64::from(*f)) } else { None }).product();
+            let wheel_zoom = zoom / pinch;
+            if wheel_zoom.is_finite() && wheel_zoom > 0.0 {
+                scroll.x += (wheel_zoom.ln() / f64::from(egui::InputOptions::default().scroll_zoom_speed)) as f32;
+                zoom = pinch;
+            }
+        }
         return if turn.alt && scroll != egui::Vec2::ZERO {
             (zoom * (f64::from(scroll.x + scroll.y) * WHEEL_ZOOM).exp(), pan)
         } else {
@@ -7118,6 +7161,140 @@ mod tests {
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: Shift-wheel scrolls up ({zoom}, {scroll:?})");
         let (zoom, scroll, _) = turn(&mut app, "cmd");
         assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
+    }
+
+    /// General › Scroll Sideways with Cmd/Ctrl + Wheel, through the control channel's `ui.wheel`:
+    /// with Zoom with Mouse Wheel off, Cmd/Ctrl-wheel zooms about the pointer while the option is
+    /// off and scrolls sideways while it is on, and a trackpad pinch, two fingers spread on a touch
+    /// screen, Alt + Cmd/Ctrl-wheel and Alt-wheel still zoom. A Cmd/Ctrl-wheel notch with a plain
+    /// one right after it scrolls two notches in all, and a trackpad gesture during which Cmd/Ctrl
+    /// is pressed and released scrolls sideways until the gesture ends. With Zoom with Mouse Wheel
+    /// also on, Cmd/Ctrl-wheel scrolls sideways and the wheel zooms.
+    #[test]
+    fn cmd_wheel_scrolls_sideways_preference() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        // A canvas frame through the host's input hook (it feeds the control channel's input).
+        let run = |app: &mut VectorcraftApp| {
+            let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+            app.raw_input_hook(&mut raw);
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        run(&mut app);
+        let rect = app.canvas_rect.unwrap();
+        let at = rect.center() + vec2(60.0, 40.0);
+        // One notch up at `at` with `mods` held, or a pinch: → (zoom ratio, scroll in points, how
+        // far the point under `at` moved).
+        let turn = |app: &mut VectorcraftApp, mods: &str| {
+            let before = *app.view().unwrap();
+            if mods == "pinch" {
+                app.synthetic.extend([egui::Event::PointerMoved(at), egui::Event::Zoom(1.25)]);
+            } else {
+                let mut p = json!({"x": at.x, "y": at.y, "dy": 1});
+                for m in mods.split('+').filter(|m| !m.is_empty()) {
+                    p[m] = json!(true);
+                }
+                crate::tests_synthetic::control(app, &ctx, "ui.wheel", p);
+            }
+            // egui spreads a notch over a few frames.
+            for _ in 0..40 {
+                run(app);
+            }
+            let after = *app.view().unwrap();
+            let moved = Xf::new(rect, &after).to_doc(at).distance(Xf::new(rect, &before).to_doc(at));
+            (after.zoom / before.zoom, (after.center - before.center) * after.zoom, moved)
+        };
+        let zooms_in = |(zoom, _, moved): (f64, _, f64)| zoom > 1.01 && moved < 1e-6;
+        assert!(zooms_in(turn(&mut app, "cmd")), "off: Cmd-wheel zooms in about the pointer");
+        let (zoom, scroll, _) = turn(&mut app, "shift");
+        assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "off: Shift-wheel scrolls sideways ({zoom}, {scroll:?})");
+        app.session.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": true})).unwrap();
+        // A notch scrolls one wheel line.
+        let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+        let (zoom, scroll, _) = turn(&mut app, "cmd");
+        assert!(
+            (zoom - 1.0).abs() < 1e-9 && (scroll.x + line).abs() < 0.5 && scroll.y == 0.0,
+            "on: Cmd-wheel scrolls sideways by a notch ({zoom}, {scroll:?})"
+        );
+        assert!(zooms_in(turn(&mut app, "pinch")), "on: a pinch right after it zooms in about the pointer");
+        // Two fingers spread on a touch screen, with no wheel turn since the Cmd-wheel one.
+        let before = app.view().unwrap().zoom;
+        let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+        let fingers = |phase, d: f32| vec![touch(1, phase, at - vec2(40.0 + d, 0.0)), touch(2, phase, at + vec2(40.0 + d, 0.0))];
+        frame(&mut app, &ctx, fingers(egui::TouchPhase::Start, 0.0));
+        for k in 1..=3 {
+            frame(&mut app, &ctx, fingers(egui::TouchPhase::Move, 10.0 * k as f32));
+        }
+        frame(&mut app, &ctx, fingers(egui::TouchPhase::End, 30.0));
+        let zoom = app.view().unwrap().zoom / before;
+        assert!(zoom > 1.01, "on: fingers spread on a touch screen zoom in ({zoom})");
+        assert!(zooms_in(turn(&mut app, "alt+cmd")), "on: Alt + Cmd-wheel zooms in about the pointer");
+        assert!(zooms_in(turn(&mut app, "alt")), "on: so does Alt-wheel");
+        let (zoom, scroll, _) = turn(&mut app, "");
+        assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: the wheel scrolls up ({zoom}, {scroll:?})");
+        let (zoom, scroll, _) = turn(&mut app, "shift");
+        assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Shift-wheel scrolls sideways ({zoom}, {scroll:?})");
+        // A Cmd-wheel notch with a plain one right after it, before egui has spread the first: they
+        // scroll two notches in all, sideways and up.
+        let before = *app.view().unwrap();
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "cmd": true}));
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1}));
+        for _ in 0..40 {
+            run(&mut app);
+        }
+        let after = *app.view().unwrap();
+        let scroll = (after.center - before.center) * after.zoom;
+        assert!(
+            scroll.x < -1.0 && scroll.y < -1.0 && (scroll.x + scroll.y + 2.0 * line).abs() < 0.5,
+            "on: a Cmd-wheel notch and a plain one right after it scroll two notches in all ({scroll:?})"
+        );
+        // A pinch while egui still spreads a Cmd-wheel notch zooms by the pinch alone, and the
+        // canvas scrolls sideways by one notch; the pinch magnifies the part scrolled before it.
+        let before = *app.view().unwrap();
+        let p = Xf::new(rect, &before).to_doc(at);
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "cmd": true}));
+        app.synthetic.extend([egui::Event::PointerMoved(at), egui::Event::Zoom(1.25)]);
+        for _ in 0..40 {
+            run(&mut app);
+        }
+        let after = *app.view().unwrap();
+        let (zoom, moved) = (after.zoom / before.zoom, Xf::new(rect, &after).to_screen(p) - at);
+        let notch = line as f32;
+        assert!(
+            (zoom - 1.25).abs() < 1e-6 && moved.x > notch - 0.5 && moved.x < 1.25 * notch + 0.5 && moved.y.abs() < 1e-3,
+            "on: a pinch during a Cmd-wheel notch zooms by the pinch, and the notch scrolls sideways ({zoom}, {moved:?})"
+        );
+        // A trackpad gesture starts with no modifier, and Cmd is pressed and released during it:
+        // egui keeps Cmd in its wheel state until the gesture ends, and the canvas keeps scrolling
+        // sideways until then.
+        let before = *app.view().unwrap();
+        let swipe = |phase, modifiers| egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, 6.0), phase, modifiers };
+        app.synthetic.extend([
+            egui::Event::PointerMoved(at),
+            swipe(egui::TouchPhase::Start, egui::Modifiers::NONE),
+            swipe(egui::TouchPhase::Move, egui::Modifiers::COMMAND),
+            swipe(egui::TouchPhase::Move, egui::Modifiers::NONE),
+            swipe(egui::TouchPhase::End, egui::Modifiers::NONE),
+        ]);
+        for _ in 0..40 {
+            run(&mut app);
+        }
+        let after = *app.view().unwrap();
+        let scroll = (after.center - before.center) * after.zoom;
+        assert!(
+            (after.zoom / before.zoom - 1.0).abs() < 1e-9 && (scroll.x + 12.0).abs() < 0.01 && scroll.y == 0.0,
+            "on: a trackpad gesture scrolls sideways to its end after Cmd is let go ({}, {scroll:?})",
+            after.zoom / before.zoom
+        );
+        app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
+        let (zoom, scroll, _) = turn(&mut app, "cmd");
+        assert!(
+            (zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0,
+            "with Zoom with Mouse Wheel: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})"
+        );
+        assert!(zooms_in(turn(&mut app, "")), "with Zoom with Mouse Wheel: the wheel zooms in about the pointer");
     }
 
     /// #888: with Zoom with Mouse Wheel, a wheel notch's zoom glides in over a few frames, as a

@@ -3429,6 +3429,7 @@ font-technology	Variable	Değişken
 	Zoom to Selection	Seçimi Yakınlaştır
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 	{count} file(s) in {folder} {note}. Show the package folder?	{folder}{note} içindeki {count} dosyası/dosyaları. Paket klasörü gösterilsin mi?
 	{count} linked file(s) not found	{count} bağlantılı dosya(lar) bulunamadı

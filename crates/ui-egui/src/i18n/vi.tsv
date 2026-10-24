@@ -3994,6 +3994,7 @@ mark-style	Japanese	Kiểu Nhật
 	Zoom to Selection	Thu phóng đến vùng chọn
 	Zoom Tool	Công cụ thu phóng
 	Zoom with Mouse Wheel	Thu phóng bằng con lăn chuột
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cuộn ngang bằng Cmd/Ctrl + con lăn
 	{count} file(s) in {folder} {note}. Show the package folder?	{count} tệp trong {folder}{note}. Hiện thư mục gói?
 	{count} folder(s) or file(s) couldn't be read	{count} thư mục hoặc tệp không thể đọc được
 	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {count} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn

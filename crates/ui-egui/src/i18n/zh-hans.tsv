@@ -3481,6 +3481,7 @@ font-script	Japanese	汉字
 	Zoom to Selection	缩放到所选对象
 	Zoom Tool	缩放工具
 	Zoom with Mouse Wheel	使用鼠标滚轮缩放
+	Scroll Sideways with Cmd/Ctrl + Wheel	使用 Cmd/Ctrl + 滚轮水平滚动
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 	{count} file(s) in {folder} {note}. Show the package folder?	{folder} 中有 {count} 个文件{note}。要显示打包文件夹吗？
 	{count} linked file(s) not found	找不到 {count} 个链接文件

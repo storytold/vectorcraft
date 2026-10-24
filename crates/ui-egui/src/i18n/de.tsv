@@ -3524,6 +3524,7 @@ effect	Points	Punkte
 	Zoom to Selection	Auf Auswahl zoomen
 	Zoom Tool	Zoom-Werkzeug
 	Zoom with Mouse Wheel	Mit Mausrad zoomen
+	Scroll Sideways with Cmd/Ctrl + Wheel	Mit Cmd/Ctrl + Mausrad horizontal scrollen
 	Scrub Numeric Fields by Dragging	Zahlenfelder durch Ziehen ändern
 	{count} file(s) in {folder} {note}. Show the package folder?	{count} Datei(en) in {folder} {note}. Paketordner anzeigen?
 	{count} linked file(s) not found	{count} verknüpfte Datei(en) nicht gefunden
