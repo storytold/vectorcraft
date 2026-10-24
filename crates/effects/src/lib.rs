@@ -62,6 +62,8 @@ mod tests_scale;
 #[cfg(test)]
 mod tests_transformfx;
 
+use std::sync::Arc;
+
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
@@ -1050,6 +1052,10 @@ pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()
 }
 
+/// What a live-effect plug-in shows besides its geometry: lines the canvas draws above the artwork
+/// and nothing else does ([`apply_geometry_bez_showing`]).
+pub use vectorcraft_plugins::overlay::Overlay;
+
 /// Context the geometry effects may need from the object's appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GeomContext<'a> {
@@ -1089,6 +1095,11 @@ impl<'a> GeomContext<'a> {
             AppearanceItem::Stroke(s) => Self { stroke: Some(s), item: at, ..self },
             AppearanceItem::Fill(_) => Self { item: at, ..self },
         }
+    }
+
+    /// What a live-effect plug-in is given of the object's paints.
+    fn paints(&self) -> vectorcraft_plugins::effect::Paints<'a> {
+        vectorcraft_plugins::effect::Paints { appearance: self.appearance, item: self.item }
     }
 }
 
@@ -1144,6 +1155,11 @@ impl Budget {
     pub(crate) fn plus(self, cost: Self) -> Self {
         Self { anchors: self.anchors.saturating_add(cost.anchors), lines: self.lines.saturating_add(cost.lines) }
     }
+
+    /// `out`, when what it costs fits this budget.
+    pub(crate) fn admit(self, out: PathData) -> Option<PathData> {
+        self.fits(Self::of(&out)).then_some(out)
+    }
 }
 
 /// Evaluate the visible geometry effects of `effects` on `path`, in order. `bounds` is the
@@ -1163,6 +1179,21 @@ pub fn apply_geometry_with(effects: &[Effect], path: &PathData, bounds: Rect, ct
 /// [`apply_geometry_with`] whose effects keep to `budget`, raised to what `path` costs where that
 /// is more.
 pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext, budget: Budget) -> PathData {
+    // Without overlays to show, the chain runs its plug-ins and always comes to its end.
+    chain(effects, path, bounds, ctx, budget, None).unwrap_or_else(|| path.clone())
+}
+
+/// [`apply_geometry_within`]. Given `showing`, it gathers what its live-effect plug-ins show
+/// besides geometry into it, in the order they run, and takes their results from their cache alone,
+/// as drawing left it: `None` when one isn't there.
+fn chain(
+    effects: &[Effect],
+    path: &PathData,
+    bounds: Rect,
+    ctx: &GeomContext,
+    budget: Budget,
+    mut showing: Option<&mut Vec<Arc<Overlay>>>,
+) -> Option<PathData> {
     // `budget` raised to what `path` costs, measured once, and only for a path that has geometry
     // effects.
     let mut limit = None;
@@ -1179,16 +1210,39 @@ pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds:
         }
         let p = merged_params(&e.id, &e.params);
         let limit = *limit.get_or_insert_with(|| budget.at_least(Budget::of(path)));
-        if let Some(next) = apply_one(&e.id, &p, &cur, b, ctx, limit) {
+        let next = match (showing.as_deref_mut(), vectorcraft_plugins::effect::plugin_id(&e.id)) {
+            (Some(out), Some(plugin)) => {
+                let ran = vectorcraft_plugins::effect::cached(plugin, &p, &cur, b, ctx.rule, ctx.paints())?;
+                out.extend(ran.overlay);
+                // Kept as `apply_one` keeps a plug-in's geometry: only when it fits.
+                limit.admit(ran.path)
+            }
+            _ => apply_one(&e.id, &p, &cur, b, ctx, limit),
+        };
+        if let Some(next) = next {
             cur = next;
         }
     }
-    cur
+    Some(cur)
 }
 
 /// Convenience wrapper on kurbo paths.
 pub fn apply_geometry_bez(effects: &[Effect], path: &BezPath, bounds: Rect, ctx: &GeomContext) -> BezPath {
     apply_geometry_with(effects, &PathData::from_bezpath(path), bounds, ctx).to_bezpath()
+}
+
+/// [`apply_geometry_bez`], also gathering what its live-effect plug-ins show besides geometry
+/// into `overlays`, in the order they run. Their results come from their cache alone, as drawing
+/// the same geometry left it: this never runs a plug-in, and is `None` when one hasn't run on what
+/// it is given here, or the cache has let the result go since.
+pub fn apply_geometry_bez_showing(
+    effects: &[Effect],
+    path: &BezPath,
+    bounds: Rect,
+    ctx: &GeomContext,
+    overlays: &mut Vec<Arc<Overlay>>,
+) -> Option<BezPath> {
+    chain(effects, &PathData::from_bezpath(path), bounds, ctx, Budget::EFFECTS, Some(overlays)).map(|p| p.to_bezpath())
 }
 
 /// Geometry effect `id` with params `p` on `path`, whose reference box is `b`; `None` when its
@@ -1205,8 +1259,7 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
     // Anchors drawn as many lines each (a large Roughen or Zig Zag): once more with as many fewer
     // anchors as there were lines too many, and a tenth to spare, as segments vary in their lines.
     let fewer = (cost.anchors as f64 * 0.9 * (budget.lines as f64 / cost.lines as f64)) as usize;
-    let out = apply_unchecked(id, p, path, b, ctx, fewer.min(budget.anchors));
-    budget.fits(Budget::of(&out)).then_some(out)
+    budget.admit(apply_unchecked(id, p, path, b, ctx, fewer.min(budget.anchors)))
 }
 
 /// Does geometry effect `id` build within the anchors it is given?
@@ -1214,12 +1267,13 @@ fn builds_within(id: &str) -> bool {
     matches!(id, "distort.freeDistort" | "distort.roughen" | "distort.transform" | "distort.twist" | "distort.zigZag") || id.starts_with("warp.")
 }
 
-/// [`apply_one`] whose result may pass `max` when the effect doesn't build within it.
+/// [`apply_one`] whose result may pass `max` when the effect doesn't build within it: a
+/// live-effect plug-in's geometry (`path` as it was when the plug-in fails), else the built-in
+/// effect's.
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
     use util::*;
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
-        let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
-        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints).unwrap_or_else(|| path.clone());
+        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, ctx.paints()).unwrap_or_else(|| path.clone());
     }
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p, max),

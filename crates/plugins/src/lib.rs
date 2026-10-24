@@ -18,7 +18,8 @@
 //! their geometry, fills, strokes (gradients included) and opacity. An **object filter** returns
 //! the objects to keep, change or add, applied to the document as one edit
 //! ([`objects::apply_output`]); a **live effect** ([`effect`]) rewrites one object's geometry each
-//! time it is drawn, from an appearance stack; an **exporter** ([`export`]) writes the whole
+//! time it is drawn, from an appearance stack, and may show lines on the canvas beside it
+//! ([`overlay`]); an **exporter** ([`export`]) writes the whole
 //! document in a file format of its own. The process-wide [`registry`] holds the installed
 //! plug-ins. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]).
@@ -29,6 +30,7 @@ pub mod effect;
 pub mod export;
 pub mod manifest;
 pub mod objects;
+pub mod overlay;
 pub mod registry;
 mod runtime;
 pub mod wat;

@@ -7,6 +7,7 @@
 
 pub mod appearance;
 pub mod assets;
+pub mod base64;
 pub mod blend;
 pub mod cancel;
 pub mod clipnest;

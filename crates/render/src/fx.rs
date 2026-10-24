@@ -59,7 +59,7 @@ use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
 use crate::ink::Ink;
-use crate::{Frame, Renderer, blend_mode, fill_rule, paint};
+use crate::{Frame, RenderOptions, Renderer, blend_mode, fill_rule, layer_outline, left_out, paint};
 
 fn visible(effects: &[Effect]) -> bool {
     effects.iter().any(|e| e.visible)
@@ -199,16 +199,73 @@ fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
+/// `effects` applied to the geometry `bp` in context `ctx`, as drawing applies them.
 fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
+    // Without overlays to show, the plug-ins run and the effects always come to an end.
+    apply_showing(effects, bp, ctx, None).unwrap_or_else(|| bp.clone())
+}
+
+/// [`apply`]; given `overlays`, it gathers what its live-effect plug-ins show besides geometry into
+/// them, and takes their results from their cache alone: `None` when one isn't there
+/// ([`effects::apply_geometry_bez_showing`]).
+fn apply_showing(effects: &[Effect], bp: &BezPath, ctx: &GeomContext, overlays: Option<&mut Vec<Arc<effects::Overlay>>>) -> Option<BezPath> {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
-        return bp.clone();
+        return Some(bp.clone());
     }
-    effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)
+    match overlays {
+        Some(out) => effects::apply_geometry_bez_showing(effects, bp, bp.bounding_box(), ctx, out),
+        None => Some(effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)),
+    }
 }
 
 /// The object-level effected geometry of `n` (base path `bp`).
 pub(crate) fn effected_path(n: &Node, bp: &BezPath) -> BezPath {
     apply(&n.appearance.effects, bp, &GeomContext::of(n))
+}
+
+/// What the live-effect plug-ins on path or compound path `n` show besides its geometry: the
+/// lines the canvas draws above the artwork, in the order drawing runs the plug-ins (its own
+/// effects, then those of each fill and stroke drawn). They are what drawing `n` made, from the
+/// plug-ins' cache: this never runs a plug-in, and is `None` while one of them hasn't run on what
+/// it is given now. Other objects show none.
+pub fn plugin_overlays(n: &Node) -> Option<Vec<Arc<effects::Overlay>>> {
+    let mut out = Vec::new();
+    // Guides are drawn as guides, without their effects.
+    if !effects::has_plugin_effect(n) || matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+        return Some(out);
+    }
+    let Some(bp) = node_bezpath(n) else { return Some(out) };
+    let ctx = GeomContext::of(n);
+    let g = apply_showing(&n.appearance.effects, &bp, &ctx, Some(&mut out))?;
+    for item in n.appearance.items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
+        apply_showing(item_effects(item), &g, &ctx.item(item), Some(&mut out))?;
+    }
+    Some(out)
+}
+
+/// The objects that drawing `doc` with `opts` draws with their live-effect plug-ins, in stacking
+/// order: those [`plugin_overlays`] may show something for. As drawing does, it leaves out what is
+/// hidden, the template layers and guides `opts` leaves out, and what draws in outline (in Outline
+/// view, and in a layer whose Preview is off, but not in a template layer, which stays in Preview).
+/// It doesn't cull: an object outside the view is drawn once the view reaches it.
+pub fn plugin_effect_objects(doc: &Document, opts: &RenderOptions) -> Vec<Arc<Node>> {
+    fn walk(n: &Arc<Node>, opts: &RenderOptions, outline: bool, out: &mut Vec<Arc<Node>>) {
+        if left_out(opts, n) {
+            return;
+        }
+        let outline = layer_outline(opts, n, outline);
+        if !outline && effects::has_plugin_effect(n) {
+            out.push(n.clone());
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, opts, outline, out);
+        }
+    }
+    let mut out = Vec::new();
+    for layer in &doc.layers {
+        walk(layer, opts, opts.outline, &mut out);
+    }
+    out
 }
 
 fn item_effects(item: &AppearanceItem) -> &[Effect] {
