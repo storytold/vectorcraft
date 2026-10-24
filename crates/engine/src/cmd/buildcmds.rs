@@ -130,7 +130,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down)}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down)}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -970,19 +970,51 @@ fn trace_params(p: &Value) -> Result<tr::TraceParams> {
     if !(params.stroke_width.is_finite() && params.stroke_width > 0.0) {
         return Err(bad("imageTrace.make", "strokeWidth must be a positive number of pixels"));
     }
+    // A color group is refused unless the trace uses it: Color mode with Document Library and the
+    // document's swatches.
+    if params.color_group.as_deref().is_some_and(|g| !g.is_empty()) {
+        if params.palette != tr::Palette::DocumentLibrary {
+            return Err(bad("imageTrace.make", "`colorGroup` needs `palette: \"documentLibrary\"`"));
+        }
+        if params.library != super::swatchlib::DOCUMENT_SWATCHES {
+            return Err(bad("imageTrace.make", "`colorGroup` needs `library: \"document\"`"));
+        }
+        if params.mode != tr::Mode::Color {
+            return Err(bad("imageTrace.make", "`colorGroup` needs `mode: \"color\"`"));
+        }
+    }
     Ok(params)
 }
 
-/// Document Library in Color mode: look the library's colours up into `params.swatches` → each
-/// one as traced (sRGB) with the colour to fill with.
+/// Document Library with `colorGroup`: the solid colors of the active document's color group
+/// `name` (so named exactly, else ignoring case).
+/// ([`trace_params`] has checked that the library is the document's swatches.)
+fn trace_group_colors(s: &Session, name: &str) -> Result<Vec<Color>> {
+    const C: &str = "imageTrace.make";
+    let groups = &s.doc()?.doc.swatch_groups;
+    let lower = name.to_lowercase();
+    let group = groups
+        .iter()
+        .find(|g| g.name == name)
+        .or_else(|| groups.iter().find(|g| g.name.to_lowercase() == lower))
+        .ok_or_else(|| bad(C, format!("no color group `{name}` in the document (see swatch.list)")))?;
+    Ok(group.swatches.iter().filter_map(|w| w.paint.color()).collect())
+}
+
+/// Document Library in Color mode: look the library's colors (or its color group's) up into
+/// `params.swatches` → each one as traced (sRGB) with the color to fill with.
 fn trace_library(s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Color)>> {
     const C: &str = "imageTrace.make";
     if params.mode != tr::Mode::Color || params.palette != tr::Palette::DocumentLibrary {
         return Ok(vec![]);
     }
-    let key = params.library.as_str();
-    let colors = super::swatchlib::library_colors(s, key)
-        .ok_or_else(|| bad(C, format!("no swatch library `{key}` (see swatch.library.list; \"document\": the document's swatches)")))?;
+    let group = params.color_group.as_deref().filter(|g| !g.is_empty());
+    let key = group.unwrap_or(params.library.as_str());
+    let colors = match group {
+        Some(name) => trace_group_colors(s, name)?,
+        None => super::swatchlib::library_colors(s, key)
+            .ok_or_else(|| bad(C, format!("no swatch library `{key}` (see swatch.library.list; \"document\": the document's swatches)")))?,
+    };
     if colors.is_empty() {
         return Err(bad(C, format!("`{key}` has no colours")));
     }

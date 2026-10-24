@@ -2271,6 +2271,71 @@ fn image_trace_palettes_and_swatch_libraries() {
 }
 
 #[test]
+fn image_trace_document_library_uses_a_color_group() {
+    let mut s = session();
+    let r = vectorcraft_trace::Raster::from_fn(60, 60, |x, y| match (x < 30, y < 30) {
+        (true, _) => [200, 40, 40, 255],
+        (false, true) => [40, 160, 60, 255],
+        (false, false) => [50, 60, 200, 255],
+    });
+    add_image(&mut s, &r, Affine::IDENTITY);
+    // Ungrouped swatches of the image's own colors, and a group of colors a little off them.
+    s.execute("swatch.new", &json!({"colors": ["#c82828", "#28a03c", "#323cc8"]})).unwrap();
+    s.execute("swatch.newGroup", &json!({"name": "Brand", "colors": ["#b43c3c", "#3c8c50", "#4650b4"]})).unwrap();
+    s.execute("swatch.newGroup", &json!({"name": "Empty"})).unwrap();
+    s.execute("swatch.newGroup", &json!({"name": "Été", "colors": ["#b43c3c", "#3c8c50", "#4650b4"]})).unwrap();
+    let hex = |c: &Color| {
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        format!("#{r:02x}{g:02x}{b:02x}")
+    };
+    let trace = |s: &mut Session, extra: Value| {
+        let mut params = json!({"mode": "color", "palette": "documentLibrary", "library": "document", "colors": 3});
+        params.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        s.execute("imageTrace.makeAndExpand", &json!({"params": params}))
+    };
+    let fills = |s: &Session, id: &Value| -> Vec<String> {
+        let g = node(s, NodeId(id.as_u64().unwrap()));
+        let mut v: Vec<String> = g.children().unwrap().iter().filter_map(|n| n.appearance.fill_paint().color()).map(|c| hex(&c)).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    // Every swatch: the image's own colors win.
+    let r = trace(&mut s, json!({})).unwrap();
+    assert_eq!(fills(&s, &r["id"]), ["#28a03c", "#323cc8", "#c82828"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // The group: its colors only, and its name matches whatever its case.
+    for name in ["Brand", "brand", "Été", "été", "ÉTÉ"] {
+        let r = trace(&mut s, json!({"colorGroup": name})).unwrap();
+        assert_eq!(fills(&s, &r["id"]), ["#3c8c50", "#4650b4", "#b43c3c"], "{name}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // An empty name is every swatch.
+    let r = trace(&mut s, json!({"colorGroup": ""})).unwrap();
+    assert_eq!(fills(&s, &r["id"]), ["#28a03c", "#323cc8", "#c82828"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let err = |s: &mut Session, extra: Value| trace(s, extra).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"colorGroup": "Nope"})).contains("no color group `Nope`"));
+    assert!(err(&mut s, json!({"colorGroup": "Empty"})).contains("`Empty` has no colours"));
+    assert!(err(&mut s, json!({"colorGroup": "Brand", "library": "web-safe-216"})).contains("needs `library: \"document\"`"));
+    // Every other palette refuses a group too, in any mode; an empty name is no group.
+    for palette in ["limited", "fullTone", "automatic"] {
+        let e = err(&mut s, json!({"colorGroup": "Brand", "palette": palette}));
+        assert!(e.contains("`colorGroup` needs `palette: \"documentLibrary\"`"), "{palette}: {e}");
+    }
+    let e = err(&mut s, json!({"colorGroup": "Brand", "mode": "grayscale", "palette": "limited"}));
+    assert!(e.contains("needs `palette: \"documentLibrary\"`"), "{e}");
+    // Document Library uses the group in Color mode only.
+    for mode in ["blackAndWhite", "grayscale", "logo"] {
+        let e = err(&mut s, json!({"colorGroup": "Brand", "mode": mode}));
+        assert!(e.contains("`colorGroup` needs `mode: \"color\"`"), "{mode}: {e}");
+    }
+    s.execute("imageTrace.makeAndExpand", &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "colorGroup": ""}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    trace(&mut s, json!({"mode": "grayscale", "colorGroup": ""})).unwrap();
+}
+
+#[test]
 fn image_trace_create_strokes_makes_stroked_centre_lines() {
     let mut s = session();
     // A 3 px wide horizontal line from x = 10 to 90 at y = 50, placed at 2× from (100, 100).

@@ -5337,6 +5337,10 @@ effect	Points	Σημεία
 	Snap to Perpendicular	Προσκόλληση σε κάθετο
 @msg	unknown snap option `{key}` (use {options})	άγνωστη επιλογή προσκόλλησης `{key}` (χρησιμοποιήστε {options})
 	Gap Length:	Μήκος κενού:
+@msg	`colorGroup` needs `library: "document"`	το `colorGroup` απαιτεί `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	το `colorGroup` απαιτεί `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	το `colorGroup` απαιτεί `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	δεν υπάρχει ομάδα χρωμάτων `{name}` στο έγγραφο (δείτε swatch.list)
 	Artboard {n} of {total}	Πίνακας σχεδίασης {n} από {total}
 	File {n} of {total}	Αρχείο {n} από {total}
 	Encoding and writing the file…	Κωδικοποίηση και εγγραφή του αρχείου…

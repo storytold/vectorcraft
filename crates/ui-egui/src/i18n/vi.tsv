@@ -4978,6 +4978,10 @@ theme	Appearance	Giao diện
 	Snap to Perpendicular	Hút vào đường vuông góc
 @msg	unknown snap option `{key}` (use {options})	tùy chọn hút không hợp lệ `{key}` (dùng {options})
 	Gap Length:	Độ dài khoảng hở:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` cần `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` cần `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` cần `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	không có nhóm màu `{name}` trong tài liệu (xem swatch.list)
 	Artboard {n} of {total}	Bảng vẽ {n} / {total}
 	File {n} of {total}	Tệp {n} / {total}
 	Encoding and writing the file…	Đang mã hóa và ghi tệp…

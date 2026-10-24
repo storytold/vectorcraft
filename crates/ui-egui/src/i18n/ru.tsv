@@ -4994,6 +4994,10 @@ lighting	Light	Свет
 	Snap to Perpendicular	Привязать к перпендикуляру
 @msg	unknown snap option `{key}` (use {options})	неизвестный параметр привязки `{key}` (допустимо: {options})
 	Gap Length:	Длина зазора:
+@msg	`colorGroup` needs `library: "document"`	для `colorGroup` нужен `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` нужен `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	для `colorGroup` нужен `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	в документе нет цветовой группы `{name}` (см. swatch.list)
 	Artboard {n} of {total}	Монтажная область {n} из {total}
 	File {n} of {total}	Файл {n} из {total}
 	Encoding and writing the file…	Кодирование и запись файла…

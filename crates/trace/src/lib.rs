@@ -277,8 +277,12 @@ pub struct TraceParams {
     /// Document Library: the swatch library, `"document"` (the document's swatches) or a library id
     /// or name. The caller looks its colours up into `swatches`.
     pub library: String,
+    /// Document Library with the document's swatches: the name of the color group whose colors are
+    /// used. `None` (or empty) uses every swatch. `imageTrace.make` refuses a name with any other
+    /// palette, library or mode.
+    pub color_group: Option<String>,
     /// Document Library: the library's colours (sRGB). Not saved: they are looked up from
-    /// `library` at every trace.
+    /// `library` (and `color_group`) at every trace.
     #[serde(skip)]
     pub swatches: Vec<[u8; 3]>,
     /// Paths (fidelity) 0–100: higher follows the pixels more tightly.
@@ -329,6 +333,7 @@ impl Default for TraceParams {
             colors: 6,
             color_detail: 50.0,
             library: "document".into(),
+            color_group: None,
             swatches: vec![],
             paths: 50.0,
             corners: 75.0,

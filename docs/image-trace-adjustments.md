@@ -32,6 +32,17 @@ white beside a cream), at most six; scattered specks of a colour add none. Adobe
 its own palettes are chosen; this is VectorCraft's own method (see
 [image-trace-quality.md](image-trace-quality.md#auto-color-keeps-rare-colours)).
 
+**Document Library color groups.** With Palette › Document Library and Library › Document Swatches,
+the panel's **Colors** menu traces with every document swatch (**All**) or with the colors of one
+color group from the Swatches panel, as the
+[public Image Trace panel documentation](https://web.archive.org/web/20251230195658/https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html)
+describes Document Library. In the params of `imageTrace.make` or `imageTrace.makeAndExpand`,
+`"colorGroup": "<name>"` names the group. It needs `"mode": "color"`, `"palette": "documentLibrary"` and
+`"library": "document"`; a `colorGroup` with any other mode, palette or library is refused. An empty name traces with
+every document swatch. A group whose name matches exactly is used first, then one whose name differs only in case. At
+most `colors` of its colors are used. A missing group and a group with no solid colors are refused. Choosing another
+mode, palette or library in the panel clears the group.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)

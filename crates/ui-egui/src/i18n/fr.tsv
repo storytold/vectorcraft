@@ -5384,6 +5384,10 @@ theme	Appearance	Apparence
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
 @msg	unknown snap option `{key}` (use {options})	option de magnétisme inconnue `{key}` (utilisez {options})
 	Gap Length:	Longueur de lacune :
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` nécessite `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` nécessite `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` nécessite `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	aucun groupe de couleurs `{name}` dans le document (voir swatch.list)
 	Artboard {n} of {total}	Plan de travail {n} sur {total}
 	File {n} of {total}	Fichier {n} sur {total}
 	Encoding and writing the file…	Encodage et écriture du fichier…

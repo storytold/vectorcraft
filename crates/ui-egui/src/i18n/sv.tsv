@@ -5341,6 +5341,10 @@ theme	Appearance	Utseende
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
 	Gap Length:	Lucklängd:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` kräver `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` kräver `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` kräver `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	ingen färggrupp `{name}` i dokumentet (se swatch.list)
 	Artboard {n} of {total}	Rityta {n} av {total}
 	File {n} of {total}	Fil {n} av {total}
 	Encoding and writing the file…	Kodar och skriver filen…

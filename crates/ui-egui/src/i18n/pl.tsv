@@ -5237,6 +5237,10 @@ mark-style	Japanese	Japońskie
 	Snap to Perpendicular	Przyciągaj do prostopadłych
 @msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` wymaga `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` wymaga `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` wymaga `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	brak grupy kolorów `{name}` w dokumencie (patrz swatch.list)
 	Artboard {n} of {total}	Obszar kompozycji {n} z {total}
 	File {n} of {total}	Plik {n} z {total}
 	Encoding and writing the file…	Kodowanie i zapisywanie pliku…

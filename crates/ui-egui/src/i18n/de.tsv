@@ -4964,6 +4964,10 @@ effect	Soft	Weich
 	Snap to Perpendicular	An Senkrechter ausrichten
 @msg	unknown snap option `{key}` (use {options})	unbekannte Einrastoption `{key}` (möglich: {options})
 	Gap Length:	Lückenlänge:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` erfordert `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` erfordert `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` erfordert `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	keine Farbgruppe `{name}` im Dokument (siehe swatch.list)
 	Artboard {n} of {total}	Zeichenfläche {n} von {total}
 	File {n} of {total}	Datei {n} von {total}
 	Encoding and writing the file…	Datei wird codiert und geschrieben…

@@ -5349,6 +5349,10 @@ mark-style	Japanese	Japanilainen
 	Snap to Perpendicular	Kohdista kohtisuoraan
 @msg	unknown snap option `{key}` (use {options})	tuntematon tartuntavalinta `{key}` (käytä: {options})
 	Gap Length:	Aukon pituus:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` edellyttää arvoa `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` edellyttää arvoa `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` edellyttää arvoa `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	asiakirjassa ei ole väriryhmää `{name}` (ks. swatch.list)
 	Artboard {n} of {total}	Piirtoalusta {n}/{total}
 	File {n} of {total}	Tiedosto {n}/{total}
 	Encoding and writing the file…	Tiedostoa koodataan ja kirjoitetaan…

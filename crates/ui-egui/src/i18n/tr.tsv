@@ -5379,6 +5379,10 @@ theme	Appearance	Görünüm
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
 	Gap Length:	Boşluk Uzunluğu:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir
+@msg	no color group `{name}` in the document (see swatch.list)	belgede `{name}` adlı renk grubu yok (bkz. swatch.list)
 @plural	{n} more export waiting|{n} more exports waiting	{n} dışa aktarma daha bekliyor|{n} dışa aktarma daha bekliyor
 @msg	Export cancelled	Dışa aktarma iptal edildi
 	Add filters from the list above	Yukarıdaki listeden filtre ekleyin
