@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make and Expand",
             ["Object", "Image Trace"],
             None,
-            "{…as imageTrace.make} same as imageTrace.make, then expand → {id, paths, anchors, colors}",
+            "{…as imageTrace.make, byColor?: false (each color's paths in a group of their own, as imageTrace.expand)} same as imageTrace.make, then expand → {id, paths, anchors, colors}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, true)
         ),
@@ -156,7 +156,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Image Trace"],
             None,
-            "{id?, ids?: [id…] (instead of id)} keep only the traced paths (drop the source image) → {ids}",
+            "{id?, ids?: [id…] (instead of id), byColor?: false (each color's paths in a group of their own, named by the swatch the color links to or as #rrggbb, gradient fills in one group named Gradients; the groups stack by their lowest path and keep their paths' order; a color whose paths overlap another color's from above and below gets a group for each part, so the art draws the same; not for a trace made with autoGrouping)} keep only the traced paths (drop the source image) → {ids}",
             has_selection_or_ids,
             trace_expand
         ),
@@ -1103,10 +1103,98 @@ fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec
     roots.iter().filter_map(|&r| built.get_mut(r)?.take()).chain(ring).collect()
 }
 
+/// The `byColor` param of an Expand (false when not given).
+fn by_color_param(cmd: &str, p: &Value) -> Result<bool> {
+    match p.get("byColor").filter(|v| !v.is_null()) {
+        Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "byColor must be true or false")),
+        None => Ok(false),
+    }
+}
+
+/// Whether a trace made with `params` can have paths that overlap, as in [`tr::trace_within`]'s
+/// Auto Grouping: stacked layers, Flat Logo's shapes and stroked lines.
+fn stacked_trace(params: &tr::TraceParams) -> bool {
+    params.method == tr::Method::Overlapping || params.mode == tr::Mode::Logo || params.strokes
+}
+
+/// Expand by color: an expanded trace's `items` (bottom-most first) in a group for each paint, a
+/// stroked line counted by its stroke. A solid color's group is named by the swatch it links to (a
+/// tint with its percentage) or as `#rrggbb`, and gradient fills share one group, "Gradients". The
+/// groups stack in the order of the lowest item in each, and each keeps its items' order. When the
+/// paths can overlap (`stacked`), an item joins its paint's last group only if no item of a later
+/// group overlaps it (by the boxes of everything they paint, effects included); otherwise it starts
+/// another group of that paint, so the art draws as before. A group among `items` (Auto Grouping)
+/// is refused.
+fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>, stacked: bool) -> Result<Vec<Arc<Node>>> {
+    use vectorcraft_color::tint_percent;
+    // Grouped by the paint: unlinked (its #rrggbb), linked (the swatch and its exact tint), a
+    // gradient, or another paint (its label). The name is apart from it: a swatch may be named as
+    // a color's `#rrggbb` or as "Gradients".
+    type PaintKey = (u8, String, u32);
+    struct Run {
+        key: PaintKey,
+        name: String,
+        members: Vec<Arc<Node>>,
+        boxes: Vec<Rect>,
+        union: Option<Rect>,
+    }
+    let meet = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    let mut groups: Vec<Run> = vec![];
+    for item in items {
+        if matches!(item.kind, NodeKind::Group { .. }) {
+            return Err(bad(cmd, "byColor can't split Auto Grouping groups: trace without Auto Grouping"));
+        }
+        let paint = match item.appearance.fill_paint() {
+            Paint::None => item.appearance.stroke_paint(),
+            fill => fill,
+        };
+        let (key, name) = match &paint {
+            Paint::Solid { swatch: Some(n), tint, .. } => {
+                let percent = tint_percent(*tint);
+                let name = if *tint < 1.0 { format!("{n} {percent}%") } else { n.clone() };
+                ((1, n.clone(), tint.to_bits()), name)
+            }
+            Paint::Solid { color, .. } => ((0, color.to_hex(), 0), color.to_hex()),
+            Paint::Gradient(_) => ((2, String::new(), 0), "Gradients".to_string()),
+            other => ((3, other.label(), 0), other.label()),
+        };
+        let bounds = if stacked { vectorcraft_render::painted_bounds(d, &item) } else { None };
+        // Joining an earlier group moves the item under every later group's items.
+        let hidden_by_later = |at: usize| {
+            bounds.is_some_and(|b| groups.iter().skip(at + 1).any(|g| g.union.is_some_and(|u| meet(&u, &b)) && g.boxes.iter().any(|m| meet(m, &b))))
+        };
+        let at = groups.iter().rposition(|g| g.key == key).filter(|&at| !hidden_by_later(at));
+        let mut started = Run { key, name, members: vec![], boxes: vec![], union: None };
+        let joins = at.and_then(|at| groups.get_mut(at));
+        let new = joins.is_none();
+        let g = joins.unwrap_or(&mut started);
+        if let Some(b) = bounds {
+            g.boxes.push(b);
+            g.union = Some(g.union.map_or(b, |u| u.union(b)));
+        }
+        g.members.push(item);
+        if new {
+            groups.push(started);
+        }
+    }
+    Ok(groups
+        .into_iter()
+        .map(|run| {
+            let mut g = Node::group(d.alloc_id(), run.members);
+            g.name = Some(run.name);
+            Arc::new(g)
+        })
+        .collect())
+}
+
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
     let mut params = trace_params(c, p)?;
     let view = view_param(c, p)?;
+    let by_color = expand && by_color_param(c, p)?;
+    if by_color && params.auto_grouping {
+        return Err(bad(c, "byColor can't split Auto Grouping groups: trace without Auto Grouping"));
+    }
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
     // The preset's name if the parameters are exactly that preset's or its enhanced version's,
     // else "Custom".
@@ -1193,6 +1281,9 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
             traced.push(n);
         }
         children.extend(grouped(d, traced, &res.parents));
+        if by_color {
+            children = color_groups(c, d, children, stacked_trace(&params))?;
+        }
         let gid = d.alloc_id();
         let mut g = Node::group(gid, children);
         g.name = if expand { None } else { Some(TRACE_NAME.into()) };
@@ -1291,7 +1382,17 @@ fn trace_release(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn trace_expand(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.expand";
+    let by_color = by_color_param(C, p)?;
     let targets = trace_targets(s, p)?;
+    if by_color {
+        // A trace made with Auto Grouping is refused even when none of its paths were grouped.
+        let d = &s.doc()?.doc;
+        let grouped = |n: &Node| n.extras().trace.as_deref().and_then(|t| t.pointer("/params/autoGrouping")).and_then(Value::as_bool) == Some(true);
+        if targets.iter().any(|g| d.node(*g).is_some_and(grouped)) {
+            return Err(bad(C, "byColor can't split Auto Grouping groups: trace without Auto Grouping"));
+        }
+    }
     s.edit("Expand Image Trace", |d, sel| {
         for g in &targets {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
@@ -1299,6 +1400,15 @@ fn trace_expand(s: &mut Session, p: &Value) -> Result<Value> {
             n.extras_mut().trace = None;
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| !matches!(c.kind, NodeKind::Image(_)));
+            }
+            if by_color {
+                let items = d.node(*g).and_then(Node::children).cloned().unwrap_or_default();
+                // The paths may have been moved or reshaped since the trace was made, so any trace's
+                // paths are taken to overlap.
+                let groups = color_groups(C, d, items, true)?;
+                if let Some(ch) = d.node_mut(*g).and_then(Node::children_mut) {
+                    *ch = groups;
+                }
             }
         }
         sel.set(targets.iter().copied());
