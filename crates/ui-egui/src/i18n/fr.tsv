@@ -1522,6 +1522,12 @@ font-technology	Variable	Variables
 	Image Trace	Vectorisation de l’image
 	Image Tracing	Objet de vectorisation de l’image
 	Tracing Presets	Paramètres prédéfinis de vectorisation
+	Manage Presets	Gérer les paramètres prédéfinis
+	Save as New Preset…	Enregistrer comme nouveau paramètre prédéfini…
+	Rename…	Renommer…
+	Rename Preset	Renommer le paramètre prédéfini
+	Save Image Trace Preset	Enregistrer le paramètre prédéfini de vectorisation de l’image
+	Delete Image Trace Preset	Supprimer le paramètre prédéfini de vectorisation de l’image
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image
 	Image:	Image :
 	Images:	Images :
@@ -2850,6 +2856,7 @@ font-technology	Variable	Variables
 	Locked	Verrouillés
 	Hidden	Masqués
 	Filter Layers Panel Rows	Filtrer les lignes du panneau Calques
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` désigne des réglages modifiés : enregistrez le paramètre prédéfini sous un autre nom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
 	Search commands and tools	Chercher commandes et outils
 	Search commands and tools…	Chercher commandes et outils…
@@ -3960,6 +3967,10 @@ axis	Both	Les deux
 @msg	a page tree node has no kids	un nœud de l’arborescence des pages n’a pas d’enfants
 @msg	a page's placement is not finite	la position d’une page n’est pas finie
 @msg	a preset named `{_1}` exists	un paramètre prédéfini nommé `{_1}` existe déjà
+@msg	`name` is empty	`name` est vide
+@msg	`newName` is empty	`newName` est vide
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` est un paramètre prédéfini intégré et ne peut pas être modifié : enregistrez-le sous un autre nom
+@msg	`{name}` is a built-in preset and stays	`{name}` est un paramètre prédéfini intégré et ne peut pas être supprimé
 @msg	a swatch or color group named `{n}` exists	une nuance ou un groupe de couleurs nommé `{n}` existe déjà
 @msg	a slice size must be a positive number of points	la taille d’une tranche doit être un nombre de points positif
 @msg	a spine keeps at least two points	une dorsale garde au moins deux points
@@ -4116,6 +4127,8 @@ axis	Both	Les deux
 @msg	no print service	aucun service d’impression
 @msg	no revert command	aucune commande Version précédente
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	aucun paramètre prédéfini PDF enregistré nommé `{name}` (les paramètres prédéfinis intégrés sont en lecture seule : créez-en un nouveau à partir d’eux)
+@msg	no saved preset named `{name}`	aucun paramètre prédéfini enregistré nommé `{name}`
+@msg	no saved preset named `{name}` to rename	aucun paramètre prédéfini enregistré nommé `{name}` à renommer
 @msg	no saved presets	aucun paramètre prédéfini enregistré
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	aucun paramètre prédéfini d’impression enregistré nommé `{name}` ({DEFAULT_PRESET} est protégé : créez-en un nouveau à partir de lui)
 @msg	no saved profiles	aucun profil enregistré
@@ -4338,6 +4351,7 @@ axis	Both	Les deux
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	paramètre prédéfini inconnu `{name}` (high, medium, low ou un paramètre enregistré : voir flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	paramètre prédéfini inconnu `{name}` (voir flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	paramètre prédéfini inconnu `{name}` (voir webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	paramètre prédéfini inconnu `{name}` : ni intégré ni enregistré (voir imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	côté inconnu `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	outil inconnu `{tool}`
 @msg	unknown tool `{t}`	outil inconnu `{t}`

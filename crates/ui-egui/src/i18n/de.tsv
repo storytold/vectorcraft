@@ -1523,6 +1523,12 @@ file-filter	Templates	Vorlagen
 	Image Trace	Bildnachzeichner
 	Image Tracing	Bildnachzeichnung
 	Tracing Presets	Nachzeichnervorgaben
+	Manage Presets	Vorgaben verwalten
+	Save as New Preset…	Als neue Vorgabe speichern…
+	Rename…	Umbenennen…
+	Rename Preset	Vorgabe umbenennen
+	Save Image Trace Preset	Bildnachzeichner-Vorgabe speichern
+	Delete Image Trace Preset	Bildnachzeichner-Vorgabe löschen
 	Image Trace Presets	Bildnachzeichner-Vorgaben
 	Image:	Bild:
 	Images:	Bilder:
@@ -2822,6 +2828,7 @@ mark-style	Japanese	Japanisch
 	Locked	Gesperrt
 	Hidden	Ausgeblendet
 	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` steht für geänderte Einstellungen: Speichern Sie die Vorgabe unter einem anderen Namen
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
@@ -3887,6 +3894,10 @@ theme	Appearance	Erscheinungsbild
 @msg	a page tree node has no kids	ein Knoten des Seitenbaums hat keine untergeordneten Einträge
 @msg	a page's placement is not finite	die Platzierung einer Seite ist nicht endlich
 @msg	a preset named `{_1}` exists	eine Vorgabe namens `{_1}` ist bereits vorhanden
+@msg	`name` is empty	`name` ist leer
+@msg	`newName` is empty	`newName` ist leer
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` ist eine integrierte Vorgabe und kann nicht geändert werden: Speichern Sie sie unter einem anderen Namen
+@msg	`{name}` is a built-in preset and stays	`{name}` ist eine integrierte Vorgabe und kann nicht gelöscht werden
 @msg	a swatch or color group named `{n}` exists	ein Farbfeld oder eine Farbgruppe namens `{n}` ist bereits vorhanden
 @msg	a slice size must be a positive number of points	eine Slice-Größe muss eine positive Anzahl von Punkt sein
 @msg	a spine keeps at least two points	eine Achse behält mindestens zwei Punkte
@@ -4044,6 +4055,8 @@ theme	Appearance	Erscheinungsbild
 @msg	no print service	kein Druckdienst
 @msg	no revert command	kein Befehl zum Zurücksetzen auf die gespeicherte Version
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	keine gespeicherte PDF-Vorgabe namens `{name}` (integrierte Vorgaben sind schreibgeschützt: Erstellen Sie daraus eine neue)
+@msg	no saved preset named `{name}`	keine gespeicherte Vorgabe namens `{name}`
+@msg	no saved preset named `{name}` to rename	keine gespeicherte Vorgabe namens `{name}` zum Umbenennen
 @msg	no saved presets	keine gespeicherten Vorgaben
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	keine gespeicherte Druckvorgabe namens `{name}` ({DEFAULT_PRESET} ist geschützt: Erstellen Sie daraus eine neue)
 @msg	no saved profiles	keine gespeicherten Profile
@@ -4266,6 +4279,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	unbekannte Vorgabe `{name}` (high, medium, low oder eine gespeicherte: siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	unbekannte Vorgabe `{name}` (siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	unbekannte Vorgabe `{name}` (siehe webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	unbekannte Vorgabe `{name}`: weder integriert noch gespeichert (siehe imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	unbekannte Seite `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	unbekanntes Werkzeug `{tool}`
 @msg	unknown tool `{t}`	unbekanntes Werkzeug `{t}`

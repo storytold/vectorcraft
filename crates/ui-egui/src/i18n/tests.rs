@@ -1440,6 +1440,37 @@ fn blend_spine_param_errors_say_what_is_wrong() {
     assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "select a blend or give `id`"), "{e}");
 }
 
+/// The errors of saving, renaming and deleting a tracing preset are translated in every language
+/// that translates every message.
+#[test]
+fn saved_tracing_preset_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("imageTrace.presets.save", &json!({"name": "Mine"})).unwrap();
+    s.execute("imageTrace.presets.save", &json!({"name": "Other"})).unwrap();
+    let mut errors = vec![];
+    for (cmd, p, want) in [
+        ("imageTrace.presets.save", json!({"name": ""}), "`name` is empty"),
+        ("imageTrace.presets.save", json!({"name": "Mine", "newName": ""}), "`newName` is empty"),
+        ("imageTrace.presets.save", json!({"name": "Other", "newName": "Mine"}), "a preset named `Mine` exists"),
+        ("imageTrace.presets.save", json!({"name": "Default"}), "`Default` is a built-in preset and can't change: save it under another name"),
+        ("imageTrace.presets.delete", json!({"name": "Default"}), "`Default` is a built-in preset and stays"),
+        ("imageTrace.presets.delete", json!({"name": "Gone"}), "no saved preset named `Gone`"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+        errors.push((e.to_string(), want));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want), "{code}: {shown}");
+        }
+    }
+}
+
 /// The status bar's line for an EPS file whose PostScript stops on an error, opened partly or
 /// refused, and the refusal's dialog keep the error's name as PostScript spells it and its meaning,
 /// which each language shows as its catalog translates the meaning.

@@ -3450,6 +3450,7 @@ mark-style	Japanese	Japán
 	Locked	Zárolt
 	Hidden	Rejtett
 	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
+@msg	`Custom` stands for changed settings: save the preset under another name	a `Custom` a módosított beállításokat jelöli: mentsd az előbeállítást más néven
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
 	Search commands and tools	Parancsok és eszközök keresése
 	Search commands and tools…	Parancsok és eszközök keresése…
@@ -4033,6 +4034,12 @@ mark-style	Japanese	Japán
 	Trace	Vektorizálás
 	Trace the image with the Default preset	Kép vektorizálása az alapértelmezett előbeállítással
 	Tracing Presets	Vektorizálási előbeállítások
+	Manage Presets	Előbeállítások kezelése
+	Save as New Preset…	Mentés új előbeállításként…
+	Rename…	Átnevezés…
+	Rename Preset	Előbeállítás átnevezése
+	Save Image Trace Preset	Képvektorizálási előbeállítás mentése
+	Delete Image Trace Preset	Képvektorizálási előbeállítás törlése
 	Tracing Result	Vektorizálás eredménye
 	Tracing Result with Outlines	Vektorizálás eredménye vázlattal
 	Tracking	Betűköz
@@ -4502,6 +4509,10 @@ imageTrace	Outline	Körvonal
 @msg	a calculation has no result, as in a division by zero	egy számításnak nincs eredménye, például nullával való osztáskor
 @msg	the operator looks for a mark on the stack and finds none	az operátor jelölőt keres a veremben, de nem talál
 @msg	a preset named `{_1}` exists	már van ilyen nevű előbeállítás: `{_1}`
+@msg	`name` is empty	a `name` üres
+@msg	`newName` is empty	a `newName` üres
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` beépített előbeállítás, nem módosítható: mentsd más néven
+@msg	`{name}` is a built-in preset and stays	`{name}` beépített előbeállítás, nem törölhető
 @msg	a swatch or color group named `{n}` exists	már van ilyen nevű színminta vagy színcsoport: `{n}`
 @msg	a slice size must be a positive number of points	a szelet mérete pozitív pontérték kell legyen
 @msg	a spine keeps at least two points	a gerincen legalább két pont marad
@@ -4785,6 +4796,8 @@ imageTrace	Outline	Körvonal
 @msg	no print service	nincs nyomtatási szolgáltatás
 @msg	no revert command	nincs visszaállító parancs
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	nincs ilyen nevű mentett PDF-előbeállítás: `{name}` (a beépített előbeállítások csak olvashatók: újat indíthatsz belőlük)
+@msg	no saved preset named `{name}`	nincs ilyen nevű mentett előbeállítás: `{name}`
+@msg	no saved preset named `{name}` to rename	nincs ilyen nevű átnevezhető mentett előbeállítás: `{name}`
 @msg	no saved presets	nincs mentett előbeállítás
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nincs ilyen nevű mentett nyomtatási előbeállítás: `{name}` (védett: {DEFAULT_PRESET}; új előbeállítást indíthatsz belőle)
 @msg	no saved profiles	nincs mentett profil
@@ -5089,6 +5102,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (high, medium, low vagy egy mentett; lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	ismeretlen előbeállítás: `{name}` (lásd: webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	ismeretlen előbeállítás: `{name}`, sem beépített, sem mentett (lásd: imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	ismeretlen oldal: `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	ismeretlen eszköz: `{tool}`
 @msg	unknown tool `{t}`	ismeretlen eszköz: `{t}`

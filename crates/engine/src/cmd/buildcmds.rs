@@ -169,9 +169,29 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection_or_ids,
             trace_set_view
         ),
-        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, params, enhanced: the params of the preset's enhanced version, null if it has none}]}", always, |_, _| {
-            Ok(json!({ "presets": tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "params": p, "enhanced": tr::enhanced_preset(n) })).collect::<Vec<_>>() }))
+        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, builtIn, params, enhanced: the params of the preset's enhanced version, null if it has none}]} the built-in presets, then the saved ones (builtIn false, enhanced null); any of these names works as imageTrace.make's `preset`", always, |s, _| {
+            let builtin = tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "builtIn": true, "params": p, "enhanced": tr::enhanced_preset(n) }));
+            let saved = s.prefs.trace_presets.iter().map(|p| json!({ "name": p.name, "builtIn": false, "params": p.params, "enhanced": null }));
+            Ok(json!({ "presets": builtin.chain(saved).collect::<Vec<_>>() }))
         }),
+        cmd!(
+            query "imageTrace.presets.save",
+            "Save Image Trace Preset",
+            [],
+            None,
+            "{name?: (default: a new \"Tracing Preset N\"), newName?: rename the saved preset `name`, preset?: the preset to start from (default: the saved preset `name`, else Default), enhanced?, params?: {settings, as imageTrace.make takes them, over the preset's}} create or change a saved tracing preset, kept with the preferences (built-in ones can't change) → {name, params, created}",
+            always,
+            trace_presets_save
+        ),
+        cmd!(
+            query "imageTrace.presets.delete",
+            "Delete Image Trace Preset",
+            [],
+            None,
+            "{name} delete a saved tracing preset (built-in ones stay) → {deleted: name}",
+            always,
+            trace_presets_delete
+        ),
     ]
 }
 
@@ -963,13 +983,95 @@ fn view_param(cmd: &str, p: &Value) -> Result<Option<TraceView>> {
     v.as_str().and_then(TraceView::from_id).map(Some).ok_or_else(|| bad(cmd, format!("view must be one of {}", ids())))
 }
 
-/// The parameters command `c` traces with: the preset's, with `params` over them.
-fn trace_params(c: &str, p: &Value) -> Result<tr::TraceParams> {
+/// A saved Image Trace preset ([`crate::Prefs::trace_presets`]): a name and its settings.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TracePreset {
+    pub name: String,
+    #[serde(default)]
+    pub params: tr::TraceParams,
+}
+
+impl Session {
+    /// The saved tracing preset `name`, any case.
+    pub fn trace_preset(&self, name: &str) -> Option<&TracePreset> {
+        self.prefs.trace_presets.iter().find(|q| q.name.eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// The index of the saved tracing preset `name`.
+    fn trace_preset_index(&self, name: &str) -> Option<usize> {
+        self.prefs.trace_presets.iter().position(|q| q.name.eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// Whether `name` is a built-in preset's, "Custom" (changed settings, as the panel and a traced
+    /// object show them), or a saved preset's other than the one at `except`.
+    fn trace_preset_taken(&self, name: &str, except: Option<usize>) -> bool {
+        tr::preset(name).is_some() || name.trim().eq_ignore_ascii_case("Custom") || self.trace_preset_index(name).is_some_and(|i| Some(i) != except)
+    }
+
+    /// The first free "Tracing Preset N": the name a new tracing preset gets.
+    pub fn new_trace_preset_name(&self) -> String {
+        (1..).map(|i| format!("Tracing Preset {i}")).find(|n| !self.trace_preset_taken(n, None)).unwrap_or_default()
+    }
+}
+
+fn trace_presets_save(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.save";
+    let name = match str_param(p, "name").map(str::trim) {
+        Some("") => return Err(bad(C, "`name` is empty")),
+        Some(n) => n.to_string(),
+        None => s.new_trace_preset_name(),
+    };
+    if tr::preset(&name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and can't change: save it under another name")));
+    }
+    if name.eq_ignore_ascii_case("Custom") {
+        return Err(bad(C, "`Custom` stands for changed settings: save the preset under another name"));
+    }
+    let at = s.trace_preset_index(&name);
+    if at.is_none() && p.get("newName").is_some_and(|n| !n.is_null()) {
+        return Err(bad(C, format!("no saved preset named `{name}` to rename")));
+    }
+    // A saved preset changes from its own settings unless `preset` says where to start.
+    let mut q = p.clone();
+    if let (Some(i), Some(o), None) = (at, q.as_object_mut(), str_param(p, "preset")) {
+        o.insert("preset".into(), json!(s.prefs.trace_presets[i].name));
+    }
+    let params = trace_params(s, C, &q)?;
+    let name = match str_param(p, "newName").map(str::trim) {
+        Some("") => return Err(bad(C, "`newName` is empty")),
+        Some(n) if s.trace_preset_taken(n, at) => return Err(bad(C, format!("a preset named `{n}` exists"))),
+        Some(n) => n.to_string(),
+        None => at.map_or(name, |i| s.prefs.trace_presets[i].name.clone()),
+    };
+    let json_params = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
+    let preset = TracePreset { name: name.clone(), params };
+    match at {
+        Some(i) => s.prefs.trace_presets[i] = preset,
+        None => s.prefs.trace_presets.push(preset),
+    }
+    Ok(json!({"name": name, "params": json_params, "created": at.is_none()}))
+}
+
+fn trace_presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.delete";
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    if tr::preset(name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and stays")));
+    }
+    let i = s.trace_preset_index(name).ok_or_else(|| bad(C, format!("no saved preset named `{name}`")))?;
+    Ok(json!({ "deleted": s.prefs.trace_presets.remove(i).name }))
+}
+
+/// The parameters command `c` traces with: the preset's (built-in, else saved), with `params` over
+/// them.
+fn trace_params(s: &Session, c: &str, p: &Value) -> Result<tr::TraceParams> {
     let name = str_param(p, "preset").unwrap_or("Default");
     let enhanced = switch_or(p, "enhanced", false, c)?;
-    // (A preset without an enhanced version is traced as it is.)
+    // (A preset without an enhanced version, a saved one too, is traced as it is.)
     let base = enhanced.then(|| tr::enhanced_preset(name)).flatten().or_else(|| tr::preset(name));
-    let base = base.ok_or_else(|| bad(c, format!("unknown preset `{name}` (see imageTrace.presets)")))?;
+    let base = base.or_else(|| s.trace_preset(name).map(|q| q.params.clone()));
+    let base = base.ok_or_else(|| bad(c, format!("unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)")))?;
     let Some(over) = p.get("params").filter(|v| !v.is_null()) else { return Ok(base) };
     let mut v = serde_json::to_value(&base).map_err(|e| EngineError::Other(e.to_string()))?;
     let (Some(o), Some(src)) = (v.as_object_mut(), over.as_object()) else { return Err(bad(c, "params must be an object")) };
@@ -1105,14 +1207,19 @@ fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec
 
 fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
-    let mut params = trace_params(c, p)?;
+    let mut params = trace_params(s, c, p)?;
     let view = view_param(c, p)?;
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    // The preset's name if the parameters are exactly that preset's or its enhanced version's,
-    // else "Custom".
+    // The preset's name if the parameters are exactly that preset's or its enhanced version's (a
+    // saved preset's under its saved name), else "Custom".
     let named = str_param(p, "preset").unwrap_or("Default");
     let is = |b: Option<tr::TraceParams>| b.and_then(|b| serde_json::to_value(&b).ok()).as_ref() == Some(&params_json);
-    let preset_label = if is(tr::preset(named)) || is(tr::enhanced_preset(named)) { named.to_string() } else { "Custom".to_string() };
+    let saved = s.trace_preset(named).filter(|q| tr::preset(named).is_none() && is(Some(q.params.clone()))).map(|q| q.name.clone());
+    let preset_label = match saved {
+        Some(name) => name,
+        None if is(tr::preset(named)) || is(tr::enhanced_preset(named)) => named.to_string(),
+        None => "Custom".to_string(),
+    };
     let roots = root_ids(s, p)?;
     // The image (inside a trace group, or selected directly).
     let (target, img) = {

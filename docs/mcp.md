@@ -1496,6 +1496,13 @@ already walks Image Trace. Short agent entry points:
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.
+  `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
+  the preferences: `params` over `preset`'s (default: the saved preset `name`, else Default), checked as `imageTrace.make`
+  checks them; without `name` it is a new "Tracing Preset N", and `newName` renames a saved preset.
+  `imageTrace.presets.delete {name}` deletes one. Built-in presets and the name `Custom` can't be saved over, renamed
+  or deleted. `imageTrace.presets` lists the built-in presets with `builtIn: true`, then the saved ones with
+  `builtIn: false`, and `imageTrace.make {preset}` takes a saved preset's name, with ASCII letters matching in either case. In the app,
+  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). With `detect: true`, paint stops at the gaps that run

@@ -1523,6 +1523,12 @@ font-technology	Variable	Variables
 	Image Trace	Calco de imagen
 	Image Tracing	Objeto de calco de imagen
 	Tracing Presets	Preajustes de calco
+	Manage Presets	Gestionar preajustes
+	Save as New Preset…	Guardar como preajuste nuevo…
+	Rename…	Cambiar nombre…
+	Rename Preset	Cambiar nombre del preajuste
+	Save Image Trace Preset	Guardar preajuste de calco de imagen
+	Delete Image Trace Preset	Eliminar preajuste de calco de imagen
 	Image Trace Presets	Preajustes de calco de imagen
 	Image:	Imagen:
 	Images:	Imágenes:
@@ -2853,6 +2859,7 @@ font-technology	Variable	Variables
 	Locked	Bloqueados
 	Hidden	Ocultos
 	Filter Layers Panel Rows	Filtrar filas del panel Capas
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa ajustes modificados: guarda el preajuste con otro nombre
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
 	Search commands and tools	Buscar comandos y herramientas
 	Search commands and tools…	Buscar comandos y herramientas…
@@ -3963,6 +3970,10 @@ axis	Both	Ambos
 @msg	a page tree node has no kids	un nodo del árbol de páginas no tiene hijos
 @msg	a page's placement is not finite	la posición de una página no es finita
 @msg	a preset named `{_1}` exists	ya existe un preajuste llamado `{_1}`
+@msg	`name` is empty	`name` está vacío
+@msg	`newName` is empty	`newName` está vacío
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` es un preajuste integrado y no se puede cambiar: guárdalo con otro nombre
+@msg	`{name}` is a built-in preset and stays	`{name}` es un preajuste integrado y no se puede eliminar
 @msg	a swatch or color group named `{n}` exists	ya existe una muestra o un grupo de colores llamado `{n}`
 @msg	a slice size must be a positive number of points	el tamaño de un sector debe ser un número positivo de puntos
 @msg	a spine keeps at least two points	un eje conserva al menos dos puntos
@@ -4119,6 +4130,8 @@ axis	Both	Ambos
 @msg	no print service	no hay servicio de impresión
 @msg	no revert command	no hay comando para volver a la versión guardada
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	no hay ningún preajuste de PDF guardado llamado `{name}` (los preajustes integrados son de solo lectura: crea uno nuevo a partir de ellos)
+@msg	no saved preset named `{name}`	no hay ningún preajuste guardado llamado `{name}`
+@msg	no saved preset named `{name}` to rename	no hay ningún preajuste guardado llamado `{name}` para cambiarle el nombre
 @msg	no saved presets	no hay preajustes guardados
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	no hay ningún preajuste de impresión guardado llamado `{name}` ({DEFAULT_PRESET} está protegido: crea uno nuevo a partir de él)
 @msg	no saved profiles	no hay perfiles guardados
@@ -4341,6 +4354,7 @@ axis	Both	Ambos
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preajuste desconocido `{name}` (high, medium, low o uno guardado: consulta flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preajuste desconocido `{name}` (consulta flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	preajuste desconocido `{name}` (consulta webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	preajuste desconocido `{name}`: no es integrado ni guardado (consulta imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	lado desconocido `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	herramienta desconocida `{tool}`
 @msg	unknown tool `{t}`	herramienta desconocida `{t}`

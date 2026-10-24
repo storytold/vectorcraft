@@ -1490,6 +1490,12 @@ font-technology	Variable	Variabla
 	Image Trace	Bildkalkering
 	Image Tracing	Bildkalkering
 	Tracing Presets	Förinställningar för vektorisering
+	Manage Presets	Hantera förinställningar
+	Save as New Preset…	Spara som ny förinställning…
+	Rename…	Byt namn…
+	Rename Preset	Byt namn på förinställning
+	Save Image Trace Preset	Spara förinställning för bildkalkering
+	Delete Image Trace Preset	Radera förinställning för bildkalkering
 	Image Trace Presets	Förinställningar för bildkalkering
 	Image:	Bild:
 	Images:	Bilder:
@@ -3720,6 +3726,7 @@ axis	Both	Båda
 @msg	its type is to come in as outlines, which only its page has	dess text ska importeras som konturer, vilket bara dess sida har
 @msg	the art on them differs from the page's in {_1}% of it	grafiken på dem skiljer sig från sidans i {_1} % av ytan
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	grafiken på dem skiljer sig från sidans i {_1} % av ytan: de hämtas ändå från dess redigeringsdata
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` står för ändrade inställningar: spara förinställningen med ett annat namn
 @msg	`to` must be "corner" or "smooth"	`to` måste vara "corner" eller "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-filer är RGB eller gråskala: colorModel rgb eller gray
 @msg	Blend colors: select at least three objects with filled colours	Blanda färger: markera minst tre objekt med färgfyllning
@@ -3882,6 +3889,10 @@ axis	Both	Båda
 @msg	a page tree node has no kids	en nod i sidträdet har inga barn
 @msg	a page's placement is not finite	en sidas placering är inte ändlig
 @msg	a preset named `{_1}` exists	det finns redan en förinställning med namnet `{_1}`
+@msg	`name` is empty	`name` är tomt
+@msg	`newName` is empty	`newName` är tomt
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` är en inbyggd förinställning och kan inte ändras: spara den med ett annat namn
+@msg	`{name}` is a built-in preset and stays	`{name}` är en inbyggd förinställning och kan inte tas bort
 @msg	a swatch or color group named `{n}` exists	det finns redan en färgruta eller färggrupp med namnet `{n}`
 @msg	a slice size must be a positive number of points	en skivstorlek måste vara ett positivt antal punkter
 @msg	a spine keeps at least two points	en ryggrad behåller minst två punkter
@@ -4034,6 +4045,8 @@ axis	Both	Båda
 @msg	no print service	ingen utskriftstjänst
 @msg	no revert command	inget kommando för att återgå
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	ingen sparad PDF-förinställning med namnet `{name}` (inbyggda förinställningar är skrivskyddade: skapa en ny utifrån dem)
+@msg	no saved preset named `{name}`	ingen sparad förinställning med namnet `{name}`
+@msg	no saved preset named `{name}` to rename	ingen sparad förinställning med namnet `{name}` att byta namn på
 @msg	no saved presets	inga sparade förinställningar
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	ingen sparad utskriftsförinställning med namnet `{name}` ({DEFAULT_PRESET} är skyddad: skapa en ny utifrån den)
 @msg	no saved profiles	inga sparade profiler
@@ -4250,6 +4263,7 @@ axis	Both	Båda
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	okänd förinställning `{name}` (high, medium, low eller en sparad: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	okänd förinställning `{name}` (se flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	okänd förinställning `{name}` (se webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	okänd förinställning `{name}`: varken inbyggd eller sparad (se imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	okänd sida `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	okänt verktyg `{tool}`
 @msg	unknown tool `{t}`	okänt verktyg `{t}`

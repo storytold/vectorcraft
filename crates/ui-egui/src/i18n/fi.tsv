@@ -1609,6 +1609,12 @@ lighting	Light	Valo
 	Document Library	Asiakirjakirjasto
 	Library:	Kirjasto:
 	Tracing Presets	Jäljityksen esiasetukset
+	Manage Presets	Hallitse esiasetuksia
+	Save as New Preset…	Tallenna uutena esiasetuksena…
+	Rename…	Nimeä uudelleen…
+	Rename Preset	Nimeä esiasetus uudelleen
+	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
+	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
 	Method:	Menetelmä:
 	Mode:	Tila:
 	Noise	Kohina
@@ -4022,6 +4028,7 @@ imageTrace	Outline	Ääriviiva
 @msg	its type is to come in as outlines, which only its page has	sen teksti tuodaan ääriviivoina, jotka ovat vain sen sivulla
 @msg	the art on them differs from the page's in {_1}% of it	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta: ne tuodaan silti sen muokkaustiedoista
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` tarkoittaa muutettuja asetuksia: tallenna esiasetus toisella nimellä
 @msg	`to` must be "corner" or "smooth"	`to` on oltava "corner" tai "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-tiedostot ovat RGB- tai harmaasävykuvia: colorModel rgb tai gray
 @msg	Blend colors: select at least three objects with filled colours	Sulauta värit: valitse vähintään kolme objektia, joilla on väritäyttö
@@ -4183,6 +4190,10 @@ imageTrace	Outline	Ääriviiva
 @msg	a page tree node has no kids	sivupuun solmulla ei ole lapsia
 @msg	a page's placement is not finite	sivun sijainti ei ole äärellinen
 @msg	a preset named `{_1}` exists	esiasetus nimeltä `{_1}` on olemassa
+@msg	`name` is empty	`name` on tyhjä
+@msg	`newName` is empty	`newName` on tyhjä
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` on sisäänrakennettu esiasetus, eikä sitä voi muuttaa: tallenna se toisella nimellä
+@msg	`{name}` is a built-in preset and stays	`{name}` on sisäänrakennettu esiasetus, eikä sitä voi poistaa
 @msg	a swatch or color group named `{n}` exists	värimalli tai väriryhmä nimeltä `{n}` on jo olemassa
 @msg	a slice size must be a positive number of points	viipaleen koon on oltava positiivinen määrä pisteitä
 @msg	a spine keeps at least two points	selkärangassa on oltava vähintään kaksi pistettä
@@ -4335,6 +4346,8 @@ imageTrace	Outline	Ääriviiva
 @msg	no print service	ei tulostuspalvelua
 @msg	no revert command	ei palautuskomentoa
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	ei tallennettua PDF-esiasetusta nimeltä `{name}` (sisäänrakennetut esiasetukset ovat vain luku -tilassa: luo uusi niiden pohjalta)
+@msg	no saved preset named `{name}`	tallennettua esiasetusta nimeltä `{name}` ei ole
+@msg	no saved preset named `{name}` to rename	ei uudelleennimettävää tallennettua esiasetusta nimeltä `{name}`
 @msg	no saved presets	ei tallennettuja esiasetuksia
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	ei tallennettua tulostuksen esiasetusta nimeltä `{name}` ({DEFAULT_PRESET} on suojattu: luo uusi sen pohjalta)
 @msg	no saved profiles	ei tallennettuja profiileja
@@ -4550,6 +4563,7 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	tuntematon esiasetus `{name}` (high, medium, low tai tallennettu: ks. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	tuntematon esiasetus `{name}` (ks. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	tuntematon esiasetus `{name}` (ks. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	tuntematon esiasetus `{name}`: ei sisäänrakennettu eikä tallennettu (ks. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	tuntematon puoli `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	tuntematon työkalu `{tool}`
 @msg	unknown tool `{t}`	tuntematon työkalu `{t}`

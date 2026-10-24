@@ -1102,6 +1102,11 @@ pub struct Prefs {
     /// edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flattener_presets: Vec<cmd::FlattenerPreset>,
+    /// Image Trace panel › Manage Presets: the user's tracing presets (the built-in ones aren't
+    /// stored). Not a `prefs.set` key or group (resetting the preferences keeps them):
+    /// `imageTrace.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub trace_presets: Vec<cmd::TracePreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1312,6 +1317,7 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             flattener_presets: vec![],
+            trace_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,

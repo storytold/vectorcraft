@@ -1635,6 +1635,12 @@ lighting	Light	Světlo
 	Document Library	Knihovna dokumentu
 	Library:	Knihovna:
 	Tracing Presets	Přednastavení vektorizace
+	Manage Presets	Spravovat přednastavení
+	Save as New Preset…	Uložit jako nové přednastavení…
+	Rename…	Přejmenovat…
+	Rename Preset	Přejmenovat přednastavení
+	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
+	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
 	Method:	Metoda:
 	Mode:	Režim:
 	Noise	Šum
@@ -1666,6 +1672,7 @@ lighting	Light	Světlo
 	Locked	Zamčené
 	Hidden	Skryté
 	Filter Layers Panel Rows	Filtrovat řádky panelu Vrstvy
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označuje změněná nastavení: uložte přednastavení pod jiným názvem
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musí být pole těchto názvů: {_1}
 	Graphics	Grafika
 	Local Libraries	Místní knihovny
@@ -4266,6 +4273,10 @@ imageTrace	Outline	Obrys
 @msg	a page tree node has no kids	uzel stromu stránek nemá potomky
 @msg	a page's placement is not finite	umístění stránky není konečné
 @msg	a preset named `{_1}` exists	přednastavení s názvem `{_1}` existuje
+@msg	`name` is empty	`name` je prázdný
+@msg	`newName` is empty	`newName` je prázdný
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` je vestavěné přednastavení a nelze ho změnit: uložte ho pod jiným názvem
+@msg	`{name}` is a built-in preset and stays	`{name}` je vestavěné přednastavení a nelze ho odstranit
 @msg	a swatch or color group named `{n}` exists	položka vzorníku nebo skupina barev s názvem `{n}` existuje
 @msg	a slice size must be a positive number of points	velikost řezu musí být kladný počet bodů
 @msg	a spine keeps at least two points	páteř si ponechává alespoň dva body
@@ -4422,6 +4433,8 @@ imageTrace	Outline	Obrys
 @msg	no print service	chybí tisková služba
 @msg	no revert command	chybí příkaz pro návrat k uložené verzi
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	uložené přednastavení PDF s názvem `{name}` neexistuje (vestavěná přednastavení jsou jen pro čtení: vytvořte z nich nové)
+@msg	no saved preset named `{name}`	uložené přednastavení s názvem `{name}` neexistuje
+@msg	no saved preset named `{name}` to rename	uložené přednastavení s názvem `{name}` k přejmenování neexistuje
 @msg	no saved presets	žádná uložená přednastavení
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	uložené přednastavení tisku s názvem `{name}` neexistuje ({DEFAULT_PRESET} je chráněné: vytvořte z něj nové)
 @msg	no saved profiles	žádné uložené profily
@@ -4643,6 +4656,7 @@ imageTrace	Outline	Obrys
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	neznámé přednastavení `{name}` (high, medium, low nebo uložené: viz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	neznámé přednastavení `{name}` (viz flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	neznámé přednastavení `{name}` (viz webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	neznámé přednastavení `{name}`: není vestavěné ani uložené (viz imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	neznámá strana `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	neznámý nástroj `{tool}`
 @msg	unknown tool `{t}`	neznámý nástroj `{t}`

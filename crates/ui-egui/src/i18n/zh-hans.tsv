@@ -1474,6 +1474,12 @@ file-filter	Templates	模板
 	Image Trace	图像描摹
 	Image Tracing	图像描摹对象
 	Tracing Presets	描摹预设
+	Manage Presets	管理预设
+	Save as New Preset…	存储为新预设…
+	Rename…	重命名…
+	Rename Preset	重命名预设
+	Save Image Trace Preset	保存图像描摹预设
+	Delete Image Trace Preset	删除图像描摹预设
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -3619,6 +3625,7 @@ imageTrace	Outline	轮廓
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Simplified Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list.
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` 表示已更改的设置：请以其他名称保存预设
 @msg	`{key}` must be an array of these names: {_1}	`{key}` 必须是由以下名称组成的数组：{_1}
 @msg	Reset {_1}	重置 {_1}
 @msg	Saving	正在保存
@@ -4110,6 +4117,10 @@ imageTrace	Outline	轮廓
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是导出增效工具 (文件 › 导出 › 导出为…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 为 {size} 字节（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名为 `{_1}` 的预设已存在
+@msg	`name` is empty	`name` 为空
+@msg	`newName` is empty	`newName` 为空
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` 是内置预设，无法更改：请以其他名称保存
+@msg	`{name}` is a built-in preset and stays	`{name}` 是内置预设，无法删除
 @msg	a swatch or color group named `{n}` exists	名为 `{n}` 的色板或颜色组已存在
 @msg	no print preset named `{base}`	没有名为 `{base}` 的打印预设
 @msg	no print preset named `{name}`	没有名为 `{name}` 的打印预设
@@ -4128,6 +4139,8 @@ imageTrace	Outline	轮廓
 @msg	PDF settings are not an object	PDF 设置不是对象
 @msg	PDF security settings are not an object	PDF 安全性设置不是对象
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	没有名为 `{name}` 的已保存 PDF 预设 (内置预设为只读：请以它们为基础新建一个)
+@msg	no saved preset named `{name}`	没有名为 `{name}` 的已保存预设
+@msg	no saved preset named `{name}` to rename	没有名为 `{name}` 的已保存预设可供重命名
 @msg	Saved to User Defined: {_1}	已保存到“用户定义”：{_1}
 @msg	choose a direction to divide in	请选择分割方向
 @msg	choice must be "merge" or "add", not `{choice}`	choice 必须是 "merge" 或 "add"，而不是 `{choice}`
@@ -4208,6 +4221,7 @@ imageTrace	Outline	轮廓
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	未知的叠印方式 `{o}` (preserve、simulate 或 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	未知预设 `{name}` (请参阅 flattener.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	未知预设 `{name}`：既不是内置预设，也不是已保存的预设 (请参阅 imageTrace.presets)
 @msg	Select text or click into text with the Type tool to insert glyphs	请选择文字，或用文字工具在文字中单击，以插入字形
 @msg	`library` is a library id or name (see {list})	`library` 是库 id 或名称 (请参阅 {list})
 @msg	no library `{key}` (see {list})	没有库 `{key}` (请参阅 {list})

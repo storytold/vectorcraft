@@ -281,6 +281,12 @@ font-technology	Variable	バリアブル
 	Image Trace	画像トレース
 	Image Tracing	画像トレースオブジェクト
 	Tracing Presets	トレースプリセット
+	Manage Presets	プリセットを管理
+	Save as New Preset…	新規プリセットとして保存…
+	Rename…	名前を変更…
+	Rename Preset	プリセット名を変更
+	Save Image Trace Preset	画像トレースプリセットを保存
+	Delete Image Trace Preset	画像トレースプリセットを削除
 	Text Wrap	テキストの回り込み
 	Text Wrap Options…	テキストの回り込みオプション…
 	Clipping Mask	クリッピングマスク
@@ -2741,6 +2747,7 @@ mark-style	Japanese	日本式
 	Locked	ロック
 	Hidden	非表示
 	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` は変更した設定を表します: プリセットを別の名前で保存してください
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands and tools	コマンドとツールを検索
 	Search commands and tools…	コマンドとツールを検索…
@@ -4385,6 +4392,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} は書き出しプラグインです (「ファイル › 書き出し › 形式を指定して書き出し…」から使用してください)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` は {size} バイトです (上限 {MAX_DOCUMENT_DATA})
 @msg	a preset named `{_1}` exists	`{_1}` という名前のプリセットはすでに存在します
+@msg	`name` is empty	`name` が空です
+@msg	`newName` is empty	`newName` が空です
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` は組み込みのプリセットのため変更できません: 別の名前で保存してください
+@msg	`{name}` is a built-in preset and stays	`{name}` は組み込みのプリセットのため削除できません
 @msg	a swatch or color group named `{n}` exists	`{n}` という名前のスウォッチまたはカラーグループはすでに存在します
 @msg	no print preset named `{base}`	`{base}` という名前のプリントプリセットが見つかりません
 @msg	no print preset named `{name}`	`{name}` という名前のプリントプリセットが見つかりません
@@ -4403,6 +4414,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	PDF settings are not an object	PDF 設定がオブジェクト形式ではありません
 @msg	PDF security settings are not an object	PDF のセキュリティ設定がオブジェクト形式ではありません
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	`{name}` という名前の保存済み PDF プリセットが見つかりません (組み込みのプリセットは読み取り専用です: それを元に新しいプリセットを作成してください)
+@msg	no saved preset named `{name}`	`{name}` という名前の保存済みプリセットが見つかりません
+@msg	no saved preset named `{name}` to rename	名前を変更する `{name}` という保存済みプリセットが見つかりません
 @msg	Saved to User Defined: {_1}	「ユーザー定義」に保存しました: {_1}
 @msg	choose a direction to divide in	分割する方向を選択してください
 @msg	choice must be "merge" or "add", not `{choice}`	choice には "merge" または "add" を指定してください (`{choice}` は指定できません)
@@ -4486,6 +4499,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	`{o}` は不明なオーバープリントの指定です (preserve、simulate、discard のいずれか)
 @msg	unknown preset `{name}` (see flattener.presets.list)	`{name}` は不明なプリセットです (flattener.presets.list を参照してください)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	`{name}` は不明なプリセットです: 組み込みのプリセットでも保存済みのプリセットでもありません (imageTrace.presets を参照してください)
 @msg	Select text or click into text with the Type tool to insert glyphs	字形を挿入するには、テキストを選択するか、文字ツールでテキスト内をクリックしてください
 @msg	`library` is a library id or name (see {list})	`library` にはライブラリの ID または名前を指定してください ({list} を参照)
 @msg	no library `{key}` (see {list})	ライブラリ `{key}` が見つかりません ({list} を参照)

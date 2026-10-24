@@ -1450,6 +1450,12 @@ font-technology	Variable	Μεταβλητές
 	Image Trace	Ανίχνευση περιγραμμάτων εικόνας
 	Image Tracing	Ανίχνευση περιγραμμάτων εικόνας
 	Tracing Presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+	Manage Presets	Διαχείριση προεπιλογών
+	Save as New Preset…	Αποθήκευση ως νέας προεπιλογής…
+	Rename…	Μετονομασία…
+	Rename Preset	Μετονομασία προεπιλογής
+	Save Image Trace Preset	Αποθήκευση προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
+	Delete Image Trace Preset	Διαγραφή προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
 	Image Trace Presets	Προεπιλογές ανίχνευσης περιγραμμάτων εικόνας
 	Image:	Εικόνα:
 	Images:	Εικόνες:
@@ -2066,6 +2072,7 @@ axis	Both	Και τα δύο
 @msg	its type is to come in as outlines, which only its page has	Το κείμενό του θα εισαχθεί ως περιγράμματα, τα οποία υπάρχουν μόνο στη σελίδα του
 @msg	the art on them differs from the page's in {_1}% of it	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%, αλλά θα χρησιμοποιηθούν τα δεδομένα επεξεργασίας
+@msg	`Custom` stands for changed settings: save the preset under another name	Το `Custom` αντιστοιχεί σε αλλαγμένες ρυθμίσεις: αποθηκεύστε την προεπιλογή με άλλο όνομα
 @msg	`to` must be "corner" or "smooth"	Το `to` πρέπει να είναι "corner" ή "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Τα αρχεία BMP πρέπει να είναι RGB ή σε κλίμακα του γκρι: colorModel rgb ή gray
 @msg	Blend colors: select at least three objects with filled colours	Ανάμειξη χρωμάτων: επιλέξτε τουλάχιστον τρία αντικείμενα με χρώμα γεμίσματος
@@ -3946,6 +3953,10 @@ theme	Appearance	Εμφάνιση
 @msg	a page tree node has no kids	ο κόμβος δέντρου σελίδων δεν έχει θυγατρικά στοιχεία
 @msg	a page's placement is not finite	η τοποθέτηση της σελίδας δεν έχει πεπερασμένες τιμές
 @msg	a preset named `{_1}` exists	υπάρχει ήδη προεπιλογή με όνομα `{_1}`
+@msg	`name` is empty	το `name` είναι κενό
+@msg	`newName` is empty	το `newName` είναι κενό
+@msg	`{name}` is a built-in preset and can't change: save it under another name	η `{name}` είναι ενσωματωμένη προεπιλογή και δεν μπορεί να αλλάξει: αποθηκεύστε την με άλλο όνομα
+@msg	`{name}` is a built-in preset and stays	η `{name}` είναι ενσωματωμένη προεπιλογή και δεν μπορεί να διαγραφεί
 @msg	a swatch or color group named `{n}` exists	υπάρχει ήδη δείγμα χρώματος ή ομάδα χρωμάτων με όνομα `{n}`
 @msg	a slice size must be a positive number of points	το μέγεθος τομής πρέπει να είναι θετικός αριθμός στιγμών
 @msg	a spine keeps at least two points	απαιτούνται τουλάχιστον δύο σημεία κεντρικής καμπύλης
@@ -4098,6 +4109,8 @@ theme	Appearance	Εμφάνιση
 @msg	no print service	δεν υπάρχει υπηρεσία εκτύπωσης
 @msg	no revert command	δεν υπάρχει εντολή επαναφοράς
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	δεν υπάρχει αποθηκευμένη προεπιλογή PDF με όνομα `{name}` (οι ενσωματωμένες προεπιλογές είναι μόνο για ανάγνωση: δημιουργήστε νέα από αυτές)
+@msg	no saved preset named `{name}`	δεν υπάρχει αποθηκευμένη προεπιλογή με όνομα `{name}`
+@msg	no saved preset named `{name}` to rename	δεν υπάρχει αποθηκευμένη προεπιλογή με όνομα `{name}` για μετονομασία
 @msg	no saved presets	δεν υπάρχουν αποθηκευμένες προεπιλογές
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	δεν υπάρχει αποθηκευμένη προεπιλογή εκτύπωσης με όνομα `{name}` (η {DEFAULT_PRESET} προστατεύεται: δημιουργήστε νέα από αυτήν)
 @msg	no saved profiles	δεν υπάρχουν αποθηκευμένα προφίλ
@@ -4314,6 +4327,7 @@ theme	Appearance	Εμφάνιση
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (high, medium, low ή αποθηκευμένη: δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	άγνωστη προεπιλογή `{name}`: δεν είναι ενσωματωμένη ούτε αποθηκευμένη (δείτε imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	άγνωστη πλευρά `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	άγνωστο εργαλείο `{tool}`
 @msg	unknown tool `{t}`	άγνωστο εργαλείο `{t}`

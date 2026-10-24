@@ -1555,6 +1555,12 @@ lighting	Light	Światło
 	Document Library	Biblioteka dokumentu
 	Library:	Biblioteka:
 	Tracing Presets	Ustawienia obrysu
+	Manage Presets	Zarządzaj ustawieniami
+	Save as New Preset…	Zapisz jako nowe ustawienie…
+	Rename…	Zmień nazwę…
+	Rename Preset	Zmień nazwę ustawienia
+	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
+	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
 	Method:	Metoda:
 	Mode:	Tryb:
 	Noise	Szum
@@ -1586,6 +1592,7 @@ lighting	Light	Światło
 	Locked	Zablokowane
 	Hidden	Ukryte
 	Filter Layers Panel Rows	Filtruj wiersze panelu Warstwy
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` oznacza zmienione ustawienia: zapisz ustawienie pod inną nazwą
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musi być tablicą tych nazw: {_1}
 	Graphics	Grafiki
 	Local Libraries	Biblioteki lokalne
@@ -4088,6 +4095,10 @@ imageTrace	Outline	Kontur
 @msg	a page tree node has no kids	węzeł drzewa stron nie ma elementów potomnych
 @msg	a page's placement is not finite	położenie strony nie jest skończone
 @msg	a preset named `{_1}` exists	ustawienie o nazwie `{_1}` już istnieje
+@msg	`name` is empty	`name` jest puste
+@msg	`newName` is empty	`newName` jest puste
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` to wbudowane ustawienie i nie można go zmienić: zapisz je pod inną nazwą
+@msg	`{name}` is a built-in preset and stays	`{name}` to wbudowane ustawienie i nie można go usunąć
 @msg	a swatch or color group named `{n}` exists	próbka lub grupa kolorów o nazwie `{n}` już istnieje
 @msg	a slice size must be a positive number of points	rozmiar plasterka musi być dodatnią liczbą punktów
 @msg	a spine keeps at least two points	grzbiet musi mieć co najmniej dwa punkty
@@ -4244,6 +4255,8 @@ imageTrace	Outline	Kontur
 @msg	no print service	brak usługi drukowania
 @msg	no revert command	brak polecenia przywracania
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	brak zapisanego ustawienia PDF o nazwie `{name}` (wbudowane ustawienia są tylko do odczytu: utwórz na ich podstawie nowe)
+@msg	no saved preset named `{name}`	brak zapisanego ustawienia o nazwie `{name}`
+@msg	no saved preset named `{name}` to rename	brak zapisanego ustawienia o nazwie `{name}` do zmiany nazwy
 @msg	no saved presets	brak zapisanych ustawień
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	brak zapisanego ustawienia drukowania o nazwie `{name}` ({DEFAULT_PRESET} jest chronione: utwórz na jego podstawie nowe)
 @msg	no saved profiles	brak zapisanych profili
@@ -4468,6 +4481,7 @@ imageTrace	Outline	Kontur
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nieznane ustawienie `{name}` (high, medium, low lub zapisane: patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nieznane ustawienie `{name}` (patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	nieznane ustawienie `{name}` (patrz webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	nieznane ustawienie `{name}`: ani wbudowane, ani zapisane (patrz imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	nieznana strona `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	nieznane narzędzie `{tool}`
 @msg	unknown tool `{t}`	nieznane narzędzie `{t}`

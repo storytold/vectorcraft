@@ -107,6 +107,7 @@ pub mod text_import;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
+pub mod trace_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
@@ -285,6 +286,7 @@ registry! {
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
     FlattenTransparency: [flatten::KIND] => flatten::SPEC,
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
+    ImageTracePreset: [trace_presets::KIND] => trace_presets::SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     SaveSymbolLibrary: [save_symbol_library::KIND] => save_symbol_library::SPEC,
     Expand: [expand::KIND] => expand::SPEC,

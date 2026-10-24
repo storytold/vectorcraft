@@ -277,6 +277,12 @@ font-technology	Variable	가변
 	Image Trace	이미지 추적
 	Image Tracing	이미지 추적
 	Tracing Presets	추적 프리셋
+	Manage Presets	프리셋 관리
+	Save as New Preset…	새 프리셋으로 저장…
+	Rename…	이름 바꾸기…
+	Rename Preset	프리셋 이름 바꾸기
+	Save Image Trace Preset	이미지 추적 프리셋 저장
+	Delete Image Trace Preset	이미지 추적 프리셋 삭제
 	Text Wrap	문자 감싸기
 	Text Wrap Options…	문자 감싸기 옵션…
 	Clipping Mask	클리핑 마스크
@@ -2735,6 +2741,7 @@ mark-style	Japanese	일본식
 	Locked	잠김
 	Hidden	숨김
 	Filter Layers Panel Rows	레이어 패널 행 필터링
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom`은 변경된 설정을 나타냅니다. 프리셋을 다른 이름으로 저장하세요
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
 	Search commands and tools	명령 및 도구 검색
 	Search commands and tools…	명령 및 도구 검색…
@@ -4317,6 +4324,10 @@ theme	Appearance	외관
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1}은(는) 내보내기 플러그인입니다(파일 › 내보내기 › 다른 이름으로 내보내기…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData`가 {size}바이트입니다(한도 {MAX_DOCUMENT_DATA})
 @msg	a preset named `{_1}` exists	`{_1}`이라는 프리셋이 이미 있습니다
+@msg	`name` is empty	`name`이(가) 비어 있습니다
+@msg	`newName` is empty	`newName`이(가) 비어 있습니다
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}`은(는) 기본 제공 프리셋이라 변경할 수 없습니다. 다른 이름으로 저장하세요
+@msg	`{name}` is a built-in preset and stays	`{name}`은(는) 기본 제공 프리셋이라 삭제할 수 없습니다
 @msg	a swatch or color group named `{n}` exists	`{n}`이라는 견본 또는 색상 그룹이 이미 있습니다
 @msg	no print preset named `{base}`	`{base}`라는 인쇄 프리셋이 없습니다
 @msg	no print preset named `{name}`	`{name}`이라는 인쇄 프리셋이 없습니다
@@ -4335,6 +4346,8 @@ theme	Appearance	외관
 @msg	PDF settings are not an object	PDF 설정이 개체가 아닙니다
 @msg	PDF security settings are not an object	PDF 보안 설정이 개체가 아닙니다
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	`{name}`이라는 저장된 PDF 프리셋이 없습니다(기본 제공 프리셋은 읽기 전용이니 이를 바탕으로 새로 만드세요)
+@msg	no saved preset named `{name}`	`{name}`이라는 저장된 프리셋이 없습니다
+@msg	no saved preset named `{name}` to rename	이름을 바꿀 `{name}`이라는 저장된 프리셋이 없습니다
 @msg	Saved to User Defined: {_1}	사용자 정의에 저장했습니다: {_1}
 @msg	choose a direction to divide in	나눌 방향을 선택하세요
 @msg	choice must be "merge" or "add", not `{choice}`	선택은 `{choice}`이(가) 아니라 "merge" 또는 "add"여야 합니다
@@ -4418,6 +4431,7 @@ theme	Appearance	외관
 @msg	unknown highlight `{h}`	알 수 없는 강조 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	알 수 없는 오버프린트 `{o}`(preserve, simulate 또는 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	알 수 없는 프리셋 `{name}`(flattener.presets.list 참조)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	알 수 없는 프리셋 `{name}`: 기본 제공 프리셋도 저장된 프리셋도 아닙니다(imageTrace.presets 참조)
 @msg	Select text or click into text with the Type tool to insert glyphs	글리프를 삽입하려면 텍스트를 선택하거나 문자 도구로 텍스트 안을 클릭하세요
 @msg	`library` is a library id or name (see {list})	`library`는 라이브러리 id 또는 이름입니다({list} 참조)
 @msg	no library `{key}` (see {list})	라이브러리 `{key}`이(가) 없습니다({list} 참조)

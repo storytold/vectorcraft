@@ -1545,6 +1545,12 @@ file-filter	Templates	Шаблоны
 	Image Trace	Трассировка изображения
 	Image Tracing	Объект трассировки изображения
 	Tracing Presets	Наборы трассировки
+	Manage Presets	Управление наборами
+	Save as New Preset…	Сохранить как новый набор…
+	Rename…	Переименовать…
+	Rename Preset	Переименовать набор
+	Save Image Trace Preset	Сохранить набор трассировки изображения
+	Delete Image Trace Preset	Удалить набор трассировки изображения
 	Image Trace Presets	Наборы трассировки изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2883,6 +2889,7 @@ mark-style	Japanese	Японский
 	Locked	Заблокированные
 	Hidden	Скрытые
 	Filter Layers Panel Rows	Фильтровать строки панели «Слои»
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` обозначает изменённые параметры: сохраните набор под другим именем
 @msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
 	Search commands and tools	Поиск команд и инструментов
 	Search commands and tools…	Поиск команд и инструментов…
@@ -3999,6 +4006,10 @@ axis	Both	Оба
 @msg	a page tree node has no kids	узел дерева страниц не имеет потомков
 @msg	a page's placement is not finite	размещение страницы не конечно
 @msg	a preset named `{_1}` exists	набор с именем `{_1}` уже существует
+@msg	`name` is empty	параметр `name` пуст
+@msg	`newName` is empty	параметр `newName` пуст
+@msg	`{name}` is a built-in preset and can't change: save it under another name	встроенный набор `{name}` нельзя изменить: сохраните его под другим именем
+@msg	`{name}` is a built-in preset and stays	встроенный набор `{name}` нельзя удалить
 @msg	a swatch or color group named `{n}` exists	образец или цветовая группа с именем `{n}` уже существует
 @msg	a slice size must be a positive number of points	размер фрагмента должен быть положительным числом пунктов
 @msg	a spine keeps at least two points	остов сохраняет как минимум две точки
@@ -4155,6 +4166,8 @@ axis	Both	Оба
 @msg	no print service	нет службы печати
 @msg	no revert command	нет команды возврата
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	нет сохранённого набора PDF с именем `{name}` (встроенные наборы доступны только для чтения: создайте новый на их основе)
+@msg	no saved preset named `{name}`	нет сохранённого набора с именем `{name}`
+@msg	no saved preset named `{name}` to rename	нет сохранённого набора с именем `{name}` для переименования
 @msg	no saved presets	нет сохранённых наборов
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	нет сохранённого набора печати с именем `{name}` ({DEFAULT_PRESET} защищён: создайте новый на его основе)
 @msg	no saved profiles	нет сохранённых профилей
@@ -4377,6 +4390,7 @@ axis	Both	Оба
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	неизвестный набор `{name}` (high, medium, low или сохранённый: см. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	неизвестный набор `{name}` (см. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	неизвестный набор `{name}` (см. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	неизвестный набор `{name}`: не встроенный и не сохранённый (см. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	неизвестная сторона `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	неизвестный инструмент `{tool}`
 @msg	unknown tool `{t}`	неизвестный инструмент `{t}`

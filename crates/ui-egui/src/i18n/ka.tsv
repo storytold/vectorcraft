@@ -1384,6 +1384,12 @@ lighting	Light	სინათლე
 	Document Library	დოკუმენტის ბიბლიოთეკა
 	Library:	ბიბლიოთეკა:
 	Tracing Presets	ვექტორიზაციის პრესეტები
+	Manage Presets	პრესეტების მართვა
+	Save as New Preset…	ახალ პრესეტად შენახვა…
+	Rename…	სახელის შეცვლა…
+	Rename Preset	პრესეტის სახელის შეცვლა
+	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
+	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
 	Method:	მეთოდი:
 	Mode:	რეჟიმი:
 	Noise	ხმაური
@@ -3600,6 +3606,7 @@ font-technology	Variable	ცვლადი
 @msg	its page has text, and its layers have no text objects to put it in	მის გვერდზე ტექსტია, შრეებში კი არ არის ტექსტური ობიექტები, სადაც ის ჩაჯდებოდა
 @msg	its type is to come in as outlines, which only its page has	მისი ტექსტი კონტურებად უნდა შემოვიდეს, ასეთი კი მხოლოდ მის გვერდზეა
 @msg	the art on them differs from the page's in {_1}% of it	მათზე არსებული ნახატი გვერდისას {_1}%-ით განსხვავდება
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` შეცვლილ პარამეტრებს ნიშნავს: შეინახეთ პრესეტი სხვა სახელით
 @msg	`to` must be "corner" or "smooth"	`to` უნდა იყოს "corner" ან "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები RGB-ა ან ნაცრისფერი: colorModel rgb ან gray
 @msg	Blend colors: select at least three objects with filled colours	ფერების შერევა: მონიშნეთ მინიმუმ სამი ობიექტი ფერადი შევსებით
@@ -3755,6 +3762,10 @@ font-technology	Variable	ცვლადი
 @msg	a page tree node has no kids	გვერდების ხის კვანძს შვილობილები არ აქვს
 @msg	a page's placement is not finite	გვერდის განლაგება სასრული არ არის
 @msg	a preset named `{_1}` exists	პრესეტი სახელით `{_1}` არსებობს
+@msg	`name` is empty	`name` ცარიელია
+@msg	`newName` is empty	`newName` ცარიელია
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` ჩაშენებული პრესეტია და მისი შეცვლა შეუძლებელია: შეინახეთ სხვა სახელით
+@msg	`{name}` is a built-in preset and stays	`{name}` ჩაშენებული პრესეტია და მისი წაშლა შეუძლებელია
 @msg	a swatch or color group named `{n}` exists	ფერის ნიმუში ან ფერების ჯგუფი სახელით `{n}` არსებობს
 @msg	a slice size must be a positive number of points	ნაჭრის ზომა წერტილების დადებითი რიცხვი უნდა იყოს
 @msg	a stream runs past the end	ნაკადი ბოლოს სცილდება
@@ -3900,6 +3911,8 @@ font-technology	Variable	ცვლადი
 @msg	no print service	ბეჭდვის სერვისი არ არის
 @msg	no revert command	დაბრუნების ბრძანება არ არის
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	შენახული PDF პრესეტი სახელით `{name}` არ არის (ჩაშენებული პრესეტები მხოლოდ წასაკითხია: მათგან ახალი შექმენით)
+@msg	no saved preset named `{name}`	შენახული პრესეტი სახელით `{name}` არ არის
+@msg	no saved preset named `{name}` to rename	გადასარქმევი შენახული პრესეტი სახელით `{name}` არ არის
 @msg	no saved presets	შენახული პრესეტები არ არის
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	შენახული ბეჭდვის პრესეტი სახელით `{name}` არ არის ({DEFAULT_PRESET} დაცულია: მისგან ახალი შექმენით)
 @msg	no saved profiles	შენახული პროფილები არ არის
@@ -4103,6 +4116,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	უცნობი პრესეტი `{name}` (high, medium, low ან შენახული: იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	უცნობი პრესეტი `{name}` (იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	უცნობი პრესეტი `{name}` (იხ. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	უცნობი პრესეტი `{name}`: არც ჩაშენებულია და არც შენახული (იხ. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	უცნობი მხარე `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	უცნობი ხელსაწყო `{tool}`
 @msg	unknown tool `{t}`	უცნობი ხელსაწყო `{t}`

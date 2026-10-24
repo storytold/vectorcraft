@@ -3199,6 +3199,7 @@ mark-style	Japanese	Kiểu Nhật
 	Locked	Đã khóa
 	Hidden	Đã ẩn
 	Filter Layers Panel Rows	Lọc hàng bảng Lớp
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` biểu thị các cài đặt đã thay đổi: hãy lưu thiết lập sẵn với tên khác
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
 	Search commands and tools	Tìm kiếm lệnh và công cụ
 	Search commands and tools…	Tìm kiếm lệnh và công cụ…
@@ -3733,6 +3734,12 @@ mark-style	Japanese	Kiểu Nhật
 	Trace	Vector hóa
 	Trace the image with the Default preset	Vector hóa ảnh với thiết lập sẵn mặc định
 	Tracing Presets	Thiết lập sẵn vector hóa
+	Manage Presets	Quản lý thiết lập sẵn
+	Save as New Preset…	Lưu thành thiết lập sẵn mới…
+	Rename…	Đổi tên…
+	Rename Preset	Đổi tên thiết lập sẵn
+	Save Image Trace Preset	Lưu thiết lập sẵn vector hóa ảnh
+	Delete Image Trace Preset	Xóa thiết lập sẵn vector hóa ảnh
 	Tracing Result	Kết quả vector hóa
 	Tracing Result with Outlines	Kết quả vector hóa với đường bao
 	Tracking	Giãn chữ
@@ -4150,6 +4157,10 @@ theme	Appearance	Giao diện
 @msg	a calculation has no result, as in a division by zero	một phép tính không có kết quả, như khi chia cho không
 @msg	the operator looks for a mark on the stack and finds none	toán tử tìm một dấu mốc trên ngăn xếp nhưng không thấy
 @msg	a preset named `{_1}` exists	đã có thiết lập sẵn tên `{_1}`
+@msg	`name` is empty	`name` trống
+@msg	`newName` is empty	`newName` trống
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` là thiết lập sẵn tích hợp và không thể thay đổi: hãy lưu với tên khác
+@msg	`{name}` is a built-in preset and stays	`{name}` là thiết lập sẵn tích hợp và không thể xóa
 @msg	a swatch or color group named `{n}` exists	đã có mẫu màu hoặc nhóm màu tên `{n}`
 @msg	a slice size must be a positive number of points	kích thước lát cắt phải là số điểm dương
 @msg	a spine keeps at least two points	trục phải giữ ít nhất hai điểm
@@ -4432,6 +4443,8 @@ theme	Appearance	Giao diện
 @msg	no print service	không có dịch vụ in
 @msg	no revert command	không có lệnh hoàn nguyên
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	không có thiết lập sẵn PDF đã lưu tên `{name}` (thiết lập sẵn tích hợp là chỉ đọc: tạo mới từ chúng)
+@msg	no saved preset named `{name}`	không có thiết lập sẵn đã lưu tên `{name}`
+@msg	no saved preset named `{name}` to rename	không có thiết lập sẵn đã lưu tên `{name}` để đổi tên
 @msg	no saved presets	không có thiết lập sẵn đã lưu
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	không có thiết lập sẵn in đã lưu tên `{name}` ({DEFAULT_PRESET} được bảo vệ: tạo mới từ nó)
 @msg	no saved profiles	không có hồ sơ đã lưu
@@ -4747,6 +4760,7 @@ theme	Appearance	Giao diện
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (high, medium, low hoặc thiết lập đã lưu: xem flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	thiết lập sẵn không xác định `{name}` (xem flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	thiết lập sẵn không xác định `{name}` (xem webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	thiết lập sẵn không xác định `{name}`: không phải thiết lập sẵn tích hợp hay đã lưu (xem imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	cạnh không xác định `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	công cụ không xác định `{tool}`
 @msg	unknown tool `{t}`	công cụ không xác định `{t}`

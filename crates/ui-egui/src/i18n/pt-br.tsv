@@ -2365,6 +2365,7 @@
 	Locked	Bloqueados
 	Hidden	Ocultos
 	Filter Layers Panel Rows	Filtrar linhas do painel Camadas
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa configurações alteradas: salve a predefinição com outro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve ser uma matriz destes nomes: {_1}
 	Search Commands…	Pesquisar Comandos…
 	Search commands and tools	Pesquisar comandos e ferramentas
@@ -3180,6 +3181,12 @@ font-technology	Variable	Variáveis
 	Library:	Biblioteca:
 	Image Tracing	Vetorização de imagem
 	Tracing Presets	Predefinições de vetorização
+	Manage Presets	Gerenciar Predefinidos
+	Save as New Preset…	Salvar como Novo Predefinido…
+	Rename…	Renomear…
+	Rename Preset	Renomear Predefinido
+	Save Image Trace Preset	Salvar Predefinido de Rastreamento de Imagem
+	Delete Image Trace Preset	Excluir Predefinido de Rastreamento de Imagem
 	Japanese	Japonês
 	Keep a link to an image file instead of only embedding it	Manter um link para o arquivo de imagem em vez de apenas incorporá-lo
 	Latin	Latim
@@ -3544,6 +3551,10 @@ axis	Both	Ambos
 @msg	a page tree node has no kids	um nó da árvore de páginas não tem filhos
 @msg	a page's placement is not finite	a posição de uma página não é finita
 @msg	a preset named `{_1}` exists	já existe uma predefinição chamada `{_1}`
+@msg	`name` is empty	`name` está vazio
+@msg	`newName` is empty	`newName` está vazio
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` é uma predefinição integrada e não pode ser alterada: salve-a com outro nome
+@msg	`{name}` is a built-in preset and stays	`{name}` é uma predefinição integrada e não pode ser excluída
 @msg	a swatch or color group named `{n}` exists	já existe uma amostra ou um grupo de cores chamado `{n}`
 @msg	a slice size must be a positive number of points	o tamanho de uma fatia deve ser um número positivo de pontos
 @msg	a spine keeps at least two points	uma coluna mantém pelo menos dois pontos
@@ -3694,6 +3705,8 @@ axis	Both	Ambos
 @msg	no print service	sem serviço de impressão
 @msg	no revert command	sem comando de reverter
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	nenhuma predefinição de PDF salva chamada `{name}` (as predefinições integradas são somente leitura: crie uma nova a partir delas)
+@msg	no saved preset named `{name}`	nenhuma predefinição salva chamada `{name}`
+@msg	no saved preset named `{name}` to rename	nenhuma predefinição salva chamada `{name}` para renomear
 @msg	no saved presets	nenhuma predefinição salva
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nenhuma predefinição de impressão salva chamada `{name}` ({DEFAULT_PRESET} é protegida: crie uma nova a partir dela)
 @msg	no saved profiles	nenhum perfil salvo
@@ -3914,6 +3927,7 @@ axis	Both	Ambos
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	predefinição desconhecida `{name}` (high, medium, low ou uma salva: veja flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	predefinição desconhecida `{name}` (veja flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	predefinição desconhecida `{name}` (veja webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	predefinição desconhecida `{name}`: não é integrada nem salva (veja imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	lado desconhecido `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	ferramenta desconhecida `{tool}`
 @msg	unknown tool `{t}`	ferramenta desconhecida `{t}`

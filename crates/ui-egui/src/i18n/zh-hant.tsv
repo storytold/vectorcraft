@@ -1512,6 +1512,12 @@ file-filter	Templates	範本
 	Image Trace	影像描圖
 	Image Tracing	影像描圖物件
 	Tracing Presets	描圖預設集
+	Manage Presets	管理預設集
+	Save as New Preset…	儲存為新預設集…
+	Rename…	重新命名…
+	Rename Preset	重新命名預設集
+	Save Image Trace Preset	儲存影像描圖預設集
+	Delete Image Trace Preset	刪除影像描圖預設集
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -1601,6 +1607,7 @@ file-filter	Templates	範本
 # Traditional Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list; 「」 around the name of
 # a panel, menu item or setting.
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` 代表已變更的設定：請以其他名稱儲存預設集
 @msg	`{key}` must be an array of these names: {_1}	`{key}` 必須是由下列名稱組成的陣列：{_1}
 @msg	Reset {_1}	重設 {_1}
 @msg	Saving	正在儲存
@@ -2090,6 +2097,10 @@ file-filter	Templates	範本
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是匯出增效模組 (檔案 › 匯出 › 匯出為…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 為 {size} 位元組（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名為 `{_1}` 的預設集已存在
+@msg	`name` is empty	`name` 為空
+@msg	`newName` is empty	`newName` 為空
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` 是內建預設集，無法變更：請以其他名稱儲存
+@msg	`{name}` is a built-in preset and stays	`{name}` 是內建預設集，無法刪除
 @msg	a swatch or color group named `{n}` exists	名為 `{n}` 的色票或顏色群組已存在
 @msg	no print preset named `{base}`	沒有名為 `{base}` 的列印預設集
 @msg	no print preset named `{name}`	沒有名為 `{name}` 的列印預設集
@@ -2108,6 +2119,8 @@ file-filter	Templates	範本
 @msg	PDF settings are not an object	PDF 設定不是物件
 @msg	PDF security settings are not an object	PDF 安全性設定不是物件
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	沒有名為 `{name}` 的已儲存 PDF 預設集 (內建預設集為唯讀：請以它們為基礎新增一個)
+@msg	no saved preset named `{name}`	沒有名為 `{name}` 的已儲存預設集
+@msg	no saved preset named `{name}` to rename	沒有名為 `{name}` 的已儲存預設集可供重新命名
 @msg	Saved to User Defined: {_1}	已儲存至「使用者定義」：{_1}
 @msg	choose a direction to divide in	請選擇分割方向
 @msg	choice must be "merge" or "add", not `{choice}`	choice 必須是 "merge" 或 "add"，而非 `{choice}`
@@ -2188,6 +2201,7 @@ file-filter	Templates	範本
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	未知的疊印方式 `{o}` (preserve、simulate 或 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	未知的預設集 `{name}` (請參閱 flattener.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	未知的預設集 `{name}`：既不是內建預設集，也不是已儲存的預設集 (請參閱 imageTrace.presets)
 @msg	Select text or click into text with the Type tool to insert glyphs	請選取文字，或使用文字工具在文字中按一下，以插入字符
 @msg	`library` is a library id or name (see {list})	`library` 是資料庫 id 或名稱 (請參閱 {list})
 @msg	no library `{key}` (see {list})	沒有資料庫 `{key}` (請參閱 {list})

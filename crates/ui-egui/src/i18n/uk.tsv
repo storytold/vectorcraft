@@ -1541,6 +1541,12 @@ file-filter	Templates	Шаблони
 	Image Trace	Трасування зображення
 	Image Tracing	Об’єкт трасування зображення
 	Tracing Presets	Набори трасування
+	Manage Presets	Керування наборами
+	Save as New Preset…	Зберегти як новий набір…
+	Rename…	Перейменувати…
+	Rename Preset	Перейменувати набір
+	Save Image Trace Preset	Зберегти набір трасування зображення
+	Delete Image Trace Preset	Видалити набір трасування зображення
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2879,6 +2885,7 @@ mark-style	Japanese	Японський
 	Locked	Заблоковані
 	Hidden	Приховані
 	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` позначає змінені параметри: збережіть набір під іншим ім’ям
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
@@ -3987,6 +3994,10 @@ axis	Both	Обидві
 @msg	a page tree node has no kids	вузол дерева сторінок не має нащадків
 @msg	a page's placement is not finite	розміщення сторінки не звісно
 @msg	a preset named `{_1}` exists	набір з іменем `{_1}` вже існує
+@msg	`name` is empty	параметр `name` порожній
+@msg	`newName` is empty	параметр `newName` порожній
+@msg	`{name}` is a built-in preset and can't change: save it under another name	вбудований набір `{name}` не можна змінити: збережіть його під іншим ім’ям
+@msg	`{name}` is a built-in preset and stays	вбудований набір `{name}` не можна видалити
 @msg	a swatch or color group named `{n}` exists	зразок або колірна група з ім’ям `{n}` вже існує
 @msg	a slice size must be a positive number of points	розмір фрагмента має бути позитивним числом пунктів
 @msg	a spine keeps at least two points	вісь зберігає як мінімум дві точки
@@ -4143,6 +4154,8 @@ axis	Both	Обидві
 @msg	no print service	немає служби друку
 @msg	no revert command	немає команди повернення
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	немає збереженого набору PDF з ім’ям `{name}` (вбудовані набори доступні лише для читання: створіть новий на їх основі)
+@msg	no saved preset named `{name}`	немає збереженого набору з ім’ям `{name}`
+@msg	no saved preset named `{name}` to rename	немає збереженого набору з ім’ям `{name}` для перейменування
 @msg	no saved presets	немає збережених наборів
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	немає збереженого набору друку з іменем `{name}` ({DEFAULT_PRESET} захищений: створіть новий на його основі)
 @msg	no saved profiles	немає збережених профілів
@@ -4365,6 +4378,7 @@ axis	Both	Обидві
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	невідомий набір `{name}` (high, medium, low або збережений: див. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	невідомий набір `{name}` (див. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	невідомий набір `{name}` (див. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	невідомий набір `{name}`: не вбудований і не збережений (див. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	невідома сторона `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	невідомий інструмент `{tool}`
 @msg	unknown tool `{t}`	невідомий інструмент `{t}`

@@ -1476,6 +1476,12 @@ lighting	Light	Lys
 	Document Library	Dokumentbibliotek
 	Library:	Bibliotek:
 	Tracing Presets	Vektoriseringsforudindstillinger
+	Manage Presets	Administrer forudindstillinger
+	Save as New Preset…	Gem som ny forudindstilling…
+	Rename…	Omdøb…
+	Rename Preset	Omdøb forudindstilling
+	Save Image Trace Preset	Gem forudindstilling til billedsporing
+	Delete Image Trace Preset	Slet forudindstilling til billedsporing
 	Method:	Metode:
 	Mode:	Tilstand:
 	Noise	Støj

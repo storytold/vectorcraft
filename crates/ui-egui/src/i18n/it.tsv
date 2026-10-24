@@ -1547,6 +1547,12 @@ file-filter	Templates	Modelli
 	Image Trace	Ricalco immagine
 	Image Tracing	Oggetto ricalco immagine
 	Tracing Presets	Preset di ricalco
+	Manage Presets	Gestisci preset
+	Save as New Preset…	Salva come nuovo preset…
+	Rename…	Rinomina…
+	Rename Preset	Rinomina preset
+	Save Image Trace Preset	Salva preset ricalco immagine
+	Delete Image Trace Preset	Elimina preset ricalco immagine
 	Image Trace Presets	Preset ricalco immagine
 	Image:	Immagine:
 	Images:	Immagini:
@@ -2887,6 +2893,7 @@ mark-style	Japanese	Giapponese
 	Locked	Bloccati
 	Hidden	Nascosti
 	Filter Layers Panel Rows	Filtra righe del pannello Livelli
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` indica impostazioni modificate: salva il preset con un altro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve essere un array di questi nomi: {_1}
 	Search commands and tools	Cerca comandi e strumenti
 	Search commands and tools…	Cerca comandi e strumenti…
@@ -4003,6 +4010,10 @@ axis	Both	Entrambi
 @msg	a page tree node has no kids	un nodo dell'albero delle pagine non ha elementi figli
 @msg	a page's placement is not finite	la posizione di una pagina non è finita
 @msg	a preset named `{_1}` exists	esiste già un preset denominato `{_1}`
+@msg	`name` is empty	`name` è vuoto
+@msg	`newName` is empty	`newName` è vuoto
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` è un preset integrato e non può essere modificato: salvalo con un altro nome
+@msg	`{name}` is a built-in preset and stays	`{name}` è un preset integrato e non può essere eliminato
 @msg	a swatch or color group named `{n}` exists	esiste già un campione o un gruppo colori denominato `{n}`
 @msg	a slice size must be a positive number of points	la dimensione di una sezione deve essere un numero positivo di punti
 @msg	a spine keeps at least two points	una dorsale mantiene almeno due punti
@@ -4159,6 +4170,8 @@ axis	Both	Entrambi
 @msg	no print service	nessun servizio di stampa
 @msg	no revert command	nessun comando Ripristina
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	nessun preset PDF salvato denominato `{name}` (i preset integrati sono di sola lettura: creane uno nuovo a partire da essi)
+@msg	no saved preset named `{name}`	nessun preset salvato denominato `{name}`
+@msg	no saved preset named `{name}` to rename	nessun preset salvato denominato `{name}` da rinominare
 @msg	no saved presets	nessun preset salvato
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	nessun preset di stampa salvato denominato `{name}` ({DEFAULT_PRESET} è protetto: creane uno nuovo a partire da esso)
 @msg	no saved profiles	nessun profilo salvato
@@ -4381,6 +4394,7 @@ axis	Both	Entrambi
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset sconosciuto `{name}` (high, medium, low o uno salvato: vedi flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset sconosciuto `{name}` (vedi flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	preset sconosciuto `{name}` (vedi webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	preset sconosciuto `{name}`: né integrato né salvato (vedi imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	lato sconosciuto `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	strumento sconosciuto `{tool}`
 @msg	unknown tool `{t}`	strumento sconosciuto `{t}`
