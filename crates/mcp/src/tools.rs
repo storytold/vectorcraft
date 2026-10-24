@@ -154,7 +154,7 @@ pub fn tool_definitions() -> Vec<Value> {
             "Render a preview",
             "Render an artboard (default the first) as inline PNG without changing the document. max_side defaults to 1024, limited to 1..4096.",
             obj(
-                json!({"max_side":{"type":"integer","minimum":1,"maximum":4096},"artboard":{"type":"integer","minimum":0,"description":"0-based artboard (default 0)"}}),
+                json!({"max_side":{"type":"integer","minimum":1,"maximum":4096},"artboard":{"type":"integer","minimum":0,"description":"0-based artboard (default 0)"},"traceViews":{"type":"boolean","description":TRACE_VIEWS}}),
                 &[],
             ),
             true,
@@ -344,6 +344,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "artboard": {"type": "integer", "minimum": 0, "description": "Artboard index (default 0)"},
                     "window": {"type": "boolean", "description": "Capture the app window (desktop app only)"},
                     "max_side": {"type": "integer", "minimum": 1, "maximum": 4096, "description": MAX_SIDE_WINDOW},
+                    "traceViews": {"type": "boolean", "description": TRACE_VIEWS},
                 }),
                 &[],
             ),
@@ -845,6 +846,7 @@ fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     if max.is_some() && !window {
         return Err("`max_side` applies to a window capture (`window: true`); size an artboard render with `scale`".into());
     }
+    let trace_views = trace_views(a)?;
     // The backend writes the file, where its automation roots allow, and sends the image back too
     // (`data`): this process writes nothing.
     let mut p = json!({"data": true});
@@ -859,6 +861,9 @@ fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
             if let Some(v) = a.get(k) {
                 p[k] = v.clone();
             }
+        }
+        if trace_views {
+            p["traceViews"] = json!(true);
         }
         b.call("ui.render", p)?
     };
@@ -941,6 +946,16 @@ const BRIEF: &str = "Leave out each command's params description (the bulk of th
 /// The `max_side` argument of the window captures.
 const MAX_SIDE_WINDOW: &str =
     "Window capture only: longest side of the returned image in pixels; a larger capture is scaled down to it (default: the full capture)";
+/// The `traceViews` argument of the artboard renders.
+const TRACE_VIEWS: &str = "Draw Image Trace objects in the view set with imageTrace.setView (outlines, the source image…), as the app's window does; by default they draw their tracing result, as exports do";
+
+/// `traceViews`: false when absent.
+fn trace_views(a: &Args) -> Result<bool, String> {
+    match a.get("traceViews") {
+        None => Ok(false),
+        Some(v) => v.as_bool().ok_or_else(|| "`traceViews` must be a boolean".into()),
+    }
+}
 
 /// The command catalogue narrowed by the listing tools' arguments: `filter` (or `query`) on the
 /// id, label and menu path, `menu` on the menu path, `enabledOnly`, and `brief` (no `params`
@@ -1326,6 +1341,7 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
         None => 0,
         Some(v) => v.as_u64().ok_or("`artboard` must be a 0-based artboard index")?,
     };
+    let trace_views = trace_views(a)?;
     let doc = b.call("document.inspect", json!({"depth":0}))?;
     let board =
         doc.get("artboards").and_then(Value::as_array).and_then(|v| v.get(usize::try_from(index).ok()?)).ok_or(format!("no artboard {index}"))?;
@@ -1340,7 +1356,11 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     if width.max(height) * scale > 4096.0 {
         return Err("artboard is too large for a bounded preview".into());
     }
-    let r = b.call("ui.render", json!({"scale":scale, "artboard": index}))?;
+    let mut p = json!({"scale":scale, "artboard": index});
+    if trace_views {
+        p["traceViews"] = json!(true);
+    }
+    let r = b.call("ui.render", p)?;
     let encoded = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
     let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read preview: {e}"))?;

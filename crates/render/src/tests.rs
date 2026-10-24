@@ -1001,6 +1001,46 @@ fn supersampled_art_leaves_no_seam_between_shapes_that_meet() {
     assert_eq!(supersample_factor(40_000, 10), None);
 }
 
+/// A supersampled render draws Outline view's lines one output pixel wide, as an unsupersampled
+/// one does, instead of a quarter of a pixel: the line down x = 50.5 draws darker than 64 of 255
+/// either way. So do the outlines of type and a dotted guide along y = 90.5.
+#[test]
+fn supersampled_outlines_stay_one_pixel_wide() {
+    let _fonts = crate::tests_fontchange::fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let style = vectorcraft_doc::text::CharStyle { size: 30.0, ..Default::default() };
+    let text = vectorcraft_doc::text::TextObject::point(vectorcraft_geom::Point::new(60.0, 80.0), "H", style);
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text)));
+    d.insert(Some(d.layers[0].id), 0, t).unwrap();
+    let n = rect_node(&mut d, Rect::new(20.0, 20.0, 50.5, 80.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let mut guide = Node::path(d.alloc_id(), shapes::line(Point::new(5.0, 90.5), Point::new(95.0, 90.5)), Appearance::default());
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    d.insert(Some(d.layers[0].id), 1, guide).unwrap();
+    let draw = |supersample: bool| {
+        let opts = RenderOptions {
+            background: Some([255, 255, 255, 255]),
+            outline: true,
+            guide: ([0, 0, 0], true),
+            precise: true,
+            supersample,
+            ..Default::default()
+        };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let darkest = |r: &Rendered| (48..=52).map(|x| r.pixel(x, 50)[0]).min().unwrap();
+    assert!(darkest(&draw(false)) < 64, "unsupersampled: {}", darkest(&draw(false)));
+    assert!(darkest(&draw(true)) < 64, "supersampled: {}", darkest(&draw(true)));
+    let type_darkest = |r: &Rendered| (56..=95).flat_map(|x| (45..=85).map(move |y| (x, y))).map(|(x, y)| r.pixel(x, y)[0]).min().unwrap();
+    assert!(type_darkest(&draw(false)) < 64, "unsupersampled type: {}", type_darkest(&draw(false)));
+    assert!(type_darkest(&draw(true)) < 64, "supersampled type: {}", type_darkest(&draw(true)));
+    let guide_darkest = |r: &Rendered| (10..=90).flat_map(|x| (89..=92).map(move |y| (x, y))).map(|(x, y)| r.pixel(x, y)[0]).min().unwrap();
+    assert!(guide_darkest(&draw(false)) < 64, "unsupersampled guide: {}", guide_darkest(&draw(false)));
+    assert!(guide_darkest(&draw(true)) < 64, "supersampled guide: {}", guide_darkest(&draw(true)));
+}
+
 /// #1613: a zero-length subpath (`m` then `L` to the same point, as `.ai` files write dots) is a
 /// dot as wide as the stroke: a disc under a round cap, a square under a projecting one, nothing
 /// under a butt cap (PDF 32000-1 8.5.3.2, SVG 2 "Path data" zero-length segments).

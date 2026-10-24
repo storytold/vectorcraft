@@ -180,6 +180,34 @@ fn control_render_matches_a_png_export_on_white() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.render {traceViews: true}` draws an Image Trace object in its view, as the canvas does:
+/// in Source Image view the image's blue shows beside the traced disc, where `ui.render` without
+/// it draws the tracing result on white.
+#[test]
+fn control_render_draws_the_trace_view_with_trace_views() {
+    let (mut app, tx, base) = confined("traceviews");
+    let png = base.join("in/disc.png");
+    image::RgbImage::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
+    })
+    .save(&png)
+    .unwrap();
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(png)}));
+    assert_eq!(r["ok"], true, "{r}");
+    app.run("select.all", json!({})).unwrap();
+    app.run("imageTrace.make", json!({"params": {"ignoreWhite": true}})).unwrap();
+    app.run("imageTrace.setView", json!({"view": "sourceImage"})).unwrap();
+    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let view = pixels(&request(&mut app, &tx, "ui.render", json!({"traceViews": true}))["result"]["pngBase64"]);
+    let result = pixels(&request(&mut app, &tx, "ui.render", json!({}))["result"]["pngBase64"]);
+    let (beside, middle) = (view.get_pixel(10, 10).0, view.get_pixel(50, 50).0);
+    assert!(beside[0] < 200 && beside[2] > 245, "the source image beside the disc: {beside:?}");
+    assert!(middle[..3].iter().all(|&c| c < 60), "the disc: {middle:?}");
+    assert_eq!(result.get_pixel(10, 10).0, [255; 4], "the tracing result on white");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn frames_with_injected_input_are_confined() {
     let (mut app, tx, base) = confined("synthetic");
