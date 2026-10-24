@@ -4389,6 +4389,12 @@ axis	Both	И двете
 	Insert Inline Symbol	Вграждане на вграден символ
 	ICF Top/Right	ICF горе/дясно
 	ICF Bottom/Left	ICF долу/ляво
+	Show Font Height Options	Показване на опциите за височина на шрифта
+	Hide Font Height Options	Скриване на опциите за височина на шрифта
+	Set Font Height Reference	Задаване на референтна височина на шрифта
+	Em Box	Квадратна касетка (Em Box)
+	x-Height	Височина на x
+	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}

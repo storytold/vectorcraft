@@ -1901,6 +1901,12 @@ file-filter	Templates	Sablonok
 	Hyphenate Capitalized Words	Nagybetűs szavak elválasztása
 	ICC Profile	ICC-profil
 	ICF Bottom/Left	ICF alja/bal oldala
+	Show Font Height Options	Betűmagasság-beállítások megjelenítése
+	Hide Font Height Options	Betűmagasság-beállítások elrejtése
+	Set Font Height Reference	Betűmagasság viszonyítási alapjának beállítása
+	Em Box	Kvirtmező
+	x-Height	x-magasság
+	ICF Box	ICF-mező
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -4417,6 +4423,7 @@ imageTrace	Outline	Körvonal
 @msg	`stops` must be an array	`stops`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
 @msg	`to` must be "corner" or "smooth"	`to`: "corner" vagy "smooth" kell
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`: "emBox", "capHeight", "xHeight" vagy "icfBox" kell
 @msg	`{_1}` is no save command	nem mentési parancs: `{_1}`
 @msg	`{area}` is no recovery area name	nem helyreállítási terület neve: `{area}`
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	nem szín: `{color}` (#rrggbb vagy előbeállítás neve)

@@ -926,6 +926,13 @@ font-technology	Variable	Variabili
 	Em Box Top/Right	Riquadro em in alto/a destra
 	ICF Top/Right	ICF in alto/a destra
 	ICF Bottom/Left	ICF in basso/a sinistra
+	Show Font Height Options	Mostra opzioni altezza font
+	Hide Font Height Options	Nascondi opzioni altezza font
+	Set Font Height Reference	Imposta riferimento altezza font
+	Em Box	Riquadro em
+	Cap Height	Altezza maiuscole
+	x-Height	Altezza x
+	ICF Box	Riquadro ICF
 	Em Dash	Lineetta
 	Em Space	Spazio em
 	Embed	Incorpora
@@ -3838,6 +3845,7 @@ axis	Both	Entrambi
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	i livelli del file non sono stati letti ({_1}): si apre come la sua pagina, in un solo livello
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	i livelli del file non sono stati letti dai suoi dati di modifica ({_1}): provengono dalla sua parte PDF
 @msg	`to` must be "corner" or "smooth"	`to` deve essere "corner" o "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` deve essere "emBox", "capHeight", "xHeight" o "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	I file BMP sono RGB o in scala di grigi: colorModel rgb o gray
 @msg	Blend colors: select at least three objects with filled colours	Fondi colori: seleziona almeno tre oggetti con riempimento colore
 @msg	Combine Slices: the slices have no bounds	Combina sezioni: le sezioni non hanno limiti

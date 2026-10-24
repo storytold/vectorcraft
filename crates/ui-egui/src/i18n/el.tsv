@@ -2064,6 +2064,7 @@ axis	Both	Και τα δύο
 @msg	the art on them differs from the page's in {_1}% of it	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%, αλλά θα χρησιμοποιηθούν τα δεδομένα επεξεργασίας
 @msg	`to` must be "corner" or "smooth"	Το `to` πρέπει να είναι "corner" ή "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	Το `fontHeightReference` πρέπει να είναι "emBox", "capHeight", "xHeight" ή "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Τα αρχεία BMP πρέπει να είναι RGB ή σε κλίμακα του γκρι: colorModel rgb ή gray
 @msg	Blend colors: select at least three objects with filled colours	Ανάμειξη χρωμάτων: επιλέξτε τουλάχιστον τρία αντικείμενα με χρώμα γεμίσματος
 @msg	Combine Slices: the slices have no bounds	Συνδυασμός τομών: οι τομές δεν έχουν όρια
@@ -4455,6 +4456,12 @@ theme	Appearance	Εμφάνιση
 	Insert Inline Symbol	Εισαγωγή ενσωματωμένου συμβόλου
 	ICF Top/Right	ICF επάνω/δεξιά
 	ICF Bottom/Left	ICF κάτω/αριστερά
+	Show Font Height Options	Εμφάνιση επιλογών ύψους γραμματοσειράς
+	Hide Font Height Options	Απόκρυψη επιλογών ύψους γραμματοσειράς
+	Set Font Height Reference	Ορισμός αναφοράς ύψους γραμματοσειράς
+	Em Box	Τετράγωνο em
+	x-Height	Ύψος x
+	ICF Box	Πλαίσιο ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
 @msg	`corners` must be an array of anchor indices, not {v}	το `corners` πρέπει να είναι πίνακας δεικτών αγκύρωσης, όχι {v}

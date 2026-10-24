@@ -160,6 +160,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
+        ("fontHeightReference", json!(v.font_height_reference)),
     ] {
         m.insert(k.into(), x);
     }

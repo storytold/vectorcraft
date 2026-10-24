@@ -888,6 +888,13 @@ font-technology	Variable	可變
 	Em Box Top/Right	全形字框上 / 右
 	ICF Top/Right	ICF 上 / 右
 	ICF Bottom/Left	ICF 下 / 左
+	Show Font Height Options	顯示字體高度選項
+	Hide Font Height Options	隱藏字體高度選項
+	Set Font Height Reference	設定字體高度參考
+	Em Box	全形字框
+	Cap Height	大寫字母高度
+	x-Height	x 字高
+	ICF Box	ICF 框
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -1605,6 +1612,7 @@ file-filter	Templates	範本
 @msg	Saving {_1}	正在儲存 {_1}
 @msg	Sent to {_1}	已傳送至 {_1}
 @msg	`to` must be "corner" or "smooth"	`to` 必須是 "corner" 或 "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` 必須是 "emBox"、"capHeight"、"xHeight" 或 "icfBox"
 @msg	a layer couldn't be read	有一個圖層無法讀取
 @msg	it has more than one artboard	它有多個工作區域
 @msg	its editing data has no layers	其編輯資料中沒有圖層

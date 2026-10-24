@@ -1407,6 +1407,12 @@ lighting	Light	Valo
 	Axis	Akseli
 	ICF Top/Right	ICF ylä/oikea
 	ICF Bottom/Left	ICF ala/vasen
+	Show Font Height Options	Näytä fontin korkeuden asetukset
+	Hide Font Height Options	Piilota fontin korkeuden asetukset
+	Set Font Height Reference	Aseta fontin korkeuden viite
+	Em Box	Em-laatikko
+	x-Height	x-korkeus
+	ICF Box	ICF-laatikko
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -4020,6 +4026,7 @@ imageTrace	Outline	Ääriviiva
 @msg	the art on them differs from the page's in {_1}% of it	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta: ne tuodaan silti sen muokkaustiedoista
 @msg	`to` must be "corner" or "smooth"	`to` on oltava "corner" tai "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` on oltava "emBox", "capHeight", "xHeight" tai "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-tiedostot ovat RGB- tai harmaasävykuvia: colorModel rgb tai gray
 @msg	Blend colors: select at least three objects with filled colours	Sulauta värit: valitse vähintään kolme objektia, joilla on väritäyttö
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja

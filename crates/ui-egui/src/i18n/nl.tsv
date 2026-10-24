@@ -1364,6 +1364,12 @@ lighting	Light	Licht
 	Axis	As
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
+	Show Font Height Options	Opties voor letterhoogte tonen
+	Hide Font Height Options	Opties voor letterhoogte verbergen
+	Set Font Height Reference	Referentie voor letterhoogte instellen
+	Em Box	Em-vak
+	x-Height	x-hoogte
+	ICF Box	ICF-vak
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%

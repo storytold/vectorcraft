@@ -286,6 +286,26 @@ impl FontFace {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
     }
 
+    /// The height of the face that a font size measures with `reference`, in ems: 1 for the em
+    /// box; the cap height or x height of its OS/2 table; the height of its ideographic character
+    /// face ([`Self::icf_margins`]), or across a `vertical` line its width. None for a face whose
+    /// font has no such value (an OS/2 table without the heights, no ICF), or one outside 0.1 to
+    /// 2 ems.
+    pub fn font_height(&self, reference: vectorcraft_doc::FontHeightReference, vertical: bool) -> Option<f64> {
+        use vectorcraft_doc::FontHeightReference as R;
+        let units = |v: Option<f32>| v.map(f64::from).map(|v| v / self.upem);
+        let h = match reference {
+            R::EmBox => Some(1.0),
+            R::CapHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height),
+            R::XHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).x_height),
+            R::IcfBox => {
+                let m = self.icf_margins();
+                (m != IcfMargins::default()).then_some(if vertical { 1.0 - m.left - m.right } else { 1.0 - m.top - m.bottom })
+            }
+        };
+        h.filter(|h| (0.1..=2.0).contains(h))
+    }
+
     /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else
     /// as far below the em box top) against the em box `ideo` .. `idtp` (else the OS/2 typographic
     /// descender, and one em above it); across vertical lines, `icfb` and `icft` of the vertical
@@ -2340,6 +2360,37 @@ impl FontDb {
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {
         let face = self.face_version(&st.font_family, &st.font_style, st.font_version.as_deref())?;
         Some(self.instance(&face, &st.font_axes))
+    }
+
+    /// The em size characters of style `st` are set at, in `vertical` type or not: its size, or
+    /// with a font height reference other than the em box ([`vectorcraft_doc::FontHeightReference`])
+    /// the size at which its face ([`Self::style_face`]) has that height
+    /// ([`FontFace::font_height`]). The size itself when the face has no such height.
+    pub fn em_size(&self, st: &vectorcraft_doc::CharStyle, vertical: bool) -> f64 {
+        let reference = st.font_height_reference;
+        if reference == vectorcraft_doc::FontHeightReference::EmBox {
+            return st.size;
+        }
+        self.style_face(st).and_then(|f| f.font_height(reference, vertical)).map_or(st.size, |h| st.size / h)
+    }
+
+    /// `t` as layout sets it: each run takes its [`Self::em_size`] and the em box as its font
+    /// height reference; an inline graphic keeps its size. Explicit leading and baseline shift
+    /// stay in points; Auto leading, tracking and kerning follow the em size. `t` itself when every
+    /// run measures the em box.
+    pub fn font_heights_resolved<'a>(&self, t: &'a vectorcraft_doc::TextObject) -> std::borrow::Cow<'a, vectorcraft_doc::TextObject> {
+        use vectorcraft_doc::FontHeightReference;
+        if t.runs.iter().all(|r| r.style.font_height_reference == FontHeightReference::EmBox) {
+            return std::borrow::Cow::Borrowed(t);
+        }
+        let mut out = t.clone();
+        for r in &mut out.runs {
+            if r.inline.is_none() {
+                r.style.size = self.em_size(&r.style, t.vertical);
+            }
+            r.style.font_height_reference = FontHeightReference::EmBox;
+        }
+        std::borrow::Cow::Owned(out)
     }
 
     /// `face` with the axis settings `axes` (by tag, in the axes' own units) in place of its own,
