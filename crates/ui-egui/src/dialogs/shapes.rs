@@ -1,5 +1,6 @@
 //! Shape size dialogs (a click with a shape tool): Rectangle, Rounded Rectangle, Ellipse, Polygon,
-//! Star, Line Segment, Arc and Spiral tool options, and the two grids (size, divider counts and skews, switches).
+//! Star, Heart, Arrow, Gear, Line Segment, Arc and Spiral tool options, and the two grids (size,
+//! divider counts and skews, switches).
 //! The Line Segment, Arc and grid dialogs are also their tools' Tool Options (a double-click on the
 //! tool, [`open_options`]): OK then sets the options the tool's next drag and click use, and draws
 //! nothing.
@@ -30,6 +31,9 @@ fn title(d: &Dialog) -> &'static str {
         "ellipse" => tl!("Ellipse"),
         "polygon" => tl!("Polygon"),
         "star" => tl!("Star"),
+        "heart" => tl!("Heart"),
+        "arrow" => tl!("Arrow"),
+        "gear" => tl!("Gear"),
         "spiral" => tl!("Spiral"),
         "rectangularGrid" if options => tl!("Rectangular Grid Tool Options"),
         "rectangularGrid" => tl!("Rectangular Grid"),
@@ -272,11 +276,41 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             values[key] = json!(d.f64(key, default).clamp(min, 1000.0) as u64);
             values
         })
+        .or_else(|| match d.kind.as_str() {
+            "arrow" => Some(json!({"shaft": d.f64("shaft", 40.0), "head": d.f64("head", 35.0), "heads": (d.f64("heads", 1.0) as u64).clamp(1, 2)})),
+            "gear" => Some(json!({"teeth": (d.f64("teeth", 12.0) as u64).clamp(3, 360), "depth": d.f64("depth", 20.0), "hole": d.f64("hole", 30.0)})),
+            _ => None,
+        })
         .or_else(|| OPTION_TOOLS.contains(&d.kind.as_str()).then(|| tool_options(d)));
     let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
     let (bx, by) = box_origin(d);
     let (id, params) = match d.kind.as_str() {
         "ellipse" => ("shape.ellipse", json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0)})),
+        "heart" => ("shape.heart", json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0)})),
+        "arrow" => (
+            "shape.arrow",
+            json!({
+                "x": bx,
+                "y": by,
+                "width": d.f64("width", 100.0),
+                "height": d.f64("height", 100.0),
+                "shaft": d.f64("shaft", 40.0),
+                "head": d.f64("head", 35.0),
+                "heads": (d.f64("heads", 1.0) as u64).clamp(1, 2),
+            }),
+        ),
+        "gear" => (
+            "shape.gear",
+            json!({
+                "x": bx,
+                "y": by,
+                "width": d.f64("width", 100.0),
+                "height": d.f64("height", 100.0),
+                "teeth": (d.f64("teeth", 12.0) as u64).clamp(3, 360),
+                "depth": d.f64("depth", 20.0),
+                "hole": d.f64("hole", 30.0),
+            }),
+        ),
         "polygon" => ("shape.polygon", json!({"cx": x, "cy": y, "radius": d.f64("radius", 50.0), "sides": d.f64("sides", 6.0) as u64})),
         "star" => (
             "shape.star",
@@ -387,6 +421,42 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
         assert_eq!(app.session.tool_options_of("spiral"), json!({"decay": 65.0, "segments": 12, "clockwise": true}));
+    }
+
+    /// #3865: a click with the Heart, Arrow or Gear tool asks for the size and the tool's options,
+    /// draws the shape there and keeps the options for the next one.
+    #[test]
+    fn heart_arrow_and_gear_click_dialogs_draw_and_keep_their_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("tool.setOption", json!({"tool": "gear", "values": {"teeth": 9}})).unwrap();
+        for (kind, extra, label) in [
+            ("heart", json!({}), "Heart"),
+            ("arrow", json!({"shaft": 30.0, "head": 25.0, "heads": 2}), "Arrow"),
+            ("gear", json!({"teeth": 12, "depth": 25.0, "hole": 0.0}), "Gear"),
+        ] {
+            super::super::open_tool_dialog(&mut app, kind, json!({"x": 40.0, "y": 60.0}));
+            let d = app.ui.dialog.as_mut().expect("a size dialog");
+            assert_eq!((d.kind.as_str(), title(d)), (kind, label));
+            if kind == "gear" {
+                assert_eq!(d.f64("teeth", 0.0), 9.0, "the tool's option");
+            }
+            d.fields.insert("width".into(), json!(120.0));
+            d.fields.insert("height".into(), json!(80.0));
+            for (k, v) in extra.as_object().unwrap() {
+                d.fields.insert(k.clone(), v.clone());
+            }
+            super::super::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            let doc = &app.session.doc().unwrap().doc;
+            let id = *app.session.doc().unwrap().selection.objects.last().unwrap();
+            let b = doc.node(id).unwrap().geometric_bounds().unwrap();
+            assert!((b.x0 - 40.0).abs() < 1e-6 && (b.y0 - 60.0).abs() < 1e-6 && (b.width() - 120.0).abs() < 1e-6, "{kind}: {b:?}");
+            assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, label);
+        }
+        let (arrow, gear) = (app.session.tool_options_of("arrow"), app.session.tool_options_of("gear"));
+        assert_eq!((&arrow["shaft"], &arrow["head"], &arrow["heads"]), (&json!(30.0), &json!(25.0), &json!(2)));
+        assert_eq!((&gear["teeth"], &gear["depth"], &gear["hole"]), (&json!(12), &json!(25.0), &json!(0.0)));
     }
 
     #[test]

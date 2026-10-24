@@ -2575,6 +2575,8 @@ mod tests_expand;
 #[cfg(test)]
 mod tests_eyedropper;
 #[cfg(test)]
+mod tests_figures;
+#[cfg(test)]
 mod tests_file;
 #[cfg(test)]
 mod tests_fileinfo;

@@ -1,10 +1,12 @@
-//! Shape tools: Rectangle, Rounded Rectangle, Ellipse, Polygon, Star, Line Segment.
+//! Shape tools: Rectangle, Rounded Rectangle, Ellipse, Polygon, Star, Heart, Arrow, Gear, Line
+//! Segment.
 //!
 //! Drag draws (Shift constrains to square/circle/45°, Alt draws from the centre, Space held moves
 //! the shape being drawn); a click without a drag asks the UI for the size dialog (like
 //! Illustrator). ↑/↓ during a polygon/star drag change the side/point count; during a star drag,
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
-//! keeps the star's shoulders straight (#812). The start point and
+//! keeps the star's shoulders straight (#812). Heart, Arrow and Gear (#3865) draw in a box like
+//! the Rectangle; ↑/↓ during a gear drag change its tooth count. The start point and
 //! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
 
 use serde_json::{Value, json};
@@ -31,6 +33,10 @@ pub struct ShapeTool {
     pub line_length: f64,
     pub line_angle: f64,
     pub fill_line: bool,
+    /// Arrow: shaft thickness (% of the height), head length (% of the width), heads (1 or 2).
+    pub arrow: (f64, f64, u32),
+    /// Gear: teeth, tooth depth and hole (% of the radius).
+    pub gear: (u32, f64, f64),
     snap: DrawSnap,
 }
 
@@ -49,6 +55,9 @@ impl ShapeTool {
             "ellipse" => "ellipse",
             "polygon" => "polygon",
             "star" => "star",
+            "heart" => "heart",
+            "arrow" => "arrow",
+            "gear" => "gear",
             "lineSegment" => "lineSegment",
             _ => "rectangle",
         };
@@ -63,6 +72,8 @@ impl ShapeTool {
             corner_radius: 12.0,
             star_ratio: 0.5,
             inner: None,
+            arrow: (40.0, 35.0, 1),
+            gear: (12, 20.0, 30.0),
             snap: DrawSnap::default(),
             line_length: 100.0,
             line_angle: 0.0,
@@ -93,6 +104,9 @@ impl ShapeTool {
             "ellipse" => "Ellipse",
             "polygon" => "Polygon",
             "star" => "Star",
+            "heart" => "Heart",
+            "arrow" => "Arrow",
+            "gear" => "Gear",
             "lineSegment" => "Line",
             _ => "Rectangle",
         }
@@ -146,10 +160,25 @@ impl ShapeTool {
                 ("shape.line".into(), v)
             }
             _ => {
-                let cmd = if self.id == "ellipse" { "shape.ellipse" } else { "shape.rectangle" };
+                let cmd = match self.id {
+                    "ellipse" => "shape.ellipse",
+                    "heart" => "shape.heart",
+                    "arrow" => "shape.arrow",
+                    "gear" => "shape.gear",
+                    _ => "shape.rectangle",
+                };
                 let mut v = box_params(start, p, m, base);
-                if self.id == "roundedRectangle" {
-                    v["radius"] = json!(self.corner_radius);
+                match self.id {
+                    "roundedRectangle" => v["radius"] = json!(self.corner_radius),
+                    "arrow" => {
+                        let (shaft, head, heads) = self.arrow;
+                        (v["shaft"], v["head"], v["heads"]) = (json!(shaft), json!(head), json!(heads));
+                    }
+                    "gear" => {
+                        let (teeth, depth, hole) = self.gear;
+                        (v["teeth"], v["depth"], v["hole"]) = (json!(teeth), json!(depth), json!(hole));
+                    }
+                    _ => {}
                 }
                 (cmd.into(), v)
             }
@@ -278,6 +307,14 @@ impl Tool for ShapeTool {
                 self.points = self.points.saturating_sub(1).max(3);
                 true
             }
+            ("gear", ToolKey::Up) => {
+                self.gear.0 = (self.gear.0 + 1).min(vectorcraft_geom::figures::GEAR_MAX_TEETH);
+                true
+            }
+            ("gear", ToolKey::Down) => {
+                self.gear.0 = self.gear.0.saturating_sub(1).max(3);
+                true
+            }
             ("roundedRectangle", ToolKey::Up) => {
                 self.corner_radius += 1.0;
                 true
@@ -326,6 +363,8 @@ impl Tool for ShapeTool {
         Cursor::Crosshair
     }
     fn options(&self) -> Value {
+        let (shaft, head, heads) = self.arrow;
+        let (teeth, depth, hole) = self.gear;
         json!({
             "sides": self.sides,
             "points": self.points,
@@ -334,6 +373,12 @@ impl Tool for ShapeTool {
             "length": self.line_length,
             "angle": self.line_angle,
             "fillLine": self.fill_line,
+            "shaft": shaft,
+            "head": head,
+            "heads": heads,
+            "teeth": teeth,
+            "depth": depth,
+            "hole": hole,
         })
     }
     fn set_option(&mut self, key: &str, v: &Value) {
@@ -346,6 +391,12 @@ impl Tool for ShapeTool {
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),
             "angle" => self.line_angle = finite.map_or(self.line_angle, |n| n.rem_euclid(360.0)),
             "fillLine" => self.fill_line = v.as_bool().unwrap_or(self.fill_line),
+            "shaft" => self.arrow.0 = v.as_f64().filter(|n| n.is_finite()).unwrap_or(40.0).clamp(1.0, 100.0),
+            "head" => self.arrow.1 = v.as_f64().filter(|n| n.is_finite()).unwrap_or(35.0).clamp(1.0, 100.0),
+            "heads" => self.arrow.2 = v.as_u64().unwrap_or(1).clamp(1, 2) as u32,
+            "teeth" => self.gear.0 = v.as_u64().unwrap_or(12).clamp(3, u64::from(vectorcraft_geom::figures::GEAR_MAX_TEETH)) as u32,
+            "depth" => self.gear.1 = v.as_f64().filter(|n| n.is_finite()).unwrap_or(20.0).clamp(2.0, 90.0),
+            "hole" => self.gear.2 = v.as_f64().filter(|n| n.is_finite()).unwrap_or(30.0).clamp(0.0, 95.0),
             _ => {}
         }
     }
@@ -478,6 +529,66 @@ mod tests {
         let o = t.overlays(&cx);
         assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(w, h))), "{o:?}");
         assert!(!o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(40.0, 0.0))), "not the page box");
+    }
+
+    /// Heart, Arrow and Gear (#3865) drag out a box like the Rectangle, with the tool's options.
+    #[test]
+    fn heart_arrow_and_gear_drag_out_a_box_with_their_options() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        for (id, cmd, label) in [("heart", "shape.heart", "Heart"), ("arrow", "shape.arrow", "Arrow"), ("gear", "shape.gear", "Gear")] {
+            let mut t = ShapeTool::new(id);
+            assert_eq!(t.id(), id);
+            t.set_option("heads", &json!(2));
+            t.set_option("teeth", &json!(9));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 380.0, 340.0));
+            assert_eq!(a[0], Action::Begin(label.into()));
+            let Action::Preview(c, v) = &a[1] else { panic!("{a:?}") };
+            assert_eq!(c, cmd);
+            assert_eq!((&v["x"], &v["y"], &v["width"], &v["height"]), (&json!(300.0), &json!(300.0), &json!(80.0), &json!(40.0)));
+            match id {
+                "arrow" => assert_eq!((&v["shaft"], &v["head"], &v["heads"]), (&json!(40.0), &json!(35.0), &json!(2))),
+                "gear" => assert_eq!((&v["teeth"], &v["depth"], &v["hole"]), (&json!(9), &json!(20.0), &json!(30.0))),
+                _ => assert!(v.get("heads").is_none() && v.get("teeth").is_none(), "{v}"),
+            }
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 380.0, 340.0)), vec![Action::Commit]);
+            // A click asks for the size.
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            assert_eq!(
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)),
+                vec![Action::Dialog(id.into(), json!({"x": 10.0, "y": 10.0}))]
+            );
+        }
+    }
+
+    #[test]
+    fn arrow_keys_change_a_gears_teeth_and_options_are_clamped() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = ShapeTool::new("gear");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 80.0));
+        let a = t.key(&cx, ToolKey::Up, Mods::default());
+        assert!(matches!(&a[0], Action::Preview(_, v) if v["teeth"] == 13), "{a:?}");
+        for _ in 0..20 {
+            t.key(&cx, ToolKey::Down, Mods::default());
+        }
+        assert_eq!(t.gear.0, 3);
+        for (key, v) in
+            [("teeth", json!(100_000)), ("depth", json!(500.0)), ("hole", json!(-5.0)), ("heads", json!(7)), ("shaft", json!(f64::NAN.to_string()))]
+        {
+            t.set_option(key, &v);
+        }
+        let o = t.options();
+        assert_eq!(
+            (&o["teeth"], &o["depth"], &o["hole"], &o["heads"], &o["shaft"]),
+            (&json!(360), &json!(90.0), &json!(0.0), &json!(2), &json!(40.0))
+        );
     }
 
     #[test]

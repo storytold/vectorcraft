@@ -1258,6 +1258,13 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
         ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
         ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
+        ("shape.heart", json!({"x": 0, "y": 0, "width": 10, "height": 10, "rotation": "45"}), "rotation"),
+        ("shape.arrow", json!({"x": 0, "y": 0, "width": 10, "height": 10, "shaft": "40"}), "shaft"),
+        ("shape.arrow", json!({"x": 0, "y": 0, "width": 10, "height": 10, "head": [35]}), "head"),
+        ("shape.arrow", json!({"x": 0, "y": 0, "width": 10, "height": 10, "heads": "2"}), "heads"),
+        ("shape.gear", json!({"x": 0, "y": 0, "width": 10, "height": 10, "teeth": "12"}), "teeth"),
+        ("shape.gear", json!({"x": 0, "y": 0, "width": 10, "height": 10, "depth": "20"}), "depth"),
+        ("shape.gear", json!({"x": 0, "y": 0, "width": 10, "height": 10, "hole": true}), "hole"),
     ]
     .into_iter()
     .map(|(cmd, p, key)| not_a_number(cmd, p, key))

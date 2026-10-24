@@ -15,7 +15,7 @@ Affinity files.
 | Artboards (legacy `ABEn` or Affinity 3 `phrp`/`aprp`), with name, paint and any transform | artboards plus a clip group with the actual vector outline, background and stroke |
 | Layers (`Scop`), groups (`Grup`), pass-through or isolated | layers and sublayers, groups |
 | Curves (`PCrv`): cubic subpaths, closed flags, live corners (`CnrD`) | paths (multi-subpath curves fill even-odd) |
-| Rectangles with corner radii (relative or absolute, locked or per corner) and round or straight corners, ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids | paths |
+| Rectangles with corner radii (relative or absolute, locked or per corner) and round or straight corners, ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids, hearts, cogs (with their hole) and double arrows (one or two heads) | paths |
 | Compound shapes (`Comp`, add and subtract) | one even-odd path |
 | A shape or curve with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
 | Vector masks (`AdCh` curves and shapes) | clip group |
@@ -35,7 +35,7 @@ Affinity files.
 Everything else is reported in the import warnings, one line per kind with a count, never
 dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush and pressure strokes,
 transparency gradients, fill opacity, bitmap fills, master pages based on other master pages, conical gradients (as radial),
-special shapes (cloud, heart, cog, callouts, arrows…, imported as their bounding ellipse), corner
+special shapes other than hearts, cogs and double arrows (cloud, callouts, tear…, imported as their bounding ellipse), hearts with another spread, cogs with curved teeth and arrows with other or swept heads (drawn with the corpus files' defaults), corner
 types other than round or straight, stars with rounded points, several fills or strokes on one object (the
 active one is used), skewed or flipped text, characters of different transparency in one text, text fields such as page numbers, text threading, frames with
 columns or a curved outline, table cell fills, unsupported font selectors, grey/Lab/32-bit pixels, CMYK pixels with transparency in a document

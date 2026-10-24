@@ -6,7 +6,7 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_doc::{LiveShape, Node, NodeKind};
+use vectorcraft_doc::{Figure, LiveShape, Node, NodeKind};
 use vectorcraft_geom::Rect;
 use vectorcraft_geom::shapes::CornerKind;
 
@@ -259,6 +259,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 widgets::subheader(ui, tl!("Ellipse Properties:"));
                 pie_rows(app, ui, *pie, "xfp-pie");
             }
+            vectorcraft_doc::LiveShape::Figure { figure, .. } => {
+                widgets::subheader(ui, figure_header(*figure));
+                figure_rows(app, ui, &n, live, "xfp-figure");
+            }
             _ => {
                 widgets::subheader(ui, tl!("Shape Properties:"));
                 widgets::dim_label(ui, tl!(n.kind_label()));
@@ -339,6 +343,65 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     if ui.add_enabled_ui(!live.polygon_sides_equal(), |ui| widgets::flat_button(ui, tl!("Make Sides Equal"), 130.0)).inner.clicked() {
         set = Some(("makeSidesEqual", json!(true)));
     }
+    if let Some((key, v)) = set {
+        app.run("object.setLiveShape", json!({ key: v })).ok();
+    }
+}
+
+/// The header over a live figure's properties.
+pub(crate) fn figure_header(f: Figure) -> &'static str {
+    match f {
+        Figure::Heart => tl!("Heart Properties:"),
+        Figure::Arrow { .. } => tl!("Arrow Properties:"),
+        Figure::Gear { .. } => tl!("Gear Properties:"),
+    }
+}
+
+/// A live heart's, arrow's or gear's properties (#3865; Transform and Properties panels): an
+/// arrow's shaft (% of its height), head (% of its width) and heads, a gear's teeth, depth and hole
+/// (% of its radius), then the corner type and radius as a polygon's. The values are the shape
+/// commands' own, so the fields take what the tools' options take.
+pub(crate) fn figure_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str) {
+    let Some(figure) = live.figure() else { return };
+    let fw = super::field_width(ui);
+    let kind = super::corner_style(app, n).1;
+    let kinds: Vec<&str> = CornerKind::ALL.iter().map(|k| corner_kind(*k)).collect();
+    let (min_depth, max_depth) = vectorcraft_geom::figures::GEAR_DEPTH_RANGE;
+    let (shaft_min, max_teeth) = (vectorcraft_geom::figures::ARROW_MIN, vectorcraft_geom::figures::GEAR_MAX_TEETH);
+    // The `object.setLiveShape` param an edited field sets.
+    let mut set = None;
+    egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        // A field for `key`: `v` shown in `range`, with `unit` and `decimals`.
+        let mut row = |ui: &mut Ui, label: &str, key: &'static str, v: f64, range: std::ops::RangeInclusive<f64>, unit: &str, decimals: usize| {
+            widgets::dim_label(ui, &format!("{label}:"));
+            if let Some(x) = widgets::range_field(ui, (id, key), v, range, unit, decimals, fw) {
+                set = Some((key, if decimals == 0 { json!(x.round() as u64) } else { json!(x) }));
+            }
+            ui.end_row();
+        };
+        match figure {
+            Figure::Heart => {}
+            Figure::Arrow { shaft, head, heads } => {
+                row(ui, tl!("Shaft"), "shaft", shaft * 100.0, shaft_min * 100.0..=100.0, "%", 1);
+                row(ui, tl!("Head"), "head", head * 100.0, shaft_min * 100.0..=if heads == 2 { 50.0 } else { 100.0 }, "%", 1);
+                row(ui, tl!("Heads"), "heads", f64::from(heads), 1.0..=2.0, "", 0);
+            }
+            Figure::Gear { teeth, depth, hole } => {
+                row(ui, tl!("Teeth"), "teeth", f64::from(teeth), 3.0..=f64::from(max_teeth), "", 0);
+                row(ui, tl!("Depth"), "depth", depth * 100.0, min_depth * 100.0..=max_depth * 100.0, "%", 1);
+                let max_hole = (1.0 - depth - vectorcraft_geom::figures::GEAR_MIN_RIM) * 100.0;
+                row(ui, tl!("Hole"), "hole", hole * 100.0, 0.0..=max_hole, "%", 1);
+            }
+        }
+        widgets::dim_label(ui, tl!("Corner:"));
+        if let Some(k) = widgets::dropdown_names(ui, (id, "kind"), kind.map_or("", corner_kind), &kinds, fw).and_then(|i| CornerKind::ALL.get(i)) {
+            set = Some(("kind", json!(k)));
+        }
+        ui.end_row();
+        widgets::dim_label(ui, tl!("Corner Radius:"));
+        super::corner_radius_field(app, ui, n, (id, "cornerRadius"), fw);
+        ui.end_row();
+    });
     if let Some((key, v)) = set {
         app.run("object.setLiveShape", json!({ key: v })).ok();
     }
@@ -503,6 +566,48 @@ mod tests {
         assert!(!live(&app).polygon_sides_equal());
         app.run("object.setLiveShape", json!({"makeSidesEqual": true})).unwrap();
         assert!(live(&app).polygon_sides_equal());
+    }
+
+    /// #3865: a live heart, arrow or gear shows its own properties in the Transform panel and the
+    /// Properties panel's Transform section, and a typed value changes the shape.
+    #[test]
+    fn hearts_arrows_and_gears_show_their_properties() {
+        use crate::panels::tests_constrain::{End, set_field};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let figure = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+            NodeKind::Path { live: Some(l), .. } => l.figure(),
+            k => panic!("{k:?}"),
+        };
+        app.run("shape.heart", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        let shown = texts(&mut app, show);
+        for t in ["Heart Properties:", "Corner:", "Corner Radius:"] {
+            assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+        }
+        app.run("shape.arrow", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+            let shown = texts(&mut app, draw);
+            for t in ["Shaft:", "40%", "Head:", "35%", "Heads:", "1", "Corner:", "Corner Radius:"] {
+                assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+            }
+        }
+        assert!(texts(&mut app, show).iter().any(|s| s == "Arrow Properties:"));
+        set_field(&mut app, show, "40%", "25", End::Enter(egui::Modifiers::NONE));
+        assert_eq!(figure(&app), Some(Figure::Arrow { shaft: 0.25, head: 0.35, heads: 1 }));
+        set_field(&mut app, crate::panels::properties::transform_section, "1", "2", End::Enter(egui::Modifiers::NONE));
+        assert_eq!(figure(&app), Some(Figure::Arrow { shaft: 0.25, head: 0.35, heads: 2 }));
+        app.run("shape.gear", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+        for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+            let shown = texts(&mut app, draw);
+            for t in ["Teeth:", "12", "Depth:", "20%", "Hole:", "30%", "Corner:"] {
+                assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+            }
+        }
+        assert!(texts(&mut app, show).iter().any(|s| s == "Gear Properties:"));
+        set_field(&mut app, show, "12", "9", End::Enter(egui::Modifiers::NONE));
+        assert_eq!(figure(&app), Some(Figure::Gear { teeth: 9, depth: 0.2, hole: 0.3 }));
+        set_field(&mut app, show, "30%", "0", End::Enter(egui::Modifiers::NONE));
+        assert_eq!(figure(&app), Some(Figure::Gear { teeth: 9, depth: 0.2, hole: 0.0 }));
     }
 
     /// #3451: a live ellipse shows pie start/end angles and Invert Pie in the Transform panel and

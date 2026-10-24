@@ -1,7 +1,7 @@
 //! Creating art: shapes, paths, text.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, CharStyle, Figure, LiveShape, Node, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::newart::NewArt;
@@ -29,6 +29,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
             has_doc,
             flare
+        ),
+        cmd!(
+            "shape.heart",
+            "Heart",
+            [],
+            None,
+            "{x, y, width, height, rotation?: deg (about centre)} a heart filling the box: two round lobes meeting in a notch at the top, a point at the bottom → {id}",
+            has_doc,
+            heart
+        ),
+        cmd!(
+            "shape.arrow",
+            "Arrow",
+            [],
+            None,
+            "{x, y, width, height, shaft=40 (% of the height: the shaft's thickness), head=35 (% of the width: each head's length; with two heads at most 50), heads=1 (1: pointing right, 2: both ways; other counts are clamped to these), rotation?: deg (about centre)} an arrow filling the box → {id}",
+            has_doc,
+            arrow
+        ),
+        cmd!(
+            "shape.gear",
+            "Gear",
+            [],
+            None,
+            "{x, y, width, height, teeth=12 (3–360, rounded), depth=20 (% of the radius: how far the teeth stand out, 2–90), hole=30 (% of the radius: the hole in the middle, 0 for none; it leaves a rim of at least 5 %), rotation?: deg (about centre)} a gear in the box, the first tooth straight up, tooth tops on the ellipse inscribed in it → {id}",
+            has_doc,
+            gear
         ),
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
         cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
@@ -277,7 +304,7 @@ pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) 
     let (Some(rotation), Some(axes)) = (vectorcraft_geom::constrain_rotation(base), vectorcraft_geom::constrain_axes(base)) else { return params };
     let Some(o) = params.as_object_mut().filter(|o| !o.contains_key("rotation")) else { return params };
     match cmd {
-        "shape.rectangle" | "shape.ellipse" | "shape.rectangularGrid" | "shape.polarGrid" => {
+        "shape.rectangle" | "shape.ellipse" | "shape.rectangularGrid" | "shape.polarGrid" | "shape.heart" | "shape.arrow" | "shape.gear" => {
             let num = |k: &str| o.get(k).and_then(Value::as_f64).filter(|v| v.is_finite());
             let (Some(x), Some(y), Some(w), Some(h)) = (num("x"), num("y"), num("width"), num("height")) else { return params };
             // The box's centre along the turned axes from the pivot; the command turns it there.
@@ -337,6 +364,50 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
+}
+
+/// The count `p` gives for `key`, rounded and clamped into `lo..=hi`, or `default` when it leaves
+/// it out or gives null; a value that isn't a number is an error, as [`number_or`] says.
+pub(crate) fn count_or(p: &Value, key: &str, default: u32, (lo, hi): (u32, u32), cmd: &str) -> Result<u32> {
+    let n = number_or(p, key, f64::from(default), cmd)?;
+    Ok(if n.is_finite() { n.round().clamp(f64::from(lo), f64::from(hi)) as u32 } else { default })
+}
+
+/// A live figure in the box of `p` (placed and turned as `shape.rectangle` places its box), added
+/// as one step named after it.
+fn boxed_figure(s: &mut Session, p: &Value, cmd: &str, figure: Figure) -> Result<Value> {
+    check_numbers(p, &["rotation"], cmd)?;
+    let r = rect_of(p, cmd)?;
+    let live = LiveShape::Figure {
+        figure: figure.clamped(),
+        w: r.width(),
+        h: r.height(),
+        xf: rect_transform(r, p, cmd)?,
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    };
+    add_art_turned(s, figure.label(), path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
+}
+
+fn heart(s: &mut Session, p: &Value) -> Result<Value> {
+    boxed_figure(s, p, "shape.heart", Figure::Heart)
+}
+
+fn arrow(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "shape.arrow";
+    let shaft = number_or(p, "shaft", 40.0, CMD)? / 100.0;
+    let head = number_or(p, "head", 35.0, CMD)? / 100.0;
+    let heads = count_or(p, "heads", 1, (1, 2), CMD)?;
+    boxed_figure(s, p, CMD, Figure::Arrow { shaft, head, heads })
+}
+
+fn gear(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "shape.gear";
+    let teeth = count_or(p, "teeth", 12, (3, vectorcraft_geom::figures::GEAR_MAX_TEETH), CMD)?;
+    let depth = number_or(p, "depth", 20.0, CMD)? / 100.0;
+    let hole = number_or(p, "hole", 30.0, CMD)? / 100.0;
+    boxed_figure(s, p, CMD, Figure::Gear { teeth, depth, hole })
 }
 
 fn polygon(s: &mut Session, p: &Value) -> Result<Value> {

@@ -30,7 +30,7 @@ fn size(app: &VectorcraftApp) -> (f64, f64) {
 /// How a field's editing ends: Enter, Enter in the frame the text is typed in, or a press away from
 /// the field, with these modifiers held.
 #[derive(Clone, Copy)]
-enum End {
+pub(super) enum End {
     Enter(Modifiers),
     TypedEnter(Modifiers),
     ClickAway(Modifiers),
@@ -38,7 +38,7 @@ enum End {
 
 /// Type `value` into the field of what `draw` shows that shows `field` (the first one drawn), and
 /// end its editing with `end`. Returns the context the frames ran in.
-fn set_field(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str, end: End) -> egui::Context {
+pub(super) fn set_field(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str, end: End) -> egui::Context {
     set_nth_field(app, draw, (field, 0), value, end)
 }
 

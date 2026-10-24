@@ -155,12 +155,142 @@ pub(crate) fn shape(r: &mut Reader, shape: ObjId, b: [f64; 4], world: Affine) ->
             let (l, rr) = (num(r, shape, b"PosL").unwrap_or(0.25), num(r, shape, b"PosR").unwrap_or(0.75));
             polygon([pt(x0 + l * w, y0), pt(x0 + rr * w, y0), pt(x1, y1), pt(x0, y1)])?
         }
+        b"ShHt" => {
+            if num(r, shape, b"Sprd").is_some_and(|v| (v - HEART_SPREAD).abs() > 0.01) {
+                r.warn("hearts with another spread (imported with the default one)");
+            }
+            heart(b)
+        }
+        b"ShCg" => {
+            if num(r, shape, b"Curv").is_some_and(|v| v.abs() > 1e-9) {
+                r.warn("cogs with curved teeth (imported with straight sides)");
+            }
+            let teeth = sides(r, shape, b"Teth", 12.0);
+            let inner = num(r, shape, b"IRad").unwrap_or(0.85).clamp(0.01, 1.0);
+            let hole = num(r, shape, b"Hole").unwrap_or(0.0).clamp(0.0, 0.99 * inner);
+            let top = num(r, shape, b"TtSz").unwrap_or(0.37).clamp(0.0, 1.0);
+            let notch = num(r, shape, b"NtSz").unwrap_or(0.42).clamp(0.0, 1.0);
+            return Some(Path { subpaths: cog(b, teeth, inner, hole, (top, notch)) });
+        }
+        b"ShDA" => {
+            // Head style 0 is no head, 1 a plain arrowhead; LPr2/RPr2 change a head's shape in
+            // ways the corpus doesn't show (all its arrows have 0).
+            let style = |tag: &[u8; 4]| r.s.enumeration(shape, tag).map_or(1, |(id, _)| id);
+            let (ls, rs) = (style(b"LSty"), style(b"RSty"));
+            let swept = [b"LPr2", b"RPr2"].iter().any(|t| num(r, shape, t).is_some_and(|v| v.abs() > 1e-9));
+            if ls > 1 || rs > 1 || swept {
+                r.warn("arrows with other or swept heads (imported with plain heads)");
+            }
+            let len = |tag: &[u8; 4], on: bool| if on { num(r, shape, tag).unwrap_or(0.25).clamp(0.0, 1.0) } else { 0.0 };
+            let thick = num(r, shape, b"Thck").unwrap_or(0.35).clamp(0.0, 1.0);
+            arrow(b, thick, len(b"LPr1", ls != 0), len(b"RPr1", rs != 0))?
+        }
         _ => {
-            r.warn("cloud, heart, cog, callout, arrow, tear and other special shapes (imported as their bounding ellipse)");
+            r.warn("cloud, callout, tear and other special shapes (imported as their bounding ellipse)");
             ellipse(cx, cy, rx, ry)
         }
     };
     Some(Path { subpaths: vec![sub] })
+}
+
+/// The `Sprd` of the hearts [`heart`] was fitted to (both corpus hearts have it).
+const HEART_SPREAD: f64 = 0.2;
+
+/// Affinity's heart in the box `b`, fitted to its renders of the corpus hearts (spread 0.2): six
+/// curves clockwise from the notch, the notch and the point as corners. Its lobes stop a little
+/// below the top of the box, as Affinity draws them. (anchor, in-handle, out-handle) in the unit
+/// box, y down.
+fn heart([x0, y0, x1, y1]: [f64; 4]) -> SubPath {
+    const H: [[(f64, f64); 3]; 6] = [
+        [(0.5, 0.204), (0.459, 0.107), (0.541, 0.107)],
+        [(0.728, 0.036), (0.658, 0.036), (0.918, 0.036)],
+        [(1.0, 0.319), (1.0, 0.153), (1.0, 0.644)],
+        [(0.5, 1.0), (0.704, 0.868), (0.296, 0.868)],
+        [(0.0, 0.319), (0.0, 0.644), (0.0, 0.153)],
+        [(0.272, 0.036), (0.082, 0.036), (0.342, 0.036)],
+    ];
+    let at = |(x, y): (f64, f64)| pt(x0 + x * (x1 - x0), y0 + y * (y1 - y0));
+    let segments = (0..H.len()).map(|i| [at(H[i][2]), at(H[(i + 1) % H.len()][1]), at(H[(i + 1) % H.len()][0])]).collect();
+    SubPath { start: at(H[0][0]), segments, closed: true }
+}
+
+/// Affinity's cog on the ellipse inscribed in the box `b`: `teeth` teeth, the first straight up,
+/// their tops on the ellipse and `top` of the pitch wide, the gaps between them on the ellipse
+/// scaled by `inner` and `notch` of the pitch wide, straight sides between (fitted to the corpus
+/// cog's render). A `hole` (a fraction of the ellipse) is a second subpath running the other way,
+/// so it stays open under the non-zero rule.
+fn cog([x0, y0, x1, y1]: [f64; 4], teeth: usize, inner: f64, hole: f64, (top, notch): (f64, f64)) -> Vec<SubPath> {
+    let (cx, cy, rx, ry) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0, (x1 - x0) / 2.0, (y1 - y0) / 2.0);
+    let pitch = TAU / teeth as f64;
+    let (ht, hf) = (top * pitch / 2.0, (1.0 - notch) * pitch / 2.0);
+    // Angles here are y-down (clockwise on screen); `arc` measures them y-up.
+    let on = |a: f64, f: f64| pt(cx + f * rx * a.cos(), cy + f * ry * a.sin());
+    let first = -FRAC_PI_2;
+    let mut segments = Vec::with_capacity(8 * teeth);
+    for i in 0..teeth {
+        let mid = first + pitch * i as f64;
+        arc(cx, cy, rx, ry, -(mid - ht), -(mid + ht), &mut segments);
+        let foot = on(mid + hf, inner);
+        segments.push([foot, foot, foot]);
+        arc(cx, cy, inner * rx, inner * ry, -(mid + hf), -(mid + pitch - hf), &mut segments);
+        if i + 1 < teeth {
+            let next = on(mid + pitch - ht, 1.0);
+            segments.push([next, next, next]);
+        }
+    }
+    let mut out = vec![SubPath { start: on(first - ht, 1.0), segments, closed: true }];
+    if hole > 0.0 {
+        let (hx, hy) = (hole * rx, hole * ry);
+        let mut ring = Vec::new();
+        arc(cx, cy, hx, hy, 0.0, TAU, &mut ring);
+        out.push(SubPath { start: pt(cx + hx, cy), segments: ring, closed: true });
+    }
+    out
+}
+
+/// Affinity's double arrow in the box `b`: a shaft `thick` of the height across, heads `left` and
+/// `right` of the width long (0: a flat end), shortened to meet in the middle, each as tall as the
+/// box. Anchors that would fall on others or on a straight side are left out.
+fn arrow([x0, y0, x1, y1]: [f64; 4], thick: f64, left: f64, right: f64) -> Option<SubPath> {
+    let total = left + right;
+    let (l, r) = if total > 1.0 { (left / total, right / total) } else { (left, right) };
+    let (top, bottom) = ((1.0 - thick) / 2.0, (1.0 + thick) / 2.0);
+    let mut pts: Vec<(f64, f64)> = Vec::with_capacity(10);
+    if l > 0.0 {
+        pts.extend([(0.0, 0.5), (l, 0.0), (l, top)]);
+    } else {
+        pts.push((0.0, top));
+    }
+    if r > 0.0 {
+        pts.extend([(1.0 - r, top), (1.0 - r, 0.0), (1.0, 0.5), (1.0 - r, 1.0), (1.0 - r, bottom)]);
+    } else {
+        pts.extend([(1.0, top), (1.0, bottom)]);
+    }
+    if l > 0.0 {
+        pts.extend([(l, bottom), (l, 1.0)]);
+    } else {
+        pts.push((0.0, bottom));
+    }
+    polygon(corners_only(pts).into_iter().map(|(x, y)| pt(x0 + x * (x1 - x0), y0 + y * (y1 - y0))))
+}
+
+/// The points of a closed polygon less those on the line through their neighbours (doubled
+/// points, points on a straight side, spikes).
+fn corners_only(mut pts: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    while pts.len() > 3 {
+        let n = pts.len();
+        let idle = (0..n).find(|&i| {
+            let (a, b, c) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
+            ((b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)).abs() < 1e-12
+        });
+        match idle {
+            Some(i) => {
+                pts.remove(i);
+            }
+            None => break,
+        }
+    }
+    pts
 }
 
 pub(crate) fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> SubPath {

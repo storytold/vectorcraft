@@ -259,14 +259,20 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "draw_shape",
             "Draw shape",
-            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
+            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. heart: x, y, width, height. arrow: x, y, width, height, shaft (% of the height), head (% of the width), heads (1 or 2). gear: x, y, width, height, teeth, depth and hole (% of the radius). Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
             obj(
                 with_draw_options(json!({
-                    "shape": {"type": "string", "enum": ["rectangle", "ellipse", "polygon", "star", "line"]},
-                    "x": num("Left (rectangle/ellipse)"),
-                    "y": num("Top (rectangle/ellipse)"),
-                    "width": num("Width (rectangle/ellipse)"),
-                    "height": num("Height (rectangle/ellipse)"),
+                    "shape": {"type": "string", "enum": ["rectangle", "ellipse", "polygon", "star", "line", "heart", "arrow", "gear"]},
+                    "x": num("Left (rectangle/ellipse/heart/arrow/gear)"),
+                    "y": num("Top (rectangle/ellipse/heart/arrow/gear)"),
+                    "width": num("Width (rectangle/ellipse/heart/arrow/gear)"),
+                    "height": num("Height (rectangle/ellipse/heart/arrow/gear)"),
+                    "shaft": num("Arrow shaft thickness, % of the height (default 40)"),
+                    "head": num("Arrowhead length, % of the width (default 35)"),
+                    "heads": {"type": "integer", "minimum": 1, "maximum": 2, "description": "Arrow heads: 1 pointing right, 2 both ways (default 1)"},
+                    "teeth": {"type": "integer", "minimum": 3, "description": "Gear teeth (default 12)"},
+                    "depth": num("Gear tooth depth, % of the radius (default 20)"),
+                    "hole": num("Gear hole radius, % of the radius, 0 for none (default 30)"),
                     "radius": num("Corner radius (rectangle) or radius (polygon)"),
                     "cx": num("Centre x (polygon/star)"),
                     "cy": num("Centre y (polygon/star)"),
@@ -274,7 +280,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "radius1": num("Star outer radius"),
                     "radius2": num("Star inner radius"),
                     "points": {"type": "integer", "minimum": 3, "description": "Star points (default 5)"},
-                    "rotation": num("Rotation in degrees (polygon/star)"),
+                    "rotation": num("Rotation in degrees (polygon/star/heart/arrow/gear)"),
                     "x1": num("Line start x"),
                     "y1": num("Line start y"),
                     "x2": num("Line end x"),
@@ -733,7 +739,10 @@ fn draw_shape(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         "polygon" => ("shape.polygon", "Polygon"),
         "star" => ("shape.star", "Star"),
         "line" => ("shape.line", "Line"),
-        other => return Err(format!("unknown shape `{other}` (rectangle, ellipse, polygon, star, line)")),
+        "heart" => ("shape.heart", "Heart"),
+        "arrow" => ("shape.arrow", "Arrow"),
+        "gear" => ("shape.gear", "Gear"),
+        other => return Err(format!("unknown shape `{other}` (rectangle, ellipse, polygon, star, line, heart, arrow, gear)")),
     };
     let mut p = a.clone();
     for k in ["shape", "fill", "stroke", "strokeWidth", "dash", "cap", "join", "opacity", "name", "effects"] {

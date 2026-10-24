@@ -1309,6 +1309,9 @@ pub(crate) fn perspective_rewrite(s: &Session, cmd: &str, params: &Value) -> Opt
         "shape.flare",
         "shape.spiral",
         "shape.polarGrid",
+        "shape.heart",
+        "shape.arrow",
+        "shape.gear",
     ];
     if !SHAPES.contains(&cmd) {
         return None;

@@ -222,9 +222,18 @@ fn headless_end_to_end() {
     );
     assert_eq!(r["isError"], false, "{r}");
 
+    // Heart, Arrow and Gear (#3865) draw in a box like the rectangle.
+    let shapes = [("heart", json!({})), ("arrow", json!({"heads": 2, "shaft": 30})), ("gear", json!({"teeth": 9, "hole": 0}))];
+    for (i, (shape, extra)) in shapes.into_iter().enumerate() {
+        let mut args = json!({"shape": shape, "x": 500, "y": 100, "width": 90, "height": 60});
+        args.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let r = call(&mut s, 30 + i as u64, "draw_shape", args);
+        assert_eq!(r["isError"], false, "{shape}: {r}");
+    }
+
     let r = call(&mut s, 4, "inspect_document", json!({}));
     let doc: Value = serde_json::from_str(&text_of(&r)).unwrap();
-    assert!(doc["objects"].as_u64().unwrap() >= 3, "{doc}");
+    assert!(doc["objects"].as_u64().unwrap() >= 6, "{doc}");
     let layer = &doc["layers"][0];
     let rect = layer["children"].as_array().unwrap().iter().find(|c| c["id"] == id).expect("rect in layer");
     assert_eq!(rect["bounds"]["width"], 200.0);

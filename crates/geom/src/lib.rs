@@ -10,6 +10,7 @@
 pub mod arc;
 pub mod bez;
 pub mod corners;
+pub mod figures;
 pub mod hit;
 pub mod path;
 pub mod projective;

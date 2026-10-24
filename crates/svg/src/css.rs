@@ -689,7 +689,12 @@ fn corners(path: &PathData, live: Option<&LiveShape>) -> Option<Corners> {
             (sweep < 1e-6 || (sweep - 360.0).abs() < 1e-6).then_some(Corners::Ellipse)
         }
         Some(
-            LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. } | LiveShape::Line { .. } | LiveShape::Path { .. },
+            LiveShape::Rectangle { .. }
+            | LiveShape::Ellipse { .. }
+            | LiveShape::Polygon { .. }
+            | LiveShape::Figure { .. }
+            | LiveShape::Line { .. }
+            | LiveShape::Path { .. },
         ) => None,
         None => is_upright_rectangle(path).then_some(Corners::Square),
     }

@@ -13,7 +13,21 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
     let y = p.get("y").and_then(Value::as_f64).unwrap_or(0.0);
     let alt = p.get("alt").and_then(Value::as_bool).unwrap_or(false);
     let d = match kind {
-        "rectangle" | "ellipse" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"})),
+        "rectangle" | "ellipse" | "heart" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"})),
+        // Arrow and Gear (#3865): the size, then the tool's own options.
+        "arrow" | "gear" => {
+            let o = app.session.tool_options_of(kind);
+            let keys: [(&str, Value); 3] = if kind == "arrow" {
+                [("shaft", json!(40.0)), ("head", json!(35.0)), ("heads", json!(1))]
+            } else {
+                [("teeth", json!(12)), ("depth", json!(20.0)), ("hole", json!(30.0))]
+            };
+            let mut fields = json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"});
+            for (k, default) in keys {
+                fields[k] = o.get(k).cloned().unwrap_or(default);
+            }
+            Dialog::new(kind, fields)
+        }
         "roundedRectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": "12 pt"})),
         "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": app.session.tool_options_of(kind)["sides"]})),
         "star" => {

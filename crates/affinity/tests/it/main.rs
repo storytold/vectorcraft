@@ -17,4 +17,6 @@ mod outline_limits;
 mod raster;
 mod real_files;
 #[cfg(feature = "synth")]
+mod special_shapes;
+#[cfg(feature = "synth")]
 mod text;

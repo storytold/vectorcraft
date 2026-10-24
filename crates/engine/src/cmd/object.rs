@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::corners::{convert_radii_relative, set_corners};
-use vectorcraft_doc::{Appearance, Document, Knockout, LiveCorners, LiveShape, Node, NodeId, NodeKind, OrientedBox, Scaling};
+use vectorcraft_doc::{Appearance, Document, Figure, Knockout, LiveCorners, LiveShape, Node, NodeId, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_render::effects;
@@ -289,7 +289,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Shape Properties",
             [],
             None,
-            "{id?, ids?, radius?: pt (or % of each corner's maximum when `relativeRadii` is true), kind?: \"round\"|\"invertedRound\"|\"chamfer\", relativeRadii?: bool (Relative rounding, as in the reference app: store radii as fractions of each corner's maximum so they scale with the shape), corners?: [i…], items?: [{id, corners?: [i…]}] (several objects, each with its own corners, in place of ids and corners: the canvas's corner widgets across a selection), sides?: n, polygonAngle?: degrees (counterclockwise from its first vertex straight up), polygonRadius?: pt (centre to vertex), sideLength?: pt (sets the radius), makeSidesEqual?: true (a polygon scaled unevenly: drops the uneven scale and shear, keeping its centre, angle and mean radius), pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse)} (Live Corners on any path: radius and kind set its corners (anchors that aren't smooth, where two sides, straight or curved (#1144), meet at an angle): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared; the polygon params apply in that order: sides, makeSidesEqual, polygonAngle, then sideLength or else polygonRadius)",
+            "{id?, ids?, radius?: pt (or % of each corner's maximum when `relativeRadii` is true), kind?: \"round\"|\"invertedRound\"|\"chamfer\", relativeRadii?: bool (Relative rounding, as in the reference app: store radii as fractions of each corner's maximum so they scale with the shape), corners?: [i…], items?: [{id, corners?: [i…]}] (several objects, each with its own corners, in place of ids and corners: the canvas's corner widgets across a selection), sides?: n, polygonAngle?: degrees (counterclockwise from its first vertex straight up), polygonRadius?: pt (centre to vertex), sideLength?: pt (sets the radius), makeSidesEqual?: true (a polygon scaled unevenly: drops the uneven scale and shear, keeping its centre, angle and mean radius), pieStart?, pieEnd?: degrees (an ellipse's pie, counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse), invertPie?: true (swaps them: the other part of the ellipse), shaft?, head?: % (an arrow's, as `shape.arrow` takes them), heads?: 1|2, teeth?: n, depth?, hole?: % (a gear's, as `shape.gear` takes them)} (Live Corners on any path: radius and kind set its corners (anchors that aren't smooth, where two sides, straight or curved (#1144), meet at an angle): `corners` (anchor indices of the path with its corners uncut, counting every subpath's anchors in order: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; a polygon's from the first vertex clockwise), else the corners with a Direct-Selected anchor, else every corner; each radius is drawn no larger than half the corner's shorter side allows; a path that isn't a live shape keeps its uncut outline so its corners stay editable, and is plain again once none is cut; sides: a polygon's, which keep the radius they shared; the polygon params apply in that order: sides, makeSidesEqual, polygonAngle, then sideLength or else polygonRadius; a figure's params apply to the hearts, arrows and gears that have them, rounded and clamped as their shape commands do, and its corners keep the radius they shared when its outline gains anchors)",
             has_selection,
             set_live_shape
         ),
@@ -2378,7 +2378,7 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
 
 fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
-    check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
+    check_numbers(p, &["radius", "sides", "shaft", "head", "heads", "teeth", "depth", "hole"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
         None => None,
@@ -2442,6 +2442,25 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         let pie = (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of));
         if invert { (pie.1.rem_euclid(360.0), end_of(pie.0)) } else { pie }
     };
+    // A figure's parameters, in percent as `shape.arrow` and `shape.gear` take them (counts
+    // rounded), clamped as they clamp them; each applies to the figures that have it.
+    let finite = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite());
+    let pct = |k: &str| finite(k).map(|v| v / 100.0);
+    let count = |k: &str| finite(k).map(|v| v.round().clamp(0.0, f64::from(u32::MAX)) as u32);
+    let (shaft, head, heads) = (pct("shaft"), pct("head"), count("heads"));
+    let (teeth, depth, hole) = (count("teeth"), pct("depth"), pct("hole"));
+    let figure_of = |f: Figure| {
+        match f {
+            Figure::Heart => Figure::Heart,
+            Figure::Arrow { shaft: s, head: h, heads: n } => {
+                Figure::Arrow { shaft: shaft.unwrap_or(s), head: head.unwrap_or(h), heads: heads.unwrap_or(n) }
+            }
+            Figure::Gear { teeth: n, depth: d, hole: o } => {
+                Figure::Gear { teeth: teeth.unwrap_or(n), depth: depth.unwrap_or(d), hole: hole.unwrap_or(o) }
+            }
+        }
+        .clamped()
+    };
     // When every value given is the current one, the document and its undo history stay as they
     // are.
     let st = s.doc()?;
@@ -2457,6 +2476,7 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 return false;
             }
             Some(LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie => return false,
+            Some(LiveShape::Figure { figure, .. }) if figure_of(*figure) != *figure => return false,
             _ => {}
         }
         if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
@@ -2506,6 +2526,12 @@ fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 if let LiveShape::Ellipse { pie, .. } = l {
                     *pie = pie_of(*pie);
                 }
+                *path = l.to_path();
+            }
+            if let Some(l) = live.as_deref_mut()
+                && let Some(f) = l.figure()
+                && l.set_figure(figure_of(f))
+            {
                 *path = l.to_path();
             }
             if let Some(on) = relative_radii

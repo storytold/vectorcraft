@@ -44,6 +44,8 @@ const ROWS: &[Row] = &[
     (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
+    (&["arrow"], None, &["shaft", "head", "heads"]),
+    (&["gear"], None, &["teeth", "depth", "hole"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (

@@ -59,7 +59,7 @@ pub(super) fn length_value(d: &Dialog, key: &str, unit: Unit, range: std::ops::R
 fn lengths(kind: &str) -> &'static [&'static str] {
     match kind {
         "move" => &["dx", "dy", "distance"],
-        "rectangle" | "ellipse" | "rectangularGrid" | "polarGrid" | "artboardOptions" => &["width", "height"],
+        "rectangle" | "ellipse" | "heart" | "arrow" | "gear" | "rectangularGrid" | "polarGrid" | "artboardOptions" => &["width", "height"],
         "roundedRectangle" => &["width", "height", "radius"],
         "polygon" | "spiral" => &["radius"],
         "star" => &["radius1", "radius2"],
@@ -75,7 +75,7 @@ fn lengths(kind: &str) -> &'static [&'static str] {
 fn suffix(kind: &str, key: &str) -> Option<&'static str> {
     match (kind, key) {
         ("rotate" | "shear" | "reflect" | "move" | "lineSegment", "angle") => Some("°"),
-        ("scale", "sx" | "sy") | ("spiral", "decay") => Some("%"),
+        ("scale", "sx" | "sy") | ("spiral", "decay") | ("arrow", "shaft" | "head") | ("gear", "depth" | "hole") => Some("%"),
         _ => None,
     }
 }
@@ -99,6 +99,8 @@ fn order(kind: &str) -> &'static [&'static str] {
         "rectangularGrid" => &["width", "height", "rows", "rowSkew", "columns", "columnSkew"],
         "polarGrid" => &["width", "height", "concentric", "concentricSkew", "radial", "radialSkew"],
         "spiral" => &["radius", "decay", "segments"],
+        "arrow" => &["width", "height", "shaft", "head", "heads"],
+        "gear" => &["width", "height", "teeth", "depth", "hole"],
         "artboardOptions" => &["name", "width", "height"],
         "lineSegment" => &["length", "angle"],
         _ => &[],

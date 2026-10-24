@@ -24,24 +24,25 @@ const FILES: &[(&str, f64)] = &[
     ("patchy-transform.af", 1.0),               // 0.19
     ("patchy-vector.af", 1.0),                  // 0.12
     ("patchy-shapes.af", 1.0),                  // 0.24: per-corner radii, a straight corner
-    ("patchy-lazy-placed.af", 1.0),             // 0.50: upstream byte-derived lazy-image regression
-    ("patchy-embedded-jpeg.af", 1.0),           // 0.50
-    ("affinity3-mexican-guy.af", 3.0),          // 1.80: brush strokes as plain strokes
-    ("affinity3-mexican-man.af", 3.5),          // 2.24
-    ("affinity3-mexican-woman.af", 3.5),        // 2.55
-    ("affinity3-playing-cards.af", 5.5),        // 4.32: layer effects
-    ("designer-beer.afdesign", 4.0),            // 2.90
-    ("designer-cactus.afdesign", 1.5),          // 0.33
-    ("designer-car.afdesign", 1.5),             // 0.40
-    ("designer-flowers.afdesign", 3.0),         // 2.01
-    ("designer-lion-track.afdesign", 5.5),      // 4.34
-    ("afdesignload-color.afdesign", 1.0),       // 0.00
-    ("afdesignload-layer_mode.afdesign", 1.0),  // 0.00
-    ("afdesignload-layer_test.afdesign", 1.0),  // 0.00
-    ("afdesignload-margins.afdesign", 1.0),     // 0.00
+    ("patchy-shapes-2.af", 11.5), // 10.51: diamond, double star, crescent, cloud, segment, tear as ellipses (14.75 with the heart, cog and arrow too)
+    ("patchy-lazy-placed.af", 1.0), // 0.50: upstream byte-derived lazy-image regression
+    ("patchy-embedded-jpeg.af", 1.0), // 0.50
+    ("affinity3-mexican-guy.af", 3.0), // 1.80: brush strokes as plain strokes
+    ("affinity3-mexican-man.af", 3.5), // 2.24
+    ("affinity3-mexican-woman.af", 3.5), // 2.55
+    ("affinity3-playing-cards.af", 5.5), // 4.32: layer effects
+    ("designer-beer.afdesign", 4.0), // 2.90
+    ("designer-cactus.afdesign", 1.5), // 0.33
+    ("designer-car.afdesign", 1.5), // 0.40
+    ("designer-flowers.afdesign", 3.0), // 2.01
+    ("designer-lion-track.afdesign", 5.5), // 4.34
+    ("afdesignload-color.afdesign", 1.0), // 0.00
+    ("afdesignload-layer_mode.afdesign", 1.0), // 0.00
+    ("afdesignload-layer_test.afdesign", 1.0), // 0.00
+    ("afdesignload-margins.afdesign", 1.0), // 0.00
     ("afdesignload-raster_test.afdesign", 2.0), // 0.72: pixel layer
     ("afdesignload-revision_test.afdesign", 1.0),
-    ("afdesignload-shape_test.afdesign", 4.5), // 3.50: cloud and heart shapes as ellipses
+    ("afdesignload-shape_test.afdesign", 2.5), // 1.69: the cloud as an ellipse (3.50 with the heart as one too)
     ("afdesignload-slice_test.afdesign", 1.0),
     ("afdesignload-test_path.afdesign", 1.5), // 0.26
     ("jac21-SimpleLogo.afdesign", 1.5),       // 0.19

@@ -965,7 +965,7 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             ("Esc", true),
             (" to exit editing", false),
         ],
-        "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" => &[
+        "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "heart" | "arrow" | "gear" => &[
             ("Drag", true),
             (" to draw  |  ", false),
             ("Shift+Drag", true),

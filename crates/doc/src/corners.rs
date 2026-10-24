@@ -36,14 +36,14 @@ pub fn convert_radii_relative(live: &mut LiveShape, relative: bool) {
     let was_relative = live.radii_relative();
     let base = match live {
         LiveShape::Rectangle { w, h, .. } => shapes::rectangle(Rect::new(0.0, 0.0, *w, *h)),
-        LiveShape::Polygon { .. } => live.polygon_outline(),
+        LiveShape::Polygon { .. } | LiveShape::Figure { .. } => live.polygon_outline(),
         LiveShape::Path { base, .. } => base.clone(),
         LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
     };
     let corners = path_corners(&base);
     let radii: &mut [f64] = match live {
         LiveShape::Rectangle { radii, .. } => radii,
-        LiveShape::Polygon { radii, .. } => radii,
+        LiveShape::Polygon { radii, .. } | LiveShape::Figure { radii, .. } => radii,
         LiveShape::Path { radii, .. } => radii,
         LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
     };
@@ -62,6 +62,7 @@ pub fn convert_radii_relative(live: &mut LiveShape, relative: bool) {
     match live {
         LiveShape::Rectangle { radii_relative: rel, .. }
         | LiveShape::Polygon { radii_relative: rel, .. }
+        | LiveShape::Figure { radii_relative: rel, .. }
         | LiveShape::Path { radii_relative: rel, .. } => {
             *rel = relative;
         }
@@ -99,7 +100,7 @@ impl<'a> LiveCorners<'a> {
                 let LiveShape::Rectangle { w, h, radii, kinds, radii_relative, xf } = l.folded() else { return None };
                 (Cow::Owned(shapes::rectangle(Rect::new(0.0, 0.0, w, h))), xf, radii.to_vec(), kinds.to_vec(), radii_relative)
             }
-            Some(l @ LiveShape::Polygon { radii, kinds, radii_relative, .. }) => {
+            Some(l @ (LiveShape::Polygon { radii, kinds, radii_relative, .. } | LiveShape::Figure { radii, kinds, radii_relative, .. })) => {
                 (Cow::Owned(l.polygon_outline()), Affine::IDENTITY, radii.clone(), kinds.clone(), *radii_relative)
             }
             Some(LiveShape::Path { base, radii, kinds, radii_relative }) => {
@@ -253,6 +254,14 @@ pub fn set_corners(path: &mut PathData, live: &mut Option<Box<LiveShape>>, corne
         LiveShape::Polygon { radius: poly_r, sides, xf, radii, kinds, .. } => {
             let outline = shapes::polygon(Point::ZERO, *poly_r, *sides, 0.0).transformed(*xf);
             let n = *sides as usize;
+            radii.resize(n, 0.0);
+            kinds.resize(n, CornerKind::Round);
+            edit(&outline, relative, radii, kinds, corners, radius, kind);
+            trim_vec_radii(radii, kinds);
+        }
+        LiveShape::Figure { figure, w, h, xf, radii, kinds, .. } => {
+            let outline = figure.outline(Rect::new(0.0, 0.0, *w, *h)).transformed(*xf);
+            let n = outline.anchor_count();
             radii.resize(n, 0.0);
             kinds.resize(n, CornerKind::Round);
             edit(&outline, relative, radii, kinds, corners, radius, kind);

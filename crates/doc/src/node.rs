@@ -9,6 +9,7 @@ use vectorcraft_geom::shapes::{self, CornerKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape};
 
 use crate::appearance::Appearance;
+pub use crate::figure::Figure;
 use crate::live::{BlendSpec, EnvelopeKind, GradientMesh, Outliner};
 use crate::pattern::RepeatSpec;
 use crate::symbols::{SYMBOL_SQUARE, SymbolBoxes};
@@ -122,6 +123,24 @@ pub enum LiveShape {
         a: Point,
         b: Point,
     },
+    /// A heart, arrow or gear (#3865): its figure drawn in a `w` × `h` box with its top-left at the
+    /// origin, mapped into the document by `xf` as a rectangle's box is. Its corners are cut as a
+    /// polygon's are, in the document.
+    Figure {
+        #[serde(flatten)]
+        figure: Figure,
+        w: f64,
+        h: f64,
+        xf: Affine,
+        /// Corner radii in document units, by anchor of the uncut outline (none: sharp).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        radii: Vec<f64>,
+        /// Corner kinds, in the same order (none: round).
+        #[serde(default, skip_serializing_if = "all_round")]
+        kinds: Vec<CornerKind>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        radii_relative: bool,
+    },
     /// Any other path whose corners Live Corners cut (a star, a pen path): it keeps its uncut
     /// outline so the corners stay editable. Without a cut corner it is a plain path again.
     Path {
@@ -146,9 +165,10 @@ fn is_false(b: &bool) -> bool {
 impl LiveShape {
     pub fn radii_relative(&self) -> bool {
         match self {
-            LiveShape::Rectangle { radii_relative, .. } | LiveShape::Polygon { radii_relative, .. } | LiveShape::Path { radii_relative, .. } => {
-                *radii_relative
-            }
+            LiveShape::Rectangle { radii_relative, .. }
+            | LiveShape::Polygon { radii_relative, .. }
+            | LiveShape::Figure { radii_relative, .. }
+            | LiveShape::Path { radii_relative, .. } => *radii_relative,
             LiveShape::Ellipse { .. } | LiveShape::Line { .. } => false,
         }
     }
@@ -159,6 +179,7 @@ impl LiveShape {
             LiveShape::Ellipse { .. } => "Ellipse",
             LiveShape::Polygon { .. } => "Polygon",
             LiveShape::Line { .. } => "Line",
+            LiveShape::Figure { figure, .. } => figure.label(),
             LiveShape::Path { .. } => "Path",
         }
     }
@@ -172,7 +193,7 @@ impl LiveShape {
                 shapes::rectangle_with_corners(Rect::new(0.0, 0.0, *w, *h), radii, *kinds).transformed(*xf)
             }
             LiveShape::Ellipse { w, h, pie, xf } => shapes::ellipse_pie(Rect::new(0.0, 0.0, *w, *h), pie.0, pie.1).transformed(*xf),
-            LiveShape::Polygon { radii, kinds, radii_relative, .. } => {
+            LiveShape::Polygon { radii, kinds, radii_relative, .. } | LiveShape::Figure { radii, kinds, radii_relative, .. } => {
                 let outline = self.polygon_outline();
                 let radii = crate::corners::resolve_stored_radii(&outline, radii, *radii_relative);
                 cut_corners(&outline, &radii, kinds).0
@@ -184,25 +205,45 @@ impl LiveShape {
             }
         }
     }
-    /// A polygon's outline with its corners uncut, in the document (empty for other shapes).
+    /// A polygon's or a figure's outline with its corners uncut, in the document (empty for other
+    /// shapes).
     pub fn polygon_outline(&self) -> PathData {
         match self {
             LiveShape::Polygon { radius, sides, xf, .. } => shapes::polygon(Point::ZERO, *radius, *sides, 0.0).transformed(*xf),
+            LiveShape::Figure { figure, w, h, xf, .. } => figure.outline(Rect::new(0.0, 0.0, *w, *h)).transformed(*xf),
             _ => PathData::default(),
         }
+    }
+    /// A figure's parameters (None for other shapes).
+    pub fn figure(&self) -> Option<Figure> {
+        match self {
+            LiveShape::Figure { figure, .. } => Some(*figure),
+            _ => None,
+        }
+    }
+    /// Give a figure the parameters `f` ([`Figure::clamped`]); a heart stays a heart, an arrow an
+    /// arrow and a gear a gear. Its corners keep the radius and kind they shared when the outline
+    /// gains or loses anchors (more teeth, a second head); else the corners past the old last one
+    /// are sharp. False when nothing changed.
+    pub fn set_figure(&mut self, f: Figure) -> bool {
+        let f = f.clamped();
+        let LiveShape::Figure { figure, .. } = self else { return false };
+        if std::mem::discriminant(figure) != std::mem::discriminant(&f) || *figure == f {
+            return false;
+        }
+        *figure = f;
+        let n = self.polygon_outline().anchor_count();
+        if let LiveShape::Figure { radii, kinds, .. } = self {
+            spread(radii, n);
+            spread(kinds, n);
+        }
+        true
     }
     /// Give a polygon `n` sides (3–1000). Its corners keep the radius and kind they shared; else
     /// the corners past the old last one are sharp.
     pub fn set_sides(&mut self, n: u64) {
         let LiveShape::Polygon { sides, radii, kinds, .. } = self else { return };
         *sides = n.clamp(3, 1000) as u32;
-        fn spread<T: Copy + PartialEq + Default>(v: &mut Vec<T>, n: usize) {
-            match v.first().copied() {
-                Some(x) if v.iter().all(|y| *y == x) => *v = vec![x; n],
-                Some(_) => v.resize(n, T::default()),
-                None => {}
-            }
-        }
         spread(radii, *sides as usize);
         spread(kinds, *sides as usize);
     }
@@ -282,7 +323,7 @@ impl LiveShape {
                 *xf = a * *xf;
                 false
             }
-            LiveShape::Polygon { xf, radii, radii_relative, .. } => {
+            LiveShape::Polygon { xf, radii, radii_relative, .. } | LiveShape::Figure { xf, radii, radii_relative, .. } => {
                 *xf = a * *xf;
                 scale_radii(radii, a, *radii_relative)
             }
@@ -334,7 +375,7 @@ impl LiveShape {
         let relative = self.radii_relative();
         let radii: &mut [f64] = match self {
             LiveShape::Rectangle { radii, .. } => radii,
-            LiveShape::Polygon { radii, .. } | LiveShape::Path { radii, .. } => radii,
+            LiveShape::Polygon { radii, .. } | LiveShape::Figure { radii, .. } | LiveShape::Path { radii, .. } => radii,
             LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return false,
         };
         if relative || !radii.iter().any(|r| *r > 0.0) || k <= 1e-12 {
@@ -346,13 +387,23 @@ impl LiveShape {
     /// Rotation angle of the live shape in degrees, clockwise on the page (y points down).
     pub fn angle_deg(&self) -> f64 {
         match self {
-            LiveShape::Rectangle { xf, .. } | LiveShape::Ellipse { xf, .. } | LiveShape::Polygon { xf, .. } => {
+            LiveShape::Rectangle { xf, .. } | LiveShape::Ellipse { xf, .. } | LiveShape::Polygon { xf, .. } | LiveShape::Figure { xf, .. } => {
                 let c = xf.as_coeffs();
                 c[1].atan2(c[0]).to_degrees()
             }
             LiveShape::Line { a, b } => (b.y - a.y).atan2(b.x - a.x).to_degrees(),
             LiveShape::Path { .. } => 0.0,
         }
+    }
+}
+
+/// Per-corner values for `n` corners: all `n` the shared value when they shared one, else the
+/// first `n`, or the default past the old last one.
+fn spread<T: Copy + PartialEq + Default>(v: &mut Vec<T>, n: usize) {
+    match v.first().copied() {
+        Some(x) if v.iter().all(|y| *y == x) => *v = vec![x; n],
+        Some(_) => v.resize(n, T::default()),
+        None => {}
     }
 }
 

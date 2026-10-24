@@ -355,6 +355,8 @@ fn heading(id: &str) -> &'static str {
         "artboard" => "Artboards",
         "slice" | "sliceSelection" => "Slices",
         "objectsOnPath" => "Modify",
+        // Heart, Arrow and Gear (#3865) aren't in the Basic toolbar: listed with the other shapes.
+        "heart" | "arrow" | "gear" => "Shapes",
         _ => "More",
     }
 }

@@ -762,6 +762,10 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 widgets::subheader(ui, tl!("Ellipse Properties:"));
                 super::transform::pie_rows(app, ui, *pie, "props-pie");
             }
+            vectorcraft_doc::LiveShape::Figure { figure, .. } => {
+                widgets::subheader(ui, super::transform::figure_header(*figure));
+                super::transform::figure_rows(app, ui, &n, live, "props-figure");
+            }
             _ => {}
         }
     }

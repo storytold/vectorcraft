@@ -233,6 +233,13 @@ fn constrain_angle_turns_shapes_made_by_a_click() {
         let b = bounds(&s, id);
         assert_eq!((b.x0, b.y0, b.x1, b.y1), (10.0, 100.0, 60.0, 200.0), "{cmd} at 90°");
     }
+    // Heart, Arrow and Gear (#3865) too; the gear's arcs come out within rounding.
+    for cmd in ["shape.heart", "shape.arrow", "shape.gear"] {
+        let id = run(&mut s, cmd, rect.clone());
+        let b = bounds(&s, id);
+        let want = [10.0, 100.0, 60.0, 200.0];
+        assert!([b.x0, b.y0, b.x1, b.y1].iter().zip(want).all(|(a, w)| (a - w).abs() < 1e-9), "{cmd} at 90°: {b:?}");
+    }
     let p = constrain_click(&s, "shape.star", json!({"cx": 0, "cy": 0, "radius1": 50, "radius2": 25, "points": 5}), Point::ZERO);
     assert_eq!(p["rotation"], json!(-90.0));
     // An explicit rotation is the caller's.
