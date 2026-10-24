@@ -658,7 +658,7 @@ EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, 
 `range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
 the next EPS Options and writes the file(s), asking for a path when there is none. With Use Artboards and two or more
 artboards, it writes a central file of the whole document under the chosen name and one `{stem}_{artboard}.eps` per
-artboard.
+artboard. When no art shows, it writes only the artboard files.
 
 Data Recovery: at launch, copies left behind by a crash open the `recovery` dialog (never copies another running
 instance keeps, so instances started side by side for screenshots don't get it). Fields: `copies` (`[{file, title,

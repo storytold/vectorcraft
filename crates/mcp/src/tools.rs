@@ -388,7 +388,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "path": string("Destination file (omit to get dataBase64)"),
                     "scale": num("Raster pixels per point (default 1)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
-                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
+                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},
                     "outlineText": {"type": "boolean", "description": "SVG/SVGZ: true writes text as outlines (viewable without the fonts). DXF takes it too (type outlined anyway unless preserve: editability). PDF uses options.advanced.outlineText instead (default false: live text)"},
                     "options": {"type": "object", "description": "More format options, passed through (see run_command document.formats), e.g. {\"quality\": 80} for jpg or {\"advanced\": {\"outlineText\": true}} for PDF text as outlines (default false: live text)"},

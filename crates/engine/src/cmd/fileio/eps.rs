@@ -1,7 +1,7 @@
 //! EPS export for every EPS path (`document.export {format: eps}`, `document.exportEps`, Export As
 //! → EPS Options): the options parsed from the params, transparency flattened with a flattener
 //! preset, one file of the art's bounds or one per artboard (with a central file of the whole
-//! document when there are several), the preview and thumbnail rendered,
+//! document when there are several and art shows), the preview and thumbnail rendered,
 //! and the native document embedded for reopening.
 
 use std::borrow::Cow;
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export EPS",
         [],
         None,
-        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard; with two or more, also the central file {stem}.eps first: the whole document, the bounding box the visible art) | false (default: one file, the bounding box the visible art, y up from the first artboard's bottom-left corner), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (with useArtboards: the artboards written)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}",
+        "{path?, level?: 2|3 (default; PostScript language level: 3 writes smooth gradients and masks transparent image pixels out, 2 steps gradients and writes those pixels white), previewFormat?: none|tiffBw|tiffColor (default: a TIFF preview other apps show), transparentPreview?: true (else on white), overprints?: preserve (default)|discard, flattenerPreset?: \"medium\" (default; high, low or a saved preset: flattener.presets.list), flattener?: {the options of object.flattenTransparency over the preset}, embedFonts?: true (type is always written as outlines, so no fonts are needed), includeLinkedFiles?: false (the embedded document keeps linked images whole, not just their previews), thumbnails?: true (a PNG thumbnail in the file), cmykPostScript?: true (RGB documents written in CMYK), compatibleGradients?: false (stepped gradients at level 3 too), selectedOnly?: false, useArtboards?: true (one file per chosen artboard, artboards?/range?, {stem}_{artboard}.eps, the bounding box the artboard; with two or more, also the central file {stem}.eps first: the whole document, the bounding box the visible art; none when no art shows) | false (one file, the bounding box the visible art, y up from the first artboard's bottom-left corner, even when artboards are named; the default when none are named), format?: \"eps\", artboard?: i | artboards?: [i…] | range?: \"1-3, 5\" (the artboards written; naming them without useArtboards works as useArtboards: true)} → {path, bytes, warnings, files?}; no path → {dataBase64, …}. Transparency is flattened with the preset (EPS has none); the native document rides along in comments, for reopening the file as it was. Same as document.export {format: eps}",
         has_doc,
         export_eps
     )]
@@ -44,7 +44,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "useArtboards",
         ty: "boolean",
         default: "null",
-        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps, and with two or more a central <file>.eps of the whole document; false or absent: one file of the visible art (naming artboards also uses them)",
+        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps, and with two or more a central <file>.eps of the whole document (none when no art shows); absent: the same when artboard, artboards or range names artboards, else one file of the visible art; false: one file of the visible art, even when artboards are named",
     },
     FormatOption { name: "level", ty: "integer", default: "3", description: "PostScript language level, 2 or 3" },
     FormatOption {
@@ -257,8 +257,8 @@ fn native(doc: &Document, board: Option<usize>, include_linked: bool) -> Vec<u8>
 }
 
 /// Encode `doc` as EPS: one file of the visible art, or with Use Artboards one per chosen
-/// artboard (after a central file of the whole document when there are several). Transparency is
-/// flattened first (once for all of them); the previews show `doc` itself.
+/// artboard (after a central file of the whole document when there are several and art shows).
+/// Transparency is flattened first (once for all of them); the previews show `doc` itself.
 pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     let set = parse(p)?;
     let original = doc;

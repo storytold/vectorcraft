@@ -1,6 +1,6 @@
 //! File → Export → Export As…: the format and Use Artboards (All or a range: one file per
-//! artboard, after a central file of the whole document for EPS with two or more, or one page
-//! each in a PDF); without artboards the export covers the visible art. OK
+//! artboard, after a central file of the whole document for EPS with two or more when art shows,
+//! or one page each in a PDF); without artboards the export covers the visible art. OK
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
 //! Options, Text Export Options, DXF Options, EPS Options, and Save PDF for artboards as pages),
 //! else the file is written. DWG is listed, greyed out, with what to use instead. The formats of

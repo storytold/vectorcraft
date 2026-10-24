@@ -102,6 +102,10 @@ fn use_artboards_writes_a_file_per_artboard_named_with_an_underscore() {
     let r = s.execute("document.exportEps", &json!({"range": "2", "previewFormat": "none"})).unwrap();
     assert!(r.get("files").is_none());
     assert!(postscript(&b64(&r)).contains(&format!("[1 0 0 -1 {} 100] cm", -second)));
+    // useArtboards: false writes one file of the visible art, even with artboards named.
+    let r = s.execute("document.exportEps", &json!({"useArtboards": false, "artboards": [0, 1], "previewFormat": "none"})).unwrap();
+    assert!(r.get("files").is_none());
+    assert_eq!(dsc(&postscript(&b64(&r)), "BoundingBox").as_deref(), Some(format!("10 60 {} 90", second + 40.0).as_str()));
     assert!(s.execute("document.exportEps", &json!({"artboard": 5})).is_err());
     // Without art there is nothing to bound.
     let mut empty = session(100.0, 100.0, 1);
@@ -109,6 +113,9 @@ fn use_artboards_writes_a_file_per_artboard_named_with_an_underscore() {
     // Artboards without art still get their files, but no central file.
     let mut empty = session(100.0, 100.0, 2);
     let r = empty.execute("document.exportEps", &json!({"useArtboards": true, "previewFormat": "none"})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
+    // Named artboards without useArtboards get the same files.
+    let r = empty.execute("document.exportEps", &json!({"range": "1-2", "previewFormat": "none"})).unwrap();
     assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
 }
 
