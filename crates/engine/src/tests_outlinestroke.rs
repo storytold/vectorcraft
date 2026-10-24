@@ -1,6 +1,8 @@
 //! Outline Stroke (`object.path.outlineStroke`) and the live Outline Stroke effect produce the
 //! stroke as the canvas paints it: dashes, arrowheads, width profiles, alignment, every stroke
-//! item in order, with the stroke's opacity and blend mode moved to the new fill.
+//! item in order, with the stroke's opacity and blend mode moved to the new fill. Outline Stroke,
+//! Expand's Stroke option and Flatten Transparency's Convert All Strokes to Outlines apply the
+//! object's geometry effects and each stroke's own to the path before outlining that stroke.
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
@@ -146,6 +148,209 @@ fn the_live_effect_outlines_the_stroke_it_sits_on() {
     let ctx = vectorcraft_render::effects::GeomContext::of(n);
     let g = vectorcraft_render::effects::apply_geometry_with(&n.appearance.effects, n.path_data().unwrap(), Rect::new(0.0, 50.0, 100.0, 50.0), &ctx);
     assert!(close(g.bounds().unwrap(), Rect::new(0.0, 49.0, 100.0, 51.0), 0.01), "{:?}", g.bounds());
+}
+
+fn render(s: &Session) -> vectorcraft_render::Rendered {
+    let doc = s.doc().unwrap().doc.clone();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&doc, 400, 300, vectorcraft_geom::Affine::IDENTITY, &opts)
+}
+
+/// Pixels whose color differs by more than `tol` in any channel.
+fn differing(a: &vectorcraft_render::Rendered, b: &vectorcraft_render::Rendered, tol: u8) -> usize {
+    a.pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.pixels.as_chunks::<4>().0)
+        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > tol))
+        .count()
+}
+
+/// Does `n` or anything in it have a geometry effect, its own or a fill's or stroke's?
+fn has_geometry_effects(n: &Node) -> bool {
+    let geometry = |e: &vectorcraft_doc::Effect| vectorcraft_render::effects::is_geometry(&e.id);
+    let mut found = false;
+    n.walk(&mut |m| found |= m.appearance.effects.iter().any(geometry) || m.appearance.items.iter().any(|i| i.effects().iter().any(geometry)));
+    found
+}
+
+/// A selected 100 pt square at (150, 100) with a 4 pt black stroke and fill `fill` (paint.setFill's),
+/// and `effects` (effect.apply's `effect` and `params`) on appearance item `item` (`null`: on the
+/// object).
+fn square_with(s: &mut Session, fill: Value, item: Value, effects: &[(&str, Value)]) {
+    s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &fill).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    for (effect, params) in effects {
+        s.execute("effect.apply", &json!({"effect": effect, "params": params, "item": item})).unwrap();
+    }
+}
+
+/// The geometry effects the tests put on the stroke or on the object.
+fn geometry_effects() -> [(&'static str, Value); 2] {
+    [("path.offsetPath", json!({"offset": 10})), ("distort.zigZag", json!({"size": 6, "ridges": 3}))]
+}
+
+/// The commands that outline strokes: Outline Stroke, Expand with Stroke alone, and Flatten
+/// Transparency with Convert All Strokes to Outlines.
+fn outlining() -> [(&'static str, Value); 3] {
+    [
+        ("object.path.outlineStroke", json!({})),
+        ("object.expand", json!({"object": false, "fill": false, "stroke": true})),
+        ("object.flattenTransparency", json!({"strokesToOutlines": true})),
+    ]
+}
+
+/// What `command` with `params` leaves in place of the selected object.
+fn outlined_by(s: &mut Session, command: &str, params: &Value) -> Node {
+    let r = s.execute(command, params).unwrap_or_else(|e| panic!("{command}: {e}"));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    s.doc().unwrap().doc.node(id).cloned().unwrap()
+}
+
+/// For each command in [`outlining`] and each of [`geometry_effects`] on `item` of a square filled
+/// with `fill`: the pixels that differ by more than 64 from the canvas before, and whether a
+/// geometry effect is left on the result.
+fn outlined_as_drawn(fill: Value, item: Value) -> Vec<(&'static str, &'static str, usize, bool)> {
+    let mut results = vec![];
+    for (command, p) in outlining() {
+        for (effect, params) in geometry_effects() {
+            let mut s = session();
+            square_with(&mut s, fill.clone(), item.clone(), &[(effect, params)]);
+            let before = render(&s);
+            let n = outlined_by(&mut s, command, &p);
+            results.push((command, effect, differing(&before, &render(&s), 64), has_geometry_effects(&n)));
+        }
+    }
+    results
+}
+
+/// What [`outlined_as_drawn`] gives when every outline looks as the canvas drew the object.
+fn as_drawn() -> Vec<(&'static str, &'static str, usize, bool)> {
+    outlining().iter().flat_map(|(command, _)| geometry_effects().map(|(effect, _)| (*command, effect, 0, false))).collect()
+}
+
+/// A stroke's own geometry effects reshape the path it strokes, as on the canvas: the outline is
+/// the stroke of the offset or zig-zagged path, not the stroke's outline offset or zig-zagged.
+#[test]
+fn a_geometry_effect_on_the_stroke_shapes_the_path_it_outlines() {
+    assert_eq!(outlined_as_drawn(json!({"none": true}), json!(1)), as_drawn());
+    // The stroke of the square offset by 10: 4 pt wide around a 120 pt square.
+    let mut s = session();
+    square_with(&mut s, json!({"none": true}), json!(1), &[("path.offsetPath", json!({"offset": 10}))]);
+    let n = outline(&mut s);
+    assert!(close(n.geometric_bounds().unwrap(), Rect::new(138.0, 88.0, 262.0, 212.0), 0.01), "{:?}", n.geometric_bounds());
+    assert!(near(area(&n), 124.0 * 124.0 - 116.0 * 116.0, 2.0), "{}", area(&n));
+}
+
+/// A drop shadow on a stroke with a geometry effect stays on the outline, which draws as the
+/// stroke did.
+#[test]
+fn the_outline_of_a_reshaped_stroke_keeps_its_drop_shadow() {
+    let mut s = session();
+    square_with(&mut s, json!({"none": true}), json!(1), &[("path.offsetPath", json!({"offset": 10})), ("stylize.dropShadow", json!({}))]);
+    let before = render(&s);
+    let n = outline(&mut s);
+    let kept: Vec<&str> = n.appearance.items.iter().flat_map(|i| i.effects()).map(|e| e.id.as_str()).collect();
+    assert_eq!(kept, ["stylize.dropShadow"]);
+    assert_eq!(differing(&before, &render(&s), 64), 0, "the shadowed outline draws as the stroke did");
+}
+
+/// The brush art of a brushed stroke with a geometry effect follows the path the effect makes.
+#[test]
+fn a_brush_draws_along_the_path_the_stroke_effects_make() {
+    let mut s = session();
+    square_with(&mut s, json!({"none": true}), json!(1), &[("path.offsetPath", json!({"offset": 10}))]);
+    s.execute("brush.apply", &json!({"name": "Tapered Stroke"})).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    let st = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().cloned().unwrap();
+    assert!(st.brush.is_some() && st.effects.len() == 1, "{st:?}");
+    let before = render(&s);
+    let n = outline(&mut s);
+    assert!(!vectorcraft_brush::has_brush(&n) && !has_geometry_effects(&n), "brush art: {n:?}");
+    assert_eq!(differing(&before, &render(&s), 64), 0, "the brush art draws as the brushed stroke did");
+}
+
+/// The object's geometry effects reshape the path its fills paint and its strokes outline, as on
+/// the canvas, and do not stay on the result.
+#[test]
+fn a_geometry_effect_on_the_object_shapes_the_path_it_outlines() {
+    assert_eq!(outlined_as_drawn(json!({"color": "#33aa55"}), Value::Null), as_drawn());
+}
+
+/// The canvas paints a gradient fill or stroke on each copy that the object's Transform effect
+/// makes by itself; the outlined result draws the same, with the gradient fitted to each copy.
+#[test]
+fn each_transform_copy_keeps_its_own_gradient() {
+    let mut differ = vec![];
+    for on_stroke in [false, true] {
+        for (command, p) in outlining() {
+            let mut s = session();
+            let fill = if on_stroke { json!({"none": true}) } else { json!({"gradient": {"kind": "linear"}}) };
+            square_with(&mut s, fill, Value::Null, &[("distort.transform", json!({"moveH": 120, "copies": 1}))]);
+            if on_stroke {
+                s.execute("paint.setStroke", &json!({"gradient": {"kind": "linear"}})).unwrap();
+                s.execute("stroke.set", &json!({"weight": 12})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            differ.push((on_stroke, command, differing(&before, &render(&s), 64)));
+        }
+    }
+    let none_differ: Vec<_> = [false, true].into_iter().flat_map(|on_stroke| outlining().map(|(command, _)| (on_stroke, command, 0))).collect();
+    assert_eq!(differ, none_differ);
+}
+
+/// With Scale Strokes & Effects on, the canvas draws the stroke of a solid square that its
+/// Transform effect scales to 200% at 8 pt; the outlined result draws the same.
+#[test]
+fn a_transform_that_scales_strokes_outlines_the_scaled_stroke() {
+    let scale = json!({"scaleH": 200, "scaleV": 200, "strokes": true});
+    let mut differ = vec![];
+    for (command, p) in outlining() {
+        let mut s = session();
+        square_with(&mut s, json!({"color": "#33aa55"}), Value::Null, &[("distort.transform", scale.clone())]);
+        let before = render(&s);
+        outlined_by(&mut s, command, &p);
+        differ.push((command, differing(&before, &render(&s), 64)));
+    }
+    let none_differ: Vec<_> = outlining().map(|(command, _)| (command, 0)).into_iter().collect();
+    assert_eq!(differ, none_differ);
+}
+
+/// Random in a Transform effect takes its seed from the object's id. The outline draws as the
+/// canvas drew the object with Random in a Transform effect that copies a gradient square, in a
+/// Transform effect on the stroke of such a square, and in a Transform effect on the fill of a
+/// plain square.
+#[test]
+fn outlines_keep_the_random_transforms_the_canvas_drew() {
+    let random = json!({"moveH": 30, "moveV": 30, "rotate": 40, "random": true});
+    let cases = [
+        ("random copies", json!({"gradient": {"kind": "linear"}}), json!({"moveH": 120, "rotate": 30, "copies": 1, "random": true}), None),
+        ("copies, random stroke", json!({"gradient": {"kind": "linear"}}), json!({"moveH": 120, "copies": 1}), Some(1)),
+        ("random fill", json!({"color": "#33aa55"}), json!({}), Some(0)),
+    ];
+    let mut differ = vec![];
+    for (case, fill, object, item) in &cases {
+        for (command, p) in outlining() {
+            let mut s = session();
+            square_with(&mut s, fill.clone(), Value::Null, &[]);
+            if object != &json!({}) {
+                s.execute("effect.apply", &json!({"effect": "distort.transform", "params": object})).unwrap();
+            }
+            s.execute("stroke.set", &json!({"weight": 12})).unwrap();
+            if let Some(item) = item {
+                s.execute("effect.apply", &json!({"effect": "distort.transform", "params": random, "item": item})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            differ.push((*case, command, differing(&before, &render(&s), 64)));
+        }
+    }
+    let none_differ: Vec<_> = cases.iter().flat_map(|(case, ..)| outlining().map(|(command, _)| (*case, command, 0))).collect();
+    assert_eq!(differ, none_differ);
 }
 
 #[test]
