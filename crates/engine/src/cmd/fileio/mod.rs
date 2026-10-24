@@ -30,6 +30,7 @@ mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
+pub mod jxlread;
 mod legacy_ai;
 mod load;
 pub(crate) use load::{MAX_RASTER_ALLOC, too_large_note};
@@ -667,6 +668,8 @@ pub const FORMATS: &[Format] = &[
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
     // PostScript programs, read as EPS files are; Print to PostScript writes them, exports don't.
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
+    // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
+    reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -692,6 +695,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "vst",
     "psd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
@@ -706,10 +710,10 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps` or Targa type (File › Open and Place still read them all). On Linux the desktop
-/// entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft
-/// for it.
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst"];
+/// `.epsf`, `.ps`, Targa or JPEG XL type (File › Open and Place still read them all). On Linux the
+/// desktop entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer
+/// VectorCraft for it.
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "jxl"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -757,6 +761,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "vst",
     "psd",
     "psb",
+    "jxl",
     "vctemplate",
     "dxf",
     "emf",
@@ -1506,6 +1511,8 @@ mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_tiffbmp;
 
+#[cfg(test)]
+mod tests_jxlread;
 #[cfg(test)]
 mod tests_pdfx;
 #[cfg(test)]

@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, jxlread, psdread, read_file};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -96,6 +96,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if psdread::is_psd(bytes) {
         return format(if psdread::is_psb(bytes) { "psb" } else { "psd" });
+    }
+    if jxlread::is_jxl(bytes) {
+        return format("jxl");
     }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
@@ -537,7 +540,8 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
 /// as RGBA, need more than [`MAX_RASTER_ALLOC`] is refused as too large to draw.
 /// A TIFF with more strips or tiles than the decoder can count
-/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
+/// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -545,7 +549,11 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+    }
+    if jxlread::is_jxl(bytes) {
+        let (img, icc) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
+        return as_png(img, icc, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
@@ -588,14 +596,20 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if f.id == "tga" {
         super::tgaread::fix_alpha(bytes, &mut img);
     }
-    as_png(img, ppi)
+    as_png(img, None, ppi)
 }
 
-/// `img` stored as a PNG that keeps the file's resolution.
-fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+/// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
+/// colors are in.
+pub(super) fn as_png(img: image::RgbaImage, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+    use image::ImageEncoder as _;
     let size = img.dimensions();
     let mut png = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).map_err(err)?;
+    }
+    img.write_with_encoder(encoder).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,

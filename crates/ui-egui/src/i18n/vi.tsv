@@ -4686,6 +4686,9 @@ theme	Appearance	Giao diện
 @msg	the PSD file is cut short	tệp PSD bị cắt ngắn
 @msg	the PSD file's header is damaged	tiêu đề tệp PSD bị hỏng
 @msg	the PSD file's image data can't be read: {e}	dữ liệu ảnh tệp PSD không thể đọc được: {e}
+@msg	the JPEG XL file is cut short	tệp JPEG XL bị cắt ngắn
+@msg	CMYK JPEG XL images can't be read	ảnh JPEG XL hệ màu CMYK không thể đọc được
+@msg	the JPEG XL file can't be read: {e}	tệp JPEG XL không thể đọc được: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	dữ liệu ảnh tệp PSD dùng nén không xác định ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
