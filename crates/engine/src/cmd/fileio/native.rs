@@ -35,6 +35,12 @@ pub const OPTIONS: &[FormatOption] = &[
         default: "false",
         description: "embed a PNG preview of the first artboard (at most 256 pixels on its longer side) for file browsers",
     },
+    FormatOption {
+        name: "precision",
+        ty: "integer",
+        default: "null",
+        description: "round path anchors and handles to this many decimal places, 0 to 9 (a smaller file; colors, transforms and type are kept exactly); null writes them exactly. Only the save that gives it rounds",
+    },
     SEPARATE_ARTBOARDS,
     SEPARATE_RANGE,
     INCLUDE_LINKED,
@@ -131,6 +137,7 @@ struct NativeOptions {
     compress: Option<bool>,
     version: Option<u32>,
     preview: bool,
+    precision: Option<Value>,
     include_linked: bool,
     embed_profiles: Option<bool>,
     pdf_compatible: bool,
@@ -145,12 +152,13 @@ pub(super) struct Extras {
 /// The options in `p` for saving `doc`, checked, with the profiles to embed (the preview and PDF
 /// are left to [`encode`]).
 pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<(SaveOptions, Extras)> {
-    let o: NativeOptions = super::encode::options(f, p)?;
+    let o: NativeOptions = super::encode::options_for(cmd, f, p)?;
     // Pretty or compact is decided by [`encode_to`] on the document it writes.
     let mut so = SaveOptions {
         compress: o.compress.unwrap_or(false),
         version: o.version.unwrap_or(vectorcraft_format::VERSION),
         include_linked: o.include_linked,
+        precision: o.precision.map(|v| precision(cmd, &v)).transpose()?,
         ..SaveOptions::default()
     };
     if o.embed_profiles.unwrap_or(true) {
@@ -158,6 +166,20 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
     Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible }))
+}
+
+/// The `precision` option `v`: a whole number of decimal places, 0 to
+/// [`vectorcraft_format::MAX_PRECISION`]. Any other value, a string included, gets the range message.
+fn precision(cmd: &str, v: &Value) -> Result<u8> {
+    let (key, min, max) = ("precision", 0u8, vectorcraft_format::MAX_PRECISION);
+    if let Some(x) = v.as_f64()
+        && x.fract() == 0.0
+        && (f64::from(min)..=f64::from(max)).contains(&x)
+    {
+        return Ok(x as u8);
+    }
+    let x = v.as_f64().map_or_else(|| v.to_string(), |x| x.to_string());
+    Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})")))
 }
 
 /// The `.vectorcraft` file of `doc` with the options in `p`.
@@ -230,8 +252,8 @@ pub(super) fn ai_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Re
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
         // AI carries the current native format without a separate preview. Its compression
-        // and PDF-content flags are still validated as booleans.
-        o.retain(|k, _| !matches!(k.as_str(), "version" | "preview"));
+        // and PDF-content flags are still validated as booleans. Its coordinates are written exactly.
+        o.retain(|k, _| !matches!(k.as_str(), "version" | "preview" | "precision"));
         if o.get("pdfCompatible").is_some_and(Value::is_null) {
             o.remove("pdfCompatible");
         }

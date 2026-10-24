@@ -359,10 +359,15 @@ fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
 }
 
 pub(super) fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
+    options_for(C, f, p)
+}
+
+/// [`options`] for the command `cmd`, which a type error names.
+pub(super) fn options_for<T: DeserializeOwned + Default>(cmd: &str, f: &Format, p: &Value) -> Result<T> {
     if !p.is_object() {
         return Ok(T::default());
     }
-    T::deserialize(p).map_err(|e| bad(C, format!("{} options: {e}", f.label)))
+    T::deserialize(p).map_err(|e| bad(cmd, format!("{} options: {e}", f.label)))
 }
 
 /// Most pixels a side of a WebP image can have (its sizes are stored in 14 bits).

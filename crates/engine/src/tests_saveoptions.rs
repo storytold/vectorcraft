@@ -353,3 +353,73 @@ fn format_options_list_the_save_options() {
     let v = s.execute("file.formatOptions", &json!({})).unwrap();
     assert_eq!(v["options"]["includeLinked"]["value"], true);
 }
+
+/// The anchors of the first object in the native file at `path`.
+fn saved_anchors(path: &str) -> Vec<vectorcraft_geom::Point> {
+    let d = vectorcraft_format::load(&std::fs::read(path).unwrap()).unwrap();
+    let NodeKind::Path { path, .. } = &d.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+    path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect()
+}
+
+#[test]
+fn precision_rounds_the_paths_of_that_save_only() {
+    let dir = Folder::new("precision");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 1000, "height": 1000})).unwrap();
+    // 1,000 anchors at coordinates with many decimal places (a fixed pseudo-random sequence).
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64 * 1000.0
+    };
+    let anchors: Vec<Value> = (0..1000).map(|_| json!({"x": next(), "y": next()})).collect();
+    s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let (exact, rounded) = (dir.file("exact.vectorcraft"), dir.file("rounded.vectorcraft"));
+    s.execute("document.save", &json!({"path": exact, "compress": false})).unwrap();
+    s.execute("document.save", &json!({"path": rounded, "compress": false, "precision": 3})).unwrap();
+    let (e, r) = (std::fs::metadata(&exact).unwrap().len(), std::fs::metadata(&rounded).unwrap().len());
+    assert!(r < e, "{r} bytes rounded, {e} exact");
+    let (want, got) = (saved_anchors(&exact), saved_anchors(&rounded));
+    assert_eq!(got.len(), 1000);
+    for (w, g) in want.iter().zip(&got) {
+        assert!((w.x - g.x).abs() <= 0.0005 && (w.y - g.y).abs() <= 0.0005, "{w:?} saved as {g:?}");
+        assert_eq!(((g.x * 1000.0).round() / 1000.0, (g.y * 1000.0).round() / 1000.0), (g.x, g.y));
+    }
+    // The document keeps its exact anchors, and Save doesn't remember the precision.
+    let v = s.execute("file.formatOptions", &json!({})).unwrap();
+    assert!(v["options"]["precision"]["value"].is_null(), "{}", v["options"]["precision"]);
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(saved_anchors(&rounded), want);
+    // A precision that isn't a whole number from 0 to 9 is refused, by the command that was given it.
+    for (wrong, got) in [(json!(10), "10"), (json!(2.5), "2.5"), (json!(-1), "-1"), (json!("4"), "\"4\""), (json!(true), "true")] {
+        for cmd in ["file.saveCopy", "document.save"] {
+            let e = s.execute(cmd, &json!({"precision": wrong})).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{cmd}`")) && !e.contains("document.export"), "{cmd} {wrong}: {e}");
+            assert!(e.contains(&format!("`precision` must be a whole number between 0 and 9 (got {got})")), "{cmd} {wrong}: {e}");
+        }
+    }
+    // A type error in another native option names that command too.
+    let e = s.execute("document.save", &json!({"version": "4"})).unwrap_err().to_string();
+    assert!(e.contains("`document.save`") && !e.contains("document.export"), "{e}");
+}
+
+#[test]
+fn a_ai_file_ignores_precision_as_save_does() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("path.create", &json!({"anchors": [{"x": 10.123456789, "y": 20.987654321}, {"x": 60.5, "y": 70.25}]})).unwrap();
+    let want: Vec<_> = {
+        let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+        path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect()
+    };
+    for cmd in ["document.export", "file.saveCopy"] {
+        for precision in [json!(3), json!(10)] {
+            let r = s.execute(cmd, &json!({"format": "ai", "precision": precision})).unwrap();
+            let mut t = Session::new();
+            t.execute("document.open", &json!({"name": "x.ai", "dataBase64": r["dataBase64"]})).unwrap();
+            let NodeKind::Path { path, .. } = &t.doc().unwrap().doc.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+            let got: Vec<_> = path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect();
+            assert_eq!(got, want, "{cmd} {precision}");
+        }
+    }
+}

@@ -575,7 +575,11 @@ can't be read becomes a placeholder in its box, named in `warnings` and `missing
 Native files: `run_command document.save {compress: true}` writes a gzip-compressed `.vectorcraft` (the
 `useCompression` preference makes that the default for saves; compressed files open like any other, told apart by
 their content). `version: 2` or `1` writes a file older VectorCraft versions open (format name `drawcraft`, never
-compressed), and `preview: true` embeds a PNG of the first artboard, at most 256 px on its longer side. A save writes
+compressed), and `preview: true` embeds a PNG of the first artboard, at most 256 px on its longer side.
+`precision: 4` (0 to 9) rounds the anchors and handles of paths to that many decimal places (in the layers, symbols,
+graph designs, patterns, opacity masks and brushes); colors, transforms, opacity and type are written exactly.
+Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
+`precision`. A save writes
 a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
 document uses are written, and document keys written by a newer version are kept.
 An uncompressed file is indented JSON when the document has at most 2,000 layers and objects and the indented

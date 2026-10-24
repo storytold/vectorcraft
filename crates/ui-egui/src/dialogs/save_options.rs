@@ -74,15 +74,16 @@ fn separates(f: &Format) -> bool {
     f.options.iter().any(|o| o.name == "separateArtboards")
 }
 
-/// The options the dialog shows: arrays and objects are for agents, and a page range replaces the
-/// single artboard choice; none for a format with its own dialog. A `.ait` template has no
-/// Version: Save as Template writes it PDF-compatible only.
+/// The options the dialog shows: arrays and objects are for agents, as is a native file's
+/// `precision`, and a page range replaces the single artboard choice; none for a format with its
+/// own dialog. A `.ait` template has no Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
     let separate = separates(f);
     let options = if own_dialog(f) { &[][..] } else { f.options };
     options.iter().filter(move |o| {
         !(matches!(o.ty, "array" | "object")
+            || o.name == "precision"
             || (range && o.name == "artboard")
             || (separate && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
@@ -738,6 +739,18 @@ mod tests {
         let names = |id: &str| shown(fileio::format(id).unwrap()).map(|o| o.name).collect::<Vec<_>>();
         assert!(names("ai").contains(&"aiVersion"), "{:?}", names("ai"));
         assert!(!names("ait").contains(&"aiVersion"), "{:?}", names("ait"));
+    }
+
+    /// The native options dialog has no row for `precision`, which agents give with the save
+    /// command; the rows it has stay.
+    #[test]
+    fn the_native_options_have_no_precision_row() {
+        for id in ["vectorcraft", "template"] {
+            let f = fileio::format(id).unwrap();
+            assert!(f.options.iter().any(|o| o.name == "precision"), "{id}");
+            let names: Vec<&str> = shown(f).map(|o| o.name).collect();
+            assert!(!names.contains(&"precision") && names.contains(&"version") && names.contains(&"compress"), "{id}: {names:?}");
+        }
     }
 
     /// A name typed in the Save as Template panel with a Save As format's extension has it

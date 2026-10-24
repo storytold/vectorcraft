@@ -768,6 +768,8 @@ impl SaveJob {
             st.path = Some(path);
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;
+            // A later save rounds only when it gives `precision` too.
+            st.save_options.remove("precision");
             st.save_artboards = self.snapshot.artboards.iter().map(|a| a.id).collect();
             st.converted = false;
             st.recovered = false;
@@ -883,7 +885,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead, compress?: bool (native, also in options: gzip; default: the useCompression preference), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead, compress?: bool (native, also in options: gzip; default: the useCompression preference), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: false for native (also carry a PDF of every artboard) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly; separateArtboards writes more files, one per artboard. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -892,7 +894,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save As…",
             ["File"],
             Some("Cmd+Shift+S"),
-            "{…as document.save} {path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own; ait, a .ait template, is written by file.saveAsTemplate), options?, svg?, modified?} the document takes on the new path, name and format (except a template, which is always a copy) → {path, format, bytes, warnings}; no path → {dataBase64, format, name, folder?, warnings}",
+            "{…as document.save} {path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own; ait, a .ait template, is written by file.saveAsTemplate), options?, svg?, precision?, modified?} the document takes on the new path, name and format (except a template, which is always a copy) → {path, format, bytes, warnings}; no path → {dataBase64, format, name, folder?, warnings}",
             has_doc,
             |s, p| save(s, SaveMode::SaveAs, p)
         ),
@@ -901,7 +903,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save a Copy…",
             ["File"],
             Some("Cmd+Alt+S"),
-            "{…as document.save} {path?, format?, options?} write a copy; the document keeps its path, title and modified state → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> copy.<ext>\", folder?, warnings}",
+            "{…as document.save} {path?, format?, options?, precision?} write a copy; the document keeps its path, title and modified state → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> copy.<ext>\", folder?, warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Copy, p)
         ),
@@ -910,7 +912,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai; aiVersion 7 is an error); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?, precision?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai; aiVersion 7 is an error); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),
