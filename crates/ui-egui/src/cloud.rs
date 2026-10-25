@@ -294,6 +294,18 @@ impl CloudApp for VectorcraftApp {
         Some(self.tr("A name with no extension is saved as a VectorCraft drawing (.vectorcraft)."))
     }
 
+    fn recents(&self) -> Vec<String> {
+        crate::io::recent_files(self).to_vec()
+    }
+
+    fn open_recent(&mut self, path: &str) {
+        let _ = crate::io::open_recent_reporting(self, path);
+    }
+
+    fn browse_local(&mut self) {
+        let _ = self.run("file.open", json!({}));
+    }
+
     fn style(&self, ui: &Ui) -> craft_ui::cloud::CloudStyle {
         let t = Tokens::get(ui.ctx());
         craft_ui::cloud::CloudStyle {
