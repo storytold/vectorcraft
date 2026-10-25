@@ -37,7 +37,9 @@ pub use color::{
     Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
     color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture,
 };
-pub use drag::{PanelDrag, SwatchRows, art_drop, doc_preview, drag_source};
+pub use drag::{
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+};
 #[cfg(test)]
 use dropdowns::combo_button_id;
 pub(crate) use dropdowns::{combo, combo_menu};

@@ -504,6 +504,27 @@ impl Appearance {
         self.set_contents_at(others_below + usize::from(now_below));
         Some(to)
     }
+    /// Move items `from` (ascending paint-order indices, no repeats) as one block, in their order,
+    /// so the lowest lands at `to` (clamped); returns it. The contents stay between the same unmoved
+    /// items; a block landing right at them keeps its lowest item's side. None (and nothing changed)
+    /// when an index is missing.
+    pub fn move_items(&mut self, from: &[usize], to: usize) -> Option<usize> {
+        let (&first, _) = from.split_first()?;
+        if from.iter().any(|i| *i >= self.items.len()) {
+            return None;
+        }
+        let below = first < self.contents_at();
+        // From the top down, so the lower indices stay valid; then back in order.
+        let mut block: Vec<AppearanceItem> = from.iter().rev().filter_map(|&i| self.remove_item(i)).collect();
+        block.reverse();
+        let others_below = self.contents_at();
+        let to = to.min(self.items.len());
+        let m = block.len();
+        self.items.splice(to..to, block);
+        let now_below = if below { to <= others_below } else { to < others_below };
+        self.set_contents_at(others_below + if now_below { m } else { 0 });
+        Some(to)
+    }
 }
 
 /// The most fills, strokes or effects a stack may have to be matched against another's
