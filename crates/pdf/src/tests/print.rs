@@ -302,6 +302,56 @@ fn each_copy_prints_with_its_marks() {
 }
 
 #[test]
+fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
+    // A symbol of three squares (4 objects with its group), placed twice.
+    let mut d = doc(100.0, 100.0, &[]);
+    let squares = (0..3)
+        .map(|i| {
+            let r = Rect::new(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 5.0, 5.0);
+            Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0)))
+        })
+        .collect();
+    let art = Node::group(d.alloc_id(), squares);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Squares".into(), art: Arc::new(art) });
+    let layer = d.default_layer().unwrap();
+    for y in [10.0, 50.0] {
+        let instance = NodeKind::SymbolInstance { symbol: "Squares".into(), xf: vectorcraft_geom::Affine::translate((10.0, y)) };
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::new(id, instance)).unwrap();
+    }
+    let set = PdfSettings { compression: CompressionSettings { compress_text: false, ..Default::default() }, ..Default::default() };
+    let mut w = crate::export::Writer::new(&d, &set, "Copies", None, false).unwrap();
+    let mut ex = crate::export::Exporter::new(&d, &set);
+    // Room for 10 symbol objects: the first copy could write both instances (8) and leave the
+    // second copy none.
+    ex.symbol_limit = 10;
+    let copies = [vectorcraft_geom::Vec2::ZERO, vectorcraft_geom::Vec2::new(200.0, 0.0)];
+    let page = Rect::new(0.0, 0.0, 300.0, 100.0);
+    let sheet = crate::export::Sheet {
+        size: (300.0, 100.0),
+        unit: 1.0,
+        trim: page,
+        bleed: page,
+        view: vectorcraft_geom::Affine::IDENTITY,
+        window: None,
+        place: vectorcraft_geom::Affine::IDENTITY,
+        copies: &copies,
+        area: Rect::new(0.0, 0.0, 100.0, 100.0),
+        clip: false,
+        marks: None,
+        negative: false,
+        links: false,
+    };
+    w.page(&mut ex, &sheet).unwrap();
+    assert_eq!(ex.symbol_limit, 10, "the limit is the export's again after the sheet");
+    w.absorb(ex);
+    let (bytes, _) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
+    let p = pages(&bytes);
+    let left = p[0].1.iter().filter(|(r, _)| r.x0 < 200.0).count();
+    assert_eq!((left, p[0].1.len() - left), (3, 3), "one instance in each copy: {:?}", p[0].1);
+}
+
+#[test]
 fn tiles_cover_the_artboard_with_overlap() {
     // 1000 × 700 on Letter tiles (612 × 792), 36 pt overlap: 2 × 1.
     let d = doc(1000.0, 700.0, &[(Rect::new(560.0, 100.0, 600.0, 140.0), rgb(0.0, 0.6, 0.0))]);

@@ -149,7 +149,12 @@ impl Writer {
         let doc = ex.doc;
         let page_group = fits && !self.pdf13 && (doc.page_isolate || doc.page_knockout);
         let cmyk_page_group = fits && self.cmyk && !page_group && ex.shows_transparency();
+        // Each copy draws within an equal share of the symbol objects the export has left
+        // ([`vectorcraft_doc::MAX_SYMBOL_NODES`]), so every copy leaves out the same instances.
+        let limit = ex.symbol_limit;
+        let share = limit.saturating_sub(ex.symbol_nodes) / moves.len() as u64;
         for m in moves {
+            ex.symbol_limit = ex.symbol_nodes.saturating_add(share);
             let place = place_at(*m);
             let placed = place != Affine::IDENTITY;
             if placed {
@@ -180,6 +185,7 @@ impl Writer {
                 s.pop();
             }
         }
+        ex.symbol_limit = limit;
         if fits && let Some(art) = sheet.marks {
             // The drawing space the page shows (the marks' area).
             let shown = sheet.view.inverse().transform_rect_bbox(paper);
