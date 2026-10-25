@@ -111,15 +111,8 @@ pub fn parse_date(s: &str) -> Option<[i64; 6]> {
     }
     let num = |a: usize, b: usize| digits.get(a..b).and_then(|t| t.parse::<i64>().ok());
     let (y, m, d) = (num(0, 4)?, num(4, 6)?, num(6, 8)?);
-    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let days = match m {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 if leap => 29,
-        2 => 28,
-        _ => return None,
-    };
-    (1..=days).contains(&d).then_some([y, m, d, 0, 0, 0])
+    chrono::NaiveDate::from_ymd_opt(i32::try_from(y).ok()?, u32::try_from(m).ok()?, u32::try_from(d).ok()?)?;
+    Some([y, m, d, 0, 0, 0])
 }
 
 #[cfg(test)]
