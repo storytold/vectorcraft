@@ -1456,8 +1456,27 @@ fn drop_on_buttons(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: 
             && let Dragged::Effect(item, _) = what
         {
             select_row(app, ctx, item.map_or(Sel::None, Sel::Item));
+        } else if removed && let Dragged::Effect(item, _) = what {
+            let gone: Vec<usize> = gone.iter().map(|k| *k as usize).collect();
+            highlight_after_removal(app, ctx, n, sel, Rows::Effects(item), &gone);
         }
     }
+}
+
+/// After the rows `gone` of kind `rows` were removed while the active row survived, the active row,
+/// the highlight and its anchor move up past the removed rows below them; removed rows drop out of
+/// the highlight. `n` is the object as it was before the removal.
+fn highlight_after_removal(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, rows: Rows, gone: &[usize]) {
+    let h = highlight(ctx, n, sel);
+    if h.rows != rows {
+        return;
+    }
+    let shift = |k: usize| (!gone.contains(&k)).then(|| k - gone.iter().filter(|g| **g < k).count());
+    let order = h.order.iter().filter_map(|k| shift(*k)).collect();
+    let anchor = h.anchor.and_then(shift);
+    let active = sel.rows().filter(|(r, _)| *r == rows).and_then(|(_, a)| shift(a));
+    set_active(app, ctx, active.map_or(Sel::None, |a| rows.sel(a)));
+    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor });
 }
 
 /// The command a stack row `what` dropped on Duplicate Selected Item (`copy`) or Delete Selected

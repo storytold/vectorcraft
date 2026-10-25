@@ -1406,6 +1406,28 @@ fn a_drop_on_delete_that_removes_the_active_effect_leaves_no_effect_active() {
     assert_eq!(object_effects(&app), ["distort.twist"], "Twist was never highlighted");
 }
 
+/// Dragging an effect that isn't highlighted onto Delete removes only it: the highlighted effects
+/// below it move up with their rows, so they stay highlighted and active, and Delete Selected Item
+/// then removes them.
+#[test]
+fn a_drop_on_delete_above_the_active_effect_keeps_the_highlight_on_its_rows() {
+    let mut app = rect_with_three_effects();
+    let ctx = drop_ctx();
+    let delete = panel_button(&ctx, &mut app, "Delete Selected Item");
+    let (glow, shadow, twist) =
+        (row_point(&ctx, &mut app, "Outer Glow", 0), row_point(&ctx, &mut app, "Drop Shadow", 0), row_point(&ctx, &mut app, "Twist", 0));
+    // Drop Shadow, then Twist with Ctrl: both highlighted, Twist active.
+    click_mod(&ctx, &mut app, shadow, egui::Modifiers::NONE);
+    click_mod(&ctx, &mut app, twist, egui::Modifiers::COMMAND);
+    drag_in_panel(&ctx, &mut app, glow, delete);
+    assert_eq!(object_effects(&app), ["stylize.dropShadow", "distort.twist"]);
+    let lit = lit_texts(&ctx, &mut app);
+    assert!(["Drop Shadow", "Twist"].iter().all(|t| lit.iter().any(|l| l.contains(t))), "still highlighted: {lit:?}");
+    let delete = panel_button(&ctx, &mut app, "Delete Selected Item");
+    click(&ctx, &mut app, delete, appearance::show);
+    assert!(object_effects(&app).is_empty(), "both highlighted effects removed: {:?}", object_effects(&app));
+}
+
 /// Whether Duplicate Selected Item and Delete Selected Item are enabled in a frame of the panel
 /// with input `events`.
 fn drop_buttons_on(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> [bool; 2] {
