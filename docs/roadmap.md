@@ -123,7 +123,7 @@ M3 follow-up (#1968): native saves retain the per-document transparency grid set
 Type/Eyedropper switches preserve highlighted characters; sampling changes only their enabled
 font/paint attributes. Enabled non-neutral source or target object transparency is refused
 atomically; disable Transparency to preserve object transparency while sampling the range.
-`tests_eyedropper.rs` covers ranges, Unicode, history and transparency; tool tests cover brush-key
+`tests/eyedropper.rs` covers ranges, Unicode, history and transparency; tool tests cover brush-key
 sampling coexistence. Scores and estimates unchanged. See [development.md](development.md#highlighted-text-eyedropper-2026-10-21).
 
 ## Drag artwork between document tabs (2026-10-22)

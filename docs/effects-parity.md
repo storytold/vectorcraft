@@ -32,7 +32,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 
 Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
 its resolution, PDF export warns once per object with the requested and the lowest achieved ppi
-(`crates/engine/src/tests_pdfraster.rs`).
+(`crates/engine/src/tests/pdfraster.rs`).
 
 ## Photoshop effects
 
@@ -82,7 +82,7 @@ glow colour is the effect's own parameter. All three keep coverage, work in docu
 Document Raster Effects resolution, and use the generic effect dialog with live preview. Ranges and
 defaults are chosen for VectorCraft. Evidence: `crates/effects/src/pixel/artistic.rs`, the
 `artistic_*`, `cutout_*`, `poster_edges_*` and `neon_glow_*` tests in `crates/effects/src/pixel/tests.rs`,
-and `artistic_settings_survive_a_save_and_open` in `crates/engine/src/tests_rasterfilters.rs`.
+and `artistic_settings_survive_a_save_and_open` in `crates/engine/src/tests/rasterfilters.rs`.
 Smudge Stick (`artistic.smudgeStick`), Sponge (`artistic.sponge`) and Watercolor (`artistic.watercolor`),
 Effect › Artistic, are original visual approximations from the public descriptions in
 [Illustrator's effects reference](https://helpx.adobe.com/illustrator/using/summary-effects.html) and the
@@ -156,7 +156,7 @@ The public help pages name each control but publish no numeric defaults or slide
 follow those control names and the emboss/halftone behaviour described there, while dialog defaults are chosen
 for VectorCraft and are not verified against proprietary defaults. Evidence: `crates/effects/src/pixel/sketch.rs`,
 `halftone_*` and `note_paper_*` in `crates/effects/src/pixel/tests.rs`, `SKETCH` and
-`halftone_pattern_settings_survive_a_save_and_open` in `crates/engine/src/tests_rasterfilters.rs`, and
+`halftone_pattern_settings_survive_a_save_and_open` in `crates/engine/src/tests/rasterfilters.rs`, and
 `tests_labels::effect_menu_lists_the_sketch_filters_between_sharpen_and_stylize`.
 
 Effect › Sketch › Conté Crayon (`sketch.conteCrayon`; `pixel/sketch.rs`) redraws the object in a dense

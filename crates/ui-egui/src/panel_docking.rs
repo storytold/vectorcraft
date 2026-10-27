@@ -1265,9 +1265,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
 }
 
 #[cfg(test)]
-#[path = "panel_docking_tests.rs"]
 mod tests;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
-#[path = "panel_docking_native_tests.rs"]
 mod native_tests;

@@ -456,5 +456,4 @@ pub(crate) fn has_canvas(layout: &Layout<String>) -> bool {
 }
 
 #[cfg(test)]
-#[path = "layout_migration_tests.rs"]
 mod tests;

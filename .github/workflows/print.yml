@@ -8,7 +8,7 @@ on:
       - "apps/vectorcraft/src/printing.rs"
       - "apps/vectorcraft/src/printing/**"
       - "crates/ui-egui/src/print.rs"
-      - "crates/ui-egui/src/tests_printps.rs"
+      - "crates/ui-egui/src/tests/printps.rs"
       - ".github/workflows/print.yml"
   workflow_dispatch:
 permissions:

@@ -1,4 +1,4 @@
-# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/lib.rs).
+# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/cursor.rs).
 #
 # This is the source of truth for what each cursor is for, written for whoever draws them:
 # designers never decide what a cursor is for, this file does. `cargo xtask cursors` warns about

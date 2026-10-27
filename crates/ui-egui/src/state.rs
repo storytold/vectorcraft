@@ -66,6 +66,7 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
+use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
@@ -899,6 +900,109 @@ fn default_shortcut_set() -> String {
 fn default_workspace() -> String {
     crate::workspaces::ESSENTIALS.to_string()
 }
+
+/// One UI pass key: the context identity, the viewport and that viewport's cumulative frame.
+pub(crate) type InputFrame = (u64, egui::ViewportId, u64);
+
+/// Record `frame` unless this host iteration already took it. A discarded rerun and any
+/// interleaved pass order stay exact-once because the key, not the last-seen slot, is compared.
+/// The list is cleared at every host-iteration boundary, so it stays as small as that iteration's
+/// pass count.
+pub(crate) fn take_frame_once(frames: &mut Vec<InputFrame>, frame: InputFrame) -> bool {
+    if frames.contains(&frame) {
+        return false;
+    }
+    frames.push(frame);
+    true
+}
+
+/// The document, dialog and focus an injected batch belongs to: if any changed before a UI pass
+/// took the batch, the clicks or text no longer belong to the new state and are dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct InputGeneration {
+    pub(crate) document: u64,
+    pub(crate) dialog: Option<egui::Id>,
+    pub(crate) focus: Option<egui::Id>,
+}
+
+/// The window geometry a capture belongs to (logical and screen bounds, DPI and zoom).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GeometryStamp {
+    pub(crate) viewport: egui::ViewportId,
+    pub(crate) content: egui::Rect,
+    pub(crate) inner: Option<egui::Rect>,
+    pub(crate) pixels_per_point: f32,
+    pub(crate) zoom: f32,
+}
+
+/// What the issued capture must still match when it completes.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CaptureEpoch {
+    pub(crate) geometry: u64,
+    pub(crate) viewport: egui::ViewportId,
+    /// The active document (uid, revision) at issuance: a screenshot never answers with pixels of
+    /// a document, undo state or selection that replaced it while the capture was in flight.
+    pub(crate) document: Option<(u64, u64)>,
+    /// The image size the issuing geometry predicts (`width * height`, checked).
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+}
+
+/// An admitted capture waiting for its settled frame (`frames`) and animation delay (`due_ms`).
+pub(crate) struct QueuedScreenshot {
+    pub(crate) id: u64,
+    pub(crate) due_ms: f64,
+    pub(crate) frames: u32,
+}
+
+/// A window capture asked for through the control channel (`ui.screenshot`), answered once a
+/// frame is presented; a window that isn't presented never delivers one, hence the deadline.
+pub(crate) struct PendingScreenshot {
+    pub(crate) id: u64,
+    pub(crate) path: Option<String>,
+    /// Send the PNG back as `pngBase64`.
+    pub(crate) data: bool,
+    pub(crate) reply: Sender<ControlResponse>,
+    /// When to give up (ms, as [`now_ms`], monotonic).
+    pub(crate) deadline_ms: f64,
+    /// The checked bytes this request reserved before it was admitted.
+    pub(crate) reserved_bytes: usize,
+    /// The active document at admission: switching documents before issuance fails the request
+    /// rather than capturing a different document.
+    pub(crate) document: Option<(u64, u64)>,
+    /// The live one-shot completion slot while the command is outstanding.
+    pub(crate) slot: Option<craft_ui::capture::CaptureSlot>,
+    /// The geometry and expected image size at issuance.
+    pub(crate) issued: Option<CaptureEpoch>,
+    /// Fresh slots made after a geometry change (a resize while the capture was in flight).
+    pub(crate) attempts: u8,
+}
+
+/// At most this many captures admitted (pending or queued) at once.
+pub(crate) const MAX_PENDING_SCREENSHOTS: usize = 4;
+
+/// The largest single capture admitted (128 MiB: a 4K viewport at 2x).
+pub(crate) const MAX_SCREENSHOT_BYTES: usize = 128 * 1024 * 1024;
+
+/// The aggregate budget of admitted captures (256 MiB).
+pub(crate) const MAX_SCREENSHOT_TOTAL_BYTES: usize = 256 * 1024 * 1024;
+
+/// Settle frames a capture waits for after a control request (and the animation time).
+pub(crate) const SCREENSHOT_SETTLE_FRAMES: u32 = 3;
+
+/// How long after settling an issued capture may take (ms).
+pub(crate) const SCREENSHOT_TIMEOUT_MS: f64 = 8000.0;
+
+/// The timeout's answer: no file, no second reply.
+pub(crate) const SCREENSHOT_TIMEOUT_ERROR: &str =
+    "no frame was presented (screen locked, window minimized or fully covered); ui.render still renders the artboard";
+
+/// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
+pub(crate) const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
+
+/// Seconds between looks for fonts a font manager activated while the app stays in front (#2576).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const FONT_INSTALL_POLL: f64 = 2.0;
 
 #[cfg(test)]
 mod tests {

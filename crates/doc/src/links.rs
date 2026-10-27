@@ -139,7 +139,17 @@ fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
     if w.max(h) <= PROXY_SIZE {
         return None;
     }
-    let small = image::load_from_memory(bytes).ok()?.thumbnail(PROXY_SIZE, PROXY_SIZE);
+    // The proxy decodes within the project's raster cap, counted as RGBA like every other
+    // decode path (#3597): the header alone decides whether the pixels could ever fit, and the
+    // decoder gets the same budget instead of image's own default.
+    if u64::from(w) * u64::from(h) > crate::MAX_RASTER_ALLOC / 4 {
+        return None;
+    }
+    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(crate::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let small = reader.decode().ok()?.thumbnail(PROXY_SIZE, PROXY_SIZE);
     let mut png = Vec::new();
     small.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some(png)
@@ -430,6 +440,44 @@ mod tests {
         assert!(!big.is_proxy(), "the bytes are the full image");
         assert!(ImageBlob::new("image/png", png(40, 20)).with_proxy().proxy.is_none(), "small images keep their pixels");
         assert!(ImageBlob::new("image/png", vec![1, 2, 3]).with_proxy().proxy.is_none(), "undecodable");
+    }
+
+    /// PNG CRC-32 (the same polynomial ZIP uses), so a hand-written header is one a decoder accepts.
+    fn crc32(data: &[u8]) -> u32 {
+        let mut crc = !0u32;
+        for &b in data {
+            crc ^= u32::from(b);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & u32::from(crc & 1 != 0).wrapping_neg());
+            }
+        }
+        !crc
+    }
+
+    /// A PNG header and nothing else, declaring `w` × `h` 8-bit gray pixels.
+    fn png_header_declaring(w: u32, h: u32) -> Vec<u8> {
+        let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        let mut chunk = Vec::new();
+        chunk.extend(b"IHDR");
+        chunk.extend(w.to_be_bytes());
+        chunk.extend(h.to_be_bytes());
+        chunk.extend([8, 0, 0, 0, 0]);
+        let crc = crc32(&chunk);
+        out.extend(13u32.to_be_bytes());
+        out.extend(&chunk);
+        out.extend(crc.to_be_bytes());
+        out
+    }
+
+    /// A linked image past the raster cap gets no proxy: the header alone decides (#3597).
+    #[test]
+    fn an_image_past_the_raster_cap_gets_no_proxy() {
+        // 65536 × 65536 gray pixels are 4 GiB as RGBA, past the 2 GiB cap on every target.
+        let huge = png_header_declaring(1 << 16, 1 << 16);
+        assert!(proxy_png(&huge).is_none());
+        // A header within the cap but with no image data decodes to no preview, as before.
+        let truncated = png_header_declaring(600, 300);
+        assert!(proxy_png(&truncated).is_none());
     }
 
     #[test]

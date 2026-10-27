@@ -582,5 +582,4 @@ fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool
 }
 
 #[cfg(test)]
-#[path = "tests_revolve.rs"]
 mod tests;

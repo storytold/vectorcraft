@@ -166,6 +166,8 @@ fn decode(s: &str) -> String {
     while let Some(b) = bytes.get(i).copied() {
         if b == b'%'
             && i + 2 < bytes.len()
+            && let Some(digits) = bytes.get(i + 1..i + 3)
+            && digits.iter().all(u8::is_ascii_hexdigit)
             && let Ok(byte) = u8::from_str_radix(s.get(i + 1..i + 3).unwrap_or(""), 16)
         {
             out.push(byte);
@@ -210,6 +212,15 @@ const MAX_CATALOGUE: usize = 20_000;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_only_accepts_two_hex_digits() {
+        assert_eq!(decode("a%+1b"), "a%+1b");
+        assert_eq!(decode("a%-1b"), "a%-1b");
+        assert_eq!(decode("a%+Fb"), "a%+Fb");
+        assert_eq!(decode("a%4"), "a%4");
+        assert_eq!(decode("Brand%2040%25"), "Brand 40%");
+    }
 
     #[test]
     fn variables_are_split_out_and_decoded() {

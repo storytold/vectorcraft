@@ -4,6 +4,24 @@ use serde_json::{Value, json};
 
 use crate::{Backend, Headless, PROTOCOL_VERSION, Remote, Server, tool_definitions};
 
+mod batchdraw;
+mod concurrency;
+mod conventions;
+mod distortkeys;
+mod drawopts;
+mod exportas;
+mod fileio;
+mod freeform;
+mod gradient;
+mod limits;
+mod links;
+mod liquify;
+mod pen;
+mod persp;
+mod place;
+mod protocol;
+mod svg;
+
 fn server() -> Server {
     Server::new(Box::new(Headless::with_document()))
 }

@@ -71,7 +71,7 @@ pub(super) fn body(ui: &mut egui::Ui, d: &mut Dialog) {
     let current = WARP_STYLES.iter().find(|(style, _)| *style == suffix).map_or_else(|| suffix.to_string(), |(_, label)| shown(label));
     widgets::label_row(ui, tl!("Style:"), LABEL_W, |ui| {
         style_preview(ui, suffix);
-        if let Some((style, label)) = widgets::combo(ui, "warp-style", &current, 170.0, false, |ui| {
+        if let Some((style, label)) = widgets::combo(ui, "warp-style", &current, 170.0, |ui| {
             let mut chosen = None;
             for (style, label) in WARP_STYLES {
                 ui.horizontal(|ui| {

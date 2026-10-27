@@ -1,0 +1,956 @@
+//! Installed system fonts: found by family name by every lookup, whatever ran before it (#130).
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use crate::fontdb::fonts_outside;
+use crate::*;
+
+const FAMILY: &str = "Sysfont Sans3";
+
+/// Concurrent first use must not report a missing glyph just because another lookup loaded it.
+#[test]
+fn concurrent_fallback_lookups_all_find_the_installed_face() {
+    const C: char = '\u{F0000}';
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-concurrent-fallback", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let base = named(&[(3, EN, 1, "Concurrent Sans"), (3, EN, 2, "Regular"), (3, EN, 6, "ConcurrentSans-Regular")]);
+    let font = skrifa::FontRef::new(&base).unwrap();
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"cmap"), crate::embed::cmap(&[(C as u32, 1)]).unwrap());
+    for r in font.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+        }
+    }
+    std::fs::write(dir.join("Concurrent.ttf"), builder.build()).unwrap();
+    for _ in 0..4 {
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        assert_eq!(db.load_system_fonts(), 1);
+        let start = std::sync::Barrier::new(16);
+        let faces = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..16)
+                .map(|_| {
+                    scope.spawn(|| {
+                        start.wait();
+                        db.face_covering(C)
+                    })
+                })
+                .collect();
+            workers.into_iter().map(|worker| worker.join().unwrap()).collect::<Vec<_>>()
+        });
+        assert!(
+            faces.iter().all(|face| face.as_ref().is_some_and(|face| face.family == "Concurrent Sans")),
+            "{} of 16 lookups missed the installed face",
+            faces.iter().filter(|face| face.is_none()).count()
+        );
+    }
+    std::fs::remove_file(dir.join("Concurrent.ttf")).unwrap();
+    std::fs::remove_dir(dir).unwrap();
+}
+
+/// A bundled Source Sans 3 file renamed [`FAMILY`] (as long as the original name).
+fn renamed(file: &str) -> Vec<u8> {
+    renamed_to(file, FAMILY)
+}
+
+/// A bundled Source Sans 3 file renamed `family`, which is as long as the original name.
+fn renamed_to(file: &str, family: &str) -> Vec<u8> {
+    let data = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts").join(file)).unwrap();
+    rename(data, "Source Sans 3", family)
+}
+
+/// The font `data` with family name `from` renamed `to`, which is as long.
+fn rename(mut data: Vec<u8>, from: &str, to: &str) -> Vec<u8> {
+    assert_eq!(from.len(), to.len());
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    for (from, to) in [(utf16(from), utf16(to)), (from.as_bytes().to_vec(), to.as_bytes().to_vec())] {
+        let mut i = 0;
+        while let Some(at) = data[i..].windows(from.len()).position(|w| w == from) {
+            data[i + at..i + at + to.len()].copy_from_slice(&to);
+            i += at + to.len();
+        }
+    }
+    data
+}
+
+/// The fonts in `faces` as one collection (TTC) file.
+fn collection(faces: &[Vec<u8>]) -> Vec<u8> {
+    let mut out = b"ttcf".to_vec();
+    out.extend_from_slice(&0x0001_0000_u32.to_be_bytes());
+    out.extend_from_slice(&(faces.len() as u32).to_be_bytes());
+    let mut base = 12 + 4 * faces.len();
+    for f in faces {
+        out.extend_from_slice(&(base as u32).to_be_bytes());
+        base += f.len();
+    }
+    for f in faces {
+        // Table offsets count from the start of the collection.
+        let start = out.len() as u32;
+        let mut f = f.clone();
+        let tables = u16::from_be_bytes([f[4], f[5]]) as usize;
+        for r in 0..tables {
+            let at = 12 + r * 16 + 8;
+            let off = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) + start;
+            f[at..at + 4].copy_from_slice(&off.to_be_bytes());
+        }
+        out.extend_from_slice(&f);
+    }
+    out
+}
+
+/// A font folder (with a subfolder, a damaged font and a file that isn't a font) holding
+/// [`FAMILY`] Regular and Bold.
+fn font_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("Sub")).unwrap();
+    std::fs::write(dir.join("Sysfont-Regular.ttf"), renamed("SourceSans3-Regular.ttf")).unwrap();
+    std::fs::write(dir.join("Sub/Sysfont-Bold.TTF"), renamed("SourceSans3-Bold.ttf")).unwrap();
+    std::fs::write(dir.join("damaged.ttf"), b"ttcf\0\x01\0\0\xff\xff\xff\xff").unwrap();
+    std::fs::write(dir.join("readme.txt"), FAMILY).unwrap();
+    dir
+}
+
+fn has(list: &[String], family: &str) -> bool {
+    list.iter().any(|f| f == family)
+}
+
+#[test]
+fn every_lookup_by_name_finds_installed_fonts_in_a_fresh_database() {
+    let dir = font_dir("fresh");
+    // Each lookup is the first thing a new database is asked. A folder listed twice is read once.
+    let db = || FontDb::with_font_dirs(vec![dir.clone(), dir.join("Sub/..")]);
+    let f = db().face("sysfont sans3", "Bold").unwrap();
+    assert_eq!((f.family.as_str(), f.style.as_str()), (FAMILY, "Bold"));
+    assert_eq!(f.path().map(std::fs::canonicalize).unwrap().unwrap(), std::fs::canonicalize(dir.join("Sub/Sysfont-Bold.TTF")).unwrap());
+    assert!(db().has_family(FAMILY));
+    assert!(has(&db().families(), FAMILY));
+    assert_eq!(db().styles(FAMILY), ["Regular", "Bold"]);
+    assert_eq!(db().load_system_fonts(), 2);
+    assert_eq!(db().find_family("SysfontSans3").as_deref(), Some(FAMILY), "a PostScript-style name");
+    // Missing fonts stay missing.
+    let db = db();
+    assert!(!db.has_family("No Such Font"));
+    assert_eq!(db.face("No Such Font", "Regular").unwrap().family, FALLBACK_FAMILY);
+}
+
+#[test]
+fn the_scan_reads_collections_and_loads_fonts_only_when_used() {
+    let dir = font_dir("collection");
+    std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap();
+    std::fs::remove_file(dir.join("Sub/Sysfont-Bold.TTF")).unwrap();
+    std::fs::write(dir.join("Sysfont.ttc"), collection(&[renamed("SourceSans3-Regular.ttf"), renamed("SourceSans3-Bold.ttf")])).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.styles(FAMILY), ["Regular", "Bold"]);
+    // Cataloged, not loaded.
+    assert!(!db.is_loaded(FAMILY));
+    let bold = db.face(FAMILY, "Bold").unwrap();
+    assert_eq!((bold.style.as_str(), bold.face_index()), ("Bold", 1));
+    assert_eq!(db.find(FAMILY, "Regular").unwrap().face_index(), 0, "the collection's faces load together");
+}
+
+#[test]
+fn fonts_without_outlines_the_engine_draws_are_left_out() {
+    let dir = font_dir("outlines");
+    // The Bold's TrueType outlines under another tag, as in fonts that keep their outlines in
+    // Apple's `hvgl` table or hold bitmaps only. The tag keeps the table directory sorted.
+    let bold = dir.join("Sub/Sysfont-Bold.TTF");
+    let mut data = std::fs::read(&bold).unwrap();
+    let tables = u16::from_be_bytes([data[4], data[5]]) as usize;
+    let rec = (0..tables).map(|i| 12 + 16 * i).find(|&r| &data[r..r + 4] == b"glyf").unwrap();
+    data[rec..rec + 4].copy_from_slice(b"gxyz");
+    std::fs::write(&bold, data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    assert_eq!(db.styles(FAMILY), ["Regular"]);
+    assert_eq!(db.load_system_fonts(), 1);
+}
+
+/// A character no font covered is looked for again once a rescan finds a font that has it (#992).
+#[test]
+fn rescanning_retries_characters_no_font_covered() {
+    // A private-use character none of the bundled fonts has.
+    const C: char = '\u{F0000}';
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-retry", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert!(db.face_covering(C).is_none());
+    // Source Sans 3 Regular renamed, its character map replaced by one holding only `C`.
+    let base = named(&[(3, EN, 1, "Retry Sans"), (3, EN, 2, "Regular"), (3, EN, 6, "RetrySans-Regular")]);
+    let font = skrifa::FontRef::new(&base).unwrap();
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"cmap"), crate::embed::cmap(&[(C as u32, 1)]).unwrap());
+    for r in font.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+        }
+    }
+    std::fs::write(dir.join("Retry.ttf"), builder.build()).unwrap();
+    assert!(db.face_covering(C).is_none(), "the miss is remembered until the fonts are scanned again");
+    assert_eq!(db.load_system_fonts(), 1);
+    assert_eq!(db.face_covering(C).unwrap().family, "Retry Sans");
+}
+
+/// A lookup on another thread while an installed family loads finds the whole family or none of
+/// it: never only the face of its first file, which falling back takes for text in the others' style
+/// (Arial Bold Italic for upright Regular Arabic, the same text laid out again moments later in
+/// Arial Regular).
+#[test]
+fn a_family_loading_on_another_thread_is_not_found_in_part() {
+    // A private-use character none of the bundled fonts has.
+    const C: char = '\u{F0000}';
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-whole-family", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // [`FAMILY`] Bold and Regular, their character maps replaced by one holding only `C`. The Bold's
+    // file sorts first, so it is read first.
+    for (file, source) in [("Sysfont-Bold.ttf", "SourceSans3-Bold.ttf"), ("Sysfont-Regular.ttf", "SourceSans3-Regular.ttf")] {
+        let base = renamed(source);
+        let font = skrifa::FontRef::new(&base).unwrap();
+        let mut builder = write_fonts::FontBuilder::new();
+        builder.add_raw(write_fonts::types::Tag::new(b"cmap"), crate::embed::cmap(&[(C as u32, 1)]).unwrap());
+        for r in font.table_directory.table_records() {
+            let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+            if !builder.contains(tag) {
+                builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+            }
+        }
+        std::fs::write(dir.join(file), builder.build()).unwrap();
+    }
+    let db = std::sync::Arc::new(FontDb::with_font_dirs(vec![dir.clone()]));
+    // Each time this thread publishes faces, another thread falls back for `C` right then.
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (hook_db, hook_seen) = (db.clone(), seen.clone());
+    crate::fontdb::on_faces_published(Some(Box::new(move || {
+        let db = hook_db.clone();
+        let style = std::thread::spawn(move || db.fallback_for(C, 0).map(|f| f.style.clone())).join().unwrap();
+        hook_seen.lock().unwrap().push(style);
+    })));
+    let face = db.face(FAMILY, "Regular").map(|f| f.style.clone());
+    crate::fontdb::on_faces_published(None);
+    assert_eq!(face.as_deref(), Some("Regular"));
+    let seen = seen.lock().unwrap().clone();
+    assert!(!seen.is_empty());
+    assert!(seen.iter().all(|s| s.as_deref() == Some("Regular")), "the lookups took the family's {seen:?} faces");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn rescanning_finds_fonts_installed_since() {
+    let dir = font_dir("rescan");
+    let later = dir.join("Later");
+    let db = FontDb::with_font_dirs(vec![later.clone()]);
+    assert!(!db.has_family(FAMILY));
+    let (generation, families) = (db.generation(), db.family_list());
+    std::fs::create_dir_all(&later).unwrap();
+    std::fs::copy(dir.join("Sysfont-Regular.ttf"), later.join("Sysfont-Regular.ttf")).unwrap();
+    assert!(!db.has_family(FAMILY), "the folders are scanned once, not on every miss");
+    assert_eq!(db.load_system_fonts(), 1);
+    assert!(db.has_family(FAMILY) && has(&db.family_list(), FAMILY) && !has(&families, FAMILY));
+    assert_ne!(db.generation(), generation);
+}
+
+/// A font removed since the last scan leaves the database at the next one even when type had
+/// loaded it: the family leaves the lists, its cached outlines are dropped, and its name resolves
+/// to the fallback font until the font is installed again. Fonts added as bytes stay.
+#[test]
+fn rescanning_drops_loaded_fonts_removed_since() {
+    let dir = font_dir("removed");
+    let (regular, bold) = (dir.join("Sysfont-Regular.ttf"), dir.join("Sub/Sysfont-Bold.TTF"));
+    let saved = std::fs::read(&regular).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.add_font(renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")), 1);
+    let (face, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((face.family.as_str(), m), (FAMILY, FontMatch::Exact));
+    assert_eq!(db.face(FAMILY, "Bold").unwrap().style, "Bold");
+    let glyph = face.glyph_for('A');
+    let outline = db.outline(&face, glyph);
+    assert!(!outline.elements().is_empty());
+
+    // One style removed: the family keeps the other.
+    std::fs::remove_file(&bold).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    assert_eq!(db.styles(FAMILY), ["Regular"]);
+    assert_eq!(db.face(FAMILY, "Bold").unwrap().style, "Regular", "the closest style left");
+
+    // The whole family removed.
+    let generation = db.generation();
+    std::fs::remove_file(&regular).unwrap();
+    assert_eq!(db.load_system_fonts(), 0);
+    assert!(!db.has_family(FAMILY) && !has(&db.families(), FAMILY) && !has(&db.menu_family_list(), FAMILY));
+    assert!(db.styles(FAMILY).is_empty() && db.find_family(FAMILY).is_none());
+    assert!(db.face_by_id(face.id()).is_none());
+    assert!(!Arc::ptr_eq(&db.outline(&face, glyph), &outline), "its cached outlines are dropped");
+    assert_ne!(db.generation(), generation, "lists built from the fonts are built again");
+    let (fallback, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((fallback.family.as_str(), m), (FALLBACK_FAMILY, FontMatch::Missing));
+    assert!(db.has_family("Other Sans 33"), "a font added as bytes has no file to remove");
+
+    // Installed again: it loads again.
+    std::fs::write(&regular, saved).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    let (again, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((again.family.as_str(), m), (FAMILY, FontMatch::Exact));
+    assert_ne!(again.id(), face.id());
+    assert_eq!(db.outline(&again, glyph).elements(), db.outline(&face, glyph).elements());
+}
+
+#[test]
+fn a_background_scan_serves_the_first_lookup() {
+    let dir = font_dir("background");
+    let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![dir])));
+    db.scan_in_background();
+    // Waits for the scan when it is still running.
+    assert!(has(&db.families(), FAMILY));
+    assert_eq!(db.load_system_fonts(), 2, "a rescan catalogs the two faces again");
+}
+
+#[test]
+fn the_family_list_is_shared_until_fonts_change() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let a = db.family_list();
+    assert!(Arc::ptr_eq(&a, &db.family_list()));
+    assert!(db.add_font(renamed("SourceSans3-Regular.ttf")) > 0);
+    let b = db.family_list();
+    assert!(!Arc::ptr_eq(&a, &b) && has(&b, FAMILY) && !has(&a, FAMILY));
+}
+
+#[test]
+fn font_lists_leave_out_hidden_system_families_which_still_resolve() {
+    // macOS names the faces it keeps for its own interface with a leading "." (".SF NS").
+    const HIDDEN: &str = ".Sysfont Sans";
+    const DOTTED: &str = "Sysfont.Sans3";
+    let dir = font_dir("hidden");
+    std::fs::write(dir.join("Hidden.ttf"), renamed_to("SourceSans3-Regular.ttf", HIDDEN)).unwrap();
+    std::fs::write(dir.join("Dotted.ttf"), renamed_to("SourceSans3-Regular.ttf", DOTTED)).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let listed = db.menu_family_list();
+    assert!(has(&listed, FAMILY) && has(&listed, FALLBACK_FAMILY));
+    assert!(!has(&listed, HIDDEN), "a leading dot hides a family: {listed:?}");
+    assert!(has(&listed, DOTTED), "a dot elsewhere doesn't");
+    assert_eq!(listed.len() + 1, db.family_list().len(), "only the hidden family is left out");
+    assert!(Arc::ptr_eq(&listed, &db.menu_family_list()), "shared until the fonts change");
+    // Documents and fallbacks that name it still find it.
+    assert!(has(&db.families(), HIDDEN) && db.has_family(HIDDEN));
+    assert_eq!(db.find_family(HIDDEN).as_deref(), Some(HIDDEN));
+    assert_eq!(db.face(HIDDEN, "Regular").unwrap().family, HIDDEN);
+    // Loading it changed the fonts: the list is built again, still without it.
+    let again = db.menu_family_list();
+    assert!(!Arc::ptr_eq(&listed, &again) && *listed == *again);
+}
+
+#[test]
+fn installed_styles_of_a_loaded_family_load_when_asked_for() {
+    let dir = font_dir("styles");
+    let db = FontDb::with_font_dirs(vec![dir]);
+    // The family is loaded with only its Regular face (as when a bundled family is also installed).
+    assert_eq!(db.add_font(renamed("SourceSans3-Regular.ttf")), 1);
+    assert_eq!(db.face(FAMILY, "Bold").unwrap().style, "Bold");
+    // A style nobody has still gets the closest one.
+    assert_eq!(db.face(FAMILY, "Black").unwrap().style, "Bold");
+}
+
+/// Documents name fonts by PostScript name, and families can hold hyphens: the installed face of
+/// that exact name gives the family and style, however the name splits.
+#[test]
+fn installed_faces_are_found_by_postscript_name() {
+    let dir = font_dir("postscript");
+    let db = FontDb::with_font_dirs(vec![dir]);
+    // The renamed Source Sans 3 files keep their PostScript names.
+    assert_eq!(db.by_postscript_name("SourceSans3-Bold"), Some((FAMILY.to_string(), "Bold".to_string())));
+    assert_eq!(db.by_postscript_name("sourcesans3-regular"), Some((FAMILY.to_string(), "Regular".to_string())), "any case");
+    assert_eq!(db.by_postscript_name("Rounded-X-Mplus-1c-black"), None);
+}
+
+/// Windows lists fonts installed as shortcuts, or by programs into their own folders, by their
+/// files' full paths: those files are scanned too (#443).
+#[test]
+fn a_font_file_named_by_itself_is_scanned() {
+    let dir = font_dir("file");
+    let db = FontDb::with_font_dirs(vec![dir.join("Sub/Sysfont-Bold.TTF"), dir.join("No Such Font.ttf")]);
+    assert_eq!(db.styles(FAMILY), ["Bold"]);
+    assert_eq!(db.load_system_fonts(), 1);
+}
+
+/// Font menus' Font Technology › Variable: a family installed as static files beside a variable
+/// one is variable, whether the scan reads a static file first or a static face is loaded.
+#[test]
+fn a_family_with_a_variable_file_beside_static_ones_is_variable() {
+    use crate::test_fonts::{VARIABLE_FAMILY, variable_font};
+    let dir = font_dir("variable");
+    assert!(!FontDb::with_font_dirs(vec![dir.clone()]).family_traits(FAMILY).variable, "static files only");
+    let var_dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-variable-file", std::process::id()));
+    let _ = std::fs::remove_dir_all(&var_dir);
+    std::fs::create_dir_all(&var_dir).unwrap();
+    std::fs::write(var_dir.join("Sysfont-Variable.ttf"), rename(variable_font().unwrap(), VARIABLE_FAMILY, FAMILY)).unwrap();
+    // The folders are read last to first: the static files are found first.
+    let db = FontDb::with_font_dirs(vec![var_dir.clone(), dir]);
+    assert!(db.family_traits(FAMILY).variable);
+    assert!(!db.is_loaded(FAMILY), "the scan's traits, nothing loaded");
+    // A static face of the family loaded, its variable file only scanned.
+    let db = FontDb::with_font_dirs(vec![var_dir]);
+    assert!(db.has_family(FAMILY));
+    db.add_font(renamed("SourceSans3-Regular.ttf"));
+    assert!(db.is_loaded(FAMILY) && !db.face(FAMILY, "Regular").unwrap().traits.variable);
+    assert!(db.family_traits(FAMILY).variable);
+}
+
+#[test]
+fn registered_fonts_outside_the_font_folders_are_their_full_paths() {
+    let dir = std::env::temp_dir().join("Fonts");
+    let elsewhere = std::env::temp_dir().join("Downloads").join("Montserrat-Regular.ttf");
+    let registered = [
+        // A file in the Windows font folder, by name.
+        "arial.ttf".into(),
+        // A file in a font folder (ignoring case).
+        dir.join("Lato-Regular.ttf").to_string_lossy().to_uppercase(),
+        elsewhere.to_string_lossy().into_owned(),
+        elsewhere.to_string_lossy().into_owned(),
+    ];
+    assert_eq!(fonts_outside(registered, &[dir]), [elsewhere]);
+}
+
+/// Fonts installed while the app runs are found when it comes back to the front, without
+/// scanning every time (#443).
+#[test]
+fn the_database_tells_when_fonts_were_installed_or_removed_since_its_scan() {
+    let dir = font_dir("changed");
+    let db = FontDb::with_font_dirs(vec![dir.clone(), dir.join("Later")]);
+    assert!(!db.installed_fonts_changed(), "nothing to compare with before the first scan");
+    assert!(!db.has_family("Other Sans 33"));
+    assert!(!db.installed_fonts_changed());
+    // Past the file system's clock tick, so the folders' times differ from the scan's.
+    let tick = || std::thread::sleep(std::time::Duration::from_millis(50));
+    tick();
+    std::fs::write(dir.join("Sub/Other.ttf"), renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font installed into a subfolder");
+    assert_eq!(db.load_system_fonts(), 3);
+    assert!(db.has_family("Other Sans 33") && !db.installed_fonts_changed());
+    tick();
+    std::fs::create_dir_all(dir.join("Later")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font folder that didn't exist");
+    db.load_system_fonts();
+    tick();
+    std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font removed");
+    assert_eq!(db.load_system_fonts(), 2);
+    assert_eq!(db.styles(FAMILY), ["Bold"]);
+}
+
+/// A font a font service loads from a file without an extension, outside the font folders.
+fn service_font() -> PathBuf {
+    std::env::temp_dir().join(format!("vc-sysfonts-{}-service", std::process::id())).join(".29457")
+}
+
+/// The fonts a font service (Adobe Fonts on Windows, through DirectWrite) loads in place are
+/// cataloged: named by the platform's lister, read whatever their file is called (#579), and one it
+/// activates after a scan is picked up by the next check (#2576). One test: the lister is set once
+/// per process, so two tests changing what it lists would race.
+#[test]
+fn fonts_the_platform_lists_outside_the_font_folders_are_cataloged() {
+    use std::sync::Mutex;
+    static FILES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let list = |files: Vec<String>| *FILES.lock().unwrap_or_else(|e| e.into_inner()) = files;
+    set_platform_font_files(|| FILES.lock().unwrap_or_else(|e| e.into_inner()).clone());
+    let file = service_font();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let _ = std::fs::remove_file(&file);
+    // Nothing listed at the first scan; then a font service activates a font.
+    let db = FontDb::for_system_scan_test();
+    assert!(!db.installed_fonts_changed());
+    db.load_system_fonts();
+    assert!(!db.has_family("Service Sans3"));
+    std::fs::write(&file, renamed_to("SourceSans3-Regular.ttf", "Service Sans3")).unwrap();
+    // A collection lists its file once per face.
+    list(vec![file.to_string_lossy().into_owned(); 2]);
+    assert!(db.installed_fonts_changed(), "a font a font service activated since the scan");
+    db.load_system_fonts();
+    assert!(db.has_family("Service Sans3"));
+    // The lister's files outside the font folders are scanned with them, each once.
+    let dirs = system_font_dirs();
+    assert_eq!(dirs.iter().filter(|d| **d == file).count(), 1, "{dirs:?}");
+    // A file named by itself is read without a font's extension, one in a folder isn't.
+    let db = FontDb::with_font_dirs(vec![file.clone()]);
+    assert_eq!(db.styles("Service Sans3"), ["Regular"]);
+    assert!(!FontDb::with_font_dirs(vec![file.parent().unwrap().to_path_buf()]).has_family("Service Sans3"));
+}
+
+#[test]
+fn a_resource_fork_gives_up_its_font_files() {
+    let (regular, bold) = (renamed("SourceSans3-Regular.ttf"), renamed("SourceSans3-Bold.ttf"));
+    let fork = crate::suitcase::fork_of(&[regular.clone(), bold.clone()]);
+    assert_eq!(crate::suitcase::sfnt_resources(&fork), [regular.as_slice(), bold.as_slice()]);
+    // Damage keeps what was read before it, and never panics.
+    for cut in [0, 3, 16, 300, fork.len() - 1] {
+        let _ = crate::suitcase::sfnt_resources(&fork[..cut]);
+    }
+    assert!(crate::suitcase::sfnt_resources(&[0xFF; 600]).is_empty());
+    // A fork can't make the scan read more than so many fonts.
+    assert_eq!(crate::suitcase::sfnt_resources(&crate::suitcase::fork_of(&vec![b"font".to_vec(); 300])).len(), 256);
+}
+
+/// Office's fonts: a file with nothing in it but a resource fork holding the fonts, named
+/// without an extension. Only macOS keeps a resource fork in a file.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_scan_reads_suitcase_fonts() {
+    let dir = font_dir("suitcase");
+    std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap();
+    std::fs::remove_file(dir.join("Sub/Sysfont-Bold.TTF")).unwrap();
+    let suitcase = dir.join("Sysfont Sans3");
+    std::fs::write(&suitcase, b"").unwrap();
+    std::fs::write(
+        suitcase.join("..namedfork/rsrc"),
+        crate::suitcase::fork_of(&[renamed("SourceSans3-Regular.ttf"), renamed("SourceSans3-Bold.ttf")]),
+    )
+    .unwrap();
+    // A file with nothing in either fork is no font.
+    std::fs::write(dir.join("empty"), b"").unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.styles(FAMILY), ["Regular", "Bold"]);
+    let bold = db.face(FAMILY, "Bold").unwrap();
+    assert_eq!((bold.family.as_str(), bold.style.as_str()), (FAMILY, "Bold"));
+    assert_eq!(bold.path(), Some(suitcase.as_path()));
+    assert_eq!(db.find_family("SysfontSans3").as_deref(), Some(FAMILY), "by a PostScript-style name, as an EPS names it");
+}
+
+/// The bundled Source Sans 3 Regular with a `name` table of `records` (platform, language, name id,
+/// text): Windows Unicode (UTF-16) or Mac Roman (ASCII here).
+fn named(records: &[(u16, u16, u16, &str)]) -> Vec<u8> {
+    let mut records = records.to_vec();
+    records.sort_by_key(|r| (r.0, r.1, r.2));
+    let (mut name, mut strings) = (vec![], vec![]);
+    let n = records.len() as u16;
+    for v in [0, n, 6 + 12 * n] {
+        name.extend_from_slice(&v.to_be_bytes());
+    }
+    for &(platform, lang, id, s) in &records {
+        let bytes: Vec<u8> = if platform == 3 { s.encode_utf16().flat_map(u16::to_be_bytes).collect() } else { s.as_bytes().to_vec() };
+        let encoding = if platform == 3 { 1 } else { 0 };
+        for v in [platform, encoding, lang, id, bytes.len() as u16, strings.len() as u16] {
+            name.extend_from_slice(&v.to_be_bytes());
+        }
+        strings.extend(bytes);
+    }
+    name.extend(strings);
+    let base = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/SourceSans3-Regular.ttf")).unwrap();
+    let font = skrifa::FontRef::new(&base).unwrap();
+    let mut builder = write_fonts::FontBuilder::new();
+    builder.add_raw(write_fonts::types::Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = write_fonts::types::Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+        }
+    }
+    builder.build()
+}
+
+const EN: u16 = 0x0409;
+const JA: u16 = 0x0411;
+
+/// Copying a file a search offers into a folder the scan reads makes the font resolve exactly from
+/// that file, and a file it doesn't offer doesn't: the search matches fonts as `resolve` finds
+/// them. Each case resolves the font, copies the file into a scanned folder, rescans and resolves
+/// again, as the app does.
+#[test]
+fn wanted_fonts_match_as_resolve_finds_them() {
+    let one = named(&[(3, EN, 1, "Parity One"), (3, EN, 2, "Regular"), (3, EN, 6, "ParityOne-Regular")]);
+    let two = named(&[
+        (3, EN, 1, "Parity Two"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "ParityTwo-Regular"),
+        (3, EN, 16, "Parity Two"),
+        (3, JA, 16, "パリティ二"),
+        (3, EN, 17, "Regular"),
+    ]);
+    // Laid out like Hiragino Sans W3: a legacy family per weight, paired with its legacy style, and
+    // a PostScript name that reads as the legacy family.
+    let three = |postscript: &str| {
+        named(&[
+            (1, 0, 1, "Parity Three"),
+            (1, 0, 2, "W3"),
+            (3, EN, 1, "Parity Three W3"),
+            (3, EN, 2, "Regular"),
+            (3, EN, 6, postscript),
+            (3, EN, 16, "Parity Three"),
+            (3, EN, 17, "W3"),
+            (3, JA, 1, "パリティ三 W3"),
+            (3, JA, 2, "Regular"),
+            (3, JA, 16, "パリティ三"),
+            (3, JA, 17, "W3"),
+        ])
+    };
+    let (three, three_ps) = (three("ParityThree-W3"), three("PThree-W3"));
+    // A PostScript name that is the family's name.
+    let findme = named(&[(3, EN, 1, "Findme"), (3, EN, 2, "Regular"), (3, EN, 6, "Findme")]);
+    let psdiff = named(&[(3, EN, 1, "Psdiff Sans"), (3, EN, 2, "Regular"), (3, EN, 6, "PsdiffSans-Regular")]);
+    let variable = crate::test_fonts::variable_font().unwrap();
+    let four = |style: &str, ja_style: &str| {
+        named(&[
+            (3, EN, 1, "Parity Four"),
+            (3, EN, 2, style),
+            (3, EN, 6, &format!("ParityFour-{style}")),
+            (3, EN, 16, "Parity Four"),
+            (3, EN, 17, style),
+            (3, JA, 16, "パリティ四"),
+            (3, JA, 17, ja_style),
+        ])
+    };
+    let (four_regular, four_bold) = (four("Regular", "標準"), four("Bold", "太字"));
+    let five = named(&[(3, EN, 1, "Parity Five"), (3, EN, 2, "Bold"), (3, EN, 6, "ParityFive-Bold"), (3, EN, 17, "Bold"), (3, JA, 17, "太字")]);
+    // (family, style, Parity Four Regular installed, candidate file, provides it)
+    let cases: Vec<(&str, &str, bool, &[u8], bool)> = vec![
+        ("Parity One", "Regular", false, &one, true),
+        ("parity one", "REGULAR", false, &one, true),
+        ("Parity One", "Bold", false, &one, false),
+        ("Parity One", "Regular", false, &four_bold, false),
+        ("パリティ二", "Regular", false, &two, true),
+        ("パリティ二", "Bold", false, &two, false),
+        ("Parity Three W3", "Regular", false, &three_ps, true),
+        ("Parity Three W3", "Bold", false, &three_ps, false),
+        ("PThree-W3", "Bold", false, &three_ps, true),
+        // The legacy family reads as the PostScript name, which names the W3 face.
+        ("Parity Three W3", "Bold", false, &three, true),
+        ("パリティ三", "W3", false, &three, true),
+        ("パリティ三", "Bold", false, &three, false),
+        ("Findme", "Bold", false, &findme, false),
+        ("Find-me", "Regular", false, &findme, true),
+        // A family's name goes before a PostScript name that reads the same.
+        ("Find-me", "Bold", false, &findme, false),
+        ("PsdiffSans-Regular", "Bold", false, &psdiff, true),
+        ("Varitest Sans", "SemiBold", false, &variable, true),
+        ("Varitest Sans", "Normal", false, &variable, true),
+        ("VaritestSans-Bold", "Regular", false, &variable, true),
+        ("Varitest Sans", "Black", false, &variable, false),
+        ("Parity Five", "太字", false, &five, true),
+        ("Parity Four", "Bold", true, &four_bold, true),
+        ("パリティ四", "Bold", true, &four_bold, true),
+        ("Parity Four", "太字", true, &four_bold, false),
+        ("Parity Four", "Bold", true, &one, false),
+    ];
+    for (i, (family, style, installed, candidate, provides)) in cases.into_iter().enumerate() {
+        let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-wanted-{i}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (base, new) = (dir.join("base"), dir.join("new"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        if installed {
+            std::fs::write(base.join("ParityFour-Regular.ttf"), &four_regular).unwrap();
+        }
+        let db = FontDb::with_font_dirs(vec![base, new.clone()]);
+        let (face, m) = db.resolve(family, style).unwrap();
+        assert_eq!(m, if installed { FontMatch::Style } else { FontMatch::Missing }, "case {i}: {family} {style}");
+        let wanted = WantedFont { family: family.into(), style: style.into(), installed: (m == FontMatch::Style).then(|| face.family.clone()) };
+        let file = new.join("Candidate.ttf");
+        std::fs::write(&file, candidate).unwrap();
+        db.load_system_fonts();
+        let (face, m) = db.resolve(family, style).unwrap();
+        let exact = m == FontMatch::Exact && face.path().map(|p| std::fs::canonicalize(p).unwrap()) == Some(std::fs::canonicalize(&file).unwrap());
+        assert_eq!(exact, provides, "case {i}: resolve gave {face:?} {m:?} for {family} {style}");
+        assert_eq!(WantedFonts::new(&[wanted]).provided_by(&file) == [0], provides, "case {i}: the search, for {family} {style}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// A search reads only so much of a file: of a collection whose header gives 300 faces it reads
+/// the first 64, and a cap on the bytes read ends it early.
+#[test]
+fn a_search_reads_at_most_its_share_of_a_font_file() {
+    use crate::fontdb::file_face_names_within;
+    let face = renamed("SourceSans3-Regular.ttf");
+    let tables = u16::from_be_bytes([face[4], face[5]]) as usize;
+    let len = |tag: &[u8]| {
+        let r = (0..tables).map(|i| 12 + 16 * i).find(|&r| &face[r..r + 4] == tag).unwrap();
+        u64::from(u32::from_be_bytes(face[r + 12..r + 16].try_into().unwrap()))
+    };
+    // What one face costs: its table directory and its name and OS/2 tables.
+    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2");
+    let n = 300;
+    let base = 12 + 4 * n;
+    let mut ttc = b"ttcf".to_vec();
+    ttc.extend_from_slice(&0x0001_0000_u32.to_be_bytes());
+    ttc.extend_from_slice(&(n as u32).to_be_bytes());
+    for _ in 0..n {
+        ttc.extend_from_slice(&(base as u32).to_be_bytes());
+    }
+    // Every face is the one font, whose table offsets count from the start of the collection.
+    let mut f = face.clone();
+    for r in 0..tables {
+        let at = 12 + r * 16 + 8;
+        let off = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) + base as u32;
+        f[at..at + 4].copy_from_slice(&off.to_be_bytes());
+    }
+    ttc.extend(f);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-many", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Many.ttc");
+    std::fs::write(&file, ttc).unwrap();
+    assert_eq!(file_face_names_within(&file, 256, u64::MAX).len(), 256);
+    assert_eq!(file_face_names_within(&file, 64, u64::MAX).len(), 64);
+    // The header, 64 offsets and three faces.
+    assert_eq!(file_face_names_within(&file, 64, 12 + 4 * 64 + 3 * per_face).len(), 3);
+    let wanted = WantedFonts::new(&[WantedFont { family: FAMILY.into(), style: "Regular".into(), installed: None }]);
+    assert_eq!(wanted.provided_by(&file), [0]);
+    assert!(wanted.provided_by(&dir.join("No Such.ttf")).is_empty());
+}
+
+/// A search reads a suitcase font only when its whole resource fork fits in the 8 MB a search reads
+/// of one file.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_search_reads_a_suitcase_font_only_within_its_share() {
+    use crate::fontdb::file_face_names_within;
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-big-suitcase", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let suitcase = dir.join("Sysfont Sans3");
+    std::fs::write(&suitcase, b"").unwrap();
+    let fork = crate::suitcase::fork_of(&[renamed("SourceSans3-Regular.ttf")]);
+    let len = fork.len() as u64;
+    std::fs::write(suitcase.join("..namedfork/rsrc"), &fork).unwrap();
+    assert_eq!(file_face_names_within(&suitcase, 64, len).len(), 1);
+    assert!(file_face_names_within(&suitcase, 64, len - 1).is_empty());
+    let wanted = WantedFonts::new(&[WantedFont { family: FAMILY.into(), style: "Regular".into(), installed: None }]);
+    assert_eq!(wanted.provided_by(&suitcase), [0]);
+    // Past the 8 MB a search reads of one file.
+    let mut big = fork;
+    big.resize((8 << 20) + 1, 0);
+    std::fs::write(suitcase.join("..namedfork/rsrc"), big).unwrap();
+    assert!(wanted.provided_by(&suitcase).is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn font_files_are_told_by_their_extension() {
+    for name in ["a/B.TTF", "c.otf", "d.Ttc", "e.otc"] {
+        assert!(is_font_file(Path::new(name)), "{name}");
+    }
+    for name in ["f.ttf.txt", "ttf", ".29457", "g.woff2", "h.fon"] {
+        assert!(!is_font_file(Path::new(name)), "{name}");
+    }
+}
+
+/// VectorCraft's own Fonts folder joins the scan once set, even before it exists; only the first
+/// folder set counts.
+#[test]
+fn the_app_font_folder_is_read_by_the_scan() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-app-fonts", std::process::id()));
+    set_app_font_dir(dir.clone());
+    set_app_font_dir(dir.join("Other"));
+    assert_eq!(app_font_dir(), Some(dir.as_path()));
+    let dirs = system_font_dirs();
+    assert_eq!(dirs.iter().filter(|d| **d == dir).count(), 1, "{dirs:?}");
+    assert!(!dirs.contains(&dir.join("Other")));
+}
+
+/// #394 Preferences › Type › Show Font Names in English: off, menus label the family in its
+/// native language; on (default), the English name. Documents still resolve by either name.
+#[test]
+fn family_display_name_follows_show_font_names_in_english() {
+    let bytes = named(&[
+        (3, EN, 1, "Hiragino Sans"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "HiraginoSans-Regular"),
+        (3, EN, 16, "Hiragino Sans"),
+        (3, JA, 16, "ヒラギノ角ゴシック"),
+        (3, EN, 17, "Regular"),
+    ]);
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(db.add_font(bytes) > 0);
+    assert_eq!(db.family_display_name("Hiragino Sans", true), "Hiragino Sans");
+    assert_eq!(db.family_display_name("Hiragino Sans", false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("ヒラギノ角ゴシック", false), "ヒラギノ角ゴシック");
+    assert_eq!(db.family_display_name("Source Sans 3", false), "Source Sans 3");
+    let face = db.face("ヒラギノ角ゴシック", "Regular").unwrap();
+    assert_eq!(face.family, "Hiragino Sans");
+}
+
+/// #2208: English-only typographic names must not hide a localized legacy family name.
+/// Cover both fonts added as bytes and the system-font catalog before a face is loaded.
+#[test]
+fn family_display_name_falls_back_to_localized_legacy_names() {
+    const ZH: u16 = 0x0804;
+    for (case, (typographic, legacy, expected)) in
+        [(None, Some("宋体"), "宋体"), (Some("排印宋体"), Some("宋体"), "排印宋体"), (None, None, "SimSun")].into_iter().enumerate()
+    {
+        let mut records = vec![(3, EN, 1, "SimSun"), (3, EN, 2, "Regular"), (3, EN, 6, "SimSun-Regular"), (3, EN, 16, "SimSun")];
+        if let Some(label) = typographic {
+            records.push((3, ZH, 16, label));
+        }
+        if let Some(label) = legacy {
+            records.push((3, ZH, 1, label));
+        }
+        let bytes = named(&records);
+        let loaded = FontDb::with_font_dirs(vec![]);
+        assert!(loaded.add_font(bytes.clone()) > 0);
+        let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-localized-family-{case}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("localized.ttf"), bytes).unwrap();
+        let catalog = FontDb::with_font_dirs(vec![dir.clone()]);
+        for (source, db) in [("loaded", loaded), ("catalog", catalog)] {
+            assert_eq!(db.family_display_name("SimSun", true), "SimSun", "{source}, case {case}: English requested");
+            assert_eq!(db.family_display_name("SimSun", false), expected, "{source}, case {case}: native requested");
+            assert_eq!(db.family_display_name("SimSun", true), "SimSun", "{source}, case {case}: switch back to English");
+            assert_eq!(db.is_loaded("SimSun"), source == "loaded", "{source}, case {case}: catalog names need no face loading");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+/// Thai typed in a font without Thai takes an installed font made for Thai (Leelawadee UI,
+/// Thonburi, Noto Sans Thai…), whatever other face covering Thai loaded first; Latin beside it keeps
+/// the font chosen. Skipped where none of those families is installed.
+#[test]
+fn thai_falls_back_to_a_font_made_for_thai() {
+    let db = FontDb::global();
+    let Some(thai) = crate::fontdb::THAI_FAMILIES.iter().find(|f| db.has_family(f)) else {
+        eprintln!("skipped: no Thai font installed");
+        return;
+    };
+    let st = vectorcraft_doc::CharStyle { size: 20.0, ..Default::default() };
+    let l = layout(db, &TextObject::point(kurbo::Point::ZERO, "Thai ภาษาไทย", st));
+    let family = |g: &PositionedGlyph| db.face_by_id(g.font_id).map(|f| f.family.clone()).unwrap_or_default();
+    let (latin, thai_glyphs) = l.glyphs.split_at(5);
+    assert!(latin.iter().all(|g| family(g) == FALLBACK_FAMILY), "{:?}", latin.iter().map(family).collect::<Vec<_>>());
+    let first = crate::fontdb::THAI_FAMILIES.iter().find(|f| thai_glyphs.iter().all(|g| family(g).eq_ignore_ascii_case(f)));
+    assert!(first.is_some(), "Thai drawn in {:?}; {thai} is installed", thai_glyphs.iter().map(family).collect::<Vec<_>>());
+    assert!(thai_glyphs.iter().all(|g| g.gid != 0), "no .notdef");
+}
+
+/// #1258: full names can differ from the PostScript name, and name one particular face.
+#[test]
+fn full_names_resolve_faces_and_missing_font_searches() {
+    let data = named(&[
+        (3, EN, 1, "Alias Script"),
+        (3, EN, 2, "Italic"),
+        (3, EN, 4, "Alias Script Italic"),
+        (3, JA, 4, "例の書体 斜体"),
+        (3, EN, 6, "AliasScriptI"),
+    ]);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-full-name", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Alias.ttf");
+    std::fs::write(&file, &data).unwrap();
+    for loaded in [false, true] {
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        if loaded {
+            assert!(db.add_font(data.clone()) > 0);
+        }
+        for name in ["Alias Script Italic", "Alias-Script-Italic", "ALIAS SCRIPT ITALIC", "例の書体 斜体", "AliasScriptI"] {
+            for requested_style in ["Regular", "Bold"] {
+                let (face, matched) = db.resolve(name, requested_style).unwrap();
+                assert_eq!((face.family.as_str(), face.style.as_str(), matched), ("Alias Script", "Italic", FontMatch::Exact));
+                let wanted = WantedFonts::new(&[WantedFont { family: name.into(), style: requested_style.into(), installed: None }]);
+                assert_eq!(wanted.provided_by(&file), [0], "search for {name} {requested_style}");
+            }
+        }
+        // Full names are face aliases; the API for actual PostScript names stays precise.
+        assert!(db.find_postscript("Alias Script Italic").is_none());
+        assert!(db.by_postscript_name("Alias Script Italic").is_none());
+        assert_eq!(db.find_postscript("AliasScriptI").unwrap().style, "Italic");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A real family's name keeps the requested style even if another face uses it as a full name.
+#[test]
+fn a_full_name_does_not_override_an_installed_family() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert!(
+        db.add_font(named(&[(3, EN, 1, "Alias Script"), (3, EN, 2, "Italic"), (3, EN, 4, "Alias Script Italic"), (3, EN, 6, "AliasScriptI")])) > 0
+    );
+    assert!(db.add_font(named(&[(3, EN, 1, "Alias Script Italic"), (3, EN, 2, "Regular"), (3, EN, 6, "OtherAlias-Regular")])) > 0);
+    let (face, matched) = db.resolve("Alias Script Italic", "Regular").unwrap();
+    assert_eq!((face.family.as_str(), face.style.as_str(), matched), ("Alias Script Italic", "Regular", FontMatch::Exact));
+}
+
+/// When type is set in a font that isn't installed, layout searches the loaded faces' names for the
+/// font's name once until fonts are added.
+#[test]
+fn a_missing_fonts_name_is_looked_up_once_until_fonts_are_added() {
+    use crate::fontdb::alias_lists;
+    let db = FontDb::with_font_dirs(vec![]);
+    // One lookup lists the names of every loaded face.
+    let before = alias_lists();
+    assert_eq!(db.canonical("Gone Sans", "Bold"), ("Gone Sans".to_string(), "Bold".to_string()));
+    let one_lookup = alias_lists() - before;
+    let style = vectorcraft_doc::CharStyle { font_family: "Gone Sans".into(), ..Default::default() };
+    let t = TextObject::point(kurbo::Point::ZERO, &vec!["Set in a font that is not installed."; 20].join("\n"), style);
+    let before = alias_lists();
+    for _ in 0..2 {
+        assert_eq!(layout(&db, &t).lines.len(), 20);
+    }
+    assert_eq!(alias_lists() - before, one_lookup, "two layouts of 20 paragraphs list the faces' names once");
+    // A font added since has the name as its full name.
+    assert_eq!(db.add_font(named(&[(3, EN, 1, "Found Sans"), (3, EN, 2, "Bold"), (3, EN, 4, "Gone Sans"), (3, EN, 6, "FoundSans-Bold")])), 1);
+    let l = layout(&db, &t);
+    assert!(!l.glyphs.is_empty() && l.glyphs.iter().all(|g| db.face_by_id(g.font_id).is_some_and(|f| f.family == "Found Sans")));
+}
+
+/// Until an installed font has a name, `canonical` returns the name and the style asked for each
+/// time; once a rescan finds the font, the name gives the font's family.
+#[test]
+fn a_name_asked_for_before_its_font_is_installed_finds_it_after_a_rescan() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-asked-before", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let answer = |family: &str, style: &str| (family.to_string(), style.to_string());
+    for _ in 0..2 {
+        for style in ["Regular", "Bold"] {
+            assert_eq!(db.canonical("Later Three W3", style), answer("Later Three W3", style));
+            assert_eq!(db.canonical("後の三", style), answer("後の三", style));
+        }
+    }
+    // The name table is laid out like Hiragino Sans W3's, with a legacy family paired with its
+    // legacy style.
+    let three = named(&[
+        (1, 0, 1, "Later Three"),
+        (1, 0, 2, "W3"),
+        (3, EN, 1, "Later Three W3"),
+        (3, EN, 2, "Regular"),
+        (3, EN, 6, "LThree-W3"),
+        (3, EN, 16, "Later Three"),
+        (3, EN, 17, "W3"),
+        (3, JA, 16, "後の三"),
+        (3, JA, 17, "W3"),
+    ]);
+    std::fs::write(dir.join("LaterThree.ttf"), three).unwrap();
+    assert_eq!(db.load_system_fonts(), 1);
+    for _ in 0..2 {
+        assert_eq!(db.canonical("Later Three W3", "Regular"), answer("Later Three", "W3"));
+        assert_eq!(db.canonical("Later Three W3", "Bold"), answer("Later Three", "Bold"));
+        assert_eq!(db.canonical("後の三", "Bold"), answer("Later Three", "Bold"));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Times the layout of a story of 1,000 paragraphs set in a font that is not installed, with 0, 100
+/// and 400 fonts added to the bundled ones. Run with
+/// `cargo test --release -p vectorcraft-text --lib missing_font_story_layout_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn missing_font_story_layout_timing() {
+    let text = vec!["Type set in a font that is not installed on this computer."; 1000].join("\n");
+    let style = vectorcraft_doc::CharStyle { font_family: "No Such Font".into(), ..Default::default() };
+    let t = TextObject::point(kurbo::Point::ZERO, &text, style);
+    for extra in [0, 100, 400] {
+        let db = FontDb::with_font_dirs(vec![]);
+        for i in 0..extra {
+            let (family, full, postscript) = (format!("Loaded Sans {i}"), format!("Loaded Sans {i} Regular"), format!("LoadedSans{i}-Regular"));
+            assert_eq!(db.add_font(named(&[(3, EN, 1, &family), (3, EN, 2, "Regular"), (3, EN, 4, &full), (3, EN, 6, &postscript)])), 1);
+        }
+        let mut ms = vec![];
+        for _ in 0..7 {
+            let start = std::time::Instant::now();
+            let l = layout(&db, &t);
+            ms.push(start.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(l.lines.len(), 1000);
+        }
+        ms.sort_by(f64::total_cmp);
+        println!("{extra} fonts added, {} families loaded: median {:.1} ms; samples {ms:.1?}", db.family_list().len(), ms[3]);
+    }
+}

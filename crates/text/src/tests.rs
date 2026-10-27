@@ -3,6 +3,29 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod axes;
+mod bidi;
+mod bitmaps;
+mod colr;
+mod combos;
+mod devanagari;
+mod embed;
+mod fit;
+mod hang;
+mod inline;
+mod joiners;
+mod justify;
+mod path_joins;
+mod ruby;
+mod scripts;
+mod snap;
+mod svg_glyphs;
+mod sysfonts;
+mod typo;
+mod variable;
+mod versions;
+mod vertical;
+
 /// The bundled fonts only: what these tests measure doesn't change with the fonts installed.
 fn db() -> &'static FontDb {
     static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();

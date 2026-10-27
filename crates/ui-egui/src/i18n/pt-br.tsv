@@ -5,7 +5,7 @@
 #                                 that menu item, so one id can read differently from its twin
 #            @plural              `source` is "one|other" (English forms); Brazilian Portuguese has
 #                                 the same two forms, so the translation is "one|other" too (see
-#                                 `plural` in i18n/mod.rs)
+#                                 `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
 #   lines starting with # and blank lines are ignored.
@@ -4455,6 +4455,7 @@ axis	Both	Ambos
 	Miter Limit	Limite da Ponta
 	Miter Limit:	Limite da Ponta:
 	Mixed Objects	Objetos Mistos
+	Mixed	Misto
 	Mojikumi	Mojikumi
 	Move All Objects	Mover Todos os Objetos
 	N pt per	N pt por
