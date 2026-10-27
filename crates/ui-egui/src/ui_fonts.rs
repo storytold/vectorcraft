@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use egui::epaint::Shape;
-use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
+use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily, VariationCoords};
 use egui::{FontData, FontDefinitions, FontFamily, FontId, FontTweak, LayerId};
 use vectorcraft_text::{FontDb, FontFace};
 
@@ -121,7 +121,9 @@ impl UiFonts {
             // The face's file data, shared with the process-wide font database (which keeps every
             // face it loads for the session) instead of copied: one handle is leaked per font added.
             let face: &'static FontFace = Box::leak(Box::new(face.clone()));
-            let data = FontData { index: face.face_index(), ..FontData::from_static(face.file_data()) };
+            let coords = ui_coords(face);
+            let data =
+                FontData { index: face.face_index(), tweak: FontTweak { coords, ..Default::default() }, ..FontData::from_static(face.file_data()) };
             for (name, data, families) in ctx.fonts(|f| baseline_copies(f.definitions(), &name, &data)) {
                 let families = families.into_iter().map(|family| InsertFontFamily { family, priority: FontPriority::Lowest }).collect();
                 ctx.add_font(FontInsert { name, data, families });
@@ -186,6 +188,31 @@ fn baseline_shift(row: (f32, f32, f32), face: &[u8], index: u32) -> f32 {
     let (row_ascent, row_height, row_offset) = row;
     let shift = em_metrics(face, index).map_or(0.0, |(ascent, height)| row_ascent + row_offset - (ascent + 0.5 * (row_height - height)));
     if shift.is_finite() { shift.clamp(-0.5, 0.5) } else { 0.0 }
+}
+
+/// The axis settings egui draws a fallback face at. egui reads only the face's file, which holds
+/// the whole variable font, so without them it draws the font's default instance: Noto Sans CJK's
+/// variable collection defaults to Thin (`wght` 100), and the UI's CJK text came out hairline next
+/// to Latin text (#2689). A named instance keeps its settings (`wght` 700 for Bold); otherwise a
+/// weight axis whose default isn't Regular is set to Regular (400, clamped into the axis). Static
+/// faces and fonts that already default to Regular get none.
+fn ui_coords(face: &FontFace) -> VariationCoords {
+    let wght = face.axes().into_iter().find(|a| &a.tag == b"wght").map(|a| (a.min, a.default, a.max));
+    coords_for(face.variations(), wght)
+}
+
+/// [`ui_coords`] for a face's named-instance settings and its weight axis (min, default, max).
+fn coords_for(variations: &[([u8; 4], f32)], wght: Option<(f32, f32, f32)>) -> VariationCoords {
+    let mut coords = VariationCoords::new(variations.iter().filter(|(_, v)| v.is_finite()).map(|(t, v)| (*t, *v)));
+    if !variations.iter().any(|(t, _)| t == b"wght")
+        && let Some((min, default, max)) = wght.filter(|(a, b, c)| a.is_finite() && b.is_finite() && c.is_finite())
+    {
+        let regular = 400f32.clamp(min.min(max), max.max(min));
+        if (regular - default).abs() > 0.5 {
+            coords.push(b"wght", regular);
+        }
+    }
+    coords
 }
 
 /// Call `f` with the text of `shape` and the shapes it holds.
@@ -377,6 +404,35 @@ mod tests {
                     assert!(drift.abs() <= 0.5, "{family:?} at {size} pt: {c} ({}) ends {drift:.2} pt below its baseline", face.family);
                 }
             }
+        }
+    }
+
+    fn coords(c: &VariationCoords) -> Vec<([u8; 4], f32)> {
+        c.as_ref().iter().map(|(t, v)| (t.to_be_bytes(), *v)).collect()
+    }
+
+    /// #2689: a variable fallback (Noto Sans CJK VF defaults to Thin) is drawn at Regular, and a
+    /// named instance at its own settings; static faces are left alone.
+    #[test]
+    fn variable_fallbacks_are_drawn_at_regular_weight() {
+        let thin = Some((100.0, 100.0, 900.0));
+        assert_eq!(coords(&coords_for(&[], thin)), vec![(*b"wght", 400.0)], "Noto Sans CJK VF");
+        assert_eq!(coords(&coords_for(&[], Some((500.0, 600.0, 900.0)))), vec![(*b"wght", 500.0)], "clamped into the axis");
+        assert!(coords(&coords_for(&[], Some((100.0, 400.0, 900.0)))).is_empty(), "already Regular");
+        assert!(coords(&coords_for(&[], None)).is_empty(), "static face or no weight axis");
+        assert!(coords(&coords_for(&[], Some((f32::NAN, 100.0, 900.0)))).is_empty(), "damaged axis");
+        assert_eq!(coords(&coords_for(&[(*b"wght", 700.0)], thin)), vec![(*b"wght", 700.0)], "named instance");
+        assert_eq!(coords(&coords_for(&[(*b"wdth", 75.0)], thin)), vec![(*b"wdth", 75.0), (*b"wght", 400.0)], "other axes kept");
+
+        // Real faces, as the font database hands them out.
+        let db = FontDb::with_font_dirs(vec![]);
+        assert!(db.add_font(vectorcraft_text::test_fonts::variable_font().unwrap()) > 0);
+        let bold = db.face(vectorcraft_text::test_fonts::VARIABLE_FAMILY, "Bold").unwrap();
+        assert_eq!(coords(&ui_coords(&bold)), vec![(*b"wght", 700.0)]);
+        let regular = db.face(vectorcraft_text::test_fonts::VARIABLE_FAMILY, "Regular").unwrap();
+        assert!(coords(&ui_coords(&regular)).is_empty(), "defaults to Regular");
+        if let Some(stat) = db.face(vectorcraft_text::FALLBACK_FAMILY, "Regular") {
+            assert!(coords(&ui_coords(&stat)).is_empty(), "static face");
         }
     }
 
