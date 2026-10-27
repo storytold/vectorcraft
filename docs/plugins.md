@@ -15,9 +15,8 @@ There are four kinds of plug-in:
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
-- **Panels** have a panel of their own: they declare what it shows and answer its events (it opened, a button was
-  clicked, a field was set) with what it shows now and host commands to run, as one undo step. The host has the
-  command so far (`plugin.panel.event`); the app doesn't draw the panels yet.
+- **Panels** have a panel of their own (Window › Plug-ins): they declare what it shows and answer its events (it
+  opened, a button was clicked, a field was set) with what it shows now and host commands to run, as one undo step.
 
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the
 `plugin.*` commands in `crates/engine/src/cmd/plugin.rs`).
@@ -58,6 +57,30 @@ in the active document, and none that changes the preferences (`stroke.widthProf
 one other command refuses them all before any runs. It can't read or write files, open or switch documents, use the
 clipboard, or install or remove plug-ins. Commands can't refer to the results of the ones before them; those that make
 art select it, so the next one acts on it.
+
+In the app, **Window › Plug-ins** lists the installed panels (`window.pluginPanel {id}`). Each opens floating, as
+panel `plugin:<id>`, and docks, tabs and closes as any panel. Drawn for the first time since it opened, it sends its
+plug-in an `open` event; a button clicked, a checkbox or dropdown changed and a text or number field committed (Enter,
+or leaving it) are events too, sent with the values of all its fields. It draws the plug-in's last answer: the
+`items` of `panel`, top to bottom, each one of
+
+| `type` | Draws | Keys |
+|---|---|---|
+| `heading`, `text` | a heading, a line of text | `text` |
+| `separator` | a divider | |
+| `button` | a button: a `click` event | `id`, `label`, `enabled`? (default true) |
+| `string` | a text field | `id`, `label`?, `value`?, `multiline`? |
+| `number`, `int` | a number field (`int`: whole numbers) | `id`, `label`?, `value`?, `min`?, `max`?, `step`?, `unit`? |
+| `bool` | a checkbox | `id`, `label`, `value`? |
+| `choice` | a dropdown | `id`, `label`?, `options` (strings), `value`? |
+| `row` | its `items` side by side | `items` |
+| `group` | its `items` under a heading that folds | `label`, `items`, `open`? (default true) |
+
+A field takes the `value` the answer gives it, else keeps the one it had. An item of another type is left out, so a
+plug-in can try a type a later host draws. At most 500 items are drawn, rows and groups nested at most 6 deep. A
+failed event leaves the panel as it was and says why under it. A panel's text is the plug-in's, never translated. A
+panel whose plug-in is removed closes. One open when the app quits is open again at the next start while its plug-in
+is installed then (the `Plug-ins` folder's are, before the first frame), and asks it afresh what it shows.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
@@ -326,8 +349,8 @@ with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or 
 
 A **panel** is given something else as its input: `{"event": {"type": "click", "target": "add"}, "state": …, "values":
 {"width": 40}, "objects": [...]}` (the objects as a filter gets them). It returns `{"panel": {…}, "state"?: …,
-"commands"?: [{"command": "shape.rectangle", "params"?: {…}}]}`: `panel` is what the panel shows (any object: the
-app will draw it), `state` what it keeps until its next event (left out: what it kept; `null`: nothing), and at most
+"commands"?: [{"command": "shape.rectangle", "params"?: {…}}]}`: `panel` is what the panel shows (`{"items": [...]}`,
+[above](#panels)), `state` what it keeps until its next event (left out: what it kept; `null`: nothing), and at most
 256 commands, in order ([panels](#panels)). A decline or an invalid output runs nothing and keeps the state as it was.
 
 ## Writing a plug-in in Rust
@@ -358,8 +381,7 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), the app drawing panel
-  plug-ins' panels (the host has `plugin.panel.event`), host
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), host
   callbacks (a plug-in reporting progress or asking whether it was cancelled), importers (plug-in formats that open
   files).
 - Live effects that change paint (they reshape geometry; an object filter recolours), and filters on type, images or

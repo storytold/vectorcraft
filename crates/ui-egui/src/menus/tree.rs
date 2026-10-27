@@ -687,6 +687,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             ];
             sort_by_localized_label(&mut lib_items, lang);
             window_items.extend(lib_items);
+            window_items.push(Sep);
+            window_items.push(sub("Plug-ins", crate::panels::plugin_panel::window_menu()));
             window_items
         }),
         (

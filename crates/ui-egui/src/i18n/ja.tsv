@@ -333,6 +333,8 @@ digits	Malayalam	マラヤーラム数字
 	As Multiple Assets	複数アセットとして
 	Plug-ins	プラグイン
 	No filter plug-ins installed	フィルタープラグインはインストールされていません
+	No panel plug-ins installed	パネルプラグインはインストールされていません
+	This plug-in is no longer installed.	このプラグインはもうインストールされていません。
 	Install Plug-in…	プラグインをインストール…
 	Open this setting's help page	この設定のヘルプページを開く
 	Reload Plug-ins	プラグインを再読み込み
@@ -3086,6 +3088,7 @@ mark-style	Japanese	日本式
 	Swatch Conflicts	スウォッチの競合
 	Swatch exchange files keep solid colors only.	スウォッチ交換ファイルにはベタ塗りのカラーのみが保存されます。
 	Swatch Library	スウォッチライブラリ
+	Plug-in Panel	プラグインパネル
 	Swatch Name:	スウォッチ名:
 	Swatch Options	スウォッチオプション
 	Swatch Options…	スウォッチオプション…

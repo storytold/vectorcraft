@@ -508,6 +508,7 @@ impl VectorcraftApp {
             toolbar::show_custom(self, ui.ctx());
         }
         panels::library_panel::tidy(self);
+        panels::plugin_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
         dialogs::show(self, &ctx);

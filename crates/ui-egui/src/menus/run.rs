@@ -14,6 +14,7 @@ pub(crate) fn normalize_panel(input: &str) -> Option<&'static str> {
         .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
         .map(|(id, _)| id)
         .or_else(|| crate::panels::library_panel::intern(input))
+        .or_else(|| crate::panels::plugin_panel::intern(input))
 }
 
 /// An optional `{key?: bool}` param: none when it is omitted or null (the commands then toggle).
@@ -667,6 +668,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
+        "window.pluginPanel" => crate::panels::plugin_panel::open_command(app, p),
         "window.swatchLibrary.other" => crate::panels::swatches::other_library(app, s("path")),
         "ui.saveSwatchLibrary" => {
             let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());

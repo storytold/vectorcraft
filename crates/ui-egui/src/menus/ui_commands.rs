@@ -751,6 +751,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
     ),
     (
+        "window.pluginPanel",
+        "Plug-in Panel",
+        "",
+        "{id: a panel plug-in (plugin.list kind panel)} open the plug-in's panel, floating (panel id `plugin:<id>`, which window.panel.* moves, docks and closes), or bring it forward when it is open. Drawn for the first time since it opened, it sends the plug-in an open event (plugin.panel.event) and shows its answer; its buttons, checkboxes, dropdowns and committed fields send events of their own → {open: id, panel}",
+    ),
+    (
         "window.swatchLibrary",
         "Swatch Library",
         "",

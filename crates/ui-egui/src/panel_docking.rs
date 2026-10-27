@@ -339,6 +339,9 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
+    if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::plugin_panel::parse(panel).is_some() {
+        return crate::panels::plugin_panel::float(app, panel);
+    }
     if app.ui.docking_hidden.contains_key(panel) {
         return restore_hidden_group(app, panel);
     }
@@ -1291,6 +1294,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
             return tl!("Canvas").to_string();
         }
         crate::panels::library_panel::tab_label(self.app, id)
+            .or_else(|| crate::panels::plugin_panel::tab_label(id))
             .or_else(|| crate::state::all_panels().find(|p| p.0 == id).map(|p| tl!(p.1).to_string()))
             .unwrap_or_else(|| id.clone())
     }
@@ -1309,7 +1313,10 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn paint_icon(&mut self, painter: &egui::Painter, rect: egui::Rect, id: &String, color: egui::Color32) -> bool {
-        let icon = crate::state::rail_panel(id).map(|p| p.2).or_else(|| crate::panels::library_panel::parse(id).map(|_| "library"));
+        let icon = crate::state::rail_panel(id)
+            .map(|p| p.2)
+            .or_else(|| crate::panels::library_panel::parse(id).map(|_| "library"))
+            .or_else(|| crate::panels::plugin_panel::parse(id).map(|_| "layout-grid"));
         let Some(icon) = icon else { return false };
         let image = egui::Image::new(crate::icons::source(icon));
         match image.load_for_size(painter.ctx(), rect.size()) {

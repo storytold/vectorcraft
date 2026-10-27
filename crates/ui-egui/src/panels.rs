@@ -35,6 +35,7 @@ pub mod opentype;
 pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
+pub mod plugin_panel;
 pub mod properties;
 pub mod separations;
 pub mod stroke;
@@ -185,6 +186,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
+        id if plugin_panel::parse(id).is_some() => plugin_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
         }
@@ -662,6 +664,8 @@ mod tests_freeform;
 mod tests_links;
 #[cfg(test)]
 mod tests_maskview;
+#[cfg(test)]
+mod tests_plugin_panel;
 #[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]

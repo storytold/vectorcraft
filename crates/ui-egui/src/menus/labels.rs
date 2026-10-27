@@ -138,16 +138,17 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "window.pluginPanel")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
-/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
-/// an Effect › Plug-ins effect), by the plug-in's own name? Told by the item itself, so it holds
-/// while another thread installs or removes plug-ins.
+/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter, an
+/// Effect › Plug-ins effect or a Window › Plug-ins panel), by the plug-in's own name? Told by the
+/// item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    id == "plugin.dialog" || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
+    matches!(id, "plugin.dialog" | "window.pluginPanel")
+        || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
 
 /// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
