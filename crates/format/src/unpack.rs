@@ -57,8 +57,16 @@ enum Tail<'a> {
 }
 
 impl<'a> Unpacked<'a> {
-    /// Open `bytes` (compressed or not).
+    /// Open `bytes` (compressed or not), with the JSON part capped at [`MAX_JSON`].
     pub(crate) fn new(bytes: &'a [u8]) -> Result<Self, FormatError> {
+        Self::within(bytes, MAX_JSON)
+    }
+
+    /// Open `bytes` with the JSON part capped at `max_json` bytes instead of [`MAX_JSON`], so
+    /// the cap is exercised wherever the test runs: a compressed file's JSON is deserialized into
+    /// a document several times its size, and the cap is what keeps that off the address space
+    /// (#3587).
+    fn within(bytes: &'a [u8], max_json: u64) -> Result<Self, FormatError> {
         if !is_compressed(bytes) {
             let (json, tail) = split_tail(bytes);
             return Ok(Self { json: Json::Borrowed(json), tail: Tail::Slice(tail) });
@@ -75,13 +83,13 @@ impl<'a> Unpacked<'a> {
             if n == 0 || nul.is_some_and(|z| buf.len() >= z + BLOB_MAGIC.len()) {
                 break;
             }
-            if buf.len() as u64 > MAX_JSON + CHUNK {
+            if buf.len() as u64 > max_json + CHUNK {
                 return Err(FormatError::TooBig);
             }
         }
         let Some(z) = nul else {
             // No NUL, so no marker: all of it is JSON.
-            if buf.len() as u64 > MAX_JSON {
+            if buf.len() as u64 > max_json {
                 return Err(FormatError::TooBig);
             }
             return Ok(Self { json: Json::Owned(buf), tail: Tail::None });
@@ -92,7 +100,7 @@ impl<'a> Unpacked<'a> {
             && buf.get(end..).is_some_and(|r| r.starts_with(BLOB_MAGIC))
             && end.checked_sub(1).and_then(|k| buf.get(k)).is_some_and(|b| matches!(b, b'}' | b']' | b'"'))
         {
-            if end as u64 > MAX_JSON {
+            if end as u64 > max_json {
                 return Err(FormatError::TooBig);
             }
             let read = buf.split_off(end + BLOB_MAGIC.len());
@@ -321,6 +329,24 @@ mod tests {
         // An offset past the data is still just missing, and the default budget reads all of it.
         assert_eq!(read(&[[1 << 40, 1]], 1 << 20).unwrap(), vec![None]);
         assert_eq!(Unpacked::new(&file).unwrap().entries(&[[0, 4096]]).unwrap(), vec![Some(Arc::new(tail.clone()))]);
+    }
+
+    /// #3587: a compressed file's JSON is capped wherever the cap runs, so a small gzip that
+    /// unpacks past it is refused instead of being deserialized into a document several times
+    /// its size.
+    #[test]
+    fn a_documents_json_is_capped() {
+        // The cap itself: a quarter of the address space on wasm32, 1 GiB elsewhere.
+        assert_eq!(MAX_JSON, if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 });
+        let mut json = br#"{"format":"vectorcraft","pad":""#.to_vec();
+        json.extend(std::iter::repeat_n(b'x', 4096));
+        json.extend(br#""}"#);
+        let gz = gzip(&json);
+        // Within the target's cap the file opens, and the JSON reads back whole.
+        assert!(Unpacked::new(&gz).is_ok());
+        assert_eq!(Unpacked::within(&gz, json.len() as u64).unwrap().json(), json.as_slice());
+        // One byte past the cap, the whole document is refused with TooBig.
+        assert!(matches!(Unpacked::within(&gz, json.len() as u64 - 1), Err(FormatError::TooBig)));
     }
 
     #[test]

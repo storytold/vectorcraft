@@ -1,6 +1,6 @@
 # Bulgarian (bg) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" English forms,
-# translated as two Bulgarian forms "one|other"; see `plural` in i18n/mod.rs).
+# translated as two Bulgarian forms "one|other"; see `plural` in i18n.rs).
 #
 # Clean-room: every entry is written from the plain meaning of VectorCraft's English labels, in
 # ordinary Bulgarian vocabulary of vector illustration (работна област, път, опорна точка,
@@ -1813,6 +1813,7 @@ font-technology	Variable	Променливи
 	Miter Limit:	Ограничение на острите ъгли:
 	Mixed Appearances	Смесени изгледи
 	Mixed Objects	Смесени обекти
+	Mixed	Смесено
 	Mode:	Режим:
 	Model	Модел
 	Modified	Модифицирано

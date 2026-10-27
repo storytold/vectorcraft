@@ -1,6 +1,6 @@
 //! Convert to Shape, Round Corners and Scribble.
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use vectorcraft_geom::kurbo;
 use vectorcraft_geom::shapes::{self, KAPPA};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath, corners};
@@ -142,6 +142,54 @@ fn crosses_outline(p: Point, q: Point, polys: &[Vec<Point>]) -> bool {
             apart(side(p, q, a), side(p, q, b), eps) && apart(side(a, b, p), side(a, b, q), eps)
         })
     })
+}
+
+/// One named Settings entry in Effect › Stylize › Scribble (public feature names; parameter sets
+/// are chosen for VectorCraft).
+pub struct ScribbleSetting {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub params: Value,
+}
+
+/// The Scribble dialog's Settings presets, in menu order.
+pub fn scribble_settings() -> &'static [ScribbleSetting] {
+    static PRESETS: std::sync::OnceLock<Vec<ScribbleSetting>> = std::sync::OnceLock::new();
+    PRESETS.get_or_init(|| {
+        [
+            ("default", "Default", json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 5.0, "spacingVariation": 0.5})),
+            ("childlike", "Childlike", json!({"angle": 45.0, "overlap": 2.0, "overlapVariation": 2.0, "strokeWidth": 2.0, "curviness": 15.0, "curvinessVariation": 30.0, "spacing": 4.0, "spacingVariation": 1.5})),
+            ("dense", "Dense", json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.0, "strokeWidth": 3.0, "curviness": 0.0, "curvinessVariation": 0.0, "spacing": 2.0, "spacingVariation": 0.0})),
+            ("loose", "Loose", json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 1.0, "strokeWidth": 2.0, "curviness": 20.0, "curvinessVariation": 40.0, "spacing": 12.0, "spacingVariation": 3.0})),
+            ("moire", "Moire", json!({"angle": 0.0, "overlap": 0.0, "overlapVariation": 0.0, "strokeWidth": 1.0, "curviness": 80.0, "curvinessVariation": 10.0, "spacing": 3.0, "spacingVariation": 0.5})),
+            ("sharp", "Sharp", json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.0, "strokeWidth": 2.0, "curviness": 0.0, "curvinessVariation": 0.0, "spacing": 3.0, "spacingVariation": 0.0})),
+            ("sketch", "Sketch", json!({"angle": 30.0, "overlap": -1.0, "overlapVariation": 0.5, "strokeWidth": 2.0, "curviness": 10.0, "curvinessVariation": 15.0, "spacing": 6.0, "spacingVariation": 1.0})),
+            ("snarl", "Snarl", json!({"angle": 15.0, "overlap": 3.0, "overlapVariation": 3.0, "strokeWidth": 4.0, "curviness": 40.0, "curvinessVariation": 50.0, "spacing": 8.0, "spacingVariation": 4.0})),
+            ("swash", "Swash", json!({"angle": 60.0, "overlap": 5.0, "overlapVariation": 2.0, "strokeWidth": 5.0, "curviness": 30.0, "curvinessVariation": 20.0, "spacing": 10.0, "spacingVariation": 2.0})),
+            ("tight", "Tight", json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.0, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 2.0, "spacingVariation": 0.2})),
+            ("zigzag", "Zigzag", json!({"angle": 90.0, "overlap": 0.0, "overlapVariation": 0.0, "strokeWidth": 3.0, "curviness": 0.0, "curvinessVariation": 0.0, "spacing": 8.0, "spacingVariation": 0.0})),
+        ]
+        .into_iter()
+        .map(|(id, label, params)| ScribbleSetting { id, label, params })
+        .collect()
+    })
+}
+
+/// Which Settings preset matches `params` (seed ignored), if any.
+pub fn scribble_setting_id(params: &Value) -> Option<&'static str> {
+    let obj = params.as_object()?;
+    scribble_settings().iter().find(|p| p.params.as_object().is_some_and(|want| scribble_params_match(obj, want))).map(|p| p.id)
+}
+
+fn scribble_params_match(have: &serde_json::Map<String, Value>, want: &serde_json::Map<String, Value>) -> bool {
+    want.iter().all(|(k, v)| have.get(k).is_some_and(|a| scribble_param_eq(a, v)))
+}
+
+fn scribble_param_eq(a: &Value, b: &Value) -> bool {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => (x - y).abs() < 1e-6,
+        _ => a == b,
+    }
 }
 
 /// Scribble (simplified): a zig-zag hatching across the filled area at `angle`, one per region

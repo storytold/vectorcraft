@@ -449,7 +449,7 @@ Character styles cannot represent object opacity or blend modes. With Transparen
 sampling refuses a non-neutral source or target object before changing art, paint defaults,
 selection or history. Disable Transparency in Eyedropper Options to sample supported attributes
 while preserving the target object's transparency. Whole-object sampling remains unchanged.
-Regression evidence: `tests_eyedropper.rs` covers Unicode, font/paint, Undo/Redo, tool switches,
+Regression evidence: `tests/eyedropper.rs` covers Unicode, font/paint, Undo/Redo, tool switches,
 and atomic rejection of source and target opacity/blend modes; `text_range_and_brush_sampling_options_coexist`
 covers upstream brush-key sampling. Scores and estimates unchanged.
 

@@ -4,7 +4,7 @@
 #            @id                  a command id (e.g. file.saveAs): wins over the English text for
 #                                 that menu item, so one id can read differently from its twin
 #            @plural              `source` is "one|other" (English forms); Chinese has one form, so
-#                                 the translation is a single string (see `plural` in i18n/mod.rs)
+#                                 the translation is a single string (see `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
 #   lines starting with # and blank lines are ignored.
@@ -2648,6 +2648,7 @@ file-filter	Templates	範本
 	Miter Limit:	尖角限度：
 	Mixed Appearances	混合外觀
 	Mixed Objects	混雜物件
+	Mixed	混合
 	Mode:	模式：
 	Model	模型
 	Modified	已修改

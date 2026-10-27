@@ -75,7 +75,7 @@
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
 
-  <!-- Every format File › Open reads (OPEN_EXTS in crates/engine/src/cmd/fileio/mod.rs; a test in
+  <!-- Every format File › Open reads (OPEN_EXTS in crates/engine/src/cmd/fileio/formats.rs; a test in
        apps/vectorcraft checks this list), so Finder offers VectorCraft for them (Open With,
        double-click, Dock drop). VectorCraft owns its own formats; for the others it is an
        alternate, so it doesn't take over another app's files. The app isn't NSDocument-based (no

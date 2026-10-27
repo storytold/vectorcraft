@@ -101,7 +101,7 @@ fn precision(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, id: &str)
     let mut value = before;
     ui.label(tl!("Precision:"));
     ui.name_inputs(tl!("Precision"), |ui| {
-        egui::ComboBox::from_id_salt(id).selected_text(value.to_string()).width(55.0).show_ui(ui, |ui| {
+        craft_ui::ComboBox::from_id_salt(id).selected_text(value.to_string()).width(55.0).show_ui(ui, |ui| {
             for n in 0..=6 {
                 ui.selectable_value(&mut value, n, n.to_string());
             }
@@ -136,7 +136,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     f.insert("scale".into(), json!(scale));
                 }
                 ui.name_inputs(tl!("Scale Presets"), |ui| {
-                    egui::ComboBox::from_id_salt("dimension-scales").selected_text(tl!("Presets")).width(76.0).show_ui(ui, |ui| {
+                    craft_ui::ComboBox::from_id_salt("dimension-scales").selected_text(tl!("Presets")).width(76.0).show_ui(ui, |ui| {
                         for scale in ["1:1", "1:2", "1:5", "1:10", "1:20", "1:50", "1:100", "1:200", "2:1", "5:1", "10:1"] {
                             if ui.selectable_label(false, scale).clicked() {
                                 f.insert("scale".into(), json!(scale));

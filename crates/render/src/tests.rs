@@ -3,6 +3,32 @@ use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node};
 use vectorcraft_geom::shapes;
 
+mod adjust;
+mod alternate;
+mod bitmapglyphs;
+mod blend;
+mod changed;
+mod charstroke;
+mod clip;
+mod cmykblend;
+mod colrglyphs;
+mod container;
+mod dither;
+pub(super) mod fontchange;
+mod freeform;
+mod fxzoom;
+mod isolation;
+mod knockout;
+mod layeropts;
+mod memory;
+mod objectfx;
+mod placed_document;
+mod rasterize;
+mod setup;
+mod strokegradient;
+mod tileedge;
+mod viewraster;
+
 fn rect_node(d: &mut Document, r: Rect, fill: Paint, stroke: Paint, w: f64) -> Node {
     let id = d.alloc_id();
     Node::path(id, shapes::rectangle(r), Appearance::basic(fill, stroke, w))

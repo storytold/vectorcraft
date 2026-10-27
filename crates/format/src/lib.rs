@@ -66,8 +66,10 @@ pub const EXTENSION: &str = "vectorcraft";
 pub const LEGACY_EXTENSION: &str = "drawcraft";
 /// Most bytes the JSON of a compressed file may unpack to (a guard against decompression bombs,
 /// as are [`MAX_BLOB`] and [`MAX_BLOBS`]). A compressed save refuses a document past any of them,
-/// so every file VectorCraft writes reads back.
-pub const MAX_JSON: u64 = 1 << 30;
+/// so every file VectorCraft writes reads back. On wasm32 the cap is a quarter of the native
+/// one: the JSON is deserialized into a document several times its size, and the 4 GiB address
+/// space also holds the file, the JSON, the document and the app (#3587).
+pub const MAX_JSON: u64 = if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 };
 /// Most bytes one entry of the data after the JSON (an image, a placed document, the PDF, a
 /// profile) may have in a compressed file.
 pub const MAX_BLOB: u64 = 1 << 30;

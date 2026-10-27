@@ -699,49 +699,5 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_axes;
-#[cfg(test)]
-mod tests_bidi;
-#[cfg(test)]
-mod tests_bitmaps;
-#[cfg(test)]
-mod tests_colr;
-#[cfg(test)]
-mod tests_combos;
-#[cfg(test)]
-mod tests_devanagari;
-#[cfg(test)]
-mod tests_embed;
-#[cfg(test)]
-mod tests_fit;
-#[cfg(test)]
-mod tests_hang;
-#[cfg(test)]
-mod tests_inline;
-#[cfg(test)]
-mod tests_joiners;
-#[cfg(test)]
-mod tests_justify;
-#[cfg(test)]
-mod tests_path_joins;
-#[cfg(test)]
-mod tests_ruby;
-#[cfg(test)]
-mod tests_scripts;
-#[cfg(test)]
-mod tests_snap;
-#[cfg(test)]
-mod tests_svg_glyphs;
-#[cfg(test)]
-mod tests_sysfonts;
-#[cfg(test)]
-mod tests_typo;
-#[cfg(test)]
-mod tests_variable;
-#[cfg(test)]
-mod tests_versions;
-#[cfg(test)]
-mod tests_vertical;
-#[cfg(test)]
 #[path = "../build/web_fonts.rs"]
 mod web_fonts_build;

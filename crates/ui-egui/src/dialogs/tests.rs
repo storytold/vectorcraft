@@ -277,6 +277,25 @@ fn effect_dialog_applies_to_its_appearance_item() {
 }
 
 #[test]
+fn scribble_dialog_settings_presets_load_parameters() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "stylize.scribble"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.lines().any(|l| l == "Settings"), "{text}");
+    let tight = vectorcraft_effects::scribble_settings().iter().find(|p| p.id == "tight").unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__scribbleSetting".into(), json!("tight"));
+    for (k, v) in tight.params.as_object().unwrap() {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.clone(), v.clone());
+    }
+    frame(&mut app, Default::default());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("spacing", 0.0), 2.0);
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["spacing"], json!(2.0));
+}
+
+#[test]
 fn scribble_dialog_shows_the_angle_as_stored_and_each_variation() {
     let mut app = app();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();

@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, Document, Node};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import};
@@ -84,6 +84,42 @@ fn unique_ids_never_collide() {
     let back = import(&a).unwrap();
     assert_eq!(back.layers[0].name.as_deref(), Some("Layer 1"));
     assert!(names(&back).contains(&"Logo mark (v2)".to_string()));
+}
+
+/// Generated def ids count up from 1 and step over numbers an object name already took, also
+/// when thousands of them are written.
+#[test]
+fn generated_ids_count_up_past_taken_names() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    for name in ["linear-gradient-2", "linear-gradient-4"] {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art());
+        n.name = Some(name.into());
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let count = 3000;
+    for i in 0..count {
+        let stops = vec![
+            GradientStop::new(0.0, Color::rgb((i % 50) as f32 / 255.0, (i / 50) as f32 / 255.0, 0.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ];
+        let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)), Appearance::basic(g, Paint::None, 0.0));
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    for object_ids in [ObjectIds::LayerNames, ObjectIds::Unique] {
+        let s = export(&d, &ExportOptions { object_ids, ..Default::default() });
+        let all = ids(&s);
+        assert_eq!(all.len(), all.iter().collect::<HashSet<_>>().len(), "unique ids");
+        let prefix = all.iter().find_map(|i| i.find("Layer_1").map(|at| i[..at].to_string())).unwrap();
+        let numbers: Vec<usize> =
+            all.iter().filter_map(|i| i.strip_prefix(&format!("{prefix}linear-gradient-"))).map(|n| n.parse().unwrap()).collect();
+        assert_eq!(numbers.len(), count + 2, "the two named objects and every gradient");
+        let mut gradients: Vec<usize> = numbers.into_iter().filter(|n| *n != 2 && *n != 4).collect();
+        gradients.sort_unstable();
+        let want: Vec<usize> = [1, 3].into_iter().chain(5..count + 3).collect();
+        assert_eq!(gradients, want);
+    }
 }
 
 #[test]

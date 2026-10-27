@@ -923,40 +923,51 @@ fn rows_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, statuses
     list.inner.inner_rect.height()
 }
 
-/// Row `r`'s target picker: "No equivalent" and the row's choices, then Keyboard Shortcuts' entries
-/// that match the search. → the target picked ("" for no equivalent).
-fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<String> {
+/// Row `r`'s target picker: the search field, "No equivalent" and the row's choices stay at the
+/// top, over Keyboard Shortcuts' entries that match the search, which scroll. → the target picked
+/// ("" for no equivalent).
+pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<String> {
     let current = target_label(r.target.as_deref());
-    widgets::combo(ui, ("shortcut-import-target", i), &current, TARGET_W, true, |ui| {
-        let field = ui.scope_id().with("query");
-        if ui.memory(|m| m.focused().is_none()) {
-            ui.memory_mut(|m| m.request_focus(field.with("edit")));
-        }
-        let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-        let mut picked = None;
-        let mut option = |ui: &mut egui::Ui, key: &str, label: &str| {
-            if ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked() {
-                picked = Some(key.to_string());
-            }
-        };
-        option(ui, "", tl!("No equivalent"));
-        let list: Vec<&Entry> = if q.is_empty() {
-            for e in r.choices.iter().filter_map(|c| entry(c)) {
-                option(ui, &e.key, &shown(e));
-            }
-            ui.separator();
-            shortcut_editor::entries().iter().collect()
-        } else {
-            shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
-        };
-        egui::ScrollArea::vertical().max_height(300.0).show_rows(ui, ROW_H, list.len(), |ui, range| {
-            for e in range.filter_map(|k| list.get(k)) {
-                option(ui, &e.key, &shown(e));
-            }
-        });
-        if picked.is_some() {
-            ui.close();
-        }
-        picked
+    // The entries' list is up to 300 points tall under the header, which was this tall last frame.
+    let header_id = egui::Id::unique(("shortcut-import-target-header", i));
+    let height = ui.data(|d| d.get_temp::<f32>(header_id)).unwrap_or(0.0) + 300.0;
+    let option = |ui: &mut egui::Ui, key: &str, label: &str| {
+        ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked().then(|| key.to_string())
+    };
+    widgets::combo_menu(ui, ("shortcut-import-target", i), &current, TARGET_W, |menu| {
+        menu.height(height).show_rows_with_header(
+            |ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                let field = ui.scope_id().with("query");
+                if ui.memory(|m| m.focused().is_none()) {
+                    ui.memory_mut(|m| m.request_focus(field.with("edit")));
+                }
+                let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
+                let mut picked = option(ui, "", tl!("No equivalent"));
+                let list: Vec<&Entry> = if q.is_empty() {
+                    for e in r.choices.iter().filter_map(|c| entry(c)) {
+                        picked = option(ui, &e.key, &shown(e)).or(picked);
+                    }
+                    ui.separator();
+                    shortcut_editor::entries().iter().collect()
+                } else {
+                    shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
+                };
+                ui.data_mut(|d| d.insert_temp(header_id, ui.min_rect().height()));
+                (list, picked)
+            },
+            ROW_H,
+            |(list, _)| list.len(),
+            |ui, range, (list, mut picked)| {
+                for e in range.filter_map(|k| list.get(k)) {
+                    picked = option(ui, &e.key, &shown(e)).or(picked);
+                }
+                if picked.is_some() {
+                    ui.close();
+                }
+                picked
+            },
+        )
     })
+    .flatten()
 }

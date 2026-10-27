@@ -5,6 +5,7 @@ use vectorcraft_geom::{Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
 
+use super::*;
 use crate::Frame;
 
 /// Set the context paint (colours as frame `f` paints them). Returns false if nothing should be
@@ -465,6 +466,40 @@ fn pixmap_of(img: image::RgbaImage) -> Option<vello_cpu::Pixmap> {
         })
         .collect();
     Some(vello_cpu::Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// The substitution highlights' pink: Preferences › Highlight Substituted Fonts and Highlight
+/// Alternate Glyphs, and Document Setup's Highlight Substituted Glyphs (screen only).
+pub(crate) const SUBSTITUTED: peniko::Color = peniko::Color::from_rgba8(255, 120, 190, 110);
+
+pub(crate) fn fill_rule(r: FillRule) -> peniko::Fill {
+    match r {
+        FillRule::NonZero => peniko::Fill::NonZero,
+        FillRule::EvenOdd => peniko::Fill::EvenOdd,
+    }
+}
+
+pub(crate) fn blend_mode(b: vectorcraft_color::BlendMode) -> BlendMode {
+    use vectorcraft_color::BlendMode as B;
+    let mix = match b {
+        B::Normal => Mix::Normal,
+        B::Darken => Mix::Darken,
+        B::Multiply => Mix::Multiply,
+        B::ColorBurn => Mix::ColorBurn,
+        B::Lighten => Mix::Lighten,
+        B::Screen => Mix::Screen,
+        B::ColorDodge => Mix::ColorDodge,
+        B::Overlay => Mix::Overlay,
+        B::SoftLight => Mix::SoftLight,
+        B::HardLight => Mix::HardLight,
+        B::Difference => Mix::Difference,
+        B::Exclusion => Mix::Exclusion,
+        B::Hue => Mix::Hue,
+        B::Saturation => Mix::Saturation,
+        B::Color => Mix::Color,
+        B::Luminosity => Mix::Luminosity,
+    };
+    BlendMode::new(mix, Compose::SrcOver)
 }
 
 #[cfg(test)]

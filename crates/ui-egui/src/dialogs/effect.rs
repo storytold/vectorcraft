@@ -74,6 +74,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if let Some(item) = p.get("item") {
         fields.insert("__item".into(), item.clone());
     }
+    // A shared row of a mixed selection: OK edits each object's own copy of the effect.
+    if p.get("aligned").and_then(Value::as_bool) == Some(true) {
+        fields.insert("__aligned".into(), json!(true));
+    }
     match p.get("index").and_then(Value::as_u64) {
         Some(k) => {
             let e = applied.get(k as usize).ok_or_else(|| format!("no effect at index {k}"))?;
@@ -161,6 +165,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         None if id == GLASS => glass_fields(app, ui, d, GLASS),
         None if id == TEXTURIZER => glass_fields(app, ui, d, TEXTURIZER),
         None if id == TRANSFORM => transform_fields(ui, d, app.session.general_unit()),
+        None if id == SCRIBBLE => scribble_fields(ui, d, app.session.general_unit()),
         None if id == ZIG_ZAG => zig_zag_fields(ui, d, app.session.general_unit()),
         None if id == DROP_SHADOW => drop_shadow_fields(ui, d, app.session.general_unit()),
         None if id == "artistic.filmGrain" => film_grain_fields(ui, d),
@@ -478,6 +483,53 @@ fn values_changed(d: &mut Dialog) -> bool {
 /// The Transform effect (Effect › Distort & Transform › Transform…).
 const TRANSFORM: &str = "distort.transform";
 
+/// Scribble (Effect › Stylize › Scribble…).
+const SCRIBBLE: &str = "stylize.scribble";
+
+/// Dialog-only: which Settings preset is selected (`custom` when the values match none).
+const SCRIBBLE_SETTING: &str = "__scribbleSetting";
+
+/// Scribble's dialog: a Settings preset menu, then its parameters. Returns whether the values differ
+/// from those last previewed.
+fn scribble_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
+    if !d.fields.contains_key(SCRIBBLE_SETTING) {
+        let id = vectorcraft_effects::scribble_setting_id(&form::params(d)).unwrap_or("custom");
+        d.fields.insert(SCRIBBLE_SETTING.into(), json!(id));
+    }
+    let presets = vectorcraft_effects::scribble_settings();
+    let cur = d.fields.get(SCRIBBLE_SETTING).and_then(Value::as_str).unwrap_or("default");
+    let labels: Vec<&str> = presets.iter().map(|p| p.label).chain(["Custom"]).collect();
+    let ids: Vec<&str> = presets.iter().map(|p| p.id).chain(["custom"]).collect();
+    let current = if cur == "custom" { "Custom" } else { presets.iter().find(|p| p.id == cur).map(|p| p.label).unwrap_or(labels[0]) };
+    widgets::subheader(ui, tl!("Settings"));
+    let mut settings_changed = false;
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::dropdown(ui, "fx-scribble-setting", current, &labels, 160.0) {
+            let picked = ids[i];
+            d.fields.insert(SCRIBBLE_SETTING.into(), json!(picked));
+            if picked != "custom"
+                && let Some(preset) = presets.iter().find(|p| p.id == picked)
+                && let Some(m) = preset.params.as_object()
+            {
+                for (k, v) in m {
+                    d.fields.insert(k.clone(), v.clone());
+                }
+            }
+            settings_changed = true;
+        }
+    });
+    ui.add_space(4.0);
+    let doc = vectorcraft_effects::effect_info(SCRIBBLE).map(|e| e.params).unwrap_or_default();
+    let fields_changed =
+        form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(SCRIBBLE, k, false), &|k| choices(SCRIBBLE, k), &|k| doc_rank(doc, k), unit);
+    if let Value::Object(m) = vectorcraft_effects::upgrade_params(SCRIBBLE, &Value::Object(d.fields.clone())) {
+        d.fields = m;
+    }
+    let id = vectorcraft_effects::scribble_setting_id(&form::params(d)).unwrap_or("custom");
+    d.fields.insert(SCRIBBLE_SETTING.into(), json!(id));
+    settings_changed || fields_changed
+}
+
 /// The Transform effect's dialog: Transform Each's Scale and Move sliders and Rotate dial, then
 /// the options Transform Objects, Transform Patterns and Scale Strokes & Effects (#885), Copies,
 /// the reflections, the reference point and Random. Returns whether the values differ from those
@@ -689,6 +741,9 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         if super::warp_effect::is_warp(&id) && d.bool("__warp_style_changed") {
             p["warpStyle"] = json!(id.strip_prefix("warp."));
         }
+        if d.bool("__aligned") {
+            p["aligned"] = json!(true);
+        }
         return ("effect.setParams", p);
     }
     let mut p = json!({"effect": d.str("__effect"), "params": params});
@@ -717,6 +772,27 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An applied effect's dialog opened on a shared row of a mixed selection (`aligned`) edits
+    /// each object's own copy on OK; opened otherwise it edits the index as given.
+    #[test]
+    fn a_shared_rows_dialog_edits_each_objects_copy() {
+        let dialog = |aligned: bool| {
+            let mut fields = Map::new();
+            fields.insert("__effect".into(), json!("stylize.feather"));
+            fields.insert("__index".into(), json!(0));
+            fields.insert("__item".into(), Value::Null);
+            fields.insert("radius".into(), json!(8));
+            if aligned {
+                fields.insert("__aligned".into(), json!(true));
+            }
+            Dialog { kind: "effect".into(), fields }
+        };
+        let (cmd, p) = command(&dialog(true));
+        assert_eq!((cmd, &p["aligned"], &p["params"]["radius"]), ("effect.setParams", &json!(true), &json!(8)));
+        assert!(p["params"].get("__aligned").is_none());
+        assert!(command(&dialog(false)).1.get("aligned").is_none());
+    }
 
     #[test]
     fn fields_that_pick_a_value_are_dropdowns_of_its_values() {

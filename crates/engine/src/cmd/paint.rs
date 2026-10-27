@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\"} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_doc,
             transparency
         ),
@@ -742,7 +742,7 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     q.remove("item");
     q.remove("id");
     q.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
-    let ItemTarget::Item { index, explicit } = item else {
+    let ItemTarget::Item { index, explicit, aligned } = item else {
         return s.execute("object.setProps", &Value::Object(q));
     };
     // Opacity and blend belong to the targeted fill/stroke; isolate/knockout/knockoutShape stay object-level.
@@ -766,7 +766,7 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if opacity.is_some() || blend.is_some() {
         let ids: Vec<u64> = item_ids.iter().map(|id| id.0).collect();
-        s.execute("appearance.setItem", &json!({ "index": index, "ids": ids, "opacity": opacity, "blend": blend }))?;
+        s.execute("appearance.setItem", &json!({ "index": index, "ids": ids, "opacity": opacity, "blend": blend, "aligned": aligned }))?;
     }
     if q.keys().all(|k| k == "ids") {
         return ok();

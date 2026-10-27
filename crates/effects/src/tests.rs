@@ -4,6 +4,9 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod scale;
+mod transformfx;
+
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
 }
@@ -920,6 +923,17 @@ fn scribble_reads_its_earlier_single_variation() {
         json!({"overlapVariation": 3, "spacingVariation": 1})
     );
     assert!(default_params("stylize.scribble").unwrap().get("variation").is_none());
+}
+
+#[test]
+fn scribble_settings_presets_are_distinct_and_recognized() {
+    let presets = crate::scribble_settings();
+    assert_eq!(presets.len(), 11);
+    assert_eq!(presets[0].id, "default");
+    assert_eq!(crate::scribble_setting_id(&presets[0].params), Some("default"));
+    assert_eq!(crate::scribble_setting_id(&presets[9].params), Some("tight"));
+    let custom = json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 4.0, "spacingVariation": 0.5});
+    assert_eq!(crate::scribble_setting_id(&custom), None);
 }
 
 #[test]

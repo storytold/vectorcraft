@@ -324,16 +324,18 @@ fn object_row_names_the_selection_like_the_control_bar() {
     let ctx = egui::Context::default();
     assert!(frame_in(&ctx, &mut app, appearance::show).contains(&"Rectangle".to_string()));
     let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].clone();
-    // Objects with one appearance list it under "Mixed Objects".
+    // Objects of one kind with one appearance are named by their kind and list it (#4174).
     run(&mut app, "select.set", json!({"ids": [a, b]}));
     let texts = frame_in(&ctx, &mut app, appearance::show);
-    assert!(texts.contains(&"Mixed Objects".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
-    // Objects that differ list nothing.
+    assert!(texts.contains(&"Rectangle".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(!texts.contains(&"Mixed Appearances".to_string()), "{texts:?}");
+    // Objects whose opacity differs list what they share, the opacity as mixed.
     run(&mut app, "select.set", json!({"ids": [b]}));
     run(&mut app, "transparency.set", json!({"opacity": 50}));
     run(&mut app, "select.set", json!({"ids": [a, b]}));
     let texts = frame_in(&ctx, &mut app, appearance::show);
-    assert!(texts.contains(&"Mixed Appearances".to_string()) && !texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(texts.contains(&"Mixed Appearances".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(texts.contains(&"Mixed".to_string()), "the opacity reads Mixed: {texts:?}");
     // Type objects are "Type" in both places.
     let t = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({ "ids": [t] }));

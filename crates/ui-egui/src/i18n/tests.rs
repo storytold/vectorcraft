@@ -491,10 +491,20 @@ pub fn tl_literals() -> std::collections::BTreeSet<String> {
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if path.is_dir() {
-                stack.push(path);
+                if name != "tests" {
+                    stack.push(path);
+                }
             } else if name.ends_with(".rs") && name != "lib.rs" && !name.starts_with("tests") {
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
-                let code = text.split("#[cfg(test)]").next().unwrap_or("");
+                // Code up to the first test item; test-only imports (`#[cfg(test)] use …;`) don't end it.
+                let code = text
+                    .match_indices("#[cfg(test)]")
+                    .find(|&(at, m)| {
+                        let item = text[at + m.len()..].trim_start();
+                        let item = ["pub(crate) ", "pub(super) ", "pub "].iter().find_map(|p| item.strip_prefix(p)).unwrap_or(item);
+                        !item.starts_with("use ")
+                    })
+                    .map_or(text.as_str(), |(at, _)| &text[..at]);
                 let mut rest = code;
                 while let Some(at) = rest.find("tl!(\"") {
                     rest = &rest[at + 5..];
