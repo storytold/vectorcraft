@@ -13,6 +13,11 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::guides::{DrawSnap, Leave, square};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
+/// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
+/// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
+/// value stop there too.
+pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
 pub struct ShapeTool {
     id: &'static str,
     start: Option<Point>,
@@ -279,7 +284,7 @@ impl Tool for ShapeTool {
                 true
             }
             ("roundedRectangle", ToolKey::Up) => {
-                self.corner_radius += 1.0;
+                self.corner_radius = (self.corner_radius + 1.0).min(MAX_CORNER_RADIUS);
                 true
             }
             ("roundedRectangle", ToolKey::Down) => {
@@ -308,15 +313,25 @@ impl Tool for ShapeTool {
                 cx.segment_measure_label(s, self.last)
             } else {
                 // A box's size as drawn (from its centre with Alt, square with Shift).
-                let (w, h) = match self.id {
-                    "polygon" | "star" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
-                    _ => {
-                        // Along the Constrain Angle's axes, as the box is drawn (`command_at`).
-                        let (r, _) = turned_box(s, self.last, self.mods, cx.constrain_angle);
-                        (r.width(), r.height())
+                match self.id {
+                    "star" => {
+                        let outer = (self.last - s).hypot().max(0.01);
+                        // The same ratio `command_at` draws with, so the label matches the preview
+                        // (Ctrl/Cmd's held radius is already in `star_ratio`, clamped; Alt overrides it).
+                        let ratio = if self.mods.alt { straight_ratio(self.points).unwrap_or(self.star_ratio) } else { self.star_ratio };
+                        cx.star_radii_label(outer, outer * ratio)
                     }
-                };
-                cx.size_label(w, h)
+                    _ => {
+                        let (w, h) = match self.id {
+                            "polygon" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
+                            _ => {
+                                let (r, _) = turned_box(s, self.last, self.mods, cx.constrain_angle);
+                                (r.width(), r.height())
+                            }
+                        };
+                        cx.size_label(w, h)
+                    }
+                }
             };
             o.push(Overlay::Measure { p, text });
         }
@@ -341,7 +356,7 @@ impl Tool for ShapeTool {
         match key {
             "sides" => self.sides = v.as_u64().unwrap_or(6).clamp(3, 1000) as u32,
             "points" => self.points = v.as_u64().unwrap_or(5).clamp(3, 1000) as u32,
-            "cornerRadius" => self.corner_radius = v.as_f64().unwrap_or(12.0).max(0.0),
+            "cornerRadius" => self.corner_radius = finite.unwrap_or(12.0).clamp(0.0, MAX_CORNER_RADIUS),
             "starRatio" => self.star_ratio = v.as_f64().unwrap_or(0.5).clamp(0.01, 1.0),
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),
             "angle" => self.line_angle = finite.map_or(self.line_angle, |n| n.rem_euclid(360.0)),
@@ -352,226 +367,4 @@ impl Tool for ShapeTool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testutil::*;
-    use vectorcraft_doc::Selection;
-
-    #[test]
-    fn rect_drag() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let mut t = ShapeTool::new("rectangle");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0, 30.0));
-        assert_eq!(a[0], Action::Begin("Rectangle".into()));
-        assert_eq!(a[1], Action::Preview("shape.rectangle".into(), json!({"x": 10.0, "y": 10.0, "width": 40.0, "height": 20.0})));
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 50.0, 30.0)), vec![Action::Commit]);
-    }
-
-    #[test]
-    fn space_moves_the_shape_being_drawn() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let space = Mods { space: true, ..Default::default() };
-        let mut t = ShapeTool::new("rectangle");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 120.0));
-        // Space held: the 100 × 70 rectangle follows the pointer.
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 170.0).with_mods(space));
-        assert_eq!(a.last(), Some(&Action::Preview("shape.rectangle".into(), json!({"x": 150.0, "y": 100.0, "width": 100.0, "height": 70.0}))));
-        // Let go of Space: it grows again, from where it was moved to.
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 270.0, 190.0));
-        assert_eq!(a.last(), Some(&Action::Preview("shape.rectangle".into(), json!({"x": 150.0, "y": 100.0, "width": 120.0, "height": 90.0}))));
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 270.0, 190.0)), vec![Action::Commit]);
-        // A star (drawn from its centre) moves its centre.
-        let mut t = ShapeTool::new("star");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 50.0));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0).with_mods(space));
-        assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["cx"] == 60.0 && v["cy"] == 60.0), "{a:?}");
-    }
-
-    /// During a star drag, Ctrl/Cmd keeps the inner radius while the outer one follows the pointer
-    /// (the new ratio stays once the key is let go), and Alt keeps the shoulders straight (#812).
-    #[test]
-    fn a_star_drag_holds_its_inner_radius_with_ctrl_and_straightens_with_alt() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let radii = |a: &[Action]| match a.last() {
-            Some(Action::Preview(_, v)) => (v["radius1"].as_f64().unwrap(), v["radius2"].as_f64().unwrap()),
-            other => panic!("{other:?}"),
-        };
-        let ctrl = Mods { cmd: true, ..Default::default() };
-        let mut t = ShapeTool::new("star");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
-        let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0)));
-        assert_eq!((r1, r2), (40.0, 20.0));
-        // Ctrl: the inner radius stays 20 as the outer one grows to 80.
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0).with_mods(ctrl));
-        let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl)));
-        assert!((r1 - 80.0).abs() < 1e-9 && (r2 - 20.0).abs() < 1e-9, "{r1} {r2}");
-        // Let go: the ratio (a quarter) stays.
-        let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 50.0)));
-        assert!((r2 / r1 - 0.25).abs() < 1e-9, "{r1} {r2}");
-        // Alt: straight shoulders, about 0.382 for five points.
-        let alt = Mods { alt: true, ..Default::default() };
-        let (r1, r2) = radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 50.0).with_mods(alt)));
-        assert!((r2 / r1 - 0.381_966).abs() < 1e-5, "{}", r2 / r1);
-        assert_eq!(straight_ratio(4), None, "four points can't line up");
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 50.0)), vec![Action::Commit]);
-    }
-
-    #[test]
-    fn shift_square_alt_center() {
-        let t = ShapeTool::new("ellipse");
-        let (c, v) = t.command(Point::new(0.0, 0.0), Point::new(10.0, 4.0), Mods { shift: true, alt: true, ..Default::default() });
-        assert_eq!(c, "shape.ellipse");
-        assert_eq!(v, json!({"x": -10.0, "y": -10.0, "width": 20.0, "height": 20.0}));
-    }
-
-    /// General › Constrain Angle: a Shift-drag squares along the turned axes, and the shape turns
-    /// by the angle about its centre.
-    #[test]
-    fn constrain_angle_squares_along_the_turned_axes() {
-        let t = ShapeTool::new("rectangle");
-        let shift = Mods { shift: true, ..Default::default() };
-        // 45°: the drag straight right is a diagonal of the turned axes, so a square on it.
-        let (_, v) = t.command_at(Point::new(0.0, 0.0), Point::new(20.0, 0.0), shift, 45.0);
-        let side = 20.0 / 2f64.sqrt();
-        let near = |k: &str, want: f64| (v[k].as_f64().unwrap() - want).abs() < 1e-9;
-        assert!(near("width", side) && near("height", side) && near("rotation", -45.0), "{v}");
-        assert!(near("x", 10.0 - side / 2.0) && near("y", -side / 2.0), "centred on the drag's middle: {v}");
-        // Whole turns are the page's axes exactly: the same box as 0°, unturned.
-        let (a, b) = (Point::new(3.0, 4.0), Point::new(41.0, 17.0));
-        let flat = t.command_at(a, b, Mods::default(), 0.0);
-        for turn in [360.0, -360.0, 720.0] {
-            assert_eq!(t.command_at(a, b, Mods::default(), turn), flat, "{turn}°");
-        }
-        // A quarter turn is exact (no floating-point noise in the box).
-        let (_, v) = t.command_at(Point::new(0.0, 0.0), Point::new(20.0, 10.0), Mods::default(), 90.0);
-        assert_eq!((v["width"].as_f64(), v["height"].as_f64(), v["rotation"].as_f64()), (Some(10.0), Some(20.0), Some(-90.0)), "{v}");
-        let (_, w) = t.command_at(Point::new(0.0, 0.0), Point::new(20.0, 10.0), Mods::default(), 450.0);
-        assert_eq!(v, w, "450° is 90°");
-    }
-
-    /// The size label gives the box as drawn: measured along the Constrain Angle's axes.
-    #[test]
-    fn constrain_angle_size_label_measures_the_turned_box() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let mut cx = cx(&d, &s, &p);
-        cx.constrain_angle = 45.0;
-        let mut t = ShapeTool::new("rectangle");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 340.0, 300.0));
-        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
-        let (w, h) = (v["width"].as_f64().unwrap(), v["height"].as_f64().unwrap());
-        assert!((w - h).abs() < 1e-9 && (w - 40.0 / 2f64.sqrt()).abs() < 1e-9, "{v}");
-        let o = t.overlays(&cx);
-        assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(w, h))), "{o:?}");
-        assert!(!o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(40.0, 0.0))), "not the page box");
-    }
-
-    #[test]
-    fn click_opens_dialog() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let mut t = ShapeTool::new("star");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
-        assert_eq!(
-            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)),
-            vec![Action::Dialog("star".into(), json!({"x": 10.0, "y": 10.0}))]
-        );
-    }
-
-    #[test]
-    fn alt_click_passes_draw_from_centre_to_the_dialog() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let alt = Mods { alt: true, ..Default::default() };
-        let mut t = ShapeTool::new("rectangle");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(alt));
-        assert_eq!(
-            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(alt)),
-            vec![Action::Dialog("rectangle".into(), json!({"x": 10.0, "y": 10.0, "alt": true}))]
-        );
-    }
-
-    #[test]
-    fn arrow_keys_change_sides() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let mut t = ShapeTool::new("polygon");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0, 10.0));
-        let a = t.key(&cx, ToolKey::Up, Mods::default());
-        assert!(matches!(&a[0], Action::Preview(_, v) if v["sides"] == 7));
-    }
-
-    /// The start and the dragged corner land on another object's anchors (#506), hovering shows
-    /// it before the press, and the measurement label gives the size drawn.
-    #[test]
-    fn corners_snap_to_smart_guides() {
-        let (d, _) = doc_with_rect();
-        let s = Selection::default();
-        let p = paint();
-        let cx = cx(&d, &s, &p);
-        let mut t = ShapeTool::new("rectangle");
-        let anchor = |o: &[Overlay], at: Point| o.iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "anchor" && *p == at));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
-        assert!(anchor(&t.overlays(&cx), Point::new(100.0, 100.0)));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 98.0, 102.0));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 198.0, 202.0));
-        assert_eq!(a[1], Action::Preview("shape.rectangle".into(), json!({"x": 100.0, "y": 100.0, "width": 100.0, "height": 100.0})));
-        let o = t.overlays(&cx);
-        assert!(anchor(&o, Point::new(200.0, 200.0)), "{o:?}");
-        assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(100.0, 100.0))));
-        // Alt draws from the centre: the label gives the whole size.
-        let alt = Mods { alt: true, ..Mods::default() };
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 198.0, 202.0).with_mods(alt));
-        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.size_label(200.0, 200.0))));
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 198.0, 202.0));
-        assert!(t.overlays(&cx).is_empty());
-        // A line with Shift keeps to 45° steps, sliding into line with the rect's right side.
-        let mut t = ShapeTool::new("lineSegment");
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
-        let shift = Mods { shift: true, ..Mods::default() };
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 203.0, 302.0).with_mods(shift));
-        assert!(matches!(&a[..], [_, Action::Preview(_, v)] if v["x2"] == 200.0 && (v["y2"].as_f64().unwrap() - 300.0).abs() < 1e-9), "{a:?}");
-        let from = Point::new(300.0, 300.0);
-        let to = Point::new(200.0, 300.0);
-        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.segment_measure_label(from, to))));
-    }
-
-    /// Line Segment Tool Options: Length and Angle are options (for a click's dialog), and Fill
-    /// Line makes the drag's line take the current fill.
-    #[test]
-    fn line_segment_options_and_fill_line() {
-        let mut t = ShapeTool::new("lineSegment");
-        let (a, b) = (Point::new(0.0, 0.0), Point::new(30.0, 40.0));
-        assert!(t.command(a, b, Mods::default()).1.get("fill").is_none());
-        for (k, v) in [("length", json!(-80.0)), ("angle", json!(-90.0)), ("fillLine", json!(true))] {
-            t.set_option(k, &v);
-        }
-        t.set_option("length", &json!(f64::NAN));
-        assert_eq!(
-            (t.options()["length"].clone(), t.options()["angle"].clone(), t.options()["fillLine"].clone()),
-            (json!(80.0), json!(270.0), json!(true))
-        );
-        assert_eq!(t.command(a, b, Mods::default()).1["fill"], json!(true));
-    }
-}
+mod tests;

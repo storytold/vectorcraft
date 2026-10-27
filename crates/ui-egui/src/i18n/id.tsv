@@ -289,6 +289,7 @@
 	Apply Bullets	Terapkan poin
 	Numbered List	Daftar bernomor
 	Apply Numbers	Terapkan penomoran
+	Convert to Text	Konversi ke teks
 	Filled Dot	Titik penuh
 	Dash	Tanda pisah
 	Hollow Circle	Lingkaran kosong
@@ -336,6 +337,7 @@
 	Create	Buat
 	Release Selection	Lepaskan seleksi
 	Remove Threading	Hapus rangkaian
+	Break Thread	Putus rangkaian
 	Fit Headline	Sesuaikan judul
 	Find Font…	Cari font…
 	Change Case	Ubah huruf besar-kecil
@@ -536,6 +538,7 @@
 	Save Grid as Preset…	Simpan kisi sebagai preset…
 	Snap to Pixel	Snap ke piksel
 	Precise Cursors	Kursor presisi
+	Image Trace Preview	Pratinjau Image Trace
 	Snap to Point	Snap ke titik
 	Snap to Glyph	Snap ke glif
 	New View…	Tampilan baru…
@@ -550,6 +553,21 @@
 	Saved View 8	Tampilan tersimpan 8
 	Saved View 9	Tampilan tersimpan 9
 	Saved View 10	Tampilan tersimpan 10
+	Saved View 11	Tampilan tersimpan 11
+	Saved View 12	Tampilan tersimpan 12
+	Saved View 13	Tampilan tersimpan 13
+	Saved View 14	Tampilan tersimpan 14
+	Saved View 15	Tampilan tersimpan 15
+	Saved View 16	Tampilan tersimpan 16
+	Saved View 17	Tampilan tersimpan 17
+	Saved View 18	Tampilan tersimpan 18
+	Saved View 19	Tampilan tersimpan 19
+	Saved View 20	Tampilan tersimpan 20
+	Saved View 21	Tampilan tersimpan 21
+	Saved View 22	Tampilan tersimpan 22
+	Saved View 23	Tampilan tersimpan 23
+	Saved View 24	Tampilan tersimpan 24
+	Saved View 25	Tampilan tersimpan 25
 	Window	Jendela
 	New Window	Jendela baru
 	Cascade	Bertingkat
@@ -707,7 +725,6 @@
 	% of all commits	% dari semua komit
 	Lines +/−	Baris +/−
 	Drag to move	Seret untuk memindahkan
-	Drag to move out of the set	Seret untuk memindahkan keluar dari set
 	Drag to float as a toolbar	Seret untuk mengambang sebagai bilah alat
 	Put back in the toolbar	Kembalikan ke bilah alat
 	Float Panel	Mengambangkan panel
@@ -1259,6 +1276,7 @@ lighting	Light	Cahaya
 	Hide Thumbnail	Sembunyikan thumbnail
 	Mixed Appearances	Penampilan campuran
 	Mixed Objects	Objek campuran
+	Mixed	Campuran
 	No options	Tidak ada opsi
 	No Selection	Tidak ada seleksi
 	Offset X	Offset X
@@ -1302,7 +1320,6 @@ lighting	Light	Cahaya
 	URL:	URL:
 	Use Even-Odd Fill Rule	Gunakan aturan isian genap-ganjil
 	Use Non-Zero Winding Fill Rule	Gunakan aturan isian lilitan tak nol
-	Brush Libraries (on the roadmap)	Pustaka kuas (masih dalam roadmap)
 	List View	Tampilan daftar
 	New Art Brush from Selection	Kuas seni baru dari seleksi
 	New Bristle Brush	Kuas bristle baru
@@ -2106,6 +2123,7 @@ lighting	Light	Cahaya
 	Fidelity:	Fidelitas:
 	Fill new strokes	Isi stroke baru
 	Alt key toggles to Smooth Tool	Tombol Alt beralih ke Alat penghalus
+	Live curve fitting	Penyesuaian kurva langsung
 	The document has no colour swatches.	Dokumen tidak memiliki swatch warna.
 	Style Name:	Nama gaya:
 	Crop To	Pangkas ke
@@ -3578,8 +3596,6 @@ effect	Regular	Reguler
 	Replace With Font	Ganti dengan font
 	  — substituted by {style}	  — digantikan oleh {style}
 	  — {n} characters from another font	  — {n} karakter dari font lain
-	Drag to float the panel group	Seret untuk mengapungkan grup panel
-	Put back in the dock	Kembalikan ke dok
 	All Scripts	Semua skrip
 	Any Kind	Jenis apa pun
 	Font Technology	Teknologi font
@@ -4492,7 +4508,6 @@ imageTrace	Outline	Kontur
 @msg	before must name a panel	before harus menyebutkan panel
 @msg	docking action contains an unknown panel or an excessive split path	tindakan docking berisi panel tidak dikenal atau jalur pemisahan berlebihan
 @msg	group must be true or false	group harus true atau false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel mengambang; ciutkan grupnya dengan window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	panel tidak berada dalam grup dok
 @msg	only a dock group above or below others collapses, not one beside another	hanya grup dok di atas atau di bawah grup lain yang bisa diciutkan, bukan yang berada di sampingnya
 @msg	icon must be true or false	icon harus true atau false
@@ -4865,6 +4880,7 @@ mark-style	Japanese	Jepang
 @msg	unknown parameter `{key}`; the command takes: {keys}	parameter `{key}` tidak dikenal; perintah menerima: {keys}
 	Load EPS into Clipboard	Muat EPS ke papan klip
 @msg	an image of {w} × {h} pixels is too large to draw	gambar {w} × {h} piksel terlalu besar untuk digambar
+@msg	an image of {w} × {h} pixels is shown at reduced size	gambar {w} × {h} piksel ditampilkan dalam ukuran yang diperkecil
 	Fill and Stroke Controls	Kontrol isian dan goresan
 	Coloring Controls	Kontrol pewarnaan
 	Draw Mode Controls	Kontrol mode menggambar
@@ -5420,6 +5436,12 @@ swatch	Bright Violet	Violet cerah
 	Shift:	Pergeseran:
 	Fresco…	Fresko…
 	Fresco	Fresko
+	Lock Artboards	Kunci artboard
+	Unlock Artboards	Buka kunci artboard
+	Lock Selected	Kunci yang dipilih
+	Lock All Except Selected	Kunci semua kecuali yang dipilih
+	Lock All	Kunci semua
+	Unlock Selected	Buka kunci yang dipilih
 	Effect Gallery…	Galeri Efek…
 	Effect Gallery Dialog	Dialog Galeri Efek
 	Arc Segment Tool Options	Opsi alat segmen busur
@@ -5494,3 +5516,32 @@ axis	Y Axis	Sumbu Y
 	Rectangular Grid Tool Options	Opsi alat kisi persegi panjang
 	Polar Grid Tool Options	Opsi alat kisi polar
 	Fill Line	Isi garis
+	Pathfinder Options	Opsi Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Bagi dan Garis luar menghapus karya seni tanpa warna
+@msg	precision must be from 0.001 to 10 pt	precision harus dari 0,001 sampai 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` harus berupa objek
+	Add to Brushes	Tambahkan ke kuas
+	Brush Library	Pustaka kuas
+	Save Brush Library	Simpan pustaka kuas
+	Save Brushes…	Simpan kuas…
+	Open Brush Library	Buka pustaka kuas
+	Selected Brushes Only	Hanya kuas terpilih
+	Brush Libraries Menu	Menu pustaka kuas
+	User Brush Library 1	Pustaka kuas pengguna 1
+	User Brush Library 2	Pustaka kuas pengguna 2
+	User Brush Library 3	Pustaka kuas pengguna 3
+	User Brush Library 4	Pustaka kuas pengguna 4
+	User Brush Library 5	Pustaka kuas pengguna 5
+	User Brush Library 6	Pustaka kuas pengguna 6
+	User Brush Library 7	Pustaka kuas pengguna 7
+	User Brush Library 8	Pustaka kuas pengguna 8
+	User Brush Library 9	Pustaka kuas pengguna 9
+	User Brush Library 10	Pustaka kuas pengguna 10
+	Art Ribbons	Pita seni
+	Calligraphic Nibs	Pena kaligrafi
+	Pattern Borders	Bingkai pola
+	Scatter Shapes	Bentuk sebar
+	Save Brush Library…	Simpan pustaka kuas…
+@msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
+	Scale Presets	Preset skala
+	Live preview	Pratinjau langsung

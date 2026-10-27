@@ -320,7 +320,6 @@ font-technology	Variable	Μεταβλητές
 	Brush Affects:	Το πινέλο επηρεάζει:
 	Brush Definition	Ορισμός πινέλου
 	Brush Libraries	Βιβλιοθήκες πινέλων
-	Brush Libraries (on the roadmap)	Βιβλιοθήκες πινέλων (στον σχεδιασμό)
 	Brush Options…	Επιλογές πινέλου…
 	Brush Strokes	Πινελιές
 	Brushes	Πινέλα
@@ -332,6 +331,7 @@ font-technology	Variable	Μεταβλητές
 	Apply Bullets	Εφαρμογή κουκκίδων
 	Numbered List	Αριθμημένη λίστα
 	Apply Numbers	Εφαρμογή αρίθμησης
+	Convert to Text	Μετατροπή σε κείμενο
 	Filled Dot	Γεμάτη κουκκίδα
 	Dash	Παύλα
 	Hollow Circle	Κενός κύκλος
@@ -1055,6 +1055,7 @@ font-technology	Variable	Μεταβλητές
 	Fill and Stroke	Γέμισμα και περίγραμμα
 	Fill new strokes	Γέμισμα νέων περιγραμμάτων
 	Alt key toggles to Smooth Tool	Το πλήκτρο Alt αλλάζει στο εργαλείο Εξομάλυνση (Smooth Tool)
+	Live curve fitting	Προσαρμογή καμπύλης σε πραγματικό χρόνο
 	Fill Color	Χρώμα γεμίσματος
 	Fill New Type Objects With Placeholder Text	Συμπλήρωση νέων αντικειμένων κειμένου με κείμενο υπόδειξης
 	Fill Rule	Κανόνας γεμίσματος
@@ -2615,6 +2616,7 @@ theme	Appearance	Εμφάνιση
 	Miter Limit:	Όριο οξείας σύνδεσης:
 	Mixed Appearances	Μεικτές εμφανίσεις
 	Mixed Objects	Μεικτά αντικείμενα
+	Mixed	Μικτό
 	Modified	Τροποποιήθηκε
 	Modified since it was read: {path}	Τροποποιήθηκε μετά την ανάγνωση: {path}
 	Modified:	Τροποποιήθηκε:
@@ -3144,6 +3146,7 @@ theme	Appearance	Εμφάνιση
 	Remove Plug-in	Αφαίρεση προσθέτου
 	Remove Selected Assets	Αφαίρεση επιλεγμένων στοιχείων
 	Remove Threading	Αφαίρεση σύνδεσης κειμένου
+	Break Thread	Διακοπή σύνδεσης κειμένου
 	Remove “{keyword}”	Αφαίρεση «{keyword}»
 	Rename Asset	Μετονομασία στοιχείου
 	Rename Character Style	Μετονομασία στυλ χαρακτήρων
@@ -3483,6 +3486,7 @@ theme	Appearance	Εμφάνιση
 	Snap Options	Επιλογές προσκόλλησης
 	Snap to Glyph	Προσκόλληση σε γλυφή
 	Precise Cursors	Δείκτες ακριβείας
+	Image Trace Preview	Προεπισκόπηση ανίχνευσης περιγραμμάτων εικόνας
 	Snapping Tolerance	Ανοχή προσκόλλησης
 	Social Square Post 1080×1080	Τετράγωνη δημοσίευση κοινωνικών δικτύων 1080×1080
 	Sort by Kind	Ταξινόμηση κατά είδος
@@ -3898,11 +3902,8 @@ theme	Appearance	Εμφάνιση
 	Joins	Συνδέσεις
 	Axis	Άξονας
 	Drag to move	Σύρετε για μετακίνηση
-	Drag to move out of the set	Σύρετε για αφαίρεση από το σύνολο
 	Drag to float as a toolbar	Σύρετε για αποδέσμευση ως γραμμή εργαλείων
 	Put back in the toolbar	Επαναφορά στη γραμμή εργαλείων
-	Drag to float the panel group	Σύρετε για αποδέσμευση της ομάδας πινάκων
-	Put back in the dock	Επαναφορά στην περιοχή σύνδεσης
 	Drag to float the toolbar	Σύρετε για αποδέσμευση της γραμμής εργαλείων
 	Drag to the window's left edge to dock	Σύρετε στο αριστερό άκρο του παραθύρου για σύνδεση
 	Float Tool Group	Αποδέσμευση ομάδας εργαλείων
@@ -4339,6 +4340,7 @@ theme	Appearance	Εμφάνιση
 @msg	{_1} is already used by {_2}	το {_1} χρησιμοποιείται ήδη από το {_2}
 @msg	{_1} is reserved by the system	Το {_1} είναι δεσμευμένο από το σύστημα
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} συνδεδεμένα αρχεία δεν μπορούν να διαβαστούν εδώ: εμφανίζονται οι προεπισκοπήσεις τους
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msg	Updated {_1} linked file(s) changed on disk	Ενημερώθηκαν {_1} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
 @msg	{_1}: not saved, so not closed	{_1}: δεν αποθηκεύτηκε και επομένως δεν έκλεισε
@@ -4522,7 +4524,6 @@ theme	Appearance	Εμφάνιση
 @msg	before must name a panel	το before πρέπει να ορίζει πίνακα
 @msg	docking action contains an unknown panel or an excessive split path	η ενέργεια σύνδεσης περιέχει άγνωστο πίνακα ή υπερβολικά βαθιά διαδρομή διαίρεσης
 @msg	group must be true or false	το group πρέπει να είναι true ή false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	Το πάνελ αιωρείται· συμπτύξτε την ομάδα του με window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	Το πάνελ δεν βρίσκεται σε ομάδα αγκύρωσης
 @msg	only a dock group above or below others collapses, not one beside another	συμπτύσσεται μόνο ομάδα αγκύρωσης πάνω ή κάτω από άλλες, όχι δίπλα σε άλλη
 @msg	icon must be true or false	το icon πρέπει να είναι true ή false
@@ -4988,6 +4989,7 @@ effect	Points	Σημεία
 	Load EPS into Clipboard	Φόρτωση EPS στο πρόχειρο
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	Άγνωστο στοιχείο ελέγχου `{name}`: fillStroke, coloring, drawMode ή screenMode
 @msg	an image of {w} × {h} pixels is too large to draw	Η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για σχεδίαση
+@msg	an image of {w} × {h} pixels is shown at reduced size	Η εικόνα {w} × {h} εικονοστοιχείων εμφανίζεται σε μειωμένο μέγεθος
 	Open Recent File 1	Άνοιγμα πρόσφατου αρχείου 1
 	Open Recent File 2	Άνοιγμα πρόσφατου αρχείου 2
 	Open Recent File 3	Άνοιγμα πρόσφατου αρχείου 3
@@ -5068,6 +5070,21 @@ effect	Points	Σημεία
 	Saved View 8	Αποθηκευμένη προβολή 8
 	Saved View 9	Αποθηκευμένη προβολή 9
 	Saved View 10	Αποθηκευμένη προβολή 10
+	Saved View 11	Αποθηκευμένη προβολή 11
+	Saved View 12	Αποθηκευμένη προβολή 12
+	Saved View 13	Αποθηκευμένη προβολή 13
+	Saved View 14	Αποθηκευμένη προβολή 14
+	Saved View 15	Αποθηκευμένη προβολή 15
+	Saved View 16	Αποθηκευμένη προβολή 16
+	Saved View 17	Αποθηκευμένη προβολή 17
+	Saved View 18	Αποθηκευμένη προβολή 18
+	Saved View 19	Αποθηκευμένη προβολή 19
+	Saved View 20	Αποθηκευμένη προβολή 20
+	Saved View 21	Αποθηκευμένη προβολή 21
+	Saved View 22	Αποθηκευμένη προβολή 22
+	Saved View 23	Αποθηκευμένη προβολή 23
+	Saved View 24	Αποθηκευμένη προβολή 24
+	Saved View 25	Αποθηκευμένη προβολή 25
 	Three Point Perspective Preset 1	Προεπιλογή προοπτικής τριών σημείων 1
 	Three Point Perspective Preset 2	Προεπιλογή προοπτικής τριών σημείων 2
 	Three Point Perspective Preset 3	Προεπιλογή προοπτικής τριών σημείων 3
@@ -5353,6 +5370,10 @@ effect	Points	Σημεία
 	Snap to Perpendicular	Προσκόλληση σε κάθετο
 @msg	unknown snap option `{key}` (use {options})	άγνωστη επιλογή προσκόλλησης `{key}` (χρησιμοποιήστε {options})
 	Gap Length:	Μήκος κενού:
+@msg	`colorGroup` needs `library: "document"`	το `colorGroup` απαιτεί `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	το `colorGroup` απαιτεί `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	το `colorGroup` απαιτεί `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	δεν υπάρχει ομάδα χρωμάτων `{name}` στο έγγραφο (δείτε swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Η λειτουργία Επίπεδο λογότυπο ανίχνευσε την εικόνα σε {_1} × {_2} εικονοστοιχεία, σμικρυμένη με μέσο όρο από {_3} × {_4}.
 	Artboard {n} of {total}	Πίνακας σχεδίασης {n} από {total}
 	File {n} of {total}	Αρχείο {n} από {total}
@@ -5413,6 +5434,12 @@ effect	Points	Σημεία
 	Shift:	Μετατόπιση:
 	Fresco…	Νωπογραφία…
 	Fresco	Νωπογραφία
+	Lock Artboards	Κλείδωμα πινάκων σχεδίασης
+	Unlock Artboards	Ξεκλείδωμα πινάκων σχεδίασης
+	Lock Selected	Κλείδωμα επιλεγμένων
+	Lock All Except Selected	Κλείδωμα όλων εκτός από τα επιλεγμένα
+	Lock All	Κλείδωμα όλων
+	Unlock Selected	Ξεκλείδωμα επιλεγμένων
 	Effect Gallery…	Συλλογή εφέ…
 	Effect Gallery Dialog	Παράθυρο διαλόγου Συλλογή εφέ
 	Arc Segment Tool Options	Επιλογές εργαλείου τμήματος τόξου
@@ -5502,3 +5529,40 @@ axis	Y Axis	Άξονας Y
 	Rectangular Grid Tool Options	Επιλογές εργαλείου ορθογώνιου πλέγματος
 	Polar Grid Tool Options	Επιλογές εργαλείου πολικού πλέγματος
 	Fill Line	Γέμισμα γραμμής
+	Pathfinder Options	Επιλογές Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Η Διαίρεση και το Περίγραμμα αφαιρούν τα γραφικά χωρίς χρώμα
+@msg	precision must be from 0.001 to 10 pt	το precision πρέπει να είναι από 0,001 έως 10 pt
+@msg	`pathfinder` must be an object	Το `pathfinder` πρέπει να είναι αντικείμενο
+	Add to Brushes	Προσθήκη στα πινέλα
+	Brush Library	Βιβλιοθήκη πινέλων
+	Save Brush Library	Αποθήκευση βιβλιοθήκης πινέλων
+	Save Brushes…	Αποθήκευση πινέλων…
+	Open Brush Library	Άνοιγμα βιβλιοθήκης πινέλων
+	Selected Brushes Only	Μόνο επιλεγμένα πινέλα
+	Brush Libraries Menu	Μενού βιβλιοθηκών πινέλων
+	User Brush Library 1	Βιβλιοθήκη πινέλων χρήστη 1
+	User Brush Library 2	Βιβλιοθήκη πινέλων χρήστη 2
+	User Brush Library 3	Βιβλιοθήκη πινέλων χρήστη 3
+	User Brush Library 4	Βιβλιοθήκη πινέλων χρήστη 4
+	User Brush Library 5	Βιβλιοθήκη πινέλων χρήστη 5
+	User Brush Library 6	Βιβλιοθήκη πινέλων χρήστη 6
+	User Brush Library 7	Βιβλιοθήκη πινέλων χρήστη 7
+	User Brush Library 8	Βιβλιοθήκη πινέλων χρήστη 8
+	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
+	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
+	Art Ribbons	Γραφικές κορδέλες
+	Calligraphic Nibs	Καλλιγραφικές πένες
+	Pattern Borders	Περιθώρια μοτίβου
+	Scatter Shapes	Σχήματα διασποράς
+	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
+@msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
+@msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
+@msg	no brush `{n}`	δεν υπάρχει πινέλο `{n}`
+@msg	no brush `{n}` in `{_1}`	δεν υπάρχει πινέλο `{n}` στη `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	δεν υπάρχει βιβλιοθήκη πινέλων `{key}` (δείτε brush.libraries)
+@msg	the document has no brushes to save	το έγγραφο δεν έχει πινέλα για αποθήκευση
+@msg	no empty artboards to delete	δεν υπάρχουν κενοί πίνακες σχεδίασης για διαγραφή
+	Scale Presets	Προεπιλογές κλίμακας
+@msg	a {width}×{height} screenshot's byte count overflows	το πλήθος byte ενός στιγμιότυπου {width}×{height} υπερχειλίζει
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	το {what} του παραθύρου ({points} σημεία × {scale} DPI) δεν μπορεί να καθορίσει μέγεθος στιγμιότυπου
+	Live preview	Ζωντανή προεπισκόπηση

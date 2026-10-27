@@ -155,7 +155,7 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
         path: path.clone(),
     };
     let h = key.hash64();
-    if let Some((k, out)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|c| c.entries.get(&h))
+    if let Some((k, out)) = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().and_then(|c| c.entries.get(&h))
         && *k == key
     {
         return out.clone();

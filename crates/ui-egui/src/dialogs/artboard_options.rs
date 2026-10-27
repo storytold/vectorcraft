@@ -23,7 +23,15 @@ use crate::panels::properties::ArtboardSizeChoice;
 use crate::panels::transform::{artboard_rect, reference_index, reference_locator};
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Artboard Options").into(), body, confirm, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Artboard Options").into(),
+    body,
+    confirm,
+    // A new artboard's dialog opens without these; its swatch, checkboxes and Video Ruler Pixel
+    // Aspect Ratio field add them.
+    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT],
+    ..DialogSpec::FORM
+};
 
 /// Where the fields put the artboard: `x` and `y` are its top-left corner in document points, as
 /// `artboard.setProps` and `artboard.new` take them.
@@ -86,15 +94,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let fills = fill_colors(app);
     let mut set = None;
     ui.horizontal(|ui| {
-        form::row_label(ui, tl!("Background Color:"));
-        if let Some(k) = crate::widgets::dropdown(ui, "ab-options-fill", fill_name(app, color), &FILLS, 110.0) {
-            set = fills.get(k).copied();
-        }
-        let [r, g, b, _] = color.unwrap_or(Color::WHITE).to_rgba8(1.0);
-        let mut rgb = [r, g, b];
-        if ui.color_edit_button_srgb(&mut rgb).changed() {
-            set = Some(Some(Color::rgb(f32::from(rgb[0]) / 255.0, f32::from(rgb[1]) / 255.0, f32::from(rgb[2]) / 255.0)));
-        }
+        let row = form::row_label(ui, tl!("Background Color:"));
+        ui.label_inputs_by(row.id, |ui| {
+            if let Some(k) =
+                crate::widgets::dropdown_named(ui, "ab-options-fill", Some(tl!("Background Color:")), fill_name(app, color), &FILLS, 110.0)
+            {
+                set = fills.get(k).copied();
+            }
+            let [r, g, b, _] = color.unwrap_or(Color::WHITE).to_rgba8(1.0);
+            let mut rgb = [r, g, b];
+            let swatch_name = format!("{} {}", tl!("Background Color:"), tl!("Swatches"));
+            if ui.name_inputs(swatch_name, |ui| ui.color_edit_button_srgb(&mut rgb)).changed() {
+                set = Some(Some(Color::rgb(f32::from(rgb[0]) / 255.0, f32::from(rgb[1]) / 255.0, f32::from(rgb[2]) / 255.0)));
+            }
+        });
     });
     if let Some(c) = set {
         d.fields.insert("color".into(), c.as_ref().map_or(Value::Null, crate::panels::color_json));
@@ -104,12 +117,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::check(ui, d, "showCrossHairs", tl!("Show Cross Hairs"));
     form::check(ui, d, "showVideoSafeAreas", tl!("Show Video Safe Areas"));
     ui.horizontal(|ui| {
-        form::row_label(ui, tl!("Video Ruler Pixel Aspect Ratio:"));
-        let range = vectorcraft_doc::VIDEO_PIXEL_ASPECT_RANGE;
-        let now = d.f64(PIXEL_ASPECT, 1.0);
-        if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", PIXEL_ASPECT), now, range, "", 4, 60.0) {
-            d.fields.insert(PIXEL_ASPECT.into(), json!(v));
-        }
+        let row = form::row_label(ui, tl!("Video Ruler Pixel Aspect Ratio:"));
+        ui.label_inputs_by(row.id, |ui| {
+            let range = vectorcraft_doc::VIDEO_PIXEL_ASPECT_RANGE;
+            let now = d.f64(PIXEL_ASPECT, 1.0);
+            if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", PIXEL_ASPECT), now, range, "", 4, 60.0) {
+                d.fields.insert(PIXEL_ASPECT.into(), json!(v));
+            }
+        });
     });
     false
 }
@@ -159,7 +174,7 @@ fn fit_bounds(app: &mut VectorcraftApp, ctx: &egui::Context, selection: bool) ->
     }
     let st = app.session.active()?;
     let key = (st.uid, st.revision);
-    let id = egui::Id::new("artboard-options-artwork-fit-bounds");
+    let id = egui::Id::unique("artboard-options-artwork-fit-bounds");
     if let Some(cached) = ctx.data_mut(|data| data.get_temp::<ArtworkFitBounds>(id))
         && cached.key == key
     {
@@ -178,18 +193,21 @@ fn position_rows(ui: &mut egui::Ui, d: &mut Dialog, refi: usize, unit: Unit, ori
     let rp = vectorcraft_geom::reference_point(r, refi);
     let mut indent = 0.0;
     for (key, label, at, zero) in [("x", "X:", rp.x, origin.x), ("y", "Y:", rp.y, origin.y)] {
-        ui.horizontal(|ui| {
-            // Y's label lines up with X's, after the locator.
-            if key == "x" {
-                let left = ui.cursor().min.x;
-                reference_locator(ui, refi);
-                indent = ui.min_rect().right() - left;
-            } else {
-                ui.add_space(indent);
-            }
-            form::row_label(ui, label);
-        });
-        if let Some(v) = crate::widgets::num_field(ui, ("dlg-ab-xy", key), Some(at - zero), unit, form::FIELD_W) {
+        let row = ui
+            .horizontal(|ui| {
+                // Y's label lines up with X's, after the locator.
+                if key == "x" {
+                    let left = ui.cursor().min.x;
+                    reference_locator(ui, refi);
+                    indent = ui.min_rect().right() - left;
+                } else {
+                    ui.add_space(indent);
+                }
+                form::row_label(ui, label)
+            })
+            .inner;
+        let value = ui.label_inputs_by(row.id, |ui| crate::widgets::num_field(ui, ("dlg-ab-xy", key), Some(at - zero), unit, form::FIELD_W));
+        if let Some(v) = value {
             let n = if key == "x" {
                 artboard_rect(r, refi, Some(v + zero), None, None, None, false).x0
             } else {

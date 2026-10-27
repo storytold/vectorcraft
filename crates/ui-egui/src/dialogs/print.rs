@@ -364,8 +364,8 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// document change.
 fn preview_of(app: &mut VectorcraftApp, ctx: &egui::Context, settings: &Value) -> Arc<Result<Value, String>> {
     let doc = app.session.active().map_or((0, 0), |s| (s.uid, s.revision));
-    let stamp = egui::Id::new((settings.to_string(), doc));
-    let key = egui::Id::new("print-preview");
+    let stamp = egui::Id::unique((settings.to_string(), doc));
+    let key = egui::Id::unique("print-preview");
     if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Arc<Result<Value, String>>)>(key))
         && s == stamp
     {
@@ -419,7 +419,7 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     painter.rect_filled(page, 0.0, egui::Color32::WHITE);
     // Dragging moves the art (and its trim box) on the paper; the placement changes on release.
     let tiling = choice::<PrintScaling>(d, "scaling").is_some_and(PrintScaling::tiles);
-    let drag_id = egui::Id::new("print-preview-drag");
+    let drag_id = egui::Id::unique("print-preview-drag");
     let mut offset = ui.ctx().data(|m| m.get_temp::<egui::Vec2>(drag_id)).unwrap_or_default();
     if !tiling && resp.dragged() {
         offset += resp.drag_delta();
@@ -538,8 +538,8 @@ fn round2(v: f64) -> f64 {
 fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayers, area: DRect, px: f64) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
     let bits = [area.x0, area.y0, area.x1, area.y1].map(f64::to_bits);
-    let stamp = egui::Id::new((st.uid, st.revision, layers, bits, px.round() as u32));
-    let key = egui::Id::new("print-preview-art");
+    let stamp = egui::Id::unique((st.uid, st.revision, layers, bits, px.round() as u32));
+    let key = egui::Id::unique("print-preview-art");
     if let Some((s, tex)) = ctx.data(|m| m.get_temp::<(egui::Id, egui::TextureHandle)>(key))
         && s == stamp
     {
@@ -695,7 +695,9 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
             ui.label(egui::RichText::new(format!("{name}{spot}")).color(t.text));
             for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
                 let v = ink[k].as_f64().unwrap_or(0.0);
-                if let Some(x) = widgets::plain_field(ui, ("print-ink", name, k), v, suffix, 2, 72.0) {
+                let heading = if k == "frequency" { tl!("Frequency") } else { tl!("Angle") };
+                let field_name = format!("{heading} {name}");
+                if let Some(x) = widgets::plain_field_named(ui, ("print-ink", name, k), Some(&field_name), v, suffix, 2, 72.0) {
                     set_ink(d, name, k, json!(x));
                 }
             }

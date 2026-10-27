@@ -46,9 +46,9 @@ fn shows_definitions(brush: &Brush, st: &StrokeLayer) -> bool {
     matches!(st.paint, vectorcraft_color::Paint::Pattern { .. }) || crate::fx::Reads::of_all(art.into_iter()).shows_definitions()
 }
 
-/// The art of `doc`'s patterns and symbols, in order.
-fn definitions(doc: &Document) -> impl Iterator<Item = &Arc<Node>> {
-    doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art))
+/// The names and art of `doc`'s patterns and symbols, in order.
+fn definitions(doc: &Document) -> impl Iterator<Item = (&str, &Arc<Node>)> {
+    doc.patterns.iter().flat_map(|p| p.art.iter().map(|a| (p.name.as_str(), a))).chain(doc.symbols.iter().map(|s| (s.name.as_str(), &s.art)))
 }
 
 /// Parsed brush library and generated brush art.
@@ -61,9 +61,9 @@ pub(crate) struct BrushCache {
     /// (frame stamp, document address) the library was last validated for.
     checked: (u64, usize),
     lib: HashMap<String, Arc<Brush>>,
-    /// The art of the document's patterns and symbols ([`definitions`]) when the library was last
-    /// validated, held weakly as the pattern tiles hold theirs.
-    definitions: Vec<Weak<Node>>,
+    /// The names and art of the document's patterns and symbols ([`definitions`]) when the library
+    /// was last validated, the art held weakly as the pattern tiles hold theirs.
+    definitions: Vec<(String, Weak<Node>)>,
     /// Brush art per (node id, stroke item index, [`path_key`] of the stroked path).
     pub(crate) entries: FrameCache<(u64, usize, u64), Entry>,
     /// How many times [`Renderer::draw_brush`] made brush art.
@@ -93,8 +93,8 @@ impl BrushCache {
             return;
         }
         self.checked = key;
-        if !self.definitions.iter().map(Weak::as_ptr).eq(definitions(doc).map(Arc::as_ptr)) {
-            self.definitions = definitions(doc).map(Arc::downgrade).collect();
+        if !self.definitions.iter().map(|(n, a)| (n.as_str(), a.as_ptr())).eq(definitions(doc).map(|(n, a)| (n, Arc::as_ptr(a)))) {
+            self.definitions = definitions(doc).map(|(n, a)| (n.to_string(), Arc::downgrade(a))).collect();
             self.entries.retain(|e| !e.definitions);
         }
         let cur = doc.unknown.get(vectorcraft_brush::DOC_KEY);

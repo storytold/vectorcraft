@@ -45,6 +45,10 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
     });
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
+        // The same value in the percent scale `object.setProps`, `transparency.set` and the MCP
+        // drawing tools take, so a reader can pass it back as it is. Rounded to 1/100 of a
+        // percent so a 55 written as an f32 reads back as 55, not 55.000001.
+        v["opacityPct"] = json!((f64::from(n.opacity) * 10_000.0).round() / 100.0);
     }
     if n.blend != BlendMode::Normal {
         v["blend"] = json!(n.blend.label());
@@ -347,7 +351,7 @@ impl FindFilter {
         [self.name.as_ref(), self.kind.as_ref(), self.text.as_ref()].iter().all(|f| f.is_none())
             && self.within.is_none()
             && self.intersects.is_none()
-            && self.ranges().iter().all(|r| r.is_empty())
+            && self.ranges().iter().all(FindRange::is_empty)
             && self.anchors.is_empty()
     }
 

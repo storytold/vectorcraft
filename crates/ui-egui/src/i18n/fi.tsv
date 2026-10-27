@@ -324,6 +324,7 @@
 	Apply Bullets	Käytä luettelomerkkejä
 	Numbered List	Numeroitu luettelo
 	Apply Numbers	Käytä numerointia
+	Convert to Text	Muunna tekstiksi
 	Filled Dot	Täytetty piste
 	Dash	Ajatusviiva
 	Hollow Circle	Ontto ympyrä
@@ -371,6 +372,7 @@
 	Create	Luo
 	Release Selection	Vapauta valinta
 	Remove Threading	Poista ketjutus
+	Break Thread	Katkaise ketjutus
 	Fit Headline	Sovita otsikko
 	Find Font…	Etsi fontti…
 	Change Case	Vaihda kirjainkoko
@@ -574,6 +576,7 @@
 	Save Grid as Preset…	Tallenna ruudukko esiasetukseksi…
 	Snap to Pixel	Kohdista pikseliin
 	Precise Cursors	Tarkat osoittimet
+	Image Trace Preview	Kuvan jäljityksen esikatselu
 	Snap to Point	Kohdista pisteeseen
 	Snap to Glyph	Kohdista merkkiin
 	New View…	Uusi näkymä…
@@ -588,6 +591,21 @@
 	Saved View 8	Tallennettu näkymä 8
 	Saved View 9	Tallennettu näkymä 9
 	Saved View 10	Tallennettu näkymä 10
+	Saved View 11	Tallennettu näkymä 11
+	Saved View 12	Tallennettu näkymä 12
+	Saved View 13	Tallennettu näkymä 13
+	Saved View 14	Tallennettu näkymä 14
+	Saved View 15	Tallennettu näkymä 15
+	Saved View 16	Tallennettu näkymä 16
+	Saved View 17	Tallennettu näkymä 17
+	Saved View 18	Tallennettu näkymä 18
+	Saved View 19	Tallennettu näkymä 19
+	Saved View 20	Tallennettu näkymä 20
+	Saved View 21	Tallennettu näkymä 21
+	Saved View 22	Tallennettu näkymä 22
+	Saved View 23	Tallennettu näkymä 23
+	Saved View 24	Tallennettu näkymä 24
+	Saved View 25	Tallennettu näkymä 25
 	Window	Ikkuna
 	New Window	Uusi ikkuna
 	Cascade	Porrasta
@@ -758,7 +776,6 @@
 	% of all commits	% kaikista commiteista
 	Lines +/−	Rivit +/−
 	Drag to move	Siirrä vetämällä
-	Drag to move out of the set	Siirrä joukosta vetämällä
 	Drag to float as a toolbar	Kelluta työkalurivinä vetämällä
 	Put back in the toolbar	Palauta työkaluriviin
 	Float Panel	Kelluta paneeli
@@ -1316,6 +1333,7 @@ lighting	Light	Valo
 	Hide Thumbnail	Piilota pikkukuva
 	Mixed Appearances	Eri ulkoasuja
 	Mixed Objects	Eri objekteja
+	Mixed	Sekalainen
 	No options	Ei asetuksia
 	No Selection	Ei valintaa
 	Offset X	Siirtymä X
@@ -1359,7 +1377,6 @@ lighting	Light	Valo
 	URL:	URL:
 	Use Even-Odd Fill Rule	Käytä parillinen-pariton-täyttösääntöä
 	Use Non-Zero Winding Fill Rule	Käytä nollasta poikkeavan kierrosluvun täyttösääntöä
-	Brush Libraries (on the roadmap)	Sivellinkirjastot (suunnitteilla)
 	List View	Luettelonäkymä
 	New Art Brush from Selection	Uusi taidesivellin valinnasta
 	New Bristle Brush	Uusi harjassivellin
@@ -2253,6 +2270,7 @@ lighting	Light	Valo
 	Fidelity:	Tarkkuus:
 	Fill new strokes	Täytä uudet viivat
 	Alt key toggles to Smooth Tool	Alt-näppäin vaihtaa Tasoitustyökaluun
+	Live curve fitting	Käyrän sovitus piirrettäessä
 	The document has no colour swatches.	Asiakirjassa ei ole värimalleja.
 	Style Name:	Tyylin nimi:
 	Crop To	Rajaa kohteeseen
@@ -3757,8 +3775,6 @@ effect	Regular	Normaali
 	Replace With Font	Korvaa fontilla
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
-	Drag to float the panel group	Irrota paneeliryhmä vetämällä
-	Put back in the dock	Palauta telakkaan
 	All Scripts	Kaikki kirjoitusjärjestelmät
 	Any Kind	Mikä tahansa laji
 	Font Technology	Fonttitekniikka
@@ -4575,6 +4591,7 @@ imageTrace	Outline	Ääriviiva
 @msg	{_1} is already used by {_2}	{_1} on jo käytössä kohteella {_2}
 @msg	{_1} is reserved by the system	{_1} on järjestelmän varaama
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} linkitettyä tiedostoa ei voi lukea täällä: niiden esikatselut näytetään
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} kuvaa ei voitu purkaa: ne näkyvät ristillä merkittyinä ruutuina
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
 @msg	{_1}: not saved, so not closed	{_1}: ei tallennettu, joten ei suljettu
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bittisiä bittikarttoja ei voi lukea
@@ -4714,7 +4731,6 @@ imageTrace	Outline	Ääriviiva
 @msg	before must name a panel	before-arvon on nimettävä paneeli
 @msg	docking action contains an unknown panel or an excessive split path	telakointitoiminto sisältää tuntemattoman paneelin tai liian pitkän jakopolun
 @msg	group must be true or false	group-arvon on oltava true tai false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	paneeli kelluu; kutista sen ryhmä komennolla window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	paneeli ei ole telakkaryhmässä
 @msg	only a dock group above or below others collapses, not one beside another	vain muiden ylä- tai alapuolella oleva telakkaryhmä kutistuu, ei toisen vieressä oleva
 @msg	icon must be true or false	icon-arvon on oltava true tai false
@@ -5113,6 +5129,7 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
+@msg	an image of {w} × {h} pixels is shown at reduced size	kuva, jonka koko on {w} × {h} pikseliä, näytetään pienennettynä
 	Fill and Stroke Controls	Täytön ja viivan säätimet
 	Coloring Controls	Värityksen säätimet
 	Draw Mode Controls	Piirtotilan säätimet
@@ -5365,6 +5382,10 @@ mark-style	Japanese	Japanilainen
 	Snap to Perpendicular	Kohdista kohtisuoraan
 @msg	unknown snap option `{key}` (use {options})	tuntematon tartuntavalinta `{key}` (käytä: {options})
 	Gap Length:	Aukon pituus:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` edellyttää arvoa `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` edellyttää arvoa `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` edellyttää arvoa `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	asiakirjassa ei ole väriryhmää `{name}` (ks. swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Tasainen logo -tila jäljitti kuvan kokoon {_1} × {_2} kuvapistettä keskiarvoistamalla pienennettynä koosta {_3} × {_4}.
 	Artboard {n} of {total}	Piirtoalusta {n}/{total}
 	File {n} of {total}	Tiedosto {n}/{total}
@@ -5492,6 +5513,12 @@ swatch	Bright Violet	Kirkas violetti
 	Shift:	Siirtymä:
 	Fresco…	Fresko…
 	Fresco	Fresko
+	Lock Artboards	Lukitse piirtoalustat
+	Unlock Artboards	Avaa piirtoalustojen lukitus
+	Lock Selected	Lukitse valitut
+	Lock All Except Selected	Lukitse kaikki paitsi valitut
+	Lock All	Lukitse kaikki
+	Unlock Selected	Avaa valittujen lukitus
 	Effect Gallery…	Tehostegalleria…
 	Effect Gallery Dialog	Tehostegalleria-valintaikkuna
 	Arc Segment Tool Options	Kaarisegmenttityökalun asetukset
@@ -5581,3 +5608,40 @@ axis	Y Axis	Y-akseli
 	Rectangular Grid Tool Options	Suorakulmaisen ruudukon työkalun asetukset
 	Polar Grid Tool Options	Napakoordinaattiruudukon työkalun asetukset
 	Fill Line	Täytä viiva
+	Pathfinder Options	Polunetsimen asetukset
+	Divide and Outline Will Remove Unpainted Artwork	Jaa ja Ääriviiva poistavat maalaamattoman kuvituksen
+@msg	precision must be from 0.001 to 10 pt	precision-arvon on oltava 0,001–10 pt
+@msg	`pathfinder` must be an object	`pathfinder` on oltava objekti
+	Add to Brushes	Lisää siveltimiin
+	Brush Library	Sivellinkirjasto
+	Save Brush Library	Tallenna sivellinkirjasto
+	Save Brushes…	Tallenna siveltimet…
+	Open Brush Library	Avaa sivellinkirjasto
+	Selected Brushes Only	Vain valitut siveltimet
+	Brush Libraries Menu	Sivellinkirjastojen valikko
+	User Brush Library 1	Käyttäjän sivellinkirjasto 1
+	User Brush Library 2	Käyttäjän sivellinkirjasto 2
+	User Brush Library 3	Käyttäjän sivellinkirjasto 3
+	User Brush Library 4	Käyttäjän sivellinkirjasto 4
+	User Brush Library 5	Käyttäjän sivellinkirjasto 5
+	User Brush Library 6	Käyttäjän sivellinkirjasto 6
+	User Brush Library 7	Käyttäjän sivellinkirjasto 7
+	User Brush Library 8	Käyttäjän sivellinkirjasto 8
+	User Brush Library 9	Käyttäjän sivellinkirjasto 9
+	User Brush Library 10	Käyttäjän sivellinkirjasto 10
+	Art Ribbons	Kuvitusnauhat
+	Calligraphic Nibs	Kalligrafiakärjet
+	Pattern Borders	Kuvioreunukset
+	Scatter Shapes	Sirontamuodot
+	Save Brush Library…	Tallenna sivellinkirjasto…
+@msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
+@msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)
+@msg	no brush `{n}`	ei sivellintä `{n}`
+@msg	no brush `{n}` in `{_1}`	ei sivellintä `{n}` kohteessa `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	ei sivellinkirjastoa `{key}` (katso brush.libraries)
+@msg	the document has no brushes to save	dokumentissa ei ole tallennettavia siveltimiä
+@msg	no empty artboards to delete	ei poistettavia tyhjiä piirtoalustoja
+	Scale Presets	Skaalauksen esiasetukset
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} kuvakaappauksen tavumäärä ylittää rajan
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	ikkunan {what} ({points} pistettä × {scale} DPI) ei voi määrittää kuvakaappauksen kokoa
+	Live preview	Reaaliaikainen esikatselu

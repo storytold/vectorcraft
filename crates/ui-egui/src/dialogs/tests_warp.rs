@@ -506,9 +506,9 @@ fn tab_to_warp_control(app: &mut VectorcraftApp, ctx: &egui::Context, label: &st
         if !events.iter().any(|event| {
             let egui::output::OutputEvent::FocusGained(info) = event else { return false };
             info.enabled
-                && match info.typ {
-                    egui::WidgetType::ComboBox => info.current_text_value.as_deref() == Some(label),
-                    egui::WidgetType::Button => info.label.as_deref() == Some(label),
+                && match info.role {
+                    egui::Role::ComboBox => info.current_text_value.as_deref() == Some(label),
+                    egui::Role::Button => info.label.as_deref() == Some(label),
                     _ => false,
                 }
         }) {

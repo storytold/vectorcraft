@@ -202,6 +202,32 @@ fn cmd_slash_adds_a_fill_and_cmd_alt_slash_a_stroke_as_the_panel_buttons_do() {
     assert_eq!(stacks(&app, &ids), before);
 }
 
+/// With nothing selected, Add New Fill and Add New Stroke are off in menus and the command palette
+/// as the Appearance panel's buttons are, and their keys run nothing (no error in the status bar).
+/// Given ids, they still add to those objects.
+#[test]
+fn add_new_fill_and_stroke_are_off_without_a_selection() {
+    let mut app = app_with_rect();
+    let rect = first_selected(&app).expect("the rectangle").id;
+    let items = |app: &VectorcraftApp| app.session.active().expect("a document").doc.node(rect).expect("the rectangle").appearance.items.len();
+    assert!(crate::menus::enabled(&app, "appearance.addFill") && crate::menus::enabled(&app, "appearance.addStroke"));
+    run(&mut app, "select.none", json!({}));
+    let before = items(&app);
+    for (id, modifiers) in
+        [("appearance.addFill", egui::Modifiers::COMMAND), ("appearance.addStroke", egui::Modifiers::COMMAND | egui::Modifiers::ALT)]
+    {
+        assert!(!crate::menus::enabled(&app, id), "{id} is off");
+        let ctx = egui::Context::default();
+        let ev = egui::Event::Key { key: egui::Key::Slash, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        crate::menus::invoke(&mut app, id, json!({}));
+        assert_eq!((items(&app), app.ui.status.as_str()), (before, ""), "{id} ran nothing");
+    }
+    crate::menus::invoke(&mut app, "appearance.addFill", json!({"ids": [rect.0]}));
+    assert_eq!((items(&app), app.ui.status.as_str()), (before + 1, ""), "given ids, it adds a fill");
+}
+
 #[test]
 fn transparency_panel_reads_the_active_item() {
     let mut app = app_with_rect();
@@ -298,16 +324,18 @@ fn object_row_names_the_selection_like_the_control_bar() {
     let ctx = egui::Context::default();
     assert!(frame_in(&ctx, &mut app, appearance::show).contains(&"Rectangle".to_string()));
     let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].clone();
-    // Objects with one appearance list it under "Mixed Objects".
+    // Objects of one kind with one appearance are named by their kind and list it (#4174).
     run(&mut app, "select.set", json!({"ids": [a, b]}));
     let texts = frame_in(&ctx, &mut app, appearance::show);
-    assert!(texts.contains(&"Mixed Objects".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
-    // Objects that differ list nothing.
+    assert!(texts.contains(&"Rectangle".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(!texts.contains(&"Mixed Appearances".to_string()), "{texts:?}");
+    // Objects whose opacity differs list what they share, the opacity as mixed.
     run(&mut app, "select.set", json!({"ids": [b]}));
     run(&mut app, "transparency.set", json!({"opacity": 50}));
     run(&mut app, "select.set", json!({"ids": [a, b]}));
     let texts = frame_in(&ctx, &mut app, appearance::show);
-    assert!(texts.contains(&"Mixed Appearances".to_string()) && !texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(texts.contains(&"Mixed Appearances".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    assert!(texts.contains(&"Mixed".to_string()), "the opacity reads Mixed: {texts:?}");
     // Type objects are "Type" in both places.
     let t = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({ "ids": [t] }));

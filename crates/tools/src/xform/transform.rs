@@ -149,18 +149,43 @@ impl TransformTool {
                 (about(o, Affine::scale_non_uniform(sx, sy)), format!("W: {:.1}%\nH: {:.1}%", sx * 100.0, sy * 100.0))
             }
             TransformKind::Shear => {
-                // The shear axis follows the dominant drag direction (Shift keeps it strictly on
-                // that axis, which this always does).
-                let d = p - start;
+                // The shear axis follows the dominant drag direction. Shift keeps the drag on that
+                // axis and locks the object's width (vertical shear) or height (horizontal shear).
+                let mut d = p - start;
+                if shift {
+                    if d.x.abs() >= d.y.abs() {
+                        d.y = 0.0;
+                    } else {
+                        d.x = 0.0;
+                    }
+                }
                 let horizontal = d.x.abs() >= d.y.abs();
                 let lever = |a: f64, fallback: f64| if a.abs() > 1e-3 { a } else { fallback.max(1.0) };
-                if horizontal {
-                    let k = d.x / lever(start.y - o.y, bounds.height() / 2.0);
-                    (about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0])), format!("{:.1}°", (-k.atan()).to_degrees()))
+                let shear_k = |horizontal: bool| {
+                    if horizontal { d.x / lever(start.y - o.y, bounds.height() / 2.0) } else { d.y / lever(start.x - o.x, bounds.width() / 2.0) }
+                };
+                let mut k = shear_k(horizontal);
+                let mut m = if horizontal {
+                    about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0]))
                 } else {
-                    let k = d.y / lever(start.x - o.x, bounds.width() / 2.0);
-                    (about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0])), format!("{:.1}°", (-k.atan()).to_degrees()))
+                    about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0]))
+                };
+                if shift {
+                    let (size0, size1) = if horizontal {
+                        (bounds.height(), m.transform_rect_bbox(bounds).height())
+                    } else {
+                        (bounds.width(), m.transform_rect_bbox(bounds).width())
+                    };
+                    if size1 > 1e-9 && (size1 - size0).abs() > 1e-6 {
+                        k *= size0 / size1;
+                        m = if horizontal {
+                            about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0]))
+                        } else {
+                            about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0]))
+                        };
+                    }
                 }
+                (m, format!("{:.1}°", (-k.atan()).to_degrees()))
             }
         }
     }
@@ -507,6 +532,28 @@ mod tests {
         let (m, _) = t.matrix_for(o, Point::new(150.0, 100.0), Point::new(200.0, 100.0), false, Rect::new(100.0, 100.0, 200.0, 200.0));
         assert!((m * Point::new(100.0, 200.0)).distance(Point::new(100.0, 200.0)) < 1e-9);
         assert!((m * Point::new(150.0, 100.0)).distance(Point::new(200.0, 100.0)) < 1e-9);
+    }
+
+    #[test]
+    fn shear_shift_vertical_preserves_width() {
+        let b = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let o = Point::new(150.0, 200.0);
+        let t = TransformTool::new(TransformKind::Shear);
+        let start = Point::new(100.0, 100.0);
+        let p = Point::new(100.0, 190.0);
+        let (m, _) = t.matrix_for(o, start, p, true, b);
+        assert!((m.transform_rect_bbox(b).width() - b.width()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shear_shift_horizontal_preserves_height() {
+        let b = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let o = Point::new(150.0, 200.0);
+        let t = TransformTool::new(TransformKind::Shear);
+        let start = Point::new(100.0, 100.0);
+        let p = Point::new(190.0, 130.0);
+        let (m, _) = t.matrix_for(o, start, p, true, b);
+        assert!((m.transform_rect_bbox(b).height() - b.height()).abs() < 1e-6);
     }
 
     #[test]

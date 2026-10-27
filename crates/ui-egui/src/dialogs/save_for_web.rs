@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
     min_width: PREVIEW_W + GAP + SIDE_W,
+    inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
 };
 
@@ -372,8 +373,9 @@ struct Cache {
     shots: Vec<(String, Result<Shot, String>)>,
 }
 
+/// Temp-memory key for the Save for Web preview render, original image and optimised shot textures.
 fn cache_id() -> egui::Id {
-    egui::Id::new("save-for-web-previews")
+    egui::Id::unique("save-for-web-previews")
 }
 
 /// The texture of straight RGBA pixels.
@@ -508,7 +510,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(4.0);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
-    let pan_id = egui::Id::new("save-for-web-pan");
+    let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
         pan += resp.drag_delta();
@@ -554,14 +556,16 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     let mut browser = false;
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
-        if let Some(i) = widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0) {
+        let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
+        if let Some(i) = zoom {
             d.fields.insert("__zoom".into(), json!(ZOOMS[i]));
             ui.ctx().data_mut(|m| m.insert_temp(pan_id, egui::Vec2::ZERO));
         }
         let kbps = d.f64("__kbps", 56.6);
         let labels: Vec<String> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
         let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0)
+        let speed = ui.name_inputs(tl!("Download:"), |ui| widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0));
+        if let Some(i) = speed
             && let Some(s) = SPEEDS.get(i)
         {
             d.fields.insert("__kbps".into(), json!(s));

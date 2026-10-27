@@ -288,6 +288,7 @@
 	Apply Bullets	Zastosuj punktory
 	Numbered List	Lista numerowana
 	Apply Numbers	Zastosuj numerację
+	Convert to Text	Konwertuj na tekst
 	Filled Dot	Pełna kropka
 	Dash	Myślnik
 	Hollow Circle	Pusty okrąg
@@ -334,6 +335,7 @@
 	Create	Utwórz
 	Release Selection	Uwolnij zaznaczenie
 	Remove Threading	Usuń wątki
+	Break Thread	Przerwij wątek
 	Fit Headline	Dopasuj nagłówek
 	Find Font…	Znajdź czcionkę…
 	Change Case	Zmień wielkość liter
@@ -541,6 +543,7 @@
 	Save Grid as Preset…	Zapisz siatkę jako ustawienie…
 	Snap to Pixel	Przyciągaj do pikseli
 	Precise Cursors	Precyzyjne kursory
+	Image Trace Preview	Podgląd obrysu obrazu
 	Snap to Point	Przyciągaj do punktów
 	Snap to Glyph	Przyciągaj do glifów
 	New View…	Nowy widok…
@@ -555,6 +558,21 @@
 	Saved View 8	Zapisany widok 8
 	Saved View 9	Zapisany widok 9
 	Saved View 10	Zapisany widok 10
+	Saved View 11	Zapisany widok 11
+	Saved View 12	Zapisany widok 12
+	Saved View 13	Zapisany widok 13
+	Saved View 14	Zapisany widok 14
+	Saved View 15	Zapisany widok 15
+	Saved View 16	Zapisany widok 16
+	Saved View 17	Zapisany widok 17
+	Saved View 18	Zapisany widok 18
+	Saved View 19	Zapisany widok 19
+	Saved View 20	Zapisany widok 20
+	Saved View 21	Zapisany widok 21
+	Saved View 22	Zapisany widok 22
+	Saved View 23	Zapisany widok 23
+	Saved View 24	Zapisany widok 24
+	Saved View 25	Zapisany widok 25
 	Window	Okno
 	New Window	Nowe okno
 	Cascade	Kaskadowo
@@ -716,7 +734,6 @@
 	% of all commits	% wszystkich commitów
 	Lines +/−	Wiersze +/−
 	Drag to move	Przeciągnij, aby przesunąć
-	Drag to move out of the set	Przeciągnij, aby wyjąć z zestawu
 	Drag to float as a toolbar	Przeciągnij, aby oderwać jako pasek narzędzi
 	Put back in the toolbar	Odłóż z powrotem na pasek narzędzi
 	Float Panel	Odepnij panel
@@ -1256,6 +1273,7 @@ lighting	Light	Światło
 	Hide Thumbnail	Ukryj miniaturę
 	Mixed Appearances	Różne wyglądy
 	Mixed Objects	Różne obiekty
+	Mixed	Mieszane
 	No options	Brak opcji
 	No Selection	Brak zaznaczenia
 	Offset X	Odsunięcie X
@@ -1298,7 +1316,6 @@ lighting	Light	Światło
 	URL:	URL:
 	Use Even-Odd Fill Rule	Użyj reguły wypełniania parzysty-nieparzysty
 	Use Non-Zero Winding Fill Rule	Użyj reguły wypełniania niezerowego
-	Brush Libraries (on the roadmap)	Biblioteki pędzli (w planach)
 	List View	Widok listy
 	New Art Brush from Selection	Nowy pędzel artystyczny z zaznaczenia
 	New Bristle Brush	Nowy pędzel włosiankowy
@@ -2211,6 +2228,7 @@ lighting	Light	Światło
 	Fidelity:	Wierność:
 	Fill new strokes	Wypełniaj nowe pociągnięcia
 	Alt key toggles to Smooth Tool	Klawisz Alt przełącza na narzędzie Wygładzanie
+	Live curve fitting	Dopasowywanie krzywej podczas rysowania
 	Keep selected	Zachowaj zaznaczenie
 	Merge only with selection	Scalaj tylko z zaznaczeniem
 	Consider Open Filled Paths as Closed	Traktuj otwarte wypełnione ścieżki jako zamknięte
@@ -3672,8 +3690,6 @@ effect	Regular	Normalny
 	Replace With Font	Zastąp czcionką
 	  — substituted by {style}	  — zastąpiona przez {style}
 	  — {n} characters from another font	  — znaki z innej czcionki: {n}
-	Drag to float the panel group	Przeciągnij, aby odpiąć grupę paneli
-	Put back in the dock	Odłóż z powrotem do doku
 	All Scripts	Wszystkie skrypty
 	Any Kind	Dowolny rodzaj
 	Font Technology	Technologia czcionek
@@ -4493,6 +4509,7 @@ imageTrace	Outline	Kontur
 @msg	{_1} is already used by {_2}	{_1} jest już używany przez {_2}
 @msg	{_1} is reserved by the system	Skrót {_1} jest zarezerwowany przez system
 @msg	{_1} linked file(s) can't be read here: their previews show	połączonych plików nie można tu odczytać ({_1}): wyświetlane są ich podglądy
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	nie udało się zdekodować obrazów ({undecoded}): są wyświetlane jako przekreślone ramki
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	połączone obrazy zmienione na dysku: {_1} — Aktualizuj łącza pokaże nowe wersje
 @msg	{_1}: not saved, so not closed	{_1}: nie zapisano, więc nie zamknięto
 @msg	{bpp}-bit bitmaps can't be read	nie można odczytać bitmap {bpp}-bitowych
@@ -4635,7 +4652,6 @@ imageTrace	Outline	Kontur
 @msg	icon must be true or false	icon musi mieć wartość true lub false
 @msg	icon only docks a panel in the icon column, with no anchor	icon tylko dokuje panel w kolumnie ikon, bez anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column dokuje zestaw jako kolumnę doku, bez anchor ani icon
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel jest pływający; zwiń jego grupę za pomocą window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	panel nie należy do żadnej grupy doku
 @msg	only a dock group above or below others collapses, not one beside another	zwinąć można tylko grupę doku nad lub pod innymi, a nie obok innej
 @msg	move requires a destination panel	przeniesienie wymaga panelu docelowego
@@ -5061,6 +5077,7 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
+@msg	an image of {w} × {h} pixels is shown at reduced size	obraz o wymiarach {w} × {h} pikseli jest wyświetlany w zmniejszonym rozmiarze
 	Basic	Podstawowy
 	Fill and Stroke Controls	Elementy sterujące wypełnieniem i obrysem
 	Coloring Controls	Elementy sterujące kolorem
@@ -5253,6 +5270,10 @@ mark-style	Japanese	Japońskie
 	Snap to Perpendicular	Przyciągaj do prostopadłych
 @msg	unknown snap option `{key}` (use {options})	nieznana opcja przyciągania `{key}` (użyj: {options})
 	Gap Length:	Długość przerwy:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` wymaga `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` wymaga `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` wymaga `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	brak grupy kolorów `{name}` w dokumencie (patrz swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Tryb Płaskie logo obrysował obraz w rozdzielczości {_1} × {_2} pikseli, po zmniejszeniu przez uśrednienie z {_3} × {_4}.
 	Artboard {n} of {total}	Obszar kompozycji {n} z {total}
 	File {n} of {total}	Plik {n} z {total}
@@ -5313,6 +5334,12 @@ mark-style	Japanese	Japońskie
 	Shift:	Przesunięcie:
 	Fresco…	Fresk…
 	Fresco	Fresk
+	Lock Artboards	Zablokuj obszary kompozycji
+	Unlock Artboards	Odblokuj obszary kompozycji
+	Lock Selected	Zablokuj zaznaczone
+	Lock All Except Selected	Zablokuj wszystkie oprócz zaznaczonych
+	Lock All	Zablokuj wszystkie
+	Unlock Selected	Odblokuj zaznaczone
 	Effect Gallery…	Galeria efektów…
 	Effect Gallery Dialog	Okno dialogowe Galeria efektów
 	Arc Segment Tool Options	Opcje narzędzia Segment łuku
@@ -5402,3 +5429,40 @@ axis	Y Axis	Oś Y
 	Rectangular Grid Tool Options	Opcje narzędzia Siatka prostokątna
 	Polar Grid Tool Options	Opcje narzędzia Siatka biegunowa
 	Fill Line	Wypełnij odcinek
+	Pathfinder Options	Opcje odnajdywania ścieżek
+	Divide and Outline Will Remove Unpainted Artwork	Podziel i Kontur usuwają niepomalowaną grafikę
+@msg	precision must be from 0.001 to 10 pt	precision musi wynosić od 0,001 do 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` musi być obiektem
+	Add to Brushes	Dodaj do pędzli
+	Brush Library	Biblioteka pędzli
+	Save Brush Library	Zapisz bibliotekę pędzli
+	Save Brushes…	Zapisz pędzle…
+	Open Brush Library	Otwórz bibliotekę pędzli
+	Selected Brushes Only	Tylko zaznaczone pędzle
+	Brush Libraries Menu	Menu bibliotek pędzli
+	User Brush Library 1	Biblioteka pędzli użytkownika 1
+	User Brush Library 2	Biblioteka pędzli użytkownika 2
+	User Brush Library 3	Biblioteka pędzli użytkownika 3
+	User Brush Library 4	Biblioteka pędzli użytkownika 4
+	User Brush Library 5	Biblioteka pędzli użytkownika 5
+	User Brush Library 6	Biblioteka pędzli użytkownika 6
+	User Brush Library 7	Biblioteka pędzli użytkownika 7
+	User Brush Library 8	Biblioteka pędzli użytkownika 8
+	User Brush Library 9	Biblioteka pędzli użytkownika 9
+	User Brush Library 10	Biblioteka pędzli użytkownika 10
+	Art Ribbons	Wstęgi artystyczne
+	Calligraphic Nibs	Stalówki kaligraficzne
+	Pattern Borders	Obramowania wzorków
+	Scatter Shapes	Kształty rozproszone
+	Save Brush Library…	Zapisz bibliotekę pędzli…
+@msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
+@msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
+@msg	no brush `{n}`	brak pędzla `{n}`
+@msg	no brush `{n}` in `{_1}`	brak pędzla `{n}` w `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	brak biblioteki pędzli `{key}` (zobacz brush.libraries)
+@msg	the document has no brushes to save	dokument nie ma pędzli do zapisania
+@msg	no empty artboards to delete	brak pustych obszarów kompozycji do usunięcia
+	Scale Presets	Ustawienia wstępne skali
+@msg	a {width}×{height} screenshot's byte count overflows	liczba bajtów zrzutu ekranu {width}×{height} przekracza limit
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} okna ({points} punktów × {scale} DPI) nie pozwala ustalić rozmiaru zrzutu ekranu
+	Live preview	Podgląd na żywo

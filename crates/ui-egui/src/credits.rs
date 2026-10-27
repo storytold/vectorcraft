@@ -226,7 +226,7 @@ impl Default for View {
 
 /// About ▸ Contributors: a name toggle, a sort, and the list as a grab bag or a table.
 pub fn contributors_ui(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let id = egui::Id::new("credits_view");
+    let id = egui::Id::unique("credits_view");
     let mut v = ui.data_mut(|d| d.get_temp::<View>(id)).unwrap_or_default();
     ui.horizontal_wrapped(|ui| {
         ui.label(tl!("Show"));
@@ -237,13 +237,15 @@ pub fn contributors_ui(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
         ui.separator();
         ui.label(tl!("Sort"));
-        egui::ComboBox::from_id_salt("credits_sort").selected_text(v.key.label().0).show_ui(ui, |ui| {
-            for k in SortKey::ALL {
-                if ui.selectable_label(v.key == k, k.label().0).clicked() {
-                    v.key = k;
-                    v.ascending = k.default_ascending();
+        ui.name_inputs(tl!("Sort"), |ui| {
+            egui::ComboBox::from_id_salt("credits_sort").selected_text(v.key.label().0).show_ui(ui, |ui| {
+                for k in SortKey::ALL {
+                    if ui.selectable_label(v.key == k, k.label().0).clicked() {
+                        v.key = k;
+                        v.ascending = k.default_ascending();
+                    }
                 }
-            }
+            });
         });
         if ui.button(if v.ascending { "▲" } else { "▼" }).on_hover_text(tl!("Reverse the order")).clicked() {
             v.ascending = !v.ascending;

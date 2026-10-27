@@ -19,6 +19,174 @@ pub(super) fn read(body: &str) -> crate::Imported {
     import(&eps(body)).unwrap()
 }
 
+#[test]
+fn postscript_roll_negative_count_is_refused() {
+    let err = import(&eps("-1 1 roll")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_putinterval_negative_index_is_refused() {
+    let err = import(&eps("(abcd) -1 (x) putinterval pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_negative_string_count_is_refused() {
+    let err = import(&eps("-1 string pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_negative_repeat_count_is_refused() {
+    let err = import(&eps("-1 { } repeat pop")).unwrap_err();
+    assert!(err.contains("rangecheck"));
+}
+
+#[test]
+fn postscript_put_negative_index_is_refused() {
+    let err = import(&eps("/a [0] def a -1 1 put pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("index"));
+}
+
+#[test]
+fn postscript_negative_packedarray_count_is_refused() {
+    let err = import(&eps("-1 packedarray pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_get_negative_index_is_refused() {
+    let err = import(&eps("/a [0] def a -1 get pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("index"));
+}
+
+#[test]
+fn postscript_negative_dict_count_is_refused() {
+    let err = import(&eps("-1 dict pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_negative_array_count_is_refused() {
+    let err = import(&eps("-1 array pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_index_negative_count_is_refused() {
+    let err = import(&eps("1 -1 index pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_getinterval_negative_count_is_refused() {
+    let err = import(&eps("(a) 1 -1 getinterval pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_getinterval_negative_at_is_refused() {
+    let err = import(&eps("(a) -1 1 getinterval pop")).unwrap_err();
+    assert!(err.contains("rangecheck") && err.contains("count"));
+}
+
+#[test]
+fn postscript_copy_negative_count_is_refused() {
+    let err = import(&eps("1 -1 copy pop")).unwrap_err();
+    assert!(err.contains("rangecheck"));
+}
+
+#[test]
+fn postscript_srand_non_integer_operand_is_refused() {
+    let err = import(&eps("1.5 srand")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("srand"));
+}
+
+#[test]
+fn postscript_roll_non_integer_count_is_refused() {
+    let err = import(&eps("1.5 1 roll")).unwrap_err();
+    assert!(err.contains("typecheck"));
+}
+
+#[test]
+fn postscript_roll_non_integer_displacement_is_refused() {
+    let err = import(&eps("1 1.5 roll")).unwrap_err();
+    assert!(err.contains("typecheck"));
+}
+
+#[test]
+fn postscript_repeat_non_procedure_operand_is_refused() {
+    let err = import(&eps("1 1 repeat")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("repeat"));
+}
+
+#[test]
+fn postscript_repeat_non_integer_count_is_refused() {
+    let err = import(&eps("1.5 { pop } repeat")).unwrap_err();
+    assert!(err.contains("typecheck"));
+}
+
+#[test]
+fn postscript_mod_non_integer_operand_is_refused() {
+    let err = import(&eps("1.5 2 mod")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("mod"));
+}
+
+#[test]
+fn postscript_loop_non_procedure_operand_is_refused() {
+    let err = import(&eps("1 loop")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("loop"));
+}
+
+#[test]
+fn postscript_index_non_integer_count_is_refused() {
+    let err = import(&eps("1 1.5 index pop")).unwrap_err();
+    assert!(err.contains("typecheck"));
+}
+
+#[test]
+fn postscript_ifelse_non_procedure_branch_is_refused() {
+    let err = import(&eps("true { pop } 1 ifelse")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("ifelse"));
+}
+
+#[test]
+fn postscript_ifelse_non_boolean_condition_is_refused() {
+    let err = import(&eps("1 { pop } { pop } ifelse")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("ifelse"));
+}
+
+#[test]
+fn postscript_if_non_procedure_body_is_refused() {
+    let err = import(&eps("true 1 if")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("if"));
+}
+
+#[test]
+fn postscript_if_non_boolean_condition_is_refused() {
+    let err = import(&eps("1 { pop } if")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("if"));
+}
+
+#[test]
+fn postscript_idiv_non_integer_operand_is_refused() {
+    let err = import(&eps("1.5 2 idiv")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("idiv"));
+}
+
+#[test]
+fn postscript_for_non_procedure_operand_is_refused() {
+    let err = import(&eps("1 1 10 1 for")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("for"));
+}
+
+#[test]
+fn postscript_copy_non_integer_operand_count_is_refused() {
+    let err = import(&eps("1 1.5 copy pop")).unwrap_err();
+    assert!(err.contains("typecheck") && err.contains("copy"));
+}
+
 /// #1714: arrays and dictionaries a program links into themselves or each other are freed with
 /// the interpreter, also the ones it no longer reaches and when it stops on an error.
 #[test]

@@ -71,29 +71,36 @@ fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     let gutter_label = form::humanized("gutter");
     egui::Grid::new("dlg").num_columns(4).spacing([10.0, 8.0]).show(ui, |ui| {
         for (number, label, ..) in axes {
-            form::row_label(ui, label);
-            if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
-                d.fields.insert(number.into(), json!(v));
-            }
+            let row = form::row_label(ui, label);
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
+                    d.fields.insert(number.into(), json!(v));
+                }
+            });
         }
         ui.end_row();
         for (number, _, label, gutter, total) in axes {
-            form::row_label(ui, label);
+            let row = form::row_label(ui, label);
             let n = d.f64(number, 2.0).max(1.0);
             let gaps = d.f64(gutter, 0.0) * (n - 1.0);
-            if let Some(v) = crate::widgets::num_field(ui, ("dlg-size", number), Some((d.f64(total, 0.0) - gaps) / n), unit, WIDTH) {
-                d.fields.insert(total.into(), json!(n * v + gaps));
-            }
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(v) = crate::widgets::num_field(ui, ("dlg-size", number), Some((d.f64(total, 0.0) - gaps) / n), unit, WIDTH) {
+                    d.fields.insert(total.into(), json!(n * v + gaps));
+                }
+            });
         }
         ui.end_row();
-        for (.., gutter, _) in axes {
-            form::row_label(ui, &gutter_label);
-            form::length(ui, d, gutter, unit, WIDTH);
+        for (_, axis, _, gutter, _) in axes {
+            // The visible rows stay the existing translated "Gutter:" and "Total:" labels; the
+            // accessible names say which axis they belong to (two identical visible labels would
+            // otherwise name two different inputs the same).
+            let _ = form::row_label(ui, &gutter_label);
+            ui.name_inputs(format!("{axis} {gutter_label}"), |ui| form::length(ui, d, gutter, unit, WIDTH));
         }
         ui.end_row();
-        for (.., total) in axes {
-            form::row_label(ui, tl!("Total:"));
-            form::length(ui, d, total, unit, WIDTH);
+        for (_, axis, _, _, total) in axes {
+            let _ = form::row_label(ui, tl!("Total:"));
+            ui.name_inputs(format!("{axis} {}", tl!("Total:")), |ui| form::length(ui, d, total, unit, WIDTH));
         }
         ui.end_row();
     });

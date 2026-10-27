@@ -214,6 +214,70 @@ fn overlapping_layers_stack() {
     assert_eq!(ov.paths[1].color, [0, 0, 0]);
 }
 
+/// Overlapping with Shapes: a black disc on the light half is written once. The blue layer, between
+/// light and black in the stack, does not reach under it: the disc holds no blue.
+#[test]
+fn overlapping_writes_no_copy_of_a_shape_under_a_color_it_does_not_touch() {
+    let (light, blue) = ([240, 240, 220, 255], [40, 120, 240, 255]);
+    let img = Raster::from_fn(600, 400, |x, y| {
+        let disc = |cx: f64, cy: f64| Point::new(f64::from(x) + 0.5, f64::from(y) + 0.5).distance(Point::new(cx, cy)) <= 12.0;
+        if disc(100.0, 100.0) || disc(200.0, 300.0) || (400..500).contains(&x) && (150..250).contains(&y) {
+            BLACK
+        } else if x >= 300 {
+            blue
+        } else {
+            light
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::Limited,
+        colors: 3,
+        paths: 90.0,
+        corners: 50.0,
+        noise: 2,
+        method: Method::Overlapping,
+        shapes: true,
+        ..TraceParams::default()
+    };
+    let res = trace(&img, &params);
+    let ellipses = res.paths.iter().filter(|p| matches!(p.shape, Some(TracedShape::Ellipse { .. }))).count();
+    let rectangles = res.paths.iter().filter(|p| matches!(p.shape, Some(TracedShape::Rectangle { .. }))).count();
+    // The two discs; the light ground, the blue half (the black square touches it) and the square.
+    assert_eq!((ellipses, rectangles), (2, 3), "{:?}", res.paths.iter().map(|p| (p.color, p.shape)).collect::<Vec<_>>());
+    let bounds: Vec<_> = res.paths.iter().filter(|p| p.shape.is_some()).filter_map(|p| p.path.bounds()).collect();
+    for (i, a) in bounds.iter().enumerate() {
+        for b in &bounds[i + 1..] {
+            let same = [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(u, v)| (u - v).abs() <= 0.5);
+            assert!(!same, "two shapes at {a:?}");
+        }
+    }
+}
+
+/// Overlapping: a black line on the light ground gets no blue path under it, though blue lies
+/// between light and black in the stack.
+#[test]
+fn overlapping_layers_leave_out_areas_without_their_color() {
+    let (light, blue) = ([240, 240, 220, 255], [40, 120, 240, 255]);
+    let img = Raster::from_fn(400, 400, |x, y| {
+        if (170..230).contains(&x) && (170..230).contains(&y) {
+            blue
+        } else if (50..350).contains(&x) && (320..330).contains(&y) {
+            BLACK
+        } else {
+            light
+        }
+    });
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 3, method: Method::Overlapping, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    let blues: Vec<_> = res.paths.iter().filter(|p| p.color[0] < 100 && p.color[2] > 150).collect();
+    assert!(!blues.is_empty(), "{:?}", res.palette);
+    for p in blues {
+        let b = p.path.bounds().unwrap();
+        assert!(b.x1 <= 50.0 || b.x0 >= 350.0 || b.y1 <= 320.0 || b.y0 >= 330.0, "a blue path over the line: {b:?}");
+    }
+}
+
 #[test]
 fn transparent_pixels_are_not_traced() {
     let img = Raster::from_fn(40, 40, |x, _| if x < 20 { [0, 0, 0, 0] } else { BLACK });
@@ -341,6 +405,64 @@ fn a_thin_semi_transparent_outline_keeps_its_own_color() {
             crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
             assert_eq!(settled, q, "{mode:?}, alpha {alpha}");
         }
+    }
+}
+
+#[test]
+fn a_cut_out_edge_leaves_the_color_of_the_art_inside_it_alone() {
+    // A white pixel inside a ring of half-opaque dark gray edge pixels on a transparent
+    // background: the edge chooses no color, and the white still takes the white swatch.
+    let img = Raster::from_fn(5, 5, |x, y| match (x, y) {
+        (2, 2) => [255, 255, 255, 255],
+        (1..=3, 1..=3) => [64, 64, 64, 128],
+        _ => [0, 0, 0, 0],
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::DocumentLibrary,
+        swatches: vec![[0, 0, 0], [255, 255, 255]],
+        colors: 2,
+        ..TraceParams::default()
+    };
+    let q = quantize(&img, &params);
+    assert_eq!(q.palette.get(q.labels[12] as usize), Some(&[255, 255, 255]), "{q:?}");
+}
+
+#[test]
+fn a_semi_transparent_stripe_beside_a_cut_out_edge_keeps_its_own_color() {
+    // Columns: transparent, a half-opaque gray edge (white blended with the background), a
+    // semi-transparent yellow stripe, then opaque white. The gray chooses no color; the yellow,
+    // no blend of the white, still does.
+    let img = Raster::from_fn(8, 10, |x, _| match x {
+        0 => [0, 0, 0, 0],
+        1 => [128, 128, 128, 128],
+        2 => [250, 200, 40, 192],
+        _ => [255, 255, 255, 255],
+    });
+    let q = quantize(&img, &TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 3, ..TraceParams::default() });
+    let yellow = q.palette.get(q.labels[5 * 8 + 2] as usize).copied();
+    assert!(yellow.is_some_and(|c| c[2] < 100), "{q:?}");
+}
+
+#[test]
+fn grayscale_takes_no_gray_from_a_cut_out_edge() {
+    // A white square cut out of a transparent border, with a black and a mid-gray block in it,
+    // and a two-pixel cut edge of white darkened by the transparent background. The edge
+    // chooses no gray, so three grays keep the black, the mid-gray and the white apart.
+    let img = Raster::from_fn(40, 40, |x, y| {
+        let ring = x.min(y).min(39 - x).min(39 - y);
+        match (x, y) {
+            _ if ring < 1 => [0, 0, 0, 0],
+            _ if ring < 3 => [170, 170, 170, 200],
+            (6..=17, 6..=33) => [20, 20, 20, 255],
+            (22..=33, 6..=33) => [110, 110, 110, 255],
+            _ => [255, 255, 255, 255],
+        }
+    });
+    let q = quantize(&img, &TraceParams { mode: Mode::Grayscale, colors: 3, ..TraceParams::default() });
+    let gray = |x: usize, y: usize| q.palette.get(q.labels[y * 40 + x] as usize).map(|c| c[0]);
+    for ((x, y), want) in [((10, 20), 20u8), ((28, 20), 110), ((20, 3), 255)] {
+        assert!(gray(x, y).is_some_and(|g| g.abs_diff(want) <= 4), "({x}, {y}) traces as {:?}, not {want}: {q:?}", gray(x, y));
     }
 }
 
@@ -474,9 +596,8 @@ fn parallel_layers_keep_their_order() {
     for _ in 0..4 {
         assert_eq!(trace(&img, &p), a);
     }
-    // Overlapping: each layer's shapes cover the layers above, so the pixel counts fall upwards.
-    let firsts: Vec<usize> = a.palette.iter().filter_map(|c| a.paths.iter().find(|t| t.color == *c).map(|t| t.pixels)).collect();
-    assert!(firsts.windows(2).all(|w| w[0] >= w[1]), "{firsts:?}");
+    // Overlapping: the bottom layer comes first and covers the whole image.
+    assert_eq!(a.paths.first().map(|t| t.pixels), Some(90 * 90));
 }
 
 /// A PNG whose header says `w` × `h` pixels, with no image data.
@@ -622,6 +743,40 @@ fn document_library_uses_the_most_used_swatches_exactly() {
     // Without library colours, it traces as Limited.
     let none = TraceParams { swatches: vec![], ..p(4) };
     assert_eq!(trace(&hard, &none).palette.len(), 4);
+}
+
+#[test]
+fn document_library_keeps_neutral_tones_off_a_saturated_swatch() {
+    // Black, gray, brown and blue patches on a light background. The gray and the brown lie
+    // nearer to the blue than to the black or the light color in plain Oklab distance.
+    let img = Raster::from_fn(400, 100, |x, y| {
+        let inside = (10..90).contains(&(x % 100)) && (10..90).contains(&y);
+        match (inside, x / 100) {
+            (false, _) => [240, 240, 220, 255],
+            (true, 0) => [0, 0, 0, 255],
+            (true, 1) => [128, 128, 128, 255],
+            (true, 2) => [112, 88, 64, 255],
+            (true, _) => [40, 120, 240, 255],
+        }
+    });
+    let params = TraceParams {
+        mode: Mode::Color,
+        palette: Palette::DocumentLibrary,
+        swatches: vec![[0, 0, 0], [240, 240, 220], [40, 120, 240]],
+        colors: 3,
+        paths: 90.0,
+        corners: 60.0,
+        noise: 4,
+        method: Method::Abutting,
+        ..TraceParams::default()
+    };
+    let res = trace(&img, &params);
+    let blue: Vec<_> = res.paths.iter().filter(|p| p.color == [40, 120, 240]).collect();
+    assert!(!blue.is_empty(), "the blue patch stays blue: {:?}", res.palette);
+    for p in blue {
+        let b = p.path.bounds().unwrap();
+        assert!(b.x0 > 299.0, "a blue path reaches {b:?}: the gray or the brown patch traced as blue");
+    }
 }
 
 fn strokes(fills: bool) -> TraceParams {
@@ -1099,11 +1254,12 @@ fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
     let params = TraceParams { mode: Mode::Grayscale, colors: 4, noise: 0, method: Method::Overlapping, ..TraceParams::default() };
     let tones = |res: &TraceResult| res.paths.iter().map(|p| p.color[0]).collect::<Vec<u8>>();
     // The largest colour is light, so the stack starts at the light end.
-    // (Each layer reaches under those above it: under the black stripe too, a part of its own.)
-    assert_eq!(tones(&trace(&img, &params)), [255, 200, 200, 120, 120, 0]);
+    // (Each layer reaches under those above it only where it is part of the area: the black stripe
+    // holds no gray, so no gray layer reaches under it.)
+    assert_eq!(tones(&trace(&img, &params)), [255, 200, 120, 0]);
     // Without white, no layer reaches under where it was.
     let res = trace(&img, &TraceParams { ignore_white: true, ..params });
-    assert_eq!(tones(&res), [200, 200, 120, 120, 0]);
+    assert_eq!(tones(&res), [200, 120, 0]);
     for p in &res.paths {
         let b = p.path.bounds().unwrap();
         assert!(b.x1 <= 20.5 || b.x0 >= 39.5, "a {} layer covers the white stripe: {b:?}", p.color[0]);
@@ -1360,7 +1516,7 @@ fn a_color_whose_every_path_straightens_to_no_area_is_left_out_of_the_palette() 
     // A light rectangle with a black block on it and a one-pixel row of a pale blue along its lower
     // edge, on a transparent background. Traced with a library of the light, the black and a
     // blue, the row is the only part in the blue.
-    const BLUE: [u8; 3] = [40, 120, 240];
+    const BLUE: [u8; 3] = [60, 130, 235];
     let img = Raster::from_fn(200, 120, |x, y| {
         if (60..140).contains(&x) && (70..90).contains(&y) {
             BLACK
@@ -2092,6 +2248,333 @@ fn scattered_noise_adds_no_colour() {
             assert!(distinct_colours(&res) <= k, "{k} colours, {per_mille}‰ noise: {:?}", res.palette);
         }
     }
+}
+
+/// A light disc (radius 190) cut out of a transparent background, with a blue and a black block
+/// in it and a tan outline `width` px wide and `alpha` (0–1) opaque drawn over the disc's edge,
+/// anti-aliased with 4 × 4 samples a pixel. Inside the edge the outline is an opaque blend of the
+/// tan and the light color; outside it, the tan alone, semi-transparent.
+fn cut_out_with_outline(width: f64, alpha: f64) -> Raster {
+    let (light, tan, blue, black) = ([253.0, 247.0, 227.0], [154.0, 132.0, 82.0], [34.0, 125.0, 250.0], [5.0, 5.0, 3.0]);
+    Raster::from_fn(400, 400, |x, y| {
+        // Premultiplied color and alpha, summed over the samples.
+        let (mut sum, mut cover) = ([0.0f64; 3], 0.0f64);
+        for s in 0..16 {
+            let (fx, fy) = (f64::from(x) + (f64::from(s % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(s / 4) + 0.5) / 4.0);
+            let r = (fx - 200.0).hypot(fy - 200.0);
+            let (mut c, mut a) = if r >= 190.0 {
+                ([0.0; 3], 0.0)
+            } else if (125.0..275.0).contains(&fx) && (100.0..200.0).contains(&fy) {
+                (blue, 1.0)
+            } else if (125.0..275.0).contains(&fx) && (225.0..300.0).contains(&fy) {
+                (black, 1.0)
+            } else {
+                (light, 1.0)
+            };
+            c = c.map(|v| v * a);
+            if (r - 190.0).abs() < width / 2.0 {
+                c = [0, 1, 2].map(|k| tan[k] * alpha + c[k] * (1.0 - alpha));
+                a = alpha + a * (1.0 - alpha);
+            }
+            for k in 0..3 {
+                sum[k] += c[k];
+            }
+            cover += a;
+        }
+        if cover <= 0.0 {
+            return [0, 0, 0, 0];
+        }
+        let c = sum.map(|v| (v / cover).round().clamp(0.0, 255.0) as u8);
+        [c[0], c[1], c[2], (cover / 16.0 * 255.0).round() as u8]
+    })
+}
+
+#[test]
+fn automatic_takes_no_color_from_a_cut_out_edge() {
+    // The semi-transparent pixels along the disc's cut edge are the tan alone, or a mix of it and
+    // the outline's opaque blend inside the edge: counted, they make a second tan, or leave the
+    // outline no color of its own. They trace, but choose no color: one tan. Inside the edge, the
+    // anti-aliasing between the disc and the outline is no second tan either.
+    let params = preset("Auto Color").unwrap();
+    let mut failed = vec![];
+    for width in [1.0, 1.5, 2.0, 2.5, 3.0, 4.0] {
+        for alpha in [0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0] {
+            // A 1 px outline under alpha 0.7 traces as the disc's color: the opaque pixels it
+            // covers vary too much to be a color of their own, and the ones outside the edge are
+            // darker shades of them.
+            if width < 1.5 && alpha < 0.7 {
+                continue;
+            }
+            let res = trace(&cut_out_with_outline(width, alpha), &params);
+            if distinct_colours(&res) != 4 {
+                failed.push(format!("outline {width} px, alpha {alpha}: {:?}", res.palette));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn automatic_keeps_a_thin_cut_edge_outline_in_few_pieces() {
+    // A fully opaque outline 1.1 to 1.3 px wide over the cut edge: along the circle its opaque
+    // pixels are the tan or a mix of the tan and the disc. The mix is the anti-aliasing between
+    // them and traces as the tan, so the outline stays a ring of few pieces.
+    let main = [[253, 247, 227], [34, 125, 250], [5, 5, 3]].map(quantize::tests_oklab);
+    let is_main = |c: [u8; 3]| {
+        let o = quantize::tests_oklab(c);
+        main.iter().any(|m| (0..3).map(|k| (o[k] - m[k]).powi(2)).sum::<f64>().sqrt() <= 6.0)
+    };
+    let params = preset("Auto Color").unwrap();
+    let mut failed = vec![];
+    for width in [1.1, 1.25, 1.3] {
+        let res = trace(&cut_out_with_outline(width, 1.0), &params);
+        let pieces = res.paths.iter().filter(|p| !is_main(p.color)).count();
+        if distinct_colours(&res) != 4 || pieces >= 24 {
+            failed.push(format!("outline {width} px: {} colors, {pieces} outline paths", distinct_colours(&res)));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// A light disc (radius 140) cut out of a transparent background, with a blue block and four dark
+/// bars 2 px tall in it, and an opaque rim `width` px wide along the inside of its cut edge whose
+/// color is `t` (0–1) of the way from the light color to the bars', anti-aliased with 4 × 4 samples
+/// a pixel. Outside the edge there is nothing: the edge pixels are the rim's color, semi-transparent.
+fn cut_out_with_rim(width: f64, t: f64) -> Raster {
+    let (light, blue, dark) = ([253.0, 247.0, 227.0], [34.0, 125.0, 250.0], [110.0, 80.0, 40.0]);
+    let rim: [f64; 3] = [0, 1, 2].map(|k| (light[k] * (1.0 - t) + dark[k] * t).round());
+    let bars = [(80.0, 190.0, 120.0, 192.0), (130.0, 190.0, 170.0, 192.0), (180.0, 190.0, 220.0, 192.0), (80.0, 215.0, 220.0, 217.0)];
+    Raster::from_fn(300, 300, |x, y| {
+        let (mut sum, mut cover) = ([0.0f64; 3], 0.0f64);
+        for s in 0..16 {
+            let (fx, fy) = (f64::from(x) + (f64::from(s % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(s / 4) + 0.5) / 4.0);
+            let r = (fx - 150.0).hypot(fy - 150.0);
+            if r >= 140.0 {
+                continue;
+            }
+            let c = if r >= 140.0 - width {
+                rim
+            } else if bars.iter().any(|&(x0, y0, x1, y1)| (x0..x1).contains(&fx) && (y0..y1).contains(&fy)) {
+                dark
+            } else if (90.0..210.0).contains(&fx) && (70.0..150.0).contains(&fy) {
+                blue
+            } else {
+                light
+            };
+            for k in 0..3 {
+                sum[k] += c[k];
+            }
+            cover += 1.0;
+        }
+        if cover <= 0.0 {
+            return [0, 0, 0, 0];
+        }
+        let c = sum.map(|v| (v / cover).round().clamp(0.0, 255.0) as u8);
+        [c[0], c[1], c[2], (cover / 16.0 * 255.0).round() as u8]
+    })
+}
+
+#[test]
+fn automatic_keeps_an_opaque_rim_along_a_cut_edge() {
+    // An opaque rim drawn along the inside of the cut edge, its color between the disc's and the
+    // bars': beside the cut edge, but touching no bar, it is drawn and not anti-aliasing between
+    // the two, and keeps its color.
+    let mut failed = vec![];
+    for (width, detail) in [(1.5, 85.0), (2.0, 50.0), (2.5, 50.0)] {
+        for t in [0.35, 0.5, 0.65] {
+            let rim = [0, 1, 2].map(|k| ([253.0f64, 247.0, 227.0][k] * (1.0 - t) + [110.0, 80.0, 40.0][k] * t).round() as u8);
+            let params = TraceParams { color_detail: detail, ..preset("Auto Color").unwrap() };
+            let res = trace(&cut_out_with_rim(width, t), &params);
+            if !has_colour(&res, rim, 3.0) {
+                failed.push(format!("rim {width} px, {t}, color detail {detail}: {:?}", res.palette));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn automatic_splits_the_anti_aliasing_beside_a_cut_edge_outline() {
+    // A 2.5 px outline at alpha 0.7 and 0.75 over the cut edge has an opaque band of its own
+    // inside the edge. The anti-aliasing between that band and the disc is no second shade of
+    // the outline, and each pixel of it traces as the color it is nearer to. Traced so, the
+    // outline's paths average 2.18 and 2.27 px wide; traced as the outline, the anti-aliasing
+    // adds 0.075 px.
+    use kurbo::Shape;
+    let main = [[253, 247, 227], [34, 125, 250], [5, 5, 3]].map(quantize::tests_oklab);
+    let is_main = |c: [u8; 3]| {
+        let o = quantize::tests_oklab(c);
+        main.iter().any(|m| (0..3).map(|k| (o[k] - m[k]).powi(2)).sum::<f64>().sqrt() <= 6.0)
+    };
+    let mut failed = vec![];
+    for (alpha, widest) in [(0.7, 2.22), (0.75, 2.31)] {
+        let res = trace(&cut_out_with_outline(2.5, alpha), &preset("Auto Color").unwrap());
+        let area: f64 = res.paths.iter().filter(|p| !is_main(p.color)).map(|p| p.path.to_bezpath().area().abs()).sum();
+        let width = area / (2.0 * std::f64::consts::PI * 190.0);
+        if distinct_colours(&res) != 4 || width > widest {
+            failed.push(format!("alpha {alpha}: {} colors, outline {width:.2} px wide", distinct_colours(&res)));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// `layers` (where, color, alpha 0–1) drawn in order over a transparent 300 × 300 image,
+/// anti-aliased with 4 × 4 samples a pixel; each pixel's color is unpremultiplied.
+fn cut_out_layers(layers: &[(Inside, [f64; 3], f64)]) -> Raster {
+    Raster::from_fn(300, 300, |x, y| {
+        // Premultiplied color and alpha, summed over the samples.
+        let (mut sum, mut cover) = ([0.0f64; 3], 0.0f64);
+        for s in 0..16 {
+            let (fx, fy) = (f64::from(x) + (f64::from(s % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(s / 4) + 0.5) / 4.0);
+            let (mut c, mut a) = ([0.0f64; 3], 0.0f64);
+            for (inside, color, alpha) in layers {
+                if inside(fx, fy) {
+                    c = [0, 1, 2].map(|k| color[k] * alpha + c[k] * (1.0 - alpha));
+                    a = alpha + a * (1.0 - alpha);
+                }
+            }
+            for k in 0..3 {
+                sum[k] += c[k];
+            }
+            cover += a;
+        }
+        if cover <= 0.0 {
+            return [0, 0, 0, 0];
+        }
+        let c = sum.map(|v| (v / cover).round().clamp(0.0, 255.0) as u8);
+        [c[0], c[1], c[2], (cover / 16.0 * 255.0).round() as u8]
+    })
+}
+
+#[test]
+fn automatic_traces_an_outline_over_a_cut_edge_in_the_color_of_other_art() {
+    // A light disc cut out of a transparent background, with a blue block and dark bars, and a
+    // dark outline at alpha 0.8 over the cut edge in the bars' color. Inside the edge the outline
+    // is an opaque blend of the dark and the light color; outside it, the dark alone. The blend is
+    // the outline, not a second shade of it: three colors, and the outline in few pieces.
+    let (light, blue, dark) = ([253.0, 247.0, 227.0], [34.0, 125.0, 250.0], [110.0, 80.0, 40.0]);
+    let r = |x: f64, y: f64| (x - 150.0).hypot(y - 150.0);
+    let disc = |x: f64, y: f64| r(x, y) < 140.0;
+    let block = |x: f64, y: f64| (90.0..210.0).contains(&x) && (70.0..150.0).contains(&y);
+    let bars = |x: f64, y: f64| {
+        [(80.0, 190.0, 120.0, 192.0), (130.0, 190.0, 170.0, 192.0), (180.0, 190.0, 220.0, 192.0), (80.0, 215.0, 220.0, 217.0)]
+            .iter()
+            .any(|&(x0, y0, x1, y1)| (x0..x1).contains(&x) && (y0..y1).contains(&y))
+    };
+    // The dark paths reach the top and the bottom of the disc, which no bar comes near: the outline
+    // is traced, not only the bars.
+    use kurbo::Shape;
+    let target = quantize::tests_oklab([110, 80, 40]);
+    let dark_reaches = |res: &TraceResult, edge: &dyn Fn(kurbo::Rect) -> bool| {
+        res.paths.iter().any(|p| {
+            let o = quantize::tests_oklab(p.color);
+            (0..3).map(|k| (o[k] - target[k]).powi(2)).sum::<f64>().sqrt() <= 3.0 && edge(p.path.to_bezpath().bounding_box())
+        })
+    };
+    let mut failed = vec![];
+    for width in [1.5, 2.0, 2.5] {
+        let outline = move |x: f64, y: f64| (r(x, y) - 140.0).abs() < width / 2.0;
+        let img = cut_out_layers(&[(&disc, light, 1.0), (&block, blue, 1.0), (&bars, dark, 1.0), (&outline, dark, 0.8)]);
+        for detail in [85.0, 50.0] {
+            let res = trace(&img, &TraceParams { color_detail: detail, ..preset("Auto Color").unwrap() });
+            let ring = dark_reaches(&res, &|b| b.y0 < 15.0) && dark_reaches(&res, &|b| b.y1 > 285.0);
+            if distinct_colours(&res) != 3 || !has_colour(&res, [110, 80, 40], 3.0) || !ring || res.paths.len() > 24 {
+                failed.push(format!("outline {width} px, color detail {detail}: {} paths, {:?}", res.paths.len(), res.palette));
+            }
+        }
+    }
+    // A 1 px outline's blend inside the edge is less than halfway from the light color to the
+    // dark: it keeps a color of its own, and the outline stays a ring of few pieces.
+    let outline = move |x: f64, y: f64| (r(x, y) - 140.0).abs() < 0.5;
+    let img = cut_out_layers(&[(&disc, light, 1.0), (&block, blue, 1.0), (&bars, dark, 1.0), (&outline, dark, 0.8)]);
+    let res = trace(&img, &preset("Auto Color").unwrap());
+    if distinct_colours(&res) != 4 || res.paths.len() > 20 {
+        failed.push(format!("outline 1 px: {} paths, {:?}", res.paths.len(), res.palette));
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn automatic_keeps_an_opaque_rim_that_other_art_reaches() {
+    // An opaque 2 px rim along the inside of the cut edge, its color between the disc's and that of
+    // dark bars, two of which run out to the rim and touch it: drawn, not anti-aliasing between the
+    // disc and the bars, so it keeps its color. A light rim with brown bars, and a gray rim with
+    // black bars on a near-white disc.
+    let r = |x: f64, y: f64| (x - 150.0).hypot(y - 150.0);
+    let disc = |x: f64, y: f64| r(x, y) < 140.0;
+    let rim = |x: f64, y: f64| (138.0..140.0).contains(&r(x, y));
+    let block = |x: f64, y: f64| (90.0..210.0).contains(&x) && (70.0..150.0).contains(&y);
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| move |x: f64, y: f64| (x0..x1).contains(&x) && (y0..y1).contains(&y);
+    let (top, bottom, left, wide) =
+        (rect(146.0, 12.0, 154.0, 60.0), rect(146.0, 240.0, 154.0, 288.0), rect(12.0, 196.0, 60.0, 199.0), rect(80.0, 215.0, 220.0, 217.0));
+    let light: [f64; 3] = [253.0, 247.0, 227.0];
+    let tan: [f64; 3] = [0, 1, 2].map(|k| (light[k] * 0.65 + [110.0, 80.0, 40.0][k] * 0.35).round());
+    let (blue, dark) = ([34.0, 125.0, 250.0], [110.0, 80.0, 40.0]);
+    let brown = cut_out_layers(&[
+        (&disc, light, 1.0),
+        (&block, blue, 1.0),
+        (&top, dark, 1.0),
+        (&bottom, dark, 1.0),
+        (&left, dark, 1.0),
+        (&wide, dark, 1.0),
+        (&rim, tan, 1.0),
+    ]);
+    let tall = rect(80.0, 215.0, 220.0, 218.0);
+    let (white, red, black, gray) = ([250.0; 3], [200.0, 40.0, 40.0], [5.0, 5.0, 3.0], [128.0; 3]);
+    let black_bars = cut_out_layers(&[(&disc, white, 1.0), (&block, red, 1.0), (&top, black, 1.0), (&tall, black, 1.0), (&rim, gray, 1.0)]);
+    let mut failed = vec![];
+    for (name, img, color) in [("tan rim", &brown, tan.map(|v| v as u8)), ("gray rim", &black_bars, [128, 128, 128])] {
+        for detail in [85.0, 50.0] {
+            let res = trace(img, &TraceParams { color_detail: detail, ..preset("Auto Color").unwrap() });
+            if !has_colour(&res, color, 3.0) {
+                failed.push(format!("{name}, color detail {detail}: {:?}", res.palette));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+#[test]
+fn automatic_keeps_an_opaque_line_between_two_kept_colors() {
+    // Two thin opaque lines on a light ground with a blue and a black block: a tan, and a lighter
+    // tan halfway between it and the ground. Away from a cut edge, the lighter one is drawn, not a
+    // blend: both stay.
+    let img = Raster::from_fn(400, 400, |x, y| {
+        if (100..300).contains(&x) && (40..120).contains(&y) {
+            [34, 125, 250, 255]
+        } else if (100..300).contains(&x) && (280..360).contains(&y) {
+            [5, 5, 3, 255]
+        } else if (60..340).contains(&x) && (180..182).contains(&y) {
+            [154, 132, 82, 255]
+        } else if (60..340).contains(&x) && (220..222).contains(&y) {
+            [204, 190, 155, 255]
+        } else {
+            [253, 247, 227, 255]
+        }
+    });
+    let res = trace(&img, &preset("Auto Color").unwrap());
+    assert!(has_colour(&res, [154, 132, 82], 3.0), "{:?}", res.palette);
+    assert!(has_colour(&res, [204, 190, 155], 3.0), "{:?}", res.palette);
+}
+
+#[test]
+fn a_cut_edge_blend_past_the_rare_budget_still_traces_as_its_kept_color() {
+    // Seven distinct rare colors, largest first, fill the budget of six, and then the blend of the
+    // first one along a cut edge: the blend still traces as that kept color.
+    let rare: [[f64; 3]; 7] = [
+        [200.0, 30.0, 40.0],
+        [30.0, 160.0, 60.0],
+        [240.0, 200.0, 20.0],
+        [120.0, 40.0, 160.0],
+        [20.0, 200.0, 210.0],
+        [250.0, 120.0, 180.0],
+        [90.0, 60.0, 20.0],
+    ];
+    let blend = [220.0, 120.0, 120.0];
+    let colors = rare.iter().map(|&c| (c, None, None)).chain([(blend, Some(rare[0]), None)]);
+    let (out, traced_as) = quantize::kept_rare(colors);
+    assert_eq!(out, rare[..6]);
+    assert_eq!(traced_as, [(blend, rare[0], None)]);
 }
 
 #[test]

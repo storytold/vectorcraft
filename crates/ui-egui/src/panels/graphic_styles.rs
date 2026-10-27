@@ -230,8 +230,8 @@ pub(super) fn outline(ui: &Ui, r: Rect, on: bool, hovered: bool) {
 fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, look: u64, px: u32) -> Option<TextureHandle> {
     let st = app.session.active()?;
     let n = st.doc.node(*st.selection.objects.first()?)?;
-    let slot = egui::Id::new("gs-large-object");
-    let key = egui::Id::new((st.uid, st.revision, look, px, app.session.prefs.override_char_color));
+    let slot = egui::Id::unique("gs-large-object");
+    let key = egui::Id::unique((st.uid, st.revision, look, px, app.session.prefs.override_char_color));
     if let Some((k, tex)) = ctx.data(|d| d.get_temp::<(egui::Id, TextureHandle)>(slot))
         && k == key
     {
@@ -253,7 +253,7 @@ fn large_preview(app: &VectorcraftApp, ctx: &egui::Context, s: &Shown, i: usize)
     let px = (LARGE * ctx.pixels_per_point()).round() as u32;
     let tex = object_preview(app, ctx, g, look, px).or_else(|| thumb(app, ctx, Paints::of(s.d), g, look, s.preview, LARGE));
     let t = Tokens::get(ctx);
-    let area = egui::Area::new(egui::Id::new("gs-large")).order(egui::Order::Tooltip).fixed_pos(at + vec2(14.0, 14.0));
+    let area = egui::Area::new(egui::Id::unique("gs-large")).order(egui::Order::Tooltip).fixed_pos(at + vec2(14.0, 14.0));
     area.interactable(false).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             let (r, _) = ui.allocate_exact_size(vec2(LARGE, LARGE), Sense::hover());
@@ -355,6 +355,7 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         | PanelDrag::Symbol(_)
         | PanelDrag::LibrarySymbol { .. }
         | PanelDrag::Brush { .. }
+        | PanelDrag::LibraryBrush { .. }
         | PanelDrag::LibraryGraphic { .. }
         | PanelDrag::LibraryItem { .. }
         | PanelDrag::LibraryGroup { .. } => (None, None),
@@ -477,7 +478,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 None => tiles(app, ui, &shown, &sel, &mut ev),
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.id().with("gs-drop"), Sense::hover());
+        let zone = ui.interact(out.inner_rect, ui.scope_id().with("gs-drop"), Sense::hover());
         zone_input(ui, &zone, &doc, &mut ev);
     });
     act(app, ui, &shown, ev, false);

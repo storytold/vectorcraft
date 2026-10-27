@@ -60,8 +60,13 @@ fn a_chosen_artboard_s_svg_holds_only_its_own_art() {
     let (first, third) = (x(&s, 0), x(&s, 2));
     s.execute("shape.rectangle", &json!({"x": first + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("shape.ellipse", &json!({"x": third + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
-    // A rectangle has straight sides only; the ellipse is curves.
-    let shapes = |svg: &str| (svg.matches("<path").count() + svg.matches("<rect").count(), svg.contains(" C") || svg.contains("<ellipse"));
+    // A rectangle has straight sides only; the ellipse is a circle or curves.
+    let shapes = |svg: &str| {
+        (
+            svg.matches("<path").count() + svg.matches("<rect").count() + svg.matches("<circle").count() + svg.matches("<ellipse").count(),
+            svg.contains(" C") || svg.contains("<ellipse") || svg.contains("<circle"),
+        )
+    };
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
     assert_eq!(shapes(&third_only), (1, true), "{third_only}");
@@ -88,8 +93,15 @@ fn a_chosen_artboard_s_svg_leaves_out_its_neighbours_art_in_a_shared_group() {
     s.execute("object.group", &json!({})).unwrap();
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
-    assert_eq!(third_only.matches("<path").count() + third_only.matches("<rect").count(), 1, "{third_only}");
-    assert!(third_only.contains(" C") || third_only.contains("<ellipse"), "{third_only}");
+    assert_eq!(
+        third_only.matches("<path").count()
+            + third_only.matches("<rect").count()
+            + third_only.matches("<circle").count()
+            + third_only.matches("<ellipse").count(),
+        1,
+        "{third_only}"
+    );
+    assert!(third_only.contains(" C") || third_only.contains("<ellipse") || third_only.contains("<circle"), "{third_only}");
 }
 
 /// An object off a chosen artboard whose drop shadow reaches onto it is in that artboard's SVG.

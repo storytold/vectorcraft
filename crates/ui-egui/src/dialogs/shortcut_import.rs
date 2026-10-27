@@ -654,7 +654,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let statuses = review.statuses();
     // The Keys and Shortcuts lists get the window's height less the rest of the dialog, as the frame
     // before drew it.
-    let id = egui::Id::new("dialog-shortcut-import");
+    let id = egui::Id::unique("dialog-shortcut-import");
     let rest = ctx.data(|m| m.get_temp::<f32>(id.with("rest"))).unwrap_or(0.0);
     let (keys, mods) = review.asked();
     let keys_open = d.bool("__keysOpen") && (!keys.is_empty() || !mods.is_empty());
@@ -928,7 +928,7 @@ fn rows_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, statuses
 fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<String> {
     let current = target_label(r.target.as_deref());
     widgets::combo(ui, ("shortcut-import-target", i), &current, TARGET_W, true, |ui| {
-        let field = ui.id().with("query");
+        let field = ui.scope_id().with("query");
         if ui.memory(|m| m.focused().is_none()) {
             ui.memory_mut(|m| m.request_focus(field.with("edit")));
         }

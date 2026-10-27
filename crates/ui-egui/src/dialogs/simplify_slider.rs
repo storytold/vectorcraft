@@ -125,7 +125,7 @@ enum Action {
 fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
-    let id = egui::Id::new(("dialog", KIND));
+    let id = egui::Id::unique(("dialog", KIND));
     let b = bounds(app, &mut d);
     let pos = place(app, ctx, id, b);
     // A click anywhere else keeps the result, and the rest of the app doesn't take it.

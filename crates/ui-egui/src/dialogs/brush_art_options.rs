@@ -9,7 +9,8 @@
 //! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure`), `rotationRelativeTo` (`page` | `path`).
-//! Art: `width` (%), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
+//! Art: `width` (%), `widthMode` (`fixed` | `pressure`), `widthMax` (the width at the heaviest pen
+//! pressure, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
 //! `overlap` (bend on each run between sharp corners).
 //! Pattern: `scale`, `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
@@ -104,6 +105,8 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
                 ArtScale::BetweenGuides { start, end } => ("betweenGuides", start, end),
             };
             f.insert("width".into(), json!(a.width));
+            f.insert("widthMode".into(), json!(a.width_mode.unwrap_or_default().id()));
+            f.insert("widthMax".into(), json!(a.width_range().1));
             f.insert("scaleMode".into(), json!(mode));
             f.insert("guideStart".into(), json!(start * 100.0));
             f.insert("guideEnd".into(), json!(end * 100.0));
@@ -157,6 +160,14 @@ fn scatter_mode(d: &Dialog, key: &str) -> Variation {
     Variation::parse(&d.str(&mode_key(key))).unwrap_or_default()
 }
 
+/// How an art brush's width varies: Fixed or Pressure.
+fn art_width_mode(d: &Dialog) -> Variation {
+    match Variation::parse(&d.str("widthMode")) {
+        Some(Variation::Pressure) => Variation::Pressure,
+        _ => Variation::Fixed,
+    }
+}
+
 /// `brush.options` params from the fields.
 pub(super) fn params(d: &Dialog) -> Value {
     let mut p = match d.str("__type").as_str() {
@@ -177,8 +188,11 @@ pub(super) fn params(d: &Dialog) -> Value {
                 },
                 _ => ArtScale::Stretch,
             };
+            let pressure = art_width_mode(d) == Variation::Pressure;
             json!({
                 "width": clamped(d, "width", ArtBrush::WIDTH_RANGE),
+                "width_mode": if pressure { json!(Variation::Pressure.id()) } else { Value::Null },
+                "width_max": if pressure { json!(clamped(d, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
                 "scale": serde_json::to_value(scale).unwrap_or_default(),
                 "direction": id_of(&parse_field::<Direction>(d, "direction")),
                 "flip_along": d.bool("flipAlong"),
@@ -211,7 +225,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     ui.add_space(10.0);
     // The brush as OK would make it, on a sample stroke.
     let ty = d.str("__type");
-    stroke_preview(ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
+    stroke_preview(app, ui, &ty, edited_def(d), vec2(PREVIEW_W, 64.0));
 }
 
 /// The brush definition as OK would make it: `__def` with the fields' params.
@@ -285,7 +299,18 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    slider_row(ui, d, "width", tl!("Width:"), ArtBrush::WIDTH_RANGE);
+    // Width, then the width at the heaviest pen pressure (only with Pressure) and how it varies.
+    let rail = Tokens::get(ui.ctx()).input_border;
+    let range = ArtBrush::WIDTH_RANGE;
+    widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
+        super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
+        let mode = art_width_mode(d);
+        number(ui, d, "widthMax", range, "%", mode == Variation::Pressure);
+        let modes = [Variation::Fixed, Variation::Pressure];
+        if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
+            d.fields.insert("widthMode".into(), json!(m.id()));
+        }
+    });
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -439,7 +464,7 @@ fn tip_sample(ui: &mut egui::Ui, def: &Value, ty: &str, method: Colorization, na
         ui.painter().image(tex.id(), r, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     }
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, name));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, name));
 }
 
 /// A document of `w` × `h` showing brush definition `def` (of type `ty`) with colorization

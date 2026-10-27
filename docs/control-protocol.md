@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-10-23 · **Change:** symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); previously: synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-10-25 · **Change:** brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -102,8 +102,9 @@ the two can still win that race.
 | `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
 | `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?, imageTracePreview?}` | `imageTracePreview`: the Image Trace panel's Preview (`ui.inspect` shows it as `ui.image_trace_preview`) |
-| `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` | fill and submit the open dialog |
-| `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
+| `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` or `{fields: [{field, value}…]}` | fill and submit the open dialog. `ui.dialog.set` takes the fields the dialog has (`ui.inspect`), `__` fields, `discard` on a dialog with a discard button, `preview` on one with a live preview, the fields that the dialog reads but adds only when a control changes (such as `searchFolder`, or `copy` in the Transform dialogs), and the fields it passes to the command it runs: every parameter of the `command` dialog's command (`ui.paramDialog`), and the `textureImage` that Load Texture… sets in the Glass and Texturizer effects; any other field is an error that lists the dialog's fields, and the dialog stays as it was `fields` sets the list (at most 256 items) in order (a missing `value` is `null`) and checks every item first: when one is refused, the call is an error and no field changes |
+| `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. The inline PNG is capped at 64 MiB: with a `path` the file is still written and `pngBase64` is omitted when the image is larger, while a path-less `data: true` request fails if either the raw RGBA image or the encoded PNG exceeds the cap. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
+| `ui.render` | `{path?, scale?, artboard?, data?, traceViews?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first; `traceViews: true`: Image Trace objects draw in their View, as on the canvas, instead of their tracing result): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.render` | `{path?, scale?, artboard?, data?}` | render an artboard headlessly (PNG with the pixels of `app.export {format: "png", background: "white"}` at the same scale; `artboard`: its 0-based index, default the first): written to `path`, else (or with `data: true` as well) sent back as `pngBase64` |
 | `ui.resize` / `ui.focus` | | |
 | `app.open` / `app.save` / `app.export` / `app.quit` | `{path}` / `{path?}` / `{path?, format?, artboard?, range?, scale?, …}` | `app.open` reads every format `document.open` reads (see `document.formats`) and returns its result (`{index, title, format, warnings, …}`; `warnings` say what didn't come in as it was, such as an EPS shown as its preview image and why its PostScript couldn't be read), or null when a dialog asks first or a library loads. `app.export` encodes through the engine's `document.export` (same options; the document keeps its path) and writes `path` through the host; without `path` it returns `{dataBase64, format, bytes}`, as headless mode does. `app.quit`, `file.close` and `file.closeAll` first open a `saveChanges` dialog for each modified document (they return `{"pending": "saveChanges"}`): `ui.dialog.confirm` saves, `ui.dialog.set {field: "discard", value: true}` then confirm discards, `ui.dialog.cancel` cancels the whole close or quit |
@@ -186,7 +187,9 @@ tools opens its dialog too (nothing happens without a selection), with the trans
 point. For `lineSegment`, `arc`, `rectangularGrid` and `polarGrid` it opens the tool's Tool Options: the dialog its
 click opens (kind = the tool id), without `x` and `y` and with `__toolOptions: true`, whose `ui.dialog.confirm` runs
 `tool.setOption {tool, values}` and draws nothing; the next drag with the tool and its click dialog use the values
-(the line's `fillLine`, the grids' Default Size `width`, `height` and `reference` too). Gradient tool handles snap to
+(the line's `fillLine`, the grids' Default Size `width`, `height` and `reference` too). For `typeOnPath` and
+`verticalTypeOnPath` it opens Type on a Path Options for the selected type on a path (a `command` dialog running
+`type.pathOptions`), or fails when no type on a path is selected. Gradient tool handles snap to
 anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
 
 Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog
@@ -285,6 +288,18 @@ Defined libraries are `window.userSymbolLibrary1`…`10` in Window → Symbol Li
 save to the user library folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `symbol.saveLibrary` (to a
 file it asks for a path and suggests `name` with `.vectorcraft`).
 
+Brush libraries open in the same panels: `window.brushLibrary {library}` (`library_panels` kind `brushes`; `library:
+null` closes them). Clicking a brush there runs `brush.addFromLibrary {library, name}`, adding it to the document's
+Brushes in one undo step, with `apply: true` when paths are selected (they take the brush in the same step; the step is
+Apply Brush when the document has the brush already and the click only applies it);
+Shift/Cmd-clicks select brushes for Add to Brushes. A brush dragged onto a path runs it with `apply: true` and that
+path as `ids`, and one dragged onto the Brushes panel runs it without. `window.brushLibrary.other {path?}` loads the
+brushes of any document VectorCraft opens (a saved brush library is a `.vectorcraft` document) and opens them there.
+The User Defined libraries are `window.userBrushLibrary1`…`10` in Window → Brush Libraries. `ui.saveBrushLibrary
+{names?}` (Save Brushes…, the Brushes panel's Save Brush Library…) opens the `saveBrushLibrary` dialog (fields
+`name`, `user`: save to the user library folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs
+`brush.saveLibrary` (to a file it asks for a path and suggests `name` with `.vectorcraft`).
+
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
@@ -309,12 +324,10 @@ Edit › Keyboard Shortcuts (entry `panel:<id>`, every panel) and pressed with `
 the Window menu's items.
 `window.panel` takes a panel id in any case or the panel's display label (`"Layers"`, `"Color Guide"`).
 
-Collapsing the dock: `window.collapseDock {collapsed?}` (the » at the top of the dock; omitted toggles) hides the
-Properties | Layers | Libraries group and puts its three panels as icons at the top of the icon column, under a «
-that expands them again. While collapsed, those icons and `window.panel {panel: "properties"|"layers"|"libraries"}`
-pop the panel out next to the column like the other icon panels (`ui.dock_collapsed`, `ui.open_panel` in
-`ui.inspect`); expanding with one popped out shows its tab. The state is saved with the preferences and in user
-workspaces; the built-in workspaces expand the dock.
+Collapsing the dock: `window.collapseDock {collapsed?}` (the » / « on the dock's column bar; omitted toggles the
+outer column) collapses every expanded dock column to icons (`true`) or expands the outer column, Properties |
+Layers | Libraries (`false`). A panel in a collapsed column opens as a flyout from its icon, as `window.panel` does
+(`ui.open_panel` in `ui.inspect`, `flyout` in `ui.docking`); the state is `ui.dock_collapsed`.
 
 Floating tool groups: dragging or clicking the tear-off bar down a tool group's flyout (or releasing the long press
 that opened it over the bar) floats the group as a strip of tool buttons, moved by the same bar and put back in the
@@ -360,32 +373,12 @@ and can't be picked, moved or deleted, and no guide goes onto a locked layer; Du
 Selected and Flatten Artwork keep them on the merged layer (Flatten discards a hidden layer's). Guides in files saved
 before guides had layers go on the top visible, unlocked layer when the document opens.
 
-Floating panels: dragging a dock tab, a panel icon or a popped-out panel's title out of the dock floats that panel
-inside the window, and the strip right of the dock's tabs floats the whole Properties | Layers | Libraries group. A
-floating group moves by its title bar (or the strip right of its tabs); a tab dragged out of it floats on its own;
-dropped on another group's title bar or tabs it stacks with that group, and dropped on the dock (lit up while the
-pointer is over it) or closed with its × its panels go back to the tabbed group or the icon column. Dropped on the upper or
-lower half of another group, floating or docked (a line shows where), a group joins it in a set right above or below
-it: the groups stack top to bottom, each
-showing one of its panels, and move together by the top group's title bar, whose × docks them all; a group dragged by
-its tab strip (a lone panel's tab or the strip right of the tabs) leaves the set. A double-click on a tab collapses a
-group to its tabs, and another expands it. Dropped on the left edge of the icon column or of a dock column, a set
-docks as a new dock column there: its groups stack in it as in a floating set, take groups dropped on their edges and
-tabs, and leave it dragged by their tab strip; the strip along the column's top floats the whole column again, and
-its × puts its panels back where they live.
-`window.panel.float {panel, x?, y?, onto?, below?, above?, group?, collapsed?}` floats a panel (with `group`, its whole
-group) with its top-left corner at `x`, `y` (window points; default cascaded), or stacks it as a tab with the floating
-group holding `onto`, or puts its group in a set right `below` or `above` the group holding that panel; `collapsed`
-collapses or expands its group;
-`window.panel.dock {panel, group?, column?}` puts it back, or with `column` (`true`, or the place: 1 next to the icon
-column, counting left) docks its group and set as a dock column; `window.panel.float` on a docked panel floats its
-column. `panel` takes the `window.panel` ids and labels, and `"tools"` for
-the Tools panel, which floats by its title bar and docks on the window's left edge. `window.panel` on a floating
-panel shows its tab (expanding its group). `ui.floating_panels` in `ui.inspect` lists the groups (panel ids, the
-index of the tab shown, the top-left corner, `column`: the set it is stacked in, top to bottom in list order,
-`collapsed`, and `docked`: the dock column it stands in) and `ui.toolbar_pos` the Tools panel's corner (null: docked); both are saved with the
-preferences and in user workspaces (the built-in workspaces dock everything), and a corner saved on a bigger window
-is clamped into this one when drawn. Floating panels stay inside the app window (no separate OS windows).
+Floating panels: the window's panels and the canvas are one craft-ui docking layout (see Shared panel docking
+below). Dragging a tab, a group's drag bar or an icon out of the dock and dropping it on the canvas or on no target
+floats it; dropping it on a group's tabs, on a group's upper or lower edge or beside a column docks it there. On
+the desktop each floating window is an OS window of its own; on the web and on Wayland it floats inside the app
+window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
+`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge.
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
@@ -447,7 +440,10 @@ Scale options: `ui.menuDialog {command}` opens the dialog a command's menu item 
 have the fields `corners` (Scale Corners) and `strokes` (Scale Strokes & Effects). They start from the preferences
 `scaleCorners` and `scaleStrokes`, and `ui.dialog.confirm` keeps them as the preferences (`prefs.set`) before running
 `object.scale` / `object.transformEach` with them. The Transform panel's checkboxes and flyout item and the Properties
-panel's checkbox set the same preferences through `prefs.set`.
+panel's checkbox set the same preferences through `prefs.set`. Transform Each opens on the values it was last
+confirmed with (scale, move, rotate, reflect, random, reference, `objects` and `preview`; never `copy`), kept with the
+UI state (#1732). Its Copy button, left of Cancel, sets `copy: true` and confirms; `ui.dialog.set {field: "copy",
+value: true}` then `ui.dialog.confirm` does the same.
 
 Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and toggles the `usePreviewBounds`
 preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
@@ -484,7 +480,7 @@ string is points). The `preferences` dialog's `unitsGeneral` starts as the activ
 
 Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) opens the `documentSetup` dialog. Its fields
 are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
-`highlightSubstitutedFonts`, `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
+`highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
 `discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
 `exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
 `ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
@@ -807,7 +803,8 @@ keeps: `fidelity` (pt; Pencil, Paintbrush, Smooth), `fill` (Pencil, Paintbrush),
 Blob Brush; on by default for the Pencil and Paintbrush and off for the Blob Brush, and while it is off the path a
 stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush; off by default,
 and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin` (screen pixels, 0 turns
-it off; Pencil, Paintbrush) and `size` (pt; Blob Brush, Eraser). `ui.dialog.confirm` runs
+it off; Pencil, Paintbrush), `size` (pt; Blob Brush, Eraser), and `angle` (°, −180 to 180; 0) and `roundness`
+(%, 1 to 100; 100) of the Eraser's tip (Eraser). `ui.dialog.confirm` runs
 `tool.setOption {tool, values}`.
 
 `ui.pointer` events also take `holdMs` (0..60000): the pointer then holds still that long, button down, before the
@@ -858,39 +855,58 @@ distortions or mesh rows and columns, Reset, Envelope Options); each runs an `ob
 
 ## Shared panel docking
 
-Panel arrangements support tab grouping and reordering, horizontal and vertical splits,
-and movable, resizable floating groups inside the application window. Drag a panel tab,
-or use its context menu. Floating groups remain within the application viewport.
+The canvas and the panels form one craft-ui docking layout: the protected `canvas` panel beside a dock at the
+window's right edge. The dock's columns, from the window edge inwards, are the Properties | Layers | Libraries
+column, the icon column (one group per row of icon panels) and any columns the user adds. Floating windows hold
+groups stacked top to bottom or split side by side. Workspaces save the layout (`ui.docking` in `ui.inspect`;
+absent while the workspace was never customized and its layout follows `ui.dock_tab`, `ui.dock_collapsed` and
+`ui.dock_width`) and where each hidden panel was (`ui.docking_hidden`). `ui.inspect` has no `floating_panels`.
 
-The shared layout begins with the existing workspace on the first docking operation.
-Workspace saves retain its groups, active tabs, split sizes, floating geometry, and the
-positions of hidden panels. Resetting a built-in workspace restores its default dock.
+Commands (`panel` and every panel parameter take a panel id in any case or its display label):
 
-- `window.panel.move {panel, anchor, zone?, before?}` moves a panel into the target group.
-  `zone` is `tab` (default), `center`, `left`, `right`, `top`, or `bottom`; `before` reorders
-  tabs by panel ID. The destination must already be visible.
-- `window.panel.float {panel, x?, y?, width?, height?}` detaches a panel.
-- `window.panel.dock {panel, anchor?, zone?, before?}` returns a panel to its previous
-  dock placement when possible, or to the supplied destination.
-- `window.panel.activate {panel}` reveals and selects a panel, restoring its saved
-  position when possible. `window.panel.close {panel}` hides it.
-- `window.panel.collapse {panel, collapsed?}` shows the dock group holding a panel as its tabs
-  only, as a double-click on a tab does (without `collapsed` it toggles), and makes the panel the
-  group's shown one; showing another of its panels expands the group. Only a group that is the
-  whole dock or sits above or below another collapses (one beside another is refused). Floating
-  groups collapse with `window.panel.float {panel, collapsed}`. Returns `{panel, collapsed}`.
+| Command | Params (`?` optional) | Does |
+|---|---|---|
+| `window.panel.move` | `{panel, anchor, zone?, before?, group?, placement?}` | into the group holding `anchor`: `zone` is `tab` (default), `center`, `left`, `right`, `top`, `bottom`, `above` or `below` (a group of its own above or below it); `before` reorders tabs |
+| `window.panel.float` | `{panel, x?, y?, width?, height?, group?, column?, onto?, above?, below?, collapsed?}` | floats the panel, its group (`group`) or its dock column or floating window (`column`; a number counts as `true`) at the rect given, else inside the dock area at the size a drag floats it at |
+| `window.panel.dock` | `{panel, anchor?, zone?, before?, group?, column?, side?, onto?, above?, below?, icon?, collapsed?}` | without a destination, a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; `anchor` and `zone` as for `move`; `side` (`Start`, `End`) makes it a new innermost column of that dock |
+| `window.panel.activate`, `.close`, `.closeGroup`, `.closeOthers` | `{panel}` | shows and selects, or hides |
+| `window.panel.minimize` | `{panel, minimized?}` | minimizes a dock group to its tabs, or a floating window to its title bar; omitted toggles |
+| `window.panel.collapse` | `{panel, collapsed?}` | `window.panel.minimize`; returns `{panel, collapsed, layout}` |
+| `window.panel.iconic` | `{panel, iconic?}` | collapses the panel's dock column to icons, or expands it |
+| `window.panel.layout`, `ui.dock` | `{action}` | one craft-ui `Action`, externally tagged, e.g. `{"MoveFloating":{"panel":"swatches","rect":[44,66,360,450]}}` or `{"ResizeSplit":{"path":[],"size":{"Ratio":0.35}}}`; `ui.dock` also takes craft-ui's `{operation, …}` |
 
-Panel IDs are stable across themes. Invalid IDs, non-finite or invalid geometry, and
-invalid destinations return an error without changing the arrangement.
+Parameters from VectorCraft's own docking, on `window.panel.float` and `window.panel.dock`:
 
-`window.panel.layout {action}` also accepts the shared, externally tagged action schema.
-For example, `{"action":{"MoveFloating":{"panel":"properties","rect":[44,66,360,450]}}}`
-updates a floating group's position and size; `{"action":{"ResizeSplit":{"path":[],"size":{"Ratio":0.35}}}}`
-resizes the root divider (`false`/`true` path entries select first/second children).
-`Move` with `placement: {"Tab":{"before":"swatches"}}` reorders tabs, and
-`SetStackOpen {panel,open}` / `ResizeStack {panel,height}` control accordion entries.
-The UI dispatches these same commands. Unknown panel IDs, invalid geometry, and stale
-split paths return an error without changing the workspace.
+- `onto`: as a tab of the group holding that panel. On `float` that group must float; on `dock` it is `anchor`.
+- `above`, `below`: as a group of its own above or below the group holding that panel, in its floating window or
+  dock column.
+- `column: n` on `dock` (with no other destination): its group (or the panel, when `group` is false and its group
+  holds others) as a new dock column at place `n`, 1 next to the icon column, counting inwards. A panel whose group
+  floats takes its whole floating window along. `column: true` with no `anchor` or `side` docks at the innermost place.
+- `icon: true` on `dock`: in a row of its own at the end of the icon column.
+- `collapsed`: then minimizes (`true`) or restores (`false`) its group or floating window.
+
+Give at most one of `onto`, `above`, `below`, `icon` and a column place, and none of them with `anchor`, `side`,
+`zone`, `before`, `x`, `y`, `width` or `height`. The commands return `{layout, closed, floating}`: the layout,
+the panels the command closed, and the floating panels. A hidden panel is shown first. Unknown panels, invalid
+geometry or destinations, and stale split paths return an error and leave the layout unchanged.
+
+`ui.docking` (a control method, read only) returns:
+
+- `layout`: the layout in use; `customized`: whether the workspace has a saved layout; `hidden`: the hidden panels
+  with a remembered place.
+- `flyout`: the panel open as a flyout from an icon column; `focused`: the panel the user last clicked or pressed
+  in; `autoCollapse`: flyouts close on a press outside them; `panelsShown`: false while Tab or a full screen mode
+  hides the panels.
+- `hitRects`: `[{hit, rect}]`, every docking control the main window drew last frame (tabs, drag bars, borders,
+  column bars, » buttons, icons, icon grips, floating title bars and close buttons, resize edges, dividers) as a
+  craft-ui `Hit`, e.g. `{"Tab":"layers"}`, with `[x, y, width, height]` in window points. Groups, columns and
+  windows are named by their first panel.
+
+Floating windows in OS windows of their own (the desktop): `hitRects` leaves out their controls, and `ui.pointer`,
+`ui.click` and `ui.drag` reach the main window only, so drive them with commands. Such a window's place on screen is
+`floating[].native` in the layout (`rect` is where it would float inside the app window). Keys typed in one run the
+main window's shortcuts; modal dialogs block them.
 
 ## Synthetic input hardening checklist
 
@@ -928,6 +944,10 @@ hidden tab (whose frames the browser pauses) answers when it is shown again.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | Panel docking on craft-ui's layout: `ui.docking`, the floating and dock parameters, native floating windows. |
+| 2026-10-24 | minor | Documented the brush library panel commands (`window.brushLibrary`, `.other`, `ui.saveBrushLibrary`, `window.userBrushLibrary1`…`10`). |
+| 2026-10-24 | minor | Documented `ui.screenshot`'s 64 MiB inline-PNG reply cap: with `path` the file is still written and `pngBase64` is omitted when over the cap; a path-less `data: true` request fails before encoding. |
+| 2026-10-25 | minor | Documented that Transform Each opens on the values it was last confirmed with and that its Copy button confirms with `copy: true` (#1732). |
 | 2026-10-23 | minor | Documented the symbol library panel commands (`window.symbolLibrary`, `.other`, `ui.saveSymbolLibrary`, `window.userSymbolLibrary1`…`10`). |
 | 2026-10-13 | minor | Documented count, pending-event and per-frame request budgets (#1709). |
 | 2026-10-13 | minor | Documented transport deadlines and connection-slot recovery (#1726). |

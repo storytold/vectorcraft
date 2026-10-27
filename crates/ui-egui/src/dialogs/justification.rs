@@ -38,6 +38,22 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     preview: true,
     min_width: 460.0,
     ok_enabled: Some(|_, d| problem(d).is_none()),
+    // A value the paragraphs don't share opens blank, without its field.
+    inputs: |_| {
+        &[
+            "wordMin",
+            "wordDesired",
+            "wordMax",
+            "letterMin",
+            "letterDesired",
+            "letterMax",
+            "glyphMin",
+            "glyphDesired",
+            "glyphMax",
+            "autoLeading",
+            "singleWord",
+        ]
+    },
     ..DialogSpec::FORM
 };
 

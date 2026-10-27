@@ -467,7 +467,7 @@ fn artboards(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             set_select(d, "range");
         }
         ui.add_enabled_ui(select == "range", |ui| {
-            if form::text(ui, d, "range", 90.0)
+            if form::text_named(ui, d, "range", tl!("Range:"), 90.0)
                 && let Ok(Some(chosen)) = (ArtboardPick { range: Some(d.str("range")), ..Default::default() }).resolve(n)
             {
                 boards = (0..n).map(|i| chosen.contains(&i)).collect();
@@ -705,7 +705,9 @@ fn naming(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         if form::text(ui, d, "name", 170.0) {
             d.fields.insert("exportPreset".into(), json!(""));
         }
-        if let Some((_, token)) = widgets::dropdown(ui, "efs-name-token", tl!("Insert"), &TOKEN_LABELS, 90.0).and_then(|i| TOKENS.get(i)) {
+        if let Some((_, token)) =
+            widgets::dropdown_named(ui, "efs-name-token", Some(tl!("Insert")), tl!("Insert"), &TOKEN_LABELS, 90.0).and_then(|i| TOKENS.get(i))
+        {
             let name = d.str("name");
             d.fields.insert("name".into(), json!(format!("{name}{token}")));
         }
@@ -817,7 +819,9 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
             let preset = d.str("preset");
             let labels: Vec<&str> = std::iter::once("Custom").chain(SCREEN_PRESETS.iter().map(|(_, l)| *l)).collect();
             let at = SCREEN_PRESETS.iter().position(|(id, _)| *id == preset).map_or(0, |i| i + 1);
-            if let Some(i) = widgets::dropdown(ui, "efs-preset", labels[at], &labels, (ui.available_width() - 8.0).clamp(90.0, 180.0)) {
+            if let Some(i) =
+                widgets::dropdown_named(ui, "efs-preset", Some(tl!("Preset:")), labels[at], &labels, (ui.available_width() - 8.0).clamp(90.0, 180.0))
+            {
                 let id = i.checked_sub(1).and_then(|i| SCREEN_PRESETS.get(i)).map_or("", |(id, _)| *id);
                 if let Some(preset_rows) = fileio::screen_preset_rows(id) {
                     rows = preset_rows;
@@ -843,7 +847,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
             let raster = row["format"].as_str().and_then(fileio::format).is_none_or(|f| f.raster);
             let scale = row["scale"].as_str().unwrap_or("1x").to_string();
             ui.add_enabled_ui(raster, |ui| {
-                if let Some(s) = widgets::text_presets(ui, ("efs-scale", i), &scale, &SIZES, scale_w) {
+                if let Some(s) = widgets::text_presets_named(ui, ("efs-scale", i), Some(tl!("Scale")), &scale, &SIZES, scale_w) {
                     // The suffix follows the size while it is the automatic one.
                     let auto = |text: &str| ScreenSize::parse(text).map(ScreenSize::suffix);
                     if row["suffix"].as_str().is_none_or(|x| Some(x.to_string()) == auto(&scale))
@@ -855,7 +859,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
                     edited = true;
                 }
             });
-            if let Some(s) = widgets::text_field(ui, ("efs-suffix", i), row["suffix"].as_str(), suffix_w, 1) {
+            if let Some(s) = widgets::text_field_named(ui, ("efs-suffix", i), Some(tl!("Suffix")), row["suffix"].as_str(), suffix_w, 1) {
                 row["suffix"] = json!(s);
                 edited = true;
             }
@@ -864,7 +868,9 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
             let current =
                 FORMATS.iter().position(|(_, f, q, print)| *f == format && *print == marked && q.is_none_or(|q| Some(u64::from(q)) == quality));
             let label = current.map_or_else(|| format.to_uppercase(), |i| FORMAT_LABELS[i].to_string());
-            if let Some((_, f, q, print)) = widgets::dropdown(ui, ("efs-fmt", i), &label, &FORMAT_LABELS, format_w).and_then(|i| FORMATS.get(i)) {
+            if let Some((_, f, q, print)) =
+                widgets::dropdown_named(ui, ("efs-fmt", i), Some(tl!("Format")), &label, &FORMAT_LABELS, format_w).and_then(|i| FORMATS.get(i))
+            {
                 row["format"] = json!(f);
                 if let Some(o) = row.as_object_mut() {
                     match q {
@@ -921,7 +927,9 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
     widgets::subheader(ui, tl!("Format Settings"));
     ui.add_space(6.0);
     let at = SETTINGS.iter().position(|(f, _)| *f == id).unwrap_or(0);
-    if let Some((f, _)) = widgets::dropdown(ui, "efs-settings-format", SETTINGS_LABELS[at], &SETTINGS_LABELS, 150.0).and_then(|i| SETTINGS.get(i)) {
+    if let Some((f, _)) = widgets::dropdown_named(ui, "efs-settings-format", Some(tl!("Format:")), SETTINGS_LABELS[at], &SETTINGS_LABELS, 150.0)
+        .and_then(|i| SETTINGS.get(i))
+    {
         d.fields.insert("__settings".into(), json!(f));
     }
     ui.add_space(8.0);
@@ -958,7 +966,7 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
 /// A small cached rendering of artboard `i` (keyed by document revision).
 pub(super) fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Option<egui::TextureHandle> {
     let st = app.session.active()?;
-    let key = egui::Id::new(("ab-thumb", i, st.revision));
+    let key = egui::Id::unique(("ab-thumb", i, st.revision));
     if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(key)) {
         return Some(t);
     }

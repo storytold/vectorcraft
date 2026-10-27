@@ -4,7 +4,7 @@
 #            @id                  a command id (e.g. file.saveAs): wins over the English text for
 #                                 that menu item, so one id can read differently from its twin
 #            @plural              `source` is "one|other" (English forms); Chinese has one form, so
-#                                 the translation is a single string (see `plural` in i18n/mod.rs)
+#                                 the translation is a single string (see `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
 #   lines starting with # and blank lines are ignored.
@@ -304,7 +304,6 @@ font-technology	Variable	可變
 	Brush Affects:	筆刷影響：
 	Brush Definition	筆刷定義
 	Brush Libraries	筆刷資料庫
-	Brush Libraries (on the roadmap)	筆刷資料庫 (規劃中)
 	Brush Options…	筆刷選項…
 	Brush Strokes	筆刷筆畫
 	Brushes	筆刷
@@ -319,6 +318,7 @@ font-technology	Variable	可變
 	Apply Bullets	套用項目符號
 	Numbered List	編號清單
 	Apply Numbers	套用編號
+	Convert to Text	轉換為文字
 	Filled Dot	實心圓點
 	Dash	短破折號
 	Hollow Circle	空心圓
@@ -1074,6 +1074,7 @@ font-technology	Variable	可變
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
 	Alt key toggles to Smooth Tool	Alt 鍵切換為平滑工具
+	Live curve fitting	即時曲線擬合
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
 	Consider Open Filled Paths as Closed	將有填色的開放路徑視為封閉路徑
@@ -2074,6 +2075,7 @@ file-filter	Templates	範本
 @msg	no such layer or object	沒有這個圖層或物件
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
 @msg	{_1} linked file(s) can't be read here: their previews show	此處無法讀取 {_1} 個連結檔案：顯示的是其預覽
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	無法解碼 {undecoded} 張影像：它們顯示為打叉的方框
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	有 {_1} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msg	pick a colour, gradient or pattern to save as a swatch	請挑選要儲存為色票的顏色、漸層或圖樣
 @msg	Packaged {n} file(s) in {folder} {note}	已將 {n} 個檔案封裝到 {folder}{note}
@@ -2301,7 +2303,6 @@ file-filter	Templates	範本
 @msg	before must name a panel	before 必須指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停駐動作包含未知的面板或過長的分割路徑
 @msg	group must be true or false	group 必須是 true 或 false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	面板處於浮動狀態；請使用 window.panel.float {panel, collapsed} 摺疊其面板群組
 @msg	panel is not in a dock group	面板不在停駐群組中
 @msg	only a dock group above or below others collapses, not one beside another	只有位於其他群組上方或下方的停駐群組可以摺疊，並排的不行
 @msg	icon must be true or false	icon 必須為 true 或 false
@@ -2377,6 +2378,10 @@ file-filter	Templates	範本
 @msg	too many library panels were opened in this session	本次工作階段開啟的資料庫面板過多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	影像為 {_1} × {_2} 像素，有一邊超過 {LARGE_TRACE_SIDE}：仍會描圖，但速度較慢。使用精確度較低的預設集或較小的影像拷貝，描圖會較快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	影像已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 縮小而來 (最多 {_5} 百萬像素)。
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	文件中沒有顏色群組 `{name}` (請參閱 swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	「扁平標誌」模式已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 平均縮小而來。
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
@@ -2643,6 +2648,7 @@ file-filter	Templates	範本
 	Miter Limit:	尖角限度：
 	Mixed Appearances	混合外觀
 	Mixed Objects	混雜物件
+	Mixed	混合
 	Mode:	模式：
 	Model	模型
 	Modified	已修改
@@ -3401,6 +3407,7 @@ font-script	Japanese	漢字
 	Remove Plug-in	移除增效模組
 	Remove Selected Assets	移除所選資產
 	Remove Threading	移除串連
+	Break Thread	中斷串連
 	Remove “{keyword}”	移除「{keyword}」
 	Rename	重新命名
 	Rename Asset	重新命名資產
@@ -3602,7 +3609,22 @@ font-script	Japanese	漢字
 	Saved to User Defined: {}	已儲存至使用者自訂：{}
 	Saved View 1	已儲存的檢視 1
 	Saved View 10	已儲存的檢視 10
+	Saved View 11	已儲存的檢視 11
+	Saved View 12	已儲存的檢視 12
+	Saved View 13	已儲存的檢視 13
+	Saved View 14	已儲存的檢視 14
+	Saved View 15	已儲存的檢視 15
+	Saved View 16	已儲存的檢視 16
+	Saved View 17	已儲存的檢視 17
+	Saved View 18	已儲存的檢視 18
+	Saved View 19	已儲存的檢視 19
 	Saved View 2	已儲存的檢視 2
+	Saved View 20	已儲存的檢視 20
+	Saved View 21	已儲存的檢視 21
+	Saved View 22	已儲存的檢視 22
+	Saved View 23	已儲存的檢視 23
+	Saved View 24	已儲存的檢視 24
+	Saved View 25	已儲存的檢視 25
 	Saved View 3	已儲存的檢視 3
 	Saved View 4	已儲存的檢視 4
 	Saved View 5	已儲存的檢視 5
@@ -3893,6 +3915,7 @@ font-script	Japanese	漢字
 	Snap to Grid	靠齊格點
 	Snap to Pixel	靠齊像素
 	Precise Cursors	精確游標
+	Image Trace Preview	影像描圖預覽
 	Snap to Point	靠齊控制點
 	Snap to Unit	靠齊單位
 	Snapping Tolerance	靠齊容許度
@@ -4575,13 +4598,10 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	兩者
 	Drag to move	拖曳以移動
-	Drag to move out of the set	拖曳以移出該組合
 	Drag to float as a toolbar	拖曳使其浮動為工具列
 	Put back in the toolbar	放回工具列
 	Float Panel	浮動面板
 	Dock Panel	停駐面板
-	Drag to float the panel group	拖曳以浮動面板群組
-	Put back in the dock	放回停駐區
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left edge to dock	拖曳到視窗左側邊緣以停駐
 	Float Tool Group	浮動工具組
@@ -4900,6 +4920,7 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的影像以縮小的尺寸顯示
 	Basic	基本
 	Fill and Stroke Controls	填色和筆畫控制項
 	Coloring Controls	顏色控制項
@@ -5094,6 +5115,12 @@ lighting	Light	光源
 	Shift:	偏移：
 	Fresco…	壁畫…
 	Fresco	壁畫
+	Lock Artboards	鎖定工作區域
+	Unlock Artboards	解除鎖定工作區域
+	Lock Selected	鎖定所選
+	Lock All Except Selected	鎖定所選以外的全部
+	Lock All	全部鎖定
+	Unlock Selected	解除鎖定所選
 	Effect Gallery…	效果庫…
 	Effect Gallery Dialog	效果庫對話框
 	Arc Segment Tool Options	弧段工具選項
@@ -5185,3 +5212,40 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	矩形格線工具選項
 	Polar Grid Tool Options	極座標格點工具選項
 	Fill Line	填色線段
+	Pathfinder Options	路徑管理員選項
+	Divide and Outline Will Remove Unpainted Artwork	分割和外框將移除未上色的圖稿
+@msg	precision must be from 0.001 to 10 pt	precision 必須介於 0.001 到 10 pt 之間
+@msg	`pathfinder` must be an object	`pathfinder` 必須是物件
+	Add to Brushes	新增至筆刷
+	Brush Library	筆刷資料庫
+	Save Brush Library	儲存筆刷資料庫
+	Save Brushes…	儲存筆刷…
+	Open Brush Library	開啟筆刷資料庫
+	Selected Brushes Only	僅限選取的筆刷
+	Brush Libraries Menu	筆刷資料庫選單
+	User Brush Library 1	使用者筆刷資料庫 1
+	User Brush Library 2	使用者筆刷資料庫 2
+	User Brush Library 3	使用者筆刷資料庫 3
+	User Brush Library 4	使用者筆刷資料庫 4
+	User Brush Library 5	使用者筆刷資料庫 5
+	User Brush Library 6	使用者筆刷資料庫 6
+	User Brush Library 7	使用者筆刷資料庫 7
+	User Brush Library 8	使用者筆刷資料庫 8
+	User Brush Library 9	使用者筆刷資料庫 9
+	User Brush Library 10	使用者筆刷資料庫 10
+	Art Ribbons	藝術緞帶
+	Calligraphic Nibs	書法筆尖
+	Pattern Borders	圖樣邊框
+	Scatter Shapes	散佈形狀
+	Save Brush Library…	儲存筆刷資料庫…
+@msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
+@msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
+@msg	no brush `{n}`	沒有筆刷 `{n}`
+@msg	no brush `{n}` in `{_1}`	`{_1}` 中沒有筆刷 `{n}`
+@msg	no brush library `{key}` (see brush.libraries)	沒有筆刷資料庫 `{key}`（請參閱 brush.libraries）
+@msg	the document has no brushes to save	文件中沒有可儲存的筆刷
+@msg	no empty artboards to delete	沒有可刪除的空白工作區域
+	Scale Presets	縮放預設集
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 螢幕擷取畫面的位元組數溢出
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	視窗的{what}（{points} 點 × {scale} DPI）無法決定螢幕擷取畫面的大小
+	Live preview	即時預覽

@@ -18,21 +18,25 @@ pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 
 /// [`field`] `width` points wide.
 pub(super) fn field_w(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, width: f32) {
-    row_label(ui, label);
-    text(ui, d, key, width);
+    let row = row_label(ui, label);
+    // The value widget must be named by the real Label already drawn beside it (egui 0.37's
+    // kittest fails an unnamed input).
+    ui.label_inputs_by(row.id, |ui| text(ui, d, key, width));
     ui.end_row();
 }
 
-/// The label cell of a grid row.
-pub(super) fn row_label(ui: &mut egui::Ui, label: &str) {
+/// The label cell of a grid row (its `Response`, so the value can be named by it).
+pub(super) fn row_label(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!(label)).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(label)).color(t.text_dim))
 }
 
 /// A labelled [`length`] field (one grid row).
 pub(super) fn length_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, unit: Unit) {
-    row_label(ui, label);
-    length(ui, d, key, unit, FIELD_W);
+    let row = row_label(ui, label);
+    ui.label_inputs_by(row.id, |ui| {
+        length(ui, d, key, unit, FIELD_W);
+    });
     ui.end_row();
 }
 
@@ -137,18 +141,38 @@ pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> 
     text_edit(ui, d, key, width).changed()
 }
 
+/// [`text`] for a row whose visible meaning is not the immediately preceding label widget
+/// (Export for Screens' Range field follows its radio buttons): screen readers name the field
+/// `name`, already translated. The pending label is still consumed, so it cannot name a later
+/// field.
+pub(super) fn text_named(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, width: f32) -> bool {
+    text_edit_named(ui, d, key, name, width).changed()
+}
+
 /// [`text`] returning the field's response (focus, Enter).
 pub(super) fn text_edit(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
     text_edit_limited(ui, d, key, width, usize::MAX)
+}
+
+/// [`text_edit`] with an explicit translated name (see [`text_named`]).
+pub(super) fn text_edit_named(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, width: f32) -> egui::Response {
+    text_edit_limited_name(ui, d, key, width, usize::MAX, Some(name))
 }
 
 /// [`text_edit`] that takes at most `max_chars` characters: typing and pasting stop at the limit,
 /// and a longer value already in the field is kept, with nothing added to it until it has fewer
 /// than `max_chars` characters.
 pub(super) fn text_edit_limited(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, max_chars: usize) -> egui::Response {
+    text_edit_limited_name(ui, d, key, width, max_chars, None)
+}
+
+/// The text field shared by [`text_edit_limited`] and [`text_edit_named`]: `name` wins over the
+/// adjacent label, and either way the pending label is taken so it can't leak to a later field.
+fn text_edit_limited_name(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, max_chars: usize, name: Option<&str>) -> egui::Response {
     let t = Tokens::get(ui.ctx());
+    let label = crate::widgets::take_previous_label(ui);
     let mut s = d.str(key);
-    let id = ui.id().with(("dlg-text", key));
+    let id = ui.scope_id().with(("dlg-text", key));
     crate::widgets::take_dialog_focus(ui, id, &s);
     let r = egui::Frame::NONE
         .fill(t.input)
@@ -162,13 +186,23 @@ pub(super) fn text_edit_limited(ui: &mut egui::Ui, d: &mut Dialog, key: &str, wi
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
     }
-    r.inner
+    match name {
+        Some(name) => r.inner.accessible_name(name),
+        None => crate::widgets::label_field(r.inner, label),
+    }
 }
 
 /// A text box `rows` lines tall and `width` wide bound to `d.fields[key]`. Enter adds a line (it
 /// doesn't press OK while the box has focus).
 pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, rows: usize) -> egui::Response {
+    text_area_named(ui, d, key, None, width, rows)
+}
+
+/// [`text_area`] with an optional explicit translated name; the pending adjacent label is consumed
+/// either way.
+pub(super) fn text_area_named(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: Option<&str>, width: f32, rows: usize) -> egui::Response {
     let t = Tokens::get(ui.ctx());
+    let label = crate::widgets::take_previous_label(ui);
     let mut s = d.str(key);
     let r = egui::Frame::NONE
         .fill(t.input)
@@ -185,7 +219,10 @@ pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
     if r.inner.has_focus() {
         ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
     }
-    r.inner
+    match name {
+        Some(name) => r.inner.accessible_name(name),
+        None => crate::widgets::label_field(r.inner, label),
+    }
 }
 
 /// A checkbox bound to `d.fields[key]` (its box shows while unchecked too).
@@ -246,10 +283,12 @@ pub(super) fn grid_then(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, more: imp
             if lengths.contains(&k.as_str()) {
                 length_field(ui, d, &k, &humanized(&k), unit);
             } else if let Some(suffix) = suffix(&d.kind, &k) {
-                row_label(ui, &humanized(&k));
-                if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", &k), d.f64(&k, 0.0), suffix, 3, FIELD_W) {
-                    d.fields.insert(k, json!(v));
-                }
+                let row = row_label(ui, &humanized(&k));
+                ui.label_inputs_by(row.id, |ui| {
+                    if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", &k), d.f64(&k, 0.0), suffix, 3, FIELD_W) {
+                        d.fields.insert(k, json!(v));
+                    }
+                });
                 ui.end_row();
             } else if let Some(ends) = skew_ends(&d.kind, &k) {
                 let max = vectorcraft_geom::shapes::GRID_SKEW_MAX;
@@ -269,8 +308,8 @@ pub(super) fn grid_then(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, more: imp
                 };
                 field(ui, d, &k, &label);
             } else {
-                row_label(ui, &humanized(&k));
-                dropdown(ui, d, &k, FIELD_W, &options, true);
+                let row = row_label(ui, &humanized(&k));
+                ui.label_inputs_by(row.id, |ui| dropdown(ui, d, &k, FIELD_W, &options, true));
                 ui.end_row();
             }
         }
@@ -307,71 +346,74 @@ pub(super) fn param_fields(
         for (k, v) in keys {
             // A size's Relative / Absolute pair (Roughen, Zig Zag, Tweak) is its own label.
             let relative = k == "relative" && v.is_boolean();
-            ui.label(egui::RichText::new(if relative { String::new() } else { humanized(&k) }).color(t.text));
-            if let Some(cur) = crate::widgets::blend_param(&k, &v) {
-                if let Some(m) = crate::widgets::blend_param_dropdown(ui, ("fx-blend", &k), cur) {
-                    d.fields.insert(k, m);
-                    changed = true;
-                }
-                ui.end_row();
-                continue;
-            }
-            if is_length(&k) {
-                changed |= length(ui, d, &k, unit, 140.0);
-                ui.end_row();
-                continue;
-            }
-            if let Some(options) = choices(&k) {
-                let cur = v.as_str().unwrap_or_default();
-                let label = options.iter().find(|(_, value)| *value == cur).map_or(cur, |(l, _)| choice_label(l));
-                let labels: Vec<&str> = options.iter().map(|(l, _)| choice_label(l)).collect();
-                if let Some((_, value)) = crate::widgets::dropdown_names(ui, ("fx-choice", &k), label, &labels, 140.0).and_then(|i| options.get(i)) {
-                    d.fields.insert(k, json!(value));
-                    changed = true;
-                }
-                ui.end_row();
-                continue;
-            }
-            match v {
-                Value::Number(n) => {
-                    if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
-                        d.fields.insert(k, typed_number(x));
+            let row = ui.label(egui::RichText::new(if relative { String::new() } else { humanized(&k) }).color(t.text));
+            // The row's actual label node names every input beside it, including plain
+            // `TextEdit`s and the numeric field beside a slider (egui 0.37's strict a11y gate).
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(cur) = crate::widgets::blend_param(&k, &v) {
+                    if let Some(m) = crate::widgets::blend_param_dropdown(ui, ("fx-blend", &k), cur) {
+                        d.fields.insert(k.clone(), m);
                         changed = true;
                     }
+                    return;
                 }
-                Value::Bool(b) if relative => {
-                    ui.horizontal(|ui| {
-                        for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
-                            if crate::widgets::radio(ui, label, b == on, true) && b != on {
-                                d.fields.insert(k.clone(), json!(on));
-                                changed = true;
-                            }
+                if is_length(&k) {
+                    changed |= length(ui, d, &k, unit, 140.0);
+                    return;
+                }
+                if let Some(options) = choices(&k) {
+                    let cur = v.as_str().unwrap_or_default();
+                    let label = options.iter().find(|(_, value)| *value == cur).map_or(cur, |(l, _)| choice_label(l));
+                    let labels: Vec<&str> = options.iter().map(|(l, _)| choice_label(l)).collect();
+                    if let Some((_, value)) =
+                        crate::widgets::dropdown_names(ui, ("fx-choice", &k), label, &labels, 140.0).and_then(|i| options.get(i))
+                    {
+                        d.fields.insert(k.clone(), json!(value));
+                        changed = true;
+                    }
+                    return;
+                }
+                match v {
+                    Value::Number(n) => {
+                        if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
+                            d.fields.insert(k.clone(), typed_number(x));
+                            changed = true;
                         }
-                    });
-                }
-                Value::Bool(b) => {
-                    if crate::widgets::check_box(ui, &humanized(&k), b, true) {
-                        d.fields.insert(k, json!(!b));
-                        changed = true;
+                    }
+                    Value::Bool(b) if relative => {
+                        ui.horizontal(|ui| {
+                            for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
+                                if crate::widgets::radio(ui, label, b == on, true) && b != on {
+                                    d.fields.insert(k.clone(), json!(on));
+                                    changed = true;
+                                }
+                            }
+                        });
+                    }
+                    Value::Bool(b) => {
+                        if crate::widgets::check_box(ui, &humanized(&k), b, true) {
+                            d.fields.insert(k.clone(), json!(!b));
+                            changed = true;
+                        }
+                    }
+                    Value::String(mut s) if s.contains('\n') => {
+                        // Multi-line values (Graph Data CSV) get a text area.
+                        if ui.add(egui::TextEdit::multiline(&mut s).desired_width(260.0).desired_rows(8).font(egui::TextStyle::Monospace)).changed() {
+                            d.fields.insert(k.clone(), json!(s));
+                            changed = true;
+                        }
+                    }
+                    Value::String(mut s) => {
+                        if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                            d.fields.insert(k.clone(), json!(s));
+                            changed = true;
+                        }
+                    }
+                    other => {
+                        ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
                     }
                 }
-                Value::String(mut s) if s.contains('\n') => {
-                    // Multi-line values (Graph Data CSV) get a text area.
-                    if ui.add(egui::TextEdit::multiline(&mut s).desired_width(260.0).desired_rows(8).font(egui::TextStyle::Monospace)).changed() {
-                        d.fields.insert(k, json!(s));
-                        changed = true;
-                    }
-                }
-                Value::String(mut s) => {
-                    if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
-                        d.fields.insert(k, json!(s));
-                        changed = true;
-                    }
-                }
-                other => {
-                    ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
-                }
-            }
+            });
             ui.end_row();
         }
     });
@@ -462,16 +504,16 @@ fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Op
     let t = Tokens::get(ui.ctx());
     let label = param_label(k, p);
     let shown_label = ui.label(egui::RichText::new(&label).color(t.text));
-    if let Some(help) = &p.ui.help {
-        shown_label.on_hover_text(help);
-    }
+    let shown_label = if let Some(help) = &p.ui.help { shown_label.on_hover_text(help) } else { shown_label };
     let cur = d.fields.get(k).cloned().unwrap_or_else(|| p.spec.default_value());
     let unit = p.ui.unit.as_deref().unwrap_or_default();
     let suffix = unit_suffix(unit);
     let mut opened = None;
     let new = ui
         .horizontal(|ui| {
-            let (new, in_field) = value_field(ui, k, &label, &p.spec, &cur, &suffix);
+            // The row's painted label names every input in its value column (egui 0.37's strict
+            // accessibility gate), not only the first one.
+            let (new, in_field) = ui.label_inputs_by(shown_label.id, |ui| value_field(ui, k, &label, &p.spec, &cur, &suffix));
             if !in_field && !unit.is_empty() {
                 ui.label(egui::RichText::new(unit).color(t.text_dim));
             }
@@ -494,7 +536,7 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
     match spec {
         ParamSpec::Number { min, max, .. } => {
             let x = cur.as_f64().unwrap_or(*min);
-            (crate::widgets::range_field(ui, ("plugin-num", k), x, *min..=*max, suffix, 2, 100.0).map(|x| json!(x)), true)
+            (crate::widgets::range_field_named(ui, ("plugin-num", k), Some(label), x, *min..=*max, suffix, 2, 100.0).map(|x| json!(x)), true)
         }
         ParamSpec::Int { min, max, .. } => {
             let x = cur.as_i64().unwrap_or(*min).clamp(*min, *max);
@@ -502,12 +544,13 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
             // Past it, the number typed is read as an integer.
             const EXACT: i64 = 1 << 53;
             if -EXACT <= *min && *max <= EXACT {
-                let field = crate::widgets::range_field(ui, ("plugin-int", k), x as f64, *min as f64..=*max as f64, suffix, 0, 100.0);
+                let field =
+                    crate::widgets::range_field_named(ui, ("plugin-int", k), Some(label), x as f64, *min as f64..=*max as f64, suffix, 0, 100.0);
                 (field.map(|x| json!(x as i64)), true)
             } else {
                 let shown = x.to_string();
-                crate::widgets::take_dialog_focus(ui, ui.id().with(("plugin-int", k)), &shown);
-                let typed = crate::widgets::text_field(ui, ("plugin-int", k), Some(&shown), 100.0, 1);
+                crate::widgets::take_dialog_focus(ui, ui.scope_id().with(("plugin-int", k)), &shown);
+                let typed = crate::widgets::text_field_named(ui, ("plugin-int", k), Some(label), Some(&shown), 100.0, 1);
                 (typed.and_then(|text| text.parse::<i64>().ok()).map(|x| json!(x.clamp(*min, *max))), false)
             }
         }
@@ -517,15 +560,16 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
         }
         ParamSpec::Choice { options, .. } => {
             let labels: Vec<&str> = options.iter().map(String::as_str).collect();
-            let chosen = crate::widgets::dropdown_names(ui, ("plugin-choice", k), cur.as_str().unwrap_or_default(), &labels, 140.0);
+            let chosen =
+                crate::widgets::dropdown_names_named(ui, ("plugin-choice", k), Some(label), cur.as_str().unwrap_or_default(), &labels, 140.0);
             (chosen.and_then(|i| options.get(i)).map(|o| json!(o)), false)
         }
         ParamSpec::Text { max_length, .. } => {
-            let typed = crate::widgets::text_field(ui, ("plugin-text", k), cur.as_str(), 160.0, 1);
+            let typed = crate::widgets::text_field_named(ui, ("plugin-text", k), Some(label), cur.as_str(), 160.0, 1);
             (typed.map(|text| json!(text.chars().take(*max_length).collect::<String>())), false)
         }
         ParamSpec::NumberList { .. } => {
-            let typed = crate::widgets::text_field(ui, ("plugin-list", k), Some(&number_list_text(cur)), 160.0, 1);
+            let typed = crate::widgets::text_field_named(ui, ("plugin-list", k), Some(label), Some(&number_list_text(cur)), 160.0, 1);
             (typed.and_then(|text| read_number_list(&text, spec)), false)
         }
     }
@@ -656,7 +700,7 @@ pub(super) fn slider_field_named(
     let v = d.f64(key, 0.0).clamp(min, max);
     let shown = crate::widgets::SliderValue::field(v, range.clone(), suffix, 0);
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
-    if let Some(n) = crate::widgets::range_field(ui, ("dlg-field", key), v, min..=max, suffix, 0, 52.0).filter(|n| *n != v) {
+    if let Some(n) = crate::widgets::range_field_named(ui, ("dlg-field", key), Some(name), v, min..=max, suffix, 0, 52.0).filter(|n| *n != v) {
         d.fields.insert(key.into(), json!(n));
     }
 }
@@ -713,10 +757,21 @@ pub(super) fn slider_ends(ui: &mut egui::Ui, label_w: f32, ends: (&str, &str)) {
     });
 }
 
+/// [`slider_ends`] under a rail `width` wide that starts at the left edge of the row, for a slider
+/// with its label on the line above.
+pub(super) fn slider_ends_below(ui: &mut egui::Ui, width: f32, ends: (&str, &str)) {
+    ui.horizontal(|ui| rail_ends_w(ui, width, ends));
+}
+
 /// The words of [`slider_ends`] under a rail that starts where the next widget does.
-fn rail_ends(ui: &mut egui::Ui, (left, right): (&str, &str)) {
+fn rail_ends(ui: &mut egui::Ui, ends: (&str, &str)) {
+    rail_ends_w(ui, SLIDER_WIDTH, ends);
+}
+
+/// [`rail_ends`] under a rail `width` wide.
+fn rail_ends_w(ui: &mut egui::Ui, width: f32, (left, right): (&str, &str)) {
     let t = Tokens::get(ui.ctx());
-    let (r, _) = ui.allocate_exact_size(egui::vec2(SLIDER_WIDTH, 14.0), egui::Sense::hover());
+    let (r, _) = ui.allocate_exact_size(egui::vec2(width, 14.0), egui::Sense::hover());
     let font = egui::FontId::proportional(11.0);
     ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, left, font.clone(), t.text_dim);
     ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, right, font, t.text_dim);
@@ -823,8 +878,9 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
         ui.spacing_mut().item_spacing.x = 6.0;
         for (i, side) in ["Top", "Bottom", "Left", "Right"].into_iter().enumerate() {
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(tl!(side)).size(11.0).color(t.text_dim));
-                if let Some(v) = crate::widgets::num_field(ui, ("bleed", i), Some(b[i]), unit, width) {
+                let label = ui.label(egui::RichText::new(tl!(side)).size(11.0).color(t.text_dim));
+                let v = ui.label_inputs_by(label.id, |ui| crate::widgets::num_field(ui, ("bleed", i), Some(b[i]), unit, width));
+                if let Some(v) = v {
                     changed = Some((i, v.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED)));
                 }
             });
@@ -914,7 +970,7 @@ mod selected_text_tests {
             let mut d = Dialog::new("test", json!({"name": "Artboard 1"}));
             let id = std::cell::Cell::new(egui::Id::NULL);
             let mut add = |ui: &mut egui::Ui| {
-                id.set(ui.id().with(("dlg-text", "name")));
+                id.set(ui.scope_id().with(("dlg-text", "name")));
                 text_edit(ui, &mut d, "name", 120.0);
             };
             frame(&ctx, 0.0, vec![], &mut add);

@@ -179,7 +179,7 @@ impl<'a> Collector<'a> {
     /// Warns when a file that placed `.ai` file `source` links (`name`) was copied as `copy`: the
     /// copy of `source` finds it only by its name, beside it.
     fn renamed(&mut self, lines: &mut Vec<String>, source: &str, path: &str, name: &str, copy: &str) {
-        if Path::new(copy).file_name().and_then(|n| n.to_str()) != Some(name) {
+        if Path::new(copy).file_name().and_then(std::ffi::OsStr::to_str) != Some(name) {
             let message = format!(
                 "{path}: copied as {copy}; the copy of {source} looks for it as {name} and shows the file of that name, if any, else its preview"
             );

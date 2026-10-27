@@ -166,7 +166,7 @@ fn blit(p: &mut Player, rop: u32, src: (i16, i16, i16, i16), dest: (i16, i16, i1
     let d = Rect::new(xd, yd, xd + wd, yd + hd);
     let Some(packed) = packed else { return p.pattern_blit(d, rop) };
     let parts = dib::split(packed);
-    let img = parts.ok_or_else(|| "damaged".to_string()).and_then(|(bmi, bits)| dib::decode(bmi, bits, Alpha::Ignore));
+    let img = parts.ok_or_else(|| "damaged".to_string()).and_then(|(bmi, bits)| dib::decode(bmi, bits, Alpha::Ignore, &mut p.pixels_left));
     let bottom_up = parts.and_then(|(bmi, _)| bmi.get(8..12)).is_some_and(|h| i32::from_le_bytes([h[0], h[1], h[2], h[3]]) > 0);
     let ih = img.as_ref().map_or(0.0, |i| f64::from(i.height));
     let (xs, ys, ws, hs) = (f64::from(src.0), f64::from(src.1), f64::from(src.2), f64::from(src.3));

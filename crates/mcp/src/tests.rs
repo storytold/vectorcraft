@@ -4,6 +4,24 @@ use serde_json::{Value, json};
 
 use crate::{Backend, Headless, PROTOCOL_VERSION, Remote, Server, tool_definitions};
 
+mod batchdraw;
+mod concurrency;
+mod conventions;
+mod distortkeys;
+mod drawopts;
+mod exportas;
+mod fileio;
+mod freeform;
+mod gradient;
+mod limits;
+mod links;
+mod liquify;
+mod pen;
+mod persp;
+mod place;
+mod protocol;
+mod svg;
+
 fn server() -> Server {
     Server::new(Box::new(Headless::with_document()))
 }
@@ -350,6 +368,58 @@ fn trace_and_style_prompt_steps_run_in_order() {
     assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
 }
 
+/// `screenshot` and `render_preview` with `traceViews: true` draw an Image Trace object in the
+/// view set with imageTrace.setView, as the app's window does; without it they draw the tracing
+/// result, as exports do. The image is a dark disc (r = 30 px) on blue, traced with Ignore White.
+#[test]
+fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
+    let mut s = server();
+    let png = tmp("trace-views.png");
+    image::RgbImage::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
+    })
+    .save(&png)
+    .unwrap();
+    let ok = |s: &mut Server, id: u64, name: &str, args: Value| {
+        let r = call(s, id, name, args);
+        assert_eq!(r["isError"], false, "{name}: {r}");
+        r
+    };
+    ok(&mut s, 1, "open_file", json!({"path": png.to_str().unwrap()}));
+    ok(&mut s, 2, "run_command", json!({"command": "select.all"}));
+    ok(&mut s, 3, "run_command", json!({"command": "imageTrace.make", "params": {"params": {"ignoreWhite": true}}}));
+    let pixels = |r: &Value| {
+        let data = r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap()["data"].as_str().unwrap();
+        image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().to_rgba8()
+    };
+    let dark = |p: &image::Rgba<u8>| p[0] < 60 && p[1] < 60 && p[2] < 60;
+    let white = |p: &image::Rgba<u8>| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let blue = |p: &image::Rgba<u8>| p[0] < 200 && p[2] > 245;
+    let (middle, beside) = ((50, 50), (10, 10));
+    let renders = [("screenshot", json!({})), ("render_preview", json!({"max_side": 100}))];
+    for (id, (name, args)) in (10..).zip(renders) {
+        let with = |mut a: Value| {
+            a["traceViews"] = json!(true);
+            a
+        };
+        ok(&mut s, id, "run_command", json!({"command": "imageTrace.setView", "params": {"view": "sourceImage"}}));
+        let (view, result) = (pixels(&ok(&mut s, id, name, with(args.clone()))), pixels(&ok(&mut s, id, name, args.clone())));
+        assert_eq!((view.width(), result.width()), (100, 100), "{name}");
+        assert!(blue(view.get_pixel(beside.0, beside.1)), "{name}: the source image beside the disc {:?}", view.get_pixel(beside.0, beside.1));
+        assert!(white(result.get_pixel(beside.0, beside.1)), "{name}: the tracing result {:?}", result.get_pixel(beside.0, beside.1));
+        assert!(dark(view.get_pixel(middle.0, middle.1)) && dark(result.get_pixel(middle.0, middle.1)), "{name}: the disc's middle");
+        // Outlines: a line at the disc's right side (x = 80) and no fill in its middle.
+        ok(&mut s, id, "run_command", json!({"command": "imageTrace.setView", "params": {"view": "outlines"}}));
+        let (view, result) = (pixels(&ok(&mut s, id, name, with(args.clone()))), pixels(&ok(&mut s, id, name, args.clone())));
+        let row: Vec<u8> = (75..=85).map(|x| view.get_pixel(x, 50)[0]).collect();
+        assert!(row.iter().any(|&r| r < 128), "{name}: the disc's outline {row:?}");
+        assert!(white(view.get_pixel(middle.0, middle.1)), "{name}: no fill in outlines {:?}", view.get_pixel(middle.0, middle.1));
+        assert!(dark(result.get_pixel(middle.0, middle.1)), "{name}: the tracing result's fill");
+        assert_eq!(call(&mut s, id, name, json!({"traceViews": "yes"}))["isError"], true, "{name}: a non-boolean traceViews");
+    }
+}
+
 #[test]
 fn headless_path_gesture_undo() {
     let mut s = server();
@@ -645,12 +715,19 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
         let (stream, _) = listener.accept().unwrap();
         let mut out = stream.try_clone().unwrap();
         let mut seen = vec![];
+        // A dialog is open until `ui.dialog.cancel` closes it; then `ui.dialog.set` is refused, as in the app.
+        let mut dialog_open = true;
         for line in BufReader::new(stream).lines() {
             let msg: Value = serde_json::from_str(&line.unwrap()).unwrap();
             let reply = match msg["method"].as_str().unwrap() {
                 "document.inspect" => json!({"ok": true, "result": {"title": "Remote", "layers": []}}),
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
+                "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                m if m.starts_with("ui.dialog.") => {
+                    dialog_open &= m != "ui.dialog.cancel";
+                    json!({"ok": true, "result": {"echo": msg["params"]}})
+                }
                 _ => json!({"ok": false, "error": "nope"}),
             };
             let mut reply = reply;
@@ -681,6 +758,68 @@ fn remote_forwards_methods() {
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
     assert_eq!(methods, ["document.inspect", "engine.execute", "ui.inspect", "ui.set"]);
     assert_eq!(seen[1]["params"], json!({"command": "object.group", "params": {}}));
+}
+
+#[test]
+fn answer_dialog_sets_fields_in_order_then_confirms() {
+    let (addr, h) = fake_app();
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "discard", "value": true}, {"field": "note"}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    let fields = json!([{"field": "discard", "value": true}, {"field": "note", "value": null}]);
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": {"echo": {}}}));
+    let r = call(&mut s, 2, "answer_dialog", json!({"action": "cancel"}));
+    assert_eq!(r["isError"], false, "{r}");
+    // Bad arguments are refused before anything reaches the app.
+    for (i, args) in [
+        json!({}),
+        json!({"set": []}),
+        json!({"set": {"field": "copies"}}),
+        json!({"set": [{"value": 1}]}),
+        json!({"set": [{"field": "copies", "value": 1}, 7]}),
+        json!({"set": [{"field": "copies", "valu": 1}], "action": "confirm"}),
+        json!({"set": vec![json!({"field": "copies"}); 257]}),
+        json!({"action": "ok"}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let r = call(&mut s, 10 + i as u64, "answer_dialog", args.clone());
+        assert_eq!(r["isError"], true, "{args} → {r}");
+    }
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm", "ui.dialog.cancel"]);
+    assert_eq!(seen[0]["params"], json!({"fields": fields}));
+}
+
+/// When the app refuses the `ui.dialog.set`, the call is an error and nothing is confirmed.
+#[test]
+fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
+    let (addr, h) = fake_app();
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let r = call(&mut s, 1, "answer_dialog", json!({"action": "cancel"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let set = json!([{"field": "copy", "value": true}, {"field": "dy", "value": 2}]);
+    let r = call(&mut s, 2, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("no dialog open"), "{r}");
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.cancel", "ui.dialog.set"], "one set call, refused, and no confirm");
+    assert_eq!(seen[1]["params"], json!({"fields": set}));
+}
+
+#[test]
+fn answer_dialog_needs_the_desktop_app() {
+    let mut s = server();
+    let r = call(&mut s, 1, "answer_dialog", json!({"action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("needs the desktop app"), "{r}");
 }
 
 #[test]

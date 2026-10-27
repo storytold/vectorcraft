@@ -363,6 +363,12 @@ fn stain_mixes_type_strokes_too() {
     let mut art = type_art(red.clone(), red);
     tint_node(&mut art, &blue, 1.0);
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
+    // Characters painted with a global swatch lose the link, as a path's paint does: the mixed color
+    // is not the swatch's color.
+    let linked = Paint::Solid { color: Color::rgb(1.0, 0.0, 0.0), swatch: Some("Red".into()), tint: 0.5 };
+    let mut art = type_art(linked.clone(), linked);
+    tint_node(&mut art, &blue, 1.0);
+    assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
 }
 
 #[test]
@@ -577,6 +583,78 @@ fn scatter_values_follow_their_modes() {
         stroke_pieces(&Document::new(1.0, 1.0), &unsaved, &bp, &stroke(1.0))
     );
     assert!(serde_json::to_value(&unsaved).unwrap().get("modes").is_none(), "not saved when unset");
+}
+
+/// Art Brush Options: with Width on Pressure the art goes from Width at the lightest pen pressure
+/// to the second width at the heaviest, along the stroke where the pen pressed; Fixed keeps Width.
+#[test]
+fn art_brush_width_follows_the_pressure() {
+    let brush = |mode: Option<Variation>, max: Option<f64>| {
+        let mut b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.width_mode, a.width_max) = (50.0, mode, max);
+        }
+        b
+    };
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    let ramp = pressed(vec![(0.0, 0.0), (1.0, 1.0)]);
+    // 4 pt art at 50 %: 1 pt either side at the lightest; at 300 %: 6 pt at the heaviest.
+    let out = draw(&brush(Some(Variation::Pressure), Some(300.0)), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 1.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 6.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    assert!(near(half_width(&out, 49.0, 51.0), 3.5, 0.15), "{}", half_width(&out, 49.0, 51.0));
+    // The stroke weight scales it.
+    let out = draw(&brush(Some(Variation::Pressure), Some(300.0)), &StrokeLayer { width: 2.0, ..ramp.clone() });
+    assert!(near(half_width(&out, 99.0, 100.0), 12.0, 0.2), "{}", half_width(&out, 99.0, 100.0));
+    // Without recorded pressure, half way between the two widths.
+    assert!(near(bounds(&draw(&brush(Some(Variation::Pressure), Some(300.0)), &stroke(1.0))).height(), 7.0, 1e-6));
+    // Fixed (or a definition without a mode) keeps Width, whatever the pressure and the second width.
+    for (mode, max) in [(None, Some(300.0)), (None, None), (Some(Variation::Pressure), None)] {
+        let out = draw(&brush(mode, max), &ramp);
+        assert!(near(bounds(&out).height(), 2.0, 1e-6), "{mode:?} {max:?}: {:?}", bounds(&out));
+    }
+    // A stroke in the art takes the width at the middle of its path: 50 % and 300 % for an even
+    // light and heavy pressure, 175 % without recorded pressure.
+    let mut stroked = brush(Some(Variation::Pressure), Some(300.0));
+    if let BrushKind::Art(a) = &mut stroked.kind {
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        bp.line_to((10.0, 0.0));
+        a.art = Node::path(NodeId(0), vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0));
+    }
+    for (st, want) in [(pressed(vec![(0.0, 0.0), (1.0, 0.0)]), 1.0), (pressed(vec![(0.0, 1.0), (1.0, 1.0)]), 6.0), (stroke(1.0), 3.5)] {
+        let out = draw(&stroked, &st);
+        let w = out.first().and_then(|n| n.appearance.stroke()).map(|s| s.width);
+        assert!(w.is_some_and(|w| near(w, want, 1e-6)), "{want}: {w:?}");
+    }
+    // Stretch Between Guides: an end outside the guides keeps the proportions of the width at its
+    // end of the stroke. A 2 pt marker at the start of 10 × 4 pt art (guides at 20 % and 80 %),
+    // 100 % to 300 % wide: 2 pt long at the lightest pressure, 6 pt at the heaviest.
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -1.0, 2.0, 1.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut spacer = rect_art(10.0, 4.0);
+    spacer.appearance = Appearance::default().into();
+    let art = Node::group(NodeId(0), vec![std::sync::Arc::new(spacer), std::sync::Arc::new(marker)]);
+    let mut guided = art_brush(art, ArtScale::BetweenGuides { start: 0.2, end: 0.8 });
+    if let BrushKind::Art(a) = &mut guided.kind {
+        (a.width_mode, a.width_max) = (Some(Variation::Pressure), Some(300.0));
+    }
+    for (p, long) in [(0.0, 2.0), (1.0, 6.0)] {
+        let out = draw(&guided, &pressed(vec![(0.0, p), (1.0, p)]));
+        let m = out.first().and_then(|g| g.children()).and_then(|c| c.get(1)).and_then(|m| m.geometric_bounds());
+        assert!(m.is_some_and(|m| near(m.x0, 0.0, 1e-6) && near(m.x1, long, 1e-6)), "{p}: {m:?}");
+    }
+    // A mode the width does not take is read as Fixed, and the second width is kept within range.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "a", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "random", "width_max": 1e308},
+        {"name": "b", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "pressure", "width_max": 0.0},
+    ]));
+    let [BrushKind::Art(a), BrushKind::Art(b)] = [&lib[0].kind, &lib[1].kind] else { panic!("{lib:?}") };
+    assert_eq!((a.width_mode, a.width_max, b.width_mode, b.width_max), (None, Some(1000.0), Some(Variation::Pressure), Some(1.0)));
+    // A brush without the new fields is written back without them.
+    let plain = serde_json::to_value(art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)).unwrap();
+    assert!(plain.get("width_mode").is_none() && plain.get("width_max").is_none(), "{plain}");
 }
 
 /// Definitions from files and commands are kept within their ranges.

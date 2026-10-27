@@ -628,7 +628,7 @@ impl DialogView {
     /// The view of `d`'s working set, from the cache unless the set changed. The dialog's
     /// `overrides` field is left in its stored form.
     fn of(ctx: &egui::Context, d: &mut Dialog) -> Arc<DialogView> {
-        let id = egui::Id::new("dialog-shortcuts-view");
+        let id = egui::Id::unique("dialog-shortcuts-view");
         let source = d.fields.get("overrides").unwrap_or(&Value::Null);
         if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source) {
             return v;
@@ -667,7 +667,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         }
     }
-    crate::dialogs::modal::show(ctx, tl!("Keyboard Shortcuts"), egui::Id::new("dialog-shortcuts"), -20.0, 20, |ui| {
+    crate::dialogs::modal::show(ctx, tl!("Keyboard Shortcuts"), egui::Id::unique("dialog-shortcuts"), -20.0, 20, |ui| {
         ui.set_width(640.0);
         crate::dialogs::modal::heading(ui, tl!("Keyboard Shortcuts"));
         ui.add_space(10.0);

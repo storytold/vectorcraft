@@ -19,6 +19,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("OK"),
     min_width: 380.0,
     max_width: Some(560.0),
+    inputs: |_| &["path", "showCode"],
     ..DialogSpec::FORM
 };
 
@@ -266,8 +267,8 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
         o.insert("artboard".into(), json!(first.map_or(0, |n| n.saturating_sub(1))));
     }
     // One cached text, replaced when the document or the options change.
-    let key = egui::Id::new("svg-code");
-    let sig = egui::Id::new((st.uid, st.revision, opts.to_string())).value();
+    let key = egui::Id::unique("svg-code");
+    let sig = egui::Id::unique((st.uid, st.revision, opts.to_string())).value();
     let code: Arc<String> = match ui.ctx().data(|m| m.get_temp::<(u64, Arc<String>)>(key)).filter(|(s, _)| *s == sig) {
         Some((_, c)) => c,
         None => {
@@ -406,7 +407,7 @@ mod tests {
         app.run("file.save", Value::Null).unwrap();
         assert!(app.ui.dialog.is_none());
         assert_eq!(written.borrow()[1].0, "/tmp/doc.svg");
-        assert!(text(&written, 1).contains("style=\"fill:") && text(&written, 1).matches("<path").count() == 2);
+        assert!(text(&written, 1).contains("style=\"fill:") && text(&written, 1).contains("<rect") && text(&written, 1).contains("<circle"));
         // Save a Copy (options given) leaves the document's path alone.
         app.run("file.saveCopy", json!({"path": "/tmp/copy.svg", "svg": {"minify": true}})).unwrap();
         assert!(!text(&written, 2).trim_end().contains('\n') && !text(&written, 2).contains("<?xml"), "minified");

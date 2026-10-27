@@ -108,7 +108,7 @@ struct Events {
 /// The asset tiles: thumbnail, name (a text field while renaming), selection.
 fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
     let t = Tokens::get(ui.ctx());
-    let rename_id = egui::Id::new("asset-export-rename");
+    let rename_id = egui::Id::unique("asset-export-rename");
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
@@ -297,7 +297,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 tiles(ui, st, &sel, &mut ev);
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.id().with("asset-export-drop"), Sense::hover());
+        let zone = ui.interact(out.inner_rect, ui.scope_id().with("asset-export-drop"), Sense::hover());
         drop_zone(ui, &zone, &mut ev);
     });
     ui.add_space(6.0);

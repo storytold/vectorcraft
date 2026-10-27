@@ -48,7 +48,7 @@ effects are rendered offscreen per object and cached while panning. See
 ## Files
 
 The native `.vectorcraft` format is versioned, compressed JSON with embedded images, saved atomically, readable
-down to v1 and from the old `.drawcraft` name. The `FORMATS` table in `crates/engine/src/cmd/fileio/mod.rs`
+down to v1 and from the old `.drawcraft` name. The `FORMATS` table in `crates/engine/src/cmd/fileio/formats.rs`
 lists every format read or written; importers are fuzzed (`crates/engine/tests/import_fuzz.rs`). See
 [file-format-parity.md](file-format-parity.md).
 

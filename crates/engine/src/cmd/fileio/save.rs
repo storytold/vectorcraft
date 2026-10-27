@@ -185,6 +185,14 @@ fn parent_folder(path: &str) -> Option<String> {
     std::path::Path::new(path).parent().map(|p| p.to_string_lossy().to_string()).filter(|p| !p.is_empty())
 }
 
+/// A file dialog's starting folder for a path on disk (#4122): the path's parent when it is a
+/// folder, else the nearest ancestor directory that exists.
+pub fn dialog_folder(path: &str) -> Option<String> {
+    let folder = parent_folder(path)?;
+    let path = std::path::PathBuf::from(folder);
+    path.ancestors().find(|a| a.is_dir()).map(|a| a.to_string_lossy().into_owned())
+}
+
 /// A save format by id or extension, or why it isn't one.
 fn save_format_of(f: &str) -> std::result::Result<&'static Format, String> {
     match format(f) {
@@ -300,7 +308,7 @@ fn disagreeing_option(p: &Value, svg: bool) -> std::result::Result<Option<(Strin
             .as_object()
             .into_iter()
             .flatten()
-            .filter(|(k, v)| !v.is_null() && !matches!(k.as_str(), "path" | "format" | "options") && !(svg && k.as_str() == "svg"))
+            .filter(|(k, v)| !(v.is_null() || matches!(k.as_str(), "path" | "format" | "options") || svg && k.as_str() == "svg"))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         if svg {
@@ -1018,6 +1026,20 @@ mod tests_folders {
         assert_eq!(super::xdg_documents("XDG_DOCUMENTS_DIR=\"$HOME/\"", home), None);
         assert_eq!(super::xdg_documents("XDG_DOCUMENTS_DIR=\"docs\"", home), None);
         assert_eq!(super::xdg_documents("XDG_MUSIC_DIR=\"$HOME/Musica\"", home), None);
+    }
+
+    /// #4122: File → Open starts in the folder of the last opened file.
+    #[test]
+    fn dialog_folder_is_the_nearest_existing_parent() {
+        let base = std::env::temp_dir().join(format!("vc-open-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let file = base.join("poster.svg");
+        assert_eq!(super::dialog_folder(&file.to_string_lossy()).map(PathBuf::from), Some(base.clone()));
+        let missing = base.join("gone").join("card.ai");
+        assert_eq!(super::dialog_folder(&missing.to_string_lossy()).map(PathBuf::from), Some(base.clone()));
+        assert!(super::dialog_folder("poster.svg").is_none());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// #703: the Templates folder a dialog starts in exists: made when missing, else the nearest

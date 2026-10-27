@@ -342,7 +342,6 @@ font-technology	Variable	Variabili
 	Brush Affects:	Il pennello influisce su:
 	Brush Definition	Definizione pennello
 	Brush Libraries	Librerie pennelli
-	Brush Libraries (on the roadmap)	Librerie pennelli (in programma)
 	Brush Options…	Opzioni pennello…
 	Brush Strokes	Pennellate
 	Brushes	Pennelli
@@ -357,6 +356,7 @@ font-technology	Variable	Variabili
 	Apply Bullets	Applica punti elenco
 	Numbered List	Elenco numerato
 	Apply Numbers	Applica numerazione
+	Convert to Text	Converti in testo
 	Filled Dot	Punto pieno
 	Dash	Trattino
 	Hollow Circle	Cerchio vuoto
@@ -1109,6 +1109,7 @@ font-technology	Variable	Variabili
 	Fill and Stroke	Riempimento e traccia
 	Fill new strokes	Riempi nuove tracce
 	Alt key toggles to Smooth Tool	Il tasto Alt attiva lo strumento Smussa
+	Live curve fitting	Adattamento della curva in tempo reale
 	Keep selected	Mantieni selezionato
 	Merge only with selection	Unisci solo con la selezione
 	Consider Open Filled Paths as Closed	Considera chiusi i tracciati aperti con riempimento
@@ -1889,6 +1890,7 @@ file-filter	Templates	Modelli
 	Miter Limit:	Limite angolo vivo:
 	Mixed Appearances	Aspetti misti
 	Mixed Objects	Oggetti misti
+	Mixed	Misto
 	Mode:	Modalità:
 	Model	Modello
 	Modified	Modificato
@@ -2631,6 +2633,7 @@ mark-style	Japanese	Giapponese
 	Remove Plug-in	Rimuovi plug-in
 	Remove Selected Assets	Rimuovi risorse selezionate
 	Remove Threading	Rimuovi concatenamento
+	Break Thread	Interrompi concatenamento
 	Remove “{keyword}”	Rimuovi “{keyword}”
 	Rename	Rinomina
 	Rename Asset	Rinomina risorsa
@@ -2832,7 +2835,22 @@ mark-style	Japanese	Giapponese
 	Saved to User Defined: {}	Salvato in Definito dall'utente: {}
 	Saved View 1	Vista salvata 1
 	Saved View 10	Vista salvata 10
+	Saved View 11	Vista salvata 11
+	Saved View 12	Vista salvata 12
+	Saved View 13	Vista salvata 13
+	Saved View 14	Vista salvata 14
+	Saved View 15	Vista salvata 15
+	Saved View 16	Vista salvata 16
+	Saved View 17	Vista salvata 17
+	Saved View 18	Vista salvata 18
+	Saved View 19	Vista salvata 19
 	Saved View 2	Vista salvata 2
+	Saved View 20	Vista salvata 20
+	Saved View 21	Vista salvata 21
+	Saved View 22	Vista salvata 22
+	Saved View 23	Vista salvata 23
+	Saved View 24	Vista salvata 24
+	Saved View 25	Vista salvata 25
 	Saved View 3	Vista salvata 3
 	Saved View 4	Vista salvata 4
 	Saved View 5	Vista salvata 5
@@ -3124,6 +3142,7 @@ mark-style	Japanese	Giapponese
 	Snap to Grid	Aggancia alla griglia
 	Snap to Pixel	Aggancia ai pixel
 	Precise Cursors	Cursori di precisione
+	Image Trace Preview	Anteprima di Ricalco immagine
 	Snap to Point	Aggancia al punto
 	Snap to Unit	Aggancia all'unità
 	Snapping Tolerance	Tolleranza di aggancio
@@ -3801,13 +3820,10 @@ axis	Horizontal	Orizzontale
 axis	Vertical	Verticale
 axis	Both	Entrambi
 	Drag to move	Trascina per spostare
-	Drag to move out of the set	Trascina per spostare fuori dall’insieme
 	Drag to float as a toolbar	Trascina per rendere mobile come barra degli strumenti
 	Put back in the toolbar	Riporta nella barra degli strumenti
 	Float Panel	Rendi mobile pannello
 	Dock Panel	Ancora pannello
-	Drag to float the panel group	Trascina per rendere mobile il gruppo di pannelli
-	Put back in the dock	Riporta nell'area dei pannelli
 	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
 	Drag to the window's left edge to dock	Trascina sul bordo sinistro della finestra per ancorare
 	Float Tool Group	Rendi mobile gruppo strumenti
@@ -4406,6 +4422,7 @@ axis	Both	Entrambi
 @msg	{_1} is already used by {_2}	{_1} è già usato da {_2}
 @msg	{_1} is reserved by the system	{_1} è riservato dal sistema
 @msg	{_1} linked file(s) can't be read here: their previews show	file collegati non leggibili qui: {_1}; vengono mostrate le loro anteprime
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	immagini non decodificabili: {undecoded}; vengono mostrate come riquadri barrati da una croce
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	immagini collegate modificate su disco: {_1}; Aggiorna collegamenti mostra le nuove versioni
 @msg	Updated {_1} linked file(s) changed on disk	File collegati modificati su disco aggiornati: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: non salvato, quindi non chiuso
@@ -4664,7 +4681,6 @@ effect	Regular	Normale
 @msg	before must name a panel	before deve indicare un pannello
 @msg	docking action contains an unknown panel or an excessive split path	L’azione di ancoraggio contiene un pannello sconosciuto o un percorso di divisioni troppo lungo
 @msg	group must be true or false	group deve essere true o false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	il pannello è mobile; comprimi il suo gruppo con window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	il pannello non è in un gruppo del dock
 @msg	only a dock group above or below others collapses, not one beside another	si comprime solo un gruppo del dock sopra o sotto altri, non uno accanto
 @msg	icon must be true or false	icon deve essere true o false
@@ -4832,6 +4848,7 @@ lighting	Light	Luce
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
 	Load EPS into Clipboard	Carica EPS negli appunti
 @msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata
+@msg	an image of {w} × {h} pixels is shown at reduced size	un'immagine di {w} × {h} pixel viene mostrata a dimensioni ridotte
 @msg	the image can't be read as a texture	l'immagine non può essere letta come texture
 	Basic	Base
 	Fill and Stroke Controls	Controlli di riempimento e traccia
@@ -5014,6 +5031,10 @@ lighting	Light	Luce
 	Snap to Perpendicular	Aggancia alla perpendicolare
 @msg	unknown snap option `{key}` (use {options})	opzione di aggancio sconosciuta `{key}` (usare {options})
 	Gap Length:	Lunghezza lacuna:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` richiede `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` richiede `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` richiede `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	nessun gruppo colori `{name}` nel documento (vedi swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	La modalità Logo piatto ha vettorializzato l’immagine a {_1} × {_2} pixel, ridotta per media da {_3} × {_4}.
 	Artboard {n} of {total}	Tavola da disegno {n} di {total}
 	File {n} of {total}	File {n} di {total}
@@ -5075,6 +5096,12 @@ lighting	Light	Luce
 	Shift:	Spostamento:
 	Fresco…	Affresco…
 	Fresco	Affresco
+	Lock Artboards	Blocca tavole da disegno
+	Unlock Artboards	Sblocca tavole da disegno
+	Lock Selected	Blocca selezionate
+	Lock All Except Selected	Blocca tutto tranne la selezione
+	Lock All	Blocca tutto
+	Unlock Selected	Sblocca selezionate
 	Effect Gallery…	Galleria effetti…
 	Effect Gallery Dialog	Finestra di dialogo Galleria effetti
 	Arc Segment Tool Options	Opzioni strumento Segmento arco
@@ -5166,3 +5193,40 @@ axis	Y Axis	Asse Y
 	Rectangular Grid Tool Options	Opzioni strumento Griglia rettangolare
 	Polar Grid Tool Options	Opzioni strumento Griglia polare
 	Fill Line	Riempi linea
+	Pathfinder Options	Opzioni elaborazione tracciati
+	Divide and Outline Will Remove Unpainted Artwork	Dividi e Contorno rimuovono la grafica senza colore
+@msg	precision must be from 0.001 to 10 pt	precision deve essere compreso tra 0,001 e 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` deve essere un oggetto
+	Add to Brushes	Aggiungi ai pennelli
+	Brush Library	Libreria pennelli
+	Save Brush Library	Salva libreria pennelli
+	Save Brushes…	Salva pennelli…
+	Open Brush Library	Apri libreria pennelli
+	Selected Brushes Only	Solo pennelli selezionati
+	Brush Libraries Menu	Menu Librerie pennelli
+	User Brush Library 1	Libreria pennelli utente 1
+	User Brush Library 2	Libreria pennelli utente 2
+	User Brush Library 3	Libreria pennelli utente 3
+	User Brush Library 4	Libreria pennelli utente 4
+	User Brush Library 5	Libreria pennelli utente 5
+	User Brush Library 6	Libreria pennelli utente 6
+	User Brush Library 7	Libreria pennelli utente 7
+	User Brush Library 8	Libreria pennelli utente 8
+	User Brush Library 9	Libreria pennelli utente 9
+	User Brush Library 10	Libreria pennelli utente 10
+	Art Ribbons	Nastri grafici
+	Calligraphic Nibs	Pennini calligrafici
+	Pattern Borders	Bordi a motivo
+	Scatter Shapes	Forme a dispersione
+	Save Brush Library…	Salva libreria pennelli…
+@msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
+@msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
+@msg	no brush `{n}`	nessun pennello `{n}`
+@msg	no brush `{n}` in `{_1}`	nessun pennello `{n}` in `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nessuna libreria pennelli `{key}` (vedi brush.libraries)
+@msg	the document has no brushes to save	il documento non ha pennelli da salvare
+@msg	no empty artboards to delete	nessuna tavola da disegno vuota da eliminare
+	Scale Presets	Preimpostazioni di scala
+@msg	a {width}×{height} screenshot's byte count overflows	il numero di byte di uno screenshot {width}×{height} va in overflow
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	la {what} della finestra ({points} punti × {scale} DPI) non può dimensionare uno screenshot
+	Live preview	Anteprima dal vivo

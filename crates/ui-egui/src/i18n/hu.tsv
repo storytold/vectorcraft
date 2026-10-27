@@ -477,7 +477,6 @@ font-technology	Variable	Változó
 	Brush Art	Ecsetgrafika
 	Brush Definition	Ecsetdefiníció
 	Brush Libraries	Ecsetkönyvtárak
-	Brush Libraries (on the roadmap)	Ecsetkönyvtárak (tervezett funkció)
 	Brush Options…	Ecset beállításai…
 	Brush Scale Options	Ecsetméretezési beállítások
 	Brush Strokes	Ecsetvonások
@@ -493,6 +492,7 @@ font-technology	Variable	Változó
 	Apply Bullets	Felsorolásjelek alkalmazása
 	Numbered List	Számozott lista
 	Apply Numbers	Számozás alkalmazása
+	Convert to Text	Átalakítás szöveggé
 	Filled Dot	Kitöltött pont
 	Dash	Gondolatjel
 	Hollow Circle	Üres kör
@@ -1100,10 +1100,8 @@ font-technology	Variable	Változó
 	Drag the art to move it on the paper	Húzd a grafikát a papíron való áthelyezéshez
 	Drag the light, or its rings. Shift snaps to 15°.	Húzd a fényt vagy a gyűrűit. Shift: illesztés 15°-onként.
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
-	Drag to float the panel group	Húzással a panelcsoport lebegtethető
 	Drag to float the toolbar	Húzd el az eszköztár lebegtetéséhez
 	Drag to move	Húzással áthelyezhető
-	Drag to move out of the set	Húzással kivehető a csoportból
 	Drag to the window's left edge to dock	Dokkoláshoz húzd az ablak bal szélére
 	Step up or down	Léptetés fel vagy le
 	Drag values or labels. Double-click a value to type.	Húzd az értékeket vagy a címkéket. Gépeléshez kattints duplán egy értékre.
@@ -1397,6 +1395,7 @@ font-technology	Variable	Változó
 	Fill Color	Kitöltőszín
 	Fill new strokes	Új vonások kitöltése
 	Alt key toggles to Smooth Tool	Az Alt billentyű a Simítás eszközre vált
+	Live curve fitting	Görbeillesztés rajzolás közben
 	Keep selected	Kijelölés megtartása
 	Merge only with selection	Összeolvasztás csak a kijelöléssel
 	Consider Open Filled Paths as Closed	A nyitott kitöltött útvonalak zártnak számítanak
@@ -2366,6 +2365,7 @@ file-filter	Templates	Sablonok
 	Miter Limit:	Hegyesszög-határ:
 	Mixed Appearances	Vegyes megjelenések
 	Mixed Objects	Vegyes objektumok
+	Mixed	Vegyes
 	Mobile	Mobil
 	Mode	Mód
 	Mode:	Mód:
@@ -2972,7 +2972,6 @@ mark-style	Japanese	Japán
 	Puppet Warp Pins	Bábtorzítás tűi
 	Puppet Warp Tool	Bábtorzítás
 	Purple	Lila
-	Put back in the dock	Visszahelyezés a dokkba
 	Put back in the toolbar	Visszahelyezés az eszköztárba
 	Quality	Minőség
 	Quality {quality}	Minőség: {quality}
@@ -3129,6 +3128,7 @@ mark-style	Japanese	Japán
 	Remove Selected Assets	Kijelölt elemek eltávolítása
 	Remove the shortcut	Billentyűparancs eltávolítása
 	Remove Threading	Szövegláncolás megszüntetése
+	Break Thread	Szövegláncolás megszakítása
 	Remove “{keyword}”	Eltávolítás: „{keyword}”
 	Rename	Átnevezés
 	Rename Asset	Elem átnevezése
@@ -3384,7 +3384,22 @@ mark-style	Japanese	Japán
 	Saved to User Defined: {}	Mentve a Felhasználói könyvtárak közé: {}
 	Saved View 1	Mentett nézet 1
 	Saved View 10	Mentett nézet 10
+	Saved View 11	Mentett nézet 11
+	Saved View 12	Mentett nézet 12
+	Saved View 13	Mentett nézet 13
+	Saved View 14	Mentett nézet 14
+	Saved View 15	Mentett nézet 15
+	Saved View 16	Mentett nézet 16
+	Saved View 17	Mentett nézet 17
+	Saved View 18	Mentett nézet 18
+	Saved View 19	Mentett nézet 19
 	Saved View 2	Mentett nézet 2
+	Saved View 20	Mentett nézet 20
+	Saved View 21	Mentett nézet 21
+	Saved View 22	Mentett nézet 22
+	Saved View 23	Mentett nézet 23
+	Saved View 24	Mentett nézet 24
+	Saved View 25	Mentett nézet 25
 	Saved View 3	Mentett nézet 3
 	Saved View 4	Mentett nézet 4
 	Saved View 5	Mentett nézet 5
@@ -3718,6 +3733,7 @@ mark-style	Japanese	Japán
 	Snap to Grid	Illesztés a rácshoz
 	Snap to Pixel	Illesztés pixelhez
 	Precise Cursors	Pontos kurzorok
+	Image Trace Preview	Képvektorizálás előnézete
 	Snap to Point	Illesztés pontra
 	Snap to Unit	Illesztés mértékegységhez
 	Snapping Tolerance	Illesztési tűrés
@@ -4641,7 +4657,6 @@ imageTrace	Outline	Körvonal
 @msg	give the path `id` and the width point `index`	add meg az útvonal `id` és a szélességi pont `index` értékét
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	a színátmenet nincs megadva a fájlban: „{name}”; helyette egyszínű kitöltés áll
 @msg	group must be true or false	a group értéke true vagy false lehet
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	a panel lebeg; a csoportját a window.panel.float {panel, collapsed} paranccsal csukhatja össze
 @msg	panel is not in a dock group	a panel nincs dokkolt csoportban
 @msg	only a dock group above or below others collapses, not one beside another	csak a többi fölötti vagy alatti dokkolt csoport csukható össze, a mellettük lévő nem
 @msg	icon must be true or false	az icon értéke true vagy false lehet
@@ -5128,6 +5143,7 @@ imageTrace	Outline	Körvonal
 @msg	{_1} is already used by {_2}	már foglalt: {_1} (használja: {_2})
 @msg	{_1} is reserved by the system	A(z) {_1} a rendszer számára foglalt
 @msg	{_1} linked file(s) can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {_1}; az előnézetük látszik
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {undecoded}; áthúzott keretként látszanak
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {_1}; a Csatolások frissítése az új változatokat mutatja
 @msg	{_1}: not saved, so not closed	{_1}: nincs mentve, ezért nem záródott be
 @msg	{bpp}-bit bitmaps can't be read	ilyen bitmélységű bitkép nem olvasható: {bpp}
@@ -5210,6 +5226,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+@msg	an image of {w} × {h} pixels is shown at reduced size	egy {w} × {h} pixeles kép csökkentett méretben jelenik meg
 @msg	the image can't be read as a texture	a kép nem olvasható be textúraként
 	Fill and Stroke Controls	Kitöltés és körvonal vezérlői
 	Coloring Controls	Színezés vezérlői
@@ -5387,6 +5404,10 @@ imageTrace	Outline	Körvonal
 	Snap to Perpendicular	Illesztés merőlegesre
 @msg	unknown snap option `{key}` (use {options})	ismeretlen illesztési beállítás: `{key}` (használható: {options})
 	Gap Length:	Rés hossza:
+@msg	`colorGroup` needs `library: "document"`	a `colorGroup` használatához `library: "document"` szükséges
+@msg	`colorGroup` needs `palette: "documentLibrary"`	a `colorGroup` használatához `palette: "documentLibrary"` szükséges
+@msg	`colorGroup` needs `mode: "color"`	a `colorGroup` használatához `mode: "color"` szükséges
+@msg	no color group `{name}` in the document (see swatch.list)	nincs ilyen színcsoport a dokumentumban: `{name}` (lásd: swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Az Egyszínű logó mód {_1} × {_2} képponton vektorizálta a képet, {_3} × {_4} méretről átlagolással kicsinyítve.
 	Artboard {n} of {total}	Rajztábla: {n} / {total}
 	File {n} of {total}	Fájl: {n} / {total}
@@ -5447,6 +5468,12 @@ imageTrace	Outline	Körvonal
 	Shift:	Eltolás:
 	Fresco…	Freskó…
 	Fresco	Freskó
+	Lock Artboards	Rajztáblák zárolása
+	Unlock Artboards	Rajztáblák zárolásának feloldása
+	Lock Selected	Kijelöltek zárolása
+	Lock All Except Selected	Összes zárolása a kijelölteken kívül
+	Lock All	Összes zárolása
+	Unlock Selected	Kijelöltek zárolásának feloldása
 	Effect Gallery…	Effektusgaléria…
 	Effect Gallery Dialog	Effektusgaléria párbeszédpanel
 	Arc Segment Tool Options	Ívszakasz eszköz beállításai
@@ -5536,3 +5563,40 @@ axis	Y Axis	Y tengely
 	Rectangular Grid Tool Options	Téglalaprács beállításai
 	Polar Grid Tool Options	Polárrács beállításai
 	Fill Line	Szakasz kitöltése
+	Pathfinder Options	Útvonalkezelő beállításai
+	Divide and Outline Will Remove Unpainted Artwork	A Felosztás és a Vázlat eltávolítja a festetlen grafikát
+@msg	precision must be from 0.001 to 10 pt	a precision értéke 0,001 és 10 pt között lehet
+@msg	`pathfinder` must be an object	`pathfinder`: objektum kell
+	Add to Brushes	Hozzáadás az ecsetekhez
+	Brush Library	Ecsetkönyvtár
+	Save Brush Library	Ecsetkönyvtár mentése
+	Save Brushes…	Ecsetek mentése…
+	Open Brush Library	Ecsetkönyvtár megnyitása
+	Selected Brushes Only	Csak a kijelölt ecsetek
+	Brush Libraries Menu	Ecsetkönyvtárak menü
+	User Brush Library 1	Felhasználói ecsetkönyvtár 1
+	User Brush Library 2	Felhasználói ecsetkönyvtár 2
+	User Brush Library 3	Felhasználói ecsetkönyvtár 3
+	User Brush Library 4	Felhasználói ecsetkönyvtár 4
+	User Brush Library 5	Felhasználói ecsetkönyvtár 5
+	User Brush Library 6	Felhasználói ecsetkönyvtár 6
+	User Brush Library 7	Felhasználói ecsetkönyvtár 7
+	User Brush Library 8	Felhasználói ecsetkönyvtár 8
+	User Brush Library 9	Felhasználói ecsetkönyvtár 9
+	User Brush Library 10	Felhasználói ecsetkönyvtár 10
+	Art Ribbons	Grafikus szalagok
+	Calligraphic Nibs	Kalligrafikus tollhegyek
+	Pattern Borders	Mintázatszegélyek
+	Scatter Shapes	Szórt alakzatok
+	Save Brush Library…	Ecsetkönyvtár mentése…
+@msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
+@msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
+@msg	no brush `{n}`	nincs `{n}` ecset
+@msg	no brush `{n}` in `{_1}`	nincs `{n}` ecset itt: `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nincs `{key}` ecsetkönyvtár (lásd: brush.libraries)
+@msg	the document has no brushes to save	a dokumentumban nincs menthető ecset
+@msg	no empty artboards to delete	nincs törölhető üres rajztábla
+	Scale Presets	Méretezési beállítások
+@msg	a {width}×{height} screenshot's byte count overflows	a(z) {width}×{height} képernyőkép bájtszáma túlcsordul
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	az ablak {what} ({points} pont × {scale} DPI) nem tud képernyőkép-méretet adni
+	Live preview	Élő előnézet

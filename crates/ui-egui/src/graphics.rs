@@ -42,7 +42,7 @@ impl GraphicsLoss {
 /// context's.
 pub(crate) fn context_tag(ctx: &egui::Context) -> u64 {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    let id = egui::Id::new("vectorcraft-context-tag");
+    let id = egui::Id::unique("vectorcraft-context-tag");
     if let Some(tag) = ctx.data(|d| d.get_temp::<u64>(id)) {
         return tag;
     }
@@ -105,14 +105,22 @@ impl VectorcraftApp {
     /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`].
     pub(crate) fn adopt_context(&mut self, ctx: &egui::Context) {
         let tag = context_tag(ctx);
+        self.ui_ctx = Some(ctx.clone());
         if self.context == tag {
             return;
         }
         if self.context != 0 {
             log::info!("vectorcraft: new graphics context: uploading the UI again");
             forget_textures();
+            // The IME tracker's pass numbers are per context. A new context starts at pass 0; only
+            // an explicit teardown guarantees it cannot look continuous with the old context's
+            // last observed pass and reuse its owner/baseline generation.
+            self.ime_context.end_viewport(ctx.viewport_id());
             self.styled = false;
             self.fonts_ready = false;
+            // Shortcut input is keyed by context identity. Preserve a first pass already
+            // handled for this new context before UI setup, or toggle keys execute twice.
+            self.injected_settle_hook = false;
             self.ui_fonts = Default::default();
             self.canvas.texture = None;
             self.canvas.key = None;

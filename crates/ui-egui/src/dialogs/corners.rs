@@ -21,7 +21,15 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Corners (the corner widgets' double-click).
 pub const KIND: &str = vectorcraft_tools::corners::DIALOG;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Corners").into(), body, confirm, min_width: 280.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Corners").into(),
+    body,
+    confirm,
+    min_width: 280.0,
+    // Corners that differ open without these; the kind buttons and the radius field add them.
+    inputs: |_| &["kind", "radius"],
+    ..DialogSpec::FORM
+};
 
 /// Open Corners for `{id?, corners?}`: the path `id` (default: the selected one) and its
 /// `corners` (default: the selected corners), filled in with their kind and radius.

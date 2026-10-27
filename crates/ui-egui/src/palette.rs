@@ -53,7 +53,7 @@ fn cache_key(lang: crate::i18n::Lang) -> (&'static str, u64, u64) {
 fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
     type Cached = ((&'static str, u64, u64), Arc<Vec<Entry>>);
     let key = cache_key(lang);
-    let id = egui::Id::new("palette-entries");
+    let id = egui::Id::unique("palette-entries");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
         && k == key
     {
@@ -84,7 +84,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut run: Option<String> = None;
     // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
     // takes it, and a new query starts again from the first.
-    let sel_id = egui::Id::new("palette-selected");
+    let sel_id = egui::Id::unique("palette-selected");
     let (mut sel, last_q) = ctx.data(|d| d.get_temp::<(usize, String)>(sel_id)).unwrap_or_default();
     if last_q != q {
         sel = 0;
@@ -101,7 +101,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         sel = sel.min(n - 1);
     }
-    egui::Area::new(egui::Id::new("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
+    egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_width(520.0);
             let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text(tl!("Search commands and tools…")).desired_width(500.0));
@@ -205,7 +205,7 @@ mod tests {
         let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
         let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx())).textures_delta.clear();
-            ctx.data(|d| d.get_temp::<(usize, String)>(egui::Id::new("palette-selected"))).unwrap().0
+            ctx.data(|d| d.get_temp::<(usize, String)>(egui::Id::unique("palette-selected"))).unwrap().0
         };
         assert_eq!(frame(&mut app, vec![]), 0);
         assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowDown)]), 1);

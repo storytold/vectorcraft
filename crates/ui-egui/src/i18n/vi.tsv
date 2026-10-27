@@ -395,7 +395,6 @@ font-technology	Variable	Biến thiên
 	Brush Art	Đối tượng của cọ
 	Brush Definition	Định nghĩa cọ
 	Brush Libraries	Thư viện cọ
-	Brush Libraries (on the roadmap)	Thư viện cọ (trong lộ trình)
 	Brush Options…	Tùy chọn cọ…
 	Brush Scale Options	Tùy chọn tỷ lệ cọ
 	Brush Strokes	Nét cọ
@@ -411,6 +410,7 @@ font-technology	Variable	Biến thiên
 	Apply Bullets	Áp dụng dấu đầu dòng
 	Numbered List	Danh sách đánh số
 	Apply Numbers	Áp dụng đánh số
+	Convert to Text	Chuyển thành văn bản
 	Filled Dot	Chấm đặc
 	Dash	Gạch ngang
 	Hollow Circle	Hình tròn rỗng
@@ -984,10 +984,8 @@ font-technology	Variable	Biến thiên
 	Drag the art to move it on the paper	Kéo tác phẩm để di chuyển trên trang
 	Drag the light, or its rings. Shift snaps to 15°.	Kéo đèn hoặc vòng của nó. Shift khớp ở 15°.
 	Drag to float as a toolbar	Kéo để thả nổi thanh công cụ
-	Drag to float the panel group	Kéo để thả nổi nhóm bảng
 	Drag to float the toolbar	Kéo để thả nổi thanh công cụ
 	Drag to move	Kéo để di chuyển
-	Drag to move out of the set	Kéo để tách khỏi bộ
 	Drag to the window's left edge to dock	Kéo đến cạnh trái cửa sổ để neo
 	Step up or down	Tăng hoặc giảm một bước
 	Drag values or labels. Double-click a value to type.	Kéo giá trị hoặc nhãn. Bấm đúp vào giá trị để nhập.
@@ -1274,6 +1272,7 @@ font-technology	Variable	Biến thiên
 	Fill Grid	Tô lưới
 	Fill new strokes	Tô nét mới
 	Alt key toggles to Smooth Tool	Phím Alt chuyển sang công cụ Làm mượt
+	Live curve fitting	Khớp đường cong khi vẽ
 	Keep selected	Giữ trạng thái đã chọn
 	Merge only with selection	Chỉ hợp nhất với vùng chọn
 	Consider Open Filled Paths as Closed	Coi đường dẫn mở có tô là đường dẫn đóng
@@ -2178,6 +2177,7 @@ file-filter	Templates	Mẫu
 	Miter Limit:	Giới hạn góc nhọn:
 	Mixed Appearances	Diện mạo hỗn hợp
 	Mixed Objects	Đối tượng hỗn hợp
+	Mixed	Hỗn hợp
 	Mode	Chế độ
 	Mode:	Chế độ:
 	Model	Mô hình
@@ -2750,7 +2750,6 @@ mark-style	Japanese	Kiểu Nhật
 	Puppet Warp	Biến dạng con rối
 	Puppet Warp Pins	Ghim biến dạng con rối
 	Puppet Warp Tool	Công cụ Biến dạng con rối
-	Put back in the dock	Đặt trở lại vào vùng neo
 	Put back in the toolbar	Đặt trở lại vào thanh công cụ
 	Quality	Chất lượng
 	Quality {quality}	Chất lượng {quality}
@@ -2895,6 +2894,7 @@ mark-style	Japanese	Kiểu Nhật
 	Remove Plug-in	Gỡ plug-in
 	Remove Selected Assets	Gỡ các asset đã chọn
 	Remove Threading	Gỡ liên kết chuỗi văn bản
+	Break Thread	Ngắt chuỗi văn bản
 	Remove “{keyword}”	Gỡ “{keyword}”
 	Rename	Đổi tên
 	Rename Asset	Đổi tên asset
@@ -3138,7 +3138,22 @@ mark-style	Japanese	Kiểu Nhật
 	Saved to User Defined: {}	Đã lưu vào Tùy chỉnh người dùng: {}
 	Saved View 1	Chế độ xem đã lưu 1
 	Saved View 10	Chế độ xem đã lưu 10
+	Saved View 11	Chế độ xem đã lưu 11
+	Saved View 12	Chế độ xem đã lưu 12
+	Saved View 13	Chế độ xem đã lưu 13
+	Saved View 14	Chế độ xem đã lưu 14
+	Saved View 15	Chế độ xem đã lưu 15
+	Saved View 16	Chế độ xem đã lưu 16
+	Saved View 17	Chế độ xem đã lưu 17
+	Saved View 18	Chế độ xem đã lưu 18
+	Saved View 19	Chế độ xem đã lưu 19
 	Saved View 2	Chế độ xem đã lưu 2
+	Saved View 20	Chế độ xem đã lưu 20
+	Saved View 21	Chế độ xem đã lưu 21
+	Saved View 22	Chế độ xem đã lưu 22
+	Saved View 23	Chế độ xem đã lưu 23
+	Saved View 24	Chế độ xem đã lưu 24
+	Saved View 25	Chế độ xem đã lưu 25
 	Saved View 3	Chế độ xem đã lưu 3
 	Saved View 4	Chế độ xem đã lưu 4
 	Saved View 5	Chế độ xem đã lưu 5
@@ -3452,6 +3467,7 @@ mark-style	Japanese	Kiểu Nhật
 	Snap to Grid	Hút vào lưới
 	Snap to Pixel	Hút vào pixel
 	Precise Cursors	Con trỏ chính xác
+	Image Trace Preview	Xem trước Vector hóa ảnh
 	Snap to Point	Hút vào điểm
 	Snap to Unit	Hút vào đơn vị
 	Snapping Tolerance	Dung sai hút
@@ -4289,7 +4305,6 @@ theme	Appearance	Giao diện
 @msg	icon must be true or false	icon phải là true hoặc false
 @msg	icon only docks a panel in the icon column, with no anchor	icon chỉ neo bảng vào cột biểu tượng, không có anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column neo một bộ thành cột neo, không có anchor hay icon
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	bảng đang nổi; hãy thu gọn nhóm của nó bằng window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	bảng không thuộc nhóm nào của dock
 @msg	only a dock group above or below others collapses, not one beside another	chỉ thu gọn được nhóm dock nằm trên hoặc dưới các nhóm khác, không phải nhóm nằm cạnh
 @msg	guides are locked	đường căn bị khóa
@@ -4786,6 +4801,7 @@ theme	Appearance	Giao diện
 @msg	{_1} is already used by {_2}	{_1} đã được dùng bởi {_2}
 @msg	{_1} is reserved by the system	{_1} được hệ thống dành riêng
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} tệp liên kết không thể đọc ở đây: bản xem trước được hiển thị
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} hình ảnh không thể giải mã: chúng hiển thị dưới dạng khung có dấu gạch chéo
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} ảnh liên kết đã thay đổi trên đĩa: Cập nhật liên kết hiển thị phiên bản mới
 @msg	{_1}: not saved, so not closed	{_1}: chưa lưu, nên không đóng
 @msg	{bpp}-bit bitmaps can't be read	bitmap {bpp}-bit không thể đọc được
@@ -4815,6 +4831,7 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+@msg	an image of {w} × {h} pixels is shown at reduced size	ảnh {w} × {h} điểm ảnh được hiển thị ở kích thước thu nhỏ
 	Basic	Cơ bản
 	Fill and Stroke Controls	Điều khiển tô và nét
 	Coloring Controls	Điều khiển màu
@@ -4994,6 +5011,10 @@ theme	Appearance	Giao diện
 	Snap to Perpendicular	Hút vào đường vuông góc
 @msg	unknown snap option `{key}` (use {options})	tùy chọn hút không hợp lệ `{key}` (dùng {options})
 	Gap Length:	Độ dài khoảng hở:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` cần `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` cần `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` cần `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	không có nhóm màu `{name}` trong tài liệu (xem swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Chế độ Logo phẳng đã dò ảnh ở {_1} × {_2} điểm ảnh, thu nhỏ bằng cách lấy trung bình từ {_3} × {_4}.
 	Artboard {n} of {total}	Bảng vẽ {n} / {total}
 	File {n} of {total}	Tệp {n} / {total}
@@ -5055,6 +5076,12 @@ theme	Appearance	Giao diện
 	Shift:	Dịch chuyển:
 	Fresco…	Bích họa…
 	Fresco	Bích họa
+	Lock Artboards	Khóa các bảng vẽ
+	Unlock Artboards	Mở khóa các bảng vẽ
+	Lock Selected	Khóa mục đã chọn
+	Lock All Except Selected	Khóa tất cả trừ mục đã chọn
+	Lock All	Khóa tất cả
+	Unlock Selected	Mở khóa mục đã chọn
 	Effect Gallery…	Thư viện hiệu ứng…
 	Effect Gallery Dialog	Hộp thoại Thư viện hiệu ứng
 	Arc Segment Tool Options	Tùy chọn công cụ cung phân đoạn
@@ -5146,3 +5173,40 @@ axis	Y Axis	Trục Y
 	Rectangular Grid Tool Options	Tùy chọn công cụ Lưới chữ nhật
 	Polar Grid Tool Options	Tùy chọn công cụ Lưới cực
 	Fill Line	Tô đoạn thẳng
+	Pathfinder Options	Tùy chọn Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Chia và Đường bao sẽ xóa tác phẩm không tô màu
+@msg	precision must be from 0.001 to 10 pt	precision phải từ 0,001 đến 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` phải là một đối tượng
+	Add to Brushes	Thêm vào cọ
+	Brush Library	Thư viện cọ
+	Save Brush Library	Lưu thư viện cọ
+	Save Brushes…	Lưu cọ…
+	Open Brush Library	Mở thư viện cọ
+	Selected Brushes Only	Chỉ cọ đã chọn
+	Brush Libraries Menu	Menu thư viện cọ
+	User Brush Library 1	Thư viện cọ người dùng 1
+	User Brush Library 2	Thư viện cọ người dùng 2
+	User Brush Library 3	Thư viện cọ người dùng 3
+	User Brush Library 4	Thư viện cọ người dùng 4
+	User Brush Library 5	Thư viện cọ người dùng 5
+	User Brush Library 6	Thư viện cọ người dùng 6
+	User Brush Library 7	Thư viện cọ người dùng 7
+	User Brush Library 8	Thư viện cọ người dùng 8
+	User Brush Library 9	Thư viện cọ người dùng 9
+	User Brush Library 10	Thư viện cọ người dùng 10
+	Art Ribbons	Dải băng nghệ thuật
+	Calligraphic Nibs	Ngòi bút thư pháp
+	Pattern Borders	Viền họa tiết
+	Scatter Shapes	Hình phân tán
+	Save Brush Library…	Lưu thư viện cọ…
+@msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
+@msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
+@msg	no brush `{n}`	không có cọ `{n}`
+@msg	no brush `{n}` in `{_1}`	không có cọ `{n}` trong `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	không có thư viện cọ `{key}` (xem brush.libraries)
+@msg	the document has no brushes to save	tài liệu không có cọ nào để lưu
+@msg	no empty artboards to delete	không có bảng vẽ trống nào để xóa
+	Scale Presets	Cài đặt sẵn tỉ lệ
+@msg	a {width}×{height} screenshot's byte count overflows	số byte của ảnh chụp {width}×{height} bị tràn
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} của cửa sổ ({points} điểm × {scale} DPI) không thể định cỡ ảnh chụp
+	Live preview	Xem trước trực tiếp

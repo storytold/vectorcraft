@@ -491,10 +491,20 @@ pub fn tl_literals() -> std::collections::BTreeSet<String> {
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if path.is_dir() {
-                stack.push(path);
+                if name != "tests" {
+                    stack.push(path);
+                }
             } else if name.ends_with(".rs") && name != "lib.rs" && !name.starts_with("tests") {
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
-                let code = text.split("#[cfg(test)]").next().unwrap_or("");
+                // Code up to the first test item; test-only imports (`#[cfg(test)] use …;`) don't end it.
+                let code = text
+                    .match_indices("#[cfg(test)]")
+                    .find(|&(at, m)| {
+                        let item = text[at + m.len()..].trim_start();
+                        let item = ["pub(crate) ", "pub(super) ", "pub "].iter().find_map(|p| item.strip_prefix(p)).unwrap_or(item);
+                        !item.starts_with("use ")
+                    })
+                    .map_or(text.as_str(), |(at, _)| &text[..at]);
                 let mut rest = code;
                 while let Some(at) = rest.find("tl!(\"") {
                     rest = &rest[at + 5..];
@@ -608,7 +618,7 @@ fn undo_scan() -> UndoScan {
     UndoScan { labels: out, templates, formatted }
 }
 
-/// The sources of a crate's `src` directory, test modules and files and `//` comments aside.
+/// The sources of a crate's `src` directory, test modules and files and comments aside.
 fn undo_sources(dir: &std::path::Path) -> Vec<String> {
     let mut out = vec![];
     let mut stack = vec![dir.to_path_buf()];
@@ -629,7 +639,8 @@ fn undo_sources(dir: &std::path::Path) -> Vec<String> {
     out
 }
 
-/// `text` with each `//` comment removed (a `//` inside a string literal stays).
+/// `text` with each comment removed: a `//` comment, and a `/* … */` comment (nested ones
+/// included), which becomes a space. A `//` or `/*` inside a string or character literal stays.
 fn without_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut i = 0;
@@ -639,12 +650,36 @@ fn without_comments(text: &str) -> String {
             i = end;
         } else if text[i..].starts_with("//") {
             i = text[i..].find('\n').map_or(text.len(), |n| i + n);
+        } else if text[i..].starts_with("/*") {
+            i = block_comment_end(text, i);
+            out.push(' ');
         } else {
             out.push(c);
             i += c.len_utf8();
         }
     }
     out
+}
+
+/// Where the `/* … */` comment starting at `text[at]` ends, past the comments nested in it; the
+/// end of `text` when the comment is not closed.
+fn block_comment_end(text: &str, at: usize) -> usize {
+    let (mut depth, mut i) = (0usize, at);
+    while let Some(c) = text[i..].chars().next() {
+        if text[i..].starts_with("/*") {
+            depth += 1;
+            i += 2;
+        } else if text[i..].starts_with("*/") {
+            depth = depth.saturating_sub(1);
+            i += 2;
+            if depth == 0 {
+                return i;
+            }
+        } else {
+            i += c.len_utf8();
+        }
+    }
+    text.len()
 }
 
 /// Where the string or character literal starting at `text[at]` (a `"` or `'`) ends, raw strings
@@ -1239,8 +1274,9 @@ fn latin_script_glyphs_are_available_without_system_fonts() {
         let families: Vec<_> = fonts.definitions().families.iter().map(|(f, stack)| (f.clone(), stack.first().cloned())).collect();
         for (family, first) in families {
             let first = first.unwrap();
-            let mut font = fonts.fonts.font(&family);
-            let chars = font.characters();
+            // Public 0.37 view: the family's characters with the fonts that have each (the old
+            // `fonts.font(...).characters()` reached a now-private field).
+            let chars = fonts.characters(&family);
             for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆäöÄÖßőűŐŰąćęłńśźżĄĆĘŁŃŚŹŻåÅ\u{a0}".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
@@ -1261,8 +1297,9 @@ fn cyrillic_glyphs_are_available_without_system_fonts() {
         let families: Vec<_> = fonts.definitions().families.iter().map(|(f, stack)| (f.clone(), stack.first().cloned())).collect();
         for (family, first) in families {
             let first = first.unwrap();
-            let mut font = fonts.fonts.font(&family);
-            let chars = font.characters();
+            // Public 0.37 view: the family's characters with the fonts that have each (the old
+            // `fonts.font(...).characters()` reached a now-private field).
+            let chars = fonts.characters(&family);
             for ch in "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯґєіїҐЄІЇ«»„“…–’".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
@@ -1337,13 +1374,16 @@ fn package_status_message_templates_parse() {
 }
 
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
-/// an error enum's variant: a literal or a `format!` string, on the call's line or wrapped over
-/// several lines, in the same template form as the catalogs' rows. It does not read a call whose
-/// name ends in a helper's name (`is_bad(`), a method call (`.err(`), `std::io::Error::new` or one
-/// of [`NAME_VARIANTS`]; without the helpers, it reads only the two variants in this source.
+/// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
+/// string, on the call's line or wrapped over several lines, in the same template form as the
+/// catalogs' rows. It does not read a call whose name ends in a helper's name (`is_bad(`), a method
+/// call (`.err(`), `std::io::Error::new`, one of [`NAME_VARIANTS`], `EngineError::Disabled`'s
+/// command id or a call in a comment. A `//` or `/*` inside a string or a raw string, or after a
+/// character literal such as `'"'`, does not start a comment. Without the helpers, the scan reads
+/// only the four variants in this source.
 #[test]
 fn message_scan_reads_error_helpers_and_variants() {
-    let code = r#"
+    let code = r##"
 fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     let w = p.get(key).and_then(Value::as_f64).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
     if w < 0.0 {
@@ -1365,9 +1405,16 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     let _ = std::io::Error::new(kind, "not an error variant");
     let _ = PsError::Ps("not an error message", op);
     let _ = EngineError::UnknownCommand("not.an.error.message".into());
+    let _ = EngineError::Disabled("not.a.reason".into(), "there is nothing to clear".into());
+    let _ = EngineError::Disabled(C.into(), format!("the {kind} panel is locked"));
+    // return Err(bad(cmd, "not an error: a commented-out call"));
+    /* let _ = err("not an error: a call in a block comment");
+       /* nested */ let _ = err("not an error: after a nested block comment"); */
+    let _ = ('"', '\'', b'"', bad(cmd, "the width // the height"));
+    let _ = (r#"a "/* raw string"#, |s: &'a str| -> Result<&'a str> { Err(bad(cmd, "the height is too large")) });
     Err(error("Select only dimensions"))
 }
-"#;
+"##;
     let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
     let found = source_messages(code, &engine);
     for want in [
@@ -1378,13 +1425,19 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
         "can't open `{name}`: damaged",
         "the {what} is nested too deep",
         "the manifest has no name",
+        "there is nothing to clear",
+        "the {kind} panel is locked",
+        "the width // the height",
+        "the height is too large",
         "Select only dimensions",
     ] {
         assert!(found.iter().any(|m| m == want), "{want} not in {found:#?}");
     }
-    assert!(!found.iter().any(|m| m.contains("not an error") || m.contains("not.an.error")), "{found:#?}");
+    let named = |m: &String| m.contains("not an error") || m.contains("not.an.error") || m.contains("not.a.reason");
+    assert!(!found.iter().any(named), "{found:#?}");
     let elsewhere = source_messages(code, &[]);
-    assert!(elsewhere.len() == 2 && elsewhere.iter().all(|m| m.contains("nested") || m.contains("manifest")), "{elsewhere:#?}");
+    let in_variants = ["nested", "manifest", "nothing to clear", "panel is locked"];
+    assert!(elsewhere.len() == 4 && elsewhere.iter().all(|m| in_variants.iter().any(|w| m.contains(w))), "{elsewhere:#?}");
     // A message read this way matches its row: `{key}` keeps its name.
     let c = Catalog::parse("@msg\t`{key}` must be a number\t`{key}` ok\n");
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
@@ -1529,6 +1582,10 @@ const ERROR_HELPERS: &[(&str, &str, usize)] =
 /// (`EngineError::UnknownCommand`) and a PostScript error name (`PsError::Ps`).
 const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
 
+/// Error variants whose message follows other arguments, with the number of arguments before it:
+/// `EngineError::Disabled(command id, reason)`.
+const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
+
 /// Messages that are signals, not text for people.
 const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
 
@@ -1559,18 +1616,21 @@ pub fn message_literals() -> std::collections::BTreeSet<String> {
     out
 }
 
-/// The message literals in `code`, as catalog templates (see [`message_literals`]): the literal
-/// after each of [`MESSAGE_MARKERS`], the first argument of an error enum's variant
-/// (`PsError::Limit(…)`, `Error::Manifest(…)`; not [`NAME_VARIANTS`]),
+/// The message literals in `code` outside its comments, as catalog templates (see
+/// [`message_literals`]): the literal after each of [`MESSAGE_MARKERS`], the message argument of an
+/// error enum's variant (the first, as in `PsError::Limit(…)` and `Error::Manifest(…)`, or the one
+/// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal or a `format!` string.
 fn source_messages(code: &str, helpers: &[(&str, usize)]) -> Vec<String> {
+    let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
     let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
-        if named { args.strip_prefix('(') } else { None }
+        let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
+        if named { skip_args(args.strip_prefix('(')?, before) } else { None }
     });
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)

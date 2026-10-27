@@ -1,19 +1,22 @@
 //! `vectorcraft --help` prints the usage and exits before the app starts (#2110): run from a
 //! terminal, SSH or an agent's shell it used to open the window (or hang without a display).
 
+use std::io::Read;
 use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
 
-/// Runs the desktop binary without a display, so a regression fails instead of opening a window.
+/// Runs the desktop binary without a display and with a control port it cannot parse, so a
+/// regression exits with that error instead of opening a window.
 fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut child = Command::new(BIN)
         .args(args)
         .env_remove("DISPLAY")
         .env_remove("WAYLAND_DISPLAY")
         .env_remove("WAYLAND_SOCKET")
-        .env_remove("VECTORCRAFT_CONTROL_PORT")
+        .env("VECTORCRAFT_CONTROL_PORT", "not-a-port")
         .env("VECTORCRAFT_NO_PREFS", "1")
         .envs(env.iter().copied())
         .stdin(Stdio::null())
@@ -21,15 +24,28 @@ fn run(args: &[&str], env: &[(&str, &str)]) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while child.try_wait().unwrap().is_none() {
-        if Instant::now() >= deadline {
-            child.kill().unwrap();
-            panic!("{args:?}: the app started instead of printing its usage");
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    child.wait_with_output().unwrap()
+    // Both pipes end when the binary exits, however long a loaded machine takes to start it. The
+    // deadline only stops a binary that is still running.
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let stdout = read_to_end(child.stdout.take().unwrap());
+    let stderr = read_to_end(child.stderr.take().unwrap());
+    let recv = |rx: &mpsc::Receiver<Vec<u8>>| rx.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    let (Ok(stdout), Ok(stderr)) = (recv(&stdout), recv(&stderr)) else {
+        child.kill().unwrap();
+        panic!("{args:?}: the app started instead of printing its usage");
+    };
+    Output { status: child.wait().unwrap(), stdout, stderr }
+}
+
+/// Reads `pipe` to its end on another thread.
+fn read_to_end(mut pipe: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = pipe.read_to_end(&mut buf);
+        let _ = tx.send(buf);
+    });
+    rx
 }
 
 fn prints_usage(args: &[&str], env: &[(&str, &str)]) {

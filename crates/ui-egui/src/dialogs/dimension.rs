@@ -100,10 +100,12 @@ fn precision(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, id: &str)
     let before = fields.get("precision").and_then(Value::as_u64).unwrap_or(2) as u32;
     let mut value = before;
     ui.label(tl!("Precision:"));
-    egui::ComboBox::from_id_salt(id).selected_text(value.to_string()).width(55.0).show_ui(ui, |ui| {
-        for n in 0..=6 {
-            ui.selectable_value(&mut value, n, n.to_string());
-        }
+    ui.name_inputs(tl!("Precision"), |ui| {
+        egui::ComboBox::from_id_salt(id).selected_text(value.to_string()).width(55.0).show_ui(ui, |ui| {
+            for n in 0..=6 {
+                ui.selectable_value(&mut value, n, n.to_string());
+            }
+        });
     });
     fields.insert("precision".into(), json!(value));
     value != before
@@ -129,15 +131,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         ui.horizontal(|ui| {
             widgets::label_row(ui, tl!("Scale:"), 96.0, |ui| {
                 let mut scale = f.get("scale").and_then(Value::as_str).unwrap_or_default().to_owned();
-                if ui.add(egui::TextEdit::singleline(&mut scale).desired_width(72.0)).changed() {
+                let changed = ui.name_inputs(tl!("Scale"), |ui| ui.add(egui::TextEdit::singleline(&mut scale).desired_width(72.0))).changed();
+                if changed {
                     f.insert("scale".into(), json!(scale));
                 }
-                egui::ComboBox::from_id_salt("dimension-scales").selected_text(tl!("Presets")).width(76.0).show_ui(ui, |ui| {
-                    for scale in ["1:1", "1:2", "1:5", "1:10", "1:20", "1:50", "1:100", "1:200", "2:1", "5:1", "10:1"] {
-                        if ui.selectable_label(false, scale).clicked() {
-                            f.insert("scale".into(), json!(scale));
+                ui.name_inputs(tl!("Scale Presets"), |ui| {
+                    egui::ComboBox::from_id_salt("dimension-scales").selected_text(tl!("Presets")).width(76.0).show_ui(ui, |ui| {
+                        for scale in ["1:1", "1:2", "1:5", "1:10", "1:20", "1:50", "1:100", "1:200", "2:1", "5:1", "10:1"] {
+                            if ui.selectable_label(false, scale).clicked() {
+                                f.insert("scale".into(), json!(scale));
+                            }
                         }
-                    }
+                    });
                 });
             });
             check(ui, f, "hideUnits", "Hide Units");
@@ -251,7 +256,7 @@ pub fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     egui::Window::new(tl!("Dimension Tool"))
-        .id(egui::Id::new("dimension-strip"))
+        .id(egui::Id::unique("dimension-strip"))
         .default_pos(egui::pos2(90.0, 120.0))
         .resizable(false)
         .collapsible(false)

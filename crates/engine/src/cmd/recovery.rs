@@ -603,7 +603,7 @@ struct Names {
 /// The name of the entry holding `bytes`: from their content (128 bits of hash and the length), so
 /// identical images share one entry and one written before isn't written again.
 fn blob_name(bytes: &Arc<Vec<u8>>) -> String {
-    let mut guard = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = NAMES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let Names { by_address, live_after_sweep } = &mut *guard;
     let names = by_address.get_or_insert_with(Default::default);
     let address = Arc::as_ptr(bytes) as usize;

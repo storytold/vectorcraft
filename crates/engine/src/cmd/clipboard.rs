@@ -23,6 +23,7 @@ use vectorcraft_geom::Rect;
 
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
 pub(crate) use resources::SwatchChoices;
+pub use resources::{ArtResources, art_resources};
 
 use super::*;
 use crate::DocState;

@@ -358,6 +358,15 @@ pub(crate) fn apply_numbers(app: &mut VectorcraftApp, p: &Value) -> Result<Value
     run_on_paragraphs(app, "text.setFormat", params)
 }
 
+/// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`): the markers of the
+/// list paragraphs of the selected type, or of those the Type tool's selection touches, become
+/// characters of the text and the lists are turned off (`text.convertListToText`, which also moves
+/// the Type tool's anchor and caret past the characters inserted at or before them).
+pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, String> {
+    text_style(app).ok_or("select some type first")?;
+    run_on_paragraphs(app, "text.convertListToText", json!({}))
+}
+
 /// The Bullets button and the arrow beside it (Paragraph panel). The button makes the paragraphs
 /// the panel acts on a bulleted list (`text.setFormat {list: "bullet"}`) and shows pressed while
 /// they all are one. The arrow lists the presets (`{bullet}`): None turns the list off, and the
@@ -374,7 +383,7 @@ pub fn bullets_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
         ui.painter().rect_filled(rect, egui::CornerRadius::same(4), t.hover);
     }
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
-    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Bullets")));
+    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Bullets")));
     let arrow = arrow.on_hover_text(tl!("Bullets"));
     let presets = [
         (tl!("None"), "none", None),
@@ -421,7 +430,7 @@ fn bullet_row(ui: &mut Ui, name: &str, bullet: Option<vectorcraft_doc::text::Bul
         Some(Bullet::Square) => painter.rect_filled(egui::Rect::from_center_size(c, vec2(6.0, 6.0)), 0.0, t.text_strong),
     };
     painter.text(rect.left_center() + vec2(42.0, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text_strong);
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, ui.is_enabled(), checked, name));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), checked, name));
     resp.clicked()
 }
 
@@ -441,7 +450,7 @@ pub fn numbers_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
         ui.painter().rect_filled(rect, egui::CornerRadius::same(4), t.hover);
     }
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
-    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Numbered List")));
+    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Numbered List")));
     let arrow = arrow.on_hover_text(tl!("Numbered List"));
     let picked = egui::Popup::menu(&arrow).show(|ui| {
         let mut picked = None;
@@ -475,7 +484,7 @@ fn number_row(ui: &mut Ui, sample: &str, checked: bool) -> bool {
         painter.text(rect.left_center() + vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, "✓", font.clone(), t.text_strong);
     }
     painter.text(rect.left_center() + vec2(22.0, 0.0), egui::Align2::LEFT_CENTER, sample, font, t.text_strong);
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, ui.is_enabled(), checked, sample));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), checked, sample));
     resp.clicked()
 }
 
@@ -526,27 +535,61 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     egui::Grid::new("para-grid").num_columns(4).spacing([4.0, 4.0]).show(ui, |ui| {
         label(ui, "→|", tl!("Left Indent"));
-        if let Some(v) = widgets::spin_field(ui, "pa-li", shared_para_field(app, |p| p.left_indent), unit, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) =
+            widgets::spin_field_named(ui, "pa-li", Some(tl!("Left Indent")), shared_para_field(app, |p| p.left_indent), unit, fw, 1.0, -1296.0, &[])
+        {
             format(app, json!({"leftIndent": v}));
         }
         label(ui, "|←", tl!("Right Indent"));
-        if let Some(v) = widgets::spin_field(ui, "pa-ri", shared_para_field(app, |p| p.right_indent), unit, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) =
+            widgets::spin_field_named(ui, "pa-ri", Some(tl!("Right Indent")), shared_para_field(app, |p| p.right_indent), unit, fw, 1.0, -1296.0, &[])
+        {
             format(app, json!({"rightIndent": v}));
         }
         ui.end_row();
         label(ui, "1→", tl!("First-line Left Indent"));
-        if let Some(v) = widgets::spin_field(ui, "pa-fi", shared_para_field(app, |p| p.first_line_indent), unit, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) = widgets::spin_field_named(
+            ui,
+            "pa-fi",
+            Some(tl!("First-line Left Indent")),
+            shared_para_field(app, |p| p.first_line_indent),
+            unit,
+            fw,
+            1.0,
+            -1296.0,
+            &[],
+        ) {
             format(app, json!({"firstLineIndent": v}));
         }
         ui.label("");
         ui.label("");
         ui.end_row();
         label(ui, "↑¶", tl!("Space Before Paragraph"));
-        if let Some(v) = widgets::spin_field(ui, "pa-sb", shared_para_field(app, |p| p.space_before), unit, fw, 1.0, 0.0, &[]) {
+        if let Some(v) = widgets::spin_field_named(
+            ui,
+            "pa-sb",
+            Some(tl!("Space Before Paragraph")),
+            shared_para_field(app, |p| p.space_before),
+            unit,
+            fw,
+            1.0,
+            0.0,
+            &[],
+        ) {
             format(app, json!({"spaceBefore": v}));
         }
         label(ui, "↓¶", tl!("Space After Paragraph"));
-        if let Some(v) = widgets::spin_field(ui, "pa-sa", shared_para_field(app, |p| p.space_after), unit, fw, 1.0, 0.0, &[]) {
+        if let Some(v) = widgets::spin_field_named(
+            ui,
+            "pa-sa",
+            Some(tl!("Space After Paragraph")),
+            shared_para_field(app, |p| p.space_after),
+            unit,
+            fw,
+            1.0,
+            0.0,
+            &[],
+        ) {
             format(app, json!({"spaceAfter": v}));
         }
         ui.end_row();
@@ -699,479 +742,4 @@ fn reset_panel(app: &mut VectorcraftApp) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_engine::Session;
-
-    fn alignment_row(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> egui::Rect {
-        let para = text_style(app).map_or_else(ParaStyle::default, |(_, p)| p);
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 3.0;
-            alignment_buttons(app, ui, &para, size);
-        })
-        .response
-        .rect
-    }
-
-    // Inspect the actual selected wells, including the shared Properties-size buttons.
-    fn alignment_frame(ctx: &egui::Context, app: &mut VectorcraftApp, size: f32) -> (Vec<Justify>, egui::Pos2) {
-        let mut row = egui::Rect::NOTHING;
-        let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| row = alignment_row(app, ui, size));
-        frame.textures_delta.clear();
-        fn wells(shape: &egui::Shape, color: egui::Color32, size: f32, out: &mut Vec<egui::Pos2>) {
-            match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| wells(s, color, size, out)),
-                egui::Shape::Rect(r) if r.fill == color && r.rect.size() == vec2(size, size) => out.push(r.rect.center()),
-                _ => {}
-            }
-        }
-        let centers: [egui::Pos2; 7] = std::array::from_fn(|i| row.min + vec2(size / 2.0 + i as f32 * (size + 3.0), size / 2.0));
-        let mut active = Vec::new();
-        for shape in &frame.shapes {
-            wells(&shape.shape, Tokens::get(ctx).tool_active, size, &mut active);
-        }
-        let selected = active
-            .iter()
-            .map(|pos| {
-                let index = centers.iter().position(|center| center.distance(*pos) < 0.1).expect("alignment well");
-                ALIGNMENTS[index].0
-            })
-            .collect();
-        (selected, centers[1])
-    }
-
-    fn editing_text(text: &str) -> (VectorcraftApp, Value) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
-        app.session.select_tool("type", Default::default()).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": text})).unwrap()["id"].clone();
-        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
-        assert!(super::super::character::text_editing(&app).is_some());
-        (app, id)
-    }
-
-    fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
-        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
-    }
-
-    #[test]
-    fn paragraph_mixed_direction_buttons_show_neither() {
-        let (mut app, id) = editing_text("A\nB");
-        app.session.prefs.show_indic_options = true;
-        app.run("text.setFormat", json!({"id": id, "direction": "leftToRight"})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "direction": "rightToLeft"})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        let para = text_style(&app).unwrap().1;
-        assert_eq!(selected_paragraph_direction(&app, &para), None);
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("text.setFormat", json!({"id": id, "direction": "leftToRight"})).unwrap();
-        assert_eq!(selected_paragraph_direction(&app, &para), Some(false));
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
-        assert_eq!(selected_paragraph_direction(&app, &para), Some(true));
-    }
-
-    #[test]
-    fn paragraph_mixed_composer_checks_neither_menu_item() {
-        let (mut app, id) = editing_text("A\nB\n");
-        app.run("text.setFormat", json!({"id": id, "composer": "singleLine"})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "everyLine"})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(shared_composer(&app), None);
-        app.run("text.setFormat", json!({"id": id, "composer": "everyLine"})).unwrap();
-        assert_eq!(shared_composer(&app), Some(Composer::EveryLine));
-    }
-
-    #[test]
-    fn paragraph_mixed_hyphenate_checks_off() {
-        let (mut app, id) = editing_text("A\nB\n");
-        app.run("text.setFormat", json!({"id": id, "hyphenate": true})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "hyphenate": false})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(shared_hyphenate(&app), None);
-        app.run("text.setFormat", json!({"id": id, "hyphenate": true})).unwrap();
-        assert_eq!(shared_hyphenate(&app), Some(true));
-    }
-
-    #[test]
-    fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
-        let (mut app, id) = editing_text("A\nB\n");
-        app.session.prefs.show_east_asian_options = true;
-        app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "none"})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "kinsoku": "soft", "mojikumi": "lineEndHalf"})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(shared_para(&app, |p| p.kinsoku), None);
-        assert_eq!(shared_para(&app, |p| p.mojikumi), None);
-        app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "lineEndHalf"})).unwrap();
-        assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
-        assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
-    }
-
-    #[test]
-    fn paragraph_mixed_indent_fields_show_blank() {
-        let (mut app, id) = editing_text("A\nB\n");
-        app.run("text.setFormat", json!({"id": id, "leftIndent": 10})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "leftIndent": 20})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(shared_para_field(&app, |p| p.left_indent), None);
-        assert_eq!(shared_para_field(&app, |p| p.space_before), Some(0.0));
-        app.run("text.setFormat", json!({"id": id, "leftIndent": 12})).unwrap();
-        assert_eq!(shared_para_field(&app, |p| p.left_indent), Some(12.0));
-        app.session.set_tool_option("stopEditing", &json!(true));
-        let other = app.run("text.create", json!({"x": 40, "y": 80, "text": "C"})).unwrap()["id"].clone();
-        app.run("text.setFormat", json!({"id": other, "leftIndent": 5})).unwrap();
-        app.run("select.set", json!({"ids": [id, other]})).unwrap();
-        assert_eq!(shared_para_field(&app, |p| p.left_indent), None);
-    }
-
-    #[test]
-    fn paragraph_mixed_alignment_click_center_and_undo() {
-        let (mut app, id) = editing_text("é\nאב\n終");
-        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
-        app.run("text.setStyle", json!({"id": id, "start": 3, "end": 7, "justify": "right"})).unwrap();
-        app.run("text.setStyle", json!({"id": id, "start": 8, "end": 11, "justify": "justifyAll"})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "start": 3, "end": 7, "leftIndent": 17, "spaceAfter": 9})).unwrap();
-        select_range(&mut app, 0, 7);
-        let before = app.session.active().unwrap().doc.clone();
-        let history = app.session.active().unwrap().history.undo.len();
-        let ctx = egui::Context::default();
-        let (selected, center) = alignment_frame(&ctx, &mut app, 28.0);
-        assert!(selected.is_empty(), "mixed paragraphs must not light one alignment: {selected:?}");
-        super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
-            alignment_row(app, ui, 28.0);
-        });
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
-        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-        let NodeKind::Text(text) = &node.kind else { panic!("text") };
-        assert_eq!(
-            (text.para_at(0).justify, text.para_at(1).justify, text.para_at(2).justify),
-            (Justify::Center, Justify::Center, Justify::JustifyAll)
-        );
-        let NodeKind::Text(old) = &before.node(node.id).unwrap().kind else { panic!("text") };
-        for i in 0..3 {
-            let mut expected = old.para_at(i).clone();
-            if i < 2 {
-                expected.justify = Justify::Center;
-            }
-            assert_eq!(text.para_at(i), &expected, "other paragraph fields stay unchanged");
-        }
-        assert_eq!(text.runs, old.runs);
-        assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.active().unwrap().doc, before);
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty());
-    }
-
-    #[test]
-    fn paragraph_mixed_alignment_caret_unicode_boundaries_and_uniform_controls() {
-        let (mut app, id) = editing_text("é\nאב\n");
-        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
-        app.run("text.setStyle", json!({"id": id, "start": 3, "end": 7, "justify": "right"})).unwrap();
-        app.run("text.setStyle", json!({"id": id, "start": 8, "end": 8, "justify": "justifyAll"})).unwrap();
-        let ctx = egui::Context::default();
-        for (start, end, expected) in [
-            (0, 2, vec![Justify::Left]),
-            (2, 2, vec![Justify::Left]), // newline belongs to the preceding paragraph
-            (3, 3, vec![Justify::Right]),
-            (4, 6, vec![Justify::Right]),          // byte offsets inside multi-byte characters
-            (0, 3, vec![]),                        // ending at the next paragraph's start touches both
-            (7, 0, vec![]),                        // reversed selection
-            (8, 8, vec![Justify::JustifyAll]),     // empty trailing paragraph
-            (100, 100, vec![Justify::JustifyAll]), // existing selection clamping
-        ] {
-            select_range(&mut app, start, end);
-            assert_eq!(alignment_frame(&ctx, &mut app, 24.0).0, expected, "range {start}..{end}");
-        }
-        for (expected, _, _, key) in ALIGNMENTS {
-            app.run("text.setStyle", json!({"id": id, "justify": key})).unwrap();
-            app.session.set_tool_option("selectAll", &json!(true));
-            assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected]);
-        }
-    }
-
-    #[test]
-    fn paragraph_mixed_alignment_auto_direction_and_split_runs() {
-        let (mut app, id) = editing_text("é\nאב");
-        // Character formatting splits the RTL paragraph across runs.
-        app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 5, "size": 24})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        let ctx = egui::Context::default();
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "Auto resolves separately per paragraph");
-        select_range(&mut app, 3, 7);
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Right]);
-        app.run("text.setFormat", json!({"id": id, "start": 3, "end": 7, "direction": "leftToRight"})).unwrap();
-        app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left]);
-        app.run("text.setStyle", json!({"id": id, "start": 0, "end": 2, "justify": "left"})).unwrap();
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit Left and resolved Auto agree");
-        app.run("text.setFormat", json!({"id": id, "start": 0, "end": 2, "direction": "rightToLeft"})).unwrap();
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit alignment ignores direction");
-    }
-
-    #[test]
-    fn paragraph_mixed_alignment_explicit_rtl_and_empty_controls() {
-        let (mut app, id) = editing_text("Latin\nאב\n\n");
-        app.run("text.setStyle", json!({"id": id, "justify": "auto"})).unwrap();
-        app.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
-        // Auto with an explicit direction still needs the real, possibly split, paragraph text.
-        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "size": 24})).unwrap();
-        let ctx = egui::Context::default();
-        for (start, end, expected) in [
-            (0, 5, Justify::Right),  // nonempty Latin with explicit RTL
-            (6, 10, Justify::Right), // nonempty Hebrew with explicit RTL
-            (11, 11, Justify::Left), // existing resolver's empty paragraph behavior
-            (12, 12, Justify::Left), // empty trailing paragraph
-        ] {
-            select_range(&mut app, start, end);
-            assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected], "explicit RTL range {start}..{end}");
-        }
-        app.run("text.setStyle", json!({"id": id, "start": 0, "end": 5, "justify": "left"})).unwrap();
-        select_range(&mut app, 0, 10);
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "explicit Left and Auto/RTL differ");
-        let (mut empty, id) = editing_text("");
-        empty.run("text.setStyle", json!({"id": id, "justify": "auto"})).unwrap();
-        empty.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
-        assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
-    }
-
-    #[test]
-    fn paragraph_mixed_alignment_object_group_and_no_text_controls() {
-        let (mut app, id) = editing_text("A\nB");
-        app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
-        app.run("text.setStyle", json!({"id": id, "start": 2, "end": 3, "justify": "right"})).unwrap();
-        app.session.set_tool_option("stopEditing", &json!(true));
-        let ctx = egui::Context::default();
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "whole object covers every paragraph");
-        app.run("object.group", json!({})).unwrap();
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "group descendant has mixed paragraphs");
-        app.run("text.setStyle", json!({"justify": "center"})).unwrap();
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
-        let group = app.session.active().unwrap().selection.objects.clone();
-        let other = app.run("text.create", json!({"x": 20, "y": 100, "text": "C"})).unwrap()["id"].clone();
-        let mut ids: Vec<Value> = group.iter().map(|id| json!(id.0)).collect();
-        ids.push(other);
-        app.run("select.set", json!({"ids": ids})).unwrap();
-        assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "different selected objects");
-        app.run("select.set", json!({"ids": []})).unwrap();
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "no-text default stays unchanged");
-        let (mut empty, _) = editing_text("");
-        assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
-    }
-
-    /// New Hebrew type aligns to the start of its direction (Align Right shows), an explicit
-    /// alignment stays as chosen, and Paragraph Direction (with the Indic options) sets the
-    /// direction: Auto then follows it.
-    #[test]
-    fn alignment_buttons_show_the_resolved_alignment_and_direction_sets_it() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
-        app.session.execute("text.create", &json!({"x": 200, "y": 50, "text": "שלום"})).unwrap();
-        let shown = |app: &VectorcraftApp| {
-            let para = text_style(app).unwrap().1;
-            shown_alignment(para.justify, resolved_rtl(app, &para))
-        };
-        assert_eq!(shown(&app), Justify::Right);
-        app.session.execute("object.group", &json!({})).unwrap();
-        assert_eq!(shown(&app), Justify::Right, "group controls resolve the same text descendant's direction");
-        app.session.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
-        assert_eq!(shown(&app), Justify::Left);
-        app.session.execute("text.setStyle", &json!({"justify": "auto"})).unwrap();
-        app.session.execute("text.setFormat", &json!({"direction": "leftToRight"})).unwrap();
-        assert_eq!(shown(&app), Justify::Left);
-        // The direction buttons show with the Indic options only.
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        let tips = |app: &mut VectorcraftApp| {
-            let ctx = egui::Context::default();
-            let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-            frame.textures_delta.clear();
-            frame.shapes.len()
-        };
-        let without = tips(&mut app);
-        app.session.prefs.show_indic_options = true;
-        assert!(tips(&mut app) > without, "two more buttons");
-    }
-
-    /// Insert Kashidas is in the panel with the Middle Eastern (Indic) options only, shows the
-    /// paragraph's setting, and Reset Panel sets it back to None.
-    #[test]
-    fn insert_kashidas_shows_with_the_indic_options_and_reset_panel_turns_it_off() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "كتب محمد"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, show);
-        assert!(!painted(&mut app).contains("Insert Kashidas"));
-        app.session.prefs.show_indic_options = true;
-        let text = painted(&mut app);
-        assert!(text.contains("Insert Kashidas") && text.contains("None"), "{text}");
-        app.run("text.setFormat", json!({"kashida": "medium"})).unwrap();
-        assert!(painted(&mut app).contains("Medium"));
-        let kashida = |app: &VectorcraftApp| {
-            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-            let NodeKind::Text(text) = &node.kind else { panic!("text") };
-            text.para_at(0).kashida
-        };
-        assert_eq!(kashida(&app), vectorcraft_doc::text::Kashida::Medium);
-        reset_panel(&mut app);
-        assert_eq!(kashida(&app), vectorcraft_doc::text::Kashida::None);
-    }
-
-    /// The Bullets button makes the paragraphs the Type tool's selection touches a bulleted list
-    /// with the dot and shows pressed; the arrow's presets pick another bullet, None turns the list
-    /// off, Type › Bullets and Numbering › Apply Bullets applies a list, and Reset Panel turns it
-    /// off.
-    #[test]
-    fn the_bullets_button_and_its_presets_set_the_list_and_reset_panel_clears_it() {
-        use vectorcraft_doc::text::{Bullet, ParaList};
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        let (mut app, id) = editing_text("One\nTwo");
-        select_range(&mut app, 0, 0);
-        let lists = |app: &VectorcraftApp| {
-            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-            let NodeKind::Text(text) = &node.kind else { panic!("text") };
-            (text.para_at(0).list, text.para_at(1).list)
-        };
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let row = std::cell::Cell::new(egui::Rect::NOTHING);
-        let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
-            row.set(ui.horizontal(|ui| bullets_button(app, ui, 28.0)).response.rect);
-        };
-        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-        let min = row.get().min;
-        let (button, arrow) = (min + vec2(14.0, 14.0), min + vec2(28.0 + 7.0, 14.0));
-        super::super::tests_appearance::click(&ctx, &mut app, button, &mut draw);
-        assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Dot)), None), "the caret's paragraph");
-        assert_eq!(shared_para(&app, |p| p.list.map(|l| l.bullet)), Some(Some(Bullet::Dot)), "the button shows pressed");
-        let mut pick = |app: &mut VectorcraftApp, name: &str| {
-            super::super::tests_appearance::click(&ctx, app, arrow, &mut draw);
-            let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], &mut draw);
-            let at = super::super::tests_appearance::text_rect(&texts, name).center();
-            super::super::tests_appearance::click(&ctx, app, at, &mut draw);
-        };
-        pick(&mut app, "Filled Square");
-        assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Square)), None));
-        pick(&mut app, "None");
-        assert_eq!(lists(&app), (None, None));
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("type.applyBullets", json!({})).unwrap();
-        assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Dot)), Some(ParaList::bulleted(Bullet::Dot))));
-        app.run("type.applyBullets", json!({"bullet": "dash"})).unwrap();
-        assert_eq!(lists(&app).0, Some(ParaList::bulleted(Bullet::Dash)));
-        app.session.set_tool_option("selectAll", &json!(true));
-        reset_panel(&mut app);
-        assert_eq!(lists(&app), (None, None));
-    }
-
-    /// The Numbered List button makes the paragraphs the Type tool's selection touches a numbered
-    /// list 1, 2, 3 and shows pressed; the arrow's presets, each shown by its first three numbers,
-    /// pick another style, None turns the list off, Type › Bullets and Numbering › Apply Numbers
-    /// applies a numbered list, and Reset Panel turns it off.
-    #[test]
-    fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_it() {
-        use vectorcraft_doc::text::{NumberStyle, ParaList};
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        let (mut app, id) = editing_text("One\nTwo");
-        select_range(&mut app, 0, 0);
-        let lists = |app: &VectorcraftApp| {
-            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-            let NodeKind::Text(text) = &node.kind else { panic!("text") };
-            (text.para_at(0).list, text.para_at(1).list)
-        };
-        let numbered = |style| Some(ParaList::numbered(style));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let row = std::cell::Cell::new(egui::Rect::NOTHING);
-        let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
-            row.set(ui.horizontal(|ui| numbers_button(app, ui, 28.0)).response.rect);
-        };
-        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-        let min = row.get().min;
-        let (button, arrow) = (min + vec2(14.0, 14.0), min + vec2(28.0 + 7.0, 14.0));
-        super::super::tests_appearance::click(&ctx, &mut app, button, &mut draw);
-        assert_eq!(lists(&app), (numbered(NumberStyle::Arabic), None), "the caret's paragraph");
-        assert_eq!(shared_para(&app, |p| p.list.and_then(|l| l.number)), Some(Some(NumberStyle::Arabic)), "the button shows pressed");
-        let mut pick = |app: &mut VectorcraftApp, name: &str| {
-            super::super::tests_appearance::click(&ctx, app, arrow, &mut draw);
-            let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], &mut draw);
-            let at = super::super::tests_appearance::text_rect(&texts, name).center();
-            super::super::tests_appearance::click(&ctx, app, at, &mut draw);
-        };
-        for (name, style) in [
-            ("I, II, III", NumberStyle::UpperRoman),
-            ("a, b, c", NumberStyle::LowerLetters),
-            ("001, 002, 003", NumberStyle::ThreeDigits),
-            ("1, 2, 3", NumberStyle::Arabic),
-        ] {
-            pick(&mut app, name);
-            assert_eq!(lists(&app), (numbered(style), None), "{name}");
-        }
-        pick(&mut app, "None");
-        assert_eq!(lists(&app), (None, None));
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("type.applyNumbers", json!({})).unwrap();
-        assert_eq!(lists(&app), (numbered(NumberStyle::Arabic), numbered(NumberStyle::Arabic)));
-        // The Numbered List button shows pressed and the Bullets button doesn't, and the other way
-        // round for a bulleted list.
-        // Each button and the arrow beside it have the same name; only a button shows pressed.
-        let pressed = |app: &mut VectorcraftApp| {
-            let nodes = crate::widgets::accessibility_tests::tree(|ui| {
-                ui.horizontal(|ui| {
-                    bullets_button(app, ui, 28.0);
-                    numbers_button(app, ui, 28.0);
-                });
-            });
-            let on = |label| nodes.iter().any(|n| n.label() == Some(label) && n.toggled() == Some(egui::accesskit::Toggled::True));
-            (on("Bullets"), on("Numbered List"))
-        };
-        assert_eq!(pressed(&mut app), (false, true));
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("type.applyBullets", json!({})).unwrap();
-        assert_eq!(pressed(&mut app), (true, false));
-        app.session.set_tool_option("selectAll", &json!(true));
-        app.run("type.applyNumbers", json!({})).unwrap();
-        app.run("type.applyNumbers", json!({"number": "upperLetters"})).unwrap();
-        assert_eq!(lists(&app).0, numbered(NumberStyle::UpperLetters));
-        app.session.set_tool_option("selectAll", &json!(true));
-        reset_panel(&mut app);
-        assert_eq!(lists(&app), (None, None));
-    }
-
-    /// Reset Panel turns Hyphenate and Roman Hanging Punctuation off and sets the Hyphenation and
-    /// Justification options back to their defaults in every paragraph it acts on, so the paragraphs
-    /// save neither.
-    #[test]
-    fn reset_panel_resets_the_hyphenation_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "First\nSecond"})).unwrap()["id"].clone();
-        app.run(
-            "text.setFormat",
-            json!({
-                "hyphenate": true, "wordsLongerThan": 8, "afterFirst": 2, "beforeLast": 4, "hyphenLimit": 2, "hyphenationZone": 18, "hyphenateCapitalized": false,
-                "wordSpacing": [60, 90, 200], "letterSpacing": [-5, 0, 5], "glyphScaling": [95, 100, 105], "autoLeading": 150, "singleWordJustification": "alignLeft", "romanHangingPunctuation": true
-            }),
-        )
-        .unwrap();
-        let paras = |app: &VectorcraftApp| {
-            let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-            let NodeKind::Text(text) = &node.kind else { panic!("text") };
-            [text.para_at(0).clone(), text.para_at(1).clone()]
-        };
-        for para in paras(&app) {
-            assert!(para.hyphenate);
-            assert_ne!(para.hyphenation, HyphenationOptions::default());
-            assert!(para.roman_hanging);
-            assert_ne!(para.justification, vectorcraft_doc::JustificationOptions::default());
-        }
-        reset_panel(&mut app);
-        for para in paras(&app) {
-            assert!(!para.hyphenate);
-            assert_eq!(para.hyphenation, HyphenationOptions::default());
-            assert_eq!(serde_json::to_value(&para).unwrap().get("hyphenation"), None, "saves no hyphenation options");
-            assert!(!para.roman_hanging, "Roman Hanging Punctuation off");
-            assert_eq!(serde_json::to_value(&para).unwrap().get("justification"), None, "saves no justification options");
-        }
-    }
-}
+mod tests;

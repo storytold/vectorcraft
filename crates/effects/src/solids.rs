@@ -358,5 +358,4 @@ pub fn solid_art(n: &Node) -> Option<Node> {
 }
 
 #[cfg(test)]
-#[path = "tests_solids.rs"]
 mod tests;

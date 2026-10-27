@@ -125,7 +125,7 @@ fn color_dropdown(ui: &mut egui::Ui, shown: &str) -> Option<usize> {
     widgets::combo(ui, "layer-color", tl!(shown), 140.0, false, |ui| {
         let mut chosen = None;
         for (i, (name, rgb)) in rows.enumerate() {
-            let chip = ui.id().with(("layer-color-chip", i));
+            let chip = egui::IdSalt::new(("layer-color-chip", i));
             let r = egui::Button::selectable(name == shown, (egui::Atom::custom(chip, CHIP), tl!(name))).atom_ui(ui);
             if let (Some(rect), Some([cr, cg, cb])) = (r.rect(chip), rgb) {
                 ui.painter().rect_filled(rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));

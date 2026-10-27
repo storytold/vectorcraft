@@ -78,10 +78,10 @@ fn font(r: &mut Reader) -> Option<FontObj> {
 }
 
 /// The bitmap of an image record: its BITMAPINFO and bits at the offsets the record gives.
-fn bitmap(rec: &[u8], off_bmi: u32, cb_bmi: u32, off_bits: u32, cb_bits: u32, alpha: Alpha) -> Result<dib::Rgba, String> {
+fn bitmap(rec: &[u8], off_bmi: u32, cb_bmi: u32, off_bits: u32, cb_bits: u32, alpha: Alpha, left: &mut u64) -> Result<dib::Rgba, String> {
     let bmi = slice(rec, off_bmi, cb_bmi).ok_or("damaged")?;
     let bits = slice(rec, off_bits, cb_bits).ok_or("damaged")?;
-    dib::decode(bmi, bits, alpha)
+    dib::decode(bmi, bits, alpha, left)
 }
 
 /// The rows a DIB's source rectangle counts from the bottom in (StretchDIBits on a bottom-up DIB).
@@ -286,7 +286,7 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
             if cb_bmi == 0 {
                 p.pattern_blit(d, rop);
             } else {
-                let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore);
+                let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
                 let src = source(xs, ys, ws, hs, &img, false);
                 p.image(img, src, d, rop, 1.0);
             }
@@ -298,7 +298,7 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
             r.skip(4)?;
             let rop = r.u32()?;
             let (wd, hd) = (r.i32()?, r.i32()?);
-            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore);
+            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, Alpha::Ignore, &mut p.pixels_left);
             let src = source(xs, ys, ws, hs, &img, bottom_up(rec, off_bmi));
             let d = Rect::new(f64::from(xd), f64::from(yd), f64::from(xd) + f64::from(wd), f64::from(yd) + f64::from(hd));
             p.image(img, src, d, rop, 1.0);
@@ -344,7 +344,8 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
             r.skip(24 + 4 + 4)?;
             let (off_bmi, cb_bmi, off_bits, cb_bits) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
             let (ws, hs) = (r.i32()?, r.i32()?);
-            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, if per_pixel { Alpha::Premultiplied } else { Alpha::Ignore });
+            let alpha = if per_pixel { Alpha::Premultiplied } else { Alpha::Ignore };
+            let img = bitmap(rec, off_bmi, cb_bmi, off_bits, cb_bits, alpha, &mut p.pixels_left);
             let src = source(xs, ys, ws, hs, &img, false);
             let d = Rect::new(f64::from(xd), f64::from(yd), f64::from(xd) + f64::from(wd), f64::from(yd) + f64::from(hd));
             p.image(img, src, d, crate::import::SRCCOPY, f64::from(constant) / 255.0);

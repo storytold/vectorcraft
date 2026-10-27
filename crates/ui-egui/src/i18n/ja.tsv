@@ -317,6 +317,7 @@ font-technology	Variable	バリアブル
 	Apply Bullets	箇条書きを適用
 	Numbered List	番号付きリスト
 	Apply Numbers	番号付けを適用
+	Convert to Text	テキストに変換
 	Filled Dot	黒丸
 	Dash	ダッシュ
 	Hollow Circle	白丸
@@ -363,6 +364,7 @@ font-technology	Variable	バリアブル
 	Create	作成
 	Release Selection	選択部分をリリース
 	Remove Threading	スレッドを解除
+	Break Thread	スレッドを切断
 	Fit Headline	ヘッドラインを合わせる
 	Decrease Font Size	フォントサイズを小さく
 	Decrease Font Size by Five Steps	フォントサイズを5段階小さく
@@ -566,6 +568,7 @@ font-technology	Variable	バリアブル
 	Save Grid as Preset…	グリッドをプリセットとして保存…
 	Snap to Pixel	ピクセルにスナップ
 	Precise Cursors	精密カーソル
+	Image Trace Preview	画像トレースのプレビュー
 	Snap to Point	ポイントにスナップ
 	Snap to Glyph	グリフにスナップ
 	New View…	新規表示…
@@ -580,6 +583,21 @@ font-technology	Variable	バリアブル
 	Saved View 8	保存した表示 8
 	Saved View 9	保存した表示 9
 	Saved View 10	保存した表示 10
+	Saved View 11	保存した表示 11
+	Saved View 12	保存した表示 12
+	Saved View 13	保存した表示 13
+	Saved View 14	保存した表示 14
+	Saved View 15	保存した表示 15
+	Saved View 16	保存した表示 16
+	Saved View 17	保存した表示 17
+	Saved View 18	保存した表示 18
+	Saved View 19	保存した表示 19
+	Saved View 20	保存した表示 20
+	Saved View 21	保存した表示 21
+	Saved View 22	保存した表示 22
+	Saved View 23	保存した表示 23
+	Saved View 24	保存した表示 24
+	Saved View 25	保存した表示 25
 	Window	ウィンドウ
 	New Window	新規ウィンドウ
 	Cascade	重ねて表示
@@ -981,7 +999,6 @@ font-technology	Variable	バリアブル
 	Browser	ブラウザー
 	Brush Affects:	ブラシの影響:
 	Brush Definition	ブラシの定義
-	Brush Libraries (on the roadmap)	ブラシライブラリ (今後対応予定)
 	Brush Options…	ブラシオプション…
 	Built-in presets are read-only: New… starts an editable copy.	組み込みのプリセットは読み取り専用です。「新規…」で編集可能なコピーを作成できます。
 	Built-in presets don't change: New makes a copy you can edit.	組み込みのプリセットは変更できません。「新規」で編集可能なコピーを作成します。
@@ -1512,6 +1529,7 @@ font-technology	Variable	バリアブル
 	Fill and Stroke	塗りと線
 	Fill new strokes	新しいストロークに塗りを適用
 	Alt key toggles to Smooth Tool	Alt キーでスムーズツールに切り替え
+	Live curve fitting	描画中にカーブを調整
 	Keep selected	選択を保持
 	Merge only with selection	選択範囲とのみ結合
 	Consider Open Filled Paths as Closed	塗りのある開いたパスを閉じたパスとみなす
@@ -3492,6 +3510,7 @@ file-filter	Templates	テンプレート
 	Miter Limit	角の比率
 	Miter Limit:	角の比率:
 	Mixed Objects	混在したオブジェクト
+	Mixed	混在
 	Model	モデル
 	Move All Objects	すべてのオブジェクトを移動
 	N pt per	N pt ごと
@@ -3738,13 +3757,10 @@ axis	Horizontal	水平方向
 axis	Vertical	垂直方向
 axis	Both	両方
 	Drag to move	移動するにはドラッグ
-	Drag to move out of the set	ドラッグしてセットから出す
 	Drag to float as a toolbar	ドラッグしてツールバーとして浮かせる
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
-	Drag to float the panel group	ドラッグしてパネルグループをフローティング
-	Put back in the dock	ドックに戻す
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
@@ -4368,6 +4384,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such layer or object	指定されたレイヤーまたはオブジェクトが見つかりません
 @msg	`{tool}` isn't a Liquify tool	`{tool}` はゆがみツールではありません
 @msg	{_1} linked file(s) can't be read here: their previews show	この環境では {_1} 個のリンクファイルを読み込めません: 代わりにプレビューを表示しています
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msg	Updated {_1} linked file(s) changed on disk	ディスク上で変更された {_1} 個のリンクファイルを更新しました
 @msg	pick a colour, gradient or pattern to save as a swatch	スウォッチとして保存するカラー、グラデーション、またはパターンを選択してください
@@ -4704,7 +4721,6 @@ effect	Vertical	垂直
 @msg	before must name a panel	before にパネルを指定してください
 @msg	docking action contains an unknown panel or an excessive split path	ドッキング操作に不明なパネルまたは長すぎる分割パスが含まれています
 @msg	group must be true or false	group は true または false にしてください
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	パネルはフローティング中です。グループは window.panel.float {panel, collapsed} で折りたたんでください
 @msg	panel is not in a dock group	パネルはドックのグループにありません
 @msg	only a dock group above or below others collapses, not one beside another	折りたためるのは他のグループの上下にあるドックのグループだけで、横に並んだグループは折りたためません
 @msg	icon must be true or false	icon は true または false である必要があります
@@ -4871,6 +4887,7 @@ lighting	Light	ライト
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} ピクセルの画像は縮小して表示されます
 @msg	the image can't be read as a texture	この画像はテクスチャとして読み込めません
 	Basic	基本
 	Fill and Stroke Controls	塗りと線のコントロール
@@ -5054,6 +5071,10 @@ lighting	Light	ライト
 	Snap to Perpendicular	垂線にスナップ
 @msg	unknown snap option `{key}` (use {options})	不明なスナップオプション `{key}` ({options} を使用してください)
 	Gap Length:	ギャップの長さ:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` には `library: "document"` が必要です
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` には `palette: "documentLibrary"` が必要です
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` には `mode: "color"` が必要です
+@msg	no color group `{name}` in the document (see swatch.list)	ドキュメントにカラーグループ `{name}` が見つかりません (swatch.list を参照)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	フラットロゴモードは画像を {_3} × {_4} から平均化して縮小した {_1} × {_2} ピクセルでトレースしました。
 	Artboard {n} of {total}	アートボード {n} / {total}
 	File {n} of {total}	ファイル {n} / {total}
@@ -5122,6 +5143,12 @@ lighting	Light	ライト
 	Shift:	シフト:
 	Fresco…	フレスコ…
 	Fresco	フレスコ
+	Lock Artboards	アートボードをロック
+	Unlock Artboards	アートボードのロックを解除
+	Lock Selected	選択をロック
+	Lock All Except Selected	選択以外をすべてロック
+	Lock All	すべてをロック
+	Unlock Selected	選択のロックを解除
 
 # Keyboard Shortcuts editor (File › Keyboard Shortcuts…) and the Print dialog's overprint note.
 	Keyboard Shortcuts	キーボードショートカット
@@ -5228,3 +5255,40 @@ axis	Y Axis	Y 軸
 	Rectangular Grid Tool Options	長方形グリッドツールオプション
 	Polar Grid Tool Options	同心円グリッドツールオプション
 	Fill Line	線を塗りつぶす
+	Pathfinder Options	パスファインダーオプション
+	Divide and Outline Will Remove Unpainted Artwork	分割およびアウトラインで塗りのないアートワークを削除
+@msg	precision must be from 0.001 to 10 pt	precision は 0.001～10 pt にしてください
+@msg	`pathfinder` must be an object	`pathfinder` にはオブジェクトを指定してください
+	Add to Brushes	ブラシに追加
+	Brush Library	ブラシライブラリ
+	Save Brush Library	ブラシライブラリを保存
+	Save Brushes…	ブラシを保存…
+	Open Brush Library	ブラシライブラリを開く
+	Selected Brushes Only	選択したブラシのみ
+	Brush Libraries Menu	ブラシライブラリメニュー
+	User Brush Library 1	ユーザーブラシライブラリ 1
+	User Brush Library 2	ユーザーブラシライブラリ 2
+	User Brush Library 3	ユーザーブラシライブラリ 3
+	User Brush Library 4	ユーザーブラシライブラリ 4
+	User Brush Library 5	ユーザーブラシライブラリ 5
+	User Brush Library 6	ユーザーブラシライブラリ 6
+	User Brush Library 7	ユーザーブラシライブラリ 7
+	User Brush Library 8	ユーザーブラシライブラリ 8
+	User Brush Library 9	ユーザーブラシライブラリ 9
+	User Brush Library 10	ユーザーブラシライブラリ 10
+	Art Ribbons	アートリボン
+	Calligraphic Nibs	カリグラフィペン先
+	Pattern Borders	パターンボーダー
+	Scatter Shapes	散布シェイプ
+	Save Brush Library…	ブラシライブラリを保存…
+@msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
+@msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)
+@msg	no brush `{n}`	ブラシ `{n}` がありません
+@msg	no brush `{n}` in `{_1}`	`{_1}` にブラシ `{n}` がありません
+@msg	no brush library `{key}` (see brush.libraries)	ブラシライブラリ `{key}` がありません (brush.libraries を参照)
+@msg	the document has no brushes to save	ドキュメントに保存するブラシがありません
+@msg	no empty artboards to delete	削除する空のアートボードはありません
+	Scale Presets	拡大縮小のプリセット
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} のスクリーンショットのバイト数がオーバーフローします
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	ウィンドウの {what}（{points} ポイント × {scale} DPI）ではスクリーンショットのサイズを決められません
+	Live preview	ライブプレビュー

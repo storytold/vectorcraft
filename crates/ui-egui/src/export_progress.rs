@@ -20,7 +20,7 @@ pub const DELAY: f64 = 0.4;
 
 /// Where the job a frame first saw is remembered (its id, the time it was first seen).
 fn seen_id() -> egui::Id {
-    egui::Id::new("export-progress-seen")
+    egui::Id::unique("export-progress-seen")
 }
 
 /// What the dialog shows: (label, steps done, steps in all, share done, exports after this one,
@@ -103,7 +103,7 @@ pub enum Pressed {
 /// ([`crate::plugin_runs`]).
 pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
     let mut pressed = None;
-    modal::show(ctx, heading, egui::Id::new(id), -40.0, 20, |ui| {
+    modal::show(ctx, heading, egui::Id::unique(id), -40.0, 20, |ui| {
         ui.set_width(360.0);
         modal::heading(ui, heading);
         ui.add_space(12.0);

@@ -159,3 +159,13 @@ display_name = "Aditya Sisodiya"
 real_name = "Angelo Bernardini"
 display_name = "Angelo Bernardini"
 sync_github_name = false
+
+[people.DCaioP]
+real_name = "Caio Pontes Magalhães"
+display_name = "Caio Pontes"
+sync_github_name = false
+
+[people.xbirks]
+real_name = "Andrés Ortega Montoya"
+display_name = "Andrés Ortega Montoya"
+sync_github_name = false

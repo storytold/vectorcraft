@@ -34,22 +34,24 @@ pub struct Workspace {
     pub status_bar: bool,
     /// Tool groups torn off the toolbar into floating strips (built-in workspaces: none).
     pub floating_flyouts: Vec<FloatingFlyout>,
-    /// Panels dragged out of the dock, where they float (built-in workspaces: none).
+    /// Floating panel groups in workspaces saved before the canvas joined `docking`; read only
+    /// to convert them ([`crate::layout_migration`]).
+    #[serde(skip_serializing)]
     pub floating_panels: Vec<FloatingPanels>,
-    /// Custom docking tree, including floating tab groups.
+    /// The workspace's own panel layout; none: the default layout from its flags.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docking: Option<craft_ui::docking::Layout<String>>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
-    /// Panels whose saved return destination is the iconic rail.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// Panels dropped on the icon column, in older workspaces (read only).
+    #[serde(default, skip_serializing)]
     pub docking_icons: std::collections::BTreeSet<String>,
-    /// The panels shown by dock groups collapsed to their tabs.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// The panels shown by dock groups collapsed to their tabs, in older workspaces (read only).
+    #[serde(default, skip_serializing)]
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Where the Tools panel floats (built-in workspaces: docked).
     pub toolbar_pos: Option<[f32; 2]>,
-    /// Main dock column width in screen points (#1753).
+    /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
 }
@@ -179,11 +181,11 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         open_panel: ui.open_panel.clone(),
         status_bar: ui.status_bar,
         floating_flyouts: ui.floating_flyouts.clone(),
-        floating_panels: ui.floating_panels.clone(),
+        floating_panels: Vec::new(),
         docking: ui.docking.clone(),
         docking_hidden: ui.docking_hidden.clone(),
-        docking_icons: ui.docking_icons.clone(),
-        docking_collapsed: ui.docking_collapsed.clone(),
+        docking_icons: Default::default(),
+        docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
         dock_width: ui.dock_width,
     }
@@ -204,16 +206,12 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.open_panel = w.open_panel.clone();
     ui.status_bar = w.status_bar;
     ui.floating_flyouts = w.floating_flyouts.clone();
-    ui.floating_panels = w.floating_panels.clone();
     ui.docking_generation = ui.docking_generation.wrapping_add(1);
     ui.docking = w.docking.clone().filter(crate::panel_docking::valid);
     ui.docking_hidden = w.docking_hidden.clone();
-    ui.docking_icons = w.docking_icons.iter().filter(|id| crate::state::rail_panel(id).is_some()).take(64).cloned().collect();
-    ui.docking_collapsed = w.docking_collapsed.iter().filter(|id| crate::menus::normalize_panel(id) == Some(id.as_str())).take(64).cloned().collect();
     ui.toolbar_pos = w.toolbar_pos;
     ui.dock_width = w.dock_width;
-    ui.dock_width_pending = true;
-    FloatingPanels::sanitize(&mut ui.floating_panels, &mut ui.toolbar_pos);
+    crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
     ui.flyout = None;
     ui.workspace = w.name.clone();
 }
@@ -433,7 +431,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let (mut ok, mut cancel) = (false, false);
     let mut action: Option<(&str, Value)> = None;
     let manage = d.kind == "manageWorkspaces";
-    crate::dialogs::modal::show(ctx, "Workspace", egui::Id::new("dialog-workspace"), -40.0, 22, |ui| {
+    crate::dialogs::modal::show(ctx, "Workspace", egui::Id::unique("dialog-workspace"), -40.0, 22, |ui| {
         ui.set_width(340.0);
         crate::dialogs::modal::heading(ui, if manage { tl!("Manage Workspaces") } else { tl!("New Workspace") });
         ui.add_space(12.0);
@@ -562,14 +560,19 @@ mod tests {
         // Changes made in it after saving (a panel moved, the control bar shown)…
         ui.control_bar = true;
         ui.dock_tab = DockTab::Layers;
-        ui.docking_icons.insert("layers".into());
-        ui.docking_collapsed.insert("layers".into());
+        let mut layout = crate::panel_docking::default_layout(&ui);
+        if let Some(craft_ui::docking::Node::Split { second, .. }) = layout.root.as_mut()
+            && let craft_ui::docking::Node::Dock { columns, .. } = second.as_mut()
+        {
+            columns[0].groups[0].minimized = true;
+        }
+        ui.docking = Some(layout.clone());
         // …are still there after switching away and back.
         switch(&mut ui, ESSENTIALS).unwrap();
-        assert!(!ui.control_bar && ui.docking_icons.is_empty() && ui.docking_collapsed.is_empty(), "Essentials comes as saved");
+        assert!(!ui.control_bar && ui.docking.is_none(), "Essentials comes as saved");
         switch(&mut ui, "Görkem").unwrap();
-        assert!(ui.control_bar && ui.dock_tab == DockTab::Layers && ui.docking_icons.contains("layers"));
-        assert!(ui.docking_collapsed.contains("layers"), "its collapsed group too");
+        assert!(ui.control_bar && ui.dock_tab == DockTab::Layers);
+        assert_eq!(ui.docking, Some(layout), "its panel layout too");
         // Built-in workspaces remember theirs too.
         switch(&mut ui, ESSENTIALS).unwrap();
         ui.status_bar = false;
@@ -583,7 +586,7 @@ mod tests {
         assert!(ui.control_bar);
         // Reset Görkem: back to the way it was saved.
         assert_eq!(reset(&mut ui), "Görkem");
-        assert!(!ui.control_bar && ui.docking_icons.is_empty());
+        assert!(!ui.control_bar && ui.docking.is_none());
         switch(&mut ui, ESSENTIALS).unwrap();
         switch(&mut ui, "Görkem").unwrap();
         assert!(!ui.control_bar, "a reset workspace stays reset");
@@ -723,7 +726,6 @@ mod tests {
         let wide = find(&ui, "Wide").unwrap();
         apply(&mut ui, &wide);
         assert_eq!(ui.dock_width, Some(420.0));
-        assert!(ui.dock_width_pending);
         let narrow = find(&ui, "Narrow").unwrap();
         apply(&mut ui, &narrow);
         assert_eq!(ui.dock_width, Some(260.0));

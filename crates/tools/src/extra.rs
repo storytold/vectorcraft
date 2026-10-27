@@ -310,8 +310,14 @@ impl Tool for ReshapeTool {
         }
         vec![]
     }
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        if let Some((p, t)) = &self.measure { vec![Overlay::Measure { p: *p, text: t.clone() }] } else { vec![] }
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if cx.measurement_labels
+            && let Some((p, t)) = &self.measure
+        {
+            vec![Overlay::Measure { p: *p, text: t.clone() }]
+        } else {
+            vec![]
+        }
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
         if self.grab.is_some() || Self::hit(cx, p).is_some() { Cursor::Move } else { Cursor::Arrow }
@@ -550,6 +556,7 @@ mod tests {
         let want = on.offset_label(30.0, 0.0);
         assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
         let off = ToolContext { measurement_labels: false, ..cx(&d, &s, &p) };
+        assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })), "overlay follows the current pref");
         let mut quiet = ReshapeTool::default();
         drag(&mut quiet, &off);
         assert!(!quiet.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));

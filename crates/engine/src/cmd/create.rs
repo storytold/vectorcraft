@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style?, color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -339,11 +339,22 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
+/// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
+/// null. A fraction, a negative, a non-finite or a non-number is an error rather than the default.
+fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
+    let n = number_or(p, key, default as f64, cmd)?;
+    if n.is_finite() && n >= 0.0 && n.fract() == 0.0 {
+        Ok(n as u64)
+    } else {
+        Err(bad(cmd, format!("`{key}` must be a whole number of at least 0, not {n}")))
+    }
+}
+
 fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.polygon")?, f64_req(p, "cy", "shape.polygon")?);
     let r = f64_req(p, "radius", "shape.polygon")?.abs();
-    check_numbers(p, &["sides", "rotation"], "shape.polygon")?;
-    let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
+    check_numbers(p, &["rotation"], "shape.polygon")?;
+    let sides = count_or(p, "sides", 6, "shape.polygon")?.clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
     let xf = Affine::translate(c.to_vec2()) * vectorcraft_geom::rotate_deg(rot);
     let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![], radii_relative: false };
@@ -353,9 +364,9 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
 fn star(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.star")?, f64_req(p, "cy", "shape.star")?);
     let r1 = f64_req(p, "radius1", "shape.star")?.abs();
-    check_numbers(p, &["radius2", "points", "rotation"], "shape.star")?;
+    check_numbers(p, &["radius2", "rotation"], "shape.star")?;
     let r2 = f64_or(p, "radius2", r1 / 2.0).abs();
-    let n = p.get("points").and_then(Value::as_u64).unwrap_or(5).clamp(2, 1000) as u32;
+    let n = count_or(p, "points", 5, "shape.star")?.clamp(2, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
     let turn = vectorcraft_geom::rotate_deg(rot);
     // A quarter or whole turn (a Constrain Angle of 90°, say) turns the upright star exactly.
@@ -500,12 +511,12 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.spiral")?, f64_req(p, "cy", "shape.spiral")?);
-    check_numbers(p, &["segments"], "shape.spiral")?;
+    let segments = count_or(p, "segments", 10, "shape.spiral")?.clamp(2, 1000) as u32;
     let path = shapes::spiral(
         c,
         f64_req(p, "radius", "shape.spiral")?,
         number_or(p, "decay", 80.0, "shape.spiral")?,
-        p.get("segments").and_then(Value::as_u64).unwrap_or(10).clamp(2, 1000) as u32,
+        segments,
         switch_or(p, "clockwise", true, "shape.spiral")?,
     );
     add_art(s, "Spiral", path_kind(path, None), None)
@@ -794,6 +805,9 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     }
     if let Some(f) = str_param(p, "style") {
         style.font_style = f.to_string();
+    } else if str_param(p, "font").is_some() {
+        // A family without a Regular (#4128): its closest style, as text.setRangeStyle takes.
+        super::textedit::fit_font_style(&mut style);
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),

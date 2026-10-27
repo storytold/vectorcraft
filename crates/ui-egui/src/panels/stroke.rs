@@ -130,7 +130,7 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
 /// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
 pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
     let unit = app.session.stroke_unit();
-    if let Some(w) = widgets::spin_field(ui, id, weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
+    if let Some(w) = widgets::spin_field_named(ui, id, Some(tl!("Weight:")), weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
         set(app, json!({"weight": w}));
     }
 }
@@ -246,7 +246,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let mut nf = shown;
         let mut changed = false;
         for (i, f) in shown.iter().enumerate() {
-            let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field(ui, ("dash", i), *f, unit, fw)).inner;
+            // The dash and gap names are in the row below the fields, so name each cell here:
+            // "dash 1", "gap 1", "dash 2"….
+            let cell = if i % 2 == 0 { tl!("dash") } else { tl!("gap") };
+            let name = format!("{} {}", cell, i / 2 + 1);
+            let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field_named(ui, ("dash", i), Some(&name), *f, unit, fw)).inner;
             if let Some(x) = r {
                 nf[i] = x.map(|v| v.max(0.0));
                 changed = true;
@@ -286,10 +290,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         row_label(ui, tl!("Scale:"));
         let mut ns = None;
         ui.add_enabled_ui(has_head, |ui| {
-            if let Some(v) = widgets::plain_field(ui, "arrow-scale-s", scale.0, "%", 0, 56.0) {
+            let start_name = format!("{} 1", tl!("Scale:"));
+            if let Some(v) = widgets::plain_field_named(ui, "arrow-scale-s", Some(&start_name), scale.0, "%", 0, 56.0) {
                 ns = Some((v, if linked { v } else { scale.1 }));
             }
-            if let Some(v) = widgets::plain_field(ui, "arrow-scale-e", scale.1, "%", 0, 56.0) {
+            let end_name = format!("{} 2", tl!("Scale:"));
+            if let Some(v) = widgets::plain_field_named(ui, "arrow-scale-e", Some(&end_name), scale.1, "%", 0, 56.0) {
                 ns = Some((if linked { v } else { scale.0 }, v));
             }
         });
@@ -368,7 +374,7 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 8.0, r.center().y), vec2(10.0, 10.0)), t.icon);
     let resp = resp.on_hover_text(if start { tl!("Start arrowhead") } else { tl!("End arrowhead") });
     let mut out = None;
-    egui::Popup::menu(&resp).id(egui::Id::new(("arrow-pop", id))).show(|ui| {
+    egui::Popup::menu(&resp).id(egui::Id::unique(("arrow-pop", id))).show(|ui| {
         ui.set_min_width(170.0);
         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
             for a in std::iter::once(None).chain(Arrowhead::ALL.map(Some)) {
@@ -749,6 +755,7 @@ mod tests {
                     delta: vec2(0.0, -1.0),
                     phase: egui::TouchPhase::Move,
                     modifiers: Modifiers::NONE,
+                    source: egui::MouseWheelSource::Unknown,
                 };
                 frame(&mut app, vec![Event::PointerMoved(at), notch]);
             }

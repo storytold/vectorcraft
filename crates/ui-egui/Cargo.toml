@@ -38,14 +38,22 @@ vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
 vectorcraft-eps = { workspace = true }
 vectorcraft-format = { workspace = true }
-egui = { workspace = true, features = ["bytemuck"] }
+egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_emoji_fonts"] }
 # With egui's `bytemuck`: copies rendered rasters into egui images whole (`canvas::color_image`).
+# `default_fonts`: egui 0.37 makes its bundled faces opt-in, and a dependency's dev-features do not
+# reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
+# without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
 bytemuck = "1"
 egui_extras = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+
+# Floating panels open in OS windows of their own on the desktop; on the web they stay in the page.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+craft-ui = { workspace = true, features = ["native-windows"] }
+craft-update = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is

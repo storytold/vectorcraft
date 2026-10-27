@@ -99,7 +99,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         run(app, ui, &op, &l);
     }
-    menu_item(ui, tl!("Pathfinder Options…"), false, false);
+    if menu_item(ui, tl!("Pathfinder Options…"), true, false) {
+        crate::menus::invoke(app, "object.pathfinder.options", json!({}));
+    }
     ui.separator();
     menu_item(ui, tl!("Make Compound Shape"), false, false);
     menu_item(ui, tl!("Release Compound Shape"), false, false);
@@ -110,6 +112,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use crate::widgets::accessibility_tests::{named, tree};
+    use serde_json::Value;
     use vectorcraft_engine::doc::{NodeId, NodeKind};
 
     /// #1635: a stroked object expanded inside a group leaves a group holding one group (its fill
@@ -187,5 +190,40 @@ mod tests {
         let bb = trap.geometric_bounds().unwrap();
         assert!((bb.x0 - 60.0).abs() < 0.02 && (bb.x1 - 62.0).abs() < 0.02, "2 pt into the blue: {bb:?}");
         assert!(trap.appearance.fill().is_some_and(|f| f.overprint));
+    }
+
+    /// The panel menu's Pathfinder Options… is enabled and opens the options as they are; OK keeps
+    /// them, and the next Divide leaves out the pieces of the object with no fill.
+    #[test]
+    fn pathfinder_options_open_and_ok_sets_what_the_next_divide_uses() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 100})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 60, "y": 30, "width": 100, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        let items = tree(|ui| menu(&mut app, ui));
+        assert!(!named(&items, "   Pathfinder Options…").is_disabled());
+        crate::menus::invoke(&mut app, "object.pathfinder.options", json!({}));
+        let d = app.ui.dialog.as_ref().expect("the Pathfinder Options");
+        assert_eq!(d.kind, crate::dialogs::pathfinder_options::KIND);
+        assert_eq!(Value::Object(d.fields.clone()), json!({"precision": 0.01, "removeRedundantPoints": false, "removeUnpainted": false}));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("removeUnpainted".into(), json!(true));
+        d.fields.insert("precision".into(), json!(0.1));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let o = app.session.prefs.pathfinder;
+        assert!(o.remove_unpainted && !o.remove_redundant_points && o.precision == 0.1, "{o:?}");
+        let id = app.run("object.pathfinder.divide", json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let group = app.session.active().unwrap().doc.node(NodeId(id)).unwrap();
+        let pieces = group.children().unwrap();
+        assert_eq!(pieces.len(), 1, "only the square's piece outside the unfilled rectangle");
+        assert!(pieces.iter().all(|p| !p.appearance.fill_paint().is_none()));
     }
 }

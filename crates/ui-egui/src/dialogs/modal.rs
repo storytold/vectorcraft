@@ -39,7 +39,7 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
 /// The layer of the backdrop behind a modal dialog window, which takes the clicks the rest of
 /// the app would get.
 pub(crate) fn backdrop() -> egui::LayerId {
-    egui::LayerId::new(egui::Order::Middle, Id::new("modal-dim"))
+    egui::LayerId::new(egui::Order::Middle, Id::unique("modal-dim"))
 }
 
 /// The dialog's heading, which also moves the window ([`drag_band`]).

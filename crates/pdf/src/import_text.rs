@@ -276,7 +276,7 @@ impl TextLine {
         self.column = true;
         // Letter-spaced Japanese is common: a gap reads as a space only when a whole em is left
         // out (the tracking set in `finish` keeps narrower gaps).
-        if step > size * 0.9 && !run.ends_with(' ') && !text.starts_with(' ') {
+        if step > size * 0.9 && !run.ends_with(is_space) && !text.starts_with(is_space) {
             run.push(' ');
         }
         if last.takes(look) {
@@ -334,15 +334,16 @@ impl TextLine {
             if !on_line && !on_curve {
                 return false;
             }
-            if !run.ends_with(' ') && !text.starts_with(' ') {
+            if !run.ends_with(is_space) && !text.starts_with(is_space) {
                 self.gaps.push(Gap { at: bytes, width: gap, em: self.last_size.min(at.size), on_line });
             }
             // A space the file draws between two glyphs spans the gaps on both sides of it.
             let drawn = self.drawn_space.take();
             if on_line {
-                if text == " " && !run.ends_with(' ') {
+                let mut chars = text.chars();
+                if chars.next().is_some_and(is_space) && chars.next().is_none() && !run.ends_with(is_space) {
                     self.drawn_space = Some((bytes, gap + advance));
-                } else if let Some((b, before)) = drawn.filter(|_| !text.starts_with(' ')) {
+                } else if let Some((b, before)) = drawn.filter(|_| !text.starts_with(is_space)) {
                     self.drawn_spaces.push((b, before + gap));
                 }
             }
@@ -904,12 +905,13 @@ fn tracked(runs: Vec<TextRun>, tracking: f64, spaces: &[(usize, f64)]) -> Vec<Te
         let mut from = 0;
         for &(b, own) in spaces.iter().filter(|(b, _)| (off..end).contains(b)) {
             let at = b - off;
-            let (Some(before), Some(space)) = (r.text.get(from..at), r.text.get(at..at + 1)) else { continue };
+            let len = r.text.get(at..).and_then(|t| t.chars().next()).map_or(1, char::len_utf8);
+            let (Some(before), Some(space)) = (r.text.get(from..at), r.text.get(at..at + len)) else { continue };
             if !before.is_empty() {
                 out.push(TextRun { text: before.to_string(), style: style.clone(), inline: None });
             }
             out.push(TextRun { text: space.to_string(), style: CharStyle { tracking: own, ..style.clone() }, inline: None });
-            from = at + 1;
+            from = at + len;
         }
         if let Some(rest) = r.text.get(from..).filter(|t| !t.is_empty()) {
             out.push(TextRun { text: rest.to_string(), style, inline: None });
@@ -917,6 +919,12 @@ fn tracked(runs: Vec<TextRun>, tracking: f64, spaces: &[(usize, f64)]) -> Vec<Te
         off = end;
     }
     out
+}
+
+/// A space a file draws as a glyph: U+0020, the no-break spaces (U+00A0, U+202F) or one of the
+/// fixed-width spaces U+2000 to U+200A (en, em, thin, hair and the others).
+fn is_space(c: char) -> bool {
+    matches!(c, ' ' | '\u{a0}' | '\u{2000}'..='\u{200a}' | '\u{202f}')
 }
 
 fn round(v: f64) -> f64 {

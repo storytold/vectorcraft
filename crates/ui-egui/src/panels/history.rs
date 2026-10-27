@@ -116,16 +116,17 @@ mod tests {
         assert_eq!(steps_to(3, 3), 0);
     }
 
-    /// The step names the panel paints, top to bottom. Without an image loader, each row's icon
-    /// paints a `⚠` instead, which is left out.
+    /// The step names the panel paints, top to bottom. The SVG loaders are installed so each row's
+    /// icon draws as an image instead of egui's ⚠ placeholder.
     fn listed(app: &mut VectorcraftApp) -> Vec<String> {
         let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
         out.shapes
             .iter()
             .filter_map(|c| match &c.shape {
-                egui::Shape::Text(t) if t.galley.text() != "⚠" => Some(t.galley.text().to_string()),
+                egui::Shape::Text(t) => Some(t.galley.text().to_string()),
                 _ => None,
             })
             .collect()

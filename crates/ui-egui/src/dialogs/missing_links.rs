@@ -29,6 +29,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     discard: Some("Ignore"),
     min_width: 380.0,
     max_width: Some(460.0),
+    inputs: |_| &["searchFolder"],
     ..DialogSpec::FORM
 };
 

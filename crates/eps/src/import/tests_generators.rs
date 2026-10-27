@@ -768,17 +768,24 @@ fn errors_say_what_the_postscript_error_means() {
 fn every_postscript_error_the_reader_raises_has_a_meaning() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("import");
     let mut raised = std::collections::BTreeSet::new();
-    for entry in std::fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        if !name.ends_with(".rs") || name.starts_with("tests") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        for marker in ["Ps(\"", "ps_err(\""] {
-            for (at, _) in text.match_indices(marker) {
-                let rest = &text[at + marker.len()..];
-                raised.insert(rest[..rest.find('"').unwrap()].to_string());
+    let mut stack = vec![dir];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !name.ends_with(".rs") || name.starts_with("tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for marker in ["Ps(\"", "ps_err(\""] {
+                for (at, _) in text.match_indices(marker) {
+                    let rest = &text[at + marker.len()..];
+                    raised.insert(rest[..rest.find('"').unwrap()].to_string());
+                }
             }
         }
     }

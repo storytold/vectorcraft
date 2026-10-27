@@ -221,7 +221,7 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         new = Some((from_components(mode, &c2), c2));
                     }
                     let bounds = f64::from(mode.min(i))..=f64::from(mode.max(i));
-                    if let Some(fv) = widgets::range_field(ui, ("swatch-field", i), v as f64, bounds, mode.suffix(i), 0, 52.0) {
+                    if let Some(fv) = widgets::range_field(ui, ("swatch-field", i), f64::from(v), bounds, mode.suffix(i), 0, 52.0) {
                         let mut c2 = comps.clone();
                         c2[i] = (fv as f32).clamp(mode.min(i), mode.max(i));
                         new = Some((from_components(mode, &c2), c2));
@@ -252,7 +252,7 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// A hex field showing `hex`; returns the colour typed into it once committed.
 fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    let id = ui.id().with("swatch-hex");
+    let id = ui.scope_id().with("swatch-hex");
     let editing = ui.memory(|m| m.has_focus(id));
     // As in `widgets::hex_field`: until the user types into it, the field shows `hex` as it is now
     // (#1692).

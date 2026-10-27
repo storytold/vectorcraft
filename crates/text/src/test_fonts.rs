@@ -408,6 +408,29 @@ pub fn twin_font(newer: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`numbered_font`]: styles numbered W3 and W6, and no Regular.
+pub const NUMBERED_FAMILY: &str = "Numtest Mincho";
+
+/// A face of family [`NUMBERED_FAMILY`] in `style` (`W3` or `W6`; the bundled Source Sans 3
+/// Regular renamed), as families whose styles are numbered have, with no Regular among them.
+/// `None` when it can't be built.
+pub fn numbered_font(style: &str) -> Option<Vec<u8>> {
+    const FACE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(FACE).ok()?;
+    let full = format!("{NUMBERED_FAMILY} {style}");
+    let postscript = format!("NumtestMincho-{style}");
+    let name = name_table(&[(1, NUMBERED_FAMILY), (2, style), (4, &full), (5, "Version 1.000"), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The character whose glyph [`colour_bitmap_font`] draws as a colour bitmap.
 pub const COLOUR_CHAR: char = 'E';
 

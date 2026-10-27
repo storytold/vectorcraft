@@ -5,7 +5,7 @@
 #                                 that menu item, so one id can read differently from its twin
 #            @plural              `source` is "one|other" (English forms); Brazilian Portuguese has
 #                                 the same two forms, so the translation is "one|other" too (see
-#                                 `plural` in i18n/mod.rs)
+#                                 `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
 #   lines starting with # and blank lines are ignored.
@@ -312,7 +312,6 @@
 	Brush Affects:	Pincel Afeta:
 	Brush Definition	Definição do Pincel
 	Brush Libraries	Bibliotecas de Pincéis
-	Brush Libraries (on the roadmap)	Bibliotecas de Pincéis (no roadmap)
 	Brush Options…	Opções de Pincel…
 	Brush Strokes	Traços de Pincel
 	Brushes	Pincéis
@@ -327,6 +326,7 @@
 	Apply Bullets	Aplicar Marcadores
 	Numbered List	Lista Numerada
 	Apply Numbers	Aplicar Numeração
+	Convert to Text	Converter em Texto
 	Filled Dot	Ponto Preenchido
 	Dash	Travessão
 	Hollow Circle	Círculo Vazado
@@ -986,6 +986,7 @@
 	Fill and Stroke	Preenchimento e Traçado
 	Fill new strokes	Preencher novos traçados
 	Alt key toggles to Smooth Tool	A tecla Alt alterna para a ferramenta Suavizar
+	Live curve fitting	Ajuste de curva em tempo real
 	Keep selected	Manter selecionado
 	Merge only with selection	Mesclar somente com a seleção
 	Consider Open Filled Paths as Closed	Tratar caminhos abertos preenchidos como fechados
@@ -2149,6 +2150,7 @@
 	Remove Plug-in	Remover Plug-in
 	Remove Selected Assets	Remover Ativos Selecionados
 	Remove Threading	Remover Encadeamento
+	Break Thread	Quebrar Encadeamento
 	Remove blank lines between paragraphs	Remover linhas em branco entre parágrafos
 	Remove “{keyword}”	Remover “{keyword}”
 	Rename	Renomear
@@ -2321,7 +2323,22 @@
 	Saved Selections	Seleções Salvas
 	Saved View 1	Visualização Salva 1
 	Saved View 10	Visualização Salva 10
+	Saved View 11	Visualização Salva 11
+	Saved View 12	Visualização Salva 12
+	Saved View 13	Visualização Salva 13
+	Saved View 14	Visualização Salva 14
+	Saved View 15	Visualização Salva 15
+	Saved View 16	Visualização Salva 16
+	Saved View 17	Visualização Salva 17
+	Saved View 18	Visualização Salva 18
+	Saved View 19	Visualização Salva 19
 	Saved View 2	Visualização Salva 2
+	Saved View 20	Visualização Salva 20
+	Saved View 21	Visualização Salva 21
+	Saved View 22	Visualização Salva 22
+	Saved View 23	Visualização Salva 23
+	Saved View 24	Visualização Salva 24
+	Saved View 25	Visualização Salva 25
 	Saved View 3	Visualização Salva 3
 	Saved View 4	Visualização Salva 4
 	Saved View 5	Visualização Salva 5
@@ -2560,6 +2577,7 @@
 	Snap to Grid	Ajustar à Grade
 	Snap to Pixel	Ajustar ao Pixel
 	Precise Cursors	Cursores Precisos
+	Image Trace Preview	Visualização do Rastreamento de Imagem
 	Snap to Point	Ajustar ao Ponto
 	Snap to Unit	Ajustar à Unidade
 	Snapping Tolerance	Tolerância de Ajuste
@@ -3026,7 +3044,6 @@ imageTrace	Outline	Contorno
 	% of all commits	% de todos os commits
 	Lines +/−	Linhas +/−
 	Drag to move	Arraste para mover
-	Drag to move out of the set	Arraste para tirar do conjunto
 	Drag to float as a toolbar	Arraste para flutuar como barra de ferramentas
 	Put back in the toolbar	Devolver à barra de ferramentas
 	Float Panel	Flutuar Painel
@@ -3356,8 +3373,6 @@ font-technology	Variable	Variáveis
 axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
-	Drag to float the panel group	Arraste para flutuar o grupo de painéis
-	Put back in the dock	Devolver ao dock
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
 	Drag to the window's left edge to dock	Arraste até a borda esquerda da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
@@ -3939,6 +3954,7 @@ axis	Both	Ambos
 @msg	{_1} is already used by {_2}	{_1} já é usado por {_2}
 @msg	{_1} is reserved by the system	{_1} é reservado pelo sistema
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} arquivo(s) vinculado(s) não podem ser lidos aqui: suas visualizações são exibidas
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	não foi possível decodificar {undecoded} imagem(ns): elas aparecem como caixas marcadas com um X
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagem(ns) vinculada(s) mudou(aram) no disco: Atualizar links mostra as novas versões
 @msg	{_1}: not saved, so not closed	{_1}: não salvo, portanto não fechado
 @msg	{bpp}-bit bitmaps can't be read	bitmaps de {bpp} bits não podem ser lidos
@@ -4076,7 +4092,6 @@ axis	Both	Ambos
 @msg	before must name a panel	before deve nomear um painel
 @msg	docking action contains an unknown panel or an excessive split path	a ação de encaixe contém um painel desconhecido ou um caminho de divisão excessivo
 @msg	group must be true or false	group deve ser true ou false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	o painel está flutuando; recolha o grupo com window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	o painel não está em um grupo do encaixe
 @msg	only a dock group above or below others collapses, not one beside another	só um grupo do encaixe acima ou abaixo de outros é recolhido, não um ao lado
 @msg	icon must be true or false	icon deve ser true ou false
@@ -4440,6 +4455,7 @@ axis	Both	Ambos
 	Miter Limit	Limite da Ponta
 	Miter Limit:	Limite da Ponta:
 	Mixed Objects	Objetos Mistos
+	Mixed	Misto
 	Mojikumi	Mojikumi
 	Move All Objects	Mover Todos os Objetos
 	N pt per	N pt por
@@ -5157,6 +5173,7 @@ mark-style	Japanese	Japonesas
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma
 @msg	an image of {w} × {h} pixels is too large to draw	uma imagem de {w} × {h} pixels é grande demais para ser desenhada
+@msg	an image of {w} × {h} pixels is shown at reduced size	uma imagem de {w} × {h} pixels é exibida em tamanho reduzido
 	Fill and Stroke Controls	Controles de Preenchimento e Traçado
 	Coloring Controls	Controles de Coloração
 	Draw Mode Controls	Controles de Modo de Desenho
@@ -5318,6 +5335,10 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar à Perpendicular
 @msg	unknown snap option `{key}` (use {options})	opção de ajuste desconhecida `{key}` (use {options})
 	Gap Length:	Comprimento da Lacuna:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` requer `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requer `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` requer `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	nenhum grupo de cores `{name}` no documento (veja swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	O modo Logotipo Plano traçou a imagem em {_1} × {_2} pixels, reduzida por média de {_3} × {_4}.
 	Artboard {n} of {total}	Mesa de Trabalho {n} de {total}
 	File {n} of {total}	Arquivo {n} de {total}
@@ -5378,6 +5399,12 @@ mark-style	Japanese	Japonesas
 	Shift:	Deslocamento:
 	Fresco…	Afresco…
 	Fresco	Afresco
+	Lock Artboards	Bloquear Mesas de Trabalho
+	Unlock Artboards	Desbloquear Mesas de Trabalho
+	Lock Selected	Bloquear selecionadas
+	Lock All Except Selected	Bloquear todas exceto as selecionadas
+	Lock All	Bloquear tudo
+	Unlock Selected	Desbloquear selecionadas
 	Effect Gallery…	Galeria de Efeitos…
 	Effect Gallery Dialog	Caixa de diálogo Galeria de Efeitos
 	Arc Segment Tool Options	Opções da Ferramenta Segmento de Arco
@@ -5467,3 +5494,40 @@ axis	Y Axis	Eixo Y
 	Rectangular Grid Tool Options	Opções da Ferramenta Grade Retangular
 	Polar Grid Tool Options	Opções da Ferramenta Grade Polar
 	Fill Line	Preencher linha
+	Pathfinder Options	Opções do Localizador de Caminhos
+	Divide and Outline Will Remove Unpainted Artwork	Dividir e Contorno removem a ilustração sem pintura
+@msg	precision must be from 0.001 to 10 pt	precision deve estar entre 0,001 e 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` deve ser um objeto
+	Add to Brushes	Adicionar aos Pincéis
+	Brush Library	Biblioteca de Pincéis
+	Save Brush Library	Salvar Biblioteca de Pincéis
+	Save Brushes…	Salvar Pincéis…
+	Open Brush Library	Abrir Biblioteca de Pincéis
+	Selected Brushes Only	Somente Pincéis Selecionados
+	Brush Libraries Menu	Menu de Bibliotecas de Pincéis
+	User Brush Library 1	Biblioteca de Pincéis do Usuário 1
+	User Brush Library 2	Biblioteca de Pincéis do Usuário 2
+	User Brush Library 3	Biblioteca de Pincéis do Usuário 3
+	User Brush Library 4	Biblioteca de Pincéis do Usuário 4
+	User Brush Library 5	Biblioteca de Pincéis do Usuário 5
+	User Brush Library 6	Biblioteca de Pincéis do Usuário 6
+	User Brush Library 7	Biblioteca de Pincéis do Usuário 7
+	User Brush Library 8	Biblioteca de Pincéis do Usuário 8
+	User Brush Library 9	Biblioteca de Pincéis do Usuário 9
+	User Brush Library 10	Biblioteca de Pincéis do Usuário 10
+	Art Ribbons	Fitas de Arte
+	Calligraphic Nibs	Penas Caligráficas
+	Pattern Borders	Bordas de Padrão
+	Scatter Shapes	Formas de Dispersão
+	Save Brush Library…	Salvar Biblioteca de Pincéis…
+@msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
+@msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
+@msg	no brush `{n}`	nenhum pincel `{n}`
+@msg	no brush `{n}` in `{_1}`	nenhum pincel `{n}` em `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	nenhuma biblioteca de pincéis `{key}` (consulte brush.libraries)
+@msg	the document has no brushes to save	o documento não tem pincéis para salvar
+@msg	no empty artboards to delete	não há mesas de trabalho vazias para excluir
+	Scale Presets	Predefinições de escala
+@msg	a {width}×{height} screenshot's byte count overflows	a contagem de bytes de uma captura {width}×{height} transborda
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	o {what} da janela ({points} pontos × {scale} DPI) não pode dimensionar uma captura
+	Live preview	Visualização ao vivo

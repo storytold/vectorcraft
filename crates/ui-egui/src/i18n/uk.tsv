@@ -336,7 +336,6 @@ font-technology	Variable	Варіативні
 	Brush Affects:	Пензель впливає на:
 	Brush Definition	Визначення пензля
 	Brush Libraries	Бібліотеки пензлів
-	Brush Libraries (on the roadmap)	Бібліотеки пензлів (у плані розвитку)
 	Brush Options…	Параметри пензля…
 	Brush Strokes	Мазки пензля
 	Brushes	Пензлі
@@ -351,6 +350,7 @@ font-technology	Variable	Варіативні
 	Apply Bullets	Застосувати маркери
 	Numbered List	Нумерований список
 	Apply Numbers	Застосувати нумерацію
+	Convert to Text	Перетворити на текст
 	Filled Dot	Заповнена крапка
 	Dash	Тире
 	Hollow Circle	Порожнє коло
@@ -1103,6 +1103,7 @@ font-technology	Variable	Варіативні
 	Fill and Stroke	Заливка та обведення
 	Fill new strokes	Заповнювати нові обведення
 	Alt key toggles to Smooth Tool	Клавіша Alt перемикає на інструмент «Згладжування»
+	Live curve fitting	Підгонка кривої під час малювання
 	Keep selected	Залишати вибраним
 	Merge only with selection	Об’єднувати лише з виділеним
 	Consider Open Filled Paths as Closed	Вважати відкриті контури із заливкою замкненими
@@ -1883,6 +1884,7 @@ file-filter	Templates	Шаблони
 	Miter Limit:	Межа гострого з’єднання:
 	Mixed Appearances	Змішане оформлення
 	Mixed Objects	Змішані об’єкти
+	Mixed	Змішане
 	Mode:	Режим:
 	Model	Модель
 	Modified	Змінено
@@ -2623,6 +2625,7 @@ mark-style	Japanese	Японський
 	Remove Plug-in	Забрати модуль
 	Remove Selected Assets	Забрати вибрані ресурси
 	Remove Threading	Прибрати зв’язування
+	Break Thread	Розірвати зв’язування
 	Remove “{keyword}”	Прибрати "{keyword}"
 	Rename	Перейменувати
 	Rename Asset	Перейменувати ресурс
@@ -2824,7 +2827,22 @@ mark-style	Japanese	Японський
 	Saved to User Defined: {}	Збережено в «Користувач»: {}
 	Saved View 1	Збережений вигляд 1
 	Saved View 10	Збережений вигляд 10
+	Saved View 11	Збережений вигляд 11
+	Saved View 12	Збережений вигляд 12
+	Saved View 13	Збережений вигляд 13
+	Saved View 14	Збережений вигляд 14
+	Saved View 15	Збережений вигляд 15
+	Saved View 16	Збережений вигляд 16
+	Saved View 17	Збережений вигляд 17
+	Saved View 18	Збережений вигляд 18
+	Saved View 19	Збережений вигляд 19
 	Saved View 2	Збережений вигляд 2
+	Saved View 20	Збережений вигляд 20
+	Saved View 21	Збережений вигляд 21
+	Saved View 22	Збережений вигляд 22
+	Saved View 23	Збережений вигляд 23
+	Saved View 24	Збережений вигляд 24
+	Saved View 25	Збережений вигляд 25
 	Saved View 3	Збережений вигляд 3
 	Saved View 4	Збережений вигляд 4
 	Saved View 5	Збережений вигляд 5
@@ -3117,6 +3135,7 @@ effect	Points	Точки
 	Snap to Grid	Прив’язати до сітки
 	Snap to Pixel	Прив’язати до пікселя
 	Precise Cursors	Точні курсори
+	Image Trace Preview	Перегляд трасування зображення
 	Snap to Point	Прив’язати до точки
 	Snap to Unit	Прив’язати до одиниць
 	Snapping Tolerance	Допуск прив’язки
@@ -3790,13 +3809,10 @@ axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
 	Drag to move	Перетягніть для переміщення
-	Drag to move out of the set	Перетягніть, щоб винести з набору
 	Drag to float as a toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
-	Drag to float the panel group	Перетягніть, щоб від’єднати групу панелей
-	Put back in the dock	Повернути у док
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
@@ -4390,6 +4406,7 @@ axis	Both	Обидві
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
 @msg	{_1} is reserved by the system	Сполучення {_1} зарезервоване системою
 @msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	не вдалося декодувати зображення ({undecoded}): вони показані як перекреслені рамки
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
 @msg	Updated {_1} linked file(s) changed on disk	Оновлено пов’язаних файлів, змінених на диску: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: не збережено, тому не закрито
@@ -4646,7 +4663,6 @@ axis	Both	Обидві
 @msg	before must name a panel	before має вказувати панель
 @msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
 @msg	group must be true or false	group має мати значення true або false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	панель від’єднана; згорніть її групу через window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	панель не входить до групи дока
 @msg	only a dock group above or below others collapses, not one beside another	згорнути можна лише групу дока над або під іншими, а не поруч з ними
 @msg	icon must be true or false	icon має бути true або false
@@ -4812,6 +4828,7 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+@msg	an image of {w} × {h} pixels is shown at reduced size	зображення розміром {w} × {h} пікселів показано в зменшеному розмірі
 @msg	the image can't be read as a texture	зображення не вдається прочитати як текстуру
 	Basic	Базовий
 	Fill and Stroke Controls	Елементи керування заливкою та обведенням
@@ -4994,6 +5011,10 @@ lighting	Light	Світло
 	Snap to Perpendicular	Прив’язати до перпендикуляра
 @msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	`colorGroup` needs `library: "document"`	для `colorGroup` потрібен `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` потрібен `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	для `colorGroup` потрібен `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	у документі немає колірної групи `{name}` (див. swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Режим «Плоский логотип» трасував зображення в розмірі {_1} × {_2} пікселів, зменшене усередненням з {_3} × {_4}.
 	Artboard {n} of {total}	Монтажна область {n} з {total}
 	File {n} of {total}	Файл {n} з {total}
@@ -5055,6 +5076,12 @@ lighting	Light	Світло
 	Shift:	Зсув:
 	Fresco…	Фреска…
 	Fresco	Фреска
+	Lock Artboards	Заблокувати монтажні області
+	Unlock Artboards	Розблокувати монтажні області
+	Lock Selected	Заблокувати вибрані
+	Lock All Except Selected	Заблокувати всі, крім вибраних
+	Lock All	Заблокувати всі
+	Unlock Selected	Розблокувати вибрані
 	Effect Gallery…	Галерея ефектів…
 	Effect Gallery Dialog	Діалог «Галерея ефектів»
 	Arc Segment Tool Options	Параметри інструменту «Дуговий сегмент»
@@ -5146,3 +5173,40 @@ axis	Y Axis	Вісь Y
 	Rectangular Grid Tool Options	Параметри інструменту «Прямокутна сітка»
 	Polar Grid Tool Options	Параметри інструменту «Полярна сітка»
 	Fill Line	Заливка відрізка
+	Pathfinder Options	Параметри обробки контурів
+	Divide and Outline Will Remove Unpainted Artwork	«Розділити» і «Контур» вилучають нефарбовану графіку
+@msg	precision must be from 0.001 to 10 pt	precision має бути від 0,001 до 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` має бути об’єктом
+	Add to Brushes	Додати до пензлів
+	Brush Library	Бібліотека пензлів
+	Save Brush Library	Зберегти бібліотеку пензлів
+	Save Brushes…	Зберегти пензлі…
+	Open Brush Library	Відкрити бібліотеку пензлів
+	Selected Brushes Only	Тільки вибрані пензлі
+	Brush Libraries Menu	Меню "Бібліотеки пензлів"
+	User Brush Library 1	Користувацька бібліотека пензлів 1
+	User Brush Library 2	Користувацька бібліотека пензлів 2
+	User Brush Library 3	Користувацька бібліотека пензлів 3
+	User Brush Library 4	Користувацька бібліотека пензлів 4
+	User Brush Library 5	Користувацька бібліотека пензлів 5
+	User Brush Library 6	Користувацька бібліотека пензлів 6
+	User Brush Library 7	Користувацька бібліотека пензлів 7
+	User Brush Library 8	Користувацька бібліотека пензлів 8
+	User Brush Library 9	Користувацька бібліотека пензлів 9
+	User Brush Library 10	Користувацька бібліотека пензлів 10
+	Art Ribbons	Художні стрічки
+	Calligraphic Nibs	Каліграфічні пера
+	Pattern Borders	Візерункові облямівки
+	Scatter Shapes	Розсіяні фігури
+	Save Brush Library…	Зберегти бібліотеку пензлів…
+@msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
+@msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
+@msg	no brush `{n}`	немає пензля `{n}`
+@msg	no brush `{n}` in `{_1}`	немає пензля `{n}` у `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	немає бібліотеки пензлів `{key}` (див. brush.libraries)
+@msg	the document has no brushes to save	у документі немає пензлів для збереження
+@msg	no empty artboards to delete	немає порожніх монтажних областей для видалення
+	Scale Presets	Набори масштабу
+@msg	a {width}×{height} screenshot's byte count overflows	кількість байтів знімка {width}×{height} переповнюється
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} вікна ({points} пунктів × {scale} DPI) не дозволяє задати розмір знімка
+	Live preview	Перегляд у реальному часі

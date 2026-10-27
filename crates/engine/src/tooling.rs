@@ -5,9 +5,13 @@ use vectorcraft_doc::Selection;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
-use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
+use vectorcraft_tools::shape::MAX_CORNER_RADIUS;
+use vectorcraft_tools::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
 use crate::{EngineError, Prefs, Result, Session};
+
+/// The tool whose radius is General › Corner Radius.
+const ROUNDED_RECTANGLE: &str = "roundedRectangle";
 
 /// View state the tools need from the frontend.
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +190,10 @@ impl Session {
     pub(crate) fn make_tool(&self, id: &str) -> Box<dyn Tool> {
         let mut t = vectorcraft_tools::create(id);
         Self::restore_tool_settings(&self.prefs, t.as_mut());
+        // General › Corner Radius is the Rounded Rectangle tool's radius (#394).
+        if id == ROUNDED_RECTANGLE {
+            t.set_option("cornerRadius", &Value::from(self.prefs.corner_radius));
+        }
         t
     }
 
@@ -204,6 +212,14 @@ impl Session {
     /// Store the persistent options of `t` in `prefs` (so they are saved with them too).
     fn store_tool_settings(prefs: &mut Prefs, t: &dyn Tool) {
         let opts = t.options();
+        // The radius ↑ and ↓ set while drawing a rounded rectangle (or `tool.setOption`) is the
+        // Corner Radius preference from then on, as in the reference app
+        // (<https://helpx.adobe.com/illustrator/using/drawing-simple-lines-shapes.html>).
+        if t.id() == ROUNDED_RECTANGLE
+            && let Some(r) = opts.get("cornerRadius").and_then(Value::as_f64).filter(|r| r.is_finite())
+        {
+            prefs.corner_radius = r.clamp(0.0, MAX_CORNER_RADIUS);
+        }
         for (store, keys) in settings::stores(t.id()) {
             let saved = prefs.tool_settings.entry(store.to_string()).or_default();
             for k in keys {
@@ -399,6 +415,12 @@ impl Session {
         self.tool.wants_ticks()
     }
 
+    /// Does the active tool build a stroke from every position the pointer passed
+    /// ([`vectorcraft_tools::Tool::wants_samples`])?
+    pub fn tool_wants_samples(&self) -> bool {
+        self.tool.wants_samples()
+    }
+
     /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`])?
     pub fn tool_waiting(&self) -> bool {
         self.tool.waiting()
@@ -429,6 +451,21 @@ impl Session {
         self.apply_actions(acts)
     }
 
+    /// Would [`Session::tool_text`] insert `text` unchanged (no control-character filtering,
+    /// newline normalization or document formatting such as Typographer's Quotes)? An IME commit
+    /// the application rewrites is an application edit, not an accepted IME insertion.
+    pub fn tool_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
+    }
+
+    /// Does the active tool's open typing session still match the document? An IME commit after
+    /// an external edit starts a fresh session (an application-side reset), so its receipt must
+    /// not be accepted as an unchanged IME insertion.
+    pub fn tool_ime_session_matches(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.ime_session_matches_document(cx))
+    }
+
+    /// Whether the active tool currently owns keyboard text input, as the Type tool does while editing.
     pub fn tool_wants_text(&self) -> bool {
         self.tool.wants_text()
     }
@@ -439,6 +476,37 @@ impl Session {
         let acts = self.with_tool_cx(view, |t, cx| t.ime_preedit(cx, text, active_chars));
         self.take_tool_panic()?;
         self.apply_actions(acts)
+    }
+
+    /// An IME replaces text around its composition before committing: delete `before`/`after`
+    /// units around the selection or pre-edit. The selection/pre-edit itself is preserved (the
+    /// following commit replaces it), and the commit shares the typing session, so the replacement
+    /// is one undo step.
+    pub fn tool_ime_delete_surrounding(
+        &mut self,
+        before: usize,
+        after: usize,
+        unit: vectorcraft_tools::SurroundingUnit,
+        view: ViewInfo,
+    ) -> Result<Vec<UiRequest>> {
+        let acts = self.with_tool_cx(view, |t, cx| t.ime_delete_surrounding(cx, before, after, unit));
+        self.take_tool_panic()?;
+        self.apply_actions(acts)
+    }
+
+    /// The active tool's stable IME owner `(document uid, target id, replacement epoch)`: the
+    /// document uid changes on document replacement, the epoch when the same target is started
+    /// afresh. Ordinary edits and caret moves leave both unchanged.
+    pub fn tool_ime_target(&mut self, view: ViewInfo) -> Option<(u64, u64, u64)> {
+        self.with_tool_cx(view, |t, cx| t.ime_target(cx))
+    }
+
+    /// The committed logical text around the IME cursor (UTF-8 byte offsets), with any pre-edit
+    /// removed and at most `max_bytes` bytes copied: the app's outgoing surrounding-text producer
+    /// (egui E21b) reads it. An explicit [`ImeSurrounding::Unavailable`] carries the narrow reason
+    /// (no editor, invalid offsets, or a selection wider than the limit).
+    pub fn tool_ime_surrounding(&mut self, max_bytes: usize, view: ViewInfo) -> ImeSurrounding {
+        self.with_tool_cx(view, |t, cx| t.ime_surrounding(cx, max_bytes))
     }
 
     /// Is the active tool showing uncommitted IME text?
@@ -556,7 +624,19 @@ impl Session {
         }
         Self::store_tool_settings(&mut self.prefs, t);
         let out = t.options();
-        if other.is_some() {
+        if let Some(other) = other {
+            // The tool that lent a selection tool for a Cmd-drag is kept aside, not made again when
+            // it is back: when it is the tool set, it takes the writes too (the Rounded Rectangle's
+            // radius stays the Corner Radius preference it just set) and what it shares, like the
+            // active tool.
+            if let Some(lender) = self.lender.as_deref_mut() {
+                if lender.id() == other.id() {
+                    for (k, v) in values {
+                        lender.set_option(k, v);
+                    }
+                }
+                Self::restore_tool_settings(&self.prefs, lender);
+            }
             Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
         }
         out

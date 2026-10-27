@@ -242,10 +242,13 @@ impl Instance {
         self.xm = Self::matrix(vals);
     }
 
-    /// `x y angle length Bh`.
+    /// `x y angle length Bh`. The point is `--` (undefined) when the gradient has no highlight.
     pub fn bh(&mut self, vals: &[V]) {
         let n: Vec<f64> = vals.iter().filter_map(V::num).collect();
-        if let [x, y, ..] = n.as_slice() {
+        if let [x, y, ..] = n.as_slice()
+            && x.is_finite()
+            && y.is_finite()
+        {
             self.hilight = Vec2::new(*x, *y);
         }
     }
@@ -417,6 +420,18 @@ mod tests {
         let Some(Paint::Gradient(gp)) = i.paint(&defs, Affine::IDENTITY) else { panic!() };
         let geom = gp.geom.unwrap();
         assert_eq!((geom.start, geom.end), (Point::new(10.0, 10.0), Point::new(50.0, 10.0)));
+    }
+
+    #[test]
+    fn gradient_stops_beyond_the_cap_are_ignored() {
+        let mut d = GradientDef::begin(&[V::Str(b"H".to_vec()), V::Num(0.0)]).unwrap();
+        let mut spots = vec![];
+        for i in 0..257 {
+            let ramp = i as f64 / 256.0 * 100.0;
+            d.stop(&nums(&[0.2, 0.4, 0.6, 0.0, 1.0, 1.0, 6.0, 50.0, ramp]), &mut spots);
+        }
+        let (_, g) = d.finish().unwrap();
+        assert_eq!(g.stops.len(), MAX_STOPS);
     }
 
     /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in

@@ -248,6 +248,7 @@
 	Apply Bullets	ბურთულების გამოყენება
 	Numbered List	დანომრილი სია
 	Apply Numbers	დანომრვის გამოყენება
+	Convert to Text	ტექსტად გარდაქმნა
 	Filled Dot	სავსე წერტილი
 	Dash	ტირე
 	Hollow Circle	ცარიელი წრე
@@ -294,6 +295,7 @@
 	Create	შექმნა
 	Release Selection	მონიშნულის მოხსნა
 	Remove Threading	დაკავშირების მოხსნა
+	Break Thread	დაკავშირების გაწყვეტა
 	Fit Headline	სათაურის მორგება
 	Find Font…	შრიფტის ძებნა…
 	Change Case	რეგისტრის შეცვლა
@@ -503,6 +505,21 @@
 	Saved View 8	შენახული ხედი 8
 	Saved View 9	შენახული ხედი 9
 	Saved View 10	შენახული ხედი 10
+	Saved View 11	შენახული ხედი 11
+	Saved View 12	შენახული ხედი 12
+	Saved View 13	შენახული ხედი 13
+	Saved View 14	შენახული ხედი 14
+	Saved View 15	შენახული ხედი 15
+	Saved View 16	შენახული ხედი 16
+	Saved View 17	შენახული ხედი 17
+	Saved View 18	შენახული ხედი 18
+	Saved View 19	შენახული ხედი 19
+	Saved View 20	შენახული ხედი 20
+	Saved View 21	შენახული ხედი 21
+	Saved View 22	შენახული ხედი 22
+	Saved View 23	შენახული ხედი 23
+	Saved View 24	შენახული ხედი 24
+	Saved View 25	შენახული ხედი 25
 	Window	ფანჯარა
 	New Window	ახალი ფანჯარა
 	Cascade	კასკადად
@@ -536,7 +553,7 @@
 	History	ისტორია
 	Info	ინფორმაცია
 	Layers	შრეები
-	Libraries	ბიბლიოთეკები
+	Libraries	ბიბლიოთეკა
 	Links	ბმულები
 	{count} linked image(s) changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({count}). ვაჩვენო ახალი ვერსიები?
 	Update Changed Links	შეცვლილი ბმულების განახლება
@@ -649,7 +666,6 @@
 	% of all commits	ყველა კომიტის %
 	Lines +/−	სტრიქონები +/−
 	Drag to move	გადაათრიეთ გადასაადგილებლად
-	Drag to move out of the set	გადაათრიეთ ნაკრებიდან გამოსატანად
 	Drag to float as a toolbar	გადაათრიეთ მცურავ ხელსაწყოთა ზოლად გადასაქცევად
 	Put back in the toolbar	ხელსაწყოთა ზოლში დაბრუნება
 	Float Panel	მცურავი პანელი
@@ -1176,6 +1192,7 @@ lighting	Light	სინათლე
 	Hide Thumbnail	ესკიზის დამალვა
 	Mixed Appearances	შერეული იერსახეები
 	Mixed Objects	შერეული ობიექტები
+	Mixed	შერეული
 	No options	პარამეტრები არ არის
 	No Selection	მონიშნული არაფერია
 	Offset X	X-წანაცვლება
@@ -1217,7 +1234,6 @@ lighting	Light	სინათლე
 	URL:	URL:
 	Use Even-Odd Fill Rule	ლუწ-კენტის შევსების წესის გამოყენება
 	Use Non-Zero Winding Fill Rule	არანულოვანი შემოვლის შევსების წესის გამოყენება
-	Brush Libraries (on the roadmap)	ფუნჯების ბიბლიოთეკები (სამომავლო გეგმაშია)
 	List View	სიის ხედი
 	New Art Brush from Selection	ახალი მხატვრული ფუნჯი მონიშნულიდან
 	New Bristle Brush	ახალი ჯაგრის ფუნჯი
@@ -1765,10 +1781,10 @@ lighting	Light	სინათლე
 	Right to Left	მარჯვნიდან მარცხნივ
 	Top to Bottom	ზემოდან ქვემოთ
 	Bottom to Top	ქვემოდან ზემოთ
-	Outer Corner Tile	გარე კუთხის ფილა
-	Side Tile	გვერდითი ფილა
-	Inner Corner Tile	შიდა კუთხის ფილა
-	Start Tile	საწყისი ფილა
+	Outer Corner Tile	გარე კუთხე
+	Side Tile	გვერდითი
+	Inner Corner Tile	შიდა კუთხე
+	Start Tile	საწყისი
 	End Tile	ბოლო ფილა
 	Fit	მორგება
 	Stretch to fit	მორგებამდე გაწელვა
@@ -2869,7 +2885,7 @@ theme	Appearance	იერსახე
 	Arrange by Column	სვეტების მიხედვით დალაგება
 	Save Preset	პრესეტის შენახვა
 	Screen (72 ppi)	ეკრანი (72 ppi)
-	Social Square Post 1080×1080	სოციალური ქსელის კვადრატული პოსტი 1080×1080
+	Social Square Post 1080×1080	კვადრატული პოსტი 1080×1080
 	Distribute	განაწილება
 	Distribute Spacing	შუალედების განაწილება
 	Enter Isolation Mode	იზოლაციის რეჟიმში შესვლა
@@ -2961,7 +2977,7 @@ theme	Appearance	იერსახე
 	90° & 45° & 30° Angles	90°, 45° და 30° კუთხეები
 	90° & 45° Angles	90° და 45° კუთხეები
 	90° Angles	90° კუთხეები
-	Additional Plug-ins Folder	პლაგინების დამატებითი საქაღალდე
+	Additional Plug-ins Folder	დამატებითი პლაგინები
 	Additional Fonts Folder	შრიფტების დამატებითი საქაღალდე
 	Alignment Guides	გასწორების დამხმარე ხაზები
 	Anchor Points, Handle, and Bounding Box Display	საყრდენი წერტილების, სახელურებისა და შემომსაზღვრელი ჩარჩოს ჩვენება
@@ -3004,19 +3020,19 @@ theme	Appearance	იერსახე
 	Enable Touch Workspace	სენსორული სამუშაო სივრცის ჩართვა
 	English: UK	ინგლისური: ბრიტანეთი
 	Every (minutes)	ყოველ (წუთში)
-	Exceptions (comma separated)	გამონაკლისები (მძიმით გამოყოფილი)
+	Exceptions (comma separated)	გამონაკლისები (მძიმით)
 	Feet	ფუტები
 	Files	ფაილები
 	Fill New Type Objects With Placeholder Text	ახალი ტექსტური ობიექტების ჩანაცვლების ტექსტით შევსება
 	Folder	საქაღალდე
-	Font Preview Size	შრიფტის წინასწარი ნახვის ზომა
+	Font Preview Size	შრიფტის ნიმუშის ზომა
 	Get Preferences	პარამეტრების მიღება
 	GPU Performance	GPU-ს წარმადობა
 	Graphics Processor	გრაფიკული პროცესორი
 	Gridline every	ბადის ხაზი ყოველ
 	Grids In Back	ბადე უკანა პლანზე
 	Handles	სახელურები
-	Hide Corner Widget for angles greater than	კუთხის ვიჯეტის დამალვა კუთხეებისთვის, რომლებიც აღემატება
+	Hide Corner Widget for angles greater than	ვიჯეტის დამალვა, თუ კუთხე >
 	High Performance (discrete)	მაღალი წარმადობა (დისკრეტული)
 	Highlight Alternate Glyphs	ალტერნატიული გლიფების გამოკვეთა
 	Highlight anchors on mouse over	საყრდენი წერტილების გამოკვეთა მაუსის მიტანისას
@@ -3043,8 +3059,8 @@ theme	Appearance	იერსახე
 	Measurement Labels	გაზომვის წარწერები
 	Meters	მეტრები
 	Move Locked and Hidden Artwork with Artboard	ჩაკეტილი და დამალული ნახატის სამუშაო დაფასთან ერთად გადაადგილება
-	Number of Recent Files to Display	საჩვენებელი ბოლოს გახსნილი ფაილების რაოდენობა
-	Number of Recent Fonts	ბოლოდროინდელი შრიფტების რაოდენობა
+	Number of Recent Files to Display	ბოლო ფაილების რაოდენობა
+	Number of Recent Fonts	ბოლო შრიფტების რაოდენობა
 	Numbers Without Units Are Points	ერთეულის გარეშე რიცხვები პუნქტებია
 	Object Highlighting	ობიექტების გამოკვეთა
 	Object Name	ობიექტის სახელი
@@ -3067,7 +3083,7 @@ theme	Appearance	იერსახე
 	Primary	ძირითადი
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
-	Render Threads (-1 = Automatic)	რენდერის ნაკადები (-1 = ავტომატური)
+	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
 	Scale Corners	კუთხეების მასშტაბირება
 	Scale Cursor Proportional to UI	კურსორის მასშტაბირება ინტერფეისის პროპორციულად
@@ -3361,8 +3377,6 @@ effect	Regular	ჩვეულებრივი
 	Replace With Font	ჩანაცვლება შრიფტით
 	  — substituted by {style}	  — ჩანაცვლებულია: {style}
 	  — {n} characters from another font	  — სხვა შრიფტის სიმბოლოები: {n}
-	Drag to float the panel group	გადაათრიეთ პანელების ჯგუფის მცურავად გადასაქცევად
-	Put back in the dock	დოკში დაბრუნება
 	All Scripts	ყველა დამწერლობა
 	Any Kind	ნებისმიერი ტიპი
 	Font Technology	შრიფტის ტექნოლოგია
@@ -3824,7 +3838,7 @@ font-technology	Variable	ცვლადი
 @msg	internal error: {msg} (please report this bug)	შიდა შეცდომა: {msg} (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	invalid PDF setting: {0}	PDF-ის არასწორი პარამეტრი: {0}
 @msg	invalid image data for `{0}`	არასწორი გამოსახულების მონაცემები `{0}`-სთვის
-@msg	invalid parameters for `{cmd}`: {msg}	არასწორი პარამეტრები `{cmd}`-სთვის: {msg}
+@msg	invalid parameters for `{cmd}`: {msg}	`{cmd}`: არასწორი პარამეტრები — {msg}
 @msg	is not an image VectorCraft reads	ეს არ არის გამოსახულება, რომელსაც VectorCraft კითხულობს
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	ის იყენებს `{at}`-ს, რომელიც VectorCraft-ის PostScript-ის წამკითხველმა არ იცის
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	ის იყენებს `{at}`-ს, რომელიც VectorCraft-ის PostScript-ის წამკითხველმა არ იცის, {procs}-ში
@@ -4124,6 +4138,7 @@ font-technology	Variable	ცვლადი
 @msg	{_1} is already used by {_2}	{_1} უკვე გამოიყენება აქ: {_2}
 @msg	{_1} is reserved by the system	{_1} დაჯავშნილია სისტემის მიერ
 @msg	{_1} linked file(s) can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({_1}): ჩანს მათი გადახედვა
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({undecoded}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({_1}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msg	{_1}: not saved, so not closed	{_1}: არ შენახულა, ამიტომ არ დაიხურა
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-ბიტიანი bitmap-ების წაკითხვა ვერ ხერხდება
@@ -4255,7 +4270,6 @@ font-technology	Variable	ცვლადი
 @msg	before must name a panel	before უნდა ასახელებდეს პანელს
 @msg	docking action contains an unknown panel or an excessive split path	მიმაგრების მოქმედება შეიცავს უცნობ პანელს ან ზედმეტად გრძელ გაყოფის გზას
 @msg	group must be true or false	group უნდა იყოს true ან false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	პანელი მცურავია; მისი ჯგუფი აკეცეთ window.panel.float {panel, collapsed}-ით
 @msg	panel is not in a dock group	პანელი არ არის დოკის ჯგუფში
 @msg	only a dock group above or below others collapses, not one beside another	იკეცება მხოლოდ სხვების ზემოთ ან ქვემოთ მდებარე დოკის ჯგუფი, არა სხვის გვერდით მდებარე
 @msg	icon must be true or false	icon უნდა იყოს true ან false
@@ -4609,7 +4623,7 @@ font-technology	Variable	ცვლადი
 3d	Bevel	წაკვეთა
 3d	Rounded	მომრგვალებული
 3d	Space	დაშორება
-	Bevel Shape	წაკვეთის ფორმა
+	Bevel Shape	ფორმა
 	Bevel Inside	წაკვეთა შიგნით
 	Bevel both sides	წაკვეთა ორივე მხარეს
 	Presets	პრესეტები
@@ -4787,6 +4801,7 @@ imageTrace	Outline	კონტური
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} პიქსელის გამოსახულება დასახატად ზედმეტად დიდია
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} პიქსელის გამოსახულება შემცირებული ზომით ჩანს
 	A later row takes this shortcut	ამ მალსახმობს ქვემოთა სტრიქონი იყენებს
 	Add to the Current Shortcuts	მიმდინარე მალსახმობებზე დამატება
 	Ambient Light	გარემოს სინათლე
@@ -4819,6 +4834,7 @@ imageTrace	Outline	კონტური
 	Needs a key	საჭიროა კლავიში
 	No equivalent	შესატყვისი არ არის
 	Precise Cursors	ზუსტი კურსორები
+	Image Trace Preview	გამოსახულების ვექტორიზაციის წინასწარი ნახვა
 	Press a key…	დააჭირეთ კლავიშს…
 	Read Shortcut Set File	მალსახმობების ნაკრების ფაილის წაკითხვა
 	Ready	მზადაა
@@ -5240,6 +5256,10 @@ imageTrace	Outline	კონტური
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„შენახვა“ წერს ფორმატს {_1} და არა {_2}: ამისთვის გამოიყენეთ file.saveAsTemplate
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	გამოსახულება არის {_1} × {_2} პიქსელი, ანუ ერთ მხარეზე {LARGE_TRACE_SIDE}-ზე მეტი: ის ვექტორიზდება, მაგრამ უფრო ნელა. ნაკლები სიზუსტის პრესეტი ან გამოსახულების უფრო პატარა ასლი უფრო სწრაფად ვექტორიზდება.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, შემცირდა {_3} × {_4}-დან (მაქსიმუმ {_5} მეგაპიქსელი).
+@msg	`colorGroup` needs `library: "document"`	`colorGroup`-ს სჭირდება `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup`-ს სჭირდება `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup`-ს სჭირდება `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	დოკუმენტში ფერების ჯგუფი `{name}` არ არის (იხ. swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	ბრტყელი ლოგოს რეჟიმში გამოსახულება ვექტორიზდა {_1} × {_2} პიქსელზე, საშუალოს გამოთვლით შემცირდა {_3} × {_4}-დან.
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` ბიბლიოთეკის პანელი არ არის (იხ. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` უნდა იყოს #rrggbb ფერი
@@ -5332,6 +5352,7 @@ imageTrace	Outline	კონტური
 	Light/Dark Balance	ნათელი/მუქი ბალანსი
 	Move Anchor Point	საყრდენი წერტილის გადაადგილება
 	Alt key toggles to Smooth Tool	Alt კლავიში ჩართავს გაგლუვების ხელსაწყოს
+	Live curve fitting	მრუდის მორგება ხატვისას
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} ინახავს დოკუმენტის {n} სამუშაო დაფიდან 1-ს: ფაილი ხელახლა ერთით გაიხსნება. ყველას შესანარჩუნებლად ჩართეთ „რედაქტირების შესაძლებლობების შენარჩუნება“.
 	Chalk & Charcoal…	ცარცი და ნახშირი…
 	Chalk & Charcoal	ცარცი და ნახშირი
@@ -5366,6 +5387,12 @@ imageTrace	Outline	კონტური
 	Shift:	წანაცვლება:
 	Fresco…	ფრესკა…
 	Fresco	ფრესკა
+	Lock Artboards	სამუშაო დაფების ჩაკეტვა
+	Unlock Artboards	სამუშაო დაფების განბლოკვა
+	Lock Selected	მონიშნულის ჩაკეტვა
+	Lock All Except Selected	მონიშნულის გარდა ყველაფრის ჩაკეტვა
+	Lock All	ყველაფრის ჩაკეტვა
+	Unlock Selected	მონიშნულის განბლოკვა
 	Effect Gallery	ეფექტების გალერეა
 	Add filters from the list above	დაამატეთ ფილტრები ზემოთ მოცემული სიიდან
 	Add to Stack	დასტაში დამატება
@@ -5466,3 +5493,40 @@ axis	Y Axis	Y ღერძი
 	Rectangular Grid Tool Options	მართკუთხა ბადის ხელსაწყოს პარამეტრები
 	Polar Grid Tool Options	პოლარული ბადის ხელსაწყოს პარამეტრები
 	Fill Line	ხაზის შევსება
+	Pathfinder Options	ტრაექტორიების ოპერაციების პარამეტრები
+	Divide and Outline Will Remove Unpainted Artwork	დაყოფა და კონტურები წაშლის შეუღებავ ნახატს
+@msg	precision must be from 0.001 to 10 pt	precision უნდა იყოს 0,001-დან 10 pt-მდე
+@msg	`pathfinder` must be an object	`pathfinder` უნდა იყოს ობიექტი
+	Add to Brushes	ფუნჯებში დამატება
+	Brush Library	ფუნჯების ბიბლიოთეკა
+	Save Brush Library	ფუნჯების ბიბლიოთეკის შენახვა
+	Save Brushes…	ფუნჯების შენახვა…
+	Open Brush Library	ფუნჯების ბიბლიოთეკის გახსნა
+	Selected Brushes Only	მხოლოდ მონიშნული ფუნჯები
+	Brush Libraries Menu	ფუნჯების ბიბლიოთეკების მენიუ
+	User Brush Library 1	მომხმარებლის ფუნჯების ბიბლიოთეკა 1
+	User Brush Library 2	მომხმარებლის ფუნჯების ბიბლიოთეკა 2
+	User Brush Library 3	მომხმარებლის ფუნჯების ბიბლიოთეკა 3
+	User Brush Library 4	მომხმარებლის ფუნჯების ბიბლიოთეკა 4
+	User Brush Library 5	მომხმარებლის ფუნჯების ბიბლიოთეკა 5
+	User Brush Library 6	მომხმარებლის ფუნჯების ბიბლიოთეკა 6
+	User Brush Library 7	მომხმარებლის ფუნჯების ბიბლიოთეკა 7
+	User Brush Library 8	მომხმარებლის ფუნჯების ბიბლიოთეკა 8
+	User Brush Library 9	მომხმარებლის ფუნჯების ბიბლიოთეკა 9
+	User Brush Library 10	მომხმარებლის ფუნჯების ბიბლიოთეკა 10
+	Art Ribbons	ნახატის ლენტები
+	Calligraphic Nibs	კალიგრაფიული წვერები
+	Pattern Borders	პატერნის ბორდიურები
+	Scatter Shapes	გაბნეული ფიგურები
+	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
+@msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
+@msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
+@msg	no brush `{n}`	ფუნჯი `{n}` არ არის
+@msg	no brush `{n}` in `{_1}`	`{_1}`-ში ფუნჯი `{n}` არ არის
+@msg	no brush library `{key}` (see brush.libraries)	ფუნჯების ბიბლიოთეკა `{key}` არ არის (იხ. brush.libraries)
+@msg	the document has no brushes to save	დოკუმენტში შესანახი ფუნჯები არ არის
+@msg	no empty artboards to delete	წასაშლელი ცარიელი სამუშაო დაფები არ არის
+	Scale Presets	მასშტაბის წინასწარ დაყენებული მნიშვნელობები
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} ეკრანის სურათის ბაიტების რაოდენობა გადაივსო
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	ფანჯრის {what} ({points} პუნქტი × {scale} DPI) ეკრანის სურათის ზომას ვერ განსაზღვრავს
+	Live preview	ცოცხალი წინასწარი ნახვა

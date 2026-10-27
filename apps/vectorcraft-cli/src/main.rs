@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -90,7 +90,7 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
       formats). --scale sizes a raster OUT (pixels per point, default 1); other formats leave it
       out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
@@ -103,8 +103,11 @@ USAGE:
       IN left things out (hidden text, art or layers it could not read; the notes say which) unless
       --replace-lossy is given. --editing-data opens a .ai or an EPS with editing data from its editing copy
       even where that draws differently from its PDF part or page (which can be older), as long as
-      it can be read. The
-      result has the export's warnings, and importWarnings for what reading IN left out.
+      it can be read. A PDF OUT omits the embedded native document unless --preserve-editing is
+      given (the app's Save As PDF still defaults to keeping it). With --preserve-editing, when the
+      attachment is written the result's warnings say so (it is left out, with its own warning, for
+      --artboard or a --range without every artboard).
+      The result has the export's warnings, and importWarnings for what reading IN left out.
       --ai-version 7 writes a .ai as the legacy version 7 (layers, groups and type kept; one file
       per artboard, OUT-<artboard>.ai when there are several; default pdf, PDF-compatible), with
       --hidden-objects (default layer: a hidden layer above each layer's hidden objects; omit;
@@ -274,8 +277,8 @@ fn convert(args: &[String]) -> Result<(), String> {
         return help();
     }
     let mut files = vec![];
-    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data) =
-        (1.0f64, None::<u64>, None::<String>, false, false, false);
+    let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data, mut preserve_editing) =
+        (1.0f64, None::<u64>, None::<String>, false, false, false, false);
     let mut decimals = None::<u64>;
     // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
     // `transparentImages`); the engine checks their values.
@@ -290,6 +293,7 @@ fn convert(args: &[String]) -> Result<(), String> {
             "--decimals" => decimals = Some(it.next().and_then(|v| v.parse::<u64>().ok()).ok_or("--decimals needs a number")?),
             "--replace-lossy" => replace_lossy = true,
             "--editing-data" => editing_data = true,
+            "--preserve-editing" => preserve_editing = true,
             "--ai-version" => legacy.push(("aiVersion", it.next().cloned().ok_or("--ai-version needs 7 or pdf")?)),
             "--hidden-objects" => legacy.push(("hiddenObjects", it.next().cloned().ok_or("--hidden-objects needs layer, omit or visible")?)),
             "--transparent-images" => legacy.push(("transparentImages", it.next().cloned().ok_or("--transparent-images needs flatten or omit")?)),
@@ -319,6 +323,9 @@ fn convert(args: &[String]) -> Result<(), String> {
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
         }
+        if vectorcraft_engine::cmd::fileio::format_for_name(&output).is_some_and(|f| f.id == "pdf") {
+            params["preserveEditing"] = json!(preserve_editing);
+        }
         ("document.export", params)
     };
     for (key, value) in legacy {
@@ -329,6 +336,25 @@ fn convert(args: &[String]) -> Result<(), String> {
     // much as what writing the output did.
     if let (Some(w), Some(out)) = (opened.get("warnings").filter(|w| w.as_array().is_some_and(|a| !a.is_empty())), r.as_object_mut()) {
         out.insert("importWarnings".into(), w.clone());
+    }
+    if preserve_editing
+        && vectorcraft_engine::cmd::fileio::format_for_name(&output).is_some_and(|f| f.id == "pdf")
+        && let Some(obj) = r.as_object_mut()
+    {
+        // The export leaves the attachment out (with this warning) for --artboard or a --range
+        // without every artboard; otherwise it writes it. Read that from the result, not the file.
+        let skipped = vectorcraft_engine::cmd::fileio::pdf::EDITING_NEEDS_EVERY_ARTBOARD;
+        let embedded = !obj.get("warnings").and_then(Value::as_array).is_some_and(|w| w.iter().any(|w| w.as_str() == Some(skipped)));
+        if embedded {
+            let note = "The PDF embeds the native VectorCraft document as an attachment (preserveEditing).";
+            if let Some(Value::Array(w)) = obj.get_mut("warnings") {
+                if !w.iter().any(|w| w.as_str() == Some(note)) {
+                    w.push(json!(note));
+                }
+            } else {
+                obj.insert("warnings".into(), json!([note]));
+            }
+        }
     }
     outln!("{r}");
     Ok(())

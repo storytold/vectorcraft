@@ -3,6 +3,32 @@ use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node};
 use vectorcraft_geom::shapes;
 
+mod adjust;
+mod alternate;
+mod bitmapglyphs;
+mod blend;
+mod changed;
+mod charstroke;
+mod clip;
+mod cmykblend;
+mod colrglyphs;
+mod container;
+mod dither;
+pub(super) mod fontchange;
+mod freeform;
+mod fxzoom;
+mod isolation;
+mod knockout;
+mod layeropts;
+mod memory;
+mod objectfx;
+mod placed_document;
+mod rasterize;
+mod setup;
+mod strokegradient;
+mod tileedge;
+mod viewraster;
+
 fn rect_node(d: &mut Document, r: Rect, fill: Paint, stroke: Paint, w: f64) -> Node {
     let id = d.alloc_id();
     Node::path(id, shapes::rectangle(r), Appearance::basic(fill, stroke, w))
@@ -930,7 +956,9 @@ fn tiff_header(w: u32, h: u32) -> Vec<u8> {
 
 /// The decode allowance (2 GB) counts an image's pixels as RGBA, read from its header (#1717): a
 /// 1-bit gray image whose 8-bit gray pixels are within it but whose RGBA is over it is not decoded
-/// and draws nothing, counted for an export to report; one a column narrower goes on to decoding.
+/// whole, and one a column narrower goes on to decoding. `decode_pixmap` reads the larger one at
+/// reduced size; this header has no rows to read, so it draws nothing, counted for an export to
+/// report.
 #[test]
 fn an_image_too_large_as_rgba_is_not_decoded() {
     let over = paint::decode_within_allowance(&png_header(23_171, 23_170));
@@ -944,6 +972,87 @@ fn an_image_too_large_as_rgba_is_not_decoded() {
     // A header whose size as RGBA does not fit in 64 bits gets the same limit error.
     let huge = paint::decode_within_allowance(&tiff_header(1 << 31, 1 << 31));
     assert!(matches!(huge, Err(image::ImageError::Limits(_))), "{huge:?}");
+}
+
+/// A PNG of `w` × `h` noisy pixels cut off halfway through its bytes: its header reads, and its
+/// pixels can't be decoded.
+fn truncated_png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| {
+        let v = (x * 7919 + y * 104_729).wrapping_mul(2_654_435_761).to_le_bytes();
+        image::Rgba([v[0], v[1], v[2], 255])
+    });
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png.truncate(png.len() / 2);
+    png
+}
+
+/// An image whose pixels can't be decoded is tried once: later renders find the store's note of it,
+/// and each render counts it in `decode_failures` for an export to report. On screen
+/// (`mark_undecoded_images`) it draws as a crossed gray box; an export draws nothing there.
+#[test]
+fn an_undecodable_image_is_tried_once_and_marked_on_screen() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+    let png = truncated_png(61, 47);
+    assert_eq!(image::ImageReader::new(std::io::Cursor::new(&png)).with_guessed_format().unwrap().into_dimensions().unwrap(), (61, 47));
+    let mut d = Document::new(80.0, 60.0);
+    d.images.insert("cut".into(), ImageBlob::new("image/png", png));
+    let id = d.alloc_id();
+    let im = ImageObject {
+        key: "cut".into(),
+        width: 61,
+        height: 47,
+        xf: Affine::translate((10.0, 5.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    // The alpha summed over the image's frame.
+    let alpha = |r: &Rendered| (10..71).flat_map(|x| (5..52).map(move |y| u64::from(r.pixel(x, y)[3]))).sum::<u64>();
+    let attempts = || paint::DECODE_ATTEMPTS.with(std::cell::Cell::get);
+    let (tried, failed) = (attempts(), decode_failures());
+    let screen = RenderOptions { mark_undecoded_images: true, ..Default::default() };
+    let mut r = Renderer::new();
+    for render in 1..=2 {
+        let shown = r.render(&d, 80, 60, Affine::IDENTITY, &screen);
+        assert!(alpha(&shown) > 0, "render {render}: the crossed box shows");
+        assert_eq!(decode_failures() - failed, render, "render {render}: counted");
+    }
+    assert_eq!(attempts() - tried, 1, "tried once");
+    let export = Renderer::new().render(&d, 80, 60, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(alpha(&export), 0, "an export draws nothing there");
+    assert_eq!((attempts() - tried, decode_failures() - failed), (1, 3), "and counts it without decoding it again");
+}
+
+/// The rasters a renderer keeps of an object's raster effects are made again when
+/// `mark_undecoded_images` changes: a blurred image whose pixels can't be decoded shows its blurred
+/// mark only while the option is on.
+#[test]
+fn raster_effects_follow_the_undecoded_image_mark() {
+    use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind};
+    let mut d = Document::new(80.0, 60.0);
+    d.images.insert("cut".into(), ImageBlob::new("image/png", truncated_png(43, 31)));
+    let id = d.alloc_id();
+    let im = ImageObject {
+        key: "cut".into(),
+        width: 43,
+        height: 31,
+        xf: Affine::translate((15.0, 12.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 2.0}), visible: true });
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let alpha = |r: &Rendered| r.pixels.chunks(4).map(|p| u64::from(p[3])).sum::<u64>();
+    let mut r = Renderer::new();
+    for mark in [true, false, true] {
+        let opts = RenderOptions { mark_undecoded_images: mark, ..Default::default() };
+        let a = alpha(&r.render(&d, 80, 60, Affine::IDENTITY, &opts));
+        assert_eq!(a > 0, mark, "mark_undecoded_images {mark}: alpha {a}");
+    }
 }
 
 /// A gray image within the allowance draws its gray levels.
@@ -961,6 +1070,124 @@ fn a_gray_image_draws_its_gray_levels() {
     d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
     let r = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &RenderOptions { smooth_images: false, ..Default::default() });
     assert_eq!((r.pixel(5, 10), r.pixel(35, 10)), ([40, 40, 40, 255], [200, 200, 200, 255]));
+}
+
+/// Runs `f` with the decode allowance of one image on this thread set to `bytes`.
+fn with_allowance<T>(bytes: u64, f: impl FnOnce() -> T) -> T {
+    paint::TEST_ALLOWANCE.with(|c| c.set(Some(bytes)));
+    let out = f();
+    paint::TEST_ALLOWANCE.with(|c| c.set(None));
+    out
+}
+
+/// `img` encoded as `format`.
+fn encoded(img: image::DynamicImage, format: image::ImageFormat) -> Vec<u8> {
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    out
+}
+
+/// A 16-bit PNG past the decode allowance is read a row at a time at the largest size within the
+/// allowance and draws its colors; the file's own size is kept.
+#[test]
+fn a_png_past_the_allowance_draws_at_reduced_size() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+    let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(64, 48, |x, _| {
+        if x < 32 { image::Rgba([51400, 10280, 10280, 65535]) } else { image::Rgba([10280, 10280, 51400, 65535]) }
+    });
+    let png = encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png);
+    // 64 × 48 is 12,288 bytes as RGBA; 36 × 27 is the largest within 4,096.
+    assert_eq!(with_allowance(4096, || paint::reduced_size(&png)), Some((36, 27)));
+    assert_eq!(paint::reduced_size(&png), None, "within the 2 GB allowance");
+    let mut d = Document::new(64.0, 48.0);
+    d.images.insert("over".into(), ImageBlob::new("image/png", png));
+    let id = d.alloc_id();
+    let im = ImageObject { key: "over".into(), width: 64, height: 48, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    let failed = decode_failures();
+    // As on screen, where an image that can't be decoded draws as a crossed box.
+    let screen = RenderOptions { smooth_images: false, mark_undecoded_images: true, ..Default::default() };
+    let r = with_allowance(4096, || Renderer::new().render(&d, 64, 48, Affine::IDENTITY, &screen));
+    assert_eq!(decode_failures(), failed);
+    assert_eq!((r.pixel(8, 24), r.pixel(56, 24)), ([200, 40, 40, 255], [40, 40, 200, 255]));
+    // 16 × 16 at 16 bits a sample is 2,048 bytes decoded and 1,024 as RGBA: past 1,500 as decoded
+    // and within it as RGBA, it is read a row at a time at its own size.
+    let small = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(16, 16, image::Rgba([51400, 10280, 10280, 65535]));
+    let small = encoded(image::DynamicImage::ImageRgba16(small), image::ImageFormat::Png);
+    assert_eq!(with_allowance(1500, || paint::reduced_size(&small)), Some((16, 16)));
+    let pm = with_allowance(1500, || paint::decode_pixmap(&small)).expect("read a row at a time");
+    let c = pm.sample(3, 3);
+    assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (16, 16, [200, 40, 40, 255]));
+    // A row is read only while the reader's row buffers, 32 bytes a column, fit the allowance:
+    // 128 columns do within 4,096 bytes, and 129 columns are not decoded (their samples, 8 bytes a
+    // pixel, are past it too).
+    let wide = |w: u32| {
+        let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 6, image::Rgba([51400, 10280, 10280, 65535]));
+        encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
+    };
+    assert_eq!(with_allowance(4096, || paint::reduced_size(&wide(128))), Some((128, 6)));
+    assert_eq!(with_allowance(4096, || paint::reduced_size(&wide(129))), None);
+    // An image of more pixels than the allowance has bytes is not read: 128 × 32 8-bit gray pixels
+    // are drawn at 64 × 16 within 4,096 bytes, and 128 × 33 are not.
+    let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(128, h, image::Luma([90]))), image::ImageFormat::Png);
+    assert_eq!(with_allowance(4096, || paint::reduced_size(&gray(32))), Some((64, 16)));
+    assert_eq!(with_allowance(4096, || paint::reduced_size(&gray(33))), None);
+}
+
+/// A JPEG whose RGB samples are within the allowance but whose RGBA is past it is decoded whole
+/// and shrunk to the largest size within the allowance; an image whose decoded samples are past it
+/// and can't be read a row at a time (a GIF, 4 bytes a pixel) is still not decoded, counted, and
+/// noted as undecodable.
+#[test]
+fn a_jpeg_past_the_allowance_as_rgba_is_shrunk_and_a_gif_past_it_is_not_decoded() {
+    let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
+    // 14,400 bytes of RGB, 19,200 as RGBA: 73 × 54 is the largest within 16,000.
+    let pm = with_allowance(16_000, || paint::decode_pixmap(&jpeg)).expect("decoded at reduced size");
+    assert_eq!((pm.width(), pm.height()), (73, 54));
+    let c = pm.sample(36, 27);
+    assert!(c.r.abs_diff(30) <= 4 && c.g.abs_diff(120) <= 4 && c.b.abs_diff(200) <= 4 && c.a == 255, "{c:?}");
+    // A placed document's preview asks for 20 × 15: decoded straight at that size.
+    let pm = with_allowance(16_000, || paint::decode_pixmap_fit(&jpeg, 20, 15)).expect("decoded at the size asked for");
+    assert_eq!((pm.width(), pm.height()), (20, 15));
+    let gif =
+        encoded(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(80, 60, image::Rgba([30, 120, 200, 255]))), image::ImageFormat::Gif);
+    assert_eq!(with_allowance(16_000, || paint::reduced_size(&gif)), None);
+    let failed = decode_failures();
+    let why = with_allowance(16_000, || paint::decode_pixmap_or_why(&gif)).err();
+    assert_eq!(why, Some(paint::Undecoded::Unreadable), "noted as undecodable");
+    assert_eq!(decode_failures(), failed + 1);
+}
+
+/// An image past the allowance is decoded at reduced size only while the result and what reading
+/// it takes (the image decoded whole, or the PNG reader's row buffers) fit beside the images
+/// paints hold; when they don't, it isn't decoded and is not noted as undecodable, and it is
+/// decoded once there is room.
+#[test]
+fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
+    /// Runs `f` with room for `bytes` beside the images paints hold.
+    fn with_room<T>(bytes: u64, f: impl FnOnce() -> T) -> T {
+        paint::TEST_ROOM.with(|c| c.set(Some(bytes)));
+        let out = f();
+        paint::TEST_ROOM.with(|c| c.set(None));
+        out
+    }
+    // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
+    // of 15,768 bytes.
+    let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
+    // Read a row at a time: 64 columns of 32 bytes in the reader's row buffers, beside a 36 × 27
+    // result of 3,888 bytes.
+    let png = encoded(
+        image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(64, 48, image::Rgba([51400, 10280, 10280, 65535]))),
+        image::ImageFormat::Png,
+    );
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 4_096, 3_888 + 2_048, (36, 27))] {
+        let failed = decode_failures();
+        let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
+        assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");
+        assert_eq!(decode_failures(), failed + 1);
+        let pm = with_allowance(allowance, || with_room(room, || paint::decode_pixmap(bytes))).expect("decoded once there is room");
+        assert_eq!((pm.width(), pm.height()), size);
+    }
 }
 
 /// Art Optimized exports are supersampled (#983): two red shapes meeting along a diagonal leave no
@@ -999,6 +1226,70 @@ fn supersampled_art_leaves_no_seam_between_shapes_that_meet() {
     assert_eq!(supersample_factor(3000, 3000), Some(2));
     assert_eq!(supersample_factor(5000, 5000), None);
     assert_eq!(supersample_factor(40_000, 10), None);
+}
+
+/// A supersampled render draws Outline view's lines one output pixel wide, as an unsupersampled
+/// one does, instead of a quarter of a pixel: the line down x = 50.5 draws darker than 64 of 255
+/// either way, and no wider than one pixel. So do the outlines of type and a dotted guide along
+/// y = 90.5.
+#[test]
+fn supersampled_outlines_stay_one_pixel_wide() {
+    let _fonts = crate::tests_fontchange::fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let style = vectorcraft_doc::text::CharStyle { size: 30.0, ..Default::default() };
+    let text = vectorcraft_doc::text::TextObject::point(vectorcraft_geom::Point::new(60.0, 80.0), "H", style);
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text)));
+    d.insert(Some(d.layers[0].id), 0, t).unwrap();
+    let n = rect_node(&mut d, Rect::new(20.0, 20.0, 50.5, 80.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let mut guide = Node::path(d.alloc_id(), shapes::line(Point::new(5.0, 90.5), Point::new(95.0, 90.5)), Appearance::default());
+    if let NodeKind::Path { guide, .. } = &mut guide.kind {
+        *guide = true;
+    }
+    d.insert(Some(d.layers[0].id), 1, guide).unwrap();
+    let draw = |supersample: bool| {
+        let opts = RenderOptions {
+            background: Some([255, 255, 255, 255]),
+            outline: true,
+            guide: ([0, 0, 0], true),
+            precise: true,
+            supersample,
+            ..Default::default()
+        };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let darkest = |r: &Rendered| (48..=52).map(|x| r.pixel(x, 50)[0]).min().unwrap();
+    assert!(darkest(&draw(false)) < 64, "unsupersampled: {}", darkest(&draw(false)));
+    assert!(darkest(&draw(true)) < 64, "supersampled: {}", darkest(&draw(true)));
+    let type_darkest = |r: &Rendered| (56..=95).flat_map(|x| (45..=85).map(move |y| (x, y))).map(|(x, y)| r.pixel(x, y)[0]).min().unwrap();
+    assert!(type_darkest(&draw(false)) < 64, "unsupersampled type: {}", type_darkest(&draw(false)));
+    assert!(type_darkest(&draw(true)) < 64, "supersampled type: {}", type_darkest(&draw(true)));
+    let guide_darkest = |r: &Rendered| (10..=90).flat_map(|x| (89..=92).map(move |y| (x, y))).map(|(x, y)| r.pixel(x, y)[0]).min().unwrap();
+    assert!(guide_darkest(&draw(false)) < 64, "unsupersampled guide: {}", guide_darkest(&draw(false)));
+    assert!(guide_darkest(&draw(true)) < 64, "supersampled guide: {}", guide_darkest(&draw(true)));
+    // One pixel wide, not wider: across each line, the pixels darker than `dark` are one pixel. The
+    // path lies on pixel centers; the type's stems do not, and the guide's dots are 1.5 pixels
+    // wide, so their edges are softer.
+    let widest = |values: Vec<u8>, dark: u8| {
+        let mut runs = vec![0usize];
+        for v in values {
+            if v < dark {
+                *runs.last_mut().unwrap() += 1;
+            } else if runs.last() != Some(&0) {
+                runs.push(0);
+            }
+        }
+        runs.into_iter().max().unwrap()
+    };
+    for supersample in [false, true] {
+        let r = draw(supersample);
+        let row = |y: u32, xs: std::ops::RangeInclusive<u32>| xs.map(|x| r.pixel(x, y)[0]).collect::<Vec<_>>();
+        assert_eq!(widest(row(50, 44..=56), 200), 1, "path, supersample {supersample}: {:?}", row(50, 44..=56));
+        // Below the H's crossbar, across its two stems.
+        assert_eq!(widest(row(76, 56..=95), 128), 1, "type, supersample {supersample}: {:?}", row(76, 56..=95));
+        let guide = (10..=90).map(|x| widest((86..=95).map(|y| r.pixel(x, y)[0]).collect(), 128)).max().unwrap();
+        assert_eq!(guide, 1, "guide, supersample {supersample}");
+    }
 }
 
 /// #1613: a zero-length subpath (`m` then `L` to the same point, as `.ai` files write dots) is a

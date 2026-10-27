@@ -125,7 +125,7 @@ pub(crate) fn orientation_button(ui: &mut egui::Ui, along: bool, selected: bool,
         let n = if along { vec2(-12.0 * x / 9.0, -1.0).normalized() } else { vec2(0.0, -1.0) };
         ui.painter().line_segment([p, p + n * 7.0], Stroke::new(2.0, color));
     }
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, tip));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, tip));
     resp.on_hover_text(tip).clicked()
 }
 

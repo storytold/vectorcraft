@@ -22,16 +22,17 @@ const LABEL_GAP: f32 = 64.0;
 
 /// Where the scrub in progress is kept (egui memory).
 fn state_id() -> Id {
-    Id::new("numeric-field-scrub")
+    Id::unique("numeric-field-scrub")
 }
 
 /// Where the last label drawn waits for its field.
 fn label_id() -> Id {
-    Id::new("numeric-field-label")
+    Id::unique("numeric-field-label")
 }
 
+/// Temp-memory key for the numeric-field scrub preference.
 fn enabled_id() -> Id {
-    Id::new("numeric-field-scrub-enabled")
+    Id::unique("numeric-field-scrub-enabled")
 }
 
 /// Turn scrubbing on or off (General › Scrub Numeric Fields by Dragging; on until set).

@@ -154,7 +154,7 @@ fn renaming_an_asset_runs_assets_rename() {
     crate::theme::install_fonts(&ctx);
     frame(&ctx, &mut app, vec![], false);
     // Double-click starts editing the name (as typed here); Enter commits it.
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("asset-export-rename"), (id, "Logo".to_string())));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("asset-export-rename"), (id, "Logo".to_string())));
     frame(&ctx, &mut app, vec![], false);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     frame(&ctx, &mut app, vec![enter], false);
@@ -169,7 +169,7 @@ fn shift_enter_renames_an_asset_and_keeps_the_field_open() {
     let id = app.run("assets.add", json!({"ids": [a]})).unwrap()["assets"][0].as_u64().unwrap();
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let rename_id = egui::Id::new("asset-export-rename");
+    let rename_id = egui::Id::unique("asset-export-rename");
     let field = rename_id.with("field");
     let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
     frame(&ctx, &mut app, vec![], false);

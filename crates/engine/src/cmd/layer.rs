@@ -139,6 +139,15 @@ pub fn specs() -> Vec<CommandSpec> {
             artboard_delete
         ),
         cmd!(
+            "artboard.deleteEmpty",
+            "Delete Empty Artboards",
+            ["Window", "Artboards"],
+            None,
+            "{} delete every artboard with no artwork on it (no object, hidden, locked and template art included, whose visual bounds meet or touch it, clip groups and clipping layers by their members inside the clip; guides don't count), with its guides, in one step; locked artboards stay; when every artboard is empty and none is locked, artboard 1 stays (with a locked one left, artboard 1 can go) → {deleted: [index…]} (the indices before deleting)",
+            has_empty_artboards,
+            artboard_delete_empty
+        ),
+        cmd!(
             "artboard.setProps",
             "Artboard Options…",
             ["Window", "Artboards"],
@@ -863,19 +872,47 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
 fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.delete")?;
     super::panelcmds::refuse_locked(&s.doc()?.doc, &indices)?;
-    s.edit("Delete Artboard", |d, sel| {
-        if indices.len() >= d.artboards.len() {
-            return Err(EngineError::Other("a document needs at least one artboard".into()));
-        }
-        // The last first, so the others keep their places; their guides go with them.
-        for &i in indices.iter().rev() {
-            let id = d.artboards.remove(i).id;
-            d.retire_artboard_id(id);
-            d.retain_guides(sel, |_, g| g.artboard != Some(id));
-        }
-        Ok(())
-    })?;
+    s.edit("Delete Artboard", |d, sel| remove_artboards(d, sel, &indices))?;
     ok()
+}
+
+/// Delete artboards `indices` (sorted) of `d` with their guides; at least one must be left.
+fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+    if indices.len() >= d.artboards.len() {
+        return Err(EngineError::Other("a document needs at least one artboard".into()));
+    }
+    // The last first, so the others keep their places; their guides go with them.
+    for &i in indices.iter().rev() {
+        let id = d.artboards.remove(i).id;
+        d.retire_artboard_id(id);
+        d.retain_guides(sel, |_, g| g.artboard != Some(id));
+    }
+    Ok(())
+}
+
+/// The artboards Delete Empty Artboards deletes: those with no artwork
+/// ([`Document::artboard_has_art`]) that aren't locked, but artboard 1 when every artboard is one
+/// of them (a document keeps one, as Delete Artboards keeps artboard 1).
+pub(crate) fn empty_artboards(d: &Document) -> Vec<usize> {
+    let mut empty: Vec<usize> = d.artboards.iter().enumerate().filter(|(_, a)| !a.locked && !d.artboard_has_art(a.rect)).map(|(i, _)| i).collect();
+    if empty.len() == d.artboards.len() {
+        empty.retain(|&i| i != 0);
+    }
+    empty
+}
+
+fn has_empty_artboards(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if empty_artboards(&st.doc).is_empty() { Err("no empty artboards to delete".into()) } else { Ok(()) }
+}
+
+fn artboard_delete_empty(s: &mut Session, _: &Value) -> Result<Value> {
+    let indices = empty_artboards(&s.doc()?.doc);
+    if indices.is_empty() {
+        return Err(EngineError::Other("no empty artboards to delete".into()));
+    }
+    s.edit("Delete Empty Artboards", |d, sel| remove_artboards(d, sel, &indices))?;
+    Ok(json!({ "deleted": indices }))
 }
 
 /// One artboard's part of `artboard.setProps`: its index, new rectangle, name, color, lock,

@@ -145,12 +145,16 @@ fn glyph_texture(ctx: &egui::Context, face: &vectorcraft_text::FontFace, gid: u3
 }
 
 /// Insert `ch` at the Type tool's caret, else append it to the selected text.
-fn insert(app: &mut VectorcraftApp, ch: char) {
+fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) {
     let s = ch.to_string();
     if app.session.tool_wants_text() {
         let v = app.view_info();
-        if let Err(e) = app.session.tool_text(&s, v) {
-            app.status(e.to_string());
+        let target_before = crate::ime::target(&mut app.session, v);
+        let before = crate::ime::stamp(&mut app.session, v);
+        let r = app.session.tool_text(&s, v);
+        match &r {
+            Err(e) => app.status(e.to_string()),
+            Ok(_) => crate::ime::note_application_edit(app, ctx, v, target_before, before),
         }
         app.sync_views();
     } else if super::character::text_style(app).is_some() {
@@ -188,7 +192,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rows = chars.len().div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = (ui.available_height() - 64.0).max(cell * 3.0);
-    let hover_id = egui::Id::new("gl-hover");
+    let hover_id = egui::Id::unique("gl-hover");
     egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]).show_rows(ui, cell, rows, |ui, range| {
         for r in range {
             ui.horizontal(|ui| {
@@ -204,7 +208,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), t.text_strong);
                     let resp = resp.on_hover_text(format!("U+{:04X}  {c}  (glyph {gid})\n{}", c as u32, tl!("Double-click to insert")));
                     if resp.double_clicked() {
-                        insert(app, c);
+                        insert(app, ui.ctx(), c);
                     }
                 }
             });
@@ -262,7 +266,7 @@ fn zoom_button(ui: &mut Ui, id: &str, label: &str, tip: &str, enabled: bool) -> 
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
     let sense = if enabled { Sense::click() } else { Sense::hover() };
-    let resp = ui.interact(rect, ui.id().with(("gl-zoom", id)), sense);
+    let resp = ui.interact(rect, ui.scope_id().with(("gl-zoom", id)), sense);
     let bg = if enabled && resp.hovered() { t.hover } else { Color32::TRANSPARENT };
     ui.painter().rect_filled(rect, 2, bg);
     let border = if enabled { t.button_border } else { t.border };

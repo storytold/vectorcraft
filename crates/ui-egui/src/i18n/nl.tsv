@@ -303,6 +303,7 @@
 	Apply Bullets	Opsommingstekens toepassen
 	Numbered List	Genummerde lijst
 	Apply Numbers	Nummering toepassen
+	Convert to Text	Converteren naar tekst
 	Filled Dot	Gevulde stip
 	Dash	Streepje
 	Hollow Circle	Holle cirkel
@@ -350,6 +351,7 @@
 	Create	Maken
 	Release Selection	Selectie vrijgeven
 	Remove Threading	Koppeling opheffen
+	Break Thread	Koppeling verbreken
 	Fit Headline	Kop passend maken
 	Find Font…	Lettertype zoeken…
 	Change Case	Hoofdlettergebruik wijzigen
@@ -550,6 +552,7 @@
 	Save Grid as Preset…	Raster opslaan als voorinstelling…
 	Snap to Pixel	Uitlijnen op pixel
 	Precise Cursors	Nauwkeurige cursors
+	Image Trace Preview	Voorbeeld van Afbeelding traceren
 	Snap to Point	Uitlijnen op punt
 	Snap to Glyph	Uitlijnen op glyph
 	New View…	Nieuwe weergave…
@@ -564,6 +567,21 @@
 	Saved View 8	Opgeslagen weergave 8
 	Saved View 9	Opgeslagen weergave 9
 	Saved View 10	Opgeslagen weergave 10
+	Saved View 11	Opgeslagen weergave 11
+	Saved View 12	Opgeslagen weergave 12
+	Saved View 13	Opgeslagen weergave 13
+	Saved View 14	Opgeslagen weergave 14
+	Saved View 15	Opgeslagen weergave 15
+	Saved View 16	Opgeslagen weergave 16
+	Saved View 17	Opgeslagen weergave 17
+	Saved View 18	Opgeslagen weergave 18
+	Saved View 19	Opgeslagen weergave 19
+	Saved View 20	Opgeslagen weergave 20
+	Saved View 21	Opgeslagen weergave 21
+	Saved View 22	Opgeslagen weergave 22
+	Saved View 23	Opgeslagen weergave 23
+	Saved View 24	Opgeslagen weergave 24
+	Saved View 25	Opgeslagen weergave 25
 	Window	Venster
 	New Window	Nieuw venster
 	Cascade	Trapsgewijs schikken
@@ -721,7 +739,6 @@
 	% of all commits	% van alle commits
 	Lines +/−	Regels +/−
 	Drag to move	Slepen om te verplaatsen
-	Drag to move out of the set	Slepen om uit de set te halen
 	Drag to float as a toolbar	Slepen om als losse werkbalk te laten zweven
 	Put back in the toolbar	Terug in de werkbalk zetten
 	Float Panel	Paneel laten zweven
@@ -1273,6 +1290,7 @@ lighting	Light	Licht
 	Hide Thumbnail	Miniatuur verbergen
 	Mixed Appearances	Gemengde vormgevingen
 	Mixed Objects	Gemengde objecten
+	Mixed	Gemengd
 	No options	Geen opties
 	No Selection	Geen selectie
 	Offset X	Verschuiving X
@@ -1316,7 +1334,6 @@ lighting	Light	Licht
 	URL:	URL:
 	Use Even-Odd Fill Rule	Even-odd-vulregel gebruiken
 	Use Non-Zero Winding Fill Rule	Non-zero-winding-vulregel gebruiken
-	Brush Libraries (on the roadmap)	Penseelbibliotheken (op de roadmap)
 	List View	Lijstweergave
 	New Art Brush from Selection	Nieuw kunstpenseel uit selectie
 	New Bristle Brush	Nieuw borstelpenseel
@@ -2120,6 +2137,7 @@ lighting	Light	Licht
 	Fidelity:	Nauwkeurigheid:
 	Fill new strokes	Nieuwe lijnen vullen
 	Alt key toggles to Smooth Tool	Alt-toets schakelt over naar Gladmaken-gereedschap
+	Live curve fitting	Curve aanpassen tijdens het tekenen
 	The document has no colour swatches.	Het document heeft geen kleurstalen.
 	Style Name:	Stijlnaam:
 	Crop To	Bijsnijden tot
@@ -3592,8 +3610,6 @@ effect	Regular	Regelmatig
 	Replace With Font	Vervangen door lettertype
 	  — substituted by {style}	  — vervangen door {style}
 	  — {n} characters from another font	  — {n} tekens van een ander lettertype
-	Drag to float the panel group	Sleep om de paneelgroep te laten zweven
-	Put back in the dock	Terugzetten in het dock
 	All Scripts	Alle scripts
 	Any Kind	Elke soort
 	Font Technology	Lettertypetechnologie
@@ -4504,7 +4520,6 @@ imageTrace	Outline	Contour
 @msg	before must name a panel	before moet een paneel benoemen
 @msg	docking action contains an unknown panel or an excessive split path	dokactie bevat een onbekend paneel of een overmatig splitspad
 @msg	group must be true or false	group moet true of false zijn
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	paneel zweeft; vouw de groep samen met window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	paneel staat niet in een dockgroep
 @msg	only a dock group above or below others collapses, not one beside another	alleen een dockgroep boven of onder andere vouwt samen, niet een ernaast
 @msg	icon must be true or false	icon moet true of false zijn
@@ -4877,6 +4892,7 @@ mark-style	Japanese	Japans
 @msg	unknown parameter `{key}`; the command takes: {keys}	onbekende parameter `{key}`; de opdracht accepteert: {keys}
 	Load EPS into Clipboard	EPS in het klembord laden
 @msg	an image of {w} × {h} pixels is too large to draw	een afbeelding van {w} × {h} pixels is te groot om te tekenen
+@msg	an image of {w} × {h} pixels is shown at reduced size	een afbeelding van {w} × {h} pixels wordt verkleind weergegeven
 	Fill and Stroke Controls	Besturingselementen voor vulling en lijn
 	Coloring Controls	Besturingselementen voor kleuren
 	Draw Mode Controls	Besturingselementen voor tekenmodus
@@ -5464,6 +5480,12 @@ swatch	Bright Violet	Felviolet
 	Shift:	Verschuiving:
 	Fresco…	Fresco…
 	Fresco	Fresco
+	Lock Artboards	Tekengebieden vergrendelen
+	Unlock Artboards	Tekengebieden ontgrendelen
+	Lock Selected	Selectie vergrendelen
+	Lock All Except Selected	Alles behalve selectie vergrendelen
+	Lock All	Alles vergrendelen
+	Unlock Selected	Selectie ontgrendelen
 	Effect Gallery…	Effectgalerij…
 	Effect Gallery Dialog	Dialoogvenster Effectgalerij
 	Arc Segment Tool Options	Opties boogsegmentgereedschap
@@ -5538,3 +5560,32 @@ axis	Y Axis	Y-as
 	Rectangular Grid Tool Options	Opties rechthoekig-rastergereedschap
 	Polar Grid Tool Options	Opties polair-rastergereedschap
 	Fill Line	Lijn vullen
+	Pathfinder Options	Pathfinder-opties
+	Divide and Outline Will Remove Unpainted Artwork	Verdelen en Omtrek verwijderen ongeverfd artwork
+@msg	precision must be from 0.001 to 10 pt	precision moet tussen 0,001 en 10 pt liggen
+@msg	`pathfinder` must be an object	`pathfinder` moet een object zijn
+	Add to Brushes	Aan penselen toevoegen
+	Brush Library	Penseelbibliotheek
+	Save Brush Library	Penseelbibliotheek opslaan
+	Save Brushes…	Penselen opslaan…
+	Open Brush Library	Penseelbibliotheek openen
+	Selected Brushes Only	Alleen geselecteerde penselen
+	Brush Libraries Menu	Menu penseelbibliotheken
+	User Brush Library 1	Penseelbibliotheek van gebruiker 1
+	User Brush Library 2	Penseelbibliotheek van gebruiker 2
+	User Brush Library 3	Penseelbibliotheek van gebruiker 3
+	User Brush Library 4	Penseelbibliotheek van gebruiker 4
+	User Brush Library 5	Penseelbibliotheek van gebruiker 5
+	User Brush Library 6	Penseelbibliotheek van gebruiker 6
+	User Brush Library 7	Penseelbibliotheek van gebruiker 7
+	User Brush Library 8	Penseelbibliotheek van gebruiker 8
+	User Brush Library 9	Penseelbibliotheek van gebruiker 9
+	User Brush Library 10	Penseelbibliotheek van gebruiker 10
+	Art Ribbons	Illustratielinten
+	Calligraphic Nibs	Kalligrafische penpunten
+	Pattern Borders	Patroonranden
+	Scatter Shapes	Strooivormen
+	Save Brush Library…	Penseelbibliotheek opslaan…
+@msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
+	Scale Presets	Schaalvoorinstellingen
+	Live preview	Live voorbeeld

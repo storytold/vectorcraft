@@ -2991,6 +2991,17 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "[1 0 0 1 0 0 10 10 12 10 1 8 10 1] /N X#",
             "[1e308 -1e308 0] /N X#",
             "0 /E X#",
+            "[2 2] /Size X#",
+            "/Cartesian /Type X#",
+            "[1 1] /P X#",
+            "(Adobe Path Blends) 1 0 92 XP",
+            "(Adobe Path Blends) 1 0 999999 XP",
+            "\n%44434241010000000000000000000000\n",
+            "\n%0200000041000000000000000000000000000000\n",
+            "\n%4G\n",
+            "%_/ArtDictionary :\n%_(A) /String (ShapeBlendPathID) ,\n%_(K) /String (ShapeBlendPathType) ,\n%_;\n",
+            "%_/ArtDictionary :\n%_(S) /String (ShapeBlendPathType) ,\n%_;\n",
+            "9 () XW",
             "\n%AI9_BeginArtStyles\n",
             "\n%AI9_EndArtStyles\n",
             "/KnownStyle :",
@@ -4253,4 +4264,81 @@ fn a_long_thin_shape_with_a_shadow_renders_and_exports() {
     let bytes = affinity_sample_file(&stream, None);
     let doc = vectorcraft_engine::cmd::fileio::load("long.af", &bytes).unwrap().doc;
     survive("long shape", || Some(doc)).unwrap();
+}
+
+/// A blend in `.ai` editing data, written by hand: two keys (10 pt squares, red on the left, blue on
+/// the right) on a straight spine, `steps` steps drawn between them as the blend lays them out, and
+/// the record (`DCBA`, version 1, two keys `A` and `B`, see `vectorcraft_eps`' AI blend reader).
+fn blend_text(steps: usize) -> String {
+    use std::fmt::Write;
+    let square = |x: f64, hidden: bool, t: f64| {
+        let p = if hidden { "%_" } else { "" };
+        format!("{p}0 0 0 0 {} 0 {} Xa\n{p}{x} 40 m\n{p}{x} 50 L\n{p}{} 50 L\n{p}{} 40 L\n{p}f\n", 1.0 - t, t, x + 10.0, x + 10.0)
+    };
+    let part = |kind: &str, id: Option<&str>| {
+        let id = id.map(|i| format!("%_({i}) /String (ShapeBlendPathID) ,\n")).unwrap_or_default();
+        format!("%_/ArtDictionary :\n{id}%_({kind}) /String (ShapeBlendPathType) ,\n%_;\n")
+    };
+    let span = 10.0 * (steps as f64 + 1.0);
+    let mut s = String::from("%_0 Ae\n%_u\n");
+    s += &square(0.0, true, 0.0);
+    s += &part("K", Some("A"));
+    s += &square(span, true, 1.0);
+    s += &part("K", Some("B"));
+    let _ = write!(s, "%_5 45 m\n%_{} 45 L\n%_N\n", span + 5.0);
+    s += &part("S", None);
+    s += "%_U\n%_9 () XW\nu\n";
+    for i in 0..steps + 2 {
+        let t = i as f64 / (steps as f64 + 1.0);
+        s += &square(t * span, false, t);
+    }
+    s += "U\n9 () XW\n0 Ae\n";
+    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), 1, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+    for id in ['A', 'B'] {
+        words.extend([id as u32, 0, 0, 0, 0, 0]);
+    }
+    let hex: String = words.iter().flat_map(|w| w.to_le_bytes()).map(|b| format!("{b:02X}")).collect();
+    let _ = write!(s, "(Adobe Path Blends) 1 0 {} XP\n%{hex}\n", hex.len() / 2);
+    s
+}
+
+/// `.ai` editing data holding `layer_art` on one layer, compressed as the private data is.
+fn ai_private(layer_art: &str) -> Vec<u8> {
+    use vectorcraft_testkit::ai;
+    let data = ai::editing_data(4000.0, 200.0, &ai::layer("L", layer_art));
+    [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat()
+}
+
+/// A blend of many steps doesn't stall the import: one within the limits (a thousand steps between
+/// two keys) is checked and made live quickly, one past them keeps its drawn steps without being
+/// laid out.
+#[test]
+fn large_ai_blends_import_in_bounded_time() {
+    for (steps, live) in [(3, true), (998, true), (1_500, false)] {
+        let private = ai_private(&blend_text(steps));
+        let started = std::time::Instant::now();
+        let (doc, notes, read) = vectorcraft_eps::layered_ai(&private, Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        assert!(read, "{steps} steps: read from the layers ({notes:?})");
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(30), "{steps} steps took {took:?}");
+        let mut blends = 0;
+        doc.walk(|n| blends += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Blend { .. })));
+        assert_eq!(blends == 1, live, "{steps} steps: live {live}");
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` blend whose record, parts or drawn steps are damaged or hostile: read live, as its
+    /// drawn steps, or not at all, never panicking.
+    #[test]
+    fn ai_blend_never_panics(steps in 1usize..6, cut in 0usize..2_500, edits in prop::collection::vec((0usize..2_500, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', '%', '_', 'K', 'S', 'A', 'B', 'u', 'U', 'F', 'X'])), 0..12)) {
+        let text = mutate_text(&blend_text(steps), cut, &edits);
+        let private = ai_private(&text);
+        // Far-out coordinates: the check's grid saturates instead of overflowing.
+        let far = ai_private(&blend_text(steps).replace(" 40 m\n", " 1e300 m\n").replace(" 50 L\n", " -1e300 L\n"));
+        survive("a .ai blend far out", || Some(vectorcraft_eps::layered_ai(&far, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+        survive("mutated .ai blend", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
 }

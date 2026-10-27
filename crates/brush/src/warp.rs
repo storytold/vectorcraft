@@ -169,6 +169,33 @@ fn bend(t: &Track, art: &Node, b: Rect, along: AlongMap, cross: f64) -> Option<N
     warp_node(art, &f, flat_tol, MAX_SEG / along.max_scale(), cross.abs())
 }
 
+/// [`bend`], with the cross scale at arc length `s` multiplied by `widen(s)` (0..=1). The strokes
+/// of each object in the art take the factor at the middle of the object.
+fn bend_widened(t: &Track, art: &Node, b: Rect, along: AlongMap, cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
+    let cy = b.center().y;
+    let x0 = b.x0;
+    let f = move |p: Point| {
+        let s = along.at(p.x - x0);
+        t.map(s, (p.y - cy) * cross * widen(s))
+    };
+    let factor = |n: &Node| n.geometric_bounds().map_or(1.0, |r| widen(along.at(r.center().x - x0)));
+    let art = widen_strokes(art, &factor);
+    let scale = along.max_scale().max(cross.abs()).max(1e-6);
+    let flat_tol = tolerance(b.height().max(b.width()) * scale) / scale;
+    warp_node(&art, &f, flat_tol, MAX_SEG / along.max_scale(), cross.abs())
+}
+
+/// `n` with the strokes of it and of everything inside it scaled by `factor` of the object they
+/// belong to.
+fn widen_strokes(n: &Node, factor: &dyn Fn(&Node) -> f64) -> Node {
+    let mut out = n.clone();
+    out.appearance.scale_strokes(factor(n));
+    if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } = &mut out.kind {
+        *children = children.iter().map(|c| Arc::new(widen_strokes(c, factor))).collect();
+    }
+    out
+}
+
 /// Arc-length spans to place art on when [`ArtBrush::overlap`] is on: one run between each sharp
 /// corner (the whole path when it has none).
 fn art_runs(t: &Track) -> Vec<(f64, f64)> {
@@ -189,7 +216,17 @@ fn art_runs(t: &Track) -> Vec<(f64, f64)> {
     bounds.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
-fn art_on_run(a: &ArtBrush, t: &Track, s0: f64, s1: f64, art: &Node, b: Rect, cross: f64) -> Option<Node> {
+/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1, and
+/// `width` the width (%) there.
+fn art_on_run(
+    t: &Track,
+    (s0, s1): (f64, f64),
+    a: &ArtBrush,
+    (art, b): (&Node, Rect),
+    cross: f64,
+    width: f64,
+    widen: &dyn Fn(f64) -> f64,
+) -> Option<Node> {
     let l = s1 - s0;
     if l <= 1e-9 {
         return None;
@@ -199,33 +236,49 @@ fn art_on_run(a: &ArtBrush, t: &Track, s0: f64, s1: f64, art: &Node, b: Rect, cr
         ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
         ArtScale::Proportional => {
             let k = l / w;
-            (AlongMap::linear(w, s0, s1), k * a.width / 100.0)
+            (AlongMap::linear(w, s0, s1), k * width / 100.0)
         }
         ArtScale::BetweenGuides { start, end } => {
             let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
             let (g0, g1) = (g0.min(g1), g0.max(g1));
-            let fixed = (g0 + (w - g1)) * cross;
+            // The ends keep the proportions of the width at their end of the run.
+            let (c0, c1) = (cross * widen(s0), cross * widen(s1));
+            let fixed = g0 * c0 + (w - g1) * c1;
             if fixed >= l || g1 - g0 < 1e-9 {
                 (AlongMap::linear(w, s0, s1), cross)
             } else {
-                (AlongMap { xs: [0.0, g0, g1, w], ss: [s0, s0 + g0 * cross, s1 - (w - g1) * cross, s1] }, cross)
+                (AlongMap { xs: [0.0, g0, g1, w], ss: [s0, s0 + g0 * c0, s1 - (w - g1) * c1, s1] }, cross)
             }
         }
     };
-    bend(t, art, b, along, cross)
+    bend_widened(t, art, b, along, cross, widen)
 }
 
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen's pressure, the art is as
+/// wide as the pressure recorded at each point of the stroke gives (half way without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
-    let cross = weight * a.width / 100.0;
+    let (light, heavy) = a.width_range();
+    let width = light.max(heavy);
+    let cross = weight * width / 100.0;
     let mut out = vec![];
     for t in tracks(bp, 0.05) {
-        if t.len() <= 1e-9 {
+        let l = t.len();
+        if l <= 1e-9 {
             continue;
         }
-        let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, t.len())] };
-        for (s0, s1) in runs {
-            if let Some(n) = art_on_run(a, &t, s0, s1, &art, b, cross) {
+        let widen = |s: f64| {
+            if light == heavy || width <= 0.0 {
+                return 1.0;
+            }
+            // A run past the start of a closed track wraps round to it.
+            let at = if s > l { s - l } else { s };
+            let p = pressure.map_or(PressureProfile::MID, |p| p.at(at / l)).clamp(0.0, 1.0);
+            (light + (heavy - light) * p) / width
+        };
+        let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
+        for run in runs {
+            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, width, &widen) {
                 out.push(n);
             }
         }

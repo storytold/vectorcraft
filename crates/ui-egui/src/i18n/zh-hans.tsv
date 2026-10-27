@@ -291,7 +291,6 @@
 	Brush Affects:	画笔影响：
 	Brush Definition	画笔定义
 	Brush Libraries	画笔库
-	Brush Libraries (on the roadmap)	画笔库 (规划中)
 	Brush Options…	画笔选项…
 	Brush Strokes	画笔描边
 	Brushes	画笔
@@ -306,6 +305,7 @@
 	Apply Bullets	应用项目符号
 	Numbered List	编号列表
 	Apply Numbers	应用编号
+	Convert to Text	转换为文本
 	Filled Dot	实心圆点
 	Dash	短划线
 	Hollow Circle	空心圆
@@ -1048,6 +1048,7 @@
 	Fill and Stroke	填色和描边
 	Fill new strokes	为新描边应用填色
 	Alt key toggles to Smooth Tool	Alt 键切换为平滑工具
+	Live curve fitting	实时曲线拟合
 	Keep selected	保持选择状态
 	Merge only with selection	仅与所选对象合并
 	Consider Open Filled Paths as Closed	将有填色的开放路径视为闭合路径
@@ -1769,6 +1770,7 @@ file-filter	Templates	模板
 	Miter Limit:	斜接限制：
 	Mixed Appearances	混合外观
 	Mixed Objects	混杂对象
+	Mixed	混合
 	Mode:	模式：
 	Model	模型
 	Modified	已修改
@@ -2500,6 +2502,7 @@ font-script	Japanese	汉字
 	Remove Plug-in	移除插件
 	Remove Selected Assets	移除所选资源
 	Remove Threading	移除线程
+	Break Thread	断开串接
 	Remove “{keyword}”	移除“{keyword}”
 	Rename	重命名
 	Rename Asset	重命名资源
@@ -2671,7 +2674,22 @@ font-script	Japanese	汉字
 	Saved to User Defined: {}	已存储至用户自定义：{}
 	Saved View 1	已存视图 1
 	Saved View 10	已存视图 10
+	Saved View 11	已存视图 11
+	Saved View 12	已存视图 12
+	Saved View 13	已存视图 13
+	Saved View 14	已存视图 14
+	Saved View 15	已存视图 15
+	Saved View 16	已存视图 16
+	Saved View 17	已存视图 17
+	Saved View 18	已存视图 18
+	Saved View 19	已存视图 19
 	Saved View 2	已存视图 2
+	Saved View 20	已存视图 20
+	Saved View 21	已存视图 21
+	Saved View 22	已存视图 22
+	Saved View 23	已存视图 23
+	Saved View 24	已存视图 24
+	Saved View 25	已存视图 25
 	Saved View 3	已存视图 3
 	Saved View 4	已存视图 4
 	Saved View 5	已存视图 5
@@ -2956,6 +2974,7 @@ font-script	Japanese	汉字
 	Snap to Grid	对齐网格
 	Snap to Pixel	对齐像素
 	Precise Cursors	精确光标
+	Image Trace Preview	图像描摹预览
 	Snap to Point	对齐点
 	Snap to Unit	对齐单位
 	Snapping Tolerance	吸附容差
@@ -4094,6 +4113,7 @@ imageTrace	Outline	轮廓
 @msg	no such layer or object	没有此图层或对象
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
 @msg	{_1} linked file(s) can't be read here: their previews show	此处无法读取 {_1} 个链接文件：显示的是其预览
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	无法解码 {undecoded} 张图像：它们显示为打叉的方框
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	有 {_1} 个链接图像已在磁盘上更改：“更新链接”可显示新版本
 @msg	pick a colour, gradient or pattern to save as a swatch	请选取要保存为色板的颜色、渐变或图案
 @msg	Packaged {n} file(s) in {folder} {note}	已将 {n} 个文件打包到 {folder}{note}
@@ -4326,7 +4346,6 @@ imageTrace	Outline	轮廓
 @msg	before must name a panel	before 必须指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停靠操作包含未知面板或过长的拆分路径
 @msg	group must be true or false	group 必须是 true 或 false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	面板处于浮动状态；请使用 window.panel.float {panel, collapsed} 折叠其面板组
 @msg	panel is not in a dock group	面板不在停放组中
 @msg	only a dock group above or below others collapses, not one beside another	只有位于其他组上方或下方的停放组可以折叠，并排的不行
 @msg	icon must be true or false	icon 必须为 true 或 false
@@ -4771,13 +4790,10 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者
 	Drag to move	拖动以移动
-	Drag to move out of the set	拖动以移出该组合
 	Drag to float as a toolbar	拖动使其浮动为工具栏
 	Put back in the toolbar	放回工具栏
 	Float Panel	浮动面板
 	Dock Panel	停放面板
-	Drag to float the panel group	拖动以浮动面板组
-	Put back in the dock	放回停放区
 	Drag to float the toolbar	拖动以浮动工具栏
 	Drag to the window's left edge to dock	拖到窗口左边缘以停放
 	Float Tool Group	浮动工具组
@@ -5093,6 +5109,7 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的图像以缩小的尺寸显示
 	Fill and Stroke Controls	填色和描边控件
 	Coloring Controls	颜色控件
 	Draw Mode Controls	绘图模式控件
@@ -5233,6 +5250,10 @@ lighting	Light	光源
 	Snap to Perpendicular	对齐垂线
 @msg	unknown snap option `{key}` (use {options})	未知的对齐选项 `{key}`（可用：{options}）
 	Gap Length:	间隙长度：
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	文档中没有颜色组 `{name}` (请参阅 swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	“扁平徽标”模式已按 {_1} × {_2} 像素描摹图像，由 {_3} × {_4} 平均缩小而来。
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	编辑原稿只能打开图像和文档文件；“{name}” 不是其中之一
@@ -5299,6 +5320,12 @@ lighting	Light	光源
 	Shift:	偏移：
 	Fresco…	壁画…
 	Fresco	壁画
+	Lock Artboards	锁定画板
+	Unlock Artboards	解锁画板
+	Lock Selected	锁定所选
+	Lock All Except Selected	锁定除所选以外的全部
+	Lock All	全部锁定
+	Unlock Selected	解锁所选
 	Effect Gallery…	效果库…
 	Effect Gallery Dialog	效果库对话框
 	Arc Segment Tool Options	弧段工具选项
@@ -5389,3 +5416,40 @@ axis	Y Axis	Y 轴
 	Rectangular Grid Tool Options	矩形网格工具选项
 	Polar Grid Tool Options	极坐标网格工具选项
 	Fill Line	填充线段
+	Pathfinder Options	路径查找器选项
+	Divide and Outline Will Remove Unpainted Artwork	分割和轮廓将删除未上色图稿
+@msg	precision must be from 0.001 to 10 pt	precision 必须介于 0.001 到 10 pt 之间
+@msg	`pathfinder` must be an object	`pathfinder` 必须是对象
+	Add to Brushes	添加到画笔
+	Brush Library	画笔库
+	Save Brush Library	保存画笔库
+	Save Brushes…	保存画笔…
+	Open Brush Library	打开画笔库
+	Selected Brushes Only	仅限选择的画笔
+	Brush Libraries Menu	画笔库菜单
+	User Brush Library 1	用户画笔库 1
+	User Brush Library 2	用户画笔库 2
+	User Brush Library 3	用户画笔库 3
+	User Brush Library 4	用户画笔库 4
+	User Brush Library 5	用户画笔库 5
+	User Brush Library 6	用户画笔库 6
+	User Brush Library 7	用户画笔库 7
+	User Brush Library 8	用户画笔库 8
+	User Brush Library 9	用户画笔库 9
+	User Brush Library 10	用户画笔库 10
+	Art Ribbons	艺术丝带
+	Calligraphic Nibs	书法笔尖
+	Pattern Borders	图案边框
+	Scatter Shapes	散布形状
+	Save Brush Library…	保存画笔库…
+@msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
+@msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
+@msg	no brush `{n}`	没有画笔 `{n}`
+@msg	no brush `{n}` in `{_1}`	`{_1}` 中没有画笔 `{n}`
+@msg	no brush library `{key}` (see brush.libraries)	没有画笔库 `{key}`（请参阅 brush.libraries）
+@msg	the document has no brushes to save	文档中没有可保存的画笔
+@msg	no empty artboards to delete	没有可删除的空白画板
+	Scale Presets	缩放预设
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 截图的字节数溢出
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	窗口的{what}（{points} 点 × {scale} DPI）无法确定截图大小
+	Live preview	实时预览

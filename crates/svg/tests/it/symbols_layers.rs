@@ -50,7 +50,7 @@ fn three_instances_give_one_symbol_and_three_uses() {
     assert_eq!(svg.matches("<use ").count(), 3, "{svg}");
     assert!(svg.contains("<symbol id=\"My_Mark\"") && svg.contains("xlink:href=\"#My_Mark\""), "{svg}");
     // The art is written once.
-    assert_eq!(svg.matches("<path").count(), 1, "{svg}");
+    assert_eq!(svg.matches("<rect").count(), 1, "{svg}");
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.002);
     // Read back (since SVG import keeps symbols: as the symbol and three instances): the three
     // squares are where the instances are.
@@ -185,14 +185,14 @@ fn layered() -> Document {
 fn hidden_layers_are_kept_hidden_when_asked() {
     let d = layered();
     let plain = export(&d, &ExportOptions::default());
-    assert!(!plain.contains("Notes") && plain.matches("<path").count() == 1, "{plain}");
+    assert!(!plain.contains("Notes") && plain.matches("<rect").count() == 1, "{plain}");
     // Page isolation wraps the layers in one more group.
     let mut isolated = d.clone();
     isolated.page_isolate = true;
     let styles = [vectorcraft_svg::Styling::PresentationAttributes, vectorcraft_svg::Styling::InlineStyle, vectorcraft_svg::Styling::InternalCss];
     for (d, styling) in styles.iter().map(|s| (&d, *s)).chain([(&isolated, vectorcraft_svg::Styling::InternalCss)]) {
         let kept = export(d, &ExportOptions { hidden_layers: true, styling, ..Default::default() });
-        assert!(kept.contains("id=\"Notes\"") && kept.contains("display") && kept.matches("<path").count() == 2, "{kept}");
+        assert!(kept.contains("id=\"Notes\"") && kept.contains("display") && kept.matches("<rect").count() == 2, "{kept}");
         // Viewers don't show it.
         assert_eq!(resvg_render(&kept, 100, 100).pixel(70, 70), [255, 255, 255, 255], "{kept}");
         // It reopens as a hidden layer with its art.

@@ -109,6 +109,11 @@ wasmi is built with its *portable* (loop) dispatcher: the default tail-call disp
 sibling-call optimisation, and when that doesn't happen a long-running module overflows the host stack, which aborts
 the process instead of returning an error.
 
+wasmi compiles each function when it is first called, and the instruction budget doesn't pay for that, so a run
+takes as many instructions the first time as the next. Charged to the run, as wasmi charges by default, compiling
+could fail it: when the 20 M-instruction slice the run was in ran out while a function compiled, wasmi ended the run
+with an error rather than a pause the host resumes, and the run stopped with most of its budget left.
+
 Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters and input
 geometry: a plug-in runs again only when one of them changes.
 

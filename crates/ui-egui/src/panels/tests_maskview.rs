@@ -16,7 +16,7 @@ fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>
 /// Click the mask thumbnail with `modifiers` held.
 fn click_mask(ctx: &egui::Context, app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
     frame(ctx, app, vec![], egui::Modifiers::NONE);
-    let at = ctx.read_response(egui::Id::new(transparency::MASK_THUMB)).expect("the mask thumbnail is drawn").rect.center();
+    let at = ctx.read_response(egui::Id::unique(transparency::MASK_THUMB)).expect("the mask thumbnail is drawn").rect.center();
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
     frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true), button(false)], modifiers);
     frame(ctx, app, vec![], egui::Modifiers::NONE);

@@ -185,7 +185,7 @@ fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
     file[102..106].copy_from_slice(&1u32.to_le_bytes());
     let e = raster_image(&file).err().expect("refused");
     assert!(e.to_string().contains("an image of 3 × 2147483649 pixels is too large to draw"), "{e}");
-    assert!(too_large_note(&file).is_some());
+    assert!(load::too_large_note(&file).is_some());
     assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
 }
 

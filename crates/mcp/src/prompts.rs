@@ -309,8 +309,8 @@ Method:
    imageTrace.presets to see every preset with its numbers.
    Lower paths and higher corners give the clean, logo-like result; high fidelity needs paths
    near 90. imageTrace.setView {view: \"outlinesWithSourceImage\"} draws the traced outlines
-   over the image in the app's window to compare them (screenshot {window: true} captures it);
-   render_preview and screenshot without `window` draw the tracing result, as exports do.
+   over the image in the app's window to compare them; render_preview and screenshot draw it
+   with traceViews: true, and the tracing result otherwise, as exports do.
 3. imageTrace.expand keeps only the traced paths and removes the source image.
    imageTrace.makeAndExpand traces and expands in one command, in place of steps 2 and 3.
 4. apply_effect {effect} on the traced shapes. Call apply_effect with no `effect` for the
@@ -557,7 +557,8 @@ mod tests {
     }
 
     /// trace-and-style selects the opened image before tracing it, expands the trace, recolors it
-    /// instead of painting it one color, and says that screenshots draw the tracing result.
+    /// instead of painting it one color, and says that screenshots draw the trace view only with
+    /// traceViews.
     #[test]
     fn trace_and_style_selects_expands_and_recolors() {
         let v = get("trace-and-style", &json!({"path": "art.png"})).unwrap();
@@ -568,7 +569,7 @@ mod tests {
         let at = |s: &str| text.find(s).unwrap_or(usize::MAX);
         assert!(at("select.all") < at("imageTrace.make") && at("imageTrace.make") < at("imageTrace.expand"), "{text}");
         assert!(text.contains("black and white"), "{text}");
-        assert!(!text.contains("screenshots show it"), "{text}");
+        assert!(!text.contains("screenshots show it") && text.contains("traceViews: true"), "{text}");
         assert!(!text.contains("own pixel size") && text.contains("resolution it declares"), "{text}");
         // No step of its own paints the trace with set_paint.
         let steps: Vec<&str> = text.lines().filter(|l| is_item(l)).filter_map(|l| l.split_once(". ").map(|(_, rest)| rest)).collect();

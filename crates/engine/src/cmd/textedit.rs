@@ -23,6 +23,15 @@ pub fn specs() -> Vec<CommandSpec> {
             edit_range
         ),
         cmd!(
+            "text.startList",
+            "Bullets and Numbering",
+            [],
+            None,
+            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), or \"* \", \"# \", \"> \" or \"+ \" (a bulleted list with the filled dot), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
+            has_doc,
+            start_list
+        ),
+        cmd!(
             "text.setRangeStyle",
             "Character",
             [],
@@ -220,6 +229,36 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "caret": caret}))
 }
 
+fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.startList";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    check_numbers(p, &["at"], C)?;
+    let t = text_ref(s, id)?;
+    let len = edit::runs_len(&t.runs);
+    let at = byte_param(p, "at").unwrap_or(len).min(len);
+    let Some((start, list)) = t.typed_list_at(at) else {
+        return Ok(json!({"id": id.0, "started": false, "caret": at}));
+    };
+    s.edit("Bullets and Numbering", |d, _| {
+        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+        t.splice_paras(start, at, "");
+        edit::replace_range(&mut t.runs, start, at, "");
+        t.ruby_after_replace(start, at, 0);
+        let i = t.paragraphs_in(start, start).start;
+        t.edit_paras(Some(i..i + 1), |para| {
+            para.list = Some(list);
+            // A paragraph with no left or first-line indent gets the hanging indent.
+            if para.left_indent == 0.0 && para.first_line_indent == 0.0 {
+                para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
+                para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
+            }
+        });
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({"id": id.0, "started": true, "caret": start}))
+}
+
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
     let t = text_ref(s, id)?;
@@ -233,6 +272,20 @@ fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     Ok(json!({"text": text, "runs": runs, "length": len}))
+}
+
+/// Keep `st`'s font style when its family has it, else take the family's closest one: a family
+/// whose styles are numbered (W3, W6) has no Regular (#4128). A family that isn't installed keeps
+/// the style as it is.
+pub(crate) fn fit_font_style(st: &mut CharStyle) {
+    let db = vectorcraft_text::FontDb::global();
+    let styles = db.styles(&st.font_family);
+    if !styles.is_empty()
+        && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style))
+        && let Some(face) = db.face(&st.font_family, &st.font_style)
+    {
+        st.font_style = face.style.clone();
+    }
 }
 
 /// Character attribute changes parsed from params (shared by range and whole-object styling).
@@ -501,13 +554,7 @@ impl CharChange {
             st.font_family = f.clone();
             // Keep the style when the new family has it, else its closest match.
             if self.style.is_none() {
-                let styles = vectorcraft_text::FontDb::global().styles(f);
-                if !styles.is_empty()
-                    && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style))
-                    && let Some(face) = vectorcraft_text::FontDb::global().face(f, &st.font_style)
-                {
-                    st.font_style = face.style.clone();
-                }
+                fit_font_style(st);
             }
         }
         if let Some(v) = &self.style {

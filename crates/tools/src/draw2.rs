@@ -10,7 +10,9 @@ mod gesture;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, AnchorKind, BezPath, PathData, Point, SubPath, Vec2};
+use vectorcraft_pathops as po;
+use vectorcraft_pathops::{Cap, Join};
 
 use crate::{Action, Tool, ToolContext};
 
@@ -21,6 +23,18 @@ pub use gesture::GestureTool;
 
 /// Colour of tool feedback (Illustrator's selection blue).
 pub const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
+
+/// The lowest Fidelity (points) the Pencil and Paintbrush take (#3328); the Smooth tool keeps
+/// [`SMOOTH_MIN_FIDELITY`].
+pub const MIN_FIDELITY: f64 = 0.01;
+
+/// The lowest Fidelity (points) the Smooth tool takes.
+pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
+
+/// The lowest Fidelity tool `id` takes.
+pub fn min_fidelity(id: &str) -> f64 {
+    if id == "smooth" { SMOOTH_MIN_FIDELITY } else { MIN_FIDELITY }
+}
 
 /// Create a drawing tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -202,6 +216,31 @@ pub fn polyline(pts: &[Point]) -> BezPath {
         }
     }
     bp
+}
+
+/// The map that takes a circle about the origin to the Eraser's tip of the same size: an ellipse
+/// whose long axis runs at `angle` degrees counter-clockwise on the page (y-down document space)
+/// and whose short axis is `roundness` percent of the long one (kept within 1–100).
+pub fn eraser_tip(angle: f64, roundness: f64) -> Affine {
+    let t = angle.to_radians();
+    let u = Vec2::new(t.cos(), -t.sin());
+    let v = Vec2::new(-u.y, u.x);
+    let r = roundness.clamp(1.0, 100.0) / 100.0;
+    let (xx, xy, yy) = (u.x * u.x + r * v.x * v.x, u.x * u.y + r * v.x * v.y, u.y * u.y + r * v.y * v.y);
+    Affine::new([xx, xy, xy, yy, 0.0, 0.0])
+}
+
+/// The area the Eraser's tip (`size` across its long axis, [`eraser_tip`]'s `angle` and
+/// `roundness`) covers along `pts`: a round stroke along the points squashed by the tip's map,
+/// stretched back.
+pub fn eraser_area(pts: &[Point], size: f64, angle: f64, roundness: f64) -> PathData {
+    let stretch = eraser_tip(angle, roundness);
+    let squash = stretch.inverse();
+    let mut round: Vec<Point> = pts.iter().map(|p| squash * *p).collect();
+    if let [p] = round[..] {
+        round.push(p + Vec2::new(0.01, 0.0));
+    }
+    po::outline_stroke(&PathData::single(SubPath::polyline(&round, false)), size, Cap::Round, Join::Round, 4.0).transformed(stretch)
 }
 
 /// Visit `n` and everything inside it, depth first in paint order, but a Shaper Group's original

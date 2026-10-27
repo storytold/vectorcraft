@@ -326,7 +326,6 @@ font-technology	Variable	Değişken
 	Brush Affects:	Fırça Etkileri:
 	Brush Definition	Fırça Tanımı
 	Brush Libraries	Fırça Kitaplıkları
-	Brush Libraries (on the roadmap)	Fırça Kitaplıkları (yol haritasında)
 	Brush Options…	Fırça Seçenekleri…
 	Brush Strokes	Fırça Darbeleri
 	Brushes	Fırçalar
@@ -341,6 +340,7 @@ font-technology	Variable	Değişken
 	Apply Bullets	Madde İşaretlerini Uygula
 	Numbered List	Numaralı Liste
 	Apply Numbers	Numaralandırmayı Uygula
+	Convert to Text	Metne Dönüştür
 	Filled Dot	Dolu Nokta
 	Dash	Tire
 	Hollow Circle	Boş Daire
@@ -1710,6 +1710,7 @@ font-technology	Variable	Değişken
 	Miter Limit:	Gönye Sınırı:
 	Mixed Appearances	Karışık Görünümler
 	Mixed Objects	Karışık Nesneler
+	Mixed	Karışık
 	Mode:	Mod:
 	Model	Modeli
 	Modified	Değiştirildi
@@ -2420,6 +2421,7 @@ font-technology	Variable	Değişken
 	Remove Plug-in	Eklentiyi Kaldır
 	Remove Selected Assets	Seçilen Varlıkları Kaldır
 	Remove Threading	Diş Açmayı Kaldır
+	Break Thread	Metin Bağını Kopar
 	Remove “{keyword}”	“{keyword}”yi kaldırın
 	Rename	Yeniden adlandır
 	Rename Asset	Varlığı Yeniden Adlandır
@@ -2614,7 +2616,22 @@ font-technology	Variable	Değişken
 	Saved to User Defined: {}	Kullanıcı Tanımlı'ya kaydedildi: {}
 	Saved View 1	Kaydedilen Görünüm 1
 	Saved View 10	Kaydedilen Görünüm 10
+	Saved View 11	Kaydedilen Görünüm 11
+	Saved View 12	Kaydedilen Görünüm 12
+	Saved View 13	Kaydedilen Görünüm 13
+	Saved View 14	Kaydedilen Görünüm 14
+	Saved View 15	Kaydedilen Görünüm 15
+	Saved View 16	Kaydedilen Görünüm 16
+	Saved View 17	Kaydedilen Görünüm 17
+	Saved View 18	Kaydedilen Görünüm 18
+	Saved View 19	Kaydedilen Görünüm 19
 	Saved View 2	Kaydedilen Görünüm 2
+	Saved View 20	Kaydedilen Görünüm 20
+	Saved View 21	Kaydedilen Görünüm 21
+	Saved View 22	Kaydedilen Görünüm 22
+	Saved View 23	Kaydedilen Görünüm 23
+	Saved View 24	Kaydedilen Görünüm 24
+	Saved View 25	Kaydedilen Görünüm 25
 	Saved View 3	Kaydedilen Görünüm 3
 	Saved View 4	Kaydedilen Görünüm 4
 	Saved View 5	Kaydedilen Görünüm 5
@@ -2930,6 +2947,7 @@ font-technology	Variable	Değişken
 	Snap to Grid	Izgaraya Yasla
 	Snap to Pixel	Piksel'e Yapış
 	Precise Cursors	Hassas İmleçler
+	Image Trace Preview	Görüntü İzleme Önizlemesi
 	Snap to Point	Noktaya Yasla
 	Snapping Tolerance	Yapışma Toleransı
 	Social Square Post 1080×1080	Sosyal Meydan Gönderisi 1080×1080
@@ -3580,13 +3598,10 @@ axis	Horizontal	Yatay
 axis	Vertical	Dikey
 axis	Both	Her İkisi
 	Drag to move	Taşımak için sürükleyin
-	Drag to move out of the set	Setin dışına çıkmak için sürükleyin
 	Drag to float as a toolbar	Bağımsız araç çubuğu yapmak için sürükleyin
 	Put back in the toolbar	Araç çubuğuna geri yerleştir
 	Float Panel	Paneli Yüzer Yap
 	Dock Panel	Bağlantı İstasyonu Paneli
-	Drag to float the panel group	Panel grubunu ayırmak için sürükleyin
-	Put back in the dock	Dock'a geri koy
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
 	Drag to the window's left edge to dock	Sabitlemek için pencerenin sol kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
@@ -4122,6 +4137,7 @@ axis	Both	Her İkisi
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} canlı bir efekttir (Efekt › Eklentiler)
 @msg	{_1} is already used by {_2}	{_1} zaten {_2} tarafından kullanılıyor
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} bağlantılı dosya(lar) burada okunamıyor: önizlemeleri gösteriliyor
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} görüntünün kodu çözülemedi: çarpı işaretli kutular olarak gösteriliyor
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} bağlantılı görseller diskte değiştirildi: Güncelleme Bağlantıları yeni sürümleri gösteriyor
 @msg	Updated {_1} linked file(s) changed on disk	Güncellenmiş {_1} bağlantılı dosya(lar) diskte değiştirildi
 @msg	{_1}: not saved, so not closed	{_1}: kaydedilmedi, dolayısıyla kapatılmadı
@@ -4935,6 +4951,7 @@ mark-style	Japanese	Japon
 theme	Appearance	Görünüm
 	Load EPS into Clipboard	EPS'yi Panoya Yükle
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} piksellik bir görüntü çizilemeyecek kadar büyük
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} piksellik bir görüntü küçültülmüş boyutta gösteriliyor
 @msg	the image can't be read as a texture	görüntü doku olarak okunamıyor
 	Fill and Stroke Controls	Dolgu ve Kontur Kontrolleri
 	Coloring Controls	Renklendirme Kontrolleri
@@ -5222,6 +5239,7 @@ theme	Appearance	Görünüm
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} bir dışa aktarma eklentisidir (Dosya › Dışa Aktar › Farklı Dışa Aktar…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` {size} bayt (sınır {MAX_DOCUMENT_DATA})
 	Alt key toggles to Smooth Tool	Alt tuşu Düzleştirme Aracına geçiş yapar
+	Live curve fitting	Çizerken eğri uydurma
 	Auto-Simplify	Otomatik Basitleştir
 	Drag an item here, or right-click one, to put it in this group.	Bu gruba eklemek için bir öğeyi buraya sürükleyin veya sağ tıklayın.
 	Drop here to take it out of its group	Grup dışına çıkarmak için buraya bırakın
@@ -5370,7 +5388,6 @@ theme	Appearance	Görünüm
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: {n}. sayfa yok (dosyada 1 sayfa var)
 @msg	variables that aren't text were left out: {kinds}	metin olmayan değişkenler dışarıda bırakıldı: {kinds}
 	Collapse Panel Group	Panel Grubunu Daralt
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel kayan durumda; grubunu window.panel.float {panel, collapsed} ile daraltın
 @msg	panel is not in a dock group	panel bir yuva grubunda değil
 @msg	only a dock group above or below others collapses, not one beside another	yalnızca diğerlerinin üstünde veya altındaki bir yuva grubu daraltılabilir, yanındaki değil
 @msg	icon must be true or false	icon true veya false olmalı
@@ -5395,6 +5412,10 @@ theme	Appearance	Görünüm
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
 	Gap Length:	Boşluk Uzunluğu:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir
+@msg	no color group `{name}` in the document (see swatch.list)	belgede `{name}` adlı renk grubu yok (bkz. swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Düz Logo modu görüntüyü {_3} × {_4} boyutundan ortalama alarak küçültüp {_1} × {_2} pikselde izledi.
 @plural	{n} more export waiting|{n} more exports waiting	{n} dışa aktarma daha bekliyor|{n} dışa aktarma daha bekliyor
 @msg	Export cancelled	Dışa aktarma iptal edildi
@@ -5513,3 +5534,40 @@ axis	Y Axis	Y ekseni
 	Rectangular Grid Tool Options	Dikdörtgen Izgara Aracı Seçenekleri
 	Polar Grid Tool Options	Yuvarlak Izgara Aracı Seçenekleri
 	Fill Line	Çizgiyi doldur
+	Pathfinder Options	Yol Bulucu Seçenekleri
+	Divide and Outline Will Remove Unpainted Artwork	Böl ve Taslak boyanmamış çizimi kaldırır
+@msg	precision must be from 0.001 to 10 pt	precision 0,001 ile 10 pt arasında olmalıdır
+@msg	`pathfinder` must be an object	`pathfinder` bir nesne olmalıdır
+	Add to Brushes	Fırçalara Ekle
+	Brush Library	Fırça Kitaplığı
+	Save Brush Library	Fırça Kitaplığını Kaydet
+	Save Brushes…	Fırçaları Kaydet…
+	Open Brush Library	Fırça Kitaplığını Aç
+	Selected Brushes Only	Yalnızca Seçilen Fırçalar
+	Brush Libraries Menu	Fırça Kitaplıkları Menüsü
+	User Brush Library 1	Kullanıcı Fırça Kitaplığı 1
+	User Brush Library 2	Kullanıcı Fırça Kitaplığı 2
+	User Brush Library 3	Kullanıcı Fırça Kitaplığı 3
+	User Brush Library 4	Kullanıcı Fırça Kitaplığı 4
+	User Brush Library 5	Kullanıcı Fırça Kitaplığı 5
+	User Brush Library 6	Kullanıcı Fırça Kitaplığı 6
+	User Brush Library 7	Kullanıcı Fırça Kitaplığı 7
+	User Brush Library 8	Kullanıcı Fırça Kitaplığı 8
+	User Brush Library 9	Kullanıcı Fırça Kitaplığı 9
+	User Brush Library 10	Kullanıcı Fırça Kitaplığı 10
+	Art Ribbons	Sanat Şeritleri
+	Calligraphic Nibs	Kaligrafi Uçları
+	Pattern Borders	Desen Kenarlıkları
+	Scatter Shapes	Dağılım Şekilleri
+	Save Brush Library…	Fırça Kitaplığını Kaydet…
+@msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
+@msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
+@msg	no brush `{n}`	`{n}` fırçası yok
+@msg	no brush `{n}` in `{_1}`	`{_1}` içinde `{n}` fırçası yok
+@msg	no brush library `{key}` (see brush.libraries)	`{key}` fırça kitaplığı yok (bkz. brush.libraries)
+@msg	the document has no brushes to save	belgede kaydedilecek fırça yok
+@msg	no empty artboards to delete	silinecek boş çalışma yüzeyi yok
+	Scale Presets	Ölçek ön ayarları
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} ekran görüntüsünün bayt sayısı taşıyor
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	pencerenin {what} ({points} nokta × {scale} DPI) bir ekran görüntüsünü boyutlandıramaz
+	Live preview	Canlı önizleme

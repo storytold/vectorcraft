@@ -260,3 +260,43 @@ fn saved_selections_from_a_file_are_tidied() {
     v["document"]["saved_selections"] = json!([{"name": 5, "objects": "x"}]);
     assert!(load(&serde_json::to_vec(&v).unwrap()).is_err());
 }
+
+/// Saved views (View → New View…) travel with the file, names and viewports intact; older files
+/// have none, and a hostile one is cut down to what the View menu can list, with names that fit
+/// and a zoom the canvas can show.
+#[test]
+fn saved_views_round_trip_and_from_a_file_are_tidied() {
+    use vectorcraft_doc::SavedView;
+    use vectorcraft_geom::Point;
+    let mut d = rich_doc();
+    let mut v: Value = serde_json::from_slice(&save(&d, false)).unwrap();
+    assert!(v["document"].get("views").is_none(), "nothing written when there are none");
+    assert!(load(&serde_json::to_vec(&v).unwrap()).unwrap().views.is_empty(), "a file from before views opens");
+    d.views = vec![
+        SavedView { name: "Overview".into(), center: Point::new(306.0, 396.0), zoom: 0.5, rotation: 0.0 },
+        SavedView { name: "Logo detail".into(), center: Point::new(40.25, -12.5), zoom: 8.0, rotation: -30.0 },
+    ];
+    assert_eq!(load(&save(&d, false)).unwrap().views, d.views);
+    let mut list = vec![
+        json!({"name": format!("  {}  ", "x".repeat(1000)), "center": {"x": 1, "y": 2}, "zoom": 2}),
+        json!({"name": "   ", "center": {"x": 0, "y": 0}, "zoom": 1}),
+        json!({"name": "Zero", "center": {"x": 0, "y": 0}, "zoom": 0}),
+        json!({"name": "Negative", "center": {"x": 0, "y": 0}, "zoom": -3}),
+        json!({"name": "Dup", "center": {"x": 5, "y": 6}, "zoom": 3, "rotation": 10}),
+        json!({"name": "Dup", "center": {"x": 0, "y": 0}, "zoom": 1}),
+    ];
+    list.extend((0..100).map(|i| json!({"name": format!("V{i}"), "center": {"x": i, "y": i}, "zoom": 1})));
+    v["document"]["views"] = json!(list);
+    let back = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+    let views = &back.views;
+    assert_eq!(views.len(), SavedView::MAX);
+    assert_eq!(views[0].name, "x".repeat(SavedView::MAX_NAME));
+    assert_eq!((views[1].name.as_str(), views[1].zoom, views[1].rotation), ("Dup", 3.0, 10.0), "the first of a name stays");
+    assert_eq!(views[2].name, "V0", "blank names, a zero or negative zoom and a repeated name go");
+    assert!(views.iter().all(SavedView::is_usable));
+    // What loads saves and loads again unchanged.
+    assert_eq!(&load(&save(&back, false)).unwrap().views, views);
+    // Junk in the member is a format error, not a crash.
+    v["document"]["views"] = json!([{"name": 5, "center": "x", "zoom": "big"}]);
+    assert!(load(&serde_json::to_vec(&v).unwrap()).is_err());
+}

@@ -31,15 +31,15 @@ struct Hover {
 
 /// Key for the source document and original canvas grab point.
 fn origin_id() -> Id {
-    Id::new("document-drag-origin")
+    Id::unique("document-drag-origin")
 }
 /// Key for the tab identity and dwell start time of the current hover.
 fn hover_id() -> Id {
-    Id::new("document-drag-hover")
+    Id::unique("document-drag-hover")
 }
 /// Key for the pointer position latched after tab activation to prevent cascading switches.
 fn activated_at_id() -> Id {
-    Id::new("document-drag-activated-at")
+    Id::unique("document-drag-activated-at")
 }
 
 /// Record the Selection drag source and grab point, clearing any previous tab-hover timer.

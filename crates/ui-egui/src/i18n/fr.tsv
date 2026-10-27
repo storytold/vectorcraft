@@ -343,7 +343,6 @@ font-technology	Variable	Variables
 	Brush Affects:	Le pinceau affecte :
 	Brush Definition	Définition de la forme
 	Brush Libraries	Bibliothèques de formes
-	Brush Libraries (on the roadmap)	Bibliothèques de formes (prévu dans la feuille de route)
 	Brush Options…	Options de forme…
 	Brush Strokes	Contours de forme
 	Brushes	Formes
@@ -358,6 +357,7 @@ font-technology	Variable	Variables
 	Apply Bullets	Appliquer les puces
 	Numbered List	Liste numérotée
 	Apply Numbers	Appliquer la numérotation
+	Convert to Text	Convertir en texte
 	Filled Dot	Point plein
 	Dash	Tiret
 	Hollow Circle	Cercle vide
@@ -1109,6 +1109,7 @@ font-technology	Variable	Variables
 	Fill and Stroke	Fond et contour
 	Fill new strokes	Remplir les nouveaux contours
 	Alt key toggles to Smooth Tool	La touche Alt bascule sur l’outil Arrondi
+	Live curve fitting	Ajustement de la courbe en direct
 	Keep selected	Garder sélectionné
 	Merge only with selection	Fusionner uniquement avec la sélection
 	Consider Open Filled Paths as Closed	Traiter les tracés ouverts avec fond comme fermés
@@ -1861,6 +1862,7 @@ font-technology	Variable	Variables
 	Miter Limit:	Limite de pointe :
 	Mixed Appearances	Aspects mixtes
 	Mixed Objects	Objets mixtes
+	Mixed	Mixte
 	Mode:	Mode :
 	Model	Modèle
 	Modified	Modifié
@@ -2597,6 +2599,7 @@ font-technology	Variable	Variables
 	Remove Plug-in	Supprimer le module externe
 	Remove Selected Assets	Supprimer les ressources sélectionnées
 	Remove Threading	Supprimer le chaînage
+	Break Thread	Rompre le chaînage
 	Remove “{keyword}”	Supprimer « {keyword} »
 	Rename	Renommer
 	Rename Asset	Renommer la ressource
@@ -2795,7 +2798,22 @@ font-technology	Variable	Variables
 	Saved to User Defined: {}	Enregistré dans Défini par l’utilisateur : {}
 	Saved View 1	Vue enregistrée 1
 	Saved View 10	Vue enregistrée 10
+	Saved View 11	Vue enregistrée 11
+	Saved View 12	Vue enregistrée 12
+	Saved View 13	Vue enregistrée 13
+	Saved View 14	Vue enregistrée 14
+	Saved View 15	Vue enregistrée 15
+	Saved View 16	Vue enregistrée 16
+	Saved View 17	Vue enregistrée 17
+	Saved View 18	Vue enregistrée 18
+	Saved View 19	Vue enregistrée 19
 	Saved View 2	Vue enregistrée 2
+	Saved View 20	Vue enregistrée 20
+	Saved View 21	Vue enregistrée 21
+	Saved View 22	Vue enregistrée 22
+	Saved View 23	Vue enregistrée 23
+	Saved View 24	Vue enregistrée 24
+	Saved View 25	Vue enregistrée 25
 	Saved View 3	Vue enregistrée 3
 	Saved View 4	Vue enregistrée 4
 	Saved View 5	Vue enregistrée 5
@@ -3087,6 +3105,7 @@ font-technology	Variable	Variables
 	Snap to Grid	Magnétisme de la grille
 	Snap to Pixel	Magnétisme du pixel
 	Precise Cursors	Pointeurs précis
+	Image Trace Preview	Aperçu de la vectorisation de l’image
 	Snap to Point	Magnétisme du point
 	Snap to Unit	Magnétisme de l’unité
 	Snapping Tolerance	Tolérance du magnétisme
@@ -3758,13 +3777,10 @@ axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Les deux
 	Drag to move	Faire glisser pour déplacer
-	Drag to move out of the set	Faire glisser pour sortir de l’ensemble
 	Drag to float as a toolbar	Faire glisser pour détacher en barre d’outils flottante
 	Put back in the toolbar	Remettre dans la barre d’outils
 	Float Panel	Rendre le panneau flottant
 	Dock Panel	Ancrer le panneau
-	Drag to float the panel group	Faire glisser pour rendre le groupe de panneaux flottant
-	Put back in the dock	Remettre dans la zone d’ancrage
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
 	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
@@ -4363,6 +4379,7 @@ axis	Both	Les deux
 @msg	{_1} is already used by {_2}	{_1} est déjà utilisé par {_2}
 @msg	{_1} is reserved by the system	{_1} est réservé par le système
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} fichier(s) lié(s) illisible(s) ici : leurs aperçus sont affichés
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} image(s) impossible(s) à décoder, affichée(s) sous forme de cadres barrés d’une croix
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} image(s) liée(s) modifiée(s) sur le disque : Mettre à jour les liens affiche les nouvelles versions
 @msg	Updated {_1} linked file(s) changed on disk	{_1} fichier(s) lié(s) modifié(s) sur le disque mis à jour
 @msg	{_1}: not saved, so not closed	{_1} : non enregistré, donc non fermé
@@ -4634,7 +4651,6 @@ effect	Soft	Doux
 @msg	before must name a panel	before doit désigner un panneau
 @msg	docking action contains an unknown panel or an excessive split path	L’action d’ancrage contient un panneau inconnu ou un chemin de divisions trop long
 @msg	group must be true or false	group doit être true ou false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	le panneau est flottant ; réduisez son groupe avec window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	le panneau n’est dans aucun groupe du dock
 @msg	only a dock group above or below others collapses, not one beside another	seul un groupe du dock situé au-dessus ou au-dessous d’autres se réduit, pas un groupe à côté
 @msg	icon must be true or false	icon doit être true ou false
@@ -5224,6 +5240,7 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+@msg	an image of {w} × {h} pixels is shown at reduced size	une image de {w} × {h} pixels est affichée en taille réduite
 @msg	the image can't be read as a texture	l'image ne peut pas être lue comme texture
 	Fill and Stroke Controls	Commandes de fond et de contour
 	Coloring Controls	Commandes de couleur
@@ -5400,6 +5417,10 @@ theme	Appearance	Apparence
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
 @msg	unknown snap option `{key}` (use {options})	option de magnétisme inconnue `{key}` (utilisez {options})
 	Gap Length:	Longueur de lacune :
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` nécessite `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` nécessite `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` nécessite `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	aucun groupe de couleurs `{name}` dans le document (voir swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Le mode Logo en aplats a vectorisé l’image à {_1} × {_2} pixels, réduite par moyennage de {_3} × {_4}.
 	Artboard {n} of {total}	Plan de travail {n} sur {total}
 	File {n} of {total}	Fichier {n} sur {total}
@@ -5460,6 +5481,12 @@ theme	Appearance	Apparence
 	Shift:	Décalage :
 	Fresco…	Fresque…
 	Fresco	Fresque
+	Lock Artboards	Verrouiller les plans de travail
+	Unlock Artboards	Déverrouiller les plans de travail
+	Lock Selected	Verrouiller la sélection
+	Lock All Except Selected	Tout verrouiller sauf la sélection
+	Lock All	Tout verrouiller
+	Unlock Selected	Déverrouiller la sélection
 	Effect Gallery…	Galerie d'effets…
 	Effect Gallery Dialog	Boîte de dialogue Galerie d'effets
 	Arc Segment Tool Options	Options de l’outil Segment d’arc
@@ -5549,3 +5576,40 @@ axis	Y Axis	Axe Y
 	Rectangular Grid Tool Options	Options de l’outil Grille rectangulaire
 	Polar Grid Tool Options	Options de l’outil Grille à coordonnées polaires
 	Fill Line	Remplir le trait
+	Pathfinder Options	Options Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Division et Tracés suppriment l’illustration non peinte
+@msg	precision must be from 0.001 to 10 pt	precision doit être compris entre 0,001 et 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` doit être un objet
+	Add to Brushes	Ajouter aux formes
+	Brush Library	Bibliothèque de formes
+	Save Brush Library	Enregistrer la bibliothèque de formes
+	Save Brushes…	Enregistrer les formes…
+	Open Brush Library	Ouvrir une bibliothèque de formes
+	Selected Brushes Only	Formes sélectionnées uniquement
+	Brush Libraries Menu	Menu Bibliothèques de formes
+	User Brush Library 1	Bibliothèque de formes utilisateur 1
+	User Brush Library 2	Bibliothèque de formes utilisateur 2
+	User Brush Library 3	Bibliothèque de formes utilisateur 3
+	User Brush Library 4	Bibliothèque de formes utilisateur 4
+	User Brush Library 5	Bibliothèque de formes utilisateur 5
+	User Brush Library 6	Bibliothèque de formes utilisateur 6
+	User Brush Library 7	Bibliothèque de formes utilisateur 7
+	User Brush Library 8	Bibliothèque de formes utilisateur 8
+	User Brush Library 9	Bibliothèque de formes utilisateur 9
+	User Brush Library 10	Bibliothèque de formes utilisateur 10
+	Art Ribbons	Rubans d'illustration
+	Calligraphic Nibs	Plumes calligraphiques
+	Pattern Borders	Bordures de motif
+	Scatter Shapes	Formes de dispersion
+	Save Brush Library…	Enregistrer la bibliothèque de formes…
+@msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
+@msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
+@msg	no brush `{n}`	aucune forme `{n}`
+@msg	no brush `{n}` in `{_1}`	aucune forme `{n}` dans `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	aucune bibliothèque de formes `{key}` (voir brush.libraries)
+@msg	the document has no brushes to save	le document n'a aucune forme à enregistrer
+@msg	no empty artboards to delete	aucun plan de travail vide à supprimer
+	Scale Presets	Préréglages de mise à l'échelle
+@msg	a {width}×{height} screenshot's byte count overflows	le nombre d'octets d'une capture {width}×{height} dépasse la limite
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	la {what} de la fenêtre ({points} points × {scale} DPI) ne permet pas de dimensionner une capture
+	Live preview	Aperçu en direct

@@ -156,7 +156,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let w = strip.width() / g.colors.len() as f32;
     for (i, c) in g.colors.iter().enumerate() {
         let r = Rect::from_min_size(strip.min + vec2(i as f32 * w, 0.0), vec2(w, strip.height()));
-        let resp = ui.interact(r, ui.id().with(("cg-h", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("cg-h", i)), Sense::click());
         ui.painter().rect_filled(r, 0.0, c32(c));
         if resp.on_hover_text(c.to_hex()).clicked() {
             chosen = Some(*c);
@@ -176,7 +176,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
         for (ci, v) in row.iter().enumerate() {
             let r = Rect::from_min_size(rr.min + vec2(x(ci), 0.0), vec2(x(ci + 1) - x(ci) - gap, 17.0));
-            let resp = ui.interact(r, ui.id().with(("cg-v", ri, ci)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("cg-v", ri, ci)), Sense::click());
             ui.painter().rect_filled(r, 0.0, c32(v));
             if sel.contains(&(ri, ci)) {
                 ui.painter().rect_stroke(r.shrink(1.0), 0.0, egui::Stroke::new(1.0, egui::Color32::WHITE), egui::StrokeKind::Inside);

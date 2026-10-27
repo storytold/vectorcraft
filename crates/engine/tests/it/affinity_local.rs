@@ -14,7 +14,7 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
             files(&p, out);
         } else if p
             .extension()
-            .and_then(|x| x.to_str())
+            .and_then(std::ffi::OsStr::to_str)
             .is_some_and(|x| ["af", "afdesign", "afpub", "afphoto"].contains(&x.to_ascii_lowercase().as_str()))
         {
             out.push(p);

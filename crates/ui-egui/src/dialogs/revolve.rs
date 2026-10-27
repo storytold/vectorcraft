@@ -40,8 +40,8 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 m.iter().any(|(k, v)| v.as_f64().map_or_else(|| d.fields.get(k) != Some(v), |default| (d.f64(k, default) - default).abs() > 1e-6))
             });
             let (r, _) = ui.allocate_exact_size(vec2(88.0, 24.0), Sense::hover());
-            let response = ui.interact(r, Id::new("revolve-reset-all"), Sense::click());
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Reset all")));
+            let response = ui.interact(r, Id::unique("revolve-reset-all"), Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset all")));
             if response.hovered() {
                 ui.painter().rect_filled(r, 3.0, t.hover);
             }
@@ -572,8 +572,8 @@ fn dot(ui: &egui::Ui, p: Pos2, changed: bool) {
 
 fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool {
     let (r, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
-    let response = ui.interact(r, Id::new(("revolve-reset", key)), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Reset to default")));
+    let response = ui.interact(r, Id::unique(("revolve-reset", key)), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset to default")));
     if response.hovered() {
         ui.painter().rect_filled(r, 3.0, Tokens::get(ui.ctx()).hover);
     }
@@ -582,5 +582,4 @@ fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool
 }
 
 #[cfg(test)]
-#[path = "tests_revolve.rs"]
 mod tests;

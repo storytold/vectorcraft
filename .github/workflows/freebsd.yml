@@ -29,5 +29,5 @@ jobs:
     uses: storytold/craft-common-actions/.github/workflows/freebsd.yml@main
     with:
       require-craft-fonts: true
-      craft-fonts-ref: a71c20e30af613287c504f7e685ca8fad77752bc
+      craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       run-package-check: true

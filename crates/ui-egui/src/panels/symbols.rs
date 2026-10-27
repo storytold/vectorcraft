@@ -4,34 +4,39 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
+use std::sync::{Arc, Weak};
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_engine::DocState;
+use vectorcraft_engine::cmd::clipboard::{ArtResources, art_resources};
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_engine::cmd::symbollib::{self, SymbolLibrary};
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
+use super::memo::Memo;
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
-/// A thumbnail of symbol `name` (an instance at its natural size), cached by the identity of the
-/// art it shows: its own and `resources`, [`resources_key`] of `doc`.
-fn thumb(ui: &Ui, doc: &Document, resources: u64, name: &str, size: f32) -> Option<egui::TextureHandle> {
+/// A thumbnail of symbol `name` (an instance at its natural size), cached by its key in `keys`
+/// ([`Thumbs`]).
+fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Option<egui::TextureHandle> {
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: crate::graphics::TexCache<HashMap<(usize, u64, String, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
+        static CACHE: crate::graphics::TexCache<HashMap<(u64, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
-    let sym = doc.symbols.iter().find(|s| s.name == name)?;
     let px = (size * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
-    let key = (Arc::as_ptr(&sym.art) as usize, resources, name.to_string(), px);
+    let key = (*keys.keys.get(name)?, px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return Some(t);
     }
+    #[cfg(test)]
+    counters::RENDERED.with(|c| c.set(c.get() + 1));
     let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), doc, name, px))?;
     let color = crate::canvas::color_image(&img);
     let tex = ui.ctx().load_texture(format!("sym-{name}-{px}"), color, egui::TextureOptions::LINEAR);
@@ -45,18 +50,64 @@ fn thumb(ui: &Ui, doc: &Document, resources: u64, name: &str, size: f32) -> Opti
     Some(tex)
 }
 
-/// The identity of `doc`'s symbol and pattern art, which a symbol's thumbnail may show. It takes a
-/// pass over them: work it out once per panel frame, not per thumbnail.
-pub(crate) fn resources_key(doc: &Document) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    for s in &doc.symbols {
-        (Arc::as_ptr(&s.art) as usize).hash(&mut h);
+/// The thumbnail keys of a document version's or a library's symbols, worked out once for it
+/// ([`document_symbols`], [`library_symbols`]): a symbol's key is its name, its art and every
+/// resource the art uses ([`art_resources`]: the symbols it nests, patterns with their options,
+/// swatches and colour groups, gradients, images, styles…), so a thumbnail renders again when one
+/// of those changes and stays cached when anything else does.
+pub(crate) struct Thumbs {
+    keys: HashMap<String, u64>,
+    /// Keeps the addresses the keys count from being reused.
+    _kept: Vec<(Weak<Node>, ArtResources)>,
+}
+
+impl Thumbs {
+    fn of(doc: &Document) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut keys = HashMap::new();
+        let mut kept = vec![];
+        for s in &doc.symbols {
+            #[cfg(test)]
+            counters::KEYED.with(|c| c.set(c.get() + 1));
+            let deps = art_resources(doc, [&*s.art]);
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (&s.name, Arc::as_ptr(&s.art) as usize, deps.key).hash(&mut h);
+            keys.entry(s.name.clone()).or_insert(h.finish());
+            kept.push((Arc::downgrade(&s.art), deps));
+        }
+        Self { keys, _kept: kept }
     }
-    for p in &doc.patterns {
-        p.art.iter().for_each(|a| (Arc::as_ptr(a) as usize).hash(&mut h));
+
+    /// The thumbnail key of symbol `name` (none when there is no such symbol).
+    #[cfg(test)]
+    pub(crate) fn key(&self, name: &str) -> Option<u64> {
+        self.keys.get(name).copied()
     }
-    h.finish()
+}
+
+/// [`Thumbs`] of the document version `st` shows.
+pub(crate) fn document_symbols(st: &DocState) -> Rc<Thumbs> {
+    thread_local! {
+        static MEMO: RefCell<Memo<Document, Thumbs>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || Thumbs::of(&st.doc)))
+}
+
+/// [`Thumbs`] of symbol library `lib`.
+pub(crate) fn library_symbols(lib: &Arc<SymbolLibrary>) -> Rc<Thumbs> {
+    thread_local! {
+        static MEMO: RefCell<Memo<SymbolLibrary, Thumbs>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| m.borrow_mut().get(lib, 0, || Thumbs::of(&lib.doc)))
+}
+
+/// Symbol thumbnails' keys worked out and thumbnails rendered on this test thread.
+#[cfg(test)]
+pub(crate) mod counters {
+    thread_local! {
+        pub(crate) static KEYED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static RENDERED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
 }
 
 /// Symbol `name` of `doc` rendered `px` pixels wide: an instance at its natural size, alone on a
@@ -73,11 +124,11 @@ fn render_thumb(r: &mut vectorcraft_render::Renderer, doc: &Document, name: &str
     r.render_thumbnail(&d, id, px)
 }
 
-/// Symbol `name`'s thumbnail on white in `r` (the panel's tiles and the chip a dragged symbol
-/// shows at the pointer); `resources` is [`resources_key`] of `doc`.
-pub(crate) fn chip(ui: &Ui, doc: &Document, resources: u64, r: egui::Rect, name: &str) {
+/// Symbol `name`'s thumbnail (keyed by `keys`, [`document_symbols`] or [`library_symbols`] of
+/// `doc`) on white in `r`: the panel's tiles and the chip a dragged symbol shows at the pointer.
+pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str) {
     ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    if let Some(tex) = thumb(ui, doc, resources, name, r.width()) {
+    if let Some(tex) = thumb(ui, doc, keys, name, r.width()) {
         ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
 }
@@ -100,9 +151,8 @@ fn has_instances_selected(app: &VectorcraftApp) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
-    let resources = resources_key(&doc);
     let list: bool = pstate(ui.ctx(), "sym-list");
     let sel = current(app);
     let mut clicked: Option<(String, bool)> = None;
@@ -123,7 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.hovered() {
                     ui.painter().rect_filled(r, 0.0, t.hover);
                 }
-                chip(ui, &doc, resources, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
+                chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
                 ui.painter().text(r.left_center() + vec2(32.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(12.5), t.text);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
@@ -136,7 +186,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
                     widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
-                    chip(ui, &doc, resources, r.shrink(2.0), n);
+                    chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = sel.as_deref() == Some(n.as_str());
                     ui.painter().rect_stroke(
                         r,
@@ -155,7 +205,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.min_rect()
     });
-    let zone = ui.interact(list_rect, ui.id().with("symbols-drop"), Sense::hover());
+    let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
     if let Some(ids) = widgets::art_drop(ui, &zone)
         && let Err(e) = app.run("symbol.new", json!({ "ids": ids }))
     {
@@ -247,8 +297,6 @@ fn save_library(app: &mut VectorcraftApp, names: Vec<String>) {
 pub(crate) struct LibSymbol {
     lib: Arc<SymbolLibrary>,
     index: usize,
-    /// [`resources_key`] of the library's document.
-    resources: u64,
 }
 
 impl LibSymbol {
@@ -261,12 +309,12 @@ impl LibSymbol {
 pub(crate) struct SymbolLibraries;
 
 impl LibraryKind for SymbolLibraries {
-    const KIND: &'static str = "symbols";
-    const OPEN: &'static str = "window.symbolLibrary";
-    const LIST: &'static str = "symbol.libraries";
-    const LOAD: &'static str = "symbol.loadLibrary";
-    const MENU: &'static str = "Symbol Libraries Menu";
-    const ADD: &'static str = "Add to Symbols";
+    const KIND: &str = "symbols";
+    const OPEN: &str = "window.symbolLibrary";
+    const LIST: &str = "symbol.libraries";
+    const LOAD: &str = "symbol.loadLibrary";
+    const MENU: &str = "Symbol Libraries Menu";
+    const ADD: &str = "Add to Symbols";
     /// Symbols need room to show their art.
     const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
     type Lib = Arc<Vec<LibSymbol>>;
@@ -278,8 +326,7 @@ impl LibraryKind for SymbolLibraries {
     }
     fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
         let (info, lib) = symbollib::library(&app.session, id)?;
-        let resources = resources_key(&lib.doc);
-        let shown = (0..lib.len()).map(|index| LibSymbol { lib: lib.clone(), index, resources }).collect();
+        let shown = (0..lib.len()).map(|index| LibSymbol { lib: lib.clone(), index }).collect();
         Some((info.name, Arc::new(shown)))
     }
     fn find(app: &VectorcraftApp, key: &str) -> library_panel::Found {
@@ -294,7 +341,7 @@ impl LibraryKind for SymbolLibraries {
     }
     /// The symbol's art on white, as the Symbols panel shows it.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {
-        chip(ui, &s.lib.doc, s.resources, r, s.name());
+        chip(ui, &s.lib.doc, &library_symbols(&s.lib), r, s.name());
         super::graphic_styles::outline(ui, r, selected, hovered);
     }
     fn row_icons(_: &Ui, _: egui::Rect, _: &LibSymbol) {}

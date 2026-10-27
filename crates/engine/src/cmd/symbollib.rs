@@ -127,7 +127,7 @@ impl SymbolLibrary {
 }
 
 impl LibraryFile for SymbolLibrary {
-    const EXTS: &'static [&'static str] = &[SYMBOLS_EXT];
+    const EXTS: &[&str] = &[SYMBOLS_EXT];
     fn read(bytes: &[u8], stem: &str) -> std::result::Result<Self, String> {
         let doc = vectorcraft_format::load(bytes).map_err(|e| e.to_string())?;
         SymbolLibrary::from_document(&doc, &[], stem.to_string())

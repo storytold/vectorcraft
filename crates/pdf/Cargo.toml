@@ -26,7 +26,7 @@ craft-pdf = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 smallvec = "1"
-weezl = "0.1"
+weezl = "0.2"
 serde = { workspace = true }
 # The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
 roxmltree = "0.21"

@@ -1,4 +1,4 @@
-# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/lib.rs).
+# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/cursor.rs).
 #
 # This is the source of truth for what each cursor is for, written for whoever draws them:
 # designers never decide what a cursor is for, this file does. `cargo xtask cursors` warns about
@@ -133,7 +133,7 @@ shown_when = [
     "The Selection tool after a click on the out port or the in port of selected area type or type on a path, threaded, overflowing or not: the pointer carries that text until a click threads it into a closed path, area type or type on a path, a click on empty canvas makes a new frame of the same kind and shape there, or a drag draws the new frame; from the in port the frame placed comes before the clicked one. Escape or another tool drops it.",
 ]
 hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
-look = "A small block of text lines: the overflow text the pointer carries. Until it is drawn it borrows the I-beam (Text)."
+look = "A small block of text lines: the overflow text the pointer carries."
 
 # ── Pen family ────────────────────────────────────────────────────────────────────────────────────
 
@@ -532,6 +532,13 @@ id = "Pencil"
 group = "Drawing and editing tools"
 shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Shift held at the press, or Alt held at the press when Alt key toggles to Smooth Tool is off, draws a straight line; Alt pressed after the drag starts, when that option is off, closes the path; when it is on, Alt held at the press gives the Smooth tool."]
 hotspot = "The lead tip."
+
+[[cursor]]
+id = "PencilNew"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a small star badge, where PencilClose has its ring."
 
 [[cursor]]
 id = "PencilClose"

@@ -567,7 +567,7 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(menu) = app.services.native_menu.as_ref() else { return };
     let input = ctx
         .input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. } | egui::Event::PointerButton { pressed: false, .. })));
-    let state = state_hash(app, input.then_some(app.frame));
+    let state = state_hash(app, input.then_some(app.host_iteration));
     if menu.state == Some(state) && !menu.dirty {
         return;
     }

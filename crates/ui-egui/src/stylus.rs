@@ -6,14 +6,21 @@
 //! from XInput2 on a connection of its own and writes it into a [`StylusFeed`]
 //! ([`crate::Services::stylus`]). On macOS, where winit reports none either, the app reads each
 //! event's pressure from AppKit before the window handles it, and also keeps it for that event's
-//! pointer move ([`StylusFeed::set_move`]), so the moves of a fast stroke each get their own. The
-//! canvas uses the feed when a frame's events carry no touch force.
+//! pointer move ([`StylusFeed::set_move`]), so the moves of a fast stroke each get their own. On
+//! Windows, where winit drops which end of the pen is down, the app reads the pressure and the end
+//! from each pointer message of a pen before winit handles it. The canvas uses the feed when a
+//! frame's events carry no touch force.
 //!
 //! The feed also says which end of the pen moved. Turning the pen to its eraser end selects the
 //! Eraser tool, and turning it back to the tip selects the tool used before
 //! ([`sync_eraser_tool`]), as the reference app's help describes under "Erase parts of a path
 //! using a stylus pen":
 //! <https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-parts-of-a-path.html>
+//!
+//! The web build writes the pen's end into a feed as well. Pointer Events report the eraser end
+//! only as a press of the pen's eraser button (`button` 5), so in a browser the end changes when
+//! the pen presses: a press of the eraser end selects the Eraser before that press, and a press of
+//! the tip selects the tool used before.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -86,7 +93,7 @@ impl StylusFeed {
     }
 
     fn lock(&self) -> MutexGuard<'_, Pen> {
-        self.0.pen.lock().unwrap_or_else(|e| e.into_inner())
+        self.0.pen.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// A pen turned to its tip moved with `pressure`, or `None`: another pointer moved
@@ -190,7 +197,7 @@ impl StylusFeed {
         }
     }
 
-    /// The browser's main thread can't wait, and the web build sets no feed.
+    /// The browser's main thread can't wait, and the web build writes its feed on that thread.
     #[cfg(target_arch = "wasm32")]
     fn wait_for_touch<'a>(&'a self, pen: MutexGuard<'a, Pen>, _wait: Duration) -> MutexGuard<'a, Pen> {
         pen

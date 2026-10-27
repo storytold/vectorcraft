@@ -327,6 +327,7 @@
 	Apply Bullets	Použít odrážky
 	Numbered List	Číslovaný seznam
 	Apply Numbers	Použít číslování
+	Convert to Text	Převést na text
 	Filled Dot	Plná tečka
 	Dash	Pomlčka
 	Hollow Circle	Prázdný kruh
@@ -374,6 +375,7 @@
 	Create	Vytvořit
 	Release Selection	Uvolnit výběr
 	Remove Threading	Odstranit zřetězení
+	Break Thread	Přerušit zřetězení
 	Fit Headline	Přizpůsobit titulek
 	Find Font…	Najít písmo…
 	Change Case	Změnit velikost písmen
@@ -583,6 +585,7 @@
 	Save Grid as Preset…	Uložit mřížku jako přednastavení…
 	Snap to Pixel	Přichytávat k obrazovým bodům
 	Precise Cursors	Přesné kurzory
+	Image Trace Preview	Náhled vektorizace obrazu
 	Snap to Point	Přichytávat k bodům
 	Snap to Glyph	Přichytávat ke glyfům
 	New View…	Nové zobrazení…
@@ -597,6 +600,21 @@
 	Saved View 8	Uložené zobrazení 8
 	Saved View 9	Uložené zobrazení 9
 	Saved View 10	Uložené zobrazení 10
+	Saved View 11	Uložené zobrazení 11
+	Saved View 12	Uložené zobrazení 12
+	Saved View 13	Uložené zobrazení 13
+	Saved View 14	Uložené zobrazení 14
+	Saved View 15	Uložené zobrazení 15
+	Saved View 16	Uložené zobrazení 16
+	Saved View 17	Uložené zobrazení 17
+	Saved View 18	Uložené zobrazení 18
+	Saved View 19	Uložené zobrazení 19
+	Saved View 20	Uložené zobrazení 20
+	Saved View 21	Uložené zobrazení 21
+	Saved View 22	Uložené zobrazení 22
+	Saved View 23	Uložené zobrazení 23
+	Saved View 24	Uložené zobrazení 24
+	Saved View 25	Uložené zobrazení 25
 	Window	Okno
 	New Window	Nové okno
 	Cascade	Do kaskády
@@ -770,7 +788,6 @@
 	% of all commits	% všech commitů
 	Lines +/−	Řádky +/−
 	Drag to move	Přetažením přesunete
-	Drag to move out of the set	Přetažením přesunete mimo sadu
 	Drag to float as a toolbar	Přetažením vytvoříte plovoucí panel nástrojů
 	Put back in the toolbar	Vrátit do panelu nástrojů
 	Float Panel	Plovoucí panel
@@ -1342,6 +1359,7 @@ lighting	Light	Světlo
 	Hide Thumbnail	Skrýt miniaturu
 	Mixed Appearances	Smíšené vzhledy
 	Mixed Objects	Smíšené objekty
+	Mixed	Smíšené
 	No options	Žádné možnosti
 	No Selection	Nic není vybráno
 	Offset X	Posun X
@@ -1384,7 +1402,6 @@ lighting	Light	Světlo
 	URL:	URL:
 	Use Even-Odd Fill Rule	Použít pravidlo výplně sudá-lichá
 	Use Non-Zero Winding Fill Rule	Použít pravidlo výplně nenulového vinutí
-	Brush Libraries (on the roadmap)	Knihovny štětců (v plánu)
 	List View	Zobrazení seznamu
 	New Art Brush from Selection	Nový obrazový štětec z výběru
 	New Bristle Brush	Nový štětinový štětec
@@ -2296,6 +2313,7 @@ lighting	Light	Světlo
 	Fidelity:	Věrnost:
 	Fill new strokes	Vyplňovat nové tahy
 	Alt key toggles to Smooth Tool	Klávesa Alt přepíná na nástroj Vyhlazení
+	Live curve fitting	Průběžné prokládání křivky
 	Keep selected	Ponechat vybrané
 	Merge only with selection	Sloučit jen s výběrem
 	Consider Open Filled Paths as Closed	Považovat otevřené vyplněné cesty za uzavřené
@@ -3833,8 +3851,6 @@ effect	Regular	Pravidelný
 	Replace With Font	Nahradit písmem
 	  — substituted by {style}	  — nahrazeno řezem {style}
 	  — {n} characters from another font	  — znaky z jiného písma: {n}
-	Drag to float the panel group	Přetažením vytvoříte plovoucí skupinu panelů
-	Put back in the dock	Vrátit do doku
 	All Scripts	Všechny systémy písma
 	Any Kind	Libovolný druh
 	Font Technology	Technologie písma
@@ -4668,6 +4684,7 @@ imageTrace	Outline	Obrys
 @msg	{_1} is already used by {_2}	{_1} už používá {_2}
 @msg	{_1} is reserved by the system	Zkratku {_1} si vyhrazuje systém
 @msg	{_1} linked file(s) can't be read here: their previews show	propojené soubory ({_1}) zde nelze přečíst: zobrazují se jejich náhledy
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	obrázky ({undecoded}) nelze dekódovat: zobrazují se jako přeškrtnuté rámečky
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	propojené obrázky ({_1}) se na disku změnily: nové verze zobrazí Aktualizovat propojení
 @msg	{_1}: not saved, so not closed	{_1}: neuloženo, proto nezavřeno
 @msg	{bpp}-bit bitmaps can't be read	{bpp}bitové bitmapy nelze přečíst
@@ -4807,7 +4824,6 @@ imageTrace	Outline	Obrys
 @msg	before must name a panel	before musí určovat panel
 @msg	docking action contains an unknown panel or an excessive split path	akce ukotvení obsahuje neznámý panel nebo příliš dlouhou cestu rozdělení
 @msg	group must be true or false	group musí být true nebo false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	panel je plovoucí; jeho skupinu sbalíte pomocí window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	panel není ve skupině doku
 @msg	only a dock group above or below others collapses, not one beside another	sbalit lze jen skupinu doku nad nebo pod jinými, ne vedle jiné
 @msg	icon must be true or false	icon musí být true nebo false
@@ -5224,6 +5240,7 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
+@msg	an image of {w} × {h} pixels is shown at reduced size	obraz o velikosti {w} × {h} obrazových bodů se zobrazuje ve zmenšené velikosti
 @msg	the image can't be read as a texture	obraz nelze načíst jako texturu
 	Fill and Stroke Controls	Ovládací prvky výplně a tahu
 	Coloring Controls	Ovládací prvky barev
@@ -5401,6 +5418,10 @@ mark-style	Japanese	Japonské
 	Snap to Perpendicular	Přichytávat ke kolmici
 @msg	unknown snap option `{key}` (use {options})	neznámá možnost přichytávání `{key}` (použijte {options})
 	Gap Length:	Délka mezery:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` vyžaduje `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` vyžaduje `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` vyžaduje `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	skupina barev `{name}` v dokumentu neexistuje (viz swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Režim Ploché logo vektorizoval obraz v rozlišení {_1} × {_2} pixelů, zmenšený průměrováním z {_3} × {_4}.
 	Artboard {n} of {total}	Pracovní plocha {n} z {total}
 	File {n} of {total}	Soubor {n} z {total}
@@ -5461,6 +5482,12 @@ mark-style	Japanese	Japonské
 	Shift:	Posun:
 	Fresco…	Freska…
 	Fresco	Freska
+	Lock Artboards	Zamknout pracovní plochy
+	Unlock Artboards	Odemknout pracovní plochy
+	Lock Selected	Zamknout vybrané
+	Lock All Except Selected	Zamknout vše kromě vybraných
+	Lock All	Zamknout vše
+	Unlock Selected	Odemknout vybrané
 	Effect Gallery…	Galerie efektů…
 	Effect Gallery Dialog	Dialog Galerie efektů
 	Arc Segment Tool Options	Možnosti nástroje Obloukový segment
@@ -5550,3 +5577,40 @@ axis	Y Axis	osa Y
 	Rectangular Grid Tool Options	Možnosti nástroje Obdélníková mřížka
 	Polar Grid Tool Options	Možnosti nástroje Polární mřížka
 	Fill Line	Výplň úsečky
+	Pathfinder Options	Možnosti operací s cestami
+	Divide and Outline Will Remove Unpainted Artwork	Rozdělit a Obrys odstraní nenatřenou kresbu
+@msg	precision must be from 0.001 to 10 pt	precision musí být od 0,001 do 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` musí být objekt
+	Add to Brushes	Přidat do štětců
+	Brush Library	Knihovna štětců
+	Save Brush Library	Uložit knihovnu štětců
+	Save Brushes…	Uložit štětce…
+	Open Brush Library	Otevřít knihovnu štětců
+	Selected Brushes Only	Pouze vybrané štětce
+	Brush Libraries Menu	Nabídka knihoven štětců
+	User Brush Library 1	Uživatelská knihovna štětců 1
+	User Brush Library 2	Uživatelská knihovna štětců 2
+	User Brush Library 3	Uživatelská knihovna štětců 3
+	User Brush Library 4	Uživatelská knihovna štětců 4
+	User Brush Library 5	Uživatelská knihovna štětců 5
+	User Brush Library 6	Uživatelská knihovna štětců 6
+	User Brush Library 7	Uživatelská knihovna štětců 7
+	User Brush Library 8	Uživatelská knihovna štětců 8
+	User Brush Library 9	Uživatelská knihovna štětců 9
+	User Brush Library 10	Uživatelská knihovna štětců 10
+	Art Ribbons	Obrazové stuhy
+	Calligraphic Nibs	Kaligrafická pera
+	Pattern Borders	Vzorkové okraje
+	Scatter Shapes	Rozptýlené tvary
+	Save Brush Library…	Uložit knihovnu štětců…
+@msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
+@msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
+@msg	no brush `{n}`	žádný štětec `{n}`
+@msg	no brush `{n}` in `{_1}`	žádný štětec `{n}` v `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	žádná knihovna štětců `{key}` (viz brush.libraries)
+@msg	the document has no brushes to save	dokument nemá žádné štětce k uložení
+@msg	no empty artboards to delete	žádné prázdné pracovní plochy k odstranění
+	Scale Presets	Přednastavení měřítka
+@msg	a {width}×{height} screenshot's byte count overflows	počet bajtů snímku {width}×{height} přeteče
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	okno {what} ({points} bodů × {scale} DPI) nemůže určit velikost snímku
+	Live preview	Živý náhled

@@ -45,7 +45,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let name = def.name.clone();
     // Name (commit on Enter / focus loss; Shift+Enter commits and keeps the focus).
     row(ui, tl!("Name:"), |ui| {
-        let id = ui.id().with("po-name");
+        let id = ui.scope_id().with("po-name");
         let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
         if !ui.memory(|m| m.has_focus(id)) {
             buf = name.clone();

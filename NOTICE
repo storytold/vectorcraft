@@ -77,10 +77,10 @@ Shared PDF backend
 
 The patched hayro-interpret 0.7.0, hayro-syntax 0.7.2, hayro-jbig2 0.3.0, hayro-cmap 0.1.0
 and hayro-postscript 0.1.0 are fetched from https://github.com/storytold/craft-libs at revision
-2eca9b3a53a98ac52efed2a27353c6a6927ead10. Their upstream project is
+a0916808f7d78bed8c7b90cdf937176015454a7f. Their upstream project is
 https://github.com/LaurenzV/hayro, licensed MIT OR Apache-2.0. The snapshot retains each
 crate's upstream licence files. The patch ledger is at
-https://github.com/storytold/craft-libs/blob/2eca9b3a53a98ac52efed2a27353c6a6927ead10/vendor/README.craft-reader.md.
+https://github.com/storytold/craft-libs/blob/a0916808f7d78bed8c7b90cdf937176015454a7f/vendor/README.craft-reader.md.
 
 Assets already bundled through Hayro's default features retain their licences:
 - Foxit standard-14 substitutes: Copyright 2014 PDFium Authors. All rights reserved.
@@ -123,3 +123,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Bundled egui font icons
+
+The pinned egui dependency includes egui-icons.ttf, a small subset of John Slegers'
+emoji-icon-font, through default_fonts. The parent emoji-icon-font.ttf face is
+included through monochrome_emoji_fonts. Their upstream project is
+https://github.com/jslegers/emoji-icon-font; both use the same exact copyright
+and permission notice below.
+
+MIT License
+
+Copyright (c) 2014 John Slegers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -1,8 +1,8 @@
 //! The wasmi host: loading, instantiating and calling a plug-in under resource limits.
 
 use wasmi::{
-    Config, EnforcedLimits, Engine, Instance, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc, TypedResumableCall,
-    WasmParams, WasmResults,
+    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
+    TypedResumableCall, WasmParams, WasmResults,
 };
 
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
@@ -13,6 +13,14 @@ pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
 const FUEL_SLICE: u64 = 20_000_000;
+
+/// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
+/// called, and charges the run that calls it by the function's size. When the slice a run was in
+/// ran out meanwhile, wasmi ended the run with an error, not an out-of-fuel pause the host resumes:
+/// a first run failed with `Limit("instruction budget")` and most of its budget left, as where the
+/// slices fell decided. So a run pays for its own instructions only, as many on a first run as on
+/// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
+const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
 
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
@@ -152,7 +160,11 @@ impl Plugin {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
         }
         let mut config = Config::default();
-        config.consume_fuel(true).enforced_limits(EnforcedLimits::strict()).set_max_recursion_depth(limits.max_recursion_depth.max(16));
+        config
+            .consume_fuel(true)
+            .fuel_cost(FUEL_COSTS)
+            .enforced_limits(EnforcedLimits::strict())
+            .set_max_recursion_depth(limits.max_recursion_depth.max(16));
         let engine = Engine::new(&config);
         let module = Module::new(&engine, bytes).map_err(|e| Error::Module(e.to_string()))?;
         if let Some(imp) = module.imports().next() {

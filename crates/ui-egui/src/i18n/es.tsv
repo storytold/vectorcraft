@@ -342,7 +342,6 @@ font-technology	Variable	Variables
 	Brush Affects:	El pincel afecta a:
 	Brush Definition	Definición del pincel
 	Brush Libraries	Bibliotecas de pinceles
-	Brush Libraries (on the roadmap)	Bibliotecas de pinceles (en la hoja de ruta)
 	Brush Options…	Opciones de pincel…
 	Brush Strokes	Trazos de pincel
 	Brushes	Pinceles
@@ -357,6 +356,7 @@ font-technology	Variable	Variables
 	Apply Bullets	Aplicar viñetas
 	Numbered List	Lista numerada
 	Apply Numbers	Aplicar numeración
+	Convert to Text	Convertir en texto
 	Filled Dot	Punto relleno
 	Dash	Guion
 	Hollow Circle	Círculo vacío
@@ -1109,6 +1109,7 @@ font-technology	Variable	Variables
 	Fill and Stroke	Relleno y trazo
 	Fill new strokes	Rellenar trazos nuevos
 	Alt key toggles to Smooth Tool	La tecla Alt cambia a la herramienta Suavizar
+	Live curve fitting	Ajuste de curva en tiempo real
 	Keep selected	Mantener seleccionado
 	Merge only with selection	Combinar solo con la selección
 	Consider Open Filled Paths as Closed	Tratar los trazados abiertos con relleno como cerrados
@@ -1862,6 +1863,7 @@ font-technology	Variable	Variables
 	Miter Limit:	Límite de inglete:
 	Mixed Appearances	Apariencias mixtas
 	Mixed Objects	Objetos mixtos
+	Mixed	Mixto
 	Mode:	Modo:
 	Model	Modelo
 	Modified	Modificado
@@ -2600,6 +2602,7 @@ font-technology	Variable	Variables
 	Remove Plug-in	Quitar plugin
 	Remove Selected Assets	Quitar recursos seleccionados
 	Remove Threading	Quitar enlace
+	Break Thread	Romper enlace
 	Remove “{keyword}”	Quitar “{keyword}”
 	Rename	Cambiar nombre
 	Rename Asset	Cambiar nombre del recurso
@@ -2798,7 +2801,22 @@ font-technology	Variable	Variables
 	Saved to User Defined: {}	Guardado en Definido por el usuario: {}
 	Saved View 1	Vista guardada 1
 	Saved View 10	Vista guardada 10
+	Saved View 11	Vista guardada 11
+	Saved View 12	Vista guardada 12
+	Saved View 13	Vista guardada 13
+	Saved View 14	Vista guardada 14
+	Saved View 15	Vista guardada 15
+	Saved View 16	Vista guardada 16
+	Saved View 17	Vista guardada 17
+	Saved View 18	Vista guardada 18
+	Saved View 19	Vista guardada 19
 	Saved View 2	Vista guardada 2
+	Saved View 20	Vista guardada 20
+	Saved View 21	Vista guardada 21
+	Saved View 22	Vista guardada 22
+	Saved View 23	Vista guardada 23
+	Saved View 24	Vista guardada 24
+	Saved View 25	Vista guardada 25
 	Saved View 3	Vista guardada 3
 	Saved View 4	Vista guardada 4
 	Saved View 5	Vista guardada 5
@@ -3090,6 +3108,7 @@ font-technology	Variable	Variables
 	Snap to Grid	Ajustar a cuadrícula
 	Snap to Pixel	Ajustar a píxel
 	Precise Cursors	Cursores precisos
+	Image Trace Preview	Vista previa de Calco de imagen
 	Snap to Point	Ajustar a punto
 	Snap to Unit	Ajustar a unidad
 	Snapping Tolerance	Tolerancia de ajuste
@@ -3761,13 +3780,10 @@ axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
 	Drag to move	Arrastrar para mover
-	Drag to move out of the set	Arrastrar para sacar del conjunto
 	Drag to float as a toolbar	Arrastrar para flotar como barra de herramientas
 	Put back in the toolbar	Devolver a la barra de herramientas
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
-	Drag to float the panel group	Arrastrar para hacer flotar el grupo de paneles
-	Put back in the dock	Devolver al área de paneles
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
@@ -4366,6 +4382,7 @@ axis	Both	Ambos
 @msg	{_1} is already used by {_2}	{_1} ya lo usa {_2}
 @msg	{_1} is reserved by the system	{_1} está reservado por el sistema
 @msg	{_1} linked file(s) can't be read here: their previews show	aquí no se pueden leer {_1} archivo(s) vinculado(s): se muestran sus previsualizaciones
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	no se pudieron descodificar {undecoded} imagen(es): se muestran como recuadros tachados
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} imagen(es) vinculada(s) cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
 @msg	Updated {_1} linked file(s) changed on disk	Se actualizaron {_1} archivo(s) vinculado(s) que cambiaron en el disco
 @msg	{_1}: not saved, so not closed	{_1}: no se guardó, así que no se cerró
@@ -4622,7 +4639,6 @@ axis	Both	Ambos
 @msg	before must name a panel	before debe indicar un panel
 @msg	docking action contains an unknown panel or an excessive split path	La acción de anclaje contiene un panel desconocido o una ruta de divisiones demasiado larga
 @msg	group must be true or false	group debe ser true o false
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	el panel flota; contraiga su grupo con window.panel.float {panel, collapsed}
 @msg	panel is not in a dock group	el panel no está en un grupo del acoplamiento
 @msg	only a dock group above or below others collapses, not one beside another	solo se contrae un grupo del acoplamiento situado encima o debajo de otros, no al lado
 @msg	icon must be true or false	icon debe ser true o false
@@ -5165,6 +5181,7 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
+@msg	an image of {w} × {h} pixels is shown at reduced size	una imagen de {w} × {h} píxeles se muestra a tamaño reducido
 @msg	the image can't be read as a texture	la imagen no se puede leer como textura
 	Fill and Stroke Controls	Controles de relleno y trazo
 	Coloring Controls	Controles de color
@@ -5343,6 +5360,10 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar a perpendicular
 @msg	unknown snap option `{key}` (use {options})	opción de ajuste desconocida `{key}` (use {options})
 	Gap Length:	Longitud del hueco:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` requiere `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requiere `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` requiere `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	no existe el grupo de colores `{name}` en el documento (consulta swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	El modo Logotipo plano calcó la imagen a {_1} × {_2} píxeles, reducida promediando desde {_3} × {_4}.
 	Artboard {n} of {total}	Mesa de trabajo {n} de {total}
 	File {n} of {total}	Archivo {n} de {total}
@@ -5403,6 +5424,12 @@ mark-style	Japanese	Japonesas
 	Shift:	Desplazamiento:
 	Fresco…	Fresco…
 	Fresco	Fresco
+	Lock Artboards	Bloquear mesas de trabajo
+	Unlock Artboards	Desbloquear mesas de trabajo
+	Lock Selected	Bloquear selección
+	Lock All Except Selected	Bloquear todo excepto la selección
+	Lock All	Bloquear todo
+	Unlock Selected	Desbloquear selección
 	Effect Gallery…	Galería de efectos…
 	Effect Gallery Dialog	Cuadro de diálogo Galería de efectos
 	Arc Segment Tool Options	Opciones de la herramienta Segmento de arco
@@ -5492,3 +5519,40 @@ axis	Y Axis	Eje Y
 	Rectangular Grid Tool Options	Opciones de la herramienta Cuadrícula rectangular
 	Polar Grid Tool Options	Opciones de la herramienta Cuadrícula polar
 	Fill Line	Rellenar línea
+	Pathfinder Options	Opciones de Buscatrazos
+	Divide and Outline Will Remove Unpainted Artwork	Dividir y Contorno eliminarán la ilustración sin pintar
+@msg	precision must be from 0.001 to 10 pt	precision debe estar entre 0,001 y 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` debe ser un objeto
+	Add to Brushes	Agregar a pinceles
+	Brush Library	Biblioteca de pinceles
+	Save Brush Library	Guardar biblioteca de pinceles
+	Save Brushes…	Guardar pinceles…
+	Open Brush Library	Abrir biblioteca de pinceles
+	Selected Brushes Only	Solo pinceles seleccionados
+	Brush Libraries Menu	Menú Bibliotecas de pinceles
+	User Brush Library 1	Biblioteca de pinceles del usuario 1
+	User Brush Library 2	Biblioteca de pinceles del usuario 2
+	User Brush Library 3	Biblioteca de pinceles del usuario 3
+	User Brush Library 4	Biblioteca de pinceles del usuario 4
+	User Brush Library 5	Biblioteca de pinceles del usuario 5
+	User Brush Library 6	Biblioteca de pinceles del usuario 6
+	User Brush Library 7	Biblioteca de pinceles del usuario 7
+	User Brush Library 8	Biblioteca de pinceles del usuario 8
+	User Brush Library 9	Biblioteca de pinceles del usuario 9
+	User Brush Library 10	Biblioteca de pinceles del usuario 10
+	Art Ribbons	Cintas de ilustración
+	Calligraphic Nibs	Plumillas caligráficas
+	Pattern Borders	Bordes de motivo
+	Scatter Shapes	Formas de dispersión
+	Save Brush Library…	Guardar biblioteca de pinceles…
+@msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
+@msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
+@msg	no brush `{n}`	no hay ningún pincel `{n}`
+@msg	no brush `{n}` in `{_1}`	no hay ningún pincel `{n}` en `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	no hay ninguna biblioteca de pinceles `{key}` (consulte brush.libraries)
+@msg	the document has no brushes to save	el documento no tiene pinceles para guardar
+@msg	no empty artboards to delete	no hay mesas de trabajo vacías que eliminar
+	Scale Presets	Ajustes predefinidos de escala
+@msg	a {width}×{height} screenshot's byte count overflows	el número de bytes de una captura de {width}×{height} se desborda
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	el {what} de la ventana ({points} puntos × {scale} DPI) no puede dimensionar una captura
+	Live preview	Vista previa en directo

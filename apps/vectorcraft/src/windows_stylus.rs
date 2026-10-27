@@ -5,30 +5,74 @@
 //! second-button flag ("analogous to a mouse right button down",
 //! <https://learn.microsoft.com/en-us/windows/win32/inputmsg/wm-pointerdown>): [`msg_hook`] notes
 //! it, and [`raw_input_hook`] makes the primary button of that contact the secondary one.
+//!
+//! winit also drops which end of the pen is down. For each pointer message of a pen, [`msg_hook`]
+//! reads the pen's `POINTER_PEN_INFO` and writes its pressure and end into the canvas's pen feed
+//! ([`start`]): `PEN_FLAG_INVERTED` ("The pen is inverted") or `PEN_FLAG_ERASER` ("The eraser
+//! button is pressed") is the eraser end
+//! (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/pen-flags-constants>). Pointer
+//! messages also come while the pen hovers, so turning the pen over selects the Eraser tool before
+//! it touches. A message of another pointer, a pen leaving detection range or the window, or a
+//! mouse message that Windows did not make from a pen or a touch
+//! (<https://learn.microsoft.com/en-us/windows/win32/tablet/system-events-and-mouse-messages>)
+//! clears the feed.
 #![cfg_attr(not(all(windows, not(target_vendor = "win7"))), allow(dead_code))]
 
 use std::cell::RefCell;
+use std::sync::OnceLock;
 
 use egui::{Event, Modifiers, PointerButton, Pos2, TouchId, TouchPhase};
+use vectorcraft_ui_egui::stylus::{PenSample, StylusFeed};
 
 /// `POINTER_MESSAGE_FLAG_SECONDBUTTON` (`winuser.h`): in the high word of a pointer message's
 /// `wParam`, a pen in contact with its barrel button pressed.
 const POINTER_MESSAGE_FLAG_SECONDBUTTON: usize = 0x0020;
+/// `POINTER_MESSAGE_FLAG_INRANGE` (`winuser.h`): not set on the message of a pointer that has left
+/// detection range.
+const POINTER_MESSAGE_FLAG_INRANGE: usize = 0x0002;
 /// At most this many pointer contacts wait for their touch event.
 const MAX_PENDING: usize = 16;
+/// `PEN_FLAG_INVERTED` and `PEN_FLAG_ERASER` (`winuser.h`), in `POINTER_PEN_INFO::penFlags`.
+const PEN_FLAG_INVERTED: u32 = 0x0002;
+const PEN_FLAG_ERASER: u32 = 0x0004;
+/// `PEN_MASK_PRESSURE` (`winuser.h`), in `POINTER_PEN_INFO::penMask`: the pen reports pressure.
+const PEN_MASK_PRESSURE: u32 = 0x0001;
+/// `MI_WP_SIGNATURE` and `SIGNATURE_MASK`: the extra information of a mouse message that Windows
+/// made from a pen or a touch.
+const MI_WP_SIGNATURE: u32 = 0xFF51_5700;
+const SIGNATURE_MASK: u32 = 0xFFFF_FF00;
+/// `WM_MOUSEFIRST` to `WM_MOUSELAST` (`winuser.h`).
+const MOUSE_MESSAGES: std::ops::RangeInclusive<u32> = 0x0200..=0x020E;
+/// `WM_POINTERUPDATE`, `WM_POINTERDOWN`, `WM_POINTERUP`, `WM_POINTERENTER` and `WM_POINTERLEAVE`
+/// (`winuser.h`).
+const WM_POINTERUPDATE: u32 = 0x0245;
+const WM_POINTERDOWN: u32 = 0x0246;
+const WM_POINTERUP: u32 = 0x0247;
+const WM_POINTERENTER: u32 = 0x0249;
+const WM_POINTERLEAVE: u32 = 0x024A;
 
 thread_local! {
     static STROKES: RefCell<BarrelStrokes> = RefCell::new(BarrelStrokes::default());
 }
 
+/// The pen feed [`msg_hook`] writes, once [`start`] has made it.
+static FEED: OnceLock<StylusFeed> = OnceLock::new();
+
+/// The canvas's pen feed, which [`msg_hook`] writes on the UI thread before winit handles each
+/// message, so a press never waits for it.
+pub fn start() -> StylusFeed {
+    FEED.get_or_init(StylusFeed::on_ui_thread).clone()
+}
+
 /// winit's message hook (`EventLoopBuilderExtWindows::with_msg_hook`), which winit calls for each
 /// message it takes from the thread's queue, before dispatching it: notes each pointer contact's id
-/// and whether the barrel button was held.
+/// and whether the barrel button was held, and writes the pen's pressure and end into the feed.
 /// It never consumes the message.
 #[cfg(all(windows, not(target_vendor = "win7")))]
 #[allow(unsafe_code)]
 pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{MSG, WM_POINTERDOWN};
+    use windows::Win32::UI::Input::Pointer::{GetPointerPenInfo, POINTER_FLAG_INCONTACT, POINTER_PEN_INFO};
+    use windows::Win32::UI::WindowsAndMessaging::{GetMessageExtraInfo, MSG};
     // SAFETY: winit passes the `MSG` that `PeekMessageW` has just filled, which lives for this
     // call; `as_ref` gives `None` for a null pointer.
     let Some(msg) = (unsafe { msg.cast::<MSG>().as_ref() }) else {
@@ -41,7 +85,61 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
             }
         });
     }
+    let Some(feed) = FEED.get() else {
+        return false;
+    };
+    let read_pen = || {
+        let mut info = POINTER_PEN_INFO::default();
+        // SAFETY: `info` is a `POINTER_PEN_INFO` that lives for the call. The call fails for a
+        // pointer that is not a pen.
+        unsafe { GetPointerPenInfo((msg.wParam.0 & 0xffff) as u32, &mut info) }.ok()?;
+        let in_contact = info.pointerInfo.pointerFlags.0 & POINTER_FLAG_INCONTACT.0 != 0;
+        Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact))
+    };
+    // SAFETY: `GetMessageExtraInfo` reads the extra information of the thread's last message.
+    let from_mouse = || is_mouse(unsafe { GetMessageExtraInfo() }.0 as u32);
+    if let Some(sample) = feed_update(msg.message, msg.wParam.0, read_pen, from_mouse) {
+        feed.set_sample(sample);
+    }
     false
+}
+
+/// What a pen whose `POINTER_PEN_INFO` holds `pressure` (0..1024), `pen_mask` and `pen_flags`
+/// reports: the pressure as winit gives it to a touch, 0 while it hovers, a full press for a pen
+/// in contact that reports none; and the eraser end while it is inverted or its eraser button is
+/// pressed.
+fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool) -> PenSample {
+    let pressure = match pressure {
+        1..=1024 if pen_mask & PEN_MASK_PRESSURE != 0 => pressure as f32 / 1024.0,
+        _ if in_contact => 1.0,
+        _ => 0.0,
+    };
+    PenSample { pressure, eraser: pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0 }
+}
+
+/// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
+/// not from a pen or a touch.
+fn is_mouse(extra_info: u32) -> bool {
+    extra_info & SIGNATURE_MASK != MI_WP_SIGNATURE
+}
+
+/// What the feed is set to for a message with this `wParam`: `Some(Some(sample))` for a pointer
+/// message of a pen in range (`read_pen`), `Some(None)` for a pointer message of another pointer,
+/// a pointer leaving detection range or the window, or a mouse message from a mouse
+/// (`from_mouse`), and `None` to leave it as it is.
+fn feed_update(
+    message: u32,
+    wparam: usize,
+    read_pen: impl FnOnce() -> Option<PenSample>,
+    from_mouse: impl FnOnce() -> bool,
+) -> Option<Option<PenSample>> {
+    match message {
+        WM_POINTERENTER | WM_POINTERUPDATE | WM_POINTERDOWN | WM_POINTERUP if (wparam >> 16) & POINTER_MESSAGE_FLAG_INRANGE == 0 => Some(None),
+        WM_POINTERENTER | WM_POINTERUPDATE | WM_POINTERDOWN | WM_POINTERUP => Some(read_pen()),
+        WM_POINTERLEAVE => Some(None),
+        m if MOUSE_MESSAGES.contains(&m) && from_mouse() => Some(None),
+        _ => None,
+    }
 }
 
 /// Before egui reads a frame's input: the primary button of a contact that started with the
@@ -285,6 +383,59 @@ mod tests {
         down(&mut strokes, 7, TIP);
         let events = [vec![touch(7, TouchPhase::Start)], start(7)].concat();
         assert_eq!(buttons(&rewrite(&mut strokes, &events)), [PRIMARY_DOWN]);
+    }
+
+    /// `PEN_FLAG_BARREL` (`winuser.h`).
+    const PEN_FLAG_BARREL: u32 = 0x0001;
+
+    #[test]
+    fn an_inverted_pen_or_its_eraser_button_is_the_eraser_end() {
+        let eraser = |flags| pen_sample(512, PEN_MASK_PRESSURE, flags, true).eraser;
+        assert!(!eraser(0), "the tip");
+        assert!(!eraser(PEN_FLAG_BARREL), "the barrel button");
+        assert!(eraser(PEN_FLAG_INVERTED), "turned over");
+        assert!(eraser(PEN_FLAG_ERASER), "the eraser button");
+        assert!(eraser(PEN_FLAG_INVERTED | PEN_FLAG_ERASER));
+        assert!(eraser(PEN_FLAG_INVERTED | PEN_FLAG_BARREL));
+    }
+
+    #[test]
+    fn a_pens_pressure_is_the_one_winit_gives_its_touch() {
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true).pressure, 0.5);
+        assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true).pressure, 1.0);
+        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false), PenSample { pressure: 0.0, eraser: true }, "hovering");
+        assert_eq!(pen_sample(0, 0, 0, true).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
+        assert_eq!(pen_sample(300, 0, 0, true).pressure, 1.0, "a pressure without the pressure mask is not one");
+        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true).pressure, 1.0, "as winit, which gives no force for 0");
+        assert_eq!(pen_sample(2000, PEN_MASK_PRESSURE, 0, false).pressure, 0.0);
+    }
+
+    #[test]
+    fn mouse_messages_from_a_pen_or_a_touch_are_told_apart() {
+        assert!(is_mouse(0), "a mouse");
+        assert!(!is_mouse(0xFF51_5701), "a pen");
+        assert!(!is_mouse(0xFF51_5780), "a touch");
+        assert!(is_mouse(0xFF51_5600));
+    }
+
+    #[test]
+    fn pen_messages_set_the_feed_and_other_pointers_clear_it() {
+        let pen = PenSample { pressure: 0.0, eraser: true };
+        // `POINTER_MESSAGE_FLAG_INRANGE` in the high word of `wParam`, pointer 7 in the low word.
+        let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
+        let no_mouse = || -> bool { panic!("a pointer message is not a mouse message") };
+        let no_pen = || -> Option<PenSample> { panic!("no pen to read") };
+        for m in [WM_POINTERENTER, WM_POINTERUPDATE, WM_POINTERDOWN, WM_POINTERUP] {
+            assert_eq!(feed_update(m, in_range, || Some(pen), no_mouse), Some(Some(pen)), "{m:#x}");
+            assert_eq!(feed_update(m, in_range, || None, no_mouse), Some(None), "a touch: {m:#x}");
+            assert_eq!(feed_update(m, 7, no_pen, no_mouse), Some(None), "out of range: {m:#x}");
+        }
+        assert_eq!(feed_update(WM_POINTERLEAVE, in_range, no_pen, no_mouse), Some(None));
+        // WM_MOUSEMOVE and WM_LBUTTONDOWN.
+        assert_eq!(feed_update(0x0200, 0, no_pen, || true), Some(None), "a mouse moved");
+        assert_eq!(feed_update(0x0201, 0, no_pen, || false), None, "made from a pen");
+        // WM_KEYDOWN.
+        assert_eq!(feed_update(0x0100, 0, no_pen, || -> bool { panic!("not a mouse message") }), None);
     }
 
     #[test]

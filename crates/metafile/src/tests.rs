@@ -11,6 +11,8 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod import;
+
 /// Add `n` (with a fresh id) on top of `d`'s first layer.
 pub(crate) fn add(d: &mut Document, mut n: Node) {
     n.id = d.alloc_id();
@@ -44,6 +46,30 @@ pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
     let mut out = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
     out
+}
+
+/// CRC-32 of a PNG chunk.
+pub(crate) fn crc32(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+        }
+    }
+    !crc
+}
+
+/// A 1 × 1 PNG whose IHDR claims `w` × `h` (and whose CRC matches): its size reads from the header,
+/// but its pixel data no longer matches, so decoding it fails.
+pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
+    let mut png = vec![];
+    image::GrayImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png[16..20].copy_from_slice(&w.to_be_bytes());
+    png[20..24].copy_from_slice(&h.to_be_bytes());
+    let crc = crc32(&png[12..29]);
+    png[29..33].copy_from_slice(&crc.to_be_bytes());
+    png
 }
 
 /// An image node of `bytes` placed by `xf`, its blob added to `d`.

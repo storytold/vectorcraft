@@ -65,6 +65,28 @@ pub(crate) struct SGlyph {
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
+    /// The glyph is of a script whose letters join (Arabic, Syriac, N'Ko, Mongolian, Adlam…),
+    /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
+    /// along the path so its joins meet.
+    pub cursive: bool,
+}
+
+/// Does `script` join its letters (a cursive script, whose neighbouring glyphs touch)?
+pub(crate) fn joins(script: Script) -> bool {
+    matches!(
+        script,
+        Script::Arabic
+            | Script::Syriac
+            | Script::Nko
+            | Script::Mongolian
+            | Script::Adlam
+            | Script::Mandaic
+            | Script::Manichaean
+            | Script::Psalter_Pahlavi
+            | Script::Hanifi_Rohingya
+            | Script::Sogdian
+            | Script::Phags_Pa
+    )
 }
 
 /// How `vpal` and the vertical kerning with it move an upright glyph in vertical type and change
@@ -560,6 +582,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
         no_break: st.no_break,
+        cursive: false,
     }
 }
 
@@ -610,6 +633,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let last = span.partition_point(|(r, _)| r.start < range.end).max(first);
     let source_runs = &(source_runs.start + first..source_runs.start + last);
     let text_seg = &text[range.clone()];
+    // The segment's script: that of its first character of a script of its own.
+    let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
     let (pos_scale, pos_shift) = st.position.scale_shift(full);
@@ -820,6 +845,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             inline: None,
             word_end: false,
             no_break: gst.no_break,
+            cursive,
         });
     }
 }

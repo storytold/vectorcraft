@@ -32,16 +32,20 @@ impl Default for View {
 impl View {
     /// The view a document opens at: the one it was saved with, else fitted on first display.
     pub fn of(st: &vectorcraft_engine::DocState) -> Self {
-        match &st.view {
-            Some(v) if v.zoom.is_finite() && v.zoom > 0.0 && v.center.x.is_finite() && v.center.y.is_finite() => Self {
-                zoom: v.zoom.clamp(0.0313, 640.0),
-                center: v.center,
-                fitted: true,
-                rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
-                artboard: 0,
-            },
-            _ => Self::default(),
-        }
+        st.view.as_ref().and_then(Self::saved).unwrap_or_default()
+    }
+
+    /// The view `v` saved (the one a document was saved with, or a View → New View… one), within
+    /// the zoom range; `None` when the canvas can't show it (a zoom or centre that isn't finite, a
+    /// zoom of 0 or less).
+    pub fn saved(v: &vectorcraft_engine::doc::SavedView) -> Option<Self> {
+        v.is_usable().then(|| Self {
+            zoom: v.zoom.clamp(0.0313, 640.0),
+            center: v.center,
+            fitted: true,
+            rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
+            artboard: 0,
+        })
     }
 }
 
@@ -62,6 +66,7 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
+use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
@@ -363,30 +368,29 @@ pub struct UiState {
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
-    /// Panels dragged out of the dock: each group floats as its own stack of tabs.
-    #[serde(default)]
+    /// Floating panel groups as files from before the canvas joined [`Self::docking`] saved
+    /// them. Read only to convert those files ([`crate::layout_migration`]), never written.
+    #[serde(default, skip_serializing)]
     pub floating_panels: Vec<FloatingPanels>,
     /// Shared panel membership and placement; older preferences use the legacy dock.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docking: Option<craft_ui::docking::Layout<String>>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
-    /// Panels whose saved return destination is the iconic rail.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// Panels dropped on the icon column, in older files (read only, like [`Self::floating_panels`]).
+    #[serde(default, skip_serializing)]
     pub docking_icons: std::collections::BTreeSet<String>,
-    /// The panels shown by dock groups collapsed to their tabs (a double-click on a tab); a group
-    /// showing another of its panels is expanded.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    /// The panels shown by dock groups collapsed to their tabs, in older files (read only, like
+    /// [`Self::floating_panels`]); a group showing another of its panels was expanded.
+    #[serde(default, skip_serializing)]
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Invalidates in-flight gestures when a workspace is replaced.
     #[serde(skip)]
     pub docking_generation: u64,
-    /// The main dock column's outer width in screen points (legacy or shared docking).
+    /// The main dock column's width in screen points while the workspace has no layout of its
+    /// own (`docking` is none); a customized layout keeps its widths in it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
-    /// Next frame should seed egui [`PanelState`] from [`Self::dock_width`] (workspace switch).
-    #[serde(skip)]
-    pub dock_width_pending: bool,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
     /// docked at the window's left edge.
     #[serde(default)]
@@ -541,6 +545,11 @@ pub struct UiState {
     /// never used): it opens with them.
     #[serde(default)]
     pub move_options: Value,
+    /// The Transform Each fields it was last confirmed with (scale, move, rotate, reflect, random,
+    /// reference point, Transform Objects and Preview, not Copy; null: never used): it opens on
+    /// them (#1732).
+    #[serde(default)]
+    pub transform_each: Value,
     /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
     /// never used).
     #[serde(default)]
@@ -698,12 +707,10 @@ pub struct TabHid {
     pub control_bar: bool,
 }
 
-/// A group of panels dragged out of the dock: it floats as a stack of tabs, one panel shown.
+/// A group of panels dragged out of the dock, as files from before the canvas joined the panel
+/// layout saved it: it floated as a stack of tabs, one panel shown.
 ///
-/// Groups sharing a `column` float as one set, stacked top to bottom in list order, like the panel
-/// groups of a dock in Illustrator's workspace
-/// (<https://helpx.adobe.com/illustrator/using/workspace-basics.html>): the set moves by the top
-/// group's title bar, and a group dragged by its tab strip leaves it.
+/// Groups sharing a `column` floated as one set, stacked top to bottom in list order.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct FloatingPanels {
     /// Panel ids (`window.panel`), in tab order.
@@ -729,54 +736,10 @@ pub struct FloatingPanels {
     pub docked: Option<u32>,
 }
 
-impl FloatingPanels {
-    /// Keep known panels, each in one group, drop the groups left empty and the toolbar position
-    /// that isn't a number (a hand-edited preferences file or workspace).
-    pub fn sanitize(groups: &mut Vec<FloatingPanels>, toolbar_pos: &mut Option<[f32; 2]>) {
-        let mut seen = std::collections::BTreeSet::new();
-        groups.retain_mut(|g| {
-            g.panels.retain(|id| crate::menus::normalize_panel(id) == Some(id.as_str()) && seen.insert(id.clone()));
-            g.active = g.active.min(g.panels.len().saturating_sub(1));
-            !g.panels.is_empty()
-        });
-        Self::tidy(groups);
-        if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
-            *toolbar_pos = None;
-        }
-    }
-
-    /// Keep each set's groups together in the list, after its first one and in the order they
-    /// come, at its first one's position and in its dock column; a set left with one group floats
-    /// (or stays docked) on its own; the dock columns are numbered 1, 2… without gaps.
-    pub fn tidy(groups: &mut Vec<FloatingPanels>) {
-        let mut out: Vec<FloatingPanels> = Vec::with_capacity(groups.len());
-        for mut g in groups.drain(..) {
-            match g.column.and_then(|c| out.iter().rposition(|o| o.column == Some(c))) {
-                Some(i) => {
-                    if let Some(first) = out.iter().find(|o| o.column == g.column) {
-                        g.pos = first.pos;
-                        g.docked = first.docked;
-                    }
-                    out.insert(i + 1, g);
-                }
-                None => out.push(g),
-            }
-        }
-        let alone: Vec<u32> = out.iter().filter_map(|g| g.column).filter(|c| out.iter().filter(|g| g.column == Some(*c)).count() < 2).collect();
-        for g in &mut out {
-            if g.column.is_some_and(|c| alone.contains(&c)) {
-                g.column = None;
-            }
-        }
-        let mut numbers: Vec<u32> = out.iter().filter_map(|g| g.docked).collect();
-        numbers.sort_unstable();
-        numbers.dedup();
-        for g in &mut out {
-            if let Some(d) = g.docked {
-                g.docked = numbers.iter().position(|n| *n == d).and_then(|k| u32::try_from(k + 1).ok());
-            }
-        }
-        *groups = out;
+/// Drop a Tools panel position that isn't a number (a hand-edited preferences file or workspace).
+pub fn sanitize_toolbar_pos(toolbar_pos: &mut Option<[f32; 2]>) {
+    if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
+        *toolbar_pos = None;
     }
 }
 
@@ -799,16 +762,12 @@ impl UiState {
             f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
-        FloatingPanels::sanitize(&mut self.floating_panels, &mut self.toolbar_pos);
+        sanitize_toolbar_pos(&mut self.toolbar_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
+        // `read_preferences` converted the file's older layouts already; this covers a state read
+        // any other way. What it reports lost was dropped there.
+        let _ = crate::layout_migration::migrate_ui(&mut self);
         self.docking = self.docking.filter(crate::panel_docking::valid);
-        // The tabbed group's panels live in the icon column too once dropped there.
-        self.docking_icons.retain(|id| rail_panel(id).is_some());
-        self.docking_collapsed = std::mem::take(&mut self.docking_collapsed)
-            .into_iter()
-            .filter(|id| crate::menus::normalize_panel(id) == Some(id.as_str()))
-            .take(64)
-            .collect();
         // Changes kept for workspaces that still exist, under their saved spelling and one per
         // workspace whatever the case (a hand-edited file).
         let mut seen = std::collections::BTreeSet::new();
@@ -863,7 +822,6 @@ impl Default for UiState {
             docking_collapsed: Default::default(),
             docking_generation: 0,
             dock_width: None,
-            dock_width_pending: false,
             toolbar_pos: None,
             status_bar: true,
             dock: true,
@@ -913,6 +871,7 @@ impl Default for UiState {
             offset_path: Value::Null,
             simplify: Value::Null,
             move_options: Value::Null,
+            transform_each: Value::Null,
             dxf_import: Value::Null,
             home: None,
             trace_hold_source: None,
@@ -941,6 +900,109 @@ fn default_shortcut_set() -> String {
 fn default_workspace() -> String {
     crate::workspaces::ESSENTIALS.to_string()
 }
+
+/// One UI pass key: the context identity, the viewport and that viewport's cumulative frame.
+pub(crate) type InputFrame = (u64, egui::ViewportId, u64);
+
+/// Record `frame` unless this host iteration already took it. A discarded rerun and any
+/// interleaved pass order stay exact-once because the key, not the last-seen slot, is compared.
+/// The list is cleared at every host-iteration boundary, so it stays as small as that iteration's
+/// pass count.
+pub(crate) fn take_frame_once(frames: &mut Vec<InputFrame>, frame: InputFrame) -> bool {
+    if frames.contains(&frame) {
+        return false;
+    }
+    frames.push(frame);
+    true
+}
+
+/// The document, dialog and focus an injected batch belongs to: if any changed before a UI pass
+/// took the batch, the clicks or text no longer belong to the new state and are dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct InputGeneration {
+    pub(crate) document: u64,
+    pub(crate) dialog: Option<egui::Id>,
+    pub(crate) focus: Option<egui::Id>,
+}
+
+/// The window geometry a capture belongs to (logical and screen bounds, DPI and zoom).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GeometryStamp {
+    pub(crate) viewport: egui::ViewportId,
+    pub(crate) content: egui::Rect,
+    pub(crate) inner: Option<egui::Rect>,
+    pub(crate) pixels_per_point: f32,
+    pub(crate) zoom: f32,
+}
+
+/// What the issued capture must still match when it completes.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CaptureEpoch {
+    pub(crate) geometry: u64,
+    pub(crate) viewport: egui::ViewportId,
+    /// The active document (uid, revision) at issuance: a screenshot never answers with pixels of
+    /// a document, undo state or selection that replaced it while the capture was in flight.
+    pub(crate) document: Option<(u64, u64)>,
+    /// The image size the issuing geometry predicts (`width * height`, checked).
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+}
+
+/// An admitted capture waiting for its settled frame (`frames`) and animation delay (`due_ms`).
+pub(crate) struct QueuedScreenshot {
+    pub(crate) id: u64,
+    pub(crate) due_ms: f64,
+    pub(crate) frames: u32,
+}
+
+/// A window capture asked for through the control channel (`ui.screenshot`), answered once a
+/// frame is presented; a window that isn't presented never delivers one, hence the deadline.
+pub(crate) struct PendingScreenshot {
+    pub(crate) id: u64,
+    pub(crate) path: Option<String>,
+    /// Send the PNG back as `pngBase64`.
+    pub(crate) data: bool,
+    pub(crate) reply: Sender<ControlResponse>,
+    /// When to give up (ms, as [`now_ms`], monotonic).
+    pub(crate) deadline_ms: f64,
+    /// The checked bytes this request reserved before it was admitted.
+    pub(crate) reserved_bytes: usize,
+    /// The active document at admission: switching documents before issuance fails the request
+    /// rather than capturing a different document.
+    pub(crate) document: Option<(u64, u64)>,
+    /// The live one-shot completion slot while the command is outstanding.
+    pub(crate) slot: Option<craft_ui::capture::CaptureSlot>,
+    /// The geometry and expected image size at issuance.
+    pub(crate) issued: Option<CaptureEpoch>,
+    /// Fresh slots made after a geometry change (a resize while the capture was in flight).
+    pub(crate) attempts: u8,
+}
+
+/// At most this many captures admitted (pending or queued) at once.
+pub(crate) const MAX_PENDING_SCREENSHOTS: usize = 4;
+
+/// The largest single capture admitted (128 MiB: a 4K viewport at 2x).
+pub(crate) const MAX_SCREENSHOT_BYTES: usize = 128 * 1024 * 1024;
+
+/// The aggregate budget of admitted captures (256 MiB).
+pub(crate) const MAX_SCREENSHOT_TOTAL_BYTES: usize = 256 * 1024 * 1024;
+
+/// Settle frames a capture waits for after a control request (and the animation time).
+pub(crate) const SCREENSHOT_SETTLE_FRAMES: u32 = 3;
+
+/// How long after settling an issued capture may take (ms).
+pub(crate) const SCREENSHOT_TIMEOUT_MS: f64 = 8000.0;
+
+/// The timeout's answer: no file, no second reply.
+pub(crate) const SCREENSHOT_TIMEOUT_ERROR: &str =
+    "no frame was presented (screen locked, window minimized or fully covered); ui.render still renders the artboard";
+
+/// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
+pub(crate) const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
+
+/// Seconds between looks for fonts a font manager activated while the app stays in front (#2576).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const FONT_INSTALL_POLL: f64 = 2.0;
 
 #[cfg(test)]
 mod tests {

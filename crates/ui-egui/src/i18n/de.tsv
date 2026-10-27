@@ -317,7 +317,6 @@ font-technology	Variable	Variabel
 	Brush Affects:	Pinsel wirkt auf:
 	Brush Definition	Pinseldefinition
 	Brush Libraries	Pinsel-Bibliotheken
-	Brush Libraries (on the roadmap)	Pinsel-Bibliotheken (geplant)
 	Brush Options…	Pinseloptionen…
 	Brush Strokes	Pinselstriche
 	Brushes	Pinsel
@@ -332,6 +331,7 @@ font-technology	Variable	Variabel
 	Apply Bullets	Aufzählungszeichen anwenden
 	Numbered List	Nummerierte Liste
 	Apply Numbers	Nummerierung anwenden
+	Convert to Text	In Text umwandeln
 	Filled Dot	Gefüllter Punkt
 	Dash	Strich
 	Hollow Circle	Leerer Kreis
@@ -1086,6 +1086,7 @@ font-technology	Variable	Variabel
 	Fill and Stroke	Fläche und Kontur
 	Fill new strokes	Neue Striche füllen
 	Alt key toggles to Smooth Tool	Alt-Taste schaltet auf Glätten-Werkzeug um
+	Live curve fitting	Kurvenanpassung beim Zeichnen
 	Keep selected	Ausgewählt lassen
 	Merge only with selection	Nur mit Auswahl zusammenfügen
 	Consider Open Filled Paths as Closed	Offene gefüllte Pfade als geschlossen behandeln
@@ -1864,6 +1865,7 @@ file-filter	Templates	Vorlagen
 	Miter Limit:	Gehrungsgrenze:
 	Mixed Appearances	Gemischtes Aussehen
 	Mixed Objects	Gemischte Objekte
+	Mixed	Gemischt
 	Mode:	Modus:
 	Model	Modell
 	Modified	Geändert
@@ -2566,6 +2568,7 @@ mark-style	Japanese	Japanisch
 	Remove Plug-in	Plug-in entfernen
 	Remove Selected Assets	Ausgewählte Assets entfernen
 	Remove Threading	Verkettung entfernen
+	Break Thread	Verkettung trennen
 	Remove “{keyword}”	„{keyword}“ entfernen
 	Rename	Umbenennen
 	Rename Asset	Asset umbenennen
@@ -2767,7 +2770,22 @@ mark-style	Japanese	Japanisch
 	Saved to User Defined: {}	In „Benutzerdefiniert“ gespeichert: {}
 	Saved View 1	Gespeicherte Ansicht 1
 	Saved View 10	Gespeicherte Ansicht 10
+	Saved View 11	Gespeicherte Ansicht 11
+	Saved View 12	Gespeicherte Ansicht 12
+	Saved View 13	Gespeicherte Ansicht 13
+	Saved View 14	Gespeicherte Ansicht 14
+	Saved View 15	Gespeicherte Ansicht 15
+	Saved View 16	Gespeicherte Ansicht 16
+	Saved View 17	Gespeicherte Ansicht 17
+	Saved View 18	Gespeicherte Ansicht 18
+	Saved View 19	Gespeicherte Ansicht 19
 	Saved View 2	Gespeicherte Ansicht 2
+	Saved View 20	Gespeicherte Ansicht 20
+	Saved View 21	Gespeicherte Ansicht 21
+	Saved View 22	Gespeicherte Ansicht 22
+	Saved View 23	Gespeicherte Ansicht 23
+	Saved View 24	Gespeicherte Ansicht 24
+	Saved View 25	Gespeicherte Ansicht 25
 	Saved View 3	Gespeicherte Ansicht 3
 	Saved View 4	Gespeicherte Ansicht 4
 	Saved View 5	Gespeicherte Ansicht 5
@@ -3060,6 +3078,7 @@ effect	Points	Punkte
 	Snap to Grid	Am Raster ausrichten
 	Snap to Pixel	An Pixel ausrichten
 	Precise Cursors	Präzise Cursor
+	Image Trace Preview	Bildnachzeichner-Vorschau
 	Snap to Point	An Punkt ausrichten
 	Snap to Unit	An Einheit ausrichten
 	Snapping Tolerance	Einrasttoleranz
@@ -3685,13 +3704,10 @@ axis	Vertical	Vertikal
 axis	Both	Beide
 theme	Appearance	Erscheinungsbild
 	Drag to move	Zum Verschieben ziehen
-	Drag to move out of the set	Ziehen, um aus dem Satz zu lösen
 	Drag to float as a toolbar	Ziehen, um als eigene Werkzeugleiste abzulösen
 	Put back in the toolbar	Zurück in die Werkzeugleiste setzen
 	Float Panel	Bedienfeld ablösen
 	Dock Panel	Bedienfeld andocken
-	Drag to float the panel group	Ziehen, um die Bedienfeldgruppe abzulösen
-	Put back in the dock	Zurück ins Dock setzen
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left edge to dock	Zum Andocken an den linken Fensterrand ziehen
 	Float Tool Group	Werkzeuggruppe ablösen
@@ -4291,6 +4307,7 @@ theme	Appearance	Erscheinungsbild
 @msg	{_1} is already used by {_2}	{_1} wird bereits von {_2} verwendet
 @msg	{_1} is reserved by the system	{_1} ist vom System reserviert
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} verknüpfte Datei(en) können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} Bild(er) konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
 @msg	{_1}: not saved, so not closed	{_1}: nicht gespeichert, daher nicht geschlossen
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-Bit-Bitmaps können nicht gelesen werden
@@ -4619,7 +4636,6 @@ theme	Appearance	Erscheinungsbild
 @msg	before must name a panel	before muss ein Bedienfeld benennen
 @msg	docking action contains an unknown panel or an excessive split path	Die Docking-Aktion enthält ein unbekanntes Bedienfeld oder einen zu langen Teilungspfad
 @msg	group must be true or false	group muss true oder false sein
-@msg	panel floats; collapse its group with window.panel.float {panel, collapsed}	Bedienfeld ist abgelöst; seine Gruppe mit window.panel.float {panel, collapsed} minimieren
 @msg	panel is not in a dock group	Bedienfeld ist in keiner Dock-Gruppe
 @msg	only a dock group above or below others collapses, not one beside another	nur eine Dock-Gruppe über oder unter anderen lässt sich minimieren, nicht eine daneben
 @msg	icon must be true or false	icon muss true oder false sein
@@ -4790,6 +4806,7 @@ lighting	Light	Licht
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	an image of {w} × {h} pixels is shown at reduced size	ein Bild mit {w} × {h} Pixeln wird verkleinert angezeigt
 @msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
 	Basic	Basis
 	Fill and Stroke Controls	Steuerelemente für Fläche und Kontur
@@ -4980,6 +4997,10 @@ effect	Soft	Weich
 	Snap to Perpendicular	An Senkrechter ausrichten
 @msg	unknown snap option `{key}` (use {options})	unbekannte Einrastoption `{key}` (möglich: {options})
 	Gap Length:	Lückenlänge:
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` erfordert `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` erfordert `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` erfordert `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	keine Farbgruppe `{name}` im Dokument (siehe swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Der Modus „Flaches Logo“ hat das Bild mit {_1} × {_2} Pixeln nachgezeichnet, durch Mittelung verkleinert von {_3} × {_4}.
 	Artboard {n} of {total}	Zeichenfläche {n} von {total}
 	File {n} of {total}	Datei {n} von {total}
@@ -5041,6 +5062,12 @@ effect	Soft	Weich
 	Shift:	Verschiebung:
 	Fresco…	Fresko…
 	Fresco	Fresko
+	Lock Artboards	Zeichenflächen sperren
+	Unlock Artboards	Zeichenflächen entsperren
+	Lock Selected	Auswahl sperren
+	Lock All Except Selected	Alle außer Auswahl sperren
+	Lock All	Alle sperren
+	Unlock Selected	Auswahl entsperren
 	Effect Gallery…	Effekt-Galerie…
 	Effect Gallery Dialog	Dialogfeld „Effekt-Galerie“
 	Arc Segment Tool Options	Optionen für das Bogensegment-Werkzeug
@@ -5132,3 +5159,40 @@ axis	Y Axis	Y-Achse
 	Rectangular Grid Tool Options	Optionen für das Rechteckiges-Raster-Werkzeug
 	Polar Grid Tool Options	Optionen für das Radiales-Raster-Werkzeug
 	Fill Line	Linie füllen
+	Pathfinder Options	Pathfinder-Optionen
+	Divide and Outline Will Remove Unpainted Artwork	„Fläche aufteilen“ und „Pfadansicht“ entfernen ungefärbtes Bildmaterial
+@msg	precision must be from 0.001 to 10 pt	precision muss zwischen 0,001 und 10 pt liegen
+@msg	`pathfinder` must be an object	`pathfinder` muss ein Objekt sein
+	Add to Brushes	Zu Pinseln hinzufügen
+	Brush Library	Pinsel-Bibliothek
+	Save Brush Library	Pinsel-Bibliothek speichern
+	Save Brushes…	Pinsel speichern…
+	Open Brush Library	Pinsel-Bibliothek öffnen
+	Selected Brushes Only	Nur ausgewählte Pinsel
+	Brush Libraries Menu	Menü „Pinsel-Bibliotheken“
+	User Brush Library 1	Benutzer-Pinsel-Bibliothek 1
+	User Brush Library 2	Benutzer-Pinsel-Bibliothek 2
+	User Brush Library 3	Benutzer-Pinsel-Bibliothek 3
+	User Brush Library 4	Benutzer-Pinsel-Bibliothek 4
+	User Brush Library 5	Benutzer-Pinsel-Bibliothek 5
+	User Brush Library 6	Benutzer-Pinsel-Bibliothek 6
+	User Brush Library 7	Benutzer-Pinsel-Bibliothek 7
+	User Brush Library 8	Benutzer-Pinsel-Bibliothek 8
+	User Brush Library 9	Benutzer-Pinsel-Bibliothek 9
+	User Brush Library 10	Benutzer-Pinsel-Bibliothek 10
+	Art Ribbons	Bildbänder
+	Calligraphic Nibs	Kalligrafie-Federn
+	Pattern Borders	Musterbordüren
+	Scatter Shapes	Streuformen
+	Save Brush Library…	Pinsel-Bibliothek speichern…
+@msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
+@msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
+@msg	no brush `{n}`	kein Pinsel `{n}`
+@msg	no brush `{n}` in `{_1}`	kein Pinsel `{n}` in `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	keine Pinsel-Bibliothek `{key}` (siehe brush.libraries)
+@msg	the document has no brushes to save	das Dokument hat keine Pinsel zum Speichern
+@msg	no empty artboards to delete	keine leeren Zeichenflächen zum Löschen
+	Scale Presets	Skalierungsvorgaben
+@msg	a {width}×{height} screenshot's byte count overflows	die Byteanzahl eines {width}×{height}-Screenshots läuft über
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	die {what} des Fensters ({points} Punkte × {scale} DPI) kann keinen Screenshot bemessen
+	Live preview	Live-Vorschau

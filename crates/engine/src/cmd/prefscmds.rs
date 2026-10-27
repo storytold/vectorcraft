@@ -193,6 +193,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
+    p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
@@ -366,6 +367,16 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The W/H link of the Transform panel, the Properties panel and the Control bar
     p!("constrainProportions", "General", "Transform Panel", "Constrain Width and Height Proportions", bool),
     p!("singleCornerRadius", "General", "Transform Panel", "Single Corner Radius", bool),
+    // The Transform panel menu: what the panel transforms (`default`: as General › Transform
+    // Pattern Tiles, until a choice in the menu), and symbols' registration point
+    p!(
+        "transformPanelPatterns",
+        "General",
+        "Transform Panel",
+        "Transform",
+        choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
+    ),
+    p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -373,17 +384,21 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 }
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
-/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`) and the
-/// Perspective Grid Options (`perspective.widget.options`). `prefs.get`
-/// and `prefs.set` take them by key (a partial object updates what it names) and `prefs.reset`
-/// without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget"];
+/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
+/// Perspective Grid Options (`perspective.widget.options`) and the Pathfinder Options
+/// (`object.pathfinder.options`). `prefs.get` and `prefs.set` take them by key (a partial object
+/// updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
     match key {
         "eyedropper" => {
             let cur: super::EyedropperOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pathfinder" => {
+            let cur: super::PathfinderOptions = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -540,7 +555,18 @@ impl Session {
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
+        let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
         self.prefs = p;
+        if corner_radius_changed {
+            // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
+            // made (active, or lent a selection tool for a drag) takes the new value.
+            let r = serde_json::Value::from(self.prefs.corner_radius);
+            for t in std::iter::once(&mut self.tool).chain(self.lender.as_mut()) {
+                if t.id() == "roundedRectangle" {
+                    t.set_option("cornerRadius", &r);
+                }
+            }
+        }
         if fonts_folder_changed {
             let folder = self.prefs.fonts_folder.trim();
             // A folder an automation caller chose is read without following its links out of it.

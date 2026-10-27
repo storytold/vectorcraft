@@ -87,10 +87,10 @@ type Open = fn(&mut VectorcraftApp);
 fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
     let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
     let opens: [(&str, Open, egui::Id); 4] = [
-        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::new(("dialog", "offsetPath"))),
-        ("New Document", open_new_document, egui::Id::new(("dialog", "newDocument"))),
-        ("Preferences", |app| crate::prefs_dialog::open(app, None), egui::Id::new("dialog-preferences")),
-        ("Keyboard Shortcuts", crate::shortcut_editor::open, egui::Id::new("dialog-shortcuts")),
+        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::unique(("dialog", "offsetPath"))),
+        ("New Document", open_new_document, egui::Id::unique(("dialog", "newDocument"))),
+        ("Preferences", |app| crate::prefs_dialog::open(app, None), egui::Id::unique("dialog-preferences")),
+        ("Keyboard Shortcuts", crate::shortcut_editor::open, egui::Id::unique("dialog-shortcuts")),
     ];
     for (name, open, id) in opens {
         let (ctx, mut app) = (ctx(), app_with_selection());
@@ -134,7 +134,7 @@ fn check_plugin_dialog(kind: &str, count: usize, check: impl FnOnce(&egui::Conte
     };
     app.run(command, params).unwrap();
     settle(&ctx, &mut app);
-    check(&ctx, &mut app, egui::Id::new(("dialog", dialog)), &format!("Test {id}"));
+    check(&ctx, &mut app, egui::Id::unique(("dialog", dialog)), &format!("Test {id}"));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
@@ -164,6 +164,7 @@ fn a_plug_in_dialog_of_many_settings_fits_the_window() {
                 delta: vec2(0.0, -200.0),
                 phase: egui::TouchPhase::Move,
                 modifiers: Default::default(),
+                source: egui::MouseWheelSource::Unknown,
             };
             frame(ctx, app, vec![Event::PointerMoved(over), wheel]);
             for _ in 0..30 {
@@ -318,7 +319,7 @@ fn simplify_preview(app: &VectorcraftApp) -> serde_json::Value {
 /// The Simplify slider's strip, and the centers of its Auto-Simplify button, its rail and its More
 /// Options button.
 fn slider_strip(ctx: &egui::Context) -> (Rect, Pos2, Pos2, Pos2) {
-    let r = rect_of(ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    let r = rect_of(ctx, egui::Id::unique(("dialog", simplify_slider::KIND)));
     let y = r.center().y;
     (r, Pos2::new(r.left() + 8.0 + 14.0, y), Pos2::new(r.left() + 8.0 + 28.0 + 6.0 + 90.0, y), Pos2::new(r.right() - 8.0 - 14.0, y))
 }
@@ -430,13 +431,13 @@ fn simplify_slider_stays_where_it_opened_while_the_preview_changes_the_bounds() 
     let before = app.selection_bounds().unwrap();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     settle(&ctx, &mut app);
-    let opened = rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    let opened = rect_of(&ctx, egui::Id::unique(("dialog", simplify_slider::KIND)));
     app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(0));
     settle(&ctx, &mut app);
     assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
     let after = app.selection_bounds().unwrap();
     assert!(after.height() < before.height() - 0.5, "the preview changes the bounds: {before:?} → {after:?}");
-    assert_eq!(rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND))), opened);
+    assert_eq!(rect_of(&ctx, egui::Id::unique(("dialog", simplify_slider::KIND))), opened);
 }
 
 /// Auto-Simplify moves the slider back to the level that keeps the path within 1/400 of its size,
@@ -701,4 +702,27 @@ fn printer_mark_labels_are_distinct_from_language_names() {
     assert_eq!(save_pdf::choice_label(cs, "marks.kind", "Japanese"), crate::i18n::tr_ctx(cs, "mark-style", "Japanese"));
     assert_eq!(save_pdf::choice_label(cs, "language", "Japanese"), crate::i18n::tr(cs, "Japanese"));
     assert_eq!(save_pdf::choice_label(crate::i18n::Lang::EN, "marks.kind", "Japanese"), "Japanese");
+}
+
+/// In a document in millimeters, an offset typed with a decimal comma (`0,1`) is taken as 0.1 mm
+/// instead of going back to the value the field had, and Offset Path opens on it again (#3837).
+#[test]
+fn offset_path_takes_a_decimal_comma() {
+    let (ctx, mut app) = (ctx(), app_with_selection());
+    app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    settle(&ctx, &mut app);
+    // The dialog focuses its first field, the offset: type as a user does, then Tab commits it.
+    frame(&ctx, &mut app, vec![Event::Text("0,1".into())]);
+    frame(&ctx, &mut app, vec![Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    let texts = frame(&ctx, &mut app, vec![]);
+    let mm = vectorcraft_doc::Unit::Millimeters.to_pt(0.1);
+    let offset = app.ui.dialog.as_ref().unwrap().f64("offset", 0.0);
+    assert!((offset - mm).abs() < 1e-9, "0.1 mm: {offset} pt");
+    assert!(texts.iter().any(|(t, _)| t == "0.1 mm"), "the field shows 0.1 mm: {texts:?}");
+    confirm(&mut app).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    let offset = app.ui.dialog.as_ref().unwrap().f64("offset", 0.0);
+    assert!((offset - mm).abs() < 1e-9, "reopened on 0.1 mm: {offset} pt");
 }
