@@ -1456,9 +1456,10 @@ fn drop_on_buttons(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: 
             && let Dragged::Effect(item, _) = what
         {
             select_row(app, ctx, item.map_or(Sel::None, Sel::Item));
-        } else if removed && let Dragged::Effect(item, _) = what {
+        } else if removed {
             let gone: Vec<usize> = gone.iter().map(|k| *k as usize).collect();
-            highlight_after_removal(app, ctx, n, sel, Rows::Effects(item), &gone);
+            let rows = if let Dragged::Effect(item, _) = what { Rows::Effects(item) } else { Rows::Items };
+            highlight_after_removal(app, ctx, n, sel, rows, &gone);
         }
     }
 }
