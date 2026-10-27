@@ -74,17 +74,17 @@ wat = "1.228"
 # rendering / formats
 # Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
 # vectorcraft-text gives it. The other default features stay.
-vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
+vello_cpu = { version = "0.3", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp", "tga"] }
 # Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
 # SVG import reads `<text>` from the XML itself and never gives usvg a font. A test of the SVG
 # crate turns `text` on.
-usvg = { version = "0.48", default-features = false, features = ["svgz"] }
+usvg = { version = "0.49", default-features = false, features = ["svgz"] }
 # Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
 # unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
 krilla = { version = "0.8", default-features = false, features = ["raster-images"] }
-skrifa = "0.47"
-harfrust = "0.13"
+skrifa = "0.49"
+harfrust = "0.15"
 linesweeper = "0.5"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 rustix = { version = "1.1", default-features = false }
@@ -92,10 +92,10 @@ rustix = { version = "1.1", default-features = false }
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 # CCITT Group 3 and Group 4 decoder (ITU-T T.4 and T.6): EPS images read through
 # `CCITTFaxDecode`. The PDF reader's hayro-syntax uses the same version.
-hayro-ccitt = "0.3"
+hayro-ccitt = "0.4"
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
-jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
+jpeg-encoder = { version = "0.7", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
 # CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
 # decoders, read directly (the image crate converts CMYK to RGB).
