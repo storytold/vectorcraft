@@ -1,6 +1,8 @@
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
-use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn};
+use super::outline::{
+    DRAW_INSIDE_OUTLINE, KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn,
+};
 use super::*;
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
@@ -66,6 +68,20 @@ fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size:
 
 fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
+}
+
+/// Draw Inside's indicator: a dashed outline around the object new art is drawn into, so the mode
+/// can be told to be on (#4319). Drawn in the object's layer colour.
+pub(super) fn draw_inside_indicator(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    if app.session.draw_mode != vectorcraft_engine::DrawMode::Inside {
+        return;
+    }
+    let Some(st) = app.session.active() else { return };
+    let Some((id, n)) = app.session.draw_inside.and_then(|id| Some((id, st.doc.node(id)?))) else { return };
+    let stroke = Stroke::new(DRAW_INSIDE_OUTLINE, c32(st.doc.layer_color(id)));
+    for line in to_screen_path(&node_outline(n, &st.doc.symbol_boxes()), xf) {
+        p.extend(Shape::dashed_line(&line, stroke, 5.0, 3.0));
+    }
 }
 
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {

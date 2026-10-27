@@ -7131,3 +7131,38 @@ fn text_threads_skip_the_links_of_a_frame_in_perspective() {
     // One thread line (c to d) and its two arrows of three strokes each.
     assert_eq!(o.iter().filter(|x| matches!(x, Overlay::Line { .. })).count(), 7);
 }
+
+/// #4319: Draw Inside outlines the object it draws into with a dashed line in its layer colour, so
+/// the mode can be told to be on; Draw Normal and Draw Behind show none, and it goes with the mode.
+#[test]
+fn draw_inside_marks_its_object_with_a_dashed_outline() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id.as_u64().unwrap())));
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let object = egui::Rect::from_two_pos(xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(200.0, 200.0)));
+    let dashes = |app: &mut VectorcraftApp| -> Vec<(Pos2, Pos2)> {
+        shapes(app, &ctx)
+            .into_iter()
+            .filter_map(|s| match s {
+                Shape::LineSegment { points, stroke } if stroke.color == color && stroke.width == DRAW_INSIDE_OUTLINE => Some((points[0], points[1])),
+                _ => None,
+            })
+            .collect()
+    };
+    assert!(dashes(&mut app).is_empty(), "Draw Normal");
+    app.run("view.drawMode", json!({"mode": "behind"})).unwrap();
+    assert!(dashes(&mut app).is_empty(), "Draw Behind");
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    let on = dashes(&mut app);
+    assert!(on.len() > 8, "dashes all round the square: {on:?}");
+    assert!(on.iter().all(|(a, b)| object.expand(1.0).contains(*a) && object.expand(1.0).contains(*b)), "on the object's outline: {on:?}");
+    app.run("view.drawMode", json!({"mode": "normal"})).unwrap();
+    assert!(dashes(&mut app).is_empty(), "back to Draw Normal");
+}

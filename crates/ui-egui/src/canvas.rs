@@ -49,10 +49,10 @@ use home::home;
 use input::handle_input;
 use outline::KEY_OUTLINE;
 #[cfg(test)]
-use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
+use outline::{DRAW_INSIDE_OUTLINE, OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
+use overlays::{HandleLook, draw_inside_indicator, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub(crate) use raster::color_image;
 use raster::{changed_pixels, pixel_region, upload};
 use task_bar::task_bar;
@@ -575,6 +575,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             hover_highlight(app, &painter, &xf);
         }
         selection_overlay(app, &painter, &xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
+        draw_inside_indicator(app, &painter, &xf);
         mirror_axis_overlay(app, &painter, &xf);
         grid_repeat_overlay(app, &painter, &xf);
         if app.ui.view.text_threads {

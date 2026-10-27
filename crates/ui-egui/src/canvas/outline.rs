@@ -90,6 +90,9 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
 /// The width of the key object's outline (Align to Key Object), thicker than the selection's.
 pub(super) const KEY_OUTLINE: f32 = 2.5;
 
+/// The width of the dashed outline that marks the object Draw Inside draws into.
+pub(super) const DRAW_INSIDE_OUTLINE: f32 = 1.5;
+
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
 /// highlight, are drawn for: an Image Trace of a photo selects hundreds of thousands of paths at
 /// once, and selecting all of an opened PDF can select as many type objects, images and gradient
