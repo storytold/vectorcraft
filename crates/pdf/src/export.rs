@@ -40,9 +40,9 @@ mod writer;
 
 pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
 pub use entry::{export, export_with_report, page_areas};
-pub use exporter::{MIN_RASTER_PPI, pdf_raster_ppi};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
+pub use exporter::{MIN_RASTER_PPI, pdf_raster_ppi};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 pub(crate) use writer::{Sheet, Writer};
