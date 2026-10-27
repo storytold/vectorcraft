@@ -73,6 +73,26 @@ mod tests {
     }
 
     #[test]
+    fn packaging_file_associations_reference_installed_executable() {
+        let wxs = std::fs::read_to_string(crate::root().join("packaging/windows/vectorcraft.wxs")).unwrap();
+        for (extension, prog_id) in [("vectorcraft", "VectorCraft.vectorcraft")] {
+            let prog_id_start = wxs.find(&format!(r#"<ProgId Id="{prog_id}""#)).unwrap();
+            let prog_id_end = wxs[prog_id_start..].find("</ProgId>").unwrap() + prog_id_start;
+            let prog_id = &wxs[prog_id_start..prog_id_end];
+
+            let extension_start = prog_id.find(&format!(r#"<Extension Id="{extension}""#)).unwrap();
+            let extension_end = prog_id[extension_start..].find("</Extension>").unwrap() + extension_start;
+            let extension = &prog_id[extension_start..extension_end];
+
+            assert!(
+                extension.contains(r#"<Verb Id="open" Command="Open" TargetFile="[#VectorcraftExe]" Argument="&quot;%1&quot;" />"#),
+                ".{extension} does not open with the installed executable",
+            );
+        }
+        assert!(wxs.contains(r#"Directory="INSTALLFOLDER""#), "associations are not installed with the app");
+    }
+
+    #[test]
     fn dev_bundle_plist_is_the_release_one() {
         let p = info_plist("1.2.3-rc.1", "abc123");
         assert!(p.contains("<string>1.2.3</string>") && p.contains("<string>1.2.3-rc.1</string>"), "{p}");
