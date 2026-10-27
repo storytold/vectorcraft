@@ -79,7 +79,15 @@ pub(super) fn draw_inside_indicator(app: &VectorcraftApp, p: &egui::Painter, xf:
     let Some(st) = app.session.active() else { return };
     let Some((id, n)) = app.session.draw_inside.and_then(|id| Some((id, st.doc.node(id)?))) else { return };
     let stroke = Stroke::new(DRAW_INSIDE_OUTLINE, c32(st.doc.layer_color(id)));
-    for line in to_screen_path(&node_outline(n, &st.doc.symbol_boxes()), xf) {
+    // Too many paths to outline every frame: the object's bounds stand for them.
+    let symbols = st.doc.symbol_boxes();
+    let outline = if too_many_anchors([n]) {
+        n.geometric_bounds_with(&symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath())
+    } else {
+        Some(node_outline(n, &symbols))
+    };
+    let Some(outline) = outline else { return };
+    for line in to_screen_path(&outline, xf) {
         p.extend(Shape::dashed_line(&line, stroke, 5.0, 3.0));
     }
 }

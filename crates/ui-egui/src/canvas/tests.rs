@@ -7166,3 +7166,37 @@ fn draw_inside_marks_its_object_with_a_dashed_outline() {
     app.run("view.drawMode", json!({"mode": "normal"})).unwrap();
     assert!(dashes(&mut app).is_empty(), "back to Draw Normal");
 }
+
+/// #4319: a Draw Inside object with more anchors than the overlays outline is marked by a dashed
+/// rectangle round its bounds, not by flattening its whole outline each frame.
+#[test]
+fn draw_inside_marks_a_huge_object_by_its_bounds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let n = OVERLAY_MAX_ANCHORS + 10;
+    let points = (0..n).map(|i| format!("L{} {}", 20.0 + 360.0 * i as f64 / n as f64, 100 + (i % 2) * 50)).collect::<String>();
+    let huge = app.run("path.create", json!({"d": format!("M20 20 {points} Z")})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [huge]})).unwrap();
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(huge.as_u64().unwrap())));
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    let bounds = app.session.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(huge.as_u64().unwrap())], false).unwrap();
+    let on_bounds = egui::Rect::from_two_pos(xf.to_screen(Point::new(bounds.x0, bounds.y0)), xf.to_screen(Point::new(bounds.x1, bounds.y1)));
+    let dashes: Vec<[Pos2; 2]> = shapes(&mut app, &ctx)
+        .into_iter()
+        .filter_map(|s| match s {
+            Shape::LineSegment { points, stroke } if stroke.color == color && stroke.width == DRAW_INSIDE_OUTLINE => Some(points),
+            _ => None,
+        })
+        .collect();
+    assert!(!dashes.is_empty(), "the bounds are dashed");
+    let edge = |q: Pos2| {
+        [on_bounds.min.x, on_bounds.max.x].iter().any(|x| (q.x - x).abs() < 0.5)
+            || [on_bounds.min.y, on_bounds.max.y].iter().any(|y| (q.y - y).abs() < 0.5)
+    };
+    assert!(dashes.iter().all(|d| d.iter().all(|q| edge(*q))), "only along the bounds rectangle: {dashes:?}");
+}
