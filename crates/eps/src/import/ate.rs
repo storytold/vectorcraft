@@ -1251,11 +1251,17 @@ impl Story {
 
     /// Area type of one frame that the file lays more lines out in than fit here: in the fallback
     /// font, or a last line whose descent the file lets pass the frame's bottom. The frame is made
-    /// taller from its bottom (`vectorcraft_text::fit_source_lines`) so the file's lines show.
+    /// taller from its bottom (`vectorcraft_text::fit_source_lines`) so the file's lines show. When
+    /// a descent isn't enough (each line a little taller here, as in a paragraph of CJK type in a
+    /// fallback font, #2769), it grows by the least that lays them out (`vectorcraft_text::fit_lines`).
     /// Whether it was.
     pub(super) fn fit_last_lines(&self, t: &mut TextObject) -> bool {
-        matches!(self.frames.as_slice(), [FrameKind::Area(..)])
-            && vectorcraft_text::fit_source_lines(vectorcraft_text::FontDb::global(), t, self.lines.len())
+        if !matches!(self.frames.as_slice(), [FrameKind::Area(..)]) {
+            return false;
+        }
+        let db = vectorcraft_text::FontDb::global();
+        let deeper = vectorcraft_text::fit_source_lines(db, t, self.lines.len());
+        vectorcraft_text::fit_lines(db, t, self.lines.len()) || deeper
     }
 
     /// Were tab stops past [`MAX_STORY_TABS`] left out of its paragraphs (so far: making its text
@@ -2611,6 +2617,45 @@ mod tests {
         let mut t = area(third.baseline - 20.0 + third.descent / 2.0);
         s.frames.push(FrameKind::Area(vec![], AreaFrame::default()));
         assert!(!s.fit_last_lines(&mut t));
+    }
+
+    /// #2769: the file sets three lines in a frame that is more than a descent too short for them
+    /// here (each line a little taller, as CJK type in a fallback font is): the frame grows from its
+    /// bottom until they all show, and no further.
+    #[test]
+    fn a_frame_more_than_a_descent_too_short_for_the_file_s_lines_is_made_taller() {
+        let text = "one\rtwo\rthree\r";
+        let db = vectorcraft_text::FontDb::global();
+        let area = |height: f64| {
+            let mut t = TextObject::point(Point::ZERO, "one\ntwo\nthree", CharStyle { size: 13.0, ..CharStyle::default() });
+            t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 20.0 + height)) };
+            t
+        };
+        let height = |t: &TextObject| if let TextKind::Area { frame } = &t.kind { frame.bounds().map(|b| (b.y0, b.height())) } else { None };
+        let lines = |t: &TextObject| vectorcraft_text::layout(db, t).lines.len();
+        let one_frame = |ys: &[f64]| {
+            let mut s = story(text, ys, &Para::default());
+            s.frames = vec![FrameKind::Area(vec![], AreaFrame::default())];
+            s
+        };
+        let s = one_frame(&[0.0, 15.6, 31.2]);
+        // The least frame height (to a quarter point) that holds all three lines here, and the
+        // third line's descent: the frame is short by more than that.
+        let full = (1..400).map(|i| i as f64 * 0.25).find(|h| lines(&area(*h)) == 3).unwrap();
+        let descent = vectorcraft_text::layout(db, &area(400.0)).lines[2].descent;
+        let short = full - descent - 1.0;
+        let mut t = area(short);
+        assert_eq!(lines(&t), 2, "the last line is cut off");
+        assert!(s.fit_last_lines(&mut t));
+        let (y0, h) = height(&t).unwrap();
+        assert_eq!(lines(&t), 3, "every line shows");
+        assert!(y0 == 20.0 && h > full - 0.25 && h < full + 0.5, "taller from its bottom, by what the last line needs: {h} (fits at {full})");
+        // A frame the file lays out only two lines in keeps its third line overset, as the file has it.
+        let mut t = area(short);
+        assert!(!one_frame(&[0.0, 15.6]).fit_last_lines(&mut t) && height(&t).unwrap().1 == short);
+        // A frame that holds every line stays as it is.
+        let mut t = area(full + 5.0);
+        assert!(!s.fit_last_lines(&mut t) && height(&t).unwrap().1 == full + 5.0);
     }
 
     #[test]
