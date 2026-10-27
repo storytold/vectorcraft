@@ -929,6 +929,35 @@ fn whitespace_the_primary_font_lacks_takes_the_fallback_face() {
     assert!(l.glyphs.iter().all(|g| g.font_id == primary.id()));
 }
 
+/// The characters of a run its font lacks come from one fallback face when one has them all: a ㈱
+/// the first Japanese fallback lacks doesn't leave the kana and kanji next to it in another
+/// design. A run the first fallback covers keeps it. Needs craft-fonts' Japanese faces (skipped
+/// without them, or when the first fallback has ㈱).
+#[test]
+fn a_run_takes_its_fallback_characters_from_one_face() {
+    let primary = db().face("Source Sans 3", "Regular").unwrap();
+    let (Some(kanji), Some(mark)) = (db().fallback_for('試', primary.id()), db().fallback_for('㈱', primary.id())) else {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    };
+    if kanji.id() == mark.id() || !"ロゴ試験".chars().all(|c| mark.covers(c)) {
+        eprintln!("skipped: the first Japanese fallback ({}) has ㈱, or the face that has it lacks kana", kanji.family);
+        return;
+    }
+    let faces = |text: &str| -> Vec<u32> { layout(db(), &point(text, style(20.0))).glyphs.iter().map(|g| g.font_id).collect() };
+    // ABC in the run's own font, the rest from the one face that has ㈱ too.
+    let ids = faces("ABC㈱ロゴ試験");
+    assert_eq!(ids.len(), 8);
+    assert!(ids[..3].iter().all(|&id| id == primary.id()));
+    assert!(
+        ids[3..].iter().all(|&id| id == mark.id()),
+        "{:?}",
+        ids.iter().map(|id| db().face_by_id(*id).map(|f| f.family.clone())).collect::<Vec<_>>()
+    );
+    // Without ㈱: the first fallback, for every character.
+    assert!(faces("ABCロゴ試験")[3..].iter().all(|&id| id == kanji.id()));
+}
+
 #[test]
 fn multiple_runs_and_styles() {
     let mut t = point("", style(10.0));

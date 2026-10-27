@@ -571,6 +571,7 @@ pub(crate) fn shape_runs(
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
+        one_fallback_face(db, &primary, pmap.as_ref(), text.get(a..b).unwrap_or_default(), st.digits, &mut cache);
         let mut script = Script::Common;
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
@@ -953,6 +954,64 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             && !invisible(glyph.ch)
         {
             glyph.adv += correction;
+        }
+    }
+}
+
+/// How many faces [`one_fallback_face`] tries for a span.
+const MAX_SPAN_FALLBACKS: usize = 8;
+
+/// The grapheme clusters of a span (`text`) that its `primary` face (charmap `pmap`) lacks a
+/// character of are drawn from one fallback face when one covers them all: `cache` gets that face
+/// for each of them. Picked per cluster (the first loaded family covering it), a span's fallback
+/// text mixed designs: a ㈱ or ⑩ that the first Japanese fallback (Shippori Mincho) lacks came from
+/// BIZ UDMincho while the kana and kanji round it stayed in Shippori Mincho. The faces tried are the
+/// ones the clusters fall back to, in the span's order (so a span its first fallback covers keeps
+/// it). Clusters no font covers don't count; with no face covering the others, each keeps its own.
+fn one_fallback_face<'t>(
+    db: &FontDb,
+    primary: &Arc<FontFace>,
+    pmap: Option<&Charmap<'_>>,
+    text: &'t str,
+    digits: Digits,
+    cache: &mut std::collections::HashMap<&'t str, Arc<FontFace>>,
+) {
+    if pmap.is_none() {
+        return;
+    }
+    // The clusters that fall back, in order, once each.
+    let mut falling: Vec<&'t str> = vec![];
+    for cluster in text.graphemes(true) {
+        if falling.contains(&cluster) || drawn_chars(cluster, digits).all(|c| in_face(pmap, c)) {
+            continue;
+        }
+        let f = match cache.get(cluster) {
+            Some(f) => f.clone(),
+            None => {
+                let f = fallback_face(db, primary, pmap, cluster, digits);
+                cache.insert(cluster, f.clone());
+                f
+            }
+        };
+        if f.id() != primary.id() {
+            falling.push(cluster);
+        }
+    }
+    let mut tried: Vec<u32> = vec![];
+    for cluster in &falling {
+        let Some(f) = cache.get(cluster).cloned() else { continue };
+        if tried.contains(&f.id()) {
+            continue;
+        }
+        if tried.len() >= MAX_SPAN_FALLBACKS {
+            return;
+        }
+        tried.push(f.id());
+        if falling.iter().all(|c| drawn_chars(c, digits).all(|ch| f.covers(ch))) {
+            for c in &falling {
+                cache.insert(c, f.clone());
+            }
+            return;
         }
     }
 }
