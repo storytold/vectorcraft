@@ -79,6 +79,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Kind::Filter => {}
         Kind::Effect => return Err(format!("{} is a live effect (Effect › Plug-ins)", m.name)),
         Kind::Exporter => return Err(format!("{} is an exporter (File › Export › Export As…)", m.name)),
+        Kind::Panel => return Err(format!("{} is a panel (plugin.panel.event)", m.name)),
     }
     let given = p.get("params").filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
     if m.params.is_empty() || given.is_some() {

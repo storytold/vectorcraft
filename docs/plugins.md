@@ -5,7 +5,7 @@ arbitrary machine code and cannot work in the browser build. Instead, plug-ins a
 run in a sandbox. One `.wasm` file works on macOS, Windows, Linux and the web. The design follows PhotoCraft's
 plug-in API (same sandbox, same manifest and parameter schema), extended for vector documents.
 
-There are three kinds of plug-in:
+There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
   and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
@@ -15,6 +15,9 @@ There are three kinds of plug-in:
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
+- **Panels** have a panel of their own: they declare what it shows and answer its events (it opened, a button was
+  clicked, a field was set) with what it shows now and host commands to run, as one undo step. The host has the
+  command so far (`plugin.panel.event`); the app doesn't draw the panels yet.
 
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the
 `plugin.*` commands in `crates/engine/src/cmd/plugin.rs`).
@@ -26,6 +29,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected. |
+| `plugin.panel.event` | `{"id", "event": {"type": "open"\|"click"\|"change", "target"?, "value"?}, "values"?: {…}}` | Hands a panel an event and runs the commands it returns ([panels](#panels)). → `{plugin, panel, results}` |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have. |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
@@ -37,6 +41,23 @@ Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>"
 An exporter adds a write-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id.
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
 its extensions that no built-in format has; `selectedOnly` hands it the selection, as for the built-in formats.
+
+### Panels
+
+A panel plug-in answers each event of its panel with `plugin.panel.event`. It is given the event, what it kept at its
+last event, the panel's field values and the selected paths and compound paths, and returns what the panel shows, what
+it keeps and commands to run ([Output](#output)). Each event runs a fresh instance, as every run does: the host keeps
+the panel's `state` (at most 4 MiB of JSON, not saved) and hands it back with the next event, and forgets it when the
+plug-in is removed.
+
+The commands are the host's own, as MCP and scripts run them (`shape.rectangle`, `object.group`, `select.all`…). They
+run as one `command.batch`: one undo step, and when one fails, all of them are rolled back and the panel keeps what it
+kept. The batch is journaled, not the event, so replaying the journal needs no plug-in. A panel runs only commands
+whose ids start with `shape.`, `path.`, `object.`, `select.`, `paint.` or `stroke.`, which make, select and edit art
+in the active document, and none that changes the preferences (`stroke.widthProfile.*`, `object.pathfinder.options`):
+one other command refuses them all before any runs. It can't read or write files, open or switch documents, use the
+clipboard, or install or remove plug-ins. Commands can't refer to the results of the ones before them; those that make
+art select it, so the next one acts on it.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
@@ -154,8 +175,8 @@ pointers are offsets into the module's memory.
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
 - `name`: the menu label, or an exporter's format name in Export As (1–64 printable characters). `kind`: `"filter"`
-  (object filter), `"effect"` (live effect) or `"exporter"`. Exporters came after the first ABI v1 hosts, which refuse
-  the kind when the plug-in is installed.
+  (object filter), `"effect"` (live effect), `"exporter"` or `"panel"`. Exporters and panels came after the first ABI
+  v1 hosts, which refuse the kind when the plug-in is installed. A panel can't be `heavy`.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
@@ -247,14 +268,15 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
  "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
-`mode` is `"filter"`, `"effect"` or `"export"`; `bounds` the selection's geometric bounds (a live effect: the reference
-box of the effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard
-under the selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document
-(`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the
+`mode` is `"filter"`, `"effect"`, `"export"` or `"panel"`; `bounds` the selection's geometric bounds (a live
+effect: the reference box of the effect, the object's bounds or those of the previous effect's result); `artboard`
+(filters) the artboard under the selection's centre, else the first; `documentData` (filters) what the plug-in last
+kept with the document (`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the
 object's effects), or `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke,
 counted from the bottom as in `fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt",
 "name": "Poster"}` instead: the extension of the file being written (one the exporter lists) and its name without the
-extension (the document's name when the export is not given a path), which some formats keep in their header.
+extension (the document's name when the export is not given a path), which some formats keep in their header. A
+panel's is `{"mode": "panel", "documentData": …}`: what it keeps with the active document, as a filter's.
 
 ### Output
 
@@ -302,6 +324,12 @@ An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file,
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
 with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
 
+A **panel** is given something else as its input: `{"event": {"type": "click", "target": "add"}, "state": …, "values":
+{"width": 40}, "objects": [...]}` (the objects as a filter gets them). It returns `{"panel": {…}, "state"?: …,
+"commands"?: [{"command": "shape.rectangle", "params"?: {…}}]}`: `panel` is what the panel shows (any object: the
+app will draw it), `state` what it keeps until its next event (left out: what it kept; `null`: nothing), and at most
+256 commands, in order ([panels](#panels)). A decline or an invalid output runs nothing and keeps the state as it was.
+
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
@@ -330,7 +358,8 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, host
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), the app drawing panel
+  plug-ins' panels (the host has `plugin.panel.event`), host
   callbacks (a plug-in reporting progress or asking whether it was cancelled), importers (plug-in formats that open
   files).
 - Live effects that change paint (they reshape geometry; an object filter recolours), and filters on type, images or

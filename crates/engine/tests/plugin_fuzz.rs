@@ -209,8 +209,64 @@ fn output(objects: &[(Option<usize>, Value)], inputs: &[u64], junk: Option<Value
     json!({ "objects": list }).to_string()
 }
 
+/// Command ids a panel may return: ones it may run, ones it may not, and ones that don't exist.
+const PANEL_COMMANDS: &[&str] = &[
+    "shape.rectangle",
+    "shape.ellipse",
+    "object.group",
+    "object.ungroup",
+    "object.move",
+    "object.arrange.bringToFront",
+    "select.all",
+    "select.none",
+    "path.join",
+    "paint.setFill",
+    "stroke.set",
+    "file.save",
+    "plugin.remove",
+    "command.batch",
+    "nope.nothing",
+];
+
+/// A panel's output: its panel, state and commands with junk parameters, or junk.
+fn arb_panel_output() -> impl Strategy<Value = String> {
+    let command = (prop::sample::select(PANEL_COMMANDS), prop::option::of(arb_junk()))
+        .prop_map(|(c, p)| if let Some(p) = p { json!({"command": c, "params": p}) } else { json!({"command": c}) });
+    let answer =
+        (arb_junk(), prop::option::of(arb_junk()), prop::option::of(prop::collection::vec(command, 0..6))).prop_map(|(panel, state, commands)| {
+            let mut o = json!({"panel": if panel.is_object() { panel } else { json!({"items": [panel]}) }});
+            if let Some(st) = state {
+                o["state"] = st;
+            }
+            if let Some(c) = commands {
+                o["commands"] = Value::Array(c);
+            }
+            o.to_string()
+        });
+    prop_oneof![4 => answer, 1 => arb_junk().prop_map(|j| j.to_string())]
+}
+
 proptest! {
     #![proptest_config(config())]
+
+    #[test]
+    fn hostile_panel_output_never_crashes(out in arb_panel_output(), values in arb_junk()) {
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let src = tpl::returning(&tpl::manifest("fuzz.panel", "panel", "{}"), &out);
+        install(&mut s, &wat::parse_str(src).unwrap()).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let r = catch_quiet(|| {
+            s.execute("plugin.panel.event", &json!({"id": "fuzz.panel", "event": {"type": "click", "target": "go"}, "values": values}))
+                .map(|_| ())
+        });
+        match r {
+            Err(msg) => return Err(TestCaseError::fail(format!("panicked on {out}: {msg}"))),
+            Ok(Err(_)) => prop_assert!(s.doc().unwrap().doc == before, "a failed event changed the document: {}", out),
+            Ok(Ok(())) => {}
+        }
+        renders(&s, &out)?;
+    }
 
     #[test]
     fn hostile_filter_and_effect_output_never_crashes(

@@ -154,8 +154,13 @@ pub fn encode(n: &Node) -> Option<Value> {
 /// The input document of a filter run: `{"objects": [...]}` for `ids` (paths and compound paths;
 /// others are left out).
 pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
-    let objects: Vec<Value> = ids.iter().filter_map(|id| doc.node(*id)).filter_map(encode).collect();
-    serde_json::to_vec(&json!({ "objects": objects })).unwrap_or_default()
+    serde_json::to_vec(&json!({ "objects": encode_objects(doc, ids) })).unwrap_or_default()
+}
+
+/// The objects [`encode_input`] lists, as values: a panel is given them with its event
+/// ([`crate::panel`]).
+pub fn encode_objects(doc: &Document, ids: &[NodeId]) -> Vec<Value> {
+    ids.iter().filter_map(|id| doc.node(*id)).filter_map(encode).collect()
 }
 
 fn out_err(at: &str, msg: impl std::fmt::Display) -> Error {

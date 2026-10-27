@@ -104,7 +104,7 @@ fn hostile_modules_fail_quickly() {
         ),
         ("bad manifest", module("not json", "(i64.const 0)", "")),
         ("manifest with a bad id", module(r#"{"id":"a b","name":"x","kind":"filter"}"#, "(i64.const 0)", "")),
-        ("manifest of the wrong kind", module(r#"{"id":"a","name":"x","kind":"panel"}"#, "(i64.const 0)", "")),
+        ("manifest of the wrong kind", module(r#"{"id":"a","name":"x","kind":"brush"}"#, "(i64.const 0)", "")),
         ("start function loops", module(MANIFEST, "(i64.const 0)", "(func $spin (loop $l (br $l))) (start $spin)")),
         (
             "WASI import",

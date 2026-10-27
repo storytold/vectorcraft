@@ -33,6 +33,9 @@ pub enum Kind {
     /// An exporter: writes the document in a file format of its own, whose extensions the manifest
     /// lists (File › Export › Export As, `document.export`; see [`crate::export`]).
     Exporter,
+    /// A panel: a panel of its own whose contents it declares, answering the events of its fields
+    /// with new contents and commands to run (`plugin.panel.event`; see [`crate::panel`]).
+    Panel,
 }
 
 impl Kind {
@@ -41,6 +44,7 @@ impl Kind {
             Kind::Filter => "filter",
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
+            Kind::Panel => "panel",
         }
     }
 }
@@ -265,6 +269,9 @@ impl Manifest {
             }
             (Budget::Heavy, Kind::Exporter) => {
                 return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
+            }
+            (Budget::Heavy, Kind::Panel) => {
+                return Err(Error::Manifest("a panel answers its events while the user waits, so it can't be `heavy`".into()));
             }
         }
         for (i, (k, p)) in self.params.iter().enumerate() {
@@ -532,9 +539,17 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"exporter","extensions":["a","b","c","d","e","f","g","h","i"]}"#,
             r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#,
             r#"{"id":"a","name":"x","kind":"effect","extensions":["plt"]}"#,
+            r#"{"id":"a","name":"x","kind":"panel","extensions":["plt"]}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_panel_is_a_kind_of_its_own() {
+        let m = Manifest::parse(br#"{"id":"org.example.shapes","name":"Shapes","kind":"panel"}"#).unwrap();
+        assert_eq!(m.kind, Kind::Panel);
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("panel"));
     }
 
     /// A filter may ask for a heavy budget; a live effect runs while the document is drawn and an
@@ -552,6 +567,7 @@ mod tests {
         for bad in [
             r#"{"id":"a","name":"x","kind":"effect","budget":"heavy"}"#,
             r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"budget":"heavy"}"#,
+            r#"{"id":"a","name":"x","kind":"panel","budget":"heavy"}"#,
             r#"{"id":"a","name":"x","kind":"filter","budget":"huge"}"#,
             r#"{"id":"a","name":"x","kind":"filter","budget":true}"#,
         ] {
@@ -607,7 +623,7 @@ mod tests {
             r#"{"id":"","name":"x","kind":"filter"}"#,
             r#"{"id":"a b","name":"x","kind":"filter"}"#,
             r#"{"id":"a","name":"","kind":"filter"}"#,
-            r#"{"id":"a","name":"x","kind":"panel"}"#,
+            r#"{"id":"a","name":"x","kind":"brush"}"#,
             r#"{"id":"a","name":"x"}"#,
             r#"{"id":"a","name":"x","kind":"filter","params":{"r":{"type":"number","min":5,"max":1,"default":1}}}"#,
             r#"{"id":"a","name":"x","kind":"filter","params":{"c":{"type":"choice","options":[]}}}"#,

@@ -7,7 +7,9 @@
 //! plug-in that fails leaves the document untouched), and read and write the data they keep with
 //! the document ([`vectorcraft_doc::plugin_data`], theirs alone); live-effect plug-ins are applied
 //! like any effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`;
-//! exporters add a file format that `document.export` writes (`fileio::plugin_formats`).
+//! exporters add a file format that `document.export` writes (`fileio::plugin_formats`); a panel
+//! answers the events of its panel with `plugin.panel.event`, its commands run as one
+//! `command.batch` (only those [`panel_may_run`] lets it run).
 //!
 //! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
 //! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
@@ -18,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
+use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, panel, registry};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
 
@@ -44,7 +46,7 @@ pub fn describe(p: &Plugin) -> Value {
             v["format"] = json!(export::format_id(&m.id));
             v["extensions"] = json!(m.extensions);
         }
-        Kind::Filter => {}
+        Kind::Filter | Kind::Panel => {}
     }
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
@@ -119,6 +121,7 @@ impl FilterRun {
                     format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id)),
                 ));
             }
+            Kind::Panel => return Err(bad(C, format!("`{}` is a panel: send it its events with plugin.panel.event", m.id))),
         }
         // Bad parameters fail before anything runs.
         let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
@@ -210,6 +213,80 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         None => r.run()?,
     };
     r.finish(s, &output)
+}
+
+/// The commands a panel may run (`plugin.panel.event`), by the start of their ids: those that make,
+/// select and edit art in the active document. None of them reads or writes a file, opens or
+/// switches documents, or changes the preferences, the clipboard or the plug-ins, except the ones in
+/// [`PANEL_REFUSED`].
+const PANEL_COMMANDS: &[&str] = &["shape.", "path.", "object.", "select.", "paint.", "stroke."];
+
+/// Commands among [`PANEL_COMMANDS`] a panel may not run: they change the preferences (the stroke
+/// width profiles kept with them, the Pathfinder Options).
+const PANEL_REFUSED: &[&str] = &["stroke.widthProfile.", "object.pathfinder.options"];
+
+/// May a panel run command `id`?
+fn panel_may_run(id: &str) -> bool {
+    PANEL_COMMANDS.iter().any(|p| id.starts_with(p)) && !PANEL_REFUSED.iter().any(|p| id.starts_with(p))
+}
+
+/// `plugin.panel.event`: panel `id`'s answer to `event`. It is given the event, what it kept at its
+/// last event, the panel's `values` and the selected paths and compound paths (as a filter is),
+/// and returns what its panel shows, what it keeps and commands, which run as one `command.batch`:
+/// one undo step, all rolled back when one fails, journaled as the batch (the event itself isn't).
+/// One command a panel may not run ([`panel_may_run`]) refuses them all before any runs. What it
+/// keeps changes only once its commands ran. → `{plugin, panel, results}`.
+fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "plugin.panel.event";
+    let plugin = plugin_by_id(C, p)?;
+    let m = plugin.manifest();
+    if m.kind != Kind::Panel {
+        return Err(bad(C, format!("`{}` is a {}, not a panel", m.id, m.kind.name())));
+    }
+    let event = panel::Event::parse(p.get("event").unwrap_or(&Value::Null)).map_err(|e| bad(C, e))?;
+    let values = match p.get("values") {
+        None | Some(Value::Null) => json!({}),
+        Some(v @ Value::Object(_)) => v.clone(),
+        Some(_) => return Err(bad(C, "`values` must be an object of the panel's fields")),
+    };
+    let state = s.panel_states.get(&m.id).cloned().unwrap_or(Value::Null);
+    let (objects, document_data) = match s.active() {
+        Some(st) => {
+            let targets = objects::filter_targets(&st.doc, &st.selection.objects);
+            (objects::encode_objects(&st.doc, &targets), st.doc.plugin_data(&m.id).cloned().unwrap_or(Value::Null))
+        }
+        None => (vec![], Value::Null),
+    };
+    let answer = panel::run(&plugin, panel::Given { event: &event, state: &state, values: &values, objects, document_data }).map_err(err)?;
+    if let Some(c) = answer.commands.iter().find(|c| !panel_may_run(&c.command)) {
+        return Err(bad(
+            C,
+            format!(
+                "{} may not run `{}`: a panel runs only commands starting with {}, and none of {}",
+                m.name,
+                c.command,
+                PANEL_COMMANDS.join(", "),
+                PANEL_REFUSED.join(", ")
+            ),
+        ));
+    }
+    let results = if answer.commands.is_empty() {
+        Value::Array(vec![])
+    } else {
+        let commands: Vec<Value> = answer.commands.iter().map(|c| json!({"command": c.command, "params": c.params})).collect();
+        let label = m.name.trim_end_matches('…');
+        s.execute("command.batch", &json!({"label": label, "commands": commands}))?.get("results").cloned().unwrap_or(Value::Array(vec![]))
+    };
+    match answer.state {
+        Some(Value::Null) => {
+            s.panel_states.remove(&m.id);
+        }
+        Some(state) => {
+            s.panel_states.insert(m.id.clone(), state);
+        }
+        None => {}
+    }
+    Ok(json!({"plugin": m.id, "panel": answer.panel, "results": results}))
 }
 
 /// Admits the effect records a filter returned for object `n` (written, its effects still its own)
@@ -402,11 +479,12 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
     s.unstore_plugin(id);
+    s.panel_states.remove(id);
     if registry::remove(id) { Ok(json!({"removed": id})) } else { Err(err(vectorcraft_plugins::Error::NotFound(id.into()))) }
 }
 
-/// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove` and
-/// `.reload`.
+/// This module's commands: `plugin.list`, `.info`, `.run`, `.panel.event`, `.install`, `.inspect`,
+/// `.remove` and `.reload`.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -414,7 +492,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"panel\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
             always,
             list
         ),
@@ -435,6 +513,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
+        ),
+        cmd!(
+            query "plugin.panel.event",
+            "Plug-in Panel Event",
+            [],
+            None,
+            "{id: a panel plug-in (kind \"panel\"), event: {type: \"open\"|\"click\"|\"change\", target?: the field's id (click, change), value?: its new value (change)}, values?: {field id: value} (the panel's fields as they are)} run the panel's answer to the event: it is given the event, what it kept at its last event, the values and the selected paths and compound paths, and returns what its panel shows, what it keeps and commands to run, which run as one command.batch (one undo step; one that fails rolls them all back, and the panel then keeps what it kept). A panel runs only commands whose ids start with shape., path., object., select., paint. or stroke. (not stroke.widthProfile.* or object.pathfinder.options): one other refuses them all → {plugin, panel: what it shows, results: the batch's results}",
+            always,
+            panel_event
         ),
         cmd!(
             query "plugin.install",
