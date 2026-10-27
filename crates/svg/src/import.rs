@@ -35,8 +35,8 @@ pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
 use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
 pub(super) use prepass::Edits;
-pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 use prepass::{Extras, labels, prepass};
+pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 
 mod css;
 mod css_transform;
