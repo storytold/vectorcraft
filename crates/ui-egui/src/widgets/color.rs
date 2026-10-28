@@ -378,7 +378,8 @@ fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
 /// readers read `name` and, when `marked`, both components. They read it as a slider over
 /// `axes[0]`'s units (0 when not `marked`), which their increment and decrement actions move as →
 /// and ← do and their set-value action sets, as for a [`hue_ring`]. Returns the clicked or dragged
-/// point, or the point the keys or actions moved to, and the phase.
+/// point, or the point the keys or actions moved to, and the phase. When `marked`, a step past an
+/// edge returns no point.
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
@@ -435,9 +436,11 @@ pub fn color_field(
         return (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase);
     }
     let across = set.map_or(x + (dx + steps) / axes[0].units, |v| v / axes[0].units);
-    // Without a marker there is no color yet, so a set value applies even when it equals `x`.
-    if across != x || dy != 0.0 || (set.is_some() && !marked) {
-        let moved = (across.clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+    let moved = (across.clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+    // A step past an edge leaves the point where it is. Without a marker there is no color yet, so
+    // a key or an action applies even when the point stays.
+    let asked = set.is_some() || dx + steps != 0.0 || dy != 0.0;
+    if moved != (x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)) || (asked && !marked) {
         return (Some(moved), Live::Released);
     }
     (None, Live::Idle)

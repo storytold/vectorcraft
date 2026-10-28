@@ -430,6 +430,21 @@ fn screen_readers_read_and_move_the_ring_and_the_square() {
     assert!(near(hsb(&fill(h.state())), [200.0, 0.19, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
 }
 
+/// A step past the edge of the square leaves the fill alone: a CMYK cyan shows at 100% saturation,
+/// and a step up from there neither separates it again nor adds an undo step.
+#[test]
+fn a_step_past_the_edge_of_the_square_changes_nothing() {
+    let mut h = harness(app(json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0})));
+    let before = fill(h.state());
+    assert_eq!(hsb(&before)[1], 1.0, "{:?}", hsb(&before));
+    let undo = undo_len(h.state());
+    let (target_node, target_tree) = h.get_by_label("Saturation and brightness").accesskit_node().locate();
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::Increment, data: None }));
+    h.run_steps(1);
+    assert_eq!(fill(h.state()), before);
+    assert_eq!(undo_len(h.state()), undo, "no undo step");
+}
+
 /// The Color Picker's color field is the same widget: a press focuses it, the arrows step the
 /// components it shows, and screen readers read its name and both components and step the first.
 #[test]
