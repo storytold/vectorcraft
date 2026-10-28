@@ -366,6 +366,7 @@ pub(super) fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
             v["id"] = json!(id.0);
             v["easingType"] = json!(spec.ease.kind.id());
             v["ramp"] = json!(spec.ease.ramp * 100.0);
+            v["midpoint"] = json!(spec.ease.midpoint * 100.0);
             v["colorShift"] = json!(spec.color_shift);
             v["spineVisible"] = json!(spec.spine_visible());
             v["spineFollowed"] = json!(spec.spine_followed());

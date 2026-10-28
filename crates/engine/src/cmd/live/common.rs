@@ -166,7 +166,7 @@ pub(super) fn spine_mode_param(p: &Value, cmd: &str, current: BlendSpineMode) ->
     }
 }
 
-/// Blend panel Type and Ramp, validated before any document mutation.
+/// Blend panel Type, Ramp and midpoint, validated before any document mutation.
 pub(super) fn ease_param(p: &Value, cmd: &str, current: BlendEase) -> Result<BlendEase> {
     let kind = match p.get("easingType").filter(|v| !v.is_null()) {
         None => current.kind,
@@ -178,7 +178,15 @@ pub(super) fn ease_param(p: &Value, cmd: &str, current: BlendEase) -> Result<Ble
             _ => return Err(bad(cmd, "easingType must be easeIn, easeOut, easeInOut or easeOutIn")),
         },
     };
-    Ok(BlendEase { kind, ramp: percent_param(p, cmd, "ramp", current.ramp * 100.0, 0.0)? / 100.0 })
+    let midpoint = match p.get("midpoint").filter(|v| !v.is_null()) {
+        None => current.midpoint,
+        Some(v) => v
+            .as_f64()
+            .filter(|n| n.is_finite() && (0.0..=100.0).contains(n))
+            .map(|n| (n / 100.0).clamp(0.05, 0.95))
+            .ok_or_else(|| bad(cmd, "midpoint must be a percentage from 0 to 100"))?,
+    };
+    Ok(BlendEase { kind, ramp: percent_param(p, cmd, "ramp", current.ramp * 100.0, 0.0)? / 100.0, midpoint })
 }
 
 /// Bounded percentage input; missing or null preserves the current value.

@@ -1,14 +1,14 @@
-//! The on-canvas controls of a selected live blend: the step-count handle that slides along the
-//! right edge of the selection's bounding box (its position is the Specified Steps count, on an
-//! exponential scale — a box height covers 1 to 100 steps and half a box above it reaches 1000,
-//! so small and large counts are alike easy to hit), and — when the blend follows its spine — the
-//! Ease knob on the spine with a linked Ramp handle beside it (bezier-handle style: its distance
-//! from the knob is the Ramp) and the Colour handle under the spine. The Selection tool and the
-//! Blend tool hit-test through here, and the canvas draws the handles white with a dark outline,
-//! like the other on-canvas handles (`ui-egui::canvas::tool_overlays`).
+//! The on-canvas controls of a selected live blend: the step-count handle at the top of the
+//! selection's bounding box's right edge (dragging it down or up sets the Specified Steps count,
+//! on an exponential scale — a box height covers 1 to 100 steps and half a box above it reaches
+//! 1000 — and it returns to the top when let go), and on the spine the Ease knob at the blend's
+//! midpoint with a linked Ramp handle beside it (bezier-handle style: its distance from the knob
+//! is the Ramp) and the Colour handle under the spine. The Selection tool and the Blend tool
+//! hit-test through here, and the canvas draws the handles white with a dark outline, like the
+//! other on-canvas handles (`ui-egui::canvas::tool_overlays`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{BlendEaseType, Spine, blend_key_stops, blend_step_count};
+use vectorcraft_doc::live::{BlendEaseType, Spine, blend_key_stops};
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, Selection};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -113,13 +113,9 @@ impl BlendHandles {
         let edge_up = (to_doc * Point::new(rect.x1, rect.y0) - edge_base) / h;
         let edge_out = to_doc * Point::new(rect.x1 + 1.0, rect.y1) - edge_base;
         let gap = HANDLE_GAP / zoom;
-        // The count the handle rests at: the Specified Steps set, else what the blend shows
-        // between its first two keys now (the first drag switches those to Specified Steps).
-        let count = match spec.spacing {
-            vectorcraft_doc::live::BlendSpacing::Steps(n) => n.clamp(1, 1000) as f64,
-            _ => blend_step_count(&children[0], &children[1], spec.spacing, pair_len(spec, children, 0)).clamp(1, 1000) as f64,
-        };
-        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, steps_height(count));
+        // The count handle rests at the box's top corner and returns there when a drag ends; the
+        // drag itself reads the pointer's height on the edge, so counts stay easy to hit.
+        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, 1.0);
         let (spine, stops) = blend_key_stops(children, spec)?;
         if !stops.iter().all(|s| s.is_finite()) {
             return None;
@@ -183,12 +179,10 @@ impl BlendHandles {
         json!({ "spacing": "steps", "steps": n })
     }
 
-    /// The easing Type and Ramp the pointer at `p` gives: the pair of keys it is between, and
-    /// where in that pair — toward a key bunches the steps toward it.
+    /// The midpoint the pointer at `p` gives: where the blend's halfway step lands between its
+    /// first two keys (the Ease knob's place; the Ramp handle shapes how the steps get there).
     fn ease_params(&self, p: Point) -> Value {
-        let local = self.local_at(p);
-        let (kind, ramp) = ease_at(local);
-        json!({ "easingType": kind, "ramp": ramp * 100.0 })
+        json!({ "midpoint": self.local_at(p) * 100.0 })
     }
 
     /// The Ramp the linked handle at `p` gives: its distance from the Ease knob, past its rest,
@@ -217,16 +211,10 @@ impl BlendHandles {
     }
 }
 
-/// Where the steps handle sits for `count`: `heights` box heights up the edge, plus the gap off
-/// the edge along `out`.
+/// Where the steps handle sits `heights` box heights up the edge, plus the gap off the edge
+/// along `out`.
 fn steps_place(base: Point, up: Vec2, out: Vec2, gap: f64, edge_h: f64, heights: f64) -> Point {
     base + up * (edge_h * heights) + out * gap
-}
-
-/// The steps scale's height in box heights for `count` (1..1000): its logarithm on the scale that
-/// puts 1 at the box's bottom corner and [`STEPS_PER_BOX_HEIGHT`] at its top corner.
-fn steps_height(count: f64) -> f64 {
-    (count.max(1.0).log10() / STEPS_PER_BOX_HEIGHT.log10()).clamp(0.0, 1.0 + STEPS_BOXES_ABOVE)
 }
 
 /// The blends of a selection: each selected blend, and the blend each selected key belongs to.
@@ -291,15 +279,6 @@ fn nearest_fraction(spine: &Spine, p: Point) -> f64 {
     best
 }
 
-/// The easing Type and Ramp whose halfway point sits at `local` (0..1) between two keys, so the
-/// knob rests where it is dropped: Ease In bunches the steps toward the first key, Ease Out
-/// toward the second; Ramp 1 is the strongest either way. Inverts `BlendEase::apply`'s curves
-/// (Ease In `u * u`, Ease Out `u * (2 - u)`) at `u = 0.5`, where the Ramp blends the curve with
-/// even spacing.
-fn ease_at(local: f64) -> (&'static str, f64) {
-    if local < 0.5 { ("easeIn", (2.0 - 4.0 * local).clamp(0.0, 1.0)) } else { ("easeOut", (4.0 * local - 2.0).clamp(0.0, 1.0)) }
-}
-
 /// The colour Shift whose halfway point sits at `local` (0..1) between two keys.
 fn shift_at(local: f64) -> f64 {
     // Shift +-100 reaches 0.5^4 and 0.5^0.25.
@@ -309,14 +288,6 @@ fn shift_at(local: f64) -> f64 {
 
 fn finite(p: Point) -> bool {
     p.x.is_finite() && p.y.is_finite()
-}
-
-/// The arc length between a blend's first two keys.
-fn pair_len(spec: &vectorcraft_doc::live::BlendSpec, children: &[std::sync::Arc<vectorcraft_doc::Node>], i: usize) -> f64 {
-    blend_key_stops(children, spec).map_or(0.0, |(spine, stops)| match (stops.get(i), stops.get(i + 1)) {
-        (Some(&a), Some(&b)) => (b - a).abs(),
-        _ => spine.length(),
-    })
 }
 
 /// A drag of one of a blend's handles.
@@ -427,22 +398,12 @@ impl BlendDrag {
 fn drag_text(part: BlendPart, v: &Value) -> String {
     match part {
         BlendPart::Steps => format!("{}", v["steps"]),
-        BlendPart::Ease => format!("{} {}%", ease_name(v["easingType"].as_str().unwrap_or("easeIn")), v["ramp"].as_f64().unwrap_or_default().round()),
-        BlendPart::Ramp => format!("{}%", v["ramp"].as_f64().unwrap_or_default().round()),
+        BlendPart::Ease => format!("Midpoint {}%", v["midpoint"].as_f64().unwrap_or(50.0).round()),
+        BlendPart::Ramp => format!("Ease {}%", v["ramp"].as_f64().unwrap_or_default().round()),
         BlendPart::Color => {
             let shift = v["colorShift"].as_f64().unwrap_or_default();
             format!("Shift {}%", if shift < 0.0 { format!("-{}", (-shift).round()) } else { format!("{}", shift.round()) })
         }
-    }
-}
-
-/// The plain name of an easing Type, as the drag label reads it.
-fn ease_name(id: &str) -> &'static str {
-    match id {
-        "easeOut" => "Ease Out",
-        "easeInOut" => "Ease In Out",
-        "easeOutIn" => "Ease Out In",
-        _ => "Ease In",
     }
 }
 
@@ -480,43 +441,35 @@ mod tests {
     }
 
     #[test]
-    fn the_steps_handle_rides_the_box_edge_and_its_height_is_the_count() {
+    fn the_steps_handle_rests_at_the_box_top_and_drags_the_count() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        // Three steps sit 23.9 % of the box height up its right edge, 22 pt off it.
-        let at = h.steps_at;
-        assert!(at.distance(Point::new(142.0, 20.0 - 20.0 * 3f64.log10() / 2.0)) < 1e-6, "{at:?}");
-        // The handle's height is the count, on the exponential scale: halfway up the edge is 10
-        // steps, the top corner 100, half a box above it the 1000 cap, the bottom corner 1.
-        assert_eq!(h.steps_params(Point::new(142.0, 15.229))["steps"], 3, "the handle rests at its own count");
+        // The handle rests at the box's top corner, 22 pt off its right edge, whatever the count.
+        assert!(h.steps_at.distance(Point::new(142.0, 0.0)) < 1e-6, "{:?}", h.steps_at);
+        // Its height while dragging is the count, on the exponential scale: halfway up the edge
+        // is 10 steps, the top corner 100, half a box above it the 1000 cap, the bottom corner 1.
+        assert_eq!(h.steps_params(Point::new(142.0, 15.229))["steps"], 3);
         assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 10);
         assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 100);
         assert_eq!(h.steps_params(Point::new(142.0, -10.0))["steps"], 1000);
         assert_eq!(h.steps_params(Point::new(142.0, 30.0))["steps"], 1);
-        // A Smooth Color blend rests at the count it shows now.
+        // A Smooth Color blend still drags to Specified Steps.
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::SmoothColor);
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        assert_eq!(h.steps_params(h.steps_at)["steps"], 50, "the count the blend shows");
+        assert!(h.steps_at.distance(Point::new(142.0, 0.0)) < 1e-6, "{:?}", h.steps_at);
+        assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 10);
     }
 
     #[test]
-    fn the_ease_handle_maps_either_way_and_the_ramp_hangs_off_it() {
+    fn the_ease_knob_is_the_midpoint_and_the_ramp_hangs_off_it() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Always, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        // Toward the second key: Ease Out; toward the first: Ease In; the knob's position is the
-        // document's own curve at the halfway point, so it rests where it is dropped.
-        assert_eq!(ease_at(0.75), ("easeOut", 1.0));
-        assert_eq!(ease_at(0.25), ("easeIn", 1.0));
-        for local in [0.3, 0.45, 0.55, 0.7] {
-            let (kind, ramp) = ease_at(local);
-            let kind = match kind {
-                "easeOut" => vectorcraft_doc::live::BlendEaseType::Out,
-                _ => vectorcraft_doc::live::BlendEaseType::In,
-            };
-            let apply = vectorcraft_doc::live::BlendEase { kind, ramp };
-            assert!((apply.apply(0.5) - local).abs() < 1e-6, "{local} -> {kind:?} {ramp}");
-        }
-        // With the default Ease In at Ramp 0, the knob is at the spine's middle, the linked Ramp
+        // The knob's place is the midpoint the halfway step lands at; the Ramp handle is the
+        // easing's strength, on its own.
+        let mid = |x: f64| h.ease_params(Point::new(x, 10.0))["midpoint"].as_f64().unwrap_or_default();
+        assert!((mid(80.0) - 70.0).abs() < 0.1, "{}", mid(80.0));
+        assert!((mid(40.0) - 30.0).abs() < 0.1, "{}", mid(40.0));
+        // With the default midpoint at 0.5, the knob is at the spine's middle, the linked Ramp
         // handle 10 pt above it, and the colour handle 14 pt below.
         let e = h.easing_handles().unwrap();
         assert!(e.ease.distance(Point::new(60.0, 10.0)) < 1e-6, "{:?}", e.ease);
@@ -535,8 +488,8 @@ mod tests {
         s.set([b]);
         let p = paint();
         let c = cx(&d, &s, &p);
-        let rest = 20.0 - 20.0 * 3f64.log10() / 2.0;
-        // The steps handle on the box's right edge, the ease knob on the spine, the linked Ramp
+        let rest = 0.0;
+        // The steps handle at the box's top corner, the ease knob on the spine, the linked Ramp
         // handle above it and the colour handle below.
         for (at, part) in [
             (Point::new(142.0, rest), BlendPart::Steps),
@@ -572,18 +525,18 @@ mod tests {
                 if id == "object.blend.options" && p["easingType"] == json!("easeIn") && p["ramp"] == json!(100.0)),
             "{acts:?}"
         );
-        assert_eq!(drag.label(), Some((Point::new(60.0, -16.0), "100%".into())));
+        assert_eq!(drag.label(), Some((Point::new(60.0, -16.0), "Ease 100%".into())));
         assert_eq!(drag.finish(), vec![Action::Commit]);
-        // Dragging the Ease knob toward the second key eases out: seven tenths of the pair is a
-        // Ramp of 0.8, which lands the curve's halfway point there.
+        // Dragging the Ease knob to seven tenths of the pair puts the midpoint there.
         let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 10.0), Mods::default()).unwrap();
         let acts = drag.drag(Point::new(80.0, 10.0));
         assert!(
             matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options" && p["easingType"] == json!("easeOut")
-                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
+                if id == "object.blend.options"
+                    && (p["midpoint"].as_f64().unwrap_or_default() - 70.0).abs() < 0.1),
             "{acts:?}"
         );
+        assert_eq!(drag.label(), Some((Point::new(80.0, 10.0), "Midpoint 70%".into())));
         assert_eq!(drag.finish(), vec![Action::Commit]);
         // The colour shift leans the colours late.
         let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 24.0), Mods::default()).unwrap();

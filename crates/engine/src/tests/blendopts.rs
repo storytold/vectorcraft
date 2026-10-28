@@ -155,7 +155,7 @@ fn spine_modes_are_set_validated_and_saved() {
 }
 
 #[test]
-fn always_lets_easing_run_along_a_straight_spine_and_never_turns_it_off() {
+fn the_easing_moves_the_steps_between_two_keys_in_every_spine_mode() {
     let mut s = session();
     let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
     sel(&mut s, &[a, b]);
@@ -163,14 +163,20 @@ fn always_lets_easing_run_along_a_straight_spine_and_never_turns_it_off() {
     let centers = |s: &Session| -> Vec<f64> {
         vectorcraft_doc::live::expand_live(&node(s, g)).iter().map(|n| n.geometric_bounds().unwrap().center().x).collect()
     };
-    // Ease In at Ramp 100 puts the first step at 4 % of the way (5 + 100 * 0.04), not 20 %.
+    // Ease In at Ramp 100 on the first half: the first step sits at 8 % of the way
+    // (5 + 100 * 0.08), not 20 %.
     let eased = centers(&s);
-    assert!((eased[1] - 9.0).abs() < 1e-6, "{eased:?}");
-    // Never ignores the spine: even spacing whatever the ease says.
+    assert!((eased[1] - 13.0).abs() < 1e-6, "{eased:?}");
+    // Never keeps the easing: the steps still bunch along the straight line between the keys.
     sel(&mut s, &[g]);
     s.execute("object.blend.options", &json!({"spineMode": "never"})).unwrap();
-    let even = centers(&s);
-    assert!((even[1] - 25.0).abs() < 1e-6, "{even:?}");
+    let never = centers(&s);
+    assert!((never[1] - 13.0).abs() < 1e-6, "{never:?}");
+    // The midpoint the Ease knob sets squeezes the steps before it toward the first key.
+    s.execute("object.blend.options", &json!({"midpoint": 30})).unwrap();
+    let mid = centers(&s);
+    assert!((mid[1] - 9.8).abs() < 1e-6, "a 30 % midpoint: {mid:?}");
+    assert!((mid[2] - 24.2).abs() < 1e-6, "a 30 % midpoint: {mid:?}");
     // Auto follows a replaced spine.
     let line = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 100, "y2": 100})).unwrap());
     sel(&mut s, &[g, line]);

@@ -19,8 +19,8 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
-use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveDeriv};
+use vectorcraft_geom::{Affine, Anchor, FillRule, PathData, Point, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -803,57 +803,45 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 // Spine
 // =====================================================================================
 
-/// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
-/// arc length at each of its anchors.
+/// A spine (the first subpath of a path) as its bezier segments, with the arc length at each
+/// anchor and the length where each segment starts.
 #[derive(Clone, Debug)]
 pub struct Spine {
-    pts: Vec<Point>,
-    cum: Vec<f64>,
+    segs: Vec<(CubicBez, f64, f64)>,
     anchors: Vec<f64>,
     closed: bool,
+    total: f64,
 }
 
 impl Spine {
     pub fn new(path: &PathData) -> Option<Self> {
         let sp = path.subpaths.first()?;
-        let mut pts: Vec<Point> = Vec::new();
-        let mut cum: Vec<f64> = Vec::new();
+        let mut segs = Vec::with_capacity(sp.segment_count());
         let mut anchors = Vec::with_capacity(sp.anchors.len());
+        let mut total = 0.0;
         for i in 0..sp.segment_count() {
-            anchors.push(cum.last().copied().unwrap_or(0.0));
+            anchors.push(total);
             let c = sp.segment(i);
-            let mut bp = BezPath::new();
-            bp.move_to(c.p0);
-            if sp.segment_is_line(i) {
-                bp.line_to(c.p3);
-            } else {
-                bp.curve_to(c.p1, c.p2, c.p3);
+            // A line is a cubic with its handles on the ends.
+            let (p1, p2) = if sp.segment_is_line(i) { (c.p0.lerp(c.p3, 1.0 / 3.0), c.p0.lerp(c.p3, 2.0 / 3.0)) } else { (c.p1, c.p2) };
+            let bez = CubicBez::new(c.p0, p1, p2, c.p3);
+            let len = bez.arclen(1e-4);
+            if !len.is_finite() || len < 1e-12 {
+                continue;
             }
-            vectorcraft_geom::kurbo::flatten(bp.iter(), 0.1, |el| {
-                if let vectorcraft_geom::PathEl::MoveTo(p) | vectorcraft_geom::PathEl::LineTo(p) = el
-                    && p.x.is_finite()
-                    && p.y.is_finite()
-                    && pts.last().is_none_or(|q| q.distance(p) > 1e-9)
-                {
-                    let s = match (pts.last(), cum.last()) {
-                        (Some(q), Some(l)) => l + q.distance(p),
-                        _ => 0.0,
-                    };
-                    pts.push(p);
-                    cum.push(s);
-                }
-            });
+            segs.push((bez, total, len));
+            total += len;
         }
-        if !sp.closed {
-            anchors.push(cum.last().copied().unwrap_or(0.0));
-        }
-        if pts.len() < 2 {
+        if segs.len() < 1 {
             return None;
         }
-        Some(Self { pts, cum, anchors, closed: sp.closed })
+        if !sp.closed {
+            anchors.push(total);
+        }
+        Some(Self { segs, anchors, closed: sp.closed, total })
     }
     pub fn length(&self) -> f64 {
-        *self.cum.last().unwrap_or(&0.0)
+        self.total
     }
     /// Arc length at anchor `i`.
     pub fn anchor_length(&self, i: usize) -> Option<f64> {
@@ -863,20 +851,20 @@ impl Spine {
     pub fn at(&self, f: f64) -> (Point, f64) {
         self.at_length(f.clamp(0.0, 1.0) * self.length())
     }
-    /// Point and tangent angle (radians) at arc length `s` (clamped to the spine).
+    /// Point and tangent angle (radians) at arc length `s` (clamped to the spine). Both come from
+    /// the curve itself, so a blend with many steps turns smoothly instead of in polyline steps.
     pub fn at_length(&self, s: f64) -> (Point, f64) {
-        let last = self.pts.len().saturating_sub(2);
-        let s = if s.is_finite() { s.clamp(0.0, self.length()) } else { 0.0 };
-        let i = match self.cum.binary_search_by(|c| c.total_cmp(&s)) {
-            Ok(i) => i.min(last),
-            Err(i) => i.saturating_sub(1).min(last),
+        let s = if s.is_finite() { s.clamp(0.0, self.total) } else { 0.0 };
+        let i = self.segs.partition_point(|(_, from, _)| *from <= s).saturating_sub(1);
+        let Some((bez, from, len)) = self.segs.get(i) else {
+            return (Point::default(), 0.0);
         };
-        let (Some(p0), Some(p1), Some(c0), Some(c1)) = (self.pts.get(i), self.pts.get(i + 1), self.cum.get(i), self.cum.get(i + 1)) else {
-            return (self.pts.first().copied().unwrap_or_default(), 0.0);
-        };
-        let u = ((s - c0) / (c1 - c0).max(1e-12)).clamp(0.0, 1.0);
-        let d = *p1 - *p0;
-        (p0.lerp(*p1, u), d.y.atan2(d.x))
+        let u = ((s - from) / len).clamp(0.0, 1.0) * len;
+        let t = bez.inv_arclen(u, 1e-7);
+        let p = bez.eval(t);
+        let d = bez.deriv().eval(t).to_vec2();
+        let angle = if d.hypot() > 1e-9 { d.y.atan2(d.x) } else { 0.0 };
+        (p, angle)
     }
 }
 
@@ -1153,12 +1141,27 @@ mod tests {
     }
 
     #[test]
+    fn the_spine_tangent_follows_the_curve_not_a_polyline() {
+        // A big circle's tangent turns a little over a short arc. Flattening to a polyline made
+        // every point inside one chord share that chord's angle, so many blend steps turned in
+        // visible jumps; the spine's own bezier must not.
+        let circle = vectorcraft_geom::shapes::ellipse(Rect::new(0.0, 0.0, 1000.0, 1000.0));
+        let spine = Spine::new(&circle).unwrap();
+        let total = spine.length();
+        let near = |f: f64| spine.at_length(total * f).1;
+        let (a, b) = (near(0.25), near(0.2500005));
+        assert!((a - b).abs() > 1e-9, "the tangent is continuous: {a} .. {b}");
+        assert!((a - b).abs() < 1e-4, "and turns only a little: {a} .. {b}");
+    }
+
+    #[test]
     fn easing_keeps_the_ends_and_stays_monotone() {
         use crate::live::{BlendEase, BlendEaseType as K};
         for kind in [K::In, K::Out, K::InOut, K::OutIn] {
             for ramp in [0.0, 0.5, 1.0, f64::NAN, f64::INFINITY] {
-                let e = BlendEase { kind, ramp };
+                let e = BlendEase { kind, ramp, ..Default::default() };
                 assert_eq!((e.apply(0.0), e.apply(1.0)), (0.0, 1.0));
+                assert_eq!(e.apply(0.5), 0.5);
                 let ys: Vec<f64> = (0..=100).map(|i| e.apply(i as f64 / 100.0)).collect();
                 assert!(ys.windows(2).all(|w| w[0] <= w[1]));
                 assert_eq!(e.apply(f64::NAN), 0.0);
@@ -1167,11 +1170,16 @@ mod tests {
                 }
             }
         }
-        let e = |kind| BlendEase { kind, ramp: 1.0 };
+        let e = |kind| BlendEase { kind, ramp: 1.0, ..Default::default() };
         assert!(e(K::In).apply(0.25) < 0.25);
         assert!(e(K::Out).apply(0.25) > 0.25);
-        assert!(e(K::InOut).apply(0.25) < 0.25 && e(K::InOut).apply(0.75) > 0.75);
-        assert!(e(K::OutIn).apply(0.25) > 0.25 && e(K::OutIn).apply(0.75) < 0.75);
+        assert!(e(K::InOut).apply(0.1) < 0.1 && e(K::InOut).apply(0.9) > 0.9);
+        assert!(e(K::OutIn).apply(0.1) > 0.1 && e(K::OutIn).apply(0.9) < 0.9);
+        // The midpoint is where the halfway step lands, whatever the Type and Ramp.
+        let m = BlendEase { kind: K::Out, ramp: 1.0, midpoint: 0.3 };
+        assert_eq!(m.apply(0.5), 0.3);
+        assert_eq!(m.apply(0.0), 0.0);
+        assert_eq!(m.apply(1.0), 1.0);
     }
 
     #[test]
@@ -1194,16 +1202,20 @@ mod tests {
         let colour = BlendSpec { color_shift: 50.0, ..base.clone() };
         let (x1, p1) = mid(&colour);
         assert!((x0 - x1).abs() < 1e-9 && p0 != p1);
-        // Position easing alone leaves the colour and moves the position.
-        let pos = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..base.clone() };
+        // Position easing alone leaves the colour and moves the position (two steps, so one sits
+        // on either side of the midpoint the easing keeps).
+        let base = BlendSpec { spacing: BlendSpacing::Steps(2), ..base };
+        let (x0, p0) = mid(&base);
+        let pos =
+            BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0, ..Default::default() }, ..base.clone() };
         let (x2, p2) = mid(&pos);
-        assert!((x0 - x2).abs() > 1e-3 && p0 == p2);
+        assert!((x0 - x2).abs() > 1e-3 && p0 == p2, "{x0} {x2}");
         assert_eq!(mid(&pos).0, x2, "deterministic");
         // The easing moves the steps along the straight line between the keys too, with no
-        // replaced spine: the blend grid's default spacing eased in lands the middle step before
-        // the halfway point.
-        let plain = BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() };
-        let eased = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..plain.clone() };
+        // replaced spine: the step before the midpoint lands nearer the first key.
+        let plain = BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() };
+        let eased =
+            BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0, ..Default::default() }, ..plain.clone() };
         assert!(mid(&eased).0 < mid(&plain).0, "eased in: {}", mid(&eased).0);
     }
 

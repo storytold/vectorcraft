@@ -336,11 +336,10 @@ mod tests {
         assert!(
             matches!(&acts[..], [Action::Begin(name), Action::Preview(id, p)]
                 if name == "Blend Options" && id == "object.blend.options"
-                    && p["easingType"] == json!("easeOut")
-                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
+                    && (p["midpoint"].as_f64().unwrap_or_default() - 70.0).abs() < 0.1),
             "{acts:?}"
         );
-        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Ease Out 80%")), "{:?}", t.overlays(&c));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Midpoint 70%")), "{:?}", t.overlays(&c));
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 80.0, 10.0)), vec![Action::Commit]);
         assert!(!t.busy());
         // The linked ramp handle raises the ramp on its own: its distance from the ease knob.
@@ -364,7 +363,7 @@ mod tests {
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 70.0, 24.0));
         // The steps handle rides the box's right edge, its height the count: dragging it up adds
         // steps (halfway up the edge is 10), and the label says the count.
-        let rest = 20.0 - 20.0 * 3f64.log10() / 2.0;
+        let rest = 0.0;
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 142.0, rest));
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 142.0, 10.0));
         assert!(

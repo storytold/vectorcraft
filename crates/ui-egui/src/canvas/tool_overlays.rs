@@ -377,7 +377,7 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => {
             let Some(e) = h.easing_handles() else { return };
             let values = |n: &vectorcraft_doc::Node| match &n.kind {
-                vectorcraft_doc::NodeKind::Blend { spec, .. } => Some((spec.ease.kind.id(), spec.ease.ramp * 100.0, spec.color_shift)),
+                vectorcraft_doc::NodeKind::Blend { spec, .. } => Some((spec.ease.midpoint * 100.0, spec.ease.ramp * 100.0, spec.color_shift)),
                 _ => None,
             };
             let at = match part {
@@ -386,8 +386,8 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
                 _ => e.color,
             };
             let (at, text) = match (part, st.doc.node(h.id).and_then(values)) {
-                (BlendPart::Ease, Some((kind, ramp, _))) => (at, format!("{} {} %", ease_label(kind), ramp.round())),
-                (BlendPart::Ramp, Some((_, ramp, _))) => (at, format!("{} {} %", tl!("Ramp:"), ramp.round())),
+                (BlendPart::Ease, Some((mid, _, _))) => (at, format!("{} {} %", tl!("Midpoint:"), mid.round())),
+                (BlendPart::Ramp, Some((_, ramp, _))) => (at, format!("{} {} %", tl!("Ease:"), ramp.round())),
                 (_, Some((_, _, shift))) => (at, format!("{} {}{} %", tl!("Shift Colors"), if shift < 0.0 { "−" } else { "" }, shift.abs().round())),
                 _ => return,
             };
@@ -408,16 +408,6 @@ fn hover_pill(p: &egui::Painter, at: egui::Pos2, text: &str) {
 /// The white of a handle's fill, and its outline.
 pub(super) const KNOB_FILL: Color32 = Color32::WHITE;
 pub(super) const KNOB_STROKE: Color32 = Color32::from_rgb(0x26, 0x26, 0x26);
-
-/// The public name of an easing Type, as the panel's Type menu spells it.
-fn ease_label(id: &str) -> &'static str {
-    match id {
-        "easeOut" => "Ease Out",
-        "easeInOut" => "Ease In Out",
-        "easeOutIn" => "Ease Out In",
-        _ => "Ease In",
-    }
-}
 
 /// The radius of the Rotate View dial, in screen points.
 pub(super) const DIAL_RADIUS: f32 = 40.0;
