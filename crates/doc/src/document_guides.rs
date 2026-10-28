@@ -79,6 +79,12 @@ impl Document {
             if self.setup.has_bleed() {
                 let br = self.setup.bleed_rect(rect).inflate(1e-6, 1e-6);
                 if b.x0 >= br.x0 && b.y0 >= br.y0 && b.x1 <= br.x1 && b.y1 <= br.y1 {
+                    if let Some(other) = self.artboard_for_bounds(b).and_then(|i| self.artboards.get(i)) {
+                        return (other.rect.x0 - rect.x0).abs() < 1e-6
+                            && (other.rect.y0 - rect.y0).abs() < 1e-6
+                            && (other.rect.x1 - rect.x1).abs() < 1e-6
+                            && (other.rect.y1 - rect.y1).abs() < 1e-6;
+                    }
                     return true;
                 }
             }
@@ -96,40 +102,12 @@ impl Document {
             if inter_x1 <= inter_x0 || inter_y1 <= inter_y0 {
                 return false;
             }
-            let c = b.center();
-            // Center is on an artboard: if on this artboard, it belongs here.
-            if let Some(other) = self.artboard_holding(c, false) {
-                let Some(oa) = self.artboards.get(other) else { return false };
-                let is_this = (oa.rect.x0 - rect.x0).abs() < 1e-6
-                    && (oa.rect.y0 - rect.y0).abs() < 1e-6
-                    && (oa.rect.x1 - rect.x1).abs() < 1e-6
-                    && (oa.rect.y1 - rect.y1).abs() < 1e-6;
-                return is_this;
-            }
-            // Center is not on any artboard (hanging off into margins): belongs to this artboard if
-            // this artboard has the largest overlap.
-            let this_area = (inter_x1 - inter_x0) * (inter_y1 - inter_y0);
-            for a in &self.artboards {
-                let is_this = (a.rect.x0 - rect.x0).abs() < 1e-6
+            self.artboard_for_bounds(b).and_then(|i| self.artboards.get(i)).is_some_and(|a| {
+                (a.rect.x0 - rect.x0).abs() < 1e-6
                     && (a.rect.y0 - rect.y0).abs() < 1e-6
                     && (a.rect.x1 - rect.x1).abs() < 1e-6
-                    && (a.rect.y1 - rect.y1).abs() < 1e-6;
-                if is_this {
-                    continue;
-                }
-                let ar = a.rect.inflate(1e-6, 1e-6);
-                let a_x0 = b.x0.max(ar.x0);
-                let a_y0 = b.y0.max(ar.y0);
-                let a_x1 = b.x1.min(ar.x1);
-                let a_y1 = b.y1.min(ar.y1);
-                if a_x1 > a_x0 && a_y1 > a_y0 {
-                    let a_area = (a_x1 - a_x0) * (a_y1 - a_y0);
-                    if a_area > this_area {
-                        return false;
-                    }
-                }
-            }
-            true
+                    && (a.rect.y1 - rect.y1).abs() < 1e-6
+            })
         };
         fn collect(n: &Node, s: &SymbolBoxes, on: &dyn Fn(Rect) -> bool, all: bool, out: &mut Vec<NodeId>) {
             for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
