@@ -121,10 +121,11 @@ fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            let field = egui::TextEdit::singleline(&mut range).desired_width(90.0).hint_text("1-3, 5");
-            if ui.add_enabled(!all, field).changed() {
-                d.fields.insert("range".into(), json!(range));
-            }
+            ui.add_enabled_ui(!all, |ui| {
+                if widgets::line_edit_hint(ui, &mut range, 90.0, "1-3, 5").changed() {
+                    d.fields.insert("range".into(), json!(range));
+                }
+            });
         });
     });
     ui.end_row();

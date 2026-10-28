@@ -263,10 +263,20 @@ fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
         .corner_radius(2)
-        .inner_margin(egui::Margin::symmetric(6, 4))
+        .inner_margin(egui::Margin { left: 6, right: 6, top: 6, bottom: 4 })
         .show(ui, |ui| {
+            ui.spacing_mut().interact_size.y = 16.0;
+            ui.set_height(16.0);
             crate::theme::strong_selected_text(ui);
-            ui.add(egui::TextEdit::singleline(&mut buf).id(id).frame(egui::Frame::NONE).desired_width(70.0).char_limit(7))
+            ui.add(
+                egui::TextEdit::singleline(&mut buf)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .desired_width(70.0)
+                    .char_limit(7)
+                    .font(egui::FontId::proportional(12.5)),
+            )
         })
         .inner;
     let focused = ui.memory(|m| m.has_focus(id));

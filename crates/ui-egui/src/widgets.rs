@@ -58,8 +58,8 @@ pub(crate) use numeric::{round_to, set_bare_numbers_are_points, typed_unit};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{dialog_focus_flag, enter_modifiers, focus_field, own_field_shift_enter, set_dialog_open, take_dialog_focus};
 pub use text::{
-    exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
-    text_presets_named,
+    exact_text_field, exact_text_field_named, line_edit, line_edit_hint, line_edit_password, line_edit_with_id, plain_field, plain_field_named,
+    search_field, text_field, text_field_named, text_presets, text_presets_named,
 };
 pub use toggles::{check, check_box, check_name, check_tip, check3, radio, radio_button};
 

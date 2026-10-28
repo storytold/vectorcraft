@@ -245,10 +245,12 @@ fn artboards(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert("allArtboards".into(), json!(false));
             }
             let mut range = d.str("range");
-            let edit = egui::TextEdit::singleline(&mut range).hint_text(format!("1-{count}")).desired_width(90.0);
-            if ui.add_enabled(!all, edit).changed() {
-                d.fields.insert("range".into(), json!(range));
-            }
+            let hint = format!("1-{count}");
+            ui.add_enabled_ui(!all, |ui| {
+                if widgets::line_edit_hint(ui, &mut range, 90.0, &hint).changed() {
+                    d.fields.insert("range".into(), json!(range));
+                }
+            });
         });
     });
 }

@@ -201,10 +201,15 @@ pub(super) fn recessed_text(
             ui.set_min_size(vec2(width, height));
             let rect = ui.max_rect();
             ui.painter().rect(rect, 5.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
-            let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
+            let margin =
+                if rows > 1 { egui::Margin { left: 7, right: 7, top: 4, bottom: 0 } } else { egui::Margin { left: 7, right: 7, top: 6, bottom: 4 } };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
                 .show(ui, |ui| {
+                    if rows == 1 {
+                        ui.spacing_mut().interact_size.y = 16.0;
+                        ui.set_height(16.0);
+                    }
                     crate::theme::strong_selected_text(ui);
                     let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
                     ui.add(
@@ -287,12 +292,15 @@ pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
         .fill(t.input)
         .stroke(Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(2))
-        .inner_margin(egui::Margin::symmetric(8, 5))
+        .inner_margin(egui::Margin::symmetric(8, 4))
         .show(ui, |ui| {
+            ui.spacing_mut().interact_size.y = 16.0;
+            ui.set_height(16.0);
             ui.add(
                 egui::TextEdit::singleline(&mut query)
                     .id(id.with("edit"))
                     .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
                     .hint_text(egui::RichText::new(tl!(hint)).italics())
                     .desired_width(ui.available_width()),
             );
@@ -325,4 +333,64 @@ pub fn text_presets_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&s
         });
     });
     out
+}
+
+/// A clean single-line text input with vertically centered text and caret.
+pub fn line_edit(ui: &mut Ui, buf: &mut String, width: f32) -> Response {
+    line_edit_opt(ui, None, buf, width, None, false)
+}
+
+/// [`line_edit`] with an explicit [`egui::Id`].
+pub fn line_edit_with_id(ui: &mut Ui, id: egui::Id, buf: &mut String, width: f32) -> Response {
+    line_edit_opt(ui, Some(id), buf, width, None, false)
+}
+
+/// [`line_edit`] with italic hint text when empty.
+pub fn line_edit_hint(ui: &mut Ui, buf: &mut String, width: f32, hint: &str) -> Response {
+    line_edit_opt(ui, None, buf, width, Some(hint), false)
+}
+
+/// [`line_edit`] for passwords.
+pub fn line_edit_password(ui: &mut Ui, buf: &mut String, width: f32) -> Response {
+    line_edit_opt(ui, None, buf, width, None, true)
+}
+
+fn line_edit_opt(ui: &mut Ui, explicit_id: Option<egui::Id>, buf: &mut String, width: f32, hint: Option<&str>, password: bool) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let id = explicit_id.unwrap_or_else(|| ui.auto_id_with("line_edit"));
+    let editing = ui.memory(|m| m.has_focus(id));
+    let enabled = ui.is_enabled();
+    let border = if editing && enabled {
+        t.accent
+    } else if !enabled {
+        t.divider
+    } else {
+        t.input_border
+    };
+    let r = egui::Frame::NONE
+        .fill(if enabled { t.input } else { t.panel })
+        .stroke(Stroke::new(1.0, border))
+        .corner_radius(CornerRadius::same(3))
+        .inner_margin(egui::Margin { left: 6, right: 6, top: 4, bottom: 2 })
+        .show(ui, |ui| {
+            ui.spacing_mut().interact_size.y = 16.0;
+            ui.set_height(16.0);
+            crate::theme::strong_selected_text(ui);
+            let mut edit = egui::TextEdit::singleline(buf)
+                .id(id)
+                .frame(egui::Frame::NONE)
+                .margin(egui::Margin::ZERO)
+                .desired_width(width)
+                .password(password)
+                .font(egui::FontId::proportional(12.5))
+                .text_color(if enabled { t.text_strong } else { t.text_disabled });
+            if let Some(h) = hint {
+                edit = edit.hint_text(h);
+            }
+            ui.add(edit)
+        });
+    if r.response.clicked() && !r.inner.has_focus() {
+        r.inner.request_focus();
+    }
+    r.inner
 }

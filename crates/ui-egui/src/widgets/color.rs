@@ -407,16 +407,18 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
         .fill(t.input)
         .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
         .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(6, 4))
+        .inner_margin(egui::Margin { left: 6, right: 6, top: 6, bottom: 4 })
         .show(ui, |ui| {
             // As tall as the other fields (26 points with the margin), whatever the font's line
             // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
-            ui.spacing_mut().interact_size.y = 18.0;
-            ui.set_height(18.0);
+            ui.spacing_mut().interact_size.y = 16.0;
+            ui.set_height(16.0);
+            crate::theme::strong_selected_text(ui);
             ui.add(
                 egui::TextEdit::singleline(&mut buf)
                     .id(id)
                     .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
                     .desired_width(62.0)
                     .char_limit(7)
                     .font(egui::FontId::proportional(12.5))

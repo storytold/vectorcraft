@@ -667,7 +667,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
             let mut name = d.str("name");
-            if ui.add(egui::TextEdit::singleline(&mut name).desired_width(260.0)).changed() {
+            if widgets::line_edit(ui, &mut name, 260.0).changed() {
                 d.fields.insert("name".into(), json!(name));
             }
         });
@@ -867,7 +867,7 @@ fn rows_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, statuses
             }
             ui.add_space(8.0);
             let mut q = d.str("__query");
-            if ui.add(egui::TextEdit::singleline(&mut q).hint_text(tl!("Search")).desired_width(180.0)).changed() {
+            if widgets::line_edit_hint(ui, &mut q, 180.0, tl!("Search")).changed() {
                 d.fields.insert("__query".into(), json!(q));
             }
         });

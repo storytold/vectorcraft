@@ -712,7 +712,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let mut q = d.str("query");
-                if ui.add(egui::TextEdit::singleline(&mut q).hint_text(tl!("Search")).desired_width(200.0)).changed() {
+                if widgets::line_edit_hint(ui, &mut q, 200.0, tl!("Search")).changed() {
                     d.fields.insert("query".into(), json!(q));
                 }
             });

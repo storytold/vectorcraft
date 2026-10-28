@@ -178,10 +178,19 @@ fn text_edit_limited_name(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(3))
-        .inner_margin(egui::Margin::symmetric(6, 3))
+        .inner_margin(egui::Margin::symmetric(6, 2))
         .show(ui, |ui| {
+            ui.spacing_mut().interact_size.y = 16.0;
+            ui.set_height(16.0);
             crate::theme::strong_selected_text(ui);
-            ui.add(egui::TextEdit::singleline(&mut s).id(id).frame(egui::Frame::NONE).desired_width(width).char_limit(max_chars))
+            ui.add(
+                egui::TextEdit::singleline(&mut s)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::ZERO)
+                    .desired_width(width)
+                    .char_limit(max_chars),
+            )
         });
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
@@ -404,7 +413,7 @@ pub(super) fn param_fields(
                         }
                     }
                     Value::String(mut s) => {
-                        if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                        if crate::widgets::line_edit(ui, &mut s, 140.0).changed() {
                             d.fields.insert(k.clone(), json!(s));
                             changed = true;
                         }

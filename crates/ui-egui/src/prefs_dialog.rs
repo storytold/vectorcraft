@@ -371,7 +371,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             PrefKind::Text => {
                 labeled(ui, sp.label, |ui| {
                     let mut s = v.as_str().unwrap_or("").to_string();
-                    if ui.add(egui::TextEdit::singleline(&mut s).desired_width(260.0)).changed() {
+                    if widgets::line_edit(ui, &mut s, 260.0).changed() {
                         d.fields.insert(sp.key.into(), json!(s));
                     }
                 });
