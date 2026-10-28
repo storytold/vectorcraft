@@ -340,21 +340,22 @@ pub fn line_edit(ui: &mut Ui, buf: &mut String, width: f32) -> Response {
     line_edit_opt(ui, None, buf, width, None, false)
 }
 
-/// [`line_edit`] with an explicit [`egui::Id`].
+/// A clean single-line text input with an explicit [`egui::Id`].
 pub fn line_edit_with_id(ui: &mut Ui, id: egui::Id, buf: &mut String, width: f32) -> Response {
     line_edit_opt(ui, Some(id), buf, width, None, false)
 }
 
-/// [`line_edit`] with italic hint text when empty.
+/// A clean single-line text input with italic hint text displayed when empty.
 pub fn line_edit_hint(ui: &mut Ui, buf: &mut String, width: f32, hint: &str) -> Response {
     line_edit_opt(ui, None, buf, width, Some(hint), false)
 }
 
-/// [`line_edit`] for passwords.
+/// A clean single-line text input for password entry.
 pub fn line_edit_password(ui: &mut Ui, buf: &mut String, width: f32) -> Response {
     line_edit_opt(ui, None, buf, width, None, true)
 }
 
+/// Internal helper rendering a framed single-line text editor with vertically centered content.
 fn line_edit_opt(ui: &mut Ui, explicit_id: Option<egui::Id>, buf: &mut String, width: f32, hint: Option<&str>, password: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let id = explicit_id.unwrap_or_else(|| ui.auto_id_with("line_edit"));
@@ -389,8 +390,11 @@ fn line_edit_opt(ui: &mut Ui, explicit_id: Option<egui::Id>, buf: &mut String, w
             }
             ui.add(edit)
         });
-    if r.response.clicked() && !r.inner.has_focus() {
-        r.inner.request_focus();
+    if enabled {
+        let frame_resp = ui.interact(r.response.rect, id.with("frame"), Sense::click());
+        if frame_resp.clicked() && !r.inner.has_focus() {
+            r.inner.request_focus();
+        }
     }
     r.inner
 }
