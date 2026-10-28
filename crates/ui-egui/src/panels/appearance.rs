@@ -1475,8 +1475,12 @@ fn highlight_after_removal(app: &mut VectorcraftApp, ctx: &egui::Context, n: &No
     let shift = |k: usize| (!gone.contains(&k)).then(|| k - gone.iter().filter(|g| **g < k).count());
     let order = h.order.iter().filter_map(|k| shift(*k)).collect();
     let anchor = h.anchor.and_then(shift);
-    let active = sel.rows().filter(|(r, _)| *r == rows).and_then(|(_, a)| shift(a));
-    set_active(app, ctx, active.map_or(Sel::None, |a| rows.sel(a)));
+    // A fill/stroke's Opacity row stays selected (renumbered) while its fill/stroke survives.
+    let active = match (sel, rows) {
+        (Sel::ItemOpacity(i), Rows::Items) => shift(i).map(Sel::ItemOpacity),
+        _ => sel.rows().filter(|(r, _)| *r == rows).and_then(|(_, a)| shift(a)).map(|a| rows.sel(a)),
+    };
+    set_active(app, ctx, active.unwrap_or(Sel::None));
     set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor });
 }
 
