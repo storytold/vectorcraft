@@ -126,20 +126,18 @@ impl BlendHandles {
         }
         // The Ease knob sits at the shape's halfway point under the easing, the linked Ramp
         // handle hangs off it perpendicular to the spine (its distance the Ramp), and the Colour
-        // handle sits at the colour's halfway point on the spine's other side.
-        let easing = spec.spine_followed().then(|| {
-            let total = spine.length();
-            let (a, b) = (stops[0] / total, stops.get(1).copied().unwrap_or(stops[0] + total) / total);
-            let (ease, angle) = spine.at(a + (b - a) * spec.ease.apply(0.5));
-            let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
-            let (rest, reach) = (RAMP_REST / zoom, RAMP_REACH / zoom);
-            EasingHandles {
-                ease,
-                ramp: ease + Vec2::new(angle.sin(), -angle.cos()) * (rest + spec.ease.ramp.clamp(0.0, 1.0) * (reach - rest)),
-                color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom),
-                ramp_rest: rest,
-                ramp_reach: reach,
-            }
+        // handle sits at the colour's halfway point on the spine's other side. The easing moves
+        // the steps between any two keys (spine or not), so these show in every spine mode.
+        let (a, b) = (stops[0] / spine.length(), stops.get(1).copied().unwrap_or(stops[0] + spine.length()) / spine.length());
+        let (ease, angle) = spine.at(a + (b - a) * spec.ease.apply(0.5));
+        let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
+        let (rest, reach) = (RAMP_REST / zoom, RAMP_REACH / zoom);
+        let easing = Some(EasingHandles {
+            ease,
+            ramp: ease + Vec2::new(angle.sin(), -angle.cos()) * (rest + spec.ease.ramp.clamp(0.0, 1.0) * (reach - rest)),
+            color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom),
+            ramp_rest: rest,
+            ramp_reach: reach,
         });
         Some(Self { id, steps_at, edge_base, edge_up, edge_h: h, spine, stops, easing, ease_kind: spec.ease.kind })
     }
@@ -158,8 +156,8 @@ impl BlendHandles {
         blends_of_selection(doc, selection).iter().filter_map(|id| Self::for_blend(doc, *id, None, zoom)).collect()
     }
 
-    /// Where the easing handles sit, or `None` when the steps do not follow the spine (Spine
-    /// Never, or Auto without a replaced spine and without Align to Path).
+    /// Where the easing handles sit: the easing moves the steps between the first two keys in
+    /// every spine mode, so they show whenever the blend has a spine to measure them on.
     pub fn easing_handles(&self) -> Option<EasingHandles> {
         self.easing
     }
@@ -179,7 +177,7 @@ impl BlendHandles {
     }
 
     /// The Specified Steps the steps handle at `p` stands for: its height on the box's edge, on
-    /// the exponential scale.
+    /// the exponential scale (the document's 1-1000 range).
     fn steps_params(&self, p: Point) -> Value {
         let n = STEPS_PER_BOX_HEIGHT.powf(self.steps_height_at(p)).round().clamp(1.0, 1000.0) as u32;
         json!({ "spacing": "steps", "steps": n })
@@ -295,13 +293,11 @@ fn nearest_fraction(spine: &Spine, p: Point) -> f64 {
 
 /// The easing Type and Ramp whose halfway point sits at `local` (0..1) between two keys, so the
 /// knob rests where it is dropped: Ease In bunches the steps toward the first key, Ease Out
-/// toward the second; Ramp 1 is the strongest either way.
+/// toward the second; Ramp 1 is the strongest either way. Inverts `BlendEase::apply`'s curves
+/// (Ease In `u * u`, Ease Out `u * (2 - u)`) at `u = 0.5`, where the Ramp blends the curve with
+/// even spacing.
 fn ease_at(local: f64) -> (&'static str, f64) {
-    if local < 0.5 {
-        ("easeIn", (-local.max(1e-6).log2() - 1.0).clamp(0.0, 1.0))
-    } else {
-        ("easeOut", (-(1.0 - local.min(1.0 - 1e-6)).log2() - 1.0).clamp(0.0, 1.0))
-    }
+    if local < 0.5 { ("easeIn", (2.0 - 4.0 * local).clamp(0.0, 1.0)) } else { ("easeOut", (4.0 * local - 2.0).clamp(0.0, 1.0)) }
 }
 
 /// The colour Shift whose halfway point sits at `local` (0..1) between two keys.
@@ -507,17 +503,18 @@ mod tests {
     fn the_ease_handle_maps_either_way_and_the_ramp_hangs_off_it() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Always, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        // Toward the second key: Ease Out; toward the first: Ease In; the mapping is
-        // self-consistent, so the knob rests where it is dropped.
+        // Toward the second key: Ease Out; toward the first: Ease In; the knob's position is the
+        // document's own curve at the halfway point, so it rests where it is dropped.
         assert_eq!(ease_at(0.75), ("easeOut", 1.0));
         assert_eq!(ease_at(0.25), ("easeIn", 1.0));
         for local in [0.3, 0.45, 0.55, 0.7] {
             let (kind, ramp) = ease_at(local);
-            let apply = |u: f64| match kind {
-                "easeOut" => 1.0 - (1.0 - u).powf(1.0 + ramp),
-                _ => u.powf(1.0 + ramp),
+            let kind = match kind {
+                "easeOut" => vectorcraft_doc::live::BlendEaseType::Out,
+                _ => vectorcraft_doc::live::BlendEaseType::In,
             };
-            assert!((apply(0.5) - local).abs() < 1e-6, "{local} -> {kind} {ramp}");
+            let apply = vectorcraft_doc::live::BlendEase { kind, ramp };
+            assert!((apply.apply(0.5) - local).abs() < 1e-6, "{local} -> {kind:?} {ramp}");
         }
         // With the default Ease In at Ramp 0, the knob is at the spine's middle, the linked Ramp
         // handle 10 pt above it, and the colour handle 14 pt below.
@@ -577,13 +574,14 @@ mod tests {
         );
         assert_eq!(drag.label(), Some((Point::new(60.0, -16.0), "100%".into())));
         assert_eq!(drag.finish(), vec![Action::Commit]);
-        // Dragging the Ease knob toward the second key eases out.
+        // Dragging the Ease knob toward the second key eases out: seven tenths of the pair is a
+        // Ramp of 0.8, which lands the curve's halfway point there.
         let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 10.0), Mods::default()).unwrap();
         let acts = drag.drag(Point::new(80.0, 10.0));
         assert!(
             matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
                 if id == "object.blend.options" && p["easingType"] == json!("easeOut")
-                    && (p["ramp"].as_f64().unwrap_or_default() - 73.7).abs() < 0.1),
+                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
             "{acts:?}"
         );
         assert_eq!(drag.finish(), vec![Action::Commit]);

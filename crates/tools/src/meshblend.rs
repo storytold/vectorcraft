@@ -337,10 +337,10 @@ mod tests {
             matches!(&acts[..], [Action::Begin(name), Action::Preview(id, p)]
                 if name == "Blend Options" && id == "object.blend.options"
                     && p["easingType"] == json!("easeOut")
-                    && (p["ramp"].as_f64().unwrap_or_default() - 73.7).abs() < 0.1),
+                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
             "{acts:?}"
         );
-        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Ease Out 74%")), "{:?}", t.overlays(&c));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Ease Out 80%")), "{:?}", t.overlays(&c));
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 80.0, 10.0)), vec![Action::Commit]);
         assert!(!t.busy());
         // The linked ramp handle raises the ramp on its own: its distance from the ease knob.
@@ -374,13 +374,16 @@ mod tests {
         );
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "10")), "{:?}", t.overlays(&c));
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 142.0, 10.0));
-        // Never leaves only the steps handle: no easing hit, no move cursor on the spine.
+        // Never keeps the easing handles: the easing moves the steps between any two keys.
         let (d2, b2) = doc_with_blend(BlendSpineMode::Never);
         let (mut s2, p2) = (Selection::default(), paint());
         s2.set([b2]);
         let c2 = cx(&d2, &s2, &p2);
-        assert!(crate::blendhandles::BlendDrag::hit_any(&c2, Point::new(60.0, 10.0), Mods::default()).is_none());
-        assert_ne!(t.cursor(&c2, Point::new(60.0, 10.0), Mods::default()), Cursor::Move);
+        assert_eq!(
+            crate::blendhandles::BlendDrag::hit_any(&c2, Point::new(60.0, 10.0), Mods::default()).unwrap().grab(),
+            (b2, crate::blendhandles::BlendPart::Ease)
+        );
+        assert_eq!(t.cursor(&c2, Point::new(60.0, 10.0), Mods::default()), Cursor::Move);
     }
 
     #[test]

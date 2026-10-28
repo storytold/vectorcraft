@@ -7184,9 +7184,9 @@ fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
     assert!(text.contains("Ease In 0"), "the ease handle's hover label in {text}");
-    // Spine Never leaves only the step-count handle.
+    // Spine Never keeps them: the easing moves the steps between any two keys.
     app.run("object.blend.options", json!({"spineMode": "never"})).unwrap();
     let at = knobs(&mut app);
-    assert_eq!(at.len(), 1, "{at:?}");
-    assert!(at[0].distance(xf.to_screen(h.steps_at)) < 2.0, "{at:?}");
+    assert_eq!(at.len(), 4, "{at:?}");
+    assert!(at.iter().any(|q| q.distance(xf.to_screen(h.steps_at)) < 2.0), "{at:?}");
 }

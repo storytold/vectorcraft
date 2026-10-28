@@ -161,9 +161,9 @@ impl BlendSpec {
         self.spine_mode != BlendSpineMode::Never
     }
 
-    /// Whether the blend runs its steps along the spine, so easing acts and the Blend tool shows
-    /// its easing handles: with `Always` the straight lines between the keys count as one; with
-    /// `Auto` only a replaced spine or Align to Path does.
+    /// Whether the blend runs its steps along the spine: with `Always` the straight lines between
+    /// the keys count as one; with `Auto` only a replaced spine or Align to Path does. The easing
+    /// (Type/Ramp) moves the steps between two keys in every mode; this only decides the path.
     pub fn spine_followed(&self) -> bool {
         match self.spine_mode {
             BlendSpineMode::Auto => self.spine.is_some() || self.orientation == BlendOrientation::AlignToPath,

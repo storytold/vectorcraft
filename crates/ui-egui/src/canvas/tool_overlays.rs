@@ -318,9 +318,9 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
 }
 
 /// The on-canvas handles of a selected live blend: the step-count handle on the selection's
-/// bounding box's right edge (white with up/down chevrons; its height is the count), and — when
-/// the blend follows its spine — the Ease knob on the spine with the linked Ramp handle above it
-/// and the Colour handle below (white with a dark outline, the Colour knob's middle the accent).
+/// bounding box's right edge (white with up/down chevrons; its height is the count), and the Ease
+/// knob on the spine with the linked Ramp handle above it and the Colour handle below (white with
+/// a dark outline, the Colour knob's middle the accent).
 /// Hovering one names it on a pill; the drag's own value label comes from the tool. Visible with
 /// the Selection tool (the one blend selected whole) and with the Blend tool (every selected
 /// blend).
@@ -346,15 +346,16 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         p.circle_stroke(at, radius, Stroke::new(2.0, KNOB_STROKE));
     };
     for h in &handles {
-        // The chevrons of the step count, in the knob.
+        // The chevrons of the step count, in the knob (over its fill, under its outline).
         let c = xf.to_screen(h.steps_at);
+        p.circle_filled(c, HANDLE_RADIUS, KNOB_FILL);
         let (d, w) = (2.5_f32, 3.0_f32);
         for (dy, dir) in [(-3.5, 1.0), (3.5, -1.0)] {
             let m = c + vec2(0.0, dy);
             p.line_segment([m + vec2(-w, dir * d), m], Stroke::new(1.5, KNOB_STROKE));
             p.line_segment([m, m + vec2(w, dir * d)], Stroke::new(1.5, KNOB_STROKE));
         }
-        knob(p, c, HANDLE_RADIUS);
+        p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, KNOB_STROKE));
         if let Some(e) = h.easing_handles() {
             let (ease, ramp, color) = (xf.to_screen(e.ease), xf.to_screen(e.ramp), xf.to_screen(e.color));
             p.line_segment([ease, ramp], Stroke::new(1.5, KNOB_STROKE));

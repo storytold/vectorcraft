@@ -1087,8 +1087,9 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         let lerp = Lerp::new(a, b, (spec.start(i), spec.start(i + 1)));
         for j in 1..=n {
             // Even position of the step, then where the easing puts its shape and its colours.
+            // Type and Ramp move the steps between any two keys, spine or not.
             let u = j as f64 / (n + 1) as f64;
-            let (t, tc) = (if rail.is_some() { spec.ease.apply(u) } else { u }, spec.color_position(u));
+            let (t, tc) = (spec.ease.apply(u), spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);
@@ -1198,6 +1199,12 @@ mod tests {
         let (x2, p2) = mid(&pos);
         assert!((x0 - x2).abs() > 1e-3 && p0 == p2);
         assert_eq!(mid(&pos).0, x2, "deterministic");
+        // The easing moves the steps along the straight line between the keys too, with no
+        // replaced spine: the blend grid's default spacing eased in lands the middle step before
+        // the halfway point.
+        let plain = BlendSpec { spacing: BlendSpacing::Steps(1), ..Default::default() };
+        let eased = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..plain.clone() };
+        assert!(mid(&eased).0 < mid(&plain).0, "eased in: {}", mid(&eased).0);
     }
 
     #[test]
