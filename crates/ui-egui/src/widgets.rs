@@ -288,6 +288,17 @@ mod spinner_modifier_tests {
         assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
         assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
     }
+
+    /// #4490: like ↑/↓ (#2881), a plain spinner step goes to the next whole unit and a
+    /// Ctrl/Cmd step to the next tenth; Shift keeps the fraction.
+    #[test]
+    fn fractional_values_round_like_arrow_keys() {
+        assert_eq!(spinner_step(5.1, 1.0, 0.0, true, egui::Modifiers::NONE), 6.0);
+        assert_eq!(spinner_step(5.1, 1.0, 0.0, false, egui::Modifiers::NONE), 5.0);
+        assert!((spinner_step(5.13, 1.0, 0.0, true, egui::Modifiers::COMMAND) - 5.2).abs() < 1e-9);
+        assert!((spinner_step(5.13, 1.0, 0.0, false, egui::Modifiers::COMMAND) - 5.1).abs() < 1e-9);
+        assert!((spinner_step(5.1, 1.0, 0.0, true, egui::Modifiers::SHIFT) - 15.1).abs() < 1e-9);
+    }
 }
 
 #[cfg(test)]

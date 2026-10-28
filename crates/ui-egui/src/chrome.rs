@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use egui::{CornerRadius, Sense, Stroke, Ui, vec2};
 use serde_json::json;
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{NodeId, NodeKind};
 
 use crate::panels::stroke as stroke_panel;
 use crate::state::{ROTATE_VIEW_ANGLES, ZOOM_STOPS, zoom_label};

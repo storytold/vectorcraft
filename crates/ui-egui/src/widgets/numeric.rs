@@ -581,11 +581,20 @@ fn spin_generic(
 }
 
 /// Spinner buttons follow the same modifier sizes as ↑/↓ in a focused number field:
-/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step.
+/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step. Like ↑/↓ (#2881, #4490),
+/// a plain or Ctrl/Cmd step goes to the next multiple of its size in its direction
+/// (5.1 with step 1.0 goes up to 6.0, down to 5.0); a Shift step adds or takes ten
+/// and keeps the fraction.
 pub(super) fn spinner_step(value: f64, step: f64, min: f64, up: bool, modifiers: egui::Modifiers) -> f64 {
-    let multiplier = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).map_or(1.0, |(_, factor)| *factor);
-    let delta = step * multiplier;
-    (value + if up { delta } else { -delta }).max(min)
+    let found = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m));
+    let is_shift = matches!(found, Some((m, _)) if *m == egui::Modifiers::SHIFT);
+    if is_shift {
+        let delta = step * 10.0;
+        return round_to((value + if up { delta } else { -delta }).max(min), STEP_DECIMALS).max(min);
+    }
+    let size = if matches!(found, Some((m, _)) if *m == egui::Modifiers::COMMAND) { step * 0.1 } else { step };
+    let n = if up { 1.0 } else { -1.0 };
+    round_to(step_to_multiple(value, size, n), STEP_DECIMALS).max(min)
 }
 
 /// A number field that may be empty (Stroke dash/gap): `value` (points) shows in `unit` without
