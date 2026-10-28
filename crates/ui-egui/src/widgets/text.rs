@@ -213,7 +213,11 @@ pub(super) fn recessed_text(
                             .margin(egui::Margin::ZERO)
                             .desired_width(width - 14.0)
                             .font(egui::FontId::proportional(12.5))
-                            .text_color(t.text_strong),
+                            .text_color(t.text_strong)
+                            // egui 0.37 lays a single line out at the top of the edit's inner rect
+                            // (taller than the row, as the other controls' height), which left the
+                            // number fields' text riding high: centre one line.
+                            .align(if rows > 1 { egui::Align2::LEFT_TOP } else { egui::Align2::LEFT_CENTER }),
                     )
                 })
                 .inner;
@@ -325,4 +329,45 @@ pub fn text_presets_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&s
         });
     });
     out
+}
+
+#[cfg(test)]
+mod centering_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// The text of a single-line field sits in the middle of its box: egui 0.37 lays the line out
+    /// at the top of the edit's inner rect, which is taller than the row (the field is as tall as
+    /// the other controls of the row), so the number fields' text rode high until the edit took an
+    /// explicit vertical alignment. Measured on the rendered glyphs, not the widget rects.
+    #[test]
+    fn single_line_field_text_is_centered() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+        let box_rect: Arc<Mutex<Option<egui::Rect>>> = Arc::new(Mutex::new(None));
+        let capture = box_rect.clone();
+        let mut harness = egui_kittest::Harness::builder().with_accessibility_check(false).with_size(egui::vec2(220.0, 60.0)).build_ui(move |ui| {
+            ui.allocate_space(egui::vec2(8.0, 8.0));
+            let (_, _, _, rect) = recessed_text(ui, egui::Id::new("measure"), "100%", 60.0, 1, None, None);
+            *capture.lock().unwrap() = Some(rect);
+        });
+        harness.step();
+        let box_rect = box_rect.lock().unwrap().take().unwrap_or(egui::Rect::NOTHING);
+        let img = harness.render().unwrap();
+        // The glyphs' bounding box within the box, from the rendered pixels (bright text on the
+        // box's dark fill).
+        let (mut min_y, mut max_y) = (u32::MAX, 0u32);
+        for y in box_rect.top() as u32..box_rect.bottom() as u32 {
+            for x in box_rect.left() as u32..box_rect.right() as u32 {
+                let [r, g, b, _] = img.get_pixel(x, y).0;
+                if r > 120 || g > 120 || b > 120 {
+                    min_y = min_y.min(y);
+                    max_y = max_y.max(y);
+                }
+            }
+        }
+        let (glyph_center, box_center) = ((min_y + max_y) as f32 / 2.0, (box_rect.top() + box_rect.bottom()) / 2.0);
+        assert!((glyph_center - box_center).abs() <= 1.0, "text center {glyph_center} off the box center {box_center} in {box_rect:?}");
+    }
 }
