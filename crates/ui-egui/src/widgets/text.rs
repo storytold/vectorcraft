@@ -391,8 +391,19 @@ fn line_edit_opt(ui: &mut Ui, explicit_id: Option<egui::Id>, buf: &mut String, w
             ui.add(edit)
         });
     if enabled {
-        let frame_resp = ui.interact(r.response.rect, id.with("frame"), Sense::click());
-        if frame_resp.clicked() && !r.inner.has_focus() {
+        let outer = r.response.rect;
+        let inner = r.inner.rect;
+        let left_pad = Rect::from_min_max(outer.min, pos2(inner.min.x, outer.max.y));
+        let right_pad = Rect::from_min_max(pos2(inner.max.x, outer.min.y), outer.max);
+        let top_pad = Rect::from_min_max(pos2(inner.min.x, outer.min.y), pos2(inner.max.x, inner.min.y));
+        let bottom_pad = Rect::from_min_max(pos2(inner.min.x, inner.max.y), pos2(inner.max.x, outer.max.y));
+
+        let pad_click = ui.interact(left_pad, id.with("pad_l"), Sense::CLICK).clicked()
+            || ui.interact(right_pad, id.with("pad_r"), Sense::CLICK).clicked()
+            || ui.interact(top_pad, id.with("pad_t"), Sense::CLICK).clicked()
+            || ui.interact(bottom_pad, id.with("pad_b"), Sense::CLICK).clicked();
+
+        if pad_click && !r.inner.has_focus() {
             r.inner.request_focus();
         }
     }
