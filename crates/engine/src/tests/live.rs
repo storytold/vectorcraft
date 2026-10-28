@@ -851,6 +851,28 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// `also` moves more points of the mesh by the same offset as `index` (a multi-point drag); the
+/// other points stay where they are (#4207).
+#[test]
+fn mesh_move_point_moves_the_also_points_by_the_same_offset() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let before = mesh_of(&s, a);
+    s.execute("object.mesh.movePoint", &json!({"id": a.0, "index": 0, "x": 20, "y": -20, "also": [1]})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!(m.points[0].p, Point::new(20.0, -20.0));
+    assert_eq!(m.points[1].p, Point::new(120.0, -20.0));
+    assert_eq!((m.points[2].p, m.points[3].p), (before.points[2].p, before.points[3].p));
+    assert!(s.execute("object.mesh.movePoint", &json!({"id": a.0, "index": 0, "x": 0, "y": 0, "also": [99]})).is_err());
+    // A point listed twice (or the grabbed point listed again) still moves once.
+    s.execute("object.mesh.movePoint", &json!({"id": a.0, "index": 0, "x": 30, "y": -20, "also": [1, 1, 0]})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!(m.points[0].p, Point::new(30.0, -20.0));
+    assert_eq!(m.points[1].p, Point::new(130.0, -20.0));
+}
+
 #[test]
 fn mesh_add_line_and_delete_point() {
     let mut s = session();

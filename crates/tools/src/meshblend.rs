@@ -191,7 +191,7 @@ impl Tool for MeshTool {
                     if cx.selection.objects != [g.id] && cx.doc.node(g.id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_))) {
                         out.push(Action::Exec("select.set".into(), json!({"ids": [g.id.0]})));
                     }
-                    out.extend(self.edit.press(cx, g));
+                    out.extend(self.edit.press(cx, g, false));
                     return out;
                 }
                 self.edit.unfocus();

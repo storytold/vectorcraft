@@ -177,11 +177,33 @@ pub(super) fn mesh_move_point(s: &mut Session, p: &Value) -> Result<Value> {
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
+    // More points moved by the same offset (a multi-point drag).
+    let mut also = match p.get("also") {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(v)) => {
+            v.iter().map(|i| i.as_u64().map(|i| i as usize).ok_or_else(|| bad(C, "`also` must be point indices"))).collect::<Result<Vec<_>>>()?
+        }
+        Some(_) => return Err(bad(C, "`also` must be point indices")),
+    };
+    // Each point moves once, however often it is listed.
+    also.sort_unstable();
+    also.dedup();
+    also.retain(|i| *i != index);
+    if handle.is_some() && !also.is_empty() {
+        return Err(bad(C, "`also` moves points, not handles"));
+    }
     with_mesh(s, p, C, "Move Mesh Point", true, |m| {
         let pt = m.points.get_mut(index).ok_or_else(|| bad(C, "index out of range"))?;
         match handle {
             Some(h) => pt.handles[h] = q - pt.p,
-            None => pt.p = q,
+            None => {
+                let d = q - pt.p;
+                pt.p = q;
+                for i in &also {
+                    let pt = m.points.get_mut(*i).ok_or_else(|| bad(C, "index out of range"))?;
+                    pt.p += d;
+                }
+            }
         }
         Ok(())
     })?;

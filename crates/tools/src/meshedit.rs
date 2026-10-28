@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use serde_json::{Value, json};
 use vectorcraft_doc::live::{GradientMesh, envelope_grid};
 use vectorcraft_doc::{EnvelopeKind, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Point, Vec2};
+use vectorcraft_geom::{Point, Rect, Vec2};
 
 use crate::{Action, Overlay, ToolContext};
 
@@ -49,6 +49,8 @@ struct ActiveDrag {
 pub struct MeshEdit {
     /// The point last clicked: its handles show and can be dragged.
     focus: Option<(NodeId, usize)>,
+    /// The selected points (Shift-click, Direct Selection's marquee): dragging one moves them all.
+    selected: Vec<(NodeId, usize)>,
     drag: Option<ActiveDrag>,
 }
 
@@ -72,9 +74,28 @@ impl MeshEdit {
         })
     }
 
-    /// Start dragging `grab` (its point takes the focus).
-    pub fn press(&mut self, cx: &ToolContext, grab: MeshGrab) -> Vec<Action> {
-        self.focus = Some((grab.id, grab.index));
+    /// Start dragging `grab` (its point takes the focus). A point joins the selected points (or,
+    /// with `toggle`, leaves them and is not dragged); without `toggle` a point outside them
+    /// becomes the only one.
+    pub fn press(&mut self, cx: &ToolContext, grab: MeshGrab, toggle: bool) -> Vec<Action> {
+        let key = (grab.id, grab.index);
+        // Points the document lost since they were selected (deleted, undone…) drop out.
+        self.selected.retain(|(id, i)| cx.doc.node(*id).and_then(grid_of).is_some_and(|g| *i < g.points.len()));
+        if grab.handle.is_none() {
+            let had = self.selected.contains(&key);
+            if toggle && had {
+                self.selected.retain(|k| *k != key);
+                self.focus = None;
+                return vec![];
+            }
+            if !toggle && !had {
+                self.selected.clear();
+            }
+            if !had {
+                self.selected.push(key);
+            }
+        }
+        self.focus = Some(key);
         let mut origin = Point::ZERO;
         if let Some(grid) = cx.doc.node(grab.id).and_then(grid_of)
             && let Some(q) = grid.points.get(grab.index)
@@ -93,6 +114,11 @@ impl MeshEdit {
         let mut params = json!({"id": g.id.0, "index": g.index, "x": p.x, "y": p.y});
         if let Some(h) = g.handle {
             params["handle"] = json!(h);
+        } else {
+            let also: Vec<usize> = self.selected.iter().filter(|(id, i)| *id == g.id && *i != g.index).map(|(_, i)| *i).collect();
+            if !also.is_empty() {
+                params["also"] = json!(also);
+            }
         }
         Some(vec![Action::Preview("object.mesh.movePoint".into(), params)])
     }
@@ -106,9 +132,33 @@ impl MeshEdit {
         self.drag.is_some()
     }
 
-    /// Forget the focused point.
+    /// Forget the focused and the selected points.
     pub fn unfocus(&mut self) {
         self.focus = None;
+        self.selected.clear();
+    }
+
+    /// Select the points of the meshes `ids` (editable ones) inside `r`, added to the selected
+    /// points with `toggle` (toggled), else in their place; whether any point was inside.
+    pub fn select_in(&mut self, cx: &ToolContext, ids: &[NodeId], r: Rect, toggle: bool) -> bool {
+        let editable = cx.doc.editable();
+        let mut inside = vec![];
+        for id in ids.iter().filter(|id| editable(**id)) {
+            let Some(grid) = cx.doc.node(*id).and_then(grid_of) else { continue };
+            inside.extend(grid.points.iter().enumerate().filter(|(_, q)| r.contains(q.p)).map(|(i, _)| (*id, i)));
+        }
+        if !toggle {
+            self.selected.clear();
+        }
+        for k in &inside {
+            if let Some(at) = self.selected.iter().position(|s| s == k) {
+                self.selected.remove(at);
+            } else {
+                self.selected.push(*k);
+            }
+        }
+        self.focus = None;
+        !inside.is_empty()
     }
 
     /// `{meshPoint: {id, index}|null}`: the focused point, which a solid fill colour recolours
@@ -117,12 +167,20 @@ impl MeshEdit {
         json!({"meshPoint": self.focus.map(|(id, index)| json!({"id": id.0, "index": index}))})
     }
 
-    /// The focused point's handles (lines and ends).
+    /// The selected points, and the focused point's handles (lines and ends).
     pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let Some((id, index)) = self.focus else { return vec![] };
-        let Some(grid) = cx.doc.node(id).and_then(grid_of) else { return vec![] };
-        let Some(q) = grid.points.get(index) else { return vec![] };
-        let mut out = vec![Overlay::Anchor { p: q.p, color: FEEDBACK, filled: true, size: 5.0 }];
+        let mut out = vec![];
+        for (id, index) in self.selected.iter().filter(|k| Some(**k) != self.focus) {
+            if let Some(grid) = cx.doc.node(*id).and_then(grid_of)
+                && let Some(q) = grid.points.get(*index)
+            {
+                out.push(Overlay::Anchor { p: q.p, color: FEEDBACK, filled: true, size: 5.0 });
+            }
+        }
+        let Some((id, index)) = self.focus else { return out };
+        let Some(grid) = cx.doc.node(id).and_then(grid_of) else { return out };
+        let Some(q) = grid.points.get(index) else { return out };
+        out.push(Overlay::Anchor { p: q.p, color: FEEDBACK, filled: true, size: 5.0 });
         for h in q.handles.iter().filter(|h| h.hypot() > 1e-6) {
             out.push(Overlay::Line { a: q.p, b: q.p + *h, color: FEEDBACK, dashed: false });
             out.push(Overlay::Handle { p: q.p + *h, color: FEEDBACK });
@@ -212,6 +270,94 @@ mod tests {
             vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": e.0, "index": 2, "x": 90.0, "y": 210.0}))]
         );
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 90.0, 210.0)), vec![Action::Commit]);
+    }
+
+    /// Dragging one of the mesh points a Direct Selection marquee picked moves them all, not the
+    /// whole object (#4207).
+    #[test]
+    fn direct_selection_drags_marquee_selected_mesh_points_together() {
+        let (mut d, a) = doc_with_rect();
+        let grid = vectorcraft_doc::live::envelope_grid(1, 1, &grid_points(Rect::new(100.0, 100.0, 200.0, 200.0), 1, 1), &[]).unwrap();
+        d.node_mut(a).unwrap().kind = NodeKind::Mesh(grid);
+        let mut s = Selection::default();
+        s.set([a]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let mut t = crate::direct::DirectSelectionTool::new(false);
+        // A marquee around the top two points (0 and 1).
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 90.0, 90.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 210.0, 110.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 210.0, 110.0));
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)), vec![Action::Begin("Move Mesh Point".into())]);
+        assert_eq!(
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 120.0, 80.0)),
+            vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": a.0, "index": 0, "x": 120.0, "y": 80.0, "also": [1]}))]
+        );
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 120.0, 80.0)), vec![Action::Commit]);
+        // Shift-clicking a point adds it: point 3 joins, dragging it moves 0 and 1 too.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(crate::Mods { shift: true, ..Default::default() }));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 200.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        assert_eq!(
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 210.0, 210.0)),
+            vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": a.0, "index": 3, "x": 210.0, "y": 210.0, "also": [0, 1]}))]
+        );
+    }
+
+    /// Selected mesh points the mesh no longer has (it shrank after the marquee) are not sent
+    /// with a drag, which the engine would reject as out of range (#4207).
+    #[test]
+    fn direct_selection_drag_drops_mesh_points_the_mesh_lost() {
+        let (mut d, a) = doc_with_rect();
+        let r = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let grid = vectorcraft_doc::live::envelope_grid(1, 2, &grid_points(r, 1, 2), &[]).unwrap();
+        d.node_mut(a).unwrap().kind = NodeKind::Mesh(grid);
+        let mut s = Selection::default();
+        s.set([a]);
+        let p = paint();
+        let mut t = crate::direct::DirectSelectionTool::new(false);
+        {
+            let c = cx(&d, &s, &p);
+            // A marquee around the bottom row (points 3, 4 and 5).
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, 90.0, 190.0));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 210.0, 210.0));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, 210.0, 210.0));
+        }
+        // The mesh shrinks to 4 points (an undo, a deleted line…).
+        let grid = vectorcraft_doc::live::envelope_grid(1, 1, &grid_points(r, 1, 1), &[]).unwrap();
+        d.node_mut(a).unwrap().kind = NodeKind::Mesh(grid);
+        let c = cx(&d, &s, &p);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0)), vec![Action::Begin("Move Mesh Point".into())]);
+        assert_eq!(
+            t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 210.0, 190.0)),
+            vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": a.0, "index": 3, "x": 210.0, "y": 190.0}))]
+        );
+    }
+
+    /// Group Selection's marquees select objects whole: they leave no mesh points selected, and
+    /// clear the ones an earlier marquee picked (#4207).
+    #[test]
+    fn group_selection_marquees_leave_no_mesh_points_selected() {
+        let (mut d, a) = doc_with_rect();
+        let grid = vectorcraft_doc::live::envelope_grid(1, 1, &grid_points(Rect::new(100.0, 100.0, 200.0, 200.0), 1, 1), &[]).unwrap();
+        d.node_mut(a).unwrap().kind = NodeKind::Mesh(grid);
+        let mut s = Selection::default();
+        s.set([a]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let mesh_point_shown = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Anchor { p, .. } if *p == Point::new(100.0, 100.0)));
+        let mut t = crate::direct::DirectSelectionTool::new(true);
+        // A marquee around the top two points (0 and 1).
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 90.0, 90.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 210.0, 110.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 210.0, 110.0));
+        assert!(!mesh_point_shown(&t.overlays(&c)));
+        // An enclosed marquee (E) around the whole mesh.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0));
+        t.key(&c, crate::ToolKey::Letter('e'), crate::Mods::default());
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 250.0, 250.0));
+        assert!(!mesh_point_shown(&t.overlays(&c)));
     }
 
     #[test]

@@ -574,7 +574,7 @@ impl Tool for DirectSelectionTool {
                 self.snapped = false;
                 if let Some(g) = self.mesh.hit(cx, &cx.selection.objects, p) {
                     self.state = State::Mesh;
-                    return self.mesh.press(cx, g);
+                    return self.mesh.press(cx, g, ev.mods.shift);
                 }
                 self.mesh.unfocus();
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
@@ -875,17 +875,30 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < cx.tol(3.0) && r.height() < cx.tol(3.0) {
-                    return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                    if toggle {
+                        return vec![];
+                    }
+                    self.mesh.unfocus();
+                    return vec![Action::Exec("select.none".into(), json!({}))];
                 }
                 // With Group Selection's enclosed marquee, the tool selects the objects inside it
                 // (members of groups too), each whole, as a click selects one.
                 if enclosed {
+                    // Whole objects: no mesh points stay selected to drag.
+                    self.mesh.unfocus();
                     let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
                     let editable = cx.doc.editable();
                     touched.retain(|id| editable(*id));
                     let ids: Vec<Value> = crate::select::inside(cx, r, touched).into_iter().map(|id| json!(id.0)).collect();
                     let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": ids }));
                     return std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, true)).collect();
+                }
+                // The points of selected meshes inside the rect: dragging one moves them all.
+                // Group Selection picks objects whole and drags no mesh points.
+                if self.group {
+                    self.mesh.unfocus();
+                } else {
+                    self.mesh.select_in(cx, &cx.selection.objects, r, toggle);
                 }
                 // Anchors inside the rect, on editable paths inside isolation mode.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];

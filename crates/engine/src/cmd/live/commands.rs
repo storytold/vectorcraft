@@ -254,7 +254,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or mesh envelope (its handles follow), or with `handle` place that handle end at (x, y)",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up, also?: [index]} move a point of a gradient mesh or mesh envelope (its handles follow), and the `also` points by the same offset, or with `handle` place that handle end at (x, y)",
             has_doc,
             mesh_move_point
         ),
