@@ -2,7 +2,7 @@ use super::entry::RgbInCmyk;
 use super::exporter::{constant_mask, cover, to_path, writable, xf};
 use super::{
     Affine, Arc, Archival, ColorOut, Compatibility, Document, Exporter, HashSet, Image, Metadata, Node, PageSettings, PdfError, PdfVersion, Rect,
-    Shape, Size, Standard, find, krilla, rfind, write,
+    Shape, Size, Standard, Vec2, find, krilla, rfind, write,
 };
 
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then
