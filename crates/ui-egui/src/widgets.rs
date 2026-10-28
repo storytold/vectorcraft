@@ -25,8 +25,8 @@ pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
 };
 pub use buttons::{
-    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
-    primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
+    SPLIT_ARROW, flat_button, flat_button_fit, flat_button_icon, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button,
+    primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]

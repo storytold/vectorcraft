@@ -148,7 +148,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     buttons(app, ui, &[(tl!("Make"), "object.blend.make")]);
     widgets::divider(ui);
     ui.add_enabled_ui(blend || selection_len(app) >= 2, |ui| settings(app, ui));
-    widgets::label_row(ui, tl!("Direction:"), LABEL_W, |ui| buttons(app, ui, &[(tl!("Reverse Front to Back"), "object.blend.reverseFrontToBack")]));
+    widgets::label_row(ui, tl!("Direction:"), LABEL_W, |ui| {
+        // The icon mirrors the button: the keys' stacking flips front to back and back to front.
+        if ui
+            .add_enabled_ui(available(app, "object.blend.reverseFrontToBack"), |ui| {
+                widgets::flat_button_icon(ui, "dc-swap", "Reverse Front to Back", ui.available_width())
+            })
+            .inner
+            .clicked()
+        {
+            app.run("object.blend.reverseFrontToBack", json!({})).ok();
+        }
+    });
     widgets::divider(ui);
     buttons(app, ui, &[(tl!("Reverse Spine"), "object.blend.reverseSpine"), (tl!("Replace Spine"), "object.blend.replaceSpine")]);
     widgets::divider(ui);

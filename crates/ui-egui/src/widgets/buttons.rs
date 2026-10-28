@@ -37,6 +37,22 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     resp
 }
 
+/// [`flat_button`] with an icon to the left of the label (the Blend panel's Direction button).
+pub fn flat_button_icon(ui: &mut Ui, icon: &str, text: &str, width: f32) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
+    let rect = rect.shrink2(vec2(0.0, 0.5));
+    ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
+    flat_fill(ui, rect, &resp);
+    let clipped = ui.painter().with_clip_rect(rect);
+    let icon_rect = Rect::from_center_size(pos2(rect.left() + 14.0, rect.center().y), Vec2::splat(14.0));
+    icons::paint(ui, icon, icon_rect, t.text_strong);
+    let label_rect = Rect::from_min_max(pos2(icon_rect.right(), rect.top()), rect.right_bottom());
+    clipped.text(label_rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
+    resp
+}
+
 /// A [`flat_button`] that expands to fit localized labels wider than `min_width`.
 pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let t = Tokens::get(ui.ctx());

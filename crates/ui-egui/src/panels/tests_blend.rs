@@ -280,5 +280,6 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     }
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(!text.contains("Ease In:") && !text.contains("Ramp:") && !text.contains("Color Ease"), "{text}");
+    // The Blend Options dialog matches the panel: the same Type, Ramp and Shift to tweak.
+    assert!(text.contains("Type:") && text.contains("Ramp:") && text.contains("Shift:"), "{text}");
 }
