@@ -5451,6 +5451,60 @@ mark-style	Japanese	Japonské
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	proměnné a sady dat souboru nebyly načteny (proměnné: {variables}, sady dat: {data_sets}): panel Proměnné je nezobrazuje
 # Select by Color (select.color)
 	Select by Color	Vybrat podle barvy
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Kopie pro síťovou tiskárnu se nastavují v její sekci výše
+	A setting isn't valid	Nastavení není platné
+	Accepted by {printer}	Přijato tiskárnou {printer}
+	Asking the printer…	Dotazování tiskárny…
+	Canceling…	Ruší se…
+	Couldn't reach the printer	Tiskárnu se nepodařilo zastihnout
+	Flip on long edge	Otočit podle delší hrany
+	Flip on short edge	Otočit podle kratší hrany
+	Held by the printer	Pozdrženo tiskárnou
+	I confirm sending this document to this printer	Potvrzuji odeslání tohoto dokumentu na tuto tiskárnu
+	Not confirmed by the printer	Tiskárna nepotvrdila
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Přijímají se jen adresy IP z této sítě (soukromé, místní nebo zpětné smyčky), nikoli názvy hostitelů.
+	Photo	Fotografie
+	Printed with errors	Vytištěno s chybami
+	Printed with warnings	Vytištěno s upozorněními
+	Printer address:	Adresa tiskárny:
+	Printer orientation:	Orientace tiskárny:
+	Printer status: {state}	Stav tiskárny: {state}
+	Query printer	Dotázat se tiskárny
+	Query the printer first to see what it supports.	Nejprve se dotažte tiskárny, co podporuje.
+	Reasons: {reasons}	Důvody: {reasons}
+	Reverse landscape	Na šířku, obráceně
+	Reverse portrait	Na výšku, obráceně
+	Sending to {printer}…	Odesílání na {printer}…
+	Sent to {printer}	Odesláno na {printer}
+	Sent. The printer can't say whether it printed.	Odesláno. Tiskárna nedokáže říct, zda vytiskla.
+	Sheets printed: {done} of {total}	Vytištěné listy: {done} z {total}
+	Sheets printed: {n}	Vytištěné listy: {n}
+	Still printing; the job continues on the printer	Stále se tiskne; úloha pokračuje na tiskárně
+	The document couldn't be prepared	Dokument se nepodařilo připravit
+	The job was canceled	Úloha byla zrušena
+	The print job stopped unexpectedly	Tisková úloha se neočekávaně zastavila
+	The printer accepts none of the formats this document can be sent in	Tiskárna nepřijímá žádný z formátů, ve kterých lze tento dokument odeslat
+	The printer address was refused	Adresa tiskárny byla odmítnuta
+	The printer doesn't support this setting	Tiskárna toto nastavení nepodporuje
+	The printer is printing it	Tiskárna to právě tiskne
+	The printer may have received the document. Check the printer before sending again.	Tiskárna možná dokument přijala. Před dalším odesláním tiskárnu zkontrolujte.
+	The printer no longer lists the job; it most likely finished	Tiskárna úlohu už nevypisuje; s největší pravděpodobností skončila
+	The printer paused the job; it needs attention	Tiskárna úlohu pozastavila; vyžaduje pozornost
+	The printer refused the request	Tiskárna žádost odmítla
+	The printer stopped the job	Tiskárna úlohu zastavila
+	The printer's reply couldn't be understood	Odpovědi tiskárny se nepodařilo porozumět
+	This printer does not take a copies setting.	Tato tiskárna nepřijímá nastavení počtu kopií.
+	This printer does not take a quality setting.	Tato tiskárna nepřijímá nastavení kvality.
+	This printer does not take a resolution setting.	Tato tiskárna nepřijímá nastavení rozlišení.
+	This printer does not take an orientation setting.	Tato tiskárna nepřijímá nastavení orientace.
+	This printer only prints in grayscale.	Tato tiskárna tiskne pouze ve stupních šedi.
+	This printer only prints one-sided.	Tato tiskárna tiskne pouze jednostranně.
+	Tick the confirmation box to send this document to this printer.	Zaškrtněte políčko potvrzení, abyste odeslali tento dokument na tuto tiskárnu.
+	Two-sided:	Oboustranně:
+	Waiting in the printer's queue	Čeká ve frontě tiskárny
+	Network Printer…	Síťová tiskárna…
+	{printer} (default)	{printer} (výchozí)
 	Move Anchor Point	Přesunout kotevní bod
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zachová 1 z {n} pracovních ploch dokumentu: soubor se znovu otevře s jedním. Zapněte Zachovat možnosti úprav, aby zůstala všechna.
 	Chalk & Charcoal…	Křída a uhel…

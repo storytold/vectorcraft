@@ -5031,6 +5031,60 @@ effect	Soft	Weich
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	die Variablen und Datensätze der Datei wurden nicht gelesen (Variablen: {variables}, Datensätze: {data_sets}): Das Bedienfeld „Variablen“ listet sie nicht auf
 # Select by Color (select.color)
 	Select by Color	Nach Farbe auswählen
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Die Kopien eines Netzwerkdruckers werden oben in seinem Abschnitt festgelegt
+	A setting isn't valid	Eine Einstellung ist ungültig
+	Accepted by {printer}	Von {printer} angenommen
+	Asking the printer…	Drucker wird abgefragt …
+	Canceling…	Wird abgebrochen …
+	Couldn't reach the printer	Der Drucker ist nicht erreichbar
+	Flip on long edge	An der langen Kante wenden
+	Flip on short edge	An der kurzen Kante wenden
+	Held by the printer	Vom Drucker angehalten
+	I confirm sending this document to this printer	Ich bestätige das Senden dieses Dokuments an diesen Drucker
+	Not confirmed by the printer	Vom Drucker nicht bestätigt
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Es werden nur IP-Adressen dieses Netzwerks akzeptiert (privat, Link-Local oder Loopback), keine Hostnamen.
+	Photo	Foto
+	Printed with errors	Mit Fehlern gedruckt
+	Printed with warnings	Mit Warnungen gedruckt
+	Printer address:	Druckeradresse:
+	Printer orientation:	Druckerausrichtung:
+	Printer status: {state}	Druckerstatus: {state}
+	Query printer	Drucker abfragen
+	Query the printer first to see what it supports.	Fragen Sie zuerst den Drucker ab, um zu sehen, was er unterstützt.
+	Reasons: {reasons}	Gründe: {reasons}
+	Reverse landscape	Querformat, gedreht
+	Reverse portrait	Hochformat, gedreht
+	Sending to {printer}…	Wird an {printer} gesendet …
+	Sent to {printer}	An {printer} gesendet
+	Sent. The printer can't say whether it printed.	Gesendet. Der Drucker kann nicht sagen, ob gedruckt wurde.
+	Sheets printed: {done} of {total}	Gedruckte Blätter: {done} von {total}
+	Sheets printed: {n}	Gedruckte Blätter: {n}
+	Still printing; the job continues on the printer	Druckt noch; der Auftrag läuft auf dem Drucker weiter
+	The document couldn't be prepared	Das Dokument konnte nicht vorbereitet werden
+	The job was canceled	Der Auftrag wurde abgebrochen
+	The print job stopped unexpectedly	Der Druckauftrag wurde unerwartet beendet
+	The printer accepts none of the formats this document can be sent in	Der Drucker akzeptiert keines der Formate, in denen dieses Dokument gesendet werden kann
+	The printer address was refused	Die Druckeradresse wurde abgelehnt
+	The printer doesn't support this setting	Der Drucker unterstützt diese Einstellung nicht
+	The printer is printing it	Der Drucker druckt es gerade
+	The printer may have received the document. Check the printer before sending again.	Der Drucker hat das Dokument möglicherweise erhalten. Prüfen Sie den Drucker, bevor Sie erneut senden.
+	The printer no longer lists the job; it most likely finished	Der Drucker listet den Auftrag nicht mehr auf; er ist höchstwahrscheinlich fertig
+	The printer paused the job; it needs attention	Der Drucker hat den Auftrag angehalten; er braucht Aufmerksamkeit
+	The printer refused the request	Der Drucker hat die Anfrage abgelehnt
+	The printer stopped the job	Der Drucker hat den Auftrag beendet
+	The printer's reply couldn't be understood	Die Antwort des Druckers konnte nicht verstanden werden
+	This printer does not take a copies setting.	Dieser Drucker unterstützt keine Kopienanzahl.
+	This printer does not take a quality setting.	Dieser Drucker unterstützt keine Qualitätseinstellung.
+	This printer does not take a resolution setting.	Dieser Drucker unterstützt keine Auflösungseinstellung.
+	This printer does not take an orientation setting.	Dieser Drucker unterstützt keine Ausrichtungseinstellung.
+	This printer only prints in grayscale.	Dieser Drucker druckt nur in Graustufen.
+	This printer only prints one-sided.	Dieser Drucker druckt nur einseitig.
+	Tick the confirmation box to send this document to this printer.	Aktivieren Sie das Bestätigungsfeld, um dieses Dokument an diesen Drucker zu senden.
+	Two-sided:	Zweiseitig:
+	Waiting in the printer's queue	Wartet in der Warteschlange des Druckers
+	Network Printer…	Netzwerkdrucker …
+	{printer} (default)	{printer} (Standard)
 	Move Anchor Point	Ankerpunkt verschieben
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behält 1 der {n} Zeichenflächen des Dokuments: Die Datei wird mit einer wieder geöffnet. Aktivieren Sie „Bearbeitungsfunktionen beibehalten“, um alle zu behalten.
 	Chalk & Charcoal…	Kreide & Kohle…

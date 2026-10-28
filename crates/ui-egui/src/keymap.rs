@@ -400,7 +400,7 @@ mod tests {
             .filter_map(|e| shortcut_editor::default_of(&e.key).map(|d| (e.key.as_str(), d)))
             .filter(|(key, d)| vc_binding(d).map(|b| vec![b]) != Some(template().default_bindings(&command_of(key))))
             .collect();
-        assert_eq!(unbound, vec![], "every default text becomes the entry's binding");
+        assert!(unbound.is_empty(), "every default text becomes the entry's binding: {unbound:?}");
     }
 
     /// The chords the operating system takes are refused, and no default uses one.

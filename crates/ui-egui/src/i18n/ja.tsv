@@ -5105,6 +5105,60 @@ lighting	Light	ライト
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	ネットワークプリンターのコピー数は、上のプリンターのセクションで設定します
+	A setting isn't valid	無効な設定があります
+	Accepted by {printer}	{printer} が受け付けました
+	Asking the printer…	プリンターに問い合わせています…
+	Canceling…	キャンセルしています…
+	Couldn't reach the printer	プリンターに接続できませんでした
+	Flip on long edge	長辺とじで反転
+	Flip on short edge	短辺とじで反転
+	Held by the printer	プリンターが保留しています
+	I confirm sending this document to this printer	このドキュメントをこのプリンターに送信することを確認します
+	Not confirmed by the printer	プリンターは確認していません
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	このネットワークの IP アドレス（プライベート、リンクローカル、ループバック）のみ使用できます。ホスト名は使用できません。
+	Photo	写真
+	Printed with errors	エラーありで印刷されました
+	Printed with warnings	警告ありで印刷されました
+	Printer address:	プリンターのアドレス:
+	Printer orientation:	プリンターの向き:
+	Printer status: {state}	プリンターの状態: {state}
+	Query printer	プリンターに問い合わせ
+	Query the printer first to see what it supports.	まずプリンターに問い合わせて、対応している機能を確認してください。
+	Reasons: {reasons}	理由: {reasons}
+	Reverse landscape	横（逆向き）
+	Reverse portrait	縦（逆向き）
+	Sending to {printer}…	{printer} に送信しています…
+	Sent to {printer}	{printer} に送信しました
+	Sent. The printer can't say whether it printed.	送信しました。プリンターは印刷されたかどうかを答えられません。
+	Sheets printed: {done} of {total}	印刷済みの用紙: {done} / {total}
+	Sheets printed: {n}	印刷済みの用紙: {n}
+	Still printing; the job continues on the printer	印刷中です。ジョブはプリンターで続行されます
+	The document couldn't be prepared	ドキュメントを準備できませんでした
+	The job was canceled	ジョブはキャンセルされました
+	The print job stopped unexpectedly	印刷ジョブが予期せず停止しました
+	The printer accepts none of the formats this document can be sent in	プリンターは、このドキュメントを送信できるどの形式も受け付けません
+	The printer address was refused	プリンターのアドレスは拒否されました
+	The printer doesn't support this setting	プリンターはこの設定に対応していません
+	The printer is printing it	プリンターが印刷しています
+	The printer may have received the document. Check the printer before sending again.	プリンターがドキュメントを受信した可能性があります。再送信する前にプリンターを確認してください。
+	The printer no longer lists the job; it most likely finished	プリンターにジョブが表示されなくなりました。おそらく完了しています
+	The printer paused the job; it needs attention	プリンターがジョブを一時停止しました。確認が必要です
+	The printer refused the request	プリンターが要求を拒否しました
+	The printer stopped the job	プリンターがジョブを停止しました
+	The printer's reply couldn't be understood	プリンターの応答を解釈できませんでした
+	This printer does not take a copies setting.	このプリンターは部数の設定に対応していません。
+	This printer does not take a quality setting.	このプリンターは品質の設定に対応していません。
+	This printer does not take a resolution setting.	このプリンターは解像度の設定に対応していません。
+	This printer does not take an orientation setting.	このプリンターは向きの設定に対応していません。
+	This printer only prints in grayscale.	このプリンターはグレースケールでのみ印刷できます。
+	This printer only prints one-sided.	このプリンターは片面印刷のみ対応しています。
+	Tick the confirmation box to send this document to this printer.	このドキュメントをこのプリンターに送信するには、確認のチェックボックスをオンにしてください。
+	Two-sided:	両面印刷:
+	Waiting in the printer's queue	プリンターのキューで待機中
+	Network Printer…	ネットワークプリンター…
+	{printer} (default)	{printer}（既定）
 	Move Anchor Point	アンカーポイントを移動
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} ではドキュメントの {n} 個のアートボードのうち 1 個だけが保持され、ファイルは 1 個で開き直されます。すべて保持するには「編集機能を保持」をオンにしてください。
 	Chalk & Charcoal…	チョーク・木炭画…

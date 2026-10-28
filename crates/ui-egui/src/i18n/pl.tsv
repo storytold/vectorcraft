@@ -5303,6 +5303,60 @@ mark-style	Japanese	Japońskie
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	zmienne i zestawy danych pliku nie zostały wczytane (zmienne: {variables}, zestawy danych: {data_sets}): panel Zmienne ich nie wyświetla
 # Select by Color (select.color)
 	Select by Color	Zaznacz według koloru
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	Liczbę kopii drukarki sieciowej ustawia się w jej sekcji powyżej
+	A setting isn't valid	Ustawienie jest nieprawidłowe
+	Accepted by {printer}	Przyjęto przez {printer}
+	Asking the printer…	Odpytywanie drukarki…
+	Canceling…	Anulowanie…
+	Couldn't reach the printer	Nie udało się połączyć z drukarką
+	Flip on long edge	Obróć wzdłuż dłuższej krawędzi
+	Flip on short edge	Obróć wzdłuż krótszej krawędzi
+	Held by the printer	Wstrzymane przez drukarkę
+	I confirm sending this document to this printer	Potwierdzam wysłanie tego dokumentu do tej drukarki
+	Not confirmed by the printer	Niepotwierdzone przez drukarkę
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Akceptowane są tylko adresy IP z tej sieci (prywatne, lokalne dla łącza lub pętli zwrotnej), nie nazwy hostów.
+	Photo	Zdjęcie
+	Printed with errors	Wydrukowano z błędami
+	Printed with warnings	Wydrukowano z ostrzeżeniami
+	Printer address:	Adres drukarki:
+	Printer orientation:	Orientacja drukarki:
+	Printer status: {state}	Stan drukarki: {state}
+	Query printer	Odpytaj drukarkę
+	Query the printer first to see what it supports.	Najpierw odpytaj drukarkę, aby zobaczyć, co obsługuje.
+	Reasons: {reasons}	Powody: {reasons}
+	Reverse landscape	Pozioma odwrócona
+	Reverse portrait	Pionowa odwrócona
+	Sending to {printer}…	Wysyłanie do {printer}…
+	Sent to {printer}	Wysłano do {printer}
+	Sent. The printer can't say whether it printed.	Wysłano. Drukarka nie potrafi powiedzieć, czy wydrukowała.
+	Sheets printed: {done} of {total}	Wydrukowane arkusze: {done} z {total}
+	Sheets printed: {n}	Wydrukowane arkusze: {n}
+	Still printing; the job continues on the printer	Nadal drukuje; zadanie jest kontynuowane na drukarce
+	The document couldn't be prepared	Nie udało się przygotować dokumentu
+	The job was canceled	Zadanie zostało anulowane
+	The print job stopped unexpectedly	Zadanie drukowania nieoczekiwanie się zatrzymało
+	The printer accepts none of the formats this document can be sent in	Drukarka nie przyjmuje żadnego z formatów, w jakich można wysłać ten dokument
+	The printer address was refused	Adres drukarki został odrzucony
+	The printer doesn't support this setting	Drukarka nie obsługuje tego ustawienia
+	The printer is printing it	Drukarka właśnie to drukuje
+	The printer may have received the document. Check the printer before sending again.	Drukarka mogła odebrać dokument. Sprawdź drukarkę przed ponownym wysłaniem.
+	The printer no longer lists the job; it most likely finished	Drukarka nie wyświetla już zadania; najprawdopodobniej zostało zakończone
+	The printer paused the job; it needs attention	Drukarka wstrzymała zadanie; wymaga uwagi
+	The printer refused the request	Drukarka odrzuciła żądanie
+	The printer stopped the job	Drukarka zatrzymała zadanie
+	The printer's reply couldn't be understood	Nie udało się zrozumieć odpowiedzi drukarki
+	This printer does not take a copies setting.	Ta drukarka nie obsługuje ustawienia liczby kopii.
+	This printer does not take a quality setting.	Ta drukarka nie obsługuje ustawienia jakości.
+	This printer does not take a resolution setting.	Ta drukarka nie obsługuje ustawienia rozdzielczości.
+	This printer does not take an orientation setting.	Ta drukarka nie obsługuje ustawienia orientacji.
+	This printer only prints in grayscale.	Ta drukarka drukuje tylko w skali szarości.
+	This printer only prints one-sided.	Ta drukarka drukuje tylko jednostronnie.
+	Tick the confirmation box to send this document to this printer.	Zaznacz pole potwierdzenia, aby wysłać ten dokument do tej drukarki.
+	Two-sided:	Dwustronnie:
+	Waiting in the printer's queue	Oczekuje w kolejce drukarki
+	Network Printer…	Drukarka sieciowa…
+	{printer} (default)	{printer} (domyślna)
 	Move Anchor Point	Przesuń punkt kontrolny
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zachowuje 1 z {n} obszarów kompozycji dokumentu: plik otworzy się ponownie z jednym. Włącz Zachowaj możliwości edycji, aby zachować wszystkie.
 	Chalk & Charcoal…	Kreda i węgiel…

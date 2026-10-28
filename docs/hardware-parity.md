@@ -31,12 +31,14 @@ reads the pen's eraser end on Windows, on macOS and on Linux under X11 and XWayl
 | Multiple monitors: panels and document windows on another screen | yes | no (one OS window) | no | no | — | missing: 6–10 h (with multiple windows, gap G7) |
 | Display colour profile (proof and display through the monitor's ICC) | yes | no | no | no | — | missing: 3–5 h |
 | 3D GPU rendering (Materials, ray tracing) | yes | — | — | — | — | blocked on 3D (gap G3) |
+| Printers on the network by address (WS-Print, IPP), without a system queue | no (the system's print dialog) | Print › Network Printer…: the printer at an IP address on this network is queried for what it lists, then sent the print-ready PDF (or PWG raster the app renders) after the person ticks the confirmation | same; not in the Windows 7 build ([windows7.md](windows7.md)) | same | no (no sockets) | beyond Illustrator; tested against in-process WS-Print fakes only, never a real printer; raster pages are held in memory (no cap yet, gap G8) |
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
 | 2026-10-24 | minor | macOS: an AppKit local event monitor reads each mouse and tablet event's pen pressure and the pen's end before the window gets it and writes them into the canvas's pen feed (#852): each pointer move of a stroke keeps its own pressure, mouse event coalescing is off, and the eraser end selects the Eraser tool. The mapping is unit-tested on every platform and the macOS code type-checks for `aarch64-apple-darwin`; not yet tried on a Mac with a tablet, so the score is unchanged (estimated) |
+| 2026-10-18 | minor | Row for printers on the network (Print › Network Printer…, WS-Print and IPP): copies go in the PDF unless the printer's listed range covers them, a Grayscale preset or dialog setting prints gray, gray raster uses Rec. 709 weights; not in the Windows 7 build. Tested against in-process fakes only; score unchanged (estimated) |
 | 2026-10-15 | patch | Web review: preserve pen buttons and modifiers; leave fingers to eframe before the first pen contact; remove persistent pen policy. Canvas regression tests cover intermediate moves and long-touch cancellation on native and web input. Physical-device QA pending. |
 | 2026-10-14 | minor | Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed); On Windows the custom title bar's window stays truly borderless, so the pointer lines up with what is drawn on systems where the hidden caption offset it (#1791, #1758; awaiting the reporter's confirmation); neither is confirmed on the hardware that reported it, so nothing is marked done |
 | 2026-10-13 | minor | Web: the shell reads pen and finger Pointer Events itself (pen pressure with coalesced events, Apple Pencil hover, palm rejection: after a pen contact fingers only navigate until reload; long press opens the context menu); score unchanged (estimated) |

@@ -150,6 +150,31 @@ fn type_warnings(doc: &Document, which: PrintLayers, areas: &[Rect]) -> Vec<Stri
 
 const PRINT: &str = "file.print";
 
+/// Whether `set` prints gray: Grayscale is for composite output (separations are inks already).
+pub fn prints_gray(set: &PrintSettings) -> bool {
+    set.color.grayscale && set.output.mode == vectorcraft_pdf::OutputMode::Composite
+}
+
+/// A colour as gray with Rec. 709 weights (ink amount: 0 white, 1 black); gray stays as it is.
+fn gray709(c: vectorcraft_color::Color) -> vectorcraft_color::Color {
+    use vectorcraft_color::Color;
+    if matches!(c, Color::Gray { .. }) {
+        return c;
+    }
+    let [r, g, b] = c.to_rgb();
+    Color::gray((1.0 - (0.2126 * r + 0.7152 * g + 0.0722 * b)).clamp(0.0, 1.0))
+}
+
+/// `doc` with every colour, gradient stop, text run and image pixel gray (Rec. 709): what a
+/// Grayscale print composes, and what its preview draws.
+pub fn grayscale_document(doc: &Document) -> Document {
+    use super::colorcmds::{Recolor, Scope};
+    let mut out = doc.clone();
+    let ids: Vec<_> = out.layers.iter().map(|l| l.id).collect();
+    Recolor::new(Scope { fill: true, stroke: true, images: true, patterns: true }, &gray709).run(&mut out, &ids);
+    out
+}
+
 /// Whether `file.print` writes PostScript: `format`, else a `.ps` path.
 fn to_postscript(p: &Value) -> Result<bool> {
     match str_param(p, "format") {
@@ -179,6 +204,9 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     // Raster effects print as images at the document's raster effects resolution.
     let flat = super::rasterfx::flatten_raster_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
+    // Grayscale: the art itself is made gray, so the PDF is gray whatever the driver does.
+    let grayed = prints_gray(&set).then(|| grayscale_document(doc));
+    let doc = grayed.as_ref().unwrap_or(doc);
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
     let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");

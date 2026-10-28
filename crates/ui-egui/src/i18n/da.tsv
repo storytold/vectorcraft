@@ -5384,6 +5384,60 @@ swatch	Bright Violet	Kraftig violet
 	Select artwork to apply effects	Vælg grafik for at anvende effekter
 # Select by Color (select.color)
 	Select by Color	Markér efter farve
+# Network printer destination of the Print dialog (WS-Print / IPP): machine-drafted by Claude (AI), not reviewed by a native speaker.
+	A network printer's copies are set in its section above	En netværksprinters kopier angives i dens afsnit ovenfor
+	A setting isn't valid	En indstilling er ugyldig
+	Accepted by {printer}	Accepteret af {printer}
+	Asking the printer…	Spørger printeren…
+	Canceling…	Annullerer…
+	Couldn't reach the printer	Printeren kunne ikke nås
+	Flip on long edge	Vend langs den lange kant
+	Flip on short edge	Vend langs den korte kant
+	Held by the printer	Tilbageholdt af printeren
+	I confirm sending this document to this printer	Jeg bekræfter, at dette dokument sendes til denne printer
+	Network Printer…	Netværksprinter…
+	Not confirmed by the printer	Ikke bekræftet af printeren
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	Kun IP-adresser på dette netværk accepteres (private, link-local eller loopback), ikke værtsnavne.
+	Photo	Foto
+	Printed with errors	Udskrevet med fejl
+	Printed with warnings	Udskrevet med advarsler
+	Printer address:	Printeradresse:
+	Printer orientation:	Printerens retning:
+	Printer status: {state}	Printerstatus: {state}
+	Query printer	Spørg printeren
+	Query the printer first to see what it supports.	Spørg først printeren for at se, hvad den understøtter.
+	Reasons: {reasons}	Årsager: {reasons}
+	Reverse landscape	Omvendt liggende
+	Reverse portrait	Omvendt stående
+	Sending to {printer}…	Sender til {printer}…
+	Sent to {printer}	Sendt til {printer}
+	Sent. The printer can't say whether it printed.	Sendt. Printeren kan ikke sige, om den udskrev.
+	Sheets printed: {done} of {total}	Udskrevne ark: {done} af {total}
+	Sheets printed: {n}	Udskrevne ark: {n}
+	Still printing; the job continues on the printer	Udskriver stadig; jobbet fortsætter på printeren
+	The document couldn't be prepared	Dokumentet kunne ikke forberedes
+	The job was canceled	Jobbet blev annulleret
+	The print job stopped unexpectedly	Udskriftsjobbet stoppede uventet
+	The printer accepts none of the formats this document can be sent in	Printeren accepterer ingen af de formater, dette dokument kan sendes i
+	The printer address was refused	Printeradressen blev afvist
+	The printer doesn't support this setting	Printeren understøtter ikke denne indstilling
+	The printer is printing it	Printeren udskriver det
+	The printer may have received the document. Check the printer before sending again.	Printeren har måske modtaget dokumentet. Kontrollér printeren, før du sender igen.
+	The printer no longer lists the job; it most likely finished	Printeren viser ikke længere jobbet; det er sandsynligvis færdigt
+	The printer paused the job; it needs attention	Printeren satte jobbet på pause; den kræver opmærksomhed
+	The printer refused the request	Printeren afviste anmodningen
+	The printer stopped the job	Printeren stoppede jobbet
+	The printer's reply couldn't be understood	Printerens svar kunne ikke forstås
+	This printer does not take a copies setting.	Denne printer har ingen indstilling for antal kopier.
+	This printer does not take a quality setting.	Denne printer har ingen kvalitetsindstilling.
+	This printer does not take a resolution setting.	Denne printer har ingen opløsningsindstilling.
+	This printer does not take an orientation setting.	Denne printer har ingen retningsindstilling.
+	This printer only prints in grayscale.	Denne printer udskriver kun i gråtoner.
+	This printer only prints one-sided.	Denne printer udskriver kun ensidet.
+	Tick the confirmation box to send this document to this printer.	Sæt flueben i bekræftelsesfeltet for at sende dette dokument til denne printer.
+	Two-sided:	Tosidet:
+	Waiting in the printer's queue	Venter i printerens kø
+	{printer} (default)	{printer} (standard)
 	Smudge Stick…	Udtværingsstift…
 	Smudge Stick	Udtværingsstift
 	Sponge…	Svamp…

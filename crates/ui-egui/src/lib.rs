@@ -40,6 +40,9 @@ pub mod keymap;
 pub mod layout_migration;
 pub mod menus;
 pub mod native_menu;
+// Network printing: not on the web (no sockets) nor in the Windows 7 build (no craft-print).
+#[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+mod network_glue;
 pub mod opening;
 pub mod palette;
 mod panel_docking;
@@ -176,6 +179,9 @@ pub struct VectorcraftApp {
     pub graphics_adapter: Option<String>,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
+    /// File → Print ▸ Network printer: the address, the query and the job in flight (not on the web: no sockets).
+    #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+    pub(crate) print_net: network_glue::NetTasks,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
     /// (SVG without a `system_clipboard`) while the internal clipboard is empty. It enables the
     /// Paste menu items.

@@ -7,8 +7,14 @@ on:
       - "apps/vectorcraft/Cargo.toml"
       - "apps/vectorcraft/src/printing.rs"
       - "apps/vectorcraft/src/printing/**"
+      - "crates/print/**"
+      - "crates/ui-egui/Cargo.toml"
       - "crates/ui-egui/src/print.rs"
       - "crates/ui-egui/src/tests/printps.rs"
+      - "crates/ui-egui/src/network_glue.rs"
+      - "crates/ui-egui/src/network_glue/**"
+      - "crates/ui-egui/src/dialogs/print.rs"
+      - "crates/ui-egui/src/dialogs/tests_print.rs"
       - ".github/workflows/print.yml"
   workflow_dispatch:
 permissions:
@@ -29,7 +35,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: desktop-print
-      - run: cargo clippy --locked -p vectorcraft --all-targets -- -D warnings
+      - run: cargo clippy --locked -p vectorcraft -p vectorcraft-print --all-targets -- -D warnings
       - run: cargo test --locked -p vectorcraft
       - name: Check pending submission and queue refusal feedback
         shell: bash
@@ -37,3 +43,7 @@ jobs:
         run: |
           cargo test --locked -p vectorcraft-ui-egui --lib -- tests::printps | tee printps.log
           grep -Eq 'test result: ok\. [1-9][0-9]* passed' printps.log || { echo "::error::tests::printps matched no tests"; exit 1; }
+      - name: Network printing (WS-Print and IPP against in-process fakes) and the PWG raster converter
+        run: cargo test --locked -p vectorcraft-print
+      - name: Network printer destination and the Print dialog
+        run: cargo test --locked -p vectorcraft-ui-egui --lib -- "network_glue::" "dialogs::tests_print::"

@@ -97,6 +97,8 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             graphics_adapter: None,
             place: Default::default(),
+            #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+            print_net: Default::default(),
             system_paste: false,
             clipboard_image_request: None,
             system_paste_at: f64::NEG_INFINITY,
@@ -280,6 +282,8 @@ impl VectorcraftApp {
         background::poll(self);
         screen_color::poll(self, ctx);
         opening::poll(self);
+        #[cfg(all(not(target_arch = "wasm32"), not(target_vendor = "win7")))]
+        self.poll_network(ctx);
         plugin_runs::poll(self);
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]

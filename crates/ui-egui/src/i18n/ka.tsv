@@ -5323,6 +5323,59 @@ imageTrace	Outline	კონტური
 # Select by Color (select.color)
 	Select by Color	მონიშვნა ფერის მიხედვით
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: გვერდი {n} არ არსებობს (ფაილს 1 გვერდი აქვს)
+	A network printer's copies are set in its section above	ქსელური პრინტერის ასლები ზემოთ, მის განყოფილებაში დგინდება
+	A setting isn't valid	პარამეტრი არასწორია
+	Accepted by {printer}	მიღებულია: {printer}
+	Asking the printer…	პრინტერს ვეკითხებით…
+	Canceling…	გაუქმება…
+	Couldn't reach the printer	პრინტერთან დაკავშირება ვერ მოხერხდა
+	Flip on long edge	გადაბრუნება გრძელი კიდის გასწვრივ
+	Flip on short edge	გადაბრუნება მოკლე კიდის გასწვრივ
+	Held by the printer	პრინტერს უკავია
+	I confirm sending this document to this printer	ვადასტურებ ამ დოკუმენტის ამ პრინტერზე გაგზავნას
+	Network Printer…	ქსელური პრინტერი…
+	Not confirmed by the printer	პრინტერმა არ დაადასტურა
+	Only IP addresses on this network are accepted (private, link-local or loopback), not host names.	დაშვებულია მხოლოდ ამ ქსელის IP მისამართები (კერძო, ლოკალური ან loopback), ჰოსტის სახელები არა.
+	Photo	ფოტო
+	Printed with errors	დაიბეჭდა შეცდომებით
+	Printed with warnings	დაიბეჭდა გაფრთხილებებით
+	Printer address:	პრინტერის მისამართი:
+	Printer orientation:	პრინტერის ორიენტაცია:
+	Printer status: {state}	პრინტერის მდგომარეობა: {state}
+	Query printer	პრინტერის გამოკითხვა
+	Query the printer first to see what it supports.	ჯერ გამოკითხეთ პრინტერი, რომ ნახოთ, რას უჭერს მხარს.
+	Reasons: {reasons}	მიზეზები: {reasons}
+	Reverse landscape	შებრუნებული ალბომური
+	Reverse portrait	შებრუნებული პორტრეტული
+	Sending to {printer}…	იგზავნება: {printer}…
+	Sent to {printer}	გაიგზავნა: {printer}
+	Sent. The printer can't say whether it printed.	გაიგზავნა. პრინტერი ვერ ამბობს, დაიბეჭდა თუ არა.
+	Sheets printed: {done} of {total}	დაბეჭდილი ფურცლები: {done} / {total}
+	Sheets printed: {n}	დაბეჭდილი ფურცლები: {n}
+	Still printing; the job continues on the printer	ბეჭდვა გრძელდება; დავალება პრინტერზე გრძელდება
+	The document couldn't be prepared	დოკუმენტის მომზადება ვერ მოხერხდა
+	The job was canceled	დავალება გაუქმდა
+	The print job stopped unexpectedly	ბეჭდვის დავალება მოულოდნელად შეწყდა
+	The printer accepts none of the formats this document can be sent in	პრინტერი არცერთ იმ ფორმატს არ იღებს, რომლითაც ეს დოკუმენტი შეიძლება გაიგზავნოს
+	The printer address was refused	პრინტერის მისამართი უარყოფილია
+	The printer doesn't support this setting	პრინტერს ეს პარამეტრი არ უჭერს მხარს
+	The printer is printing it	პრინტერი მას ბეჭდავს
+	The printer may have received the document. Check the printer before sending again.	პრინტერს შესაძლოა დოკუმენტი მიეღო. ხელახლა გაგზავნამდე შეამოწმეთ პრინტერი.
+	The printer no longer lists the job; it most likely finished	პრინტერი დავალებას აღარ აჩვენებს; სავარაუდოდ დასრულდა
+	The printer paused the job; it needs attention	პრინტერმა დავალება დააპაუზა; საჭიროა ყურადღება
+	The printer refused the request	პრინტერმა მოთხოვნა უარყო
+	The printer stopped the job	პრინტერმა დავალება შეწყვიტა
+	The printer's reply couldn't be understood	პრინტერის პასუხი გაუგებარია
+	This printer does not take a copies setting.	ამ პრინტერს ასლების რაოდენობის პარამეტრი არ აქვს.
+	This printer does not take a quality setting.	ამ პრინტერს ხარისხის პარამეტრი არ აქვს.
+	This printer does not take a resolution setting.	ამ პრინტერს გარჩევადობის პარამეტრი არ აქვს.
+	This printer does not take an orientation setting.	ამ პრინტერს ორიენტაციის პარამეტრი არ აქვს.
+	This printer only prints in grayscale.	ეს პრინტერი მხოლოდ ნაცრისფერ ტონებში ბეჭდავს.
+	This printer only prints one-sided.	ეს პრინტერი მხოლოდ ცალმხრივად ბეჭდავს.
+	Tick the confirmation box to send this document to this printer.	მონიშნეთ დადასტურების ველი, რომ ეს დოკუმენტი ამ პრინტერზე გაიგზავნოს.
+	Two-sided:	ორმხრივი:
+	Waiting in the printer's queue	ელოდება პრინტერის რიგში
+	{printer} (default)	{printer} (ნაგულისხმევი)
 	Snapping	მიბმა
 	Snap to Tangent	მხებზე მიბმა
 	Snap to Perpendicular	პერპენდიკულარზე მიბმა
