@@ -55,6 +55,36 @@ fn a_duplicate_highlights_the_copies_above_the_originals() {
     assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::Effect(4));
 }
 
+/// Removing other fills/strokes keeps a fill/stroke's Opacity row selected, renumbered with its
+/// item (so the Transparency panel keeps editing it); removing that item clears the selection.
+#[test]
+fn removing_items_keeps_a_surviving_item_opacity_row_selected() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.run("appearance.duplicateItem", json!({ "indices": [0] })).unwrap();
+    let owner = Some(NodeId(id));
+    let ctx = egui::Context::default();
+    let remove = |app: &mut VectorcraftApp, k: usize| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let n = first_subject(app).unwrap();
+            let sel = current_sel(app, ui.ctx(), Some(&n));
+            app.run("appearance.removeItem", json!({ "indices": [k] })).unwrap();
+            highlight_after_removal(app, ui.ctx(), &n, sel, Rows::Items, &[k]);
+        });
+        out.textures_delta.clear();
+    };
+    app.run("appearance.setActiveItem", json!({ "index": 2 })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::ItemOpacity(2)));
+    remove(&mut app, 0);
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::ItemOpacity(1));
+    assert_eq!(app.session.appearance_item(), Some(1));
+    remove(&mut app, 1);
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::None);
+    assert_eq!(app.session.appearance_item(), None);
+}
+
 #[test]
 fn opacity_labels() {
     assert_eq!(opacity_text(1.0, BlendMode::Normal), "Default");
