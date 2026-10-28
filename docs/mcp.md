@@ -5208,17 +5208,24 @@ shows, and so do the click-to-size dialogs (`perspective.draw` with `at`: the cl
 
 ## Blends
 
-`object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
-what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target: "defaults"`),
-else Smooth Color and Align to Page. `starts` gives, per object, the anchor of its first subpath the blend starts
-from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). A blend
-among the objects takes the others in as more key objects, keeping its options, name and transparency:
+`object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing, orientation and spine
+default to what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target:
+"defaults"`), else Smooth Color, Align to Page and Auto. `starts` gives, per object, the anchor of its first
+subpath the blend starts from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it
+the other way). A blend among the objects takes the others in as more key objects, keeping its options, name and
+transparency:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[12,15],"starts":[0,2],"steps":8}}}
 {"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[20,31]}}}
 {"name":"run_command","arguments":{"command":"object.blend.info","params":{}}}
 ```
+
+`object.blend.options` also sets the spine (`spineMode`: `auto`, `always` or `never`) and the easing: `easingType`
+(`easeIn`, `easeOut`, `easeInOut`, `easeOutIn`), `ramp` (0–100%) and `colorShift` (-100–100%, independent of the
+position easing). Auto follows a replaced spine or Align to Path; Always eases along the straight lines between
+the keys; Never takes the spine off the distribution and the canvas. `object.blend.info` reports `spineMode`,
+`spineVisible` (false for Never) and `spineFollowed` (whether easing acts).
 
 A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
 (`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where

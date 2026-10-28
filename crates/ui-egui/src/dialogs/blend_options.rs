@@ -1,12 +1,12 @@
 //! Object → Blend → Blend Options (also the Blend tool's double-click, Alt-click and toolbar
-//! button): Spacing (Smooth Color, Specified Steps or Specified Distance) with its value and
-//! Orientation (Align to Page or Align to Path), opened on the selected blend's options and
-//! previewed live on it; OK keeps the preview as one undo step (`object.blend.options`). With no
-//! blend selected it sets the options new blends start with.
+//! button): Spacing (Smooth Color, Specified Steps or Specified Distance) with its value,
+//! Orientation (Align to Page or Align to Path) and Spine (Auto, Always or Never), opened on the
+//! selected blend's options and previewed live on it; OK keeps the preview as one undo step
+//! (`object.blend.options`). With no blend selected it sets the options new blends start with.
 //!
 //! Fields: `spacing` (`smooth` | `steps` | `distance`), `steps` (1..1000), `distance` (pt),
-//! `orientation` (`page` | `path`), `preview`, and `__target` (`blend` or `defaults`, from
-//! `object.blend.info`).
+//! `orientation` (`page` | `path`), `spineMode` (`auto` | `always` | `never`), `preview`, and
+//! `__target` (`blend` or `defaults`, from `object.blend.info`).
 
 use egui::{CornerRadius, Sense, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
@@ -35,7 +35,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut fields = app.session.execute("object.blend.info", &json!({})).map_err(|e| e.to_string())?;
     let target = fields["target"].clone();
     let Some(o) = fields.as_object_mut() else { return Err("no blend options".into()) };
-    o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation"));
+    o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "spineMode"));
     o.insert("__target".into(), target);
     o.insert("preview".into(), json!(true));
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -49,7 +49,7 @@ fn on_blend(d: &Dialog) -> bool {
 
 /// `object.blend.options` parameters from the fields.
 fn params(d: &Dialog) -> Value {
-    let mut p = json!({"spacing": d.str("spacing"), "orientation": d.str("orientation")});
+    let mut p = json!({"spacing": d.str("spacing"), "orientation": d.str("orientation"), "spineMode": d.str("spineMode")});
     match d.str("spacing").as_str() {
         "steps" => p["steps"] = json!(d.f64("steps", 5.0).round().clamp(1.0, 1000.0)),
         "distance" => p["distance"] = json!(d.f64("distance", 10.0)),
@@ -90,6 +90,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             if orientation_button(ui, along, path == along, tip) {
                 d.fields.insert("orientation".into(), json!(value));
             }
+        }
+    });
+    ui.add_space(6.0);
+    widgets::label_row(ui, tl!("Spine:"), LABEL_W, |ui| {
+        let modes = ["auto", "always", "never"];
+        let labels = [tl!("Auto"), tl!("Always"), tl!("Never")];
+        let mode = d.str("spineMode");
+        let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
+        if let Some(i) = widgets::dropdown(ui, "blend-spine", labels[index], &labels, 150.0)
+            && let Some(mode) = modes.get(i)
+        {
+            d.fields.insert("spineMode".into(), json!(mode));
         }
     });
     if on_blend(d) {
@@ -167,6 +179,7 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
         frame(&mut app);
         assert_eq!(app.ui.dialog.as_ref().unwrap().str("spacing"), "smooth");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("spineMode"), "auto");
         // OK without changes keeps Smooth Color (it used to become 5 steps).
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(spec(&app, id).spacing, BlendSpacing::SmoothColor);
@@ -203,6 +216,7 @@ mod tests {
         d.fields.insert("spacing".into(), json!("steps"));
         d.fields.insert("steps".into(), json!(7));
         d.fields.insert("orientation".into(), json!("path"));
+        d.fields.insert("spineMode".into(), json!("never"));
         frame(&mut app);
         crate::dialogs::confirm(&mut app).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
@@ -211,5 +225,6 @@ mod tests {
         let id = app.run("object.blend.make", json!({})).unwrap()["id"].as_u64().unwrap();
         let s = spec(&app, id);
         assert_eq!((s.spacing, s.orientation), (BlendSpacing::Steps(7), BlendOrientation::AlignToPath));
+        assert_eq!(s.spine_mode, vectorcraft_doc::live::BlendSpineMode::Never);
     }
 }

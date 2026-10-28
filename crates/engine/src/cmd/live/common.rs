@@ -158,6 +158,14 @@ pub(super) fn orientation_param(p: &Value, current: BlendOrientation) -> BlendOr
     }
 }
 
+/// Blend panel Spine (Auto, Always, Never), validated before any document mutation.
+pub(super) fn spine_mode_param(p: &Value, cmd: &str, current: BlendSpineMode) -> Result<BlendSpineMode> {
+    match p.get("spineMode").filter(|v| !v.is_null()) {
+        None => Ok(current),
+        Some(v) => v.as_str().and_then(BlendSpineMode::parse).ok_or_else(|| bad(cmd, "spineMode must be auto, always or never")),
+    }
+}
+
 /// Blend panel Type and Ramp, validated before any document mutation.
 pub(super) fn ease_param(p: &Value, cmd: &str, current: BlendEase) -> Result<BlendEase> {
     let kind = match p.get("easingType").filter(|v| !v.is_null()) {

@@ -966,7 +966,7 @@ impl Rail {
     /// `None` when nothing moves: no stored spine and the steps keep the page's orientation.
     fn new(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<Self> {
         let rotate = spec.orientation == BlendOrientation::AlignToPath;
-        if spec.spine.is_none() && !rotate {
+        if !spec.spine_followed() {
             return None;
         }
         let (path, anchors) = blend_spine(keys, spec)?;

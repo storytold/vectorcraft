@@ -3,7 +3,9 @@
 //! - Blend: click object A, then object B → `object.blend.make {ids: [A, B]}`; clicking an anchor
 //!   point of a path blends from that point (`starts`). Each further click adds the object as one
 //!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
-//!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over.
+//!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over. A selected blend
+//!   whose spine the steps follow shows Ease and Color handles on its first pair of keys: dragging
+//!   them previews `object.blend.options` (Type/Ramp and Shift), one undo step.
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
 //!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
 //!   new point takes the current fill color in its own model, unless Shift); drag a mesh point,
@@ -13,13 +15,16 @@
 
 use serde_json::json;
 use vectorcraft_color::Paint;
+use vectorcraft_doc::live::{Spine, blend_spine};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Point, Vec2};
 
 use crate::meshedit::{MeshEdit, grid_of};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
+/// The colour-shift handle, away from the ease handle on the spine.
+const SHIFT_COLOR: [u8; 3] = [0xf2, 0x9d, 0x38];
 
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
     match id {
@@ -40,11 +45,115 @@ const BLEND_OPTIONS: &str = "blendOptions";
 /// What the Blend tool picks: an object and the anchor of its first subpath clicked, if any.
 type Pick = (NodeId, Option<usize>);
 
+/// A selected blend whose easing handles show on the canvas.
+struct BlendControl {
+    spine: Spine,
+    /// Whole-spine arc-length fractions of the first pair of keys.
+    from: f64,
+    span: f64,
+    /// Where the ease and colour-shift handles sit.
+    ease: Point,
+    shift: Point,
+}
+
+/// The selected blends, or the blends of selected key objects.
+fn selected_blends(cx: &ToolContext) -> Vec<NodeId> {
+    let mut ids = vec![];
+    for id in &cx.selection.objects {
+        let blend = match cx.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Blend { .. }) => Some(*id),
+            _ => cx.doc.parent_of(*id),
+        };
+        if let Some(b) = blend
+            && cx.doc.node(b).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }))
+            && !ids.contains(&b)
+        {
+            ids.push(b);
+        }
+    }
+    ids
+}
+
+/// The spine and handles of blend `id`: its first pair of keys runs the ease handle (at the
+/// shape's halfway point) and the colour-shift handle (at the colour's halfway point), the latter
+/// lifted off the spine so the two can be told apart where they meet.
+fn blend_control(cx: &ToolContext, id: NodeId) -> Option<BlendControl> {
+    let NodeKind::Blend { children, spec } = &cx.doc.node(id)?.kind else { return None };
+    if !spec.spine_followed() {
+        return None;
+    }
+    let (path, anchors) = blend_spine(children, spec)?;
+    let spine = Spine::new(&path)?;
+    let total = spine.length();
+    if !(total.is_finite() && total > 1e-9) {
+        return None;
+    }
+    let k = children.len().max(2);
+    let (a0, a1) = match anchors {
+        Some(ka) if ka.len() >= 2 => (spine.anchor_length(ka[0]).unwrap_or(0.0), spine.anchor_length(ka[1]).unwrap_or(total)),
+        _ => (0.0, total / (k - 1) as f64),
+    };
+    let (f0, f1) = (a0 / total, a1 / total);
+    let (from, span) = if f1 > f0 + 1e-9 { (f0, f1 - f0) } else { (0.0, 1.0 / (k - 1) as f64) };
+    let (ease, _) = spine.at(from + span * spec.ease.apply(0.5));
+    let (at_shift, angle) = spine.at(from + span * spec.color_position(0.5));
+    let lift = Vec2::new(-angle.sin(), angle.cos()) * cx.tol(14.0);
+    Some(BlendControl { spine, from, span, ease, shift: at_shift + lift })
+}
+
+/// The fraction (0..1) of the spine nearest `p`, sampled then refined.
+fn nearest_fraction(spine: &Spine, p: Point) -> f64 {
+    let (mut best, mut best_d) = (0.0, f64::INFINITY);
+    let (mut lo, mut hi) = (0.0, 1.0);
+    for _ in 0..2 {
+        let n = 128;
+        for i in 0..=n {
+            let f = lo + (hi - lo) * i as f64 / n as f64;
+            let d = spine.at(f).0.distance(p);
+            if d < best_d {
+                best_d = d;
+                best = f;
+            }
+        }
+        let step = (hi - lo) / n as f64;
+        lo = (best - step).max(0.0);
+        hi = (best + step).min(1.0);
+    }
+    best
+}
+
+/// The easing Type and Ramp whose halfway point is `local` (0..1) between two keys.
+fn ease_at(local: f64) -> (&'static str, f64) {
+    if local >= 0.5 { ("easeOut", ((local - 0.5) / 0.25).clamp(0.0, 1.0)) } else { ("easeIn", ((0.5 - local) / 0.25).clamp(0.0, 1.0)) }
+}
+
+/// The colour Shift whose halfway point is `local` (0..1) between two keys.
+fn shift_at(local: f64) -> f64 {
+    // Shift +-100 reaches 0.5^4 and 0.5^0.25.
+    let t = local.clamp(0.0625, 0.5f64.powf(0.25));
+    (50.0 * (-t.log2()).log2()).clamp(-100.0, 100.0)
+}
+
+/// Which handle a blend drag moves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BlendGrab {
+    Ease,
+    Shift,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BlendDrag {
+    id: NodeId,
+    grab: BlendGrab,
+}
+
 #[derive(Default)]
 pub struct BlendTool {
     first: Option<Pick>,
     /// A blend was just made: the next click adds to it (the selected blend).
     chained: bool,
+    /// An ease or colour-shift handle being dragged.
+    drag: Option<BlendDrag>,
 }
 
 /// The anchor of the first subpath of path or compound path `id` (its first member's) nearest
@@ -76,6 +185,35 @@ impl BlendTool {
             _ => None,
         })
     }
+
+    /// The easing handle under `p`, in a selected blend.
+    fn handle_at(&self, cx: &ToolContext, p: Point) -> Option<BlendDrag> {
+        let tol = cx.tol(8.0);
+        for id in selected_blends(cx) {
+            let Some(c) = blend_control(cx, id) else { continue };
+            let (de, ds) = (c.ease.distance(p), c.shift.distance(p));
+            if ds <= tol && ds < de {
+                return Some(BlendDrag { id, grab: BlendGrab::Shift });
+            }
+            if de <= tol {
+                return Some(BlendDrag { id, grab: BlendGrab::Ease });
+            }
+        }
+        None
+    }
+
+    /// `object.blend.options` parameters for dragging handle `d` to `p`.
+    fn drag_params(cx: &ToolContext, d: BlendDrag, p: Point) -> Option<serde_json::Value> {
+        let c = blend_control(cx, d.id)?;
+        let local = ((nearest_fraction(&c.spine, p) - c.from) / c.span).clamp(0.0, 1.0);
+        Some(match d.grab {
+            BlendGrab::Ease => {
+                let (kind, ramp) = ease_at(local);
+                json!({"easingType": kind, "ramp": ramp * 100.0})
+            }
+            BlendGrab::Shift => json!({"colorShift": shift_at(local)}),
+        })
+    }
 }
 
 impl Tool for BlendTool {
@@ -90,31 +228,53 @@ impl Tool for BlendTool {
         match ev.kind {
             PointerKind::DoubleClick => options(self),
             PointerKind::Down if ev.mods.alt => options(self),
-            PointerKind::Down => match (self.first(cx), pick(cx, ev.pos)) {
-                (_, None) => {
+            PointerKind::Down => {
+                // A selected blend's easing handles come before picking objects.
+                if let Some(d) = self.handle_at(cx, ev.pos) {
                     (self.first, self.chained) = (None, false);
-                    vec![]
+                    self.drag = Some(d);
+                    return vec![Action::Begin("Blend Easing".into())];
                 }
-                (None, Some((top, start))) => {
-                    self.first = Some((top, start));
-                    vec![Action::Exec("select.set".into(), json!({"ids": [top.0]}))]
-                }
-                (Some((a, sa)), Some((b, sb))) if a != b && cx.doc.node(a).is_some() => {
-                    (self.first, self.chained) = (None, true);
-                    let mut p = json!({"ids": [a.0, b.0]});
-                    if sa.is_some() || sb.is_some() {
-                        p["starts"] = json!([sa, sb]);
+                match (self.first(cx), pick(cx, ev.pos)) {
+                    (_, None) => {
+                        (self.first, self.chained) = (None, false);
+                        vec![]
                     }
-                    vec![Action::Exec("object.blend.make".into(), p)]
+                    (None, Some((top, start))) => {
+                        self.first = Some((top, start));
+                        vec![Action::Exec("select.set".into(), json!({"ids": [top.0]}))]
+                    }
+                    (Some((a, sa)), Some((b, sb))) if a != b && cx.doc.node(a).is_some() => {
+                        (self.first, self.chained) = (None, true);
+                        let mut p = json!({"ids": [a.0, b.0]});
+                        if sa.is_some() || sb.is_some() {
+                            p["starts"] = json!([sa, sb]);
+                        }
+                        vec![Action::Exec("object.blend.make".into(), p)]
+                    }
+                    (Some(_), Some(_)) => vec![],
                 }
-                (Some(_), Some(_)) => vec![],
+            }
+            PointerKind::Drag => match self.drag {
+                Some(d) => Self::drag_params(cx, d, ev.pos).map(|p| vec![Action::Preview("object.blend.options".into(), p)]).unwrap_or_default(),
+                None => vec![],
             },
+            PointerKind::Up => self.drag.take().map_or_else(Vec::new, |_| vec![Action::Commit]),
             _ => vec![],
         }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let Some((id, start)) = self.first(cx) else { return vec![] };
-        let Some(n) = cx.doc.node(id) else { return vec![] };
+        let mut out = vec![];
+        // A selected blend shows its spine and the two easing handles on its first pair of keys.
+        for id in selected_blends(cx) {
+            let Some(c) = blend_control(cx, id) else { continue };
+            out.push(Overlay::CurvePoint { p: c.ease, color: FEEDBACK, filled: true, size: 9.0 });
+            out.push(Overlay::Label { p: c.ease, text: "Ease".into(), color: FEEDBACK });
+            out.push(Overlay::CurvePoint { p: c.shift, color: SHIFT_COLOR, filled: true, size: 9.0 });
+            out.push(Overlay::Label { p: c.shift, text: "Color".into(), color: SHIFT_COLOR });
+        }
+        let Some((id, start)) = self.first(cx) else { return out };
+        let Some(n) = cx.doc.node(id) else { return out };
         let at = match (start, &n.kind) {
             (Some(i), NodeKind::Path { path, .. }) => path.subpaths.first().and_then(|s| s.anchors.get(i)).map(|a| a.p),
             (Some(i), NodeKind::Compound { children, .. }) => {
@@ -122,10 +282,14 @@ impl Tool for BlendTool {
             }
             _ => None,
         };
-        let Some(p) = at.or_else(|| n.geometric_bounds().map(|b| b.center())) else { return vec![] };
-        vec![Overlay::Anchor { p, color: FEEDBACK, filled: true, size: 6.0 }]
+        let Some(p) = at.or_else(|| n.geometric_bounds().map(|b| b.center())) else { return out };
+        out.push(Overlay::Anchor { p, color: FEEDBACK, filled: true, size: 6.0 });
+        out
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
+        if self.handle_at(cx, p).is_some() {
+            return Cursor::Move;
+        }
         match pick(cx, p) {
             Some((_, Some(_))) => Cursor::BlendAnchor,
             Some(_) => Cursor::BlendObject,
@@ -133,11 +297,11 @@ impl Tool for BlendTool {
         }
     }
     fn busy(&self) -> bool {
-        self.first.is_some()
+        self.first.is_some() || self.drag.is_some()
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         (self.first, self.chained) = (None, false);
-        vec![]
+        self.drag.take().map_or_else(Vec::new, |_| vec![Action::Commit])
     }
 }
 
@@ -262,7 +426,80 @@ impl Tool for MeshTool {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use vectorcraft_doc::Selection;
+    use vectorcraft_doc::live::{BlendSpacing, BlendSpec, BlendSpineMode};
+    use vectorcraft_doc::{Document, Node, Selection};
+
+    /// Two 20 pt squares blended with Spine Always: the straight spine runs from (10, 10) to
+    /// (110, 10), so its handles start at the middle of that line.
+    fn doc_with_blend(mode: BlendSpineMode) -> (Document, NodeId) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let key = |id: NodeId, x: f64| {
+            std::sync::Arc::new(Node::path(
+                id,
+                vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 0.0, x + 20.0, 20.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            ))
+        };
+        let (k1, k2, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(3), spine_mode: mode, ..Default::default() };
+        let blend = Node::new(b, NodeKind::Blend { children: vec![key(k1, 0.0), key(k2, 100.0)], spec: Box::new(spec) });
+        d.insert(Some(l), 0, blend).unwrap();
+        (d, b)
+    }
+
+    #[test]
+    fn blend_tool_drags_easing_and_color_handles() {
+        let (d, b) = doc_with_blend(BlendSpineMode::Always);
+        let (mut s, p) = (Selection::default(), paint());
+        s.set([b]);
+        let c = cx(&d, &s, &p);
+        let mut t = create("blend").unwrap();
+        let ov = t.overlays(&c);
+        let at = |color: [u8; 3]| {
+            ov.iter()
+                .find_map(|o| match o {
+                    Overlay::CurvePoint { p, color: c, .. } if *c == color => Some(*p),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("no handle in {ov:?}"))
+        };
+        let ease = at(FEEDBACK);
+        let shift = at(SHIFT_COLOR);
+        assert!(ease.distance(Point::new(60.0, 10.0)) < 1e-6, "{ease:?}");
+        assert!(shift.distance(Point::new(60.0, 24.0)) < 1e-6, "{shift:?}");
+        assert_eq!(t.cursor(&c, ease, Mods::default()), Cursor::Move);
+        // Dragging the ease handle toward the second key eases out, 80 % ramp.
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, ease.x, ease.y)), vec![Action::Begin("Blend Easing".into())]);
+        assert!(t.busy());
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 80.0, 10.0));
+        assert!(
+            matches!(&acts[..], [Action::Preview(id, p)]
+                if id == "object.blend.options"
+                    && p["easingType"] == json!("easeOut")
+                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
+            "{acts:?}"
+        );
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 80.0, 10.0)), vec![Action::Commit]);
+        assert!(!t.busy());
+        // The colour-shift handle moves independently: 60 % of the way leans the colours late.
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, shift.x, shift.y)), vec![Action::Begin("Blend Easing".into())]);
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 70.0, 24.0));
+        assert!(
+            matches!(&acts[..], [Action::Preview(id, p)]
+                if id == "object.blend.options"
+                    && (p["colorShift"].as_f64().unwrap_or_default() + 22.02).abs() < 0.01),
+            "{acts:?}"
+        );
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 70.0, 24.0));
+        // Never hides the spine and its handles.
+        let (d2, b2) = doc_with_blend(BlendSpineMode::Never);
+        let (mut s2, p2) = (Selection::default(), paint());
+        s2.set([b2]);
+        let c2 = cx(&d2, &s2, &p2);
+        assert!(!t.overlays(&c2).iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
+        assert_ne!(t.cursor(&c2, Point::new(60.0, 10.0), Mods::default()), Cursor::Move);
+    }
 
     #[test]
     fn blend_tool_two_clicks_make_blend() {
@@ -321,7 +558,7 @@ mod tests {
         d.insert(Some(l), 1, blend).unwrap();
         let mut s = Selection::default();
         let p = paint();
-        let mut t = BlendTool { first: None, chained: true };
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         s.set([g]);
         let c = cx(&d, &s, &p);
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));

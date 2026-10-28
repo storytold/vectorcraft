@@ -6,7 +6,7 @@
 
 use egui::{Event, Pos2, Rect, pos2, vec2};
 use serde_json::json;
-use vectorcraft_doc::live::{BlendOrientation, BlendSpacing};
+use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpineMode};
 use vectorcraft_doc::{BlendSpec, NodeId, NodeKind};
 use vectorcraft_engine::Session;
 
@@ -124,7 +124,9 @@ fn window_blend_opens_the_panel() {
     crate::menus::invoke(&mut app, "window.panel", item.params.clone());
     assert!(crate::panel_docking::showing(&app.ui, ID));
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::show_icon_panel(app, ui, ID));
-    for label in ["Make", "Spacing:", "Orientation:", "Direction:", "Reverse Front to Back", "Reverse Spine", "Replace Spine", "Expand", "Release"] {
+    for label in
+        ["Make", "Spacing:", "Orientation:", "Spine:", "Direction:", "Reverse Front to Back", "Reverse Spine", "Replace Spine", "Expand", "Release"]
+    {
         assert!(text.contains(label), "{label} in {text}");
     }
     assert!(!text.contains("on the roadmap"), "{text}");
@@ -224,6 +226,27 @@ fn each_button_runs_its_blend_command() {
     f.click_text(&mut app, "Release");
     let objects = top(&app);
     assert!(objects.len() >= 2 && objects.iter().all(|(_, blend)| !blend), "the keys are back: {objects:?}");
+}
+
+#[test]
+fn spine_mode_edits_the_selected_blend_and_undoes() {
+    let (mut app, id) = blended();
+    let mut f = Frames::new();
+    f.text(&mut app, "Spine:");
+    f.click_text(&mut app, "Auto");
+    f.click_text(&mut app, "Always");
+    assert_eq!(spec(&app, id).spine_mode, BlendSpineMode::Always);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["spineVisible"], &info["spineFollowed"]), (&json!(true), &json!(true)));
+    let depth = undo_depth(&app);
+    f.click_text(&mut app, "Always");
+    f.click_text(&mut app, "Never");
+    assert_eq!(spec(&app, id).spine_mode, BlendSpineMode::Never);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["spineVisible"], &info["spineFollowed"]), (&json!(false), &json!(false)));
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(spec(&app, id).spine_mode, BlendSpineMode::Always);
 }
 
 #[test]

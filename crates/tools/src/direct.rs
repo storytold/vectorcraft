@@ -230,6 +230,7 @@ pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
     let mut v = vec![];
     walk_pickable(cx.doc, cx.isolation, |n| {
         if let NodeKind::Blend { children, spec } = &n.kind
+            && spec.spine_visible()
             && let Some((path, _)) = vectorcraft_doc::live::blend_spine(children, spec)
         {
             v.push((n.id, path));

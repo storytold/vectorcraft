@@ -1,10 +1,11 @@
-//! Blend panel (Window → Blend): Make, the Spacing and Orientation of the selected blend (with no
-//! blend selected, the options new blends start with), Reverse Front to Back, Reverse Spine,
-//! Replace Spine, Expand and Release. Each control runs its Object → Blend command
-//! (`object.blend.make`, `object.blend.options` and the others), so a change of the selected
-//! blend's spacing or orientation shows on the canvas at once as one undo step. Make is dimmed
-//! until two or more objects are selected. Spacing and Orientation are dimmed until a blend or two
-//! or more objects are selected, and the other buttons are dimmed until a blend is selected.
+//! Blend panel (Window → Blend): Make, the Spacing, Orientation and Spine of the selected blend
+//! (with no blend selected, the options new blends start with), Type, Ramp and Shift, Reverse
+//! Front to Back, Reverse Spine, Replace Spine, Expand and Release. Each control runs its
+//! Object → Blend command (`object.blend.make`, `object.blend.options` and the others), so a
+//! change of the selected blend's spacing, orientation, spine or easing shows on the canvas at
+//! once as one undo step. Make is dimmed until two or more objects are selected. Spacing and
+//! Orientation are dimmed until a blend or two or more objects are selected, Type, Ramp and Shift
+//! until the blend follows a spine, and the other buttons until a blend is selected.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -94,9 +95,22 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    let spines = ["auto", "always", "never"];
+    let spine_labels = [tl!("Auto"), tl!("Always"), tl!("Never")];
+    let spine = info["spineMode"].as_str().unwrap_or("auto");
+    let spine_index = spines.iter().position(|m| *m == spine).unwrap_or(0);
+    widgets::label_row(ui, tl!("Spine:"), LABEL_W, |ui| {
+        let width = ui.available_width().max(FIELD_W);
+        if let Some(i) = widgets::dropdown(ui, "blend-panel-spine", spine_labels[spine_index], &spine_labels, width)
+            && let Some(mode) = spines.get(i)
+        {
+            change = Some(json!({"spineMode": mode}));
+        }
+    });
     let selected = info["target"] == "blend";
-    // Position easing needs a spine to run along: a replaced one, or Align to Path.
-    let spined = info["spine"]["explicit"] == true || info["orientation"] == "path";
+    // Position easing needs the blend to follow a spine (spineFollowed covers Always and a
+    // replaced spine, and is false for Never).
+    let spined = info["spineFollowed"] == true;
     ui.add_enabled_ui(selected && spined, |ui| {
         let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];

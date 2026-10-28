@@ -1,6 +1,6 @@
 use super::common::{
     DEFAULT_DISTANCE, DEFAULT_STEPS, ease_param, fix_ids, ids_json, is_blend, orientation_param, percent_param, roots_param, selected_of,
-    spacing_param, starts_param, wrap,
+    spacing_param, spine_mode_param, starts_param, wrap,
 };
 use super::mesh::index_param;
 use super::*;
@@ -65,11 +65,12 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     let starts = starts_param(p, &roots)?;
     let base = first_blend(&s.doc()?.doc, &roots);
     let cur = match base.as_ref().map(|n| &n.kind) {
-        Some(NodeKind::Blend { spec, .. }) => BlendDefaults { spacing: spec.spacing, orientation: spec.orientation },
+        Some(NodeKind::Blend { spec, .. }) => BlendDefaults { spacing: spec.spacing, orientation: spec.orientation, spine_mode: spec.spine_mode },
         _ => s.prefs.blend_options.unwrap_or_default(),
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
+    let spine_mode = spine_mode_param(p, C, cur.spine_mode)?;
     let (ease0, color0) = match base.as_ref().map(|n| &n.kind) {
         Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_shift),
         _ => Default::default(),
@@ -86,7 +87,7 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
                 n.knockout = vectorcraft_doc::Knockout::On;
                 n
             });
-            let mut spec = BlendSpec { spacing, orientation, ease, color_shift, starts, ..Default::default() };
+            let mut spec = BlendSpec { spacing, orientation, spine_mode, ease, color_shift, starts, ..Default::default() };
             if let NodeKind::Blend { children: old, spec: old_spec } = &n.kind {
                 extend_spine(&mut spec, old, old_spec, &children);
             }
@@ -321,42 +322,53 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         // Nothing to set them on: the options new blends start with (easing is per blend).
         let d = s.prefs.blend_options.unwrap_or_default();
         let spacing = spacing_param(p, C, d.spacing)?;
-        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation) });
+        let spine_mode = spine_mode_param(p, C, d.spine_mode)?;
+        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation), spine_mode });
         return Ok(json!({ "defaults": true }));
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
+    let spine_mode = spine_mode_param(p, C, cur.spine_mode)?;
     let ease = ease_param(p, C, cur.ease)?;
     let color_shift = percent_param(p, C, "colorShift", cur.color_shift, -100.0)?;
     edit_blends(s, "Blend Options", |_, spec| {
         spec.spacing = spacing;
         spec.orientation = orientation;
+        spec.spine_mode = spine_mode;
         spec.ease = ease;
         spec.color_shift = color_shift;
     })
 }
 
-/// Spacing and orientation as `object.blend.options` takes them; the step count and distance
-/// not in use show their defaults.
-fn blend_options_json(spacing: BlendSpacing, orientation: BlendOrientation) -> Value {
+/// Spacing, orientation and spine mode as `object.blend.options` takes them; the step count and
+/// distance not in use show their defaults.
+fn blend_options_json(spacing: BlendSpacing, orientation: BlendOrientation, spine_mode: BlendSpineMode) -> Value {
     let (mode, steps, distance) = match spacing {
         BlendSpacing::SmoothColor => ("smooth", DEFAULT_STEPS, DEFAULT_DISTANCE),
         BlendSpacing::Steps(n) => ("steps", n, DEFAULT_DISTANCE),
         BlendSpacing::Distance(d) => ("distance", DEFAULT_STEPS, d),
     };
     let orientation = if orientation == BlendOrientation::AlignToPath { "path" } else { "page" };
-    json!({ "spacing": mode, "steps": steps, "distance": distance, "orientation": orientation })
+    json!({
+        "spacing": mode,
+        "steps": steps,
+        "distance": distance,
+        "orientation": orientation,
+        "spineMode": spine_mode.id()
+    })
 }
 
 pub(super) fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(match selected_spec(s) {
         Some((id, spec, keys)) => {
-            let mut v = blend_options_json(spec.spacing, spec.orientation);
+            let mut v = blend_options_json(spec.spacing, spec.orientation, spec.spine_mode);
             v["target"] = json!("blend");
             v["id"] = json!(id.0);
             v["easingType"] = json!(spec.ease.kind.id());
             v["ramp"] = json!(spec.ease.ramp * 100.0);
             v["colorShift"] = json!(spec.color_shift);
+            v["spineVisible"] = json!(spec.spine_visible());
+            v["spineFollowed"] = json!(spec.spine_followed());
             v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());
             v["keys"] = json!(keys.iter().map(|k| k.0).collect::<Vec<_>>());
             if let Some(NodeKind::Blend { children, .. }) = s.doc()?.doc.node(id).map(|n| &n.kind)
@@ -371,7 +383,7 @@ pub(super) fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
         }
         None => {
             let d = s.prefs.blend_options.unwrap_or_default();
-            let mut v = blend_options_json(d.spacing, d.orientation);
+            let mut v = blend_options_json(d.spacing, d.orientation, d.spine_mode);
             v["target"] = json!("defaults");
             v
         }

@@ -2,7 +2,7 @@
 //! start points from clicked anchors, adding keys to a blend instead of nesting it (M8.18).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
+use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec, BlendSpineMode};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -116,6 +116,69 @@ fn a_blend_and_an_object_make_one_blend_with_more_keys() {
     assert_eq!(n.name.as_deref(), Some("Ribbon"));
     assert!(s.doc().unwrap().doc.node(g).is_none());
     assert_eq!(vectorcraft_doc::live::expand_live(&n).len(), 3 + 2 * 3);
+}
+
+#[test]
+fn spine_modes_are_set_validated_and_saved() {
+    let mut s = session();
+    // Nothing selected: the mode new blends start with.
+    let d = s.execute("object.blend.options", &json!({"spineMode": "always"})).unwrap();
+    assert_eq!(d["defaults"], json!(true));
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(info["spineMode"], "always");
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 4})).unwrap());
+    assert_eq!(spec(&s, g).1.spine_mode, BlendSpineMode::Always, "a new blend starts with the mode");
+    sel(&mut s, &[g]);
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["spineMode"], &info["spineVisible"]), (&json!("always"), &json!(true)));
+    // Never leaves the spine out of the distribution and the canvas.
+    s.execute("object.blend.options", &json!({"spineMode": "never"})).unwrap();
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["spineMode"], &info["spineVisible"]), (&json!("never"), &json!(false)));
+    // A bad mode is refused without an undo step.
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in [json!({"spineMode": "sometimes"}), json!({"spineMode": 1}), json!({"spineMode": true})] {
+        assert!(s.execute("object.blend.options", &bad).is_err(), "{bad}");
+        assert_eq!(spec(&s, g).1.spine_mode, BlendSpineMode::Never);
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    }
+    // The mode round-trips through the document.
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert_eq!(&back.layers, &d.layers);
+    // Auto is the default and is not written, so old documents stay as they were.
+    let old: BlendSpec = serde_json::from_value(json!({"spacing": {"steps": 4}})).unwrap();
+    assert_eq!(old.spine_mode, BlendSpineMode::Auto);
+    assert!(serde_json::to_value(&old).unwrap().get("spineMode").is_none());
+}
+
+#[test]
+fn always_lets_easing_run_along_a_straight_spine_and_never_turns_it_off() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 4, "spineMode": "always", "easingType": "easeIn", "ramp": 100})).unwrap());
+    let centers = |s: &Session| -> Vec<f64> {
+        vectorcraft_doc::live::expand_live(&node(s, g)).iter().map(|n| n.geometric_bounds().unwrap().center().x).collect()
+    };
+    // Ease In at Ramp 100 puts the first step at 4 % of the way (5 + 100 * 0.04), not 20 %.
+    let eased = centers(&s);
+    assert!((eased[1] - 9.0).abs() < 1e-6, "{eased:?}");
+    // Never ignores the spine: even spacing whatever the ease says.
+    sel(&mut s, &[g]);
+    s.execute("object.blend.options", &json!({"spineMode": "never"})).unwrap();
+    let even = centers(&s);
+    assert!((even[1] - 25.0).abs() < 1e-6, "{even:?}");
+    // Auto follows a replaced spine.
+    let line = id_of(&s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 100, "y2": 100})).unwrap());
+    sel(&mut s, &[g, line]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    sel(&mut s, &[g]);
+    s.execute("object.blend.options", &json!({"spineMode": "auto"})).unwrap();
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(info["spineVisible"], json!(true));
 }
 
 #[test]

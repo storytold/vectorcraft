@@ -10,8 +10,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::live::{
-    self, BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeMap, EnvelopeOptions,
-    GradientMesh, MeshAppearance, PreserveShape, Spine,
+    self, BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec, BlendSpineMode, EnvelopeKind, EnvelopeMap,
+    EnvelopeOptions, GradientMesh, MeshAppearance, PreserveShape, Spine,
 };
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Vec2};

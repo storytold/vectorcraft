@@ -26,6 +26,43 @@ pub enum BlendOrientation {
     AlignToPath,
 }
 
+/// Blend panel → Spine: when the blend follows and shows its spine.
+///
+/// `Auto` follows a replaced spine, or a straight one when the steps align to the path; `Always`
+/// always follows and shows one (so easing works on a straight blend too); `Never` leaves the
+/// spine alone: no distribution along it, no spine or easing handles on the canvas.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BlendSpineMode {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+impl BlendSpineMode {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Always => "always",
+            Self::Never => "never",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "auto" => Some(Self::Auto),
+            "always" => Some(Self::Always),
+            "never" => Some(Self::Never),
+            _ => None,
+        }
+    }
+
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
+    }
+}
+
 /// Distribution of blend steps, as offered by the Blend panel's Type menu.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +126,9 @@ pub struct BlendSpec {
     pub spacing: BlendSpacing,
     #[serde(default)]
     pub orientation: BlendOrientation,
+    /// When the blend follows and shows its spine (Auto, Always, Never).
+    #[serde(default, rename = "spineMode", skip_serializing_if = "BlendSpineMode::is_auto")]
+    pub spine_mode: BlendSpineMode,
     /// Acceleration of the steps' shapes and positions along the spine between two keys.
     #[serde(default, skip_serializing_if = "BlendEase::is_default")]
     pub ease: BlendEase,
@@ -114,6 +154,23 @@ impl BlendSpec {
     pub fn start(&self, i: usize) -> Option<usize> {
         self.starts.get(i).copied().flatten().map(|a| a as usize)
     }
+
+    /// Whether the blend shows its spine and the Pen can edit it: a spine always exists (a stored
+    /// one or the lines between the keys), and only Spine → Never hides it.
+    pub fn spine_visible(&self) -> bool {
+        self.spine_mode != BlendSpineMode::Never
+    }
+
+    /// Whether the blend runs its steps along the spine, so easing acts and the Blend tool shows
+    /// its easing handles: with `Always` the straight lines between the keys count as one; with
+    /// `Auto` only a replaced spine or Align to Path does.
+    pub fn spine_followed(&self) -> bool {
+        match self.spine_mode {
+            BlendSpineMode::Auto => self.spine.is_some() || self.orientation == BlendOrientation::AlignToPath,
+            BlendSpineMode::Always => true,
+            BlendSpineMode::Never => false,
+        }
+    }
 }
 
 /// Blend Options set with no blend selected: what new blends start with.
@@ -123,6 +180,8 @@ pub struct BlendDefaults {
     pub spacing: BlendSpacing,
     #[serde(default)]
     pub orientation: BlendOrientation,
+    #[serde(default, rename = "spineMode")]
+    pub spine_mode: BlendSpineMode,
 }
 
 /// Reading a native file never fails over one bad blend number: out-of-range values clamp,
