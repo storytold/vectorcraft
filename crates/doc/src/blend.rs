@@ -805,6 +805,7 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 
 /// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
 /// arc length at each of its anchors.
+#[derive(Clone, Debug)]
 pub struct Spine {
     pts: Vec<Point>,
     cum: Vec<f64>,
@@ -962,6 +963,34 @@ struct Rail {
     rotate: bool,
 }
 
+/// The spine a blend's steps run along, with each key's arc length on it: [`Rail`]'s inputs, and
+/// the on-canvas blend handles' (`tools::blendhandles` reads the same geometry the steps use).
+pub fn blend_key_stops(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(Spine, Vec<f64>)> {
+    let (path, anchors) = blend_spine(keys, spec)?;
+    let spine = Spine::new(&path)?;
+    let total = spine.length();
+    let k = keys.len();
+    let stops = match anchors {
+        Some(ka) => {
+            let mut v: Vec<f64> = Vec::with_capacity(k);
+            for a in ka {
+                let mut s = spine.anchor_length(a).unwrap_or(0.0);
+                // On a closed spine the key back at the start sits at its far end.
+                if spine.closed
+                    && let Some(prev) = v.last()
+                    && s <= *prev + 1e-9
+                {
+                    s += total;
+                }
+                v.push(s);
+            }
+            v
+        }
+        None => (0..k).map(|i| total * i as f64 / (k - 1).max(1) as f64).collect(),
+    };
+    Some((spine, stops))
+}
+
 impl Rail {
     /// `None` when nothing moves: no stored spine and the steps keep the page's orientation.
     fn new(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<Self> {
@@ -969,28 +998,7 @@ impl Rail {
         if !spec.spine_followed() {
             return None;
         }
-        let (path, anchors) = blend_spine(keys, spec)?;
-        let spine = Spine::new(&path)?;
-        let total = spine.length();
-        let k = keys.len();
-        let stops = match anchors {
-            Some(ka) => {
-                let mut v: Vec<f64> = Vec::with_capacity(k);
-                for a in ka {
-                    let mut s = spine.anchor_length(a).unwrap_or(0.0);
-                    // On a closed spine the key back at the start sits at its far end.
-                    if spine.closed
-                        && let Some(prev) = v.last()
-                        && s <= *prev + 1e-9
-                    {
-                        s += total;
-                    }
-                    v.push(s);
-                }
-                v
-            }
-            None => (0..k).map(|i| total * i as f64 / (k - 1).max(1) as f64).collect(),
-        };
+        let (spine, stops) = blend_key_stops(keys, spec)?;
         Some(Self { spine, stops, centers: keys.iter().map(|k| center_of(k)).collect(), rotate })
     }
 

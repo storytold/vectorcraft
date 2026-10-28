@@ -349,7 +349,7 @@ mod centering_tests {
         let capture = box_rect.clone();
         let mut harness = egui_kittest::Harness::builder().with_accessibility_check(false).with_size(egui::vec2(220.0, 60.0)).build_ui(move |ui| {
             ui.allocate_space(egui::vec2(8.0, 8.0));
-            let (_, _, _, rect) = recessed_text(ui, egui::Id::new("measure"), "100%", 60.0, 1, None, None);
+            let (_, _, _, rect) = recessed_text(ui, egui::Id::unique("measure"), "100%", 60.0, 1, None, None);
             *capture.lock().unwrap() = Some(rect);
         });
         harness.step();

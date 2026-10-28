@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod bbox;
+pub mod blendhandles;
 pub mod builder;
 pub mod catalog;
 pub mod corners;

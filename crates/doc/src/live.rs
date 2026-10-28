@@ -39,7 +39,7 @@ fn fifty() -> f64 {
 // =====================================================================================
 
 pub use crate::blend::{
-    Spine, blend_expand, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
+    Spine, blend_expand, blend_key_stops, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
     steps_knockout_shows,
 };
 

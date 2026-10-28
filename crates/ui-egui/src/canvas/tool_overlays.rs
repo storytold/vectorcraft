@@ -317,6 +317,107 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
     }
 }
 
+/// The on-canvas handles of a selected live blend: the step-count handle on the selection's
+/// bounding box's right edge (white with up/down chevrons; its height is the count), and — when
+/// the blend follows its spine — the Ease knob on the spine with the linked Ramp handle above it
+/// and the Colour handle below (white with a dark outline, the Colour knob's middle the accent).
+/// Hovering one names it on a pill; the drag's own value label comes from the tool. Visible with
+/// the Selection tool (the one blend selected whole) and with the Blend tool (every selected
+/// blend).
+pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    use vectorcraft_tools::blendhandles::{BlendHandles, BlendPart, HANDLE_RADIUS, RAMP_RADIUS, hit_part};
+    let tool = app.session.tool_id();
+    if tool != "selection" && tool != "blend" {
+        return;
+    }
+    let frame = if tool == "selection" { app.selection_box() } else { None };
+    let Some(st) = app.session.active() else { return };
+    let handles = match tool {
+        "selection" if app.ui.view.bounding_box => BlendHandles::selected(&st.doc, &st.selection, frame, xf.zoom).into_iter().collect::<Vec<_>>(),
+        "blend" => BlendHandles::of_selection(&st.doc, &st.selection, xf.zoom),
+        _ => vec![],
+    };
+    if handles.is_empty() {
+        return;
+    }
+    let t = Tokens::get(p.ctx());
+    let knob = |p: &egui::Painter, at: egui::Pos2, radius: f32| {
+        p.circle_filled(at, radius, KNOB_FILL);
+        p.circle_stroke(at, radius, Stroke::new(2.0, KNOB_STROKE));
+    };
+    for h in &handles {
+        // The chevrons of the step count, in the knob.
+        let c = xf.to_screen(h.steps_at);
+        let (d, w) = (2.5_f32, 3.0_f32);
+        for (dy, dir) in [(-3.5, 1.0), (3.5, -1.0)] {
+            let m = c + vec2(0.0, dy);
+            p.line_segment([m + vec2(-w, dir * d), m], Stroke::new(1.5, KNOB_STROKE));
+            p.line_segment([m, m + vec2(w, dir * d)], Stroke::new(1.5, KNOB_STROKE));
+        }
+        knob(p, c, HANDLE_RADIUS);
+        if let Some(e) = h.easing_handles() {
+            let (ease, ramp, color) = (xf.to_screen(e.ease), xf.to_screen(e.ramp), xf.to_screen(e.color));
+            p.line_segment([ease, ramp], Stroke::new(1.5, KNOB_STROKE));
+            knob(p, ease, HANDLE_RADIUS);
+            knob(p, ramp, RAMP_RADIUS);
+            knob(p, color, HANDLE_RADIUS);
+            p.circle_filled(color, 2.5, t.accent);
+        }
+    }
+    // Hovering a handle names it, until a drag takes over.
+    if app.session.tool_busy() {
+        return;
+    }
+    let Some(at) = app.hover_doc else { return };
+    let Some((i, part)) = hit_part(&handles, at, 8.0 / xf.zoom) else { return };
+    let Some(h) = handles.get(i) else { return };
+    let (at, text) = match part {
+        BlendPart::Steps => (h.steps_at, tl!("Modify Steps").to_string()),
+        BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => {
+            let Some(e) = h.easing_handles() else { return };
+            let values = |n: &vectorcraft_doc::Node| match &n.kind {
+                vectorcraft_doc::NodeKind::Blend { spec, .. } => Some((spec.ease.kind.id(), spec.ease.ramp * 100.0, spec.color_shift)),
+                _ => None,
+            };
+            let at = match part {
+                BlendPart::Ease => e.ease,
+                BlendPart::Ramp => e.ramp,
+                _ => e.color,
+            };
+            let (at, text) = match (part, st.doc.node(h.id).and_then(values)) {
+                (BlendPart::Ease, Some((kind, ramp, _))) => (at, format!("{} {} %", ease_label(kind), ramp.round())),
+                (BlendPart::Ramp, Some((_, ramp, _))) => (at, format!("{} {} %", tl!("Ramp:"), ramp.round())),
+                (_, Some((_, _, shift))) => (at, format!("{} {}{} %", tl!("Shift Colors"), if shift < 0.0 { "−" } else { "" }, shift.abs().round())),
+                _ => return,
+            };
+            (at, text)
+        }
+    };
+    hover_pill(p, xf.to_screen(at) + vec2(14.0, 14.0), &text);
+}
+
+/// The hover label on a pill, so it reads over any art (the drag labels' style).
+fn hover_pill(p: &egui::Painter, at: egui::Pos2, text: &str) {
+    let galley = p.layout(text.to_owned(), egui::FontId::proportional(11.0), Color32::WHITE, 200.0);
+    let r = egui::Rect::from_min_size(at, galley.size() + vec2(12.0, 8.0));
+    p.rect_filled(r, CornerRadius::same(3), Tokens::get(p.ctx()).measure_bg);
+    p.galley(at + vec2(6.0, 4.0), galley, Color32::WHITE);
+}
+
+/// The white of a handle's fill, and its outline.
+pub(super) const KNOB_FILL: Color32 = Color32::WHITE;
+pub(super) const KNOB_STROKE: Color32 = Color32::from_rgb(0x26, 0x26, 0x26);
+
+/// The public name of an easing Type, as the panel's Type menu spells it.
+fn ease_label(id: &str) -> &'static str {
+    match id {
+        "easeOut" => "Ease Out",
+        "easeInOut" => "Ease In Out",
+        "easeOutIn" => "Ease Out In",
+        _ => "Ease In",
+    }
+}
+
 /// The radius of the Rotate View dial, in screen points.
 pub(super) const DIAL_RADIUS: f32 = 40.0;
 
