@@ -34,6 +34,7 @@ vectorcraft-eps = { workspace = true }
 vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
+vectorcraft-cdr = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }

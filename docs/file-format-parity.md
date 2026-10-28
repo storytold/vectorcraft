@@ -108,7 +108,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | JPEG 2000 | open, place | no | no | |
 | PICT, PCX, Pixar PXR | open, place (legacy) | no | no | rarely used |
 | FreeHand `.fh*` | open (legacy) | no | no | |
-| CorelDRAW `.cdr` | open | no | no | |
+| CorelDRAW `.cdr` | open, place | yes | no | RIFF container and CPNG decompression, native vector paths, artistic/paragraph text, line clustering and baseline alignment, embedded bitmaps, multi-page horizontal artboards and preview fallback (`crates/cdr`, `tests/cdr_import.rs`) |
 | Text `.txt` | place, export | place (Text Import Options) | yes | |
 | RTF `.rtf` | place | place (area type with fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/rtf.rs`; fuzzed (`text_import_fuzz.rs`); `\'hh` bytes read as Windows-1252 or Mac Roman only |
 | Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |

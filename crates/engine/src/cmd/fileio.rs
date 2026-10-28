@@ -24,6 +24,7 @@
 mod action_batch;
 mod affinity;
 mod batch;
+mod cdr;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;

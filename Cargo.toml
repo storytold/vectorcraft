@@ -49,6 +49,7 @@ vectorcraft-eps = { path = "crates/eps" }
 vectorcraft-metafile = { path = "crates/metafile" }
 vectorcraft-plugins = { path = "crates/plugins" }
 vectorcraft-affinity = { path = "crates/affinity" }
+vectorcraft-cdr = { path = "crates/cdr" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 
 # foundation

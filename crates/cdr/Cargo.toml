@@ -1,0 +1,17 @@
+[package]
+name = "vectorcraft-cdr"
+description = "Bounded reader for CorelDRAW documents (.cdr): RIFF/ZIP container, preview and document model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+flate2 = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
