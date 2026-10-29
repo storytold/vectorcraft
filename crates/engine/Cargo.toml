@@ -52,6 +52,8 @@ rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
+# The Quick Look extensions' read path, fuzzed with the native files (tests/import_fuzz.rs).
+vectorcraft-quicklook = { workspace = true }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }

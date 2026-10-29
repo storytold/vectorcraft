@@ -2,6 +2,7 @@
 # Build, sign and (optionally) notarize the macOS release artifacts:
 #
 #   $DIST/vectorcraft-<version>-macos-<arch>.dmg          VectorCraft.app on a drag-to-Applications DMG
+#                                                         (with its Quick Look extensions, quicklook/)
 #   $DIST/vectorcraft-cli-<version>-macos-<arch>.zip      the headless CLI
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
@@ -58,12 +59,12 @@ echo "==> VectorCraft $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize:
 if [[ "$SKIP_BUILD" = 0 ]]; then
   args=()
   for t in "${TARGETS[@]}"; do args+=(--target "$t"); done
-  (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli "${args[@]}")
+  (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli -p vectorcraft-quicklook "${args[@]}")
 fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK/bin"
-for bin in vectorcraft vectorcraft-cli; do
+for bin in vectorcraft vectorcraft-cli vectorcraft-ql-thumbnail vectorcraft-ql-preview; do
   inputs=()
   for t in "${TARGETS[@]}"; do inputs+=("$CARGO_TARGET_DIR/$t/release/$bin"); done
   lipo -create -output "$WORK/bin/$bin" "${inputs[@]}"
@@ -126,8 +127,29 @@ printf 'APPL????' >"$APP/Contents/PkgInfo"
 # The licences of the craft-fonts fonts embedded in the binary (release builds).
 copy_docs "$APP/Contents/Resources"
 
+# Quick Look: Finder's thumbnails and the Space-bar preview of VectorCraft documents (#663), two
+# app extensions built from crates/quicklook (quicklook/README.md).
+APPEXES=()
+add_appex() {
+  local name="$1" bin="$2" appex="$APP/Contents/PlugIns/$1.appex"
+  mkdir -p "$appex/Contents/MacOS"
+  cp "$WORK/bin/$bin" "$appex/Contents/MacOS/$name"
+  sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
+    "$HERE/quicklook/${name#VectorCraft}-Info.plist.in" >"$appex/Contents/Info.plist"
+  plutil -lint "$appex/Contents/Info.plist"
+  APPEXES+=("$appex")
+}
+add_appex VectorCraftThumbnail vectorcraft-ql-thumbnail
+add_appex VectorCraftPreview vectorcraft-ql-preview
+
 # Sign inside-out: nested code first, then the bundle itself (no --deep on the final signature).
-# Today the only nested code is the main executable; frameworks/helpers would be signed here too.
+# The extensions are sandboxed (quicklook/entitlements.plist), as app extensions must be; each is
+# signed whole (executable, then bundle) before the app seals them in.
+for appex in "${APPEXES[@]}"; do
+  sign --options runtime --entitlements "$HERE/quicklook/entitlements.plist" "$appex/Contents/MacOS/$(basename "$appex" .appex)"
+  sign --options runtime --entitlements "$HERE/quicklook/entitlements.plist" "$appex"
+  codesign --verify --strict --verbose=2 "$appex"
+done
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/VectorCraft"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"

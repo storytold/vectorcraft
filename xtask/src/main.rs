@@ -193,20 +193,23 @@ fn cmd_layers() -> Result<(), String> {
     }
 }
 
-/// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else).
+/// Workspace packages that must build for wasm32: all L0–L5 crates but the macOS Quick Look
+/// extensions, the egui shell, and the web app (its wasm-only code is compiled by nothing else).
 fn wasm_set() -> Result<Vec<String>, String> {
     let crates = layers::from_metadata(&metadata()?)?;
     Ok(crates
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
-            Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
+            Some(layers::Class::Layer(l)) => (l <= 5 && !NOT_WASM.contains(&layers::short_name(&c.name))) || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
         .map(|c| c.name)
         .collect())
 }
+
+/// Layered crates the web app never uses: the macOS Quick Look extensions.
+const NOT_WASM: &[&str] = &["quicklook"];
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
 /// reports every crate that fails rather than only the first.

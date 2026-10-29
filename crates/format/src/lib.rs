@@ -81,6 +81,33 @@ pub const MAX_BLOBS: u64 = if cfg!(target_arch = "wasm32") { 1 << 30 } else { 4 
 /// (hand-made or damaged files) may unpack to: it is unpacked whole.
 const MAX_UNPACKED: u64 = 512 << 20;
 
+/// How much reading a native file may unpack: a reader that needs less than [`load`] (Finder's
+/// Quick Look extensions) gives smaller caps, so a file past them is refused
+/// ([`FormatError::TooBig`]) before that much is unpacked or read. A cap larger than its default
+/// ([`MAX_JSON`], [`MAX_BLOBS`]) counts as the default. The default caps apply to compressed files
+/// only (an uncompressed file is in memory already); tighter ones apply to both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadCaps {
+    /// Most bytes the JSON may unpack to.
+    pub json: u64,
+    /// Most bytes the entries after the JSON (images, profiles, the PDF) may have together; each
+    /// one is also at most [`MAX_BLOB`].
+    pub blobs: u64,
+}
+
+impl Default for ReadCaps {
+    fn default() -> Self {
+        Self { json: MAX_JSON, blobs: MAX_BLOBS }
+    }
+}
+
+impl ReadCaps {
+    /// Each cap at most its default.
+    fn within_defaults(self) -> Self {
+        Self { json: self.json.min(MAX_JSON), blobs: self.blobs.min(MAX_BLOBS) }
+    }
+}
+
 /// Is `ext` (without the dot, any case) a native document extension?
 pub fn is_native_ext(ext: &str) -> bool {
     ext.eq_ignore_ascii_case(EXTENSION) || ext.eq_ignore_ascii_case(LEGACY_EXTENSION)
@@ -553,14 +580,24 @@ pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
 
 /// [`load`], with everything else the file carries.
 pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
-    load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+    load_file_within(bytes, ReadCaps::default())
 }
 
-/// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
-/// before objects' types, so a test can exercise the budgets without documents that large
+/// [`load`] unpacking no more than `caps` allow ([`FormatError::TooBig`] past them).
+pub fn load_within(bytes: &[u8], caps: ReadCaps) -> Result<Document, FormatError> {
+    load_file_within(bytes, caps).map(|f| f.doc)
+}
+
+/// [`load_file`] unpacking no more than `caps` allow ([`FormatError::TooBig`] past them).
+pub fn load_file_within(bytes: &[u8], caps: ReadCaps) -> Result<NativeFile, FormatError> {
+    load_file_budgeted(bytes, caps, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+}
+
+/// [`load_file_within`] reading at most `max_nodes` objects and buffering at most `max_values`
+/// values before objects' types, so a test can exercise the budgets without documents that large
 /// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
-fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
-    let file = unpack::Unpacked::new(bytes)?;
+fn load_file_budgeted(bytes: &[u8], caps: ReadCaps, max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
+    let file = unpack::Unpacked::open(bytes, caps)?;
     // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
     // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
@@ -665,7 +702,7 @@ struct Head {
 /// The bytes of the member of the file's head `pick` picks (only that entry of the data after
 /// the JSON is kept).
 fn head_member(bytes: &[u8], pick: impl FnOnce(Head) -> Option<Image>) -> Option<Vec<u8>> {
-    let file = unpack::Unpacked::new(bytes).ok()?;
+    let file = unpack::Unpacked::open(bytes, ReadCaps::default()).ok()?;
     let head: Head = serde_json::from_slice(file.json()).ok()?;
     let img = pick(head)?;
     match img.blob {
@@ -677,6 +714,41 @@ fn head_member(bytes: &[u8], pick: impl FnOnce(Head) -> Option<Image>) -> Option
 /// The preview PNG embedded in a native file (`None`: it has none, or isn't a native file).
 pub fn preview(bytes: &[u8]) -> Option<Vec<u8>> {
     head_member(bytes, |h| h.preview)
+}
+
+/// The preview PNG embedded in a native file, after the checks [`load`] makes on the file itself:
+/// `Ok(None)` when a file this version reads has no preview; an error when the bytes aren't a
+/// native file, were written by a newer version ([`FormatError::TooNew`]), unpack past
+/// [`MAX_JSON`], [`MAX_BLOB`] or [`MAX_BLOBS`] ([`FormatError::TooBig`]), or the preview's bytes
+/// are missing. The document itself is not read (Finder's thumbnails, #663).
+pub fn preview_checked(bytes: &[u8]) -> Result<Option<Vec<u8>>, FormatError> {
+    preview_checked_within(bytes, ReadCaps::default())
+}
+
+/// [`preview_checked`] unpacking no more than `caps` allow ([`FormatError::TooBig`] past them):
+/// the JSON within `caps.json`, and the data after it (read only when the preview is kept there)
+/// within `caps.blobs`.
+pub fn preview_checked_within(bytes: &[u8], caps: ReadCaps) -> Result<Option<Vec<u8>>, FormatError> {
+    #[derive(Deserialize)]
+    struct Checked {
+        format: String,
+        version: u32,
+        preview: Option<Image>,
+    }
+    let file = unpack::Unpacked::open(bytes, caps)?;
+    let head: Checked = serde_json::from_slice(file.json()).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
+    if head.format != EXTENSION && head.format != LEGACY_EXTENSION {
+        return Err(FormatError::NotVectorcraft(format!("format is `{}`", head.format)));
+    }
+    if head.version > VERSION {
+        return Err(FormatError::TooNew(head.version));
+    }
+    let Some(img) = head.preview else { return Ok(None) };
+    let png = match img.blob {
+        Some(at) => file.entries(&[at])?.pop().flatten().map(Arc::unwrap_or_clone),
+        None => img.inline(),
+    };
+    png.map(Some).ok_or_else(|| FormatError::BadImage("preview".into()))
 }
 
 /// The PDF a native file saved with Create PDF-Compatible File carries (`None`: it has none, or
@@ -766,6 +838,104 @@ mod tests {
     }
 
     #[test]
+    fn preview_checked_reads_only_files_this_version_reads() {
+        let d = Document::new(10.0, 10.0);
+        let small = vec![7u8; 100];
+        // Past INLINE_MAX (the writer keeps a preview in the JSON whatever its size).
+        let big: Vec<u8> = (0..INLINE_MAX + 100).map(|i| (i % 251) as u8).collect();
+        for compress in [false, true] {
+            for png in [&small, &big] {
+                let o = SaveOptions { compress, preview: Some(png.clone()), ..SaveOptions::default() };
+                let bytes = save_with(&d, &o).unwrap();
+                assert_eq!(preview_checked(&bytes).unwrap().as_ref(), Some(png), "compress {compress}, {} bytes", png.len());
+                assert_eq!(preview(&bytes).as_ref(), Some(png));
+            }
+        }
+        let plain = save(&d, false);
+        assert!(preview_checked(&plain).unwrap().is_none(), "no preview is no error");
+        let text = String::from_utf8(save_with(&d, &SaveOptions { preview: Some(small.clone()), ..SaveOptions::default() }).unwrap()).unwrap();
+        let legacy = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1);
+        assert_eq!(preview_checked(legacy.as_bytes()).unwrap(), Some(small.clone()), "the former name");
+        let newer = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":99", 1);
+        assert!(matches!(preview_checked(newer.as_bytes()), Err(FormatError::TooNew(99))));
+        assert!(preview(newer.as_bytes()).is_some(), "the unchecked read doesn't look");
+        let other = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"other\"", 1);
+        assert!(matches!(preview_checked(other.as_bytes()), Err(FormatError::NotVectorcraft(_))));
+        for junk in [&b""[..], b"{", b"\x1f\x8b\x08garbage", b"{\"format\":\"vectorcraft\"}", b"[1,2]"] {
+            assert!(preview_checked(junk).is_err(), "{junk:?}");
+        }
+        // A cut file.
+        let o = SaveOptions { preview: Some(big.clone()), ..SaveOptions::default() };
+        let whole = save_with(&d, &o).unwrap();
+        let cut = &whole[..whole.len() - 50];
+        assert!(preview_checked(cut).is_err());
+    }
+
+    /// A v4 file whose preview is kept after the JSON (as another writer may keep it): `d` saved
+    /// without one, with `preview` naming `png` placed after `before` bytes of other data.
+    fn with_preview_after_the_json(d: &Document, before: usize, png: &[u8], compress: bool) -> Vec<u8> {
+        let text = String::from_utf8(save(d, false)).unwrap();
+        let body = text.strip_prefix('{').unwrap();
+        let json = format!("{{\"preview\":{{\"mime\":\"image/png\",\"blob\":[{before},{}]}},{body}", png.len());
+        let mut file = json.into_bytes();
+        file.extend_from_slice(BLOB_MAGIC);
+        file.extend(std::iter::repeat_n(0x55u8, before));
+        file.extend_from_slice(png);
+        if !compress {
+            return file;
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &file).unwrap();
+        gz.finish().unwrap()
+    }
+
+    #[test]
+    fn previews_after_the_json_are_read_within_the_caps() {
+        let d = Document::new(10.0, 10.0);
+        let png: Vec<u8> = (0..INLINE_MAX + 100).map(|i| (i % 251) as u8).collect();
+        for compress in [false, true] {
+            let file = with_preview_after_the_json(&d, 1000, &png, compress);
+            assert_eq!(preview_checked(&file).unwrap(), Some(png.clone()), "compress {compress}");
+            assert_eq!(preview(&file), Some(png.clone()));
+            assert!(load(&file).is_ok(), "the document reads too");
+            // Past the end of the data.
+            let cut = &file[..file.len() - 50];
+            assert!(preview_checked(cut).is_err(), "cut, compress {compress}");
+        }
+        // Compressed, the caps apply as the file is unpacked.
+        let file = with_preview_after_the_json(&d, 1 << 20, &png, true);
+        let json_len = {
+            let mut all = Vec::new();
+            flate2::read::GzDecoder::new(file.as_slice()).read_to_end(&mut all).unwrap();
+            all.windows(BLOB_MAGIC.len()).position(|w| w == BLOB_MAGIC).unwrap() as u64
+        };
+        let roomy = ReadCaps { json: json_len, blobs: (1 << 20) + png.len() as u64 };
+        assert_eq!(preview_checked_within(&file, roomy).unwrap(), Some(png.clone()));
+        let short_json = ReadCaps { json: json_len - 1, ..roomy };
+        assert!(matches!(preview_checked_within(&file, short_json), Err(FormatError::TooBig)));
+        // Room for the preview itself, not for the data before it.
+        let short_blobs = ReadCaps { blobs: png.len() as u64, ..roomy };
+        assert!(matches!(preview_checked_within(&file, short_blobs), Err(FormatError::TooBig)));
+        assert!(matches!(load_within(&file, short_json), Err(FormatError::TooBig)));
+        // A tighter JSON cap applies to an uncompressed file too; the default one doesn't.
+        let plain = with_preview_after_the_json(&d, 1000, &png, false);
+        let plain_json = plain.windows(BLOB_MAGIC.len()).position(|w| w == BLOB_MAGIC).unwrap() as u64;
+        let fits = ReadCaps { json: plain_json, ..ReadCaps::default() };
+        assert_eq!(preview_checked_within(&plain, fits).unwrap(), Some(png.clone()));
+        let tight = ReadCaps { json: plain_json - 1, ..ReadCaps::default() };
+        assert!(matches!(preview_checked_within(&plain, tight), Err(FormatError::TooBig)));
+        assert!(matches!(load_within(&plain, tight), Err(FormatError::TooBig)));
+        // So does a tighter cap on the data after the JSON.
+        let room = ReadCaps { blobs: png.len() as u64, ..ReadCaps::default() };
+        assert_eq!(preview_checked_within(&plain, room).unwrap(), Some(png.clone()));
+        let short = ReadCaps { blobs: png.len() as u64 - 1, ..ReadCaps::default() };
+        assert!(matches!(preview_checked_within(&plain, short), Err(FormatError::TooBig)));
+        // Caps past the defaults are the defaults.
+        let huge = ReadCaps { json: u64::MAX, blobs: u64::MAX };
+        assert_eq!(huge.within_defaults(), ReadCaps::default());
+    }
+
+    #[test]
     fn file_info_tells_old_files() {
         let d = Document::new(10.0, 10.0);
         let current = save(&d, false);
@@ -816,11 +986,13 @@ mod tests {
         let bytes = save_with(&d, &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
         assert!(is_compressed(&bytes));
         assert_eq!(
-            load_file_within(&bytes, n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc.node_count(),
+            load_file_budgeted(&bytes, ReadCaps::default(), n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc.node_count(),
             n,
             "a document of exactly the budget opens"
         );
-        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+        let Err(FormatError::NotVectorcraft(why)) =
+            load_file_budgeted(&bytes, ReadCaps::default(), n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+        else {
             panic!("one object past the budget must be refused")
         };
         assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
@@ -843,7 +1015,7 @@ mod tests {
         let zeros = vec![0; 1000];
         v["document"]["layers"][0]["kind"]["children"] = serde_json::json!([{"id": 90, "kind": {"children": zeros, "type": "group"}}]);
         let bomb = serde_json::to_vec(&v).unwrap();
-        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bomb, vectorcraft_doc::node::MAX_READ_NODES, 100) else {
+        let Err(FormatError::NotVectorcraft(why)) = load_file_budgeted(&bomb, ReadCaps::default(), vectorcraft_doc::node::MAX_READ_NODES, 100) else {
             panic!("past the budget must be refused")
         };
         assert!(why.contains("more than 100 values before its type"), "{why}");

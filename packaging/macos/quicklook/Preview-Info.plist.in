@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist of VectorCraft.app/Contents/PlugIns/VectorCraftPreview.appex: the Space-bar preview of
+     VectorCraft documents (crates/quicklook, #663). Filled in like ../Info.plist.in, by package.sh
+     and `cargo xtask bundle`. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>VectorCraft Preview</string>
+  <key>CFBundleName</key>
+  <string>VectorCraftPreview</string>
+  <key>CFBundleExecutable</key>
+  <string>VectorCraftPreview</string>
+  <!-- Prefixed by the app's identifier, as an app extension's must be. -->
+  <key>CFBundleIdentifier</key>
+  <string>ai.storyteller.vectorcraft.preview</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundlePackageType</key>
+  <string>XPC!</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@SHORT_VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@SHORT_VERSION@</string>
+  <key>CFBundleSupportedPlatforms</key>
+  <array><string>MacOSX</string></array>
+  <!-- Data-based previews (QLPreviewProvider) came with macOS 12; on 11 the extension is ignored. -->
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.quicklook.preview</string>
+    <!-- Defined in Rust (crates/quicklook/src/mac/preview.rs). -->
+    <key>NSExtensionPrincipalClass</key>
+    <string>VCPreviewProvider</string>
+    <key>NSExtensionAttributes</key>
+    <dict>
+      <key>QLIsDataBasedPreview</key>
+      <true/>
+      <!-- The type ../Info.plist.in exports: .vectorcraft and .drawcraft files. -->
+      <key>QLSupportedContentTypes</key>
+      <array><string>ai.storyteller.vectorcraft.document</string></array>
+      <key>QLSupportsSearchableItems</key>
+      <false/>
+    </dict>
+  </dict>
+</dict>
+</plist>

@@ -1,0 +1,146 @@
+# The Quick Look extensions on a real Mac (crates/quicklook, #663): build VectorCraft.app as a
+# release is built (packaging/macos/package.sh, ad-hoc signed: the signing secrets aren't needed),
+# install it, and have Quick Look make thumbnails of documents vectorcraft-cli writes. Good files
+# must get a thumbnail; files without one (no preview, damaged, too new, past the format's caps)
+# must not hang Quick Look. The thumbnails, logs and pluginkit's view are uploaded as an artifact.
+name: Quick Look (macOS)
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quicklook-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  quicklook:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: quicklook-macos
+          # The build is most of the job: keep it for the next run even when a check fails.
+          cache-on-failure: true
+
+      - name: Build and package (ad-hoc signed)
+        run: packaging/macos/package.sh --arch aarch64
+
+      # Asks Quick Look for thumbnails as Finder does (crates/quicklook/examples/ql_probe.rs).
+      - name: Build the thumbnail probe
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: cargo build --release --locked -p vectorcraft-quicklook --example ql_probe --target aarch64-apple-darwin
+
+      - name: Inspect the extensions' bundles and signatures
+        run: |
+          mkdir -p out
+          APP=target/macos-package/VectorCraft.app
+          {
+            for appex in "$APP"/Contents/PlugIns/*.appex; do
+              echo "== $appex"
+              plutil -p "$appex/Contents/Info.plist"
+              codesign -dvvv --entitlements - "$appex" 2>&1
+              lipo -info "$appex/Contents/MacOS/"*
+            done
+            codesign --verify --strict --deep --verbose=2 "$APP" 2>&1
+          } | tee out/bundles.txt
+
+      - name: Install and register the app
+        run: |
+          rm -rf /Applications/VectorCraft.app
+          ditto target/macos-package/VectorCraft.app /Applications/VectorCraft.app
+          LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+          "$LSREGISTER" -f -R -trusted /Applications/VectorCraft.app
+          for appex in /Applications/VectorCraft.app/Contents/PlugIns/*.appex; do
+            pluginkit -a "$appex"
+          done
+          qlmanage -r
+          qlmanage -r cache
+          sleep 5
+          {
+            echo "== pluginkit: thumbnail extensions"
+            pluginkit -m -v -p com.apple.quicklook.thumbnail
+            echo "== pluginkit: preview extensions"
+            pluginkit -m -v -p com.apple.quicklook.preview
+            echo "== Launch Services: the document type"
+            "$LSREGISTER" -dump | grep -B2 -A8 "ai.storyteller.vectorcraft.document" | head -60 || true
+          } 2>&1 | tee out/pluginkit.txt
+          grep -q "ai.storyteller.vectorcraft.thumbnail" out/pluginkit.txt || { echo "::error::pluginkit doesn't list the thumbnail extension"; exit 1; }
+          grep -q "ai.storyteller.vectorcraft.preview" out/pluginkit.txt || { echo "::error::pluginkit doesn't list the preview extension"; exit 1; }
+
+      - name: Make test documents
+        run: packaging/macos/quicklook/make-test-files.sh target/macos-package/bin/vectorcraft-cli "$PWD/docs-in"
+
+      - name: Thumbnails
+        run: packaging/macos/quicklook/check-thumbnails.sh "$PWD/docs-in" "$PWD/out" "$PWD/target/aarch64-apple-darwin/release/examples/ql_probe"
+
+      # What the system made of the extensions, for a failed (or puzzling) run: the registrations
+      # pluginkit knows of (rejected ones too), errors from the processes that load them, and any
+      # crash reports.
+      - name: Extension diagnostics
+        if: always()
+        run: |
+          mkdir -p out
+          {
+            for id in ai.storyteller.vectorcraft.thumbnail ai.storyteller.vectorcraft.preview; do
+              echo "== pluginkit -m -A -D -v -i $id"
+              pluginkit -m -A -D -v -i "$id" || true
+            done
+            echo "== log: errors and VectorCraft mentions"
+            log show --last 30m --style compact --predicate 'eventMessage CONTAINS[c] "vectorcraft" OR process BEGINSWITH "VectorCraft" OR ((process == "qlmanage" OR process CONTAINS[c] "thumbnail" OR process CONTAINS[c] "quicklook" OR process == "pkd" OR process == "extensionkitservice") AND (messageType == error OR messageType == fault))' 2>&1 \
+              | grep -v "runningboard\|CFPasteboard\|CarbonCore" | tail -n 300 || true
+            echo "== crash reports"
+            for f in ~/Library/Logs/DiagnosticReports/*; do
+              case "$f" in *VectorCraft* | *qlmanage* | *Thumbnail* | *QuickLook*) echo "-- $f"; head -n 60 "$f";; esac
+            done
+          } 2>&1 | tee out/diagnostics.txt
+
+      # The save rows with Embed Preview on (the default now) and off, on this runner. For the
+      # record: shared runners are too noisy for the budgets to fail the job.
+      - name: Performance budgets
+        if: always()
+        run: target/macos-package/bin/vectorcraft-cli perf 2>&1 | tee out/perf.txt || true
+
+      - name: Quick Look's log
+        if: always()
+        run: |
+          mkdir -p out
+          log show --predicate 'subsystem contains "quicklook" OR process contains "VectorCraft" OR eventMessage contains "ai.storyteller.vectorcraft"' --last 15m --info --debug >out/quicklook.log 2>&1 || true
+          tail -n 200 out/quicklook.log
+
+      # Last, so it stays in the part of the job log that tools showing only its end can read:
+      # the thumbnail table, and the probe's thumbnails as small JPEGs in base64 between markers.
+      - name: Summary and thumbnails as text
+        if: always()
+        run: |
+          cat out/summary.md 2>/dev/null || true
+          grep -E "save \.vectorcraft|open \.vectorcraft|performance budgets" out/perf.txt 2>/dev/null || true
+          mkdir -p out/small
+          for f in out/probe/*.png; do
+            [ -f "$f" ] || continue
+            small="out/small/$(basename "$f" .png).jpg"
+            sips -s format jpeg -s formatOptions 70 -Z 256 "$f" --out "$small" >/dev/null
+            echo "-----BEGIN THUMBNAIL $(basename "$small")-----"
+            base64 -i "$small" | fold -w 120
+            echo "-----END THUMBNAIL $(basename "$small")-----"
+          done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: quicklook-macos
+          path: out/
+          if-no-files-found: error

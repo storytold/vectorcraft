@@ -1,0 +1,82 @@
+[package]
+name = "vectorcraft-quicklook"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "VectorCraft's macOS Quick Look extensions: Finder thumbnails and Space-bar previews of .vectorcraft files"
+
+[lints]
+workspace = true
+
+# The two app-extension executables (packaging/macos/quicklook/README.md). On other systems each is
+# a stub that says so and exits: only the library's read path is used there (its tests and the
+# engine's import fuzzing).
+[[bin]]
+name = "vectorcraft-ql-thumbnail"
+path = "src/bin/thumbnail.rs"
+
+[[bin]]
+name = "vectorcraft-ql-preview"
+path = "src/bin/preview.rs"
+
+[features]
+default = ["bundled-fonts"]
+# Type in previews is set in the fonts VectorCraft bundles where the Mac doesn't have the document's.
+bundled-fonts = ["vectorcraft-text/bundled-fonts"]
+
+[dependencies]
+vectorcraft-doc = { workspace = true }
+vectorcraft-format = { workspace = true }
+vectorcraft-render = { workspace = true }
+vectorcraft-text = { workspace = true }
+image = { workspace = true }
+# The preview's PNG with its resolution (pHYs), so Quick Look shows the artboard at its size in
+# points. MIT OR Apache-2.0, already in the build through the renderer and the image crate.
+png = "0.18"
+thiserror = { workspace = true }
+
+# The extensions' Objective-C side: QLThumbnailProvider and QLPreviewProvider subclasses written
+# with objc2 (no Swift or Objective-C source). Zlib OR Apache-2.0 OR MIT, the same objc2 family as
+# apps/vectorcraft's AppKit code.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSData", "NSDictionary", "NSError", "NSString", "NSURL", "NSExtensionRequestHandling"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes", "CFData"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGColorSpace", "CGContext", "CGDataProvider", "CGImage"] }
+objc2-quick-look-thumbnailing = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-core-foundation",
+  "objc2-core-graphics",
+  "QLThumbnailProvider",
+  "QLThumbnailReply",
+  "QLThumbnailRequest",
+] }
+objc2-quick-look-ui = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-core-foundation",
+  "objc2-uniform-type-identifiers",
+  "QLFilePreviewRequest",
+  "QLPreviewProvider",
+  "QLPreviewReply",
+  "QLPreviewingController",
+] }
+objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTType", "UTCoreTypes"] }
+
+[dev-dependencies]
+vectorcraft-geom = { workspace = true }
+
+# examples/ql_probe.rs: asks Quick Look for thumbnails as Finder does (the macOS workflow).
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-quick-look-thumbnailing = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-core-foundation",
+  "objc2-uniform-type-identifiers",
+  "QLThumbnailGenerationRequest",
+  "QLThumbnailGenerator",
+  "QLThumbnailRepresentation",
+] }

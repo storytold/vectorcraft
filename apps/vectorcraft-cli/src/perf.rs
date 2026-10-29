@@ -401,7 +401,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     rows.push(("hit test (per click)", hits, 2.0));
 
     let mut bytes = vec![];
-    rows.push(("save .vectorcraft", median_ms(3, || bytes = vectorcraft_format::save_file(&doc)), 300.0));
+    rows.push(("save .vectorcraft (Embed Preview off)", median_ms(3, || bytes = vectorcraft_format::save_file(&doc)), 300.0));
+    // A save as File → Save writes it: with the preview of the first artboard that Embed Preview
+    // adds by default (Finder's thumbnail, #663).
+    let save = || -> Vec<u8> {
+        let o = vectorcraft_format::SaveOptions {
+            preview: vectorcraft_engine::cmd::fileio::preview_png(&doc).ok().flatten(),
+            ..vectorcraft_format::SaveOptions::for_doc(&doc)
+        };
+        vectorcraft_format::save_with(&doc, &o).unwrap_or_default()
+    };
+    rows.push(("save .vectorcraft (with preview)", median_ms(3, || bytes = save()), 300.0));
     let mut failed = None;
     let open = median_ms(3, || {
         if let Err(e) = vectorcraft_format::load(&bytes) {

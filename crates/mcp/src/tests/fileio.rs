@@ -194,7 +194,9 @@ fn save_file_takes_the_native_save_options() {
     assert_eq!(v3["version"], 3);
     let shown = saved_with(&mut h, "preview.vectorcraft", json!({"preview": true}));
     assert!(vectorcraft_format::preview(&shown).is_some(), "a preview");
-    assert!(vectorcraft_format::preview(&plain).is_none(), "off by default");
+    assert!(vectorcraft_format::preview(&plain).is_some(), "on by default (Embed Preview)");
+    let bare = saved_with(&mut h, "bare.vectorcraft", json!({"preview": false}));
+    assert!(vectorcraft_format::preview(&bare).is_none(), "turned off");
     // Version 2 files can't be compressed: the engine's error comes back.
     let r = call_tool(&mut h, "save_file", &json!({"path": tmp("v2.vectorcraft"), "version": 2, "compress": true}));
     assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("can't be compressed"), "{r:?}");

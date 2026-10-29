@@ -33,7 +33,7 @@ pub const OPTIONS: &[FormatOption] = &[
         name: "preview",
         ty: "boolean",
         default: "false",
-        description: "embed a PNG preview of the first artboard (at most 256 pixels on its longer side) for file browsers",
+        description: "embed a PNG preview of the first artboard (at most 256 pixels on its longer side) for file browsers such as Finder's Quick Look (saves default to Preferences → File Handling → Embed Preview, on unless turned off)",
     },
     SEPARATE_ARTBOARDS,
     SEPARATE_RANGE,
@@ -263,7 +263,7 @@ pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<V
 
 /// The first artboard (else the art) as a PNG fitted into [`PREVIEW_MAX`] pixels (`None`: nothing
 /// to show).
-pub(crate) fn preview_png(doc: &Document) -> Result<Option<Vec<u8>>> {
+pub fn preview_png(doc: &Document) -> Result<Option<Vec<u8>>> {
     let Some(r) = doc.artboards.first().map(|a| a.rect).or_else(|| vectorcraft_render::encode::art_bounds(doc)) else { return Ok(None) };
     let scale = f64::from(PREVIEW_MAX) / r.width().max(r.height());
     if vectorcraft_render::raster_size(r, scale).is_err() {
@@ -272,16 +272,21 @@ pub(crate) fn preview_png(doc: &Document) -> Result<Option<Vec<u8>>> {
     vectorcraft_render::Renderer::new().render_region(doc, r, scale, false).to_png().map(Some).map_err(EngineError::Other)
 }
 
-/// `p` with `compress` from the Use Compression preference when it doesn't say (saves only;
-/// exports and serializing write what they're told).
-pub fn with_compression_pref(prefs: &crate::Prefs, p: &Value) -> Value {
+/// `p` with `compress` from the Use Compression preference and `preview` from Embed Preview when
+/// it doesn't say (saves only; exports and serializing write what they're told).
+pub fn with_native_prefs(prefs: &crate::Prefs, p: &Value) -> Value {
     let mut q = if p.is_object() { p.clone() } else { Value::Object(Default::default()) };
-    if let Some(o) = q.as_object_mut()
-        && o.get("compress").is_none_or(Value::is_null)
-        // Older versions can't read compressed files: those saves stay plain.
-        && o.get("version").and_then(Value::as_u64).is_none_or(|v| v >= u64::from(vectorcraft_format::COMPRESSED_SINCE))
-    {
-        o.insert("compress".into(), Value::Bool(prefs.use_compression));
+    if let Some(o) = q.as_object_mut() {
+        if o.get("compress").is_none_or(Value::is_null)
+            // Older versions can't read compressed files: those saves stay plain.
+            && o.get("version").and_then(Value::as_u64).is_none_or(|v| v >= u64::from(vectorcraft_format::COMPRESSED_SINCE))
+        {
+            o.insert("compress".into(), Value::Bool(prefs.use_compression));
+        }
+        // Every version carries a preview.
+        if o.get("preview").is_none_or(Value::is_null) {
+            o.insert("preview".into(), Value::Bool(prefs.embed_preview));
+        }
     }
     q
 }

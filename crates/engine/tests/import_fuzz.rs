@@ -1,6 +1,7 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
 //! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
-//! (`.vcflattener`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
+//! (`.vcflattener`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions,
+//! also as the macOS Quick Look extensions read them),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
@@ -1892,8 +1893,85 @@ proptest! {
         }
         let _ = vectorcraft_format::sniff(&bytes);
         let _ = vectorcraft_format::preview(&bytes);
+        quick_look(&bytes)?;
         survive("mutated native file", || vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes).ok().map(|l| l.doc))?;
     }
+
+    /// Damaged native files carrying a preview, as Finder's Quick Look extensions read them: flipped
+    /// bytes and cuts anywhere, the embedded PNG's included (inline, and after the JSON in v4).
+    #[test]
+    fn quick_look_reads_mutated_files_without_panicking(which in 0usize..5, cut in 0usize..40_000, edits in prop::collection::vec((0usize..40_000, any::<u8>()), 0..10), tail in any::<bool>()) {
+        let mut bytes = previewed_samples()[which].clone();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            // Half the cases hit the end of the file: the PNG after the JSON.
+            let at = if tail { n - 1 - at % n.min(16_000) } else { at % n };
+            bytes[at] = b;
+        }
+        // The tail cases keep the whole file, so the damaged PNG is what gets read.
+        if !tail {
+            bytes.truncate(cut.max(2));
+        }
+        quick_look(&bytes)?;
+    }
+}
+
+/// The rich document saved with an embedded preview: a small one and a large one, in the JSON as
+/// VectorCraft writes it (uncompressed and compressed), and the large one kept after the JSON as
+/// another writer may keep it (v4, uncompressed and compressed).
+fn previewed_samples() -> &'static [Vec<u8>; 5] {
+    use vectorcraft_format::{BLOB_MAGIC, SaveOptions, save_with};
+    static SAMPLES: std::sync::OnceLock<[Vec<u8>; 5]> = std::sync::OnceLock::new();
+    SAMPLES.get_or_init(|| {
+        let png = |w: u32, h: u32| {
+            // Noise, so the PNG stays large (past INLINE_MAX) when it is the big one.
+            let img = image::RgbImage::from_fn(w, h, |x, y| {
+                let v = (x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503)).wrapping_mul(2_246_822_519);
+                image::Rgb([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8])
+            });
+            let mut out = Vec::new();
+            img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+            out
+        };
+        let (small, big) = (png(16, 8), png(96, 96));
+        assert!(big.len() > vectorcraft_format::INLINE_MAX);
+        let d = rich_doc();
+        let save =
+            |preview: &Vec<u8>, compress| save_with(&d, &SaveOptions { preview: Some(preview.clone()), compress, ..SaveOptions::default() }).unwrap();
+        // Saved without a preview, then given one after the data that follows the JSON.
+        let mut after = save_with(&d, &SaveOptions::default()).unwrap();
+        let tail = match after.windows(BLOB_MAGIC.len()).position(|w| w == BLOB_MAGIC) {
+            Some(at) => after.len() - at - BLOB_MAGIC.len(),
+            None => {
+                after.extend_from_slice(BLOB_MAGIC);
+                0
+            }
+        };
+        let field = format!("{{\"preview\":{{\"mime\":\"image/png\",\"blob\":[{tail},{}]}},", big.len());
+        assert_eq!(after.first(), Some(&b'{'));
+        after.splice(0..1, field.bytes());
+        after.extend_from_slice(&big);
+        assert_eq!(vectorcraft_format::preview_checked(&after).unwrap(), Some(big.clone()));
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &after).unwrap();
+        let after_gz = gz.finish().unwrap();
+        assert_eq!(vectorcraft_format::preview_checked(&after_gz).unwrap(), Some(big.clone()));
+        [save(&small, false), save(&big, false), save(&big, true), after, after_gz]
+    })
+}
+
+/// The Quick Look extensions' read path on `bytes`: the thumbnail, the Space-bar preview (with
+/// small limits) and its render, which runs on a thread of its own there (so is also run here,
+/// where a panic is caught).
+fn quick_look(bytes: &[u8]) -> Result<(), TestCaseError> {
+    use vectorcraft_quicklook::{Limits, preview, render, thumbnail};
+    let limits = Limits { max_side: 64, max_pixels: 64 * 48, time: std::time::Duration::from_secs(10), ..Limits::default() };
+    catch_quiet(|| {
+        let _ = thumbnail(bytes, 128.0, 96.0);
+        let _ = render(bytes, &limits);
+        let _ = preview(bytes.to_vec(), &limits);
+    })
+    .map_err(|msg| TestCaseError::fail(format!("Quick Look: panicked: {msg}")))
 }
 
 /// A native file whose area type has 2^60 rows, 2^60 columns, or 2^32 of each (their product

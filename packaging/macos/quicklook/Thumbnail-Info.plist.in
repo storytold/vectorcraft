@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist of VectorCraft.app/Contents/PlugIns/VectorCraftThumbnail.appex: Finder's thumbnails of
+     VectorCraft documents (crates/quicklook, #663). Filled in like ../Info.plist.in, by package.sh
+     and `cargo xtask bundle`. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>VectorCraft Thumbnail</string>
+  <key>CFBundleName</key>
+  <string>VectorCraftThumbnail</string>
+  <key>CFBundleExecutable</key>
+  <string>VectorCraftThumbnail</string>
+  <!-- Prefixed by the app's identifier, as an app extension's must be. -->
+  <key>CFBundleIdentifier</key>
+  <string>ai.storyteller.vectorcraft.thumbnail</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundlePackageType</key>
+  <string>XPC!</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@SHORT_VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@SHORT_VERSION@</string>
+  <key>CFBundleSupportedPlatforms</key>
+  <array><string>MacOSX</string></array>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.quicklook.thumbnail</string>
+    <!-- Defined in Rust (crates/quicklook/src/mac/thumbnail.rs). -->
+    <key>NSExtensionPrincipalClass</key>
+    <string>VCThumbnailProvider</string>
+    <key>NSExtensionAttributes</key>
+    <dict>
+      <!-- The type ../Info.plist.in exports: .vectorcraft and .drawcraft files. -->
+      <key>QLSupportedContentTypes</key>
+      <array><string>ai.storyteller.vectorcraft.document</string></array>
+      <key>QLThumbnailMinimumDimension</key>
+      <integer>0</integer>
+    </dict>
+  </dict>
+</dict>
+</plist>

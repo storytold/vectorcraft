@@ -364,6 +364,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
     // Native saves (`document.save {compress}`)
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),
+    // Native saves (`document.save {preview}`): the thumbnail Finder and Quick Look show
+    p!("embedPreview", "File Handling", "Files", "Embed Preview", bool),
     // The W/H link of the Transform panel, the Properties panel and the Control bar
     p!("constrainProportions", "General", "Transform Panel", "Constrain Width and Height Proportions", bool),
     p!("singleCornerRadius", "General", "Transform Panel", "Single Corner Radius", bool),

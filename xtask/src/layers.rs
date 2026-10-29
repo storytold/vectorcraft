@@ -63,6 +63,9 @@ pub const TABLE: &[(&str, Class)] = &[
     ("plugins", Class::Layer(2)),
     ("affinity", Class::Standalone),
     ("scriptcheck", Class::Standalone),
+    // The macOS Quick Look extensions: the format and the renderer (L3) on a read path the engine's
+    // import fuzzing (L5) exercises. Not built for wasm (`wasm_set`).
+    ("quicklook", Class::Layer(4)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
