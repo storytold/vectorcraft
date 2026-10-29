@@ -176,7 +176,7 @@ fn isolating_ancestor_after_undo_clears_editing_from_redo_history() {
     // Isolating the parent group must clear editing flag in redo entries too
     s.execute("object.isolate", &json!({"id": g})).unwrap();
     for e in &s.doc().unwrap().history.redo {
-        if let Some(p) = e.doc.node(id).and_then(|n| n.extras().perspective.as_deref()) {
+        if let Some(p) = e.doc().and_then(|d| d.node(id)).and_then(|n| n.extras().perspective.as_deref()) {
             assert!(!p.editing, "redo entry must not retain editing=true");
         }
     }

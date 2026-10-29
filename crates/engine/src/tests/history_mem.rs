@@ -103,7 +103,7 @@ fn undo_steps_keep_no_lookup_tables() {
     s.preview("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
     first_x(&s);
     s.commit_interaction().unwrap();
-    assert!(!s.doc().unwrap().history.undo.last().unwrap().doc().map_or(false, |d| d.has_lookup_cache()));
+    assert!(!s.doc().unwrap().history.undo.last().unwrap().doc().is_some_and(|d| d.has_lookup_cache()));
 }
 
 #[test]
