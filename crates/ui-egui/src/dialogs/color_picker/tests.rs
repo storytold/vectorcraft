@@ -332,6 +332,65 @@ fn tab_goes_through_one_color_models_fields_before_the_next() {
     }
 }
 
+/// General › Color Picker › Select When Opened: by default the picker opens with the keyboard in
+/// H; set to the hex code, it opens with the hex field's digits selected, so a code typed over
+/// them and Enter apply it. Tab still goes on from # to L.
+#[test]
+fn the_picker_opens_in_the_field_the_preference_names() {
+    let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    let app_with_hex_first = || {
+        let mut app = app();
+        app.run("prefs.set", json!({"key": "colorPickerFocus", "value": "hex"})).unwrap();
+        app
+    };
+    for (focus, opens_in) in [(None, "H"), (Some("hex"), "#"), (Some("hue"), "H")] {
+        let mut app = app();
+        if let Some(v) = focus {
+            app.run("prefs.set", json!({"key": "colorPickerFocus", "value": v})).unwrap();
+        }
+        app.run("ui.colorPicker", json!({"color": "#ff0000"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = frame_in(&ctx, &mut app, vec![]);
+        }
+        assert_eq!(focused_field(&ctx, &texts).map(|(label, _)| label).as_deref(), Some(opens_in), "{focus:?}");
+        if opens_in == "#" {
+            let after = frame_in(&ctx, &mut app, vec![tab.clone()]);
+            assert_eq!(focused_field(&ctx, &after).map(|(label, _)| label).as_deref(), Some("L"), "Tab goes on from #");
+            // A code typed over the selected digits, then Enter.
+            let (ctx, mut app) = (context(), app_with_hex_first());
+            app.run("ui.colorPicker", json!({"color": "#ff0000"})).unwrap();
+            settled(&ctx, &mut app, screen());
+            draw(&ctx, &mut app, screen(), vec![egui::Event::Text("00FF00".into())]);
+            draw(&ctx, &mut app, screen(), vec![key(egui::Key::Enter)]);
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(fill_hex(&app), "#00ff00");
+        }
+    }
+}
+
+/// With the picker opening in the hex field, a code typed there and cancelled with Escape is gone
+/// when the picker opens again: Enter then keeps the colour as it is.
+#[test]
+fn a_cancelled_hex_code_is_not_applied_when_the_picker_opens_again() {
+    let (ctx, mut app) = (context(), app());
+    app.run("prefs.set", json!({"key": "colorPickerFocus", "value": "hex"})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    app.run("ui.colorPicker", json!({})).unwrap();
+    settled(&ctx, &mut app, screen());
+    draw(&ctx, &mut app, screen(), vec![egui::Event::Text("00FF00".into())]);
+    draw(&ctx, &mut app, screen(), vec![key(egui::Key::Escape)]);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(fill_hex(&app), "#ff0000");
+    app.run("ui.colorPicker", json!({})).unwrap();
+    settled(&ctx, &mut app, screen());
+    draw(&ctx, &mut app, screen(), vec![key(egui::Key::Enter)]);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(fill_hex(&app), "#ff0000", "the cancelled code isn't applied");
+}
+
 #[test]
 fn every_mode_draws_and_cmyk_documents_get_cmyk() {
     let mut app = app();

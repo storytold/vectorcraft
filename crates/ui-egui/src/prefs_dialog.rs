@@ -79,7 +79,17 @@ pub fn restore(app: &mut VectorcraftApp) {
     if !GPU_PREFERENCES.iter().any(|(v, _)| *v == p.gpu_preference) {
         p.gpu_preference = Prefs::default().gpu_preference;
     }
+    // The same for General › Color Picker › Select When Opened: a value saved by another version
+    // would otherwise make OK in the Preferences dialog, which sets every value, fail.
+    if !offers("colorPickerFocus", &p.color_picker_focus) {
+        p.color_picker_focus = Prefs::default().color_picker_focus;
+    }
     app.session.apply_prefs(p);
+}
+
+/// Does the choice preference `key` offer `value`?
+fn offers(key: &str, value: &str) -> bool {
+    matches!(PREF_SPECS.iter().find(|s| s.key == key).map(|s| s.kind), Some(PrefKind::Choice(opts)) if opts.iter().any(|(v, _)| *v == value))
 }
 
 #[derive(Clone, Copy, PartialEq)]

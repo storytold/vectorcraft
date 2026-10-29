@@ -1868,3 +1868,22 @@ fn transform_panel_patterns_defaults_to_following_the_general_preference() {
     s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
     assert_eq!(s.prefs.transform_panel_patterns, "default");
 }
+
+/// General › Color Picker › Select When Opened starts at `hue` (H): in a new session, in a
+/// preferences file saved before it existed and after a reset; `prefs.set` takes `hue` and `hex`
+/// and nothing else.
+#[test]
+fn color_picker_focus_defaults_to_hue() {
+    assert_eq!(Prefs::default().color_picker_focus, "hue");
+    let old: Prefs = serde_json::from_value(json!({"scaleStrokes": true})).unwrap();
+    assert_eq!(old.color_picker_focus, "hue");
+    let mut s = Session::new();
+    for v in ["hex", "hue"] {
+        s.execute("prefs.set", &json!({"key": "colorPickerFocus", "value": v})).unwrap();
+        assert_eq!(s.prefs.color_picker_focus, v);
+    }
+    assert!(s.execute("prefs.set", &json!({"key": "colorPickerFocus", "value": "lab"})).is_err());
+    s.execute("prefs.set", &json!({"key": "colorPickerFocus", "value": "hex"})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    assert_eq!(s.prefs.color_picker_focus, "hue");
+}

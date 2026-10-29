@@ -377,6 +377,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Color Picker: the field that has the keyboard when it opens
+    p!("colorPickerFocus", "General", "Color Picker", "Select When Opened", choice(&[("hue", "H (Hue)"), ("hex", "# (Hex Code)")])),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

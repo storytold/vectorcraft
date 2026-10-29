@@ -85,7 +85,7 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 }
 
 /// `parent.with(salt)` for a salt that needs only `Hash`.
-fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
+pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
 }
 

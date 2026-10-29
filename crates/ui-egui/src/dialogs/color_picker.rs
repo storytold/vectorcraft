@@ -301,6 +301,8 @@ fn header(ui: &mut Ui, title: &str) {
 /// Draws the responsive picker and updates its color fields and live preview.
 /// Returns the requested action for the shared frame to confirm or cancel.
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
+    // General › Color Picker › Select When Opened.
+    let hex_first = app.session.prefs.color_picker_focus == "hex";
     let channel = Channel::parse(&d.str("channel")).unwrap_or_default();
     let web = d.bool("webOnly");
     let swatches = d.bool("swatches");
@@ -401,7 +403,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                         });
                     });
                     ui.add_space(PREVIEW_GAP - ROW_GAP);
-                    let (edit, ch) = value_fields(ui, &p, channel);
+                    let (edit, ch) = value_fields(ui, &p, channel, hex_first);
                     pick = pick.or(edit);
                     new_channel = ch;
                 });
@@ -490,9 +492,14 @@ fn new_original_chips(ui: &mut Ui, new: &Color, original: &Color) -> bool {
 ///
 /// HSB, RGB and hex are in one grid, and Lab and CMYK are in a second grid beside it. Tab goes
 /// through the fields in the order they are drawn: H, S, B, R, G, B, hex, then L, a, b, C, M, Y,
-/// K, with a stop at each channel's radio button before its field.
-fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, Option<Channel>) {
+/// K, with a stop at each channel's radio button before its field. With `hex_first` (General ›
+/// Color Picker › Select When Opened), the picker opens with the hex field's digits selected
+/// instead of H's, so a hex code typed or pasted replaces the colour.
+fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel, hex_first: bool) -> (Option<Picked>, Option<Channel>) {
     let t = Tokens::get(ui.ctx());
+    // The flag that gives a just-opened dialog's first field the keyboard (H) goes to the hex
+    // field. A new window's first frame only measures it, and keeps the flag.
+    let focus_hex = hex_first && !ui.is_sizing_pass() && ui.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_focus_flag())).is_some();
     let rgb = p.color.to_rgb();
     let lab = p.color.to_lab();
     let cms = cms::active();
@@ -534,10 +541,21 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
                             }
                         });
                     }
-                } else if let Some(c) =
-                    widgets::hex_field_named(ui, "cp-hex", Some(tl!("Color")), &hex_digits(&p.color)).as_deref().and_then(parse_hex)
-                {
-                    edit = Some(Picked::of(c));
+                } else {
+                    let hex = hex_digits(&p.color);
+                    if focus_hex {
+                        // The field starts from the colour: a code typed into it and cancelled
+                        // (Escape closes the picker before the field is drawn again) is dropped.
+                        let id = widgets::id_with(ui.scope_id(), "cp-hex");
+                        ui.data_mut(|d| {
+                            d.remove_temp::<String>(id);
+                            d.remove_temp::<bool>(id.with("edited"));
+                        });
+                        widgets::focus_field(ui, id, &hex);
+                    }
+                    if let Some(c) = widgets::hex_field_named(ui, "cp-hex", Some(tl!("Color")), &hex).as_deref().and_then(parse_hex) {
+                        edit = Some(Picked::of(c));
+                    }
                 }
                 ui.end_row();
             }

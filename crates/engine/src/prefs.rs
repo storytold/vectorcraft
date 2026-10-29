@@ -272,6 +272,9 @@ pub struct Prefs {
     /// value), until one is chosen: they pass neither, so patterns follow General › Transform
     /// Pattern Tiles (`transformPatternTiles`), as before the menu acted.
     pub transform_panel_patterns: String,
+    /// The Color Picker field that has the keyboard, its text selected, when the picker opens:
+    /// `hue` (H, the default) or `hex` (#, so a hex code typed or pasted replaces the colour).
+    pub color_picker_focus: String,
     /// The Transform panel menu's Use Registration Point for Symbol: with one symbol instance
     /// selected, the panel and the Properties panel's Transform section measure and transform it
     /// from its symbol's registration point instead of the reference point.
@@ -454,6 +457,7 @@ impl Default for Prefs {
             constrain_proportions: false,
             single_corner_radius: true,
             transform_panel_patterns: "default".to_string(),
+            color_picker_focus: "hue".to_string(),
             use_registration_point_for_symbol: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],

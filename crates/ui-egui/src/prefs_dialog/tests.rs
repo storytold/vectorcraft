@@ -372,3 +372,18 @@ fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
     assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
     assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
 }
+
+/// A Color Picker focus saved by another version reads as H when the preferences are restored, so
+/// OK in the Preferences dialog, which sets every value, still works; a known one is kept.
+#[test]
+fn an_unknown_color_picker_focus_restores_as_hue() {
+    for (saved, restored) in [("lab", "hue"), ("hex", "hex")] {
+        let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui.engine_prefs = json!({"colorPickerFocus": saved});
+        super::restore(&mut app);
+        assert_eq!(app.session.prefs.color_picker_focus, restored);
+        super::open(&mut app, Some("General"));
+        super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.prefs.color_picker_focus, restored);
+    }
+}
