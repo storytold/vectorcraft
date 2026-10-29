@@ -155,6 +155,28 @@ pub fn step_document(app: &mut VectorcraftApp, forward: bool) -> Result<serde_js
     Ok(json!({ "index": i }))
 }
 
+fn isolation_crumb_icon(node: &vectorcraft_doc::Node) -> &'static str {
+    if node.is_layer() {
+        "layers"
+    } else {
+        match &node.kind {
+            vectorcraft_doc::NodeKind::Group { clip: true, .. } => "frame",
+            vectorcraft_doc::NodeKind::Group { .. } => "group",
+            vectorcraft_doc::NodeKind::Compound { .. } => "shapes",
+            vectorcraft_doc::NodeKind::Path { .. } => "spline",
+            vectorcraft_doc::NodeKind::Text(_) => "type",
+            vectorcraft_doc::NodeKind::Image(_) => "image",
+            vectorcraft_doc::NodeKind::SymbolInstance { .. } => "dc-place-symbol",
+            vectorcraft_doc::NodeKind::Blend { .. } => "blend",
+            vectorcraft_doc::NodeKind::Envelope { .. } => "waves",
+            vectorcraft_doc::NodeKind::Mesh(_) => "dc-mesh",
+            vectorcraft_doc::NodeKind::Repeat(_) => "layout-grid",
+            vectorcraft_doc::NodeKind::PlacedDocument(_) => "image",
+            vectorcraft_doc::NodeKind::Intertwine { .. } => "combine",
+            _ => "shapes",
+        }
+    }
+}
 /// The isolation mode breadcrumb bar. It is drawn over the top of `area` (the canvas), after the
 /// canvas, so entering isolation mode does not change the canvas's size (#3126).
 pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
@@ -165,17 +187,20 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         let ancestry = st.doc.ancestry(iso).unwrap_or_default();
         struct Crumb {
             id: Option<vectorcraft_doc::NodeId>,
+            icon: &'static str,
             is_layer: bool,
             name: String,
         }
         let mut crumbs: Vec<Crumb> = ancestry
             .iter()
-            .filter_map(|id| st.doc.node(*id).map(|n| Crumb { id: Some(*id), is_layer: n.is_layer(), name: n.display_name() }))
+            .filter_map(|id| {
+                st.doc.node(*id).map(|n| Crumb { id: Some(*id), icon: isolation_crumb_icon(n), is_layer: n.is_layer(), name: n.display_name() })
+            })
             .collect();
         // Pattern editing mode: the pattern's name, and Save a Copy / Done / Cancel at the right.
         let pattern_edit = st.doc.pattern_edit.as_ref().map(|e| e.pattern.clone());
         if let Some(pn) = &pattern_edit {
-            crumbs.push(Crumb { id: None, is_layer: false, name: pn.clone() });
+            crumbs.push(Crumb { id: None, icon: "swatch-book", is_layer: false, name: pn.clone() });
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
         // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
@@ -190,13 +215,18 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         let font_id = egui::FontId::proportional(12.0);
         let mut nav_cmd = None;
         let total = crumbs.len();
+        let icon_size = 14.0;
         for (i, crumb) in crumbs.iter().enumerate() {
             let is_leaf = i + 1 == total;
+            let start_x = x;
+            let icon_rect = egui::Rect::from_min_size(egui::pos2(x, y_center - icon_size * 0.5), vec2(icon_size, icon_size));
+            icons::paint(ui, crumb.icon, icon_rect, t.icon);
+            x += icon_size + 4.0;
             let galley = ui.painter().layout_no_wrap(crumb.name.clone(), font_id.clone(), t.text);
             let w = galley.size().x;
             let text_pos = egui::pos2(x, y_center - galley.size().y * 0.5);
             if !is_leaf {
-                let crumb_rect = egui::Rect::from_min_max(egui::pos2(x - 3.0, bar.top() + 3.0), egui::pos2(x + w + 3.0, bar.bottom() - 3.0));
+                let crumb_rect = egui::Rect::from_min_max(egui::pos2(start_x - 3.0, bar.top() + 3.0), egui::pos2(x + w + 3.0, bar.bottom() - 3.0));
                 let resp = ui.interact(crumb_rect, ui.scope_id().with(("iso-crumb", i)), Sense::click());
                 if resp.hovered() {
                     ui.painter().rect_filled(crumb_rect, 3.0, t.hover);
