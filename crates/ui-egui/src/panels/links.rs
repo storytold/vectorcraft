@@ -265,7 +265,7 @@ fn status_tip(r: &Value) -> String {
         "embedded" => tl!("Embedded").into(),
         _ => path.to_string(),
     };
-    // An image too large to draw (`links.list`'s note).
+    // An image shown at reduced size or too large to draw (`links.list`'s note).
     match r["note"].as_str() {
         Some(note) => format!("{tip}\n{}", crate::i18n::msg(note)),
         None => tip,

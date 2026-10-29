@@ -1,18 +1,19 @@
-//! Edit → Edit Colors → Recolor Artwork: list the selection's colours, reduce them to rows of
+//! Edit → Edit Colors → Recolor Artwork: list the colors of the selection (or of the art Select All
+//! takes when nothing is selected), reduce them to rows of
 //! similar colours, and remap each row to a new colour by a recolour method. Colours are keyed by
 //! their identity ([`ColorKey`]: model and exact values), so a CMYK colour stays CMYK and two
 //! colours that only look alike stay apart.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use serde_json::{Value, json};
 use vectorcraft_color::recolor::{ColorKey, Method, Preserve, Rng, RowMap, cluster};
 use vectorcraft_color::{Color, Paint, Swatch};
-use vectorcraft_doc::swatches::node_colors;
-use vectorcraft_doc::{AppearanceItem, Document, NodeId, NodeKind};
+use vectorcraft_doc::swatches::{node_colors, node_paints};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::colorcmds::{Recolor, Scope};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, checked_ids_param, cmd, color_value, has_doc, index, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -21,8 +22,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artwork Colors",
             [],
             None,
-            "{} → {colors: [{key: colour identity (\"rgb 255 0 0\", \"cmyk 0 100 100 0\", \"gray 40\", \"lab 55 60 -40\"), hex, count, swatch?: the global swatch it is linked to}]} unique colours used by the selection (fills, strokes, gradient stops, text, mesh points and the tiles of pattern fills and strokes), most used first",
-            has_selection,
+            "{ids?: object ids (default: the selection, or with nothing selected the objects select.all takes, without the hidden and locked objects inside them)} → {colors: [{key: colour identity (\"rgb 255 0 0\", \"cmyk 0 100 100 0\", \"gray 40\", \"lab 55 60 -40\"), hex, count, swatch?: the global swatch it is linked to}]} unique colours used by the objects (fills, strokes, gradient stops, text, mesh points and the tiles of pattern fills and strokes), most used first",
+            has_doc,
             colors
         ),
         cmd!(
@@ -30,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces, except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches) and the group, as one undo step → {changed, swatches: [names added to the document's swatches]}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model)}",
             has_doc,
             apply
         ),
@@ -39,8 +40,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce Colors",
             [],
             None,
-            "{colors?: n (rows; default: one per colour, with the tints of a global swatch in its row), method?: as recolor.apply; default scaleTints (picks each row's colour), preserve?: {white?: true, black?: true, grays?: false} (left out of the rows), limitTo?: as recolor.apply (new colours snap to it)} group the selection's colours into rows of similar colours (k-means in Lab, weighted by use) → {map: [{from: [keys, the row's colour first], to: key}], preserved: [keys], method}",
-            has_selection,
+            "{colors?: n (rows; default: one per colour, with the tints of a global swatch in its row), method?: as recolor.apply; default scaleTints (picks each row's colour), preserve?: {white?: true, black?: true, grays?: false} (left out of the rows), limitTo?: as recolor.apply (new colours snap to it), ids?: as recolor.colors} group the colors of the objects (default: as recolor.colors) into rows of similar colours (k-means in Lab, weighted by use) → {map: [{from: [keys, the row's colour first], to: key}], preserved: [keys], method}",
+            has_doc,
             reduce
         ),
         cmd!(
@@ -62,9 +63,19 @@ struct Used {
     swatch: Option<String>,
 }
 
-/// The unique colours of the selection, most used first (ties by key): fills, strokes, gradient
-/// stops, text, mesh points and the tiles of the patterns used as fills or strokes.
-fn used_colors(d: &Document, ids: &[NodeId]) -> Vec<Used> {
+/// The unique colours of the objects `ids` and the objects inside them, most used first (ties by
+/// key): fills, strokes, gradient stops, text, mesh points and the tiles of the patterns used as
+/// fills or strokes. With `only`, an object not in it is left out with everything it holds.
+fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) -> Vec<Used> {
+    fn read<'a>(n: &'a Node, only: Option<&BTreeSet<NodeId>>, out: &mut Vec<&'a Node>) {
+        if only.is_some_and(|o| !o.contains(&n.id)) {
+            return;
+        }
+        out.push(n);
+        for c in n.children().into_iter().flatten() {
+            read(c, only, out);
+        }
+    }
     let mut index: HashMap<ColorKey, usize> = HashMap::new();
     let mut used: Vec<(ColorKey, Used)> = vec![];
     let mut count = |c: &Color, link: Option<&str>| {
@@ -81,25 +92,22 @@ fn used_colors(d: &Document, ids: &[NodeId]) -> Vec<Used> {
     };
     // The patterns used as fills or strokes: their tiles count once each.
     let mut patterns: Vec<&str> = vec![];
+    let mut nodes = vec![];
     for n in ids.iter().filter_map(|id| d.node(*id)) {
-        node_colors(n, &mut count);
-        n.walk(&mut |m| {
-            let runs = match &m.kind {
-                NodeKind::Text(t) => t.runs.as_slice(),
-                _ => &[],
-            };
-            let items = m.appearance.items.iter().map(|it| match it {
-                AppearanceItem::Fill(l) => &l.paint,
-                AppearanceItem::Stroke(l) => &l.paint,
-            });
-            for p in items.chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])) {
-                if let Paint::Pattern { pattern, .. } = p
-                    && !patterns.contains(&pattern.as_str())
-                {
-                    patterns.push(pattern);
-                }
+        read(n, only, &mut nodes);
+    }
+    for m in nodes {
+        for p in node_paints(m) {
+            match p {
+                Paint::Solid { color, swatch, .. } => count(color, swatch.as_deref()),
+                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref())),
+                Paint::Pattern { pattern, .. } if !patterns.contains(&pattern.as_str()) => patterns.push(pattern),
+                _ => {}
             }
-        });
+        }
+        if let NodeKind::Mesh(mesh) = &m.kind {
+            mesh.points.iter().for_each(|p| count(&p.color, None));
+        }
     }
     for def in patterns.iter().filter_map(|p| d.pattern(p)) {
         def.art.iter().for_each(|n| node_colors(n, &mut count));
@@ -108,9 +116,30 @@ fn used_colors(d: &Document, ids: &[NodeId]) -> Vec<Used> {
     used.into_iter().map(|(_, u)| u).collect()
 }
 
-fn colors(s: &mut Session, _: &Value) -> Result<Value> {
+/// The objects whose colors `recolor.colors` and `recolor.reduce` read, for [`used_colors`]: `ids`
+/// (each checked) or else the selection, with everything they hold; with nothing selected, the
+/// objects Select All takes and the objects inside them, leaving out every hidden or locked object
+/// with what it holds and the objects of hidden, locked and template layers (the second value
+/// lists the objects read). Objects listed twice or inside another one listed are dropped, so
+/// their colors count once.
+fn scope_ids(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<NodeId>, Option<BTreeSet<NodeId>>)> {
     let st = s.doc()?;
-    let v: Vec<Value> = used_colors(&st.doc, &st.selection.objects)
+    let ids = match p.get("ids") {
+        Some(_) => checked_ids_param(s, p, "ids", cmd)?,
+        None if st.selection.is_empty() => {
+            let only = super::select::selectable_ids(&st.doc, st.isolation);
+            return Ok((super::select::selectable(&st.doc, st.isolation), Some(only)));
+        }
+        None => st.selection.objects.clone(),
+    };
+    let mut seen = BTreeSet::new();
+    Ok((super::edit::outermost(&st.doc, ids).into_iter().filter(|id| seen.insert(*id)).collect(), None))
+}
+
+fn colors(s: &mut Session, p: &Value) -> Result<Value> {
+    let (ids, only) = scope_ids(s, p, "recolor.colors")?;
+    let st = s.doc()?;
+    let v: Vec<Value> = used_colors(&st.doc, &ids, only.as_ref())
         .iter()
         .map(|u| {
             let mut v = json!({"key": key_str(&u.color), "hex": u.color.to_hex(), "count": u.count});
@@ -145,8 +174,9 @@ fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
     let def = Preserve::default();
     let flag = |k: &str, d: bool| p.get("preserve").map_or(d, |v| bool_or(v, k, d));
     let preserve = Preserve { white: flag("white", def.white), black: flag("black", def.black), grays: flag("grays", def.grays) };
+    let (ids, only) = scope_ids(s, p, C)?;
     let st = s.doc()?;
-    let (kept, used): (Vec<Used>, Vec<Used>) = used_colors(&st.doc, &st.selection.objects).into_iter().partition(|u| preserve.keeps(&u.color));
+    let (kept, used): (Vec<Used>, Vec<Used>) = used_colors(&st.doc, &ids, only.as_ref()).into_iter().partition(|u| preserve.keeps(&u.color));
     // Units that stay together: the tints of a global swatch, else one colour each.
     let mut units: Vec<Vec<&Used>> = vec![];
     for u in &used {
@@ -156,11 +186,11 @@ fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let unit_colors = |g: &[&Used]| g.iter().map(|u| u.color).collect::<Vec<_>>();
-    let rows: Vec<Vec<&Used>> = match p.get("colors").and_then(Value::as_u64) {
-        Some(n) if (n as usize) < units.len() => {
+    let rows: Vec<Vec<&Used>> = match p.get("colors").and_then(Value::as_u64).map(index) {
+        Some(n) if n < units.len() => {
             let keys: Vec<Color> = units.iter().map(|g| method.key_color(&unit_colors(g)).unwrap_or_default()).collect();
             let weights: Vec<f32> = units.iter().map(|g| g.iter().map(|u| u.count as f32).sum()).collect();
-            cluster(&keys, &weights, n as usize).into_iter().map(|ix| ix.into_iter().flat_map(|i| units[i].iter().copied()).collect()).collect()
+            cluster(&keys, &weights, n).into_iter().map(|ix| ix.into_iter().flat_map(|i| units[i].iter().copied()).collect()).collect()
         }
         _ => units,
     };
@@ -261,24 +291,41 @@ struct Link {
     color: Color,
 }
 
+/// A global swatch of the color group `recolor.apply` rewrites: its name, the color it is
+/// rewritten with and the color art linked to it shows afterwards.
+struct GroupSwatch {
+    name: String,
+    color: Color,
+    shown: Color,
+}
+
 /// A parsed map ready to recolour: the row of each current colour, and the swatch of each row's
 /// new colour.
 struct ColorMap {
     rows: Vec<RowMap>,
     links: Vec<Option<Link>>,
+    /// The new color of each of `rows`.
+    tos: Vec<Color>,
+    /// The global swatches of the color group being rewritten.
+    group: Vec<GroupSwatch>,
     keys: HashMap<ColorKey, usize>,
     hexes: HashMap<String, usize>,
+    /// Set when a colour took a new colour of another model in its own model.
+    converted: std::cell::Cell<bool>,
 }
 
 impl ColorMap {
-    /// `links`: the swatch of each of `rows`' new colours (as many as `rows`, or none).
-    fn new(rows: &[Row], method: Method, links: &[Option<Link>]) -> Self {
-        let mut out = Self { rows: vec![], links: vec![], keys: HashMap::new(), hexes: HashMap::new() };
+    /// `links`: the swatch of each of `rows`' new colours (as many as `rows`, or none); `group`: the
+    /// global swatches of the color group being rewritten.
+    fn new(rows: &[Row], method: Method, own_model: bool, links: &[Option<Link>], group: Vec<GroupSwatch>) -> Self {
+        let mut out =
+            Self { rows: vec![], links: vec![], tos: vec![], group, keys: HashMap::new(), hexes: HashMap::new(), converted: Default::default() };
         for (n, r) in rows.iter().enumerate().filter(|(_, r)| !r.from.is_empty()) {
             let Some(to) = r.new_color() else { continue };
             let i = out.rows.len();
             let colors: Vec<Color> = r.from.iter().map(Match::color).collect();
-            out.rows.push(RowMap::new(method, &colors, to));
+            out.rows.push(RowMap::new(method, &colors, to).with_own_model(own_model));
+            out.tos.push(to);
             out.links.push(links.get(n).cloned().flatten());
             for m in &r.from {
                 match m {
@@ -296,16 +343,35 @@ impl ColorMap {
     }
 
     fn map(&self, c: Color) -> Color {
-        self.row_of(c).and_then(|i| self.rows.get(i)).map_or(c, |r| r.map(c))
+        let Some(r) = self.row_of(c).and_then(|i| self.rows.get(i)) else { return c };
+        if r.converts(c) {
+            self.converted.set(true);
+        }
+        r.map(c)
     }
 
     /// Recolour a colour that can link to a swatch: a row whose new colour is a global or spot
     /// swatch links its colours to it (at their tints; shades and other hues stay unlinked), a
-    /// process swatch gives its colour in its own model; other rows map the colour, which loses its
-    /// link when it changes. True when anything changed.
+    /// process swatch gives its colour in its own model; a color linked to a global swatch of the
+    /// rewritten group that takes the row's new color keeps its link (at its tint in the row) when
+    /// the row gives it the new color in that color's model;
+    /// other rows map the colour, which loses its link when it changes or when the group's rewrite
+    /// would change it. True when anything changed.
     fn map_link(&self, c: &mut Color, link: &mut Option<String>, tint: &mut f32) -> bool {
         let Some(i) = self.row_of(*c) else { return false };
         let (Some(row), Some(l)) = (self.rows.get(i), self.links.get(i)) else { return false };
+        if l.is_none()
+            && let Some(g) = link.as_deref().and_then(|n| self.group.iter().find(|g| g.name == n))
+            && self.tos.get(i) == Some(&g.color)
+            && !row.converts(*c)
+            && let Some(t) = row.tint(*c)
+        {
+            let t = t.clamp(0.0, 1.0);
+            let shown = g.shown.tinted(t);
+            let changed = *tint != t || *c != shown;
+            (*c, *tint) = (shown, t);
+            return changed;
+        }
         let new = match (l, row.tint(*c)) {
             (Some(l), Some(t)) if l.global => {
                 let t = t.clamp(0.0, 1.0);
@@ -315,9 +381,17 @@ impl ColorMap {
                 return changed;
             }
             (Some(l), Some(t)) => l.color.tinted(t),
-            _ => row.map(*c),
+            _ => {
+                if row.converts(*c) {
+                    self.converted.set(true);
+                }
+                row.map(*c)
+            }
         };
-        if new == *c {
+        // A color its row leaves as it is still loses its link to a swatch of the rewritten group
+        // when the rewrite would give it another color.
+        let rewritten = link.as_deref().and_then(|n| self.group.iter().find(|g| g.name == n)).is_some_and(|g| g.shown.tinted(*tint) != new);
+        if new == *c && !rewritten {
             return false;
         }
         *c = new;
@@ -351,17 +425,42 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let scope = Scope { fill: true, stroke: true, ..Scope::of(p) };
     let label = if ids.is_empty() { "Edit Color Group" } else { "Recolor Artwork" };
+    // `model`: keep each colour's model (default), take the new colour's own, or the document's.
+    // A given `model` must be a string; only a missing one means "keep".
+    let model = match p.get("model") {
+        None => "keep",
+        Some(Value::String(m)) => m.as_str(),
+        Some(other) => return Err(bad(C, format!("bad model {other} (keep, new or document)"))),
+    };
+    let mut doc_model = None;
+    let own_model = match model {
+        "keep" => false,
+        "new" => true,
+        "document" => {
+            let m = s.doc()?.doc.color_mode.model();
+            doc_model = Some(m);
+            for r in &mut rows {
+                r.to = r.to.map(|c| c.in_model(m));
+            }
+            true
+        }
+        other => return Err(bad(C, format!("unknown model `{other}` (keep, new or document)"))),
+    };
+    // The colours a colour group takes follow the model too (`document` converts them).
+    let in_doc_model = |c: Color| doc_model.map_or(c, |m| c.in_model(m));
     let new: Vec<Color> = match p.get("groupColors").and_then(Value::as_array) {
         Some(cs) => cs
             .iter()
             .map(|v| {
-                color_value(v).map(|c| palette.as_ref().map_or(c, |pl| pl.nearest(c))).ok_or_else(|| bad(C, format!("bad colour {v} in groupColors")))
+                color_value(v)
+                    .map(|c| in_doc_model(palette.as_ref().map_or(c, |pl| pl.nearest(c))))
+                    .ok_or_else(|| bad(C, format!("bad colour {v} in groupColors")))
             })
             .collect::<Result<_>>()?,
         None => rows.iter().filter_map(Row::new_color).collect(),
     };
     let rename = str_param(p, "rename");
-    let (changed, edit, added) = s.edit(label, |d, _| {
+    let (changed, edit, added, converted) = s.edit(label, |d, _| {
         // The rows' library swatches join the document (one it has with that name and colour is
         // used as it is).
         let mut added = vec![];
@@ -382,17 +481,38 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(Link { name, global: w.global, color })
             })
             .collect();
-        let map = ColorMap::new(&rows, method, &links);
+        // The group's global swatches that its rewrite gives a color: art linked to one of them
+        // whose row's new color is that color stays linked.
+        let kept: Vec<GroupSwatch> = group
+            .and_then(|g| d.swatch_groups.iter().find(|x| x.name == g))
+            .map(|g| {
+                g.swatches
+                    .iter()
+                    .zip(&new)
+                    .filter(|(w, _)| w.global && !w.is_reserved())
+                    .map(|(w, c)| GroupSwatch { name: w.name.clone(), color: *c, shown: d.linked_color(*c, w.spot) })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let map = ColorMap::new(&rows, method, own_model, &links, kept);
         let f = |c: Color| map.map(c);
         let lf = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| map.map_link(c, link, tint);
         let changed = Recolor::with_links(scope, &f, &lf).run(d, &ids);
         let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, rename, C)).transpose()?;
-        Ok((changed, edit, added))
+        Ok((changed, edit, added, map.converted.get()))
     })?;
+    let mut out = json!({ "changed": changed, "swatches": added });
     if let Some(e) = edit {
         e.defaults(s);
+        out["relinked"] = json!(e.relinked());
     }
-    Ok(json!({ "changed": changed, "swatches": added }))
+    if converted {
+        out["note"] = json!(
+            "some colours kept their own colour model, so the new colour was converted into it and may look different; \
+             pass model \"new\" (the new colour's model) or \"document\" (the document's colour mode) to change the model"
+        );
+    }
+    Ok(out)
 }
 
 fn randomize(_: &mut Session, p: &Value) -> Result<Value> {

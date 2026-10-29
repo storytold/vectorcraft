@@ -173,7 +173,7 @@ proptest! {
         let root = base.join("a/b/c/root");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(base.join("outside")).unwrap();
-        let roots = vectorcraft_engine::file_access::AutomationRoots::new(Some(root.as_path()), Some(root.as_path())).unwrap();
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[root.as_path()]).unwrap();
         let mut s = Server::new(Box::new(Headless::with_document().with_automation_roots(roots)));
         let path = format!("{}{}{tail}", root.display(), std::path::MAIN_SEPARATOR);
         let r = catch_quiet(|| call(&mut s, tool, json!({"path": path})));

@@ -31,10 +31,17 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().map_or(IMAGE_CACHE_MAX, |m| usize::try_from(m / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX))
+    physical_memory().map_or(IMAGE_CACHE_MAX, budget_for)
 }
 
-/// Installed memory in bytes, where the system says without a native call (Linux).
+/// The default budget on a machine with `memory` bytes installed: an eighth of it, at most
+/// [`IMAGE_CACHE_MAX`].
+#[cfg(not(target_arch = "wasm32"))]
+fn budget_for(memory: u64) -> usize {
+    usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+}
+
+/// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
 #[cfg(target_os = "linux")]
 fn physical_memory() -> Option<u64> {
     let info = std::fs::read_to_string("/proc/meminfo").ok()?;
@@ -43,7 +50,28 @@ fn physical_memory() -> Option<u64> {
     kib.checked_mul(1024)
 }
 
-#[cfg(not(any(target_os = "linux", target_arch = "wasm32")))]
+/// Installed memory in bytes (`GlobalMemoryStatusEx`).
+#[cfg(windows)]
+fn physical_memory() -> Option<u64> {
+    winsafe::GlobalMemoryStatusEx().ok().map(|m| m.ullTotalPhys)
+}
+
+/// Installed memory in bytes, as `sysctl` prints it (`hw.memsize` on macOS, `hw.physmem` on
+/// FreeBSD).
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+fn physical_memory() -> Option<u64> {
+    let (sysctl, name) = if cfg!(target_os = "macos") { ("/usr/sbin/sysctl", "hw.memsize") } else { ("/sbin/sysctl", "hw.physmem") };
+    let out = std::process::Command::new(sysctl).args(["-n", name]).output().ok().filter(|o| o.status.success())?;
+    sysctl_bytes(&out.stdout)
+}
+
+/// The byte count `sysctl -n` prints for a memory size.
+#[cfg(any(target_os = "macos", target_os = "freebsd", test))]
+fn sysctl_bytes(out: &[u8]) -> Option<u64> {
+    std::str::from_utf8(out).ok()?.trim().parse().ok()
+}
+
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd", target_arch = "wasm32")))]
 fn physical_memory() -> Option<u64> {
     None
 }
@@ -89,8 +117,16 @@ pub(crate) struct ImageStore {
     budget: usize,
     /// Request counter: the least recently used entries go first.
     tick: u64,
+    /// How many entries and undecodable notes have been added: it changes whenever the store
+    /// holds pixels, or notes an image as undecodable, that it did not before.
+    added: u64,
     /// [`BlobId`]s per blob byte buffer, by address (the `Weak` keeps it from being reused).
     ids: HashMap<usize, (Weak<Vec<u8>>, BlobId)>,
+    /// The content keys of images whose pixels can't be decoded ([`Undecoded::Unreadable`]), so
+    /// they aren't decoded again, each with whether [`newly_undecodable`] has counted it.
+    ///
+    /// [`Undecoded::Unreadable`]: crate::paint::Undecoded::Unreadable
+    undecodable: HashMap<Arc<str>, bool>,
 }
 
 fn pixmap_bytes(pm: &Pixmap) -> usize {
@@ -99,7 +135,29 @@ fn pixmap_bytes(pm: &Pixmap) -> usize {
 
 impl ImageStore {
     pub(crate) fn new(budget: usize) -> Self {
-        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, ids: HashMap::new() }
+        Self { entries: HashMap::new(), bytes: 0, budget, tick: 0, added: 0, ids: HashMap::new(), undecodable: HashMap::new() }
+    }
+
+    /// How many entries and undecodable notes have been added to the store.
+    pub(crate) fn added(&self) -> u64 {
+        self.added
+    }
+
+    /// Whether the image with content key `content` is known not to decode.
+    pub(crate) fn is_undecodable(&self, content: &str) -> bool {
+        self.undecodable.contains_key(content)
+    }
+
+    /// Note that the image with content key `content` can't be decoded. Past 1024 such images the
+    /// notes are dropped and those images are tried again.
+    pub(crate) fn set_undecodable(&mut self, content: Arc<str>) {
+        if self.undecodable.len() >= 1024 {
+            self.undecodable.clear();
+        }
+        if !self.undecodable.contains_key(&content) {
+            self.added += 1;
+            self.undecodable.insert(content, false);
+        }
     }
 
     /// The pixels of `key`, marked as just used.
@@ -134,9 +192,22 @@ impl ImageStore {
             return e.pm.clone();
         }
         self.bytes += pixmap_bytes(&pm);
+        self.added += 1;
         self.entries.insert(key, Entry { pm: pm.clone(), used: tick });
         self.evict();
         pm
+    }
+
+    /// Keep `pm` as `key` as [`ImageStore::insert`] does, holding no reference to it afterwards,
+    /// then drop entries over budget → whether the store holds `key`'s pixels. Pixels larger than
+    /// the budget are not kept.
+    pub(crate) fn keep(&mut self, key: ImageKey, pm: Arc<Pixmap>) -> bool {
+        if pixmap_bytes(&pm) > self.budget {
+            return false;
+        }
+        drop(self.insert(key.clone(), pm));
+        self.evict();
+        self.entries.contains_key(&key)
     }
 
     /// Drop the least recently used entries no one else holds until within budget.
@@ -155,6 +226,12 @@ impl ImageStore {
                 self.bytes = self.bytes.saturating_sub(pixmap_bytes(&e.pm));
             }
         }
+    }
+
+    /// Bytes of the entries someone besides the store holds (images being painted): eviction can't
+    /// free them.
+    pub(crate) fn pinned_bytes(&self) -> usize {
+        self.entries.values().filter(|e| Arc::strong_count(&e.pm) > 1).map(|e| pixmap_bytes(&e.pm)).sum()
     }
 
     pub(crate) fn set_budget(&mut self, budget: usize) {
@@ -206,6 +283,42 @@ pub fn image_cache_bytes() -> usize {
     store().bytes()
 }
 
+/// Keep `img`, the decoded pixels of `blob`, in the store as a renderer keeps the pixels it
+/// decodes, so the first render that draws `blob` uses them instead of decoding it. Returns whether
+/// `img` was kept or the store already held `blob`'s pixels. It returns false, without looking at
+/// the store, for a CMYK image and for pixels a renderer would refuse to decode: more than the
+/// decode allowance as RGBA, or more than fits beside the pixels being drawn now. The store then
+/// drops the least recently used entries beyond its budget, as it does whenever a renderer adds
+/// pixels, and returns false when that leaves `img` out: pixels larger than the budget are never
+/// kept.
+pub fn keep_decoded_image(blob: &ImageBlob, img: image::DynamicImage) -> bool {
+    let (key, lut, _) = crate::blobs::blob_key(blob);
+    if lut.is_some() || !crate::paint::within_allowance(img.width(), img.height()) {
+        return false;
+    }
+    let kept = store().get(&key);
+    let size = match kept {
+        Some(pm) => (pm.width(), pm.height()),
+        None => {
+            let Some(pm) = crate::paint::decoded_pixmap(img) else { return false };
+            let size = (pm.width(), pm.height());
+            if !store().keep(key, Arc::new(pm)) {
+                return false;
+            }
+            size
+        }
+    };
+    remember_size(blob, size);
+    true
+}
+
+/// Whether the store holds the decoded pixels of `blob` at full size.
+pub fn image_cached(blob: &ImageBlob) -> bool {
+    // The key first: working it out takes the store's lock too.
+    let (key, _, _) = crate::blobs::blob_key(blob);
+    store().peek(&key).is_some()
+}
+
 /// `blob`'s content key and kind, hashed and sniffed once per blob allocation.
 pub(crate) fn blob_id(blob: &ImageBlob) -> BlobId {
     if let Some(id) = store().known_id(&blob.bytes) {
@@ -221,6 +334,27 @@ pub(crate) fn blob_id(blob: &ImageBlob) -> BlobId {
 /// of them are found while the store holds the mips but not the pixels.
 pub(crate) fn remember_size(blob: &ImageBlob, size: (u16, u16)) {
     store().remember_size(&blob.bytes, size);
+}
+
+/// How many of `blobs` a renderer has found it can't decode (they draw nothing, or a crossed box
+/// with [`RenderOptions::mark_undecoded_images`](crate::RenderOptions::mark_undecoded_images)) that
+/// no earlier call counted: each such image is counted once in the process.
+pub fn newly_undecodable<'a>(blobs: impl IntoIterator<Item = &'a ImageBlob>) -> usize {
+    let mut s = store();
+    if s.undecodable.values().all(|counted| *counted) {
+        return 0;
+    }
+    let mut n = 0;
+    for blob in blobs {
+        let Some(id) = s.known_id(&blob.bytes) else { continue };
+        if let Some(counted) = s.undecodable.get_mut(&id.content)
+            && !*counted
+        {
+            *counted = true;
+            n += 1;
+        }
+    }
+    n
 }
 
 /// `pm` at half the size (rounded up), each pixel the mean of the 2×2 it covers (the last row and
@@ -282,6 +416,50 @@ mod tests {
         s.set_budget(400);
         assert!(s.peek(&key("b")).is_none() && s.peek(&key("c")).is_some(), "now b goes first");
         assert_eq!(s.bytes(), 400);
+    }
+
+    /// Pixels kept for a first frame are dropped at once when the budget has no room for them,
+    /// since nothing draws them yet.
+    #[test]
+    fn kept_pixels_larger_than_the_budget_are_not_kept() {
+        // 10×10 pixmaps: 400 bytes each.
+        let mut s = ImageStore::new(300);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(10, 10))));
+        assert_eq!(s.bytes(), 0);
+        assert!(s.peek(&key("big")).is_none());
+        // Room for one: the older one, held by no one, goes.
+        let mut s = ImageStore::new(400);
+        assert!(s.keep(key("a"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.keep(key("b"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("a")).is_none() && s.peek(&key("b")).is_some());
+        assert_eq!(s.bytes(), 400);
+        // The one kept is held while drawn: a new one that doesn't fit beside it is dropped.
+        let held = s.get(&key("b"));
+        assert!(!s.keep(key("c"), Arc::new(Pixmap::new(10, 10))));
+        assert!(s.peek(&key("c")).is_none());
+        assert_eq!(s.bytes(), 400);
+        drop(held);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn default_budget_is_an_eighth_of_installed_memory_at_most_1_gib() {
+        assert_eq!(budget_for(4 << 30), 512 << 20);
+        assert_eq!(budget_for(8 << 30), IMAGE_CACHE_MAX);
+        assert_eq!(budget_for(64 << 30), IMAGE_CACHE_MAX);
+    }
+
+    #[test]
+    #[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
+    fn installed_memory_is_read() {
+        assert!(physical_memory().is_some_and(|m| m >= 256 << 20), "{:?}", physical_memory());
+    }
+
+    #[test]
+    fn sysctl_prints_the_memory_size_in_bytes() {
+        assert_eq!(sysctl_bytes(b"17179869184\n"), Some(16 << 30));
+        assert_eq!(sysctl_bytes(b""), None);
+        assert_eq!(sysctl_bytes(b"unknown oid 'hw.memsize'\n"), None);
     }
 
     #[test]

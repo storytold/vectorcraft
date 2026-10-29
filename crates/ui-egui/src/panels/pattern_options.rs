@@ -45,13 +45,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let name = def.name.clone();
     // Name (commit on Enter / focus loss; Shift+Enter commits and keeps the focus).
     row(ui, tl!("Name:"), |ui| {
-        let id = ui.id().with("po-name");
+        let id = ui.scope_id().with("po-name");
         let mut buf: String = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| name.clone());
         if !ui.memory(|m| m.has_focus(id)) {
             buf = name.clone();
         }
         let kept = widgets::own_field_shift_enter(ui, id, &mut buf, &name);
-        let r = ui.add(egui::TextEdit::singleline(&mut buf).id(id).desired_width(150.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut buf).id(id).align(egui::Align2::LEFT_CENTER).desired_width(150.0));
         ui.data_mut(|d| d.insert_temp(id, buf.clone()));
         if (r.lost_focus() || kept) && !buf.trim().is_empty() && buf != name {
             set(app, &name, json!({"newName": buf.trim()}));

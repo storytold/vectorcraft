@@ -10,6 +10,8 @@
 //! Frames (`TextKind::Area`) and paths (`TextKind::OnPath`) are interpreted in text space.
 #![forbid(unsafe_code)]
 
+mod bitmap;
+mod colr;
 mod composer;
 pub mod craft_fonts;
 pub mod edit;
@@ -24,17 +26,23 @@ mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
+mod svg_glyph;
 #[cfg(any(test, feature = "test-fonts"))]
 pub mod test_fonts;
 pub mod thread;
 
+pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
     FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
-    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, style_weight, system_font_dirs, user_font_dirs,
+    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
+    system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
+use std::sync::Arc;
+pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
+
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
@@ -118,6 +126,63 @@ pub struct PositionedGlyph {
     /// (Justification…), Desired and justification together: 1 at 100%. Horizontal Scale isn't
     /// included.
     pub scale: f64,
+    /// A colour bitmap glyph (emoji), drawn through `xf` instead of an outline: its `outline` is
+    /// empty. Also a COLR glyph whose paints documents have no form for, drawn as an image.
+    pub image: Option<Arc<GlyphImage>>,
+    /// A colour glyph's art (COLR layers, an SVG document's art), drawn through `xf` instead of an
+    /// outline: a group in font units (y down). Its `outline` is empty.
+    pub colour: Option<Arc<vectorcraft_doc::Node>>,
+    /// Type on a curved path in a script whose letters join: the glyph's `outline` is bent along
+    /// the path ([`GlyphBend`]) so it meets its neighbours, and `xf` is only the straight glyph
+    /// nearest it (for the caret, hit testing and tools). `None`: the glyph is drawn through `xf`.
+    pub bend: Option<GlyphBend>,
+    /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
+    /// its Character Rotation. The identity for a glyph without one.
+    pub unturned: Affine,
+}
+
+/// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
+/// left end, y down from the baseline) goes to `P(s + x · step / advance) + (y + rise) · N` there,
+/// `P` the path's point at a distance along it and `N` its normal on the glyph's lower side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlyphBend {
+    /// Where the glyph's left end is along the path.
+    pub s: f64,
+    /// How far along the path the glyph runs.
+    pub step: f64,
+    /// The glyph's advance.
+    pub advance: f64,
+    /// How far down the type moves off the path (Align to Path).
+    pub rise: f64,
+}
+
+impl PositionedGlyph {
+    /// The glyph's colour bitmap, and the transform from its pixels to text space.
+    pub fn placed_image(&self) -> Option<(&Arc<GlyphImage>, Affine)> {
+        self.image.as_ref().map(|i| (i, self.xf * i.xf))
+    }
+    /// The glyph's colour bitmap as an image object placed through `to_doc` (text space → where it
+    /// goes), holding its pixels ([`vectorcraft_doc::ImageObject::pixels`]), without an id.
+    pub fn placed_image_node(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
+        let (image, to_text) = self.placed_image()?;
+        let im = vectorcraft_doc::ImageObject {
+            key: image.blob.content_key(),
+            width: image.width,
+            height: image.height,
+            xf: to_doc * to_text,
+            link: None,
+            placement: Default::default(),
+            pixels: Some(Arc::new(image.blob.clone())),
+        };
+        Some(vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(u64::MAX), vectorcraft_doc::NodeKind::Image(Box::new(im))))
+    }
+    /// The glyph's colour art placed through `to_doc` (text space → where they go): a copy of
+    /// [`Self::colour`], transformed, its nodes without ids.
+    pub fn placed_colour(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
+        let mut art = (**self.colour.as_ref()?).clone();
+        art.transform(to_doc * self.xf, true);
+        Some(art)
+    }
 }
 
 /// One line of laid-out text.
@@ -172,6 +237,21 @@ pub struct InlineGlyph {
     pub bounds: Rect,
 }
 
+/// A list marker (Paragraph panel › Bullets) the layout drew before the first line of a list
+/// paragraph: glyphs of [`TextLayout::glyphs`] that stand for no characters of the text (`len`
+/// 0, at the paragraph's first byte, in the run of its first character).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListMarker {
+    /// The marker's glyphs, in the order they are drawn: those of its characters and the tab that
+    /// takes the text to the next tab stop.
+    pub glyphs: std::ops::Range<usize>,
+    /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
+    /// right-to-left paragraph.
+    pub tab: usize,
+    /// The marker's characters ("•").
+    pub text: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
@@ -180,6 +260,10 @@ pub struct TextLayout {
     /// turn clockwise for vertical type (point type also centres its first column on the anchor).
     pub line_xf: Affine,
     pub glyphs: Vec<PositionedGlyph>,
+    /// Ruby (furigana) glyphs, laid out over their base text: geometry like [`Self::glyphs`], but
+    /// they are not characters of the text (their `len` is 0 and their `run` is the base text's
+    /// run, for the fill and stroke). Empty when the type has no ruby.
+    pub ruby: Vec<PositionedGlyph>,
     pub lines: Vec<LineInfo>,
     /// Ink/advance bounds in text space.
     pub bounds: Rect,
@@ -195,6 +279,8 @@ pub struct TextLayout {
     pub fit_scale: f64,
     /// Inline graphics, in text order.
     pub inlines: Vec<InlineGlyph>,
+    /// List markers, in text order.
+    pub markers: Vec<ListMarker>,
 }
 
 impl Default for TextLayout {
@@ -203,6 +289,7 @@ impl Default for TextLayout {
             vertical: false,
             line_xf: Affine::IDENTITY,
             glyphs: Vec::new(),
+            ruby: Vec::new(),
             lines: Vec::new(),
             bounds: Rect::ZERO,
             overflow: false,
@@ -210,11 +297,31 @@ impl Default for TextLayout {
             frames: Vec::new(),
             fit_scale: 1.0,
             inlines: Vec::new(),
+            markers: Vec::new(),
         }
     }
 }
 
 impl TextLayout {
+    /// The list marker that glyph `i` of [`Self::glyphs`] belongs to, if any.
+    pub fn marker_of(&self, i: usize) -> Option<&ListMarker> {
+        let at = self.markers.partition_point(|m| m.glyphs.end <= i);
+        self.markers.get(at).filter(|m| m.glyphs.contains(&i))
+    }
+    /// The text glyph `i` of [`Self::glyphs`] stands for when it belongs to a list marker: a tab
+    /// for its tab, the marker's characters for the first of its other glyphs, nothing for the
+    /// rest.
+    pub fn marker_text(&self, i: usize) -> Option<&str> {
+        let m = self.marker_of(i)?;
+        let first = if m.tab == m.glyphs.start { m.glyphs.start + 1 } else { m.glyphs.start };
+        Some(if i == m.tab {
+            "\t"
+        } else if i == first {
+            &m.text
+        } else {
+            ""
+        })
+    }
     /// Convert physical text coordinates to inline/block coordinates.
     pub fn logical_point(&self, p: Point) -> Point {
         if self.vertical { self.line_xf.inverse() * p } else { p }
@@ -237,7 +344,7 @@ impl TextLayout {
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
-        for g in &self.glyphs {
+        for g in self.glyphs.iter().chain(&self.ruby) {
             p.extend(g.outline.iter());
         }
         p
@@ -289,12 +396,13 @@ fn dir(angle: f64) -> Vec2 {
 
 /// The left and right x of the cluster of `glyphs[i]` (glyphs of one line of horizontal type
 /// that is not on a path): the glyphs next to it with its byte offset and length, and the
-/// tatweels of a kashida after it (length 0, the same byte offset). None for vertical type and
-/// type on a path.
+/// tatweels of a kashida after it (length 0 and no advance, the same byte offset). A list marker
+/// next to it (length 0 and an advance, the same byte offset) is not part of it. None for
+/// vertical type and type on a path.
 fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> Option<(f64, f64)> {
     let g = glyphs.get(i).filter(|_| !layout.vertical && !layout.on_path)?;
-    let same = |o: &PositionedGlyph| o.byte == g.byte && (o.len == g.len || o.len == 0);
-    let start = glyphs.get(..i)?.iter().rposition(|o| !same(o)).map_or(0, |p| p + 1);
+    let same = |o: &PositionedGlyph| o.byte == g.byte && (o.len == g.len || (o.len == 0 && o.advance == 0.0));
+    let start = glyphs.get(..i)?.iter().rposition(|o| !(o.byte == g.byte && o.len == g.len)).map_or(0, |p| p + 1);
     let end = glyphs.get(i..)?.iter().position(|o| !same(o)).map_or(glyphs.len(), |p| i + p);
     let span = glyphs.get(start..end)?;
     let left = span.iter().map(|o| o.origin.x).fold(f64::INFINITY, f64::min);
@@ -382,14 +490,15 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     // A cluster drawn with several adjacent glyphs (a Devanagari pre-base matra and its consonant,
     // a consonant and its reph) has one caret stop at each end of its glyphs taken together. The
-    // tatweels of a kashida have no source length and come after the glyphs of the letter after
-    // the kashida in the text; they belong to that letter's cluster.
+    // tatweels of a kashida have no source length or advance and come after the glyphs of the
+    // letter after the kashida in the text; they belong to that letter's cluster. A list marker's
+    // glyphs (no source length, an advance) are a cluster of their own.
     let mut clusters: Vec<(f64, f64, &PositionedGlyph)> = Vec::with_capacity(glyphs.len());
     for g in glyphs {
         let left = layout.logical_point(g.origin).x;
         let right = left + g.advance;
         match clusters.last_mut() {
-            Some((l, r, c)) if c.byte == g.byte && (c.len == g.len || g.len == 0) => (*l, *r) = (l.min(left), r.max(right)),
+            Some((l, r, c)) if c.byte == g.byte && (c.len == g.len || (g.len == 0 && g.advance == 0.0)) => (*l, *r) = (l.min(left), r.max(right)),
             _ => clusters.push((left, right, g)),
         }
     }
@@ -459,7 +568,8 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         return out;
     }
     if layout.on_path {
-        for g in layout.glyphs.iter().filter(|g| g.byte >= a && g.byte < b) {
+        // A list marker's glyphs stand for no characters.
+        for g in layout.glyphs.iter().filter(|g| g.byte >= a && g.byte < b && g.len > 0) {
             let li = &layout.lines[0];
             let d = dir(g.angle);
             let up = Vec2::new(d.y, -d.x);
@@ -469,7 +579,9 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         return out;
     }
     if layout.glyphs.iter().any(|g| g.rtl) {
-        for g in layout.glyphs.iter().filter(|g| g.byte < b && g.byte + g.len > a) {
+        // A list marker's glyphs stand for no characters.
+        let glyphs = layout.glyphs.iter().enumerate().filter(|(i, g)| g.byte < b && g.byte + g.len > a && layout.marker_of(*i).is_none());
+        for (_, g) in glyphs {
             let Some(l) = layout.lines.get(g.line) else { continue };
             let p = layout.logical_point(g.origin);
             let (x0, x1) = (p.x, p.x + g.advance);
@@ -489,7 +601,10 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         if l.start > b || l.end < a || (l.end == a && l.start < a && layout.lines.get(li + 1).is_some_and(|n| n.start == l.end)) {
             continue;
         }
-        let xa = if a <= l.start { l.x0.min(x_in_line(layout, li, l.start)) } else { x_in_line(layout, li, a) };
+        // A list marker before the line's first character is not part of the selection.
+        let next = layout.markers.partition_point(|m| m.glyphs.start < l.glyph_start);
+        let marked = layout.markers.get(next).is_some_and(|m| m.glyphs.start < l.glyph_end);
+        let xa = if a <= l.start && !marked { l.x0.min(x_in_line(layout, li, l.start)) } else { x_in_line(layout, li, a.max(l.start)) };
         let mut xb = x_in_line(layout, li, b.min(l.end));
         if b > l.end {
             // The selection continues past the line: include the line break / trailing space.
@@ -586,38 +701,6 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_axes;
-#[cfg(test)]
-mod tests_bidi;
-#[cfg(test)]
-mod tests_combos;
-#[cfg(test)]
-mod tests_devanagari;
-#[cfg(test)]
-mod tests_embed;
-#[cfg(test)]
-mod tests_fit;
-#[cfg(test)]
-mod tests_inline;
-#[cfg(test)]
-mod tests_joiners;
-#[cfg(test)]
-mod tests_justify;
-#[cfg(test)]
-mod tests_scripts;
-#[cfg(test)]
-mod tests_snap;
-#[cfg(test)]
-mod tests_sysfonts;
-#[cfg(test)]
-mod tests_typo;
-#[cfg(test)]
-mod tests_variable;
-#[cfg(test)]
-mod tests_versions;
-#[cfg(test)]
-mod tests_vertical;
 #[cfg(test)]
 #[path = "../build/web_fonts.rs"]
 mod web_fonts_build;

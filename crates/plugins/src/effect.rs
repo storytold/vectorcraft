@@ -29,6 +29,10 @@ pub const WALL_TIME_MS: u64 = 5_000;
 
 /// Cached results kept before the cache starts over.
 const CACHE_SIZE: usize = 512;
+/// Anchors the cached inputs and results may hold together before the cache starts over (about
+/// 50 MB). A plug-in can return far more than it was given, so a count of results alone let a few
+/// hundred small inputs keep gigabytes. A result past a quarter of this isn't kept.
+const CACHE_ANCHORS: usize = 1 << 20;
 
 /// The plug-in id of effect id `id` (`plugin.<id>`).
 pub fn plugin_id(effect_id: &str) -> Option<&str> {
@@ -107,9 +111,18 @@ impl Key {
     }
 }
 
-type Cache = HashMap<u64, (Key, Option<PathData>)>;
+#[derive(Default)]
+struct Cache {
+    entries: HashMap<u64, (Key, Option<PathData>)>,
+    /// The anchors of the entries' inputs and results ([`CACHE_ANCHORS`]).
+    anchors: usize,
+}
 
 static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
+
+fn anchors(p: &PathData) -> usize {
+    p.subpaths.iter().map(|sp| sp.anchors.len()).sum()
+}
 static ERRORS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 /// The last error of live-effect plug-in `id` (cleared when it next succeeds).
@@ -142,7 +155,7 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
         path: path.clone(),
     };
     let h = key.hash64();
-    if let Some((k, out)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|c| c.get(&h))
+    if let Some((k, out)) = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().and_then(|c| c.entries.get(&h))
         && *k == key
     {
         return out.clone();
@@ -155,12 +168,19 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
     }
     note(id, &r);
     let out = r.ok();
-    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let cache = cache.get_or_insert_with(HashMap::new);
-    if cache.len() >= CACHE_SIZE {
-        cache.clear();
+    let size = anchors(&key.path) + out.as_ref().map_or(0, anchors);
+    if size > CACHE_ANCHORS / 4 {
+        return out;
     }
-    cache.insert(h, (key, out.clone()));
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let cache = cache.get_or_insert_with(Cache::default);
+    if cache.entries.len() >= CACHE_SIZE || cache.anchors + size > CACHE_ANCHORS {
+        *cache = Cache::default();
+    }
+    if let Some((old, old_out)) = cache.entries.insert(h, (key, out.clone())) {
+        cache.anchors = cache.anchors.saturating_sub(anchors(&old.path) + old_out.as_ref().map_or(0, anchors));
+    }
+    cache.anchors += size;
     out
 }
 

@@ -54,7 +54,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut close = false;
     let mut find_in_folder = false;
     let mut act: Option<&str> = None;
-    crate::dialogs::modal::show(ctx, tl!("Find Font"), egui::Id::new("dialog-find-font"), -40.0, 22, |ui: &mut Ui| {
+    crate::dialogs::modal::show(ctx, tl!("Find Font"), egui::Id::unique("dialog-find-font"), -40.0, 22, |ui: &mut Ui| {
         ui.set_width(380.0);
         crate::dialogs::modal::heading(ui, tl!("Find Font"));
         ui.add_space(10.0);

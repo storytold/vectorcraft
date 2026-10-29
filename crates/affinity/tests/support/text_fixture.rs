@@ -140,7 +140,7 @@ pub const IDENTITY: [f64; 6] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
 
 // Shared arrays require definitions/references, whereas inline fields use Obj. Give the original
 // fixture objects independent shared IDs without making the fixture descriptions noisy.
-fn shared_objects(value: &mut F, next_id: &mut u32) {
+pub fn shared_objects(value: &mut F, next_id: &mut u32) {
     match value {
         F::Shared(items) => {
             for item in items {

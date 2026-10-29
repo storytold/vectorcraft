@@ -5,7 +5,8 @@
 //! Fields: `files` (`[{path} | {name}]`), `link`, `template`, `replace`, and `__replace` (one file
 //! and one selected object: Replace applies), `__documents` and `__others` (VectorCraft documents
 //! from files are picked, other files are: what Link's tooltip explains), `__info` (a line per
-//! file).
+//! file; on the desktop the lines are read off the UI thread and are empty until they are read,
+//! [`crate::place::fill_lines`]).
 
 use serde_json::{Value, json};
 
@@ -34,7 +35,10 @@ const OPTIONS: [(&str, &str, &str); 3] = [
     ("replace", "Replace", "Swap the selected object for the file, keeping its place and transform"),
 ];
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    if crate::place::fill_lines(app, d) {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+    }
     let t = Tokens::get(ui.ctx());
     let files: Vec<Value> = d.fields.get("files").and_then(Value::as_array).cloned().unwrap_or_default();
     let info = d.fields.get("__info").cloned().unwrap_or_default();

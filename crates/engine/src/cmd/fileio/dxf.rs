@@ -10,7 +10,7 @@ use vectorcraft_cad::{ColorDepth, DxfOptions, DxfVersion, Preserve, RasterFormat
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
 
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, bad, cmd, has_doc};
 use super::{ArtboardPick, Encoded, FormatOption};
 
 const C: &str = "document.export";
@@ -93,6 +93,12 @@ pub const UNSUPPORTED: &[Unsupported] = &[
         label: "PICT",
         extensions: &["pict", "pct", "pic"],
         hint: "PICT is a retired format and is not supported: convert the file to PDF or PNG first",
+    },
+    Unsupported {
+        id: "pmd",
+        label: "PageMaker",
+        extensions: &["pmd"],
+        hint: "PageMaker (.pmd) is not supported: open the layout in PageMaker and export PDF or EPS, or place a PDF export here",
     },
 ];
 

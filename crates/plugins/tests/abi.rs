@@ -6,7 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use vectorcraft_plugins::{Error, Kind, Limits, Plugin, registry, wat as tpl};
+use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -164,6 +164,9 @@ fn wall_clock_budget_stops_runaway_plugins() {
     assert!(t < Duration::from_secs(3), "{t:?}");
 }
 
+/// Cancelling stops a run where one slice of its budget ends: an endless loop given all but
+/// unlimited instructions comes back `Cancelled` within seconds, where outside a cancelled scope the
+/// same module runs until its budget is spent.
 #[test]
 fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
@@ -177,6 +180,43 @@ fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     // Outside a cancelled scope the same module still runs to its budget.
     let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, ..Limits::default() });
     assert_eq!(e, Error::Limit("instruction budget".into()));
+}
+
+/// Compiling a plug-in's code takes none of a run's instructions, so a first run takes as many as the
+/// next, though wasmi compiles each function only when it is first called. When the compiling was the
+/// run's to pay for, and the slice of the budget the run was in ran out while a function compiled,
+/// wasmi ended the run with an error the host can't resume: it failed with most of its budget left.
+/// Here `vc_run` calls a function about 100 KB long, a `br_table` of 100,000 labels.
+#[test]
+fn a_first_run_takes_no_more_instructions_than_the_next() {
+    let big = format!("(func $big (param $i i32) (block (br_table {}0 (local.get $i))))", "0 ".repeat(100_000));
+    let calling = module(MANIFEST, &format!("(call $big (i32.const 0)) {}", tpl::ECHO), &big);
+    let with = |fuel_base| Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+    let warm = Plugin::load(&calling, Limits::default()).unwrap();
+    assert_eq!(warm.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()));
+    // The fewest instructions a run takes once the functions are compiled.
+    let (mut lo, mut hi) = (0, 1 << 20);
+    assert!(warm.run_limited(INPUT.as_bytes(), b"{}", &with(hi)).is_ok());
+    while hi - lo > 1 {
+        let mid = (lo + hi) / 2;
+        if warm.run_limited(INPUT.as_bytes(), b"{}", &with(mid)).is_ok() { hi = mid } else { lo = mid }
+    }
+    let first = Plugin::load(&calling, Limits::default()).unwrap();
+    assert_eq!(first.run_limited(INPUT.as_bytes(), b"{}", &with(hi)), Ok(INPUT.as_bytes().to_vec()), "a first run within {hi} instructions");
+}
+
+/// A filter that asks for a heavy budget gets 20 times the instructions and five times the time of
+/// a light one, so it finishes work a light one can't: here 100 million steps of a loop. The
+/// budget is its own: what it returns can't add to it, since the host learns that only at the end.
+#[test]
+fn a_heavy_filter_finishes_what_a_light_one_cannot() {
+    let heavy = r#"{"id":"test.heavy","name":"Heavy","version":"1","kind":"filter","budget":"heavy"}"#;
+    let (light, heavy) = (build(&tpl::spinning(MANIFEST, 100_000_000, INPUT)), build(&tpl::spinning(heavy, 100_000_000, INPUT)));
+    assert_eq!(run_err(&light, Limits::default()).0, Error::Limit("instruction budget".into()));
+    let p = Plugin::load(&heavy, Limits::default()).unwrap();
+    assert_eq!((p.limits().fuel_base, p.limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
+    assert_eq!(heavy_terms(), (5, 20));
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
 }
 
 #[test]
@@ -265,5 +305,20 @@ fn folder_loading_skips_bad_files() {
     assert!(r.failed[0].0.ends_with("b-broken.wasm"));
     assert!(registry::load_folder(&dir.join("missing")).is_err());
     assert!(registry::load_file(&dir, Limits::default()).is_err(), "a directory is not a module");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped
+/// and reported.
+#[test]
+fn folder_loading_skips_heavy_filters() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-plugins-heavy-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = r#"{"id":"test.folder.heavy","name":"Heavy","kind":"filter","budget":"heavy"}"#;
+    std::fs::write(dir.join("heavy.wasm"), build(&tpl::spinning(manifest, 1, INPUT))).unwrap();
+    let r = registry::load_folder(&dir).unwrap();
+    assert!(r.loaded.is_empty());
+    assert!(r.failed.len() == 1 && r.failed[0].1.contains("heavy budget"), "{:?}", r.failed);
+    assert!(registry::get("test.folder.heavy").is_none());
     std::fs::remove_dir_all(&dir).ok();
 }

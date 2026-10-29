@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use super::*;
+use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -228,6 +228,7 @@ pub(super) fn area_text(story: Story, frame: Rect, setup: &vectorcraft_doc::DocS
         t.set_paragraph_styles(story.paras);
     }
     t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::from_origin_size(Point::ORIGIN, frame.size())) };
+    t.system_layout = setup.system_layout;
     crate::cmd::typecmd::refresh_bounds(&mut t);
     t
 }

@@ -45,6 +45,27 @@ impl Kind {
     }
 }
 
+/// How much one run of a plug-in may compute.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Budget {
+    /// The usual budget ([`crate::Limits::default`]).
+    #[default]
+    Light,
+    /// A filter's larger budget for heavy but legitimate work (routing, packing, simulation):
+    /// [`crate::HEAVY_FUEL`] instructions and [`crate::HEAVY_WALL_TIME_MS`]. The
+    /// user allows it once, when the plug-in is installed, and the app runs it in the background
+    /// with Cancel.
+    Heavy,
+}
+
+impl Budget {
+    /// The usual budget, which a manifest written back leaves out (`skip_serializing_if`).
+    fn is_light(&self) -> bool {
+        *self == Budget::Light
+    }
+}
+
 /// One declared parameter.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -191,6 +212,9 @@ pub struct Manifest {
     /// files get. Only exporters declare them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
+    /// How much a run may compute: only a filter may be [`Budget::Heavy`].
+    #[serde(default, skip_serializing_if = "Budget::is_light")]
+    pub budget: Budget,
 }
 
 impl Manifest {
@@ -216,9 +240,12 @@ impl Manifest {
             author: String::new(),
             params: Vec::new(),
             extensions: Vec::new(),
+            budget: Budget::Light,
         }
     }
 
+    /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
+    /// kind may have (only a filter may be heavy), and each parameter and its dialog layout.
     fn validate(&self) -> Result<()> {
         if !valid_id(&self.id) {
             return Err(Error::Manifest(format!("invalid id {:?}: use 1-64 characters from A-Z a-z 0-9 . _ -", self.id)));
@@ -231,6 +258,15 @@ impl Manifest {
             return Err(Error::Manifest("`version`, `description` or `author` is too long".into()));
         }
         self.validate_extensions()?;
+        match (self.budget, self.kind) {
+            (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
+            (Budget::Heavy, Kind::Effect) => {
+                return Err(Error::Manifest("a live effect runs while the document is drawn, so it can't be `heavy`".into()));
+            }
+            (Budget::Heavy, Kind::Exporter) => {
+                return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
+            }
+        }
         for (i, (k, p)) in self.params.iter().enumerate() {
             if !valid_key(k) {
                 return Err(Error::Manifest(format!("invalid parameter name {k:?}")));
@@ -496,6 +532,28 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"exporter","extensions":["a","b","c","d","e","f","g","h","i"]}"#,
             r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#,
             r#"{"id":"a","name":"x","kind":"effect","extensions":["plt"]}"#,
+        ] {
+            assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    /// A filter may ask for a heavy budget; a live effect runs while the document is drawn and an
+    /// exporter has an export's budget, so they can't. Light, the default, isn't written back.
+    #[test]
+    fn only_a_filter_asks_for_a_heavy_budget() {
+        let heavy = Manifest::parse(br#"{"id":"org.example.route","name":"Route","kind":"filter","budget":"heavy"}"#).unwrap();
+        assert_eq!(heavy.budget, Budget::Heavy);
+        assert_eq!(serde_json::to_value(&heavy).unwrap()["budget"], json!("heavy"));
+        for light in [r#"{"id":"a","name":"x","kind":"filter"}"#, r#"{"id":"a","name":"x","kind":"effect","budget":"light"}"#] {
+            let m = Manifest::parse(light.as_bytes()).unwrap();
+            assert_eq!(m.budget, Budget::Light);
+            assert!(serde_json::to_value(&m).unwrap().get("budget").is_none(), "{light}");
+        }
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","budget":"heavy"}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"budget":"heavy"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","budget":"huge"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","budget":true}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
         }

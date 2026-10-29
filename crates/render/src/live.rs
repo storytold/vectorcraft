@@ -6,7 +6,11 @@
 //! the symbols, patterns and placed files it shows, the fonts for type, the plug-ins for plug-in
 //! effects, and the color settings (so the steps keep
 //! stable `Arc`s and hit the geometry cache frame after frame, and editing a symbol redraws an
-//! envelope around an instance of it). Gradient meshes are tessellated into many small solid-colour quads (vello
+//! envelope around an instance of it). What the walk behind that key found is kept with the node
+//! and with the document's symbols and patterns as the walk read them ([`Walk`]). A later frame
+//! makes the key from what was kept while the node and the document's symbols and patterns stay
+//! the same. A walk that found a placed file is not kept.
+//! Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
 //! grown by half a device pixel along its edges so neighbours overlap and no antialiasing seams
 //! show. The quads are made again when the color settings change.
@@ -33,17 +37,38 @@ type Quads = Arc<Vec<MeshQuad>>;
 pub(crate) type Found = (u64, Arc<DocInputs>, Vec<Weak<ReadDocument>>);
 /// A mesh node, its quads, and the [`DocInputs`] whose color settings colored them.
 type MeshEntry = (Arc<Node>, Quads, Arc<DocInputs>);
+/// A node, held weakly (the reference keeps its allocation, so no other node gets its address),
+/// what the walk of [`resources_key`] found in it, and the frame's [`DocInputs`] the walk read
+/// the symbols and patterns of.
+type Walk = (Weak<Node>, Walked, Arc<DocInputs>);
 
-/// Per-renderer cache of evaluated live objects: (live node, its evaluation, [`Found`]), and a
-/// [`MeshEntry`] per mesh node and subdivision level.
+/// Per-renderer cache of evaluated live objects: (live node, its evaluation, [`Found`]), a
+/// [`MeshEntry`] per mesh node and subdivision level, and a [`Walk`] per node whose key
+/// [`Renderer::live_found`] found without finding a placed file.
 pub(crate) struct LiveCache {
     expanded: FrameCache<usize, (Arc<Node>, Expanded, Found)>,
     meshes: FrameCache<(usize, usize), MeshEntry>,
+    walks: FrameCache<usize, Walk>,
+    /// How many live objects [`Renderer::live_expanded`] evaluated and how many meshes
+    /// [`Renderer::mesh_quads`] tessellated.
+    #[cfg(test)]
+    pub(crate) evaluated: usize,
+    /// How many walks [`Renderer::live_found`] made.
+    #[cfg(test)]
+    pub(crate) walked: usize,
 }
 
 impl Default for LiveCache {
     fn default() -> Self {
-        Self { expanded: FrameCache::new(lru::LIVE_BUDGET, 256), meshes: FrameCache::new(lru::MESH_BUDGET, 256) }
+        Self {
+            expanded: FrameCache::new(lru::LIVE_BUDGET, 256),
+            meshes: FrameCache::new(lru::MESH_BUDGET, 256),
+            walks: FrameCache::new(lru::WALK_BUDGET, 256),
+            #[cfg(test)]
+            evaluated: 0,
+            #[cfg(test)]
+            walked: 0,
+        }
     }
 }
 
@@ -52,6 +77,7 @@ impl LiveCache {
     pub(crate) fn sweep(&mut self, stamp: u64) {
         self.expanded.sweep(stamp);
         self.meshes.sweep(stamp);
+        self.walks.sweep(stamp);
     }
 
     /// A cache whose evaluations take at most `budget` bytes.
@@ -76,19 +102,41 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 /// plug-in revision ([`crate::effects::plugin_revision`]) when it shows an object with a plug-in
 /// effect, and the color settings (`cms`, their address). Art is hashed by the addresses of its
 /// `Arc`s, which copies of the document share: a copy of the document has the same key. It also
-/// returns weak references to the reads found.
-fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>) {
+/// returns weak references to the reads found, and what the walk found ([`Walked`]) when it found
+/// no placed file.
+fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>, Option<Walked>) {
     let mut h = DefaultHasher::new();
     let mut shown = Shown::default();
     hash_resources(doc, n, &mut shown, &mut h);
-    if shown.text {
-        vectorcraft_text::FontDb::global().generation().hash(&mut h);
+    let walked = Walked { hash: h.finish(), text: shown.text, plugins: shown.plugins };
+    (walked.key(cms), shown.reads, (!shown.placed).then_some(walked))
+}
+
+/// What [`hash_resources`] found in a node: the hash of what it walked, whether it found type or
+/// a placed file, and whether it found an object with a visible plug-in effect.
+#[derive(Clone, Copy)]
+struct Walked {
+    hash: u64,
+    text: bool,
+    plugins: bool,
+}
+
+impl Walked {
+    /// The [`resources_key`] of the node walked: the walk's hash, the font generation when it found
+    /// type or a placed file, the plug-in revision when it found a plug-in effect, and the color
+    /// settings `cms`.
+    fn key(self, cms: usize) -> u64 {
+        let mut h = DefaultHasher::new();
+        self.hash.hash(&mut h);
+        if self.text {
+            vectorcraft_text::FontDb::global().generation().hash(&mut h);
+        }
+        if self.plugins {
+            crate::effects::plugin_revision().hash(&mut h);
+        }
+        cms.hash(&mut h);
+        h.finish()
     }
-    if shown.plugins {
-        crate::effects::plugin_revision().hash(&mut h);
-    }
-    cms.hash(&mut h);
-    (h.finish(), shown.reads)
 }
 
 /// What [`hash_resources`] has found so far.
@@ -98,6 +146,8 @@ struct Shown {
     seen: Vec<usize>,
     /// Whether type or a placed file was found.
     text: bool,
+    /// Whether a placed file was found.
+    placed: bool,
     /// Whether an object with a visible plug-in effect was found.
     plugins: bool,
     /// Weak references to the reads of the placed files found.
@@ -145,6 +195,7 @@ fn hash_resources<'a>(doc: &'a Document, n: &'a Node, shown: &mut Shown, h: &mut
                     read.as_ref().map(|r| Arc::as_ptr(r) as usize).hash(h);
                     shown.reads.extend(read.as_ref().map(Arc::downgrade));
                     shown.text = true;
+                    shown.placed = true;
                 }
                 NodeKind::Text(_) => shown.text = true,
                 _ => {}
@@ -179,7 +230,8 @@ const MESH_RASTER_MAX_PIXELS: usize = 4 << 20;
 
 /// Draw a tessellated gradient mesh as one image: its quads are filled into a pixel buffer of the
 /// mesh's on-screen box by scanline (each pixel takes the quad its centre is in, so neighbouring
-/// quads meet without seams or overlap), and the buffer is drawn through the mesh's outline, which
+/// quads meet without seams or overlap, and is shaded between the quad's corner colours, so the
+/// colour changes smoothly instead of in steps), and the buffer is drawn through the mesh's outline, which
 /// antialiases the outer edge. The outline is grown by half a device pixel ([`grown_outline`]), as
 /// the quads drawn one by one are: a page of meshes laid edge to edge would otherwise show the
 /// background through each shared, antialiased edge. Drawing every quad as a path of its own costs a
@@ -208,9 +260,12 @@ fn draw_mesh_raster(ctx: &mut RenderContext, f: &Frame, m: &GradientMesh, quads:
     let mut filled = vec![false; w * h];
     let to_buffer = Affine::translate((-x0, -y0)) * f.view;
     for q in quads {
-        // A fully transparent quad still claims its pixels, so the edge fill below leaves them clear.
-        let c = if q.opacity > 0.0 { f.ink.color(&q.color, q.opacity * alpha).premultiply().to_rgba8() } else { clear };
-        fill_quad(&mut px, &mut filled, w, h, q.pts.map(|p| to_buffer * p), c);
+        // A fully transparent corner still shades toward clear, so the edge fill below leaves it clear.
+        let corners = q.corners.map(|(color, opacity)| {
+            let c = if opacity > 0.0 { f.ink.color(&color, opacity * alpha).premultiply().to_rgba8() } else { clear };
+            [c.r, c.g, c.b, c.a].map(f32::from)
+        });
+        fill_quad(&mut px, &mut filled, w, h, q.pts.map(|p| to_buffer * p), corners);
     }
     // Twice: the grown edge samples pixels up to about a pixel and a half out from the quads.
     let filled = spread_to_edges(&mut px, filled, w, h);
@@ -280,7 +335,7 @@ fn grown_outline(path: &BezPath, grow: f64) -> BezPath {
 
 /// Fill the pixels of the `w`×`h` buffer whose centres are inside quad `p` (buffer pixels, even-odd
 /// so a twisted quad is filled as drawn) with `c`, and mark them `filled`.
-fn fill_quad(px: &mut [vello_cpu::color::PremulRgba8], filled: &mut [bool], w: usize, h: usize, p: [Point; 4], c: vello_cpu::color::PremulRgba8) {
+fn fill_quad(px: &mut [vello_cpu::color::PremulRgba8], filled: &mut [bool], w: usize, h: usize, p: [Point; 4], c: [[f32; 4]; 4]) {
     if !p.iter().all(|p| p.x.is_finite() && p.y.is_finite()) {
         return;
     }
@@ -304,14 +359,50 @@ fn fill_quad(px: &mut [vello_cpu::color::PremulRgba8], filled: &mut [bool], w: u
             let from = (a - 0.5).ceil().clamp(0.0, w as f64) as usize;
             let to = (b - 0.5).ceil().clamp(0.0, w as f64) as usize;
             let row = y * w;
-            for (d, k) in
-                px.get_mut(row + from..row + to).unwrap_or_default().iter_mut().zip(filled.get_mut(row + from..row + to).unwrap_or_default())
+            for ((x, d), k) in (from..)
+                .zip(px.get_mut(row + from..row + to).unwrap_or_default().iter_mut())
+                .zip(filled.get_mut(row + from..row + to).unwrap_or_default())
             {
-                *d = c;
+                *d = shade(p, &c, Point::new(x as f64 + 0.5, yc));
                 *k = true;
             }
         }
     }
+}
+
+/// The colour at `q` in quad `p` with corner colours `c` (premultiplied, 0–255): the corners'
+/// colours mixed by `q`'s barycentric weights in the quad's triangle 0-1-2 or 0-2-3, whichever
+/// holds it. A tessellated quad is a few pixels across, so the split along its diagonal doesn't show.
+fn shade(p: [Point; 4], c: &[[f32; 4]; 4], q: Point) -> vello_cpu::color::PremulRgba8 {
+    let weights = |a: Point, b: Point, d: Point| -> Option<[f64; 3]> {
+        let det = (b.x - a.x) * (d.y - a.y) - (d.x - a.x) * (b.y - a.y);
+        if det.abs() < 1e-12 {
+            return None;
+        }
+        let wb = ((q.x - a.x) * (d.y - a.y) - (d.x - a.x) * (q.y - a.y)) / det;
+        let wd = ((b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y)) / det;
+        Some([1.0 - wb - wd, wb, wd])
+    };
+    let inside = |w: &[f64; 3]| w.iter().all(|w| *w >= -1e-6);
+    let first = weights(p[0], p[1], p[2]).map(|w| (w, [0, 1, 2]));
+    let second = weights(p[0], p[2], p[3]).map(|w| (w, [0, 2, 3]));
+    // The triangle holding `q`, else (at the quad's edge, or a folded quad) the nearer one.
+    let pick = match (first, second) {
+        (Some(a), _) if inside(&a.0) => Some(a),
+        (_, Some(b)) if inside(&b.0) => Some(b),
+        (Some(a), Some(b)) => Some(if a.0.iter().fold(0.0f64, |m, w| m.min(*w)) >= b.0.iter().fold(0.0f64, |m, w| m.min(*w)) { a } else { b }),
+        (a, b) => a.or(b),
+    };
+    let mix = match pick {
+        Some((w, idx)) => {
+            let w = w.map(|w| w.clamp(0.0, 1.0));
+            let sum = w.iter().sum::<f64>().max(1e-12);
+            std::array::from_fn(|ch| (0..3).map(|k| c[idx[k]][ch] * (w[k] / sum) as f32).sum::<f32>())
+        }
+        None => std::array::from_fn(|ch| c.iter().map(|corner| corner[ch]).sum::<f32>() / 4.0),
+    };
+    let [r, g, b, a] = mix.map(|v| v.round().clamp(0.0, 255.0) as u8);
+    vello_cpu::color::PremulRgba8 { r: r.min(a), g: g.min(a), b: b.min(a), a }
 }
 
 /// Give each pixel no quad covered the colour of a covered neighbour: the outline's antialiased
@@ -343,28 +434,54 @@ fn spread_to_edges(px: &mut [vello_cpu::color::PremulRgba8], filled: Vec<bool>, 
 impl Renderer {
     /// The [`resources_key`] of `n` in `doc`, with the frame's [`DocInputs`] ([`Found`]): `n` is a
     /// live node, or an object with effects whose art ([`Renderer::fx_art`]) can be made from
-    /// evaluated live objects, type, symbol art or colors shaded through the color settings.
-    pub(crate) fn live_found(&mut self, doc: &Document, n: &Node) -> Found {
+    /// evaluated live objects, type, symbol art or colors shaded through the color settings. The
+    /// key is made from the [`Walk`] kept for `n` while `doc`'s symbols and patterns are those it
+    /// read; `n` is walked again when they changed, and in every frame when the walk found a
+    /// placed file.
+    pub(crate) fn live_found(&mut self, doc: &Document, n: &Arc<Node>) -> Found {
         let inputs = self.doc_inputs(doc);
-        let (key, reads) = resources_key(doc, inputs.cms, n);
+        let at = Arc::as_ptr(n) as usize;
+        if let Some((node, walked, read)) = self.live.walks.get(&at, self.stamp)
+            && std::ptr::eq(node.as_ptr(), Arc::as_ptr(n))
+            && read.same_art(&inputs)
+        {
+            return (walked.key(inputs.cms), inputs, vec![]);
+        }
+        #[cfg(test)]
+        {
+            self.live.walked += 1;
+        }
+        let (key, reads, walked) = resources_key(doc, inputs.cms, n);
+        if let Some(walked) = walked {
+            // The bytes count the key and the entry, and the node's allocation that the weak
+            // reference keeps.
+            let bytes = size_of::<(usize, Walk, Node)>();
+            self.live.walks.insert(at, (Arc::downgrade(n), walked, inputs.clone()), bytes, self.stamp);
+        }
         (key, inputs, reads)
     }
 
     fn live_expanded(&mut self, doc: &Document, a: &Arc<Node>, cache: bool) -> Expanded {
         let key = Arc::as_ptr(a) as usize;
-        let resources = self.live_found(doc, a);
-        if cache
+        // An evaluation the cache does not keep is made without the key, so the copy that
+        // `draw_live_node` makes is not walked.
+        let resources = cache.then(|| self.live_found(doc, a));
+        if let Some(resources) = &resources
             && let Some(e) = self.live.expanded.get(&key, self.stamp)
             && Arc::ptr_eq(&e.0, a)
             && e.2.0 == resources.0
         {
             return e.1.clone();
         }
+        #[cfg(test)]
+        {
+            self.live.evaluated += 1;
+        }
         let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
-        if cache {
+        if let Some(resources) = resources {
             let bytes = size_of::<Expanded>() + v.iter().map(|n| lru::node_bytes(n)).sum::<usize>();
             self.live.expanded.insert(key, (a.clone(), v.clone(), resources), bytes, self.stamp);
         }
@@ -382,6 +499,10 @@ impl Renderer {
             && e.2.cms == inputs.cms
         {
             return e.1.clone();
+        }
+        #[cfg(test)]
+        {
+            self.live.evaluated += 1;
         }
         let q = Arc::new(m.quads(level));
         if cache {
@@ -508,7 +629,10 @@ impl Renderer {
         }
     }
 
-    /// Draw a live node reached without its `Arc` (thumbnails, clip fallbacks): uncached.
+    /// Draw a live node that [`Self::draw_content`] reached without its kept `Arc`
+    /// ([`Self::live_root`]): the node of a thumbnail ([`Self::render_node_thumbnail_with`]), symbol
+    /// art placed again in every frame, color glyph art, and brush art that the brush cache did not
+    /// keep. It evaluates a copy of the node and does not use the live cache.
     pub(crate) fn draw_live_node(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node) {
         let a = Arc::new(n.clone());
         self.draw_live_body(ctx, f, &a, false);
@@ -555,12 +679,36 @@ mod tests {
         assert!(holes < 60, "{holes} pixels the smooth render covers are empty with hard edges");
     }
 
+    /// A quad is shaded between its corner colours: across a quad running from black on the left to
+    /// white on the right, each column is lighter than the one before (no flat step), the left and
+    /// right edges are near their corners' colours, and a column's pixels are alike.
+    #[test]
+    fn a_quad_shades_smoothly_between_its_corner_colours() {
+        let (w, h) = (40, 10);
+        let clear = vello_cpu::color::PremulRgba8 { r: 0, g: 0, b: 0, a: 0 };
+        let mut px = vec![clear; w * h];
+        let mut filled = vec![false; w * h];
+        let (black, white) = ([0.0, 0.0, 0.0, 255.0], [255.0, 255.0, 255.0, 255.0]);
+        let pts = [Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 10.0), Point::new(0.0, 10.0)];
+        fill_quad(&mut px, &mut filled, w, h, pts, [black, white, white, black]);
+        let at = |x: usize, y: usize| px[y * w + x].r;
+        for y in 0..h {
+            for x in 1..w {
+                assert!(at(x, y) > at(x - 1, y), "column {x} row {y}: {} after {}", at(x, y), at(x - 1, y));
+            }
+            assert!(at(0, y) < 8 && at(w - 1, y) > 247, "row {y}: {} to {}", at(0, y), at(w - 1, y));
+        }
+        for x in 0..w {
+            assert!(at(x, 0).abs_diff(at(x, h - 1)) <= 1, "column {x}: {} vs {}", at(x, 0), at(x, h - 1));
+        }
+    }
+
     /// Quads that share edges fill every pixel of their union once: no gap, no overlap.
     #[test]
     fn quads_meeting_edge_to_edge_fill_their_union_once() {
         let (w, h) = (20, 20);
         let clear = vello_cpu::color::PremulRgba8 { r: 0, g: 0, b: 0, a: 0 };
-        let red = vello_cpu::color::PremulRgba8 { r: 255, g: 0, b: 0, a: 255 };
+        let red = [[255.0, 0.0, 0.0, 255.0]; 4];
         let mut px = vec![clear; w * h];
         let mut count = vec![0u8; w * h];
         // A 2×2 grid over (2.3, 2.7)–(17.6, 16.2) with an inner corner off the pixel grid.

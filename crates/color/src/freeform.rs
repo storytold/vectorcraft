@@ -162,8 +162,9 @@ impl Freeform {
     /// ([`Color::lerp_keep_model`]).
     pub fn recolor(&mut self, g: &Gradient) {
         let n = self.points.len();
-        for (k, p) in self.points.iter_mut().enumerate() {
-            (p.color, p.opacity) = g.sample_with(k as f32 / (n - 1).max(1) as f32, Color::lerp_keep_model);
+        let at = (0..n).map(|k| k as f32 / (n - 1).max(1) as f32);
+        for (p, (color, opacity)) in self.points.iter_mut().zip(g.sample_increasing_with(at, Color::lerp_keep_model)) {
+            (p.color, p.opacity) = (color, opacity);
         }
     }
 

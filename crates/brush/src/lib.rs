@@ -285,6 +285,13 @@ pub struct ArtBrush {
     pub scale: ArtScale,
     /// Width in percent.
     pub width: f64,
+    /// How the width varies along a stroke: `None` (Fixed) always `width`; Pressure goes from
+    /// `width` at the lightest pen pressure to [`Self::width_max`] at the heaviest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_mode: Option<Variation>,
+    /// The width at the heaviest pen pressure (%), for Pressure (`width` without one).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_max: Option<f64>,
     pub flip_along: bool,
     pub flip_across: bool,
     /// When true, art is placed on each run between sharp corners so folds do not overlap.
@@ -295,6 +302,15 @@ pub struct ArtBrush {
 impl ArtBrush {
     /// The range of the width (%).
     pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
+
+    /// The widths (%) at the lightest and the heaviest pen pressure: `width` for both unless the
+    /// width follows the pressure.
+    pub fn width_range(&self) -> (f64, f64) {
+        match self.width_mode {
+            Some(Variation::Pressure) => (self.width, self.width_max.unwrap_or(self.width)),
+            _ => (self.width, self.width),
+        }
+    }
 }
 
 impl Default for ArtBrush {
@@ -304,6 +320,8 @@ impl Default for ArtBrush {
             direction: Direction::LeftToRight,
             scale: ArtScale::Stretch,
             width: 100.0,
+            width_mode: None,
+            width_max: None,
             flip_along: false,
             flip_across: false,
             overlap: false,
@@ -325,6 +343,44 @@ pub enum PatternFit {
     Approximate,
 }
 
+/// What a pattern brush draws at a kind of corner it has no corner art for: no tile, or a tile
+/// made from the side tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerSource {
+    /// No corner tile: the side tiles run up to the corner.
+    None,
+    /// One side tile stretched around the corner and centered on it.
+    AutoCentered,
+    /// A side tile on each side reaching into the corner, stretched so the two meet on the
+    /// corner's diagonal.
+    AutoBetween,
+    /// A side tile on each side cut on the corner's diagonal, the two meeting like a mitered frame.
+    AutoSliced,
+    /// A side tile on each side running past the corner, the two overlapping there.
+    AutoOverlap,
+}
+
+impl CornerSource {
+    pub const ALL: [CornerSource; 5] =
+        [CornerSource::None, CornerSource::AutoCentered, CornerSource::AutoBetween, CornerSource::AutoSliced, CornerSource::AutoOverlap];
+
+    /// The id in a brush definition and in `brush.options` params.
+    pub fn id(self) -> &'static str {
+        match self {
+            CornerSource::None => "none",
+            CornerSource::AutoCentered => "autoCentered",
+            CornerSource::AutoBetween => "autoBetween",
+            CornerSource::AutoSliced => "autoSliced",
+            CornerSource::AutoOverlap => "autoOverlap",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CornerSource> {
+        CornerSource::ALL.into_iter().find(|a| a.id() == s)
+    }
+}
+
 /// Pattern brush: tiles repeated along the path, with corner and end tiles.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -334,6 +390,14 @@ pub struct PatternBrush {
     pub outer_corner: Option<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inner_corner: Option<Node>,
+    /// What the outer corners take when there is no `outer_corner` art. Without art or a source,
+    /// they take the `inner_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_source: Option<CornerSource>,
+    /// What the inner corners take when there is no `inner_corner` art. Without art or a source,
+    /// they take the `outer_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inner_source: Option<CornerSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -360,6 +424,8 @@ impl Default for PatternBrush {
             side: defaults::stitch_tile(),
             outer_corner: None,
             inner_corner: None,
+            outer_source: None,
+            inner_source: None,
             start: None,
             end: None,
             scale: 100.0,
@@ -413,6 +479,8 @@ impl Bristle {
     pub const SIZE_RANGE: (f64, f64) = (0.1, 1296.0);
     pub const LENGTH_RANGE: (f64, f64) = (25.0, 300.0);
     pub const PERCENT_RANGE: (f64, f64) = (1.0, 100.0);
+    /// The most characters `brush.new` and `brush.options` take for a new bristle brush name.
+    pub const MAX_NAME_CHARS: usize = 31;
 }
 
 impl Default for Bristle {
@@ -452,6 +520,18 @@ impl Brush {
             BrushKind::Pattern(p) => {
                 std::iter::once(&p.side).chain([&p.outer_corner, &p.inner_corner, &p.start, &p.end].into_iter().flatten()).collect()
             }
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+        }
+    }
+
+    /// [`Brush::art`], to change (relink the resources it uses).
+    pub fn art_mut(&mut self) -> Vec<&mut Node> {
+        match &mut self.kind {
+            BrushKind::Scatter(s) => vec![&mut s.art],
+            BrushKind::Art(a) => vec![&mut a.art],
+            BrushKind::Pattern(p) => std::iter::once(&mut p.side)
+                .chain([&mut p.outer_corner, &mut p.inner_corner, &mut p.start, &mut p.end].into_iter().flatten())
+                .collect(),
             BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
         }
     }
@@ -506,6 +586,11 @@ impl Brush {
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
+                // The width follows the pen's pressure or stays fixed.
+                if a.width_mode != Some(Variation::Pressure) {
+                    a.width_mode = None;
+                }
+                a.width_max = a.width_max.map(|w| within(w, ArtBrush::WIDTH_RANGE, a.width));
                 if let ArtScale::BetweenGuides { start, end } = &mut a.scale {
                     *start = within(*start, (0.0, 1.0), 0.0);
                     *end = within(*end, (0.0, 1.0), 1.0);
@@ -590,7 +675,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
-        BrushKind::Art(a) => warp::art(a, bp, w),
+        BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke.pressure.as_ref(), &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };
@@ -687,6 +772,10 @@ fn leave_out_brushed(doc: &Document, nodes: &mut Vec<Node>, known: &mut Known) {
 /// with the stroke's opacity folded into the piece opacity. `None` if nothing is brushed.
 pub fn node_pieces(doc: &Document, n: &Node) -> Option<Vec<Node>> {
     let bp = node_bezpath(n)?;
+    // The library is parsed for a stroke that names a brush, not for every path.
+    if !n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if st.brush.is_some())) {
+        return None;
+    }
     let lib = library(doc);
     let mut out = vec![];
     let mut any = false;

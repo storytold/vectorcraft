@@ -2,12 +2,18 @@
 //! which last across tool switches and are saved with the preferences. OK sets them with
 //! `tool.setOption {tool: "shapeBuilder", values}`.
 //!
-//! Fields: `openFilledAsClosed` (Consider Open Filled Paths as Closed), `pickColorFrom`
-//! (`artwork` or `swatches`), `cursorSwatchPreview` (with `swatches`), `selection` (`freeform` or
-//! `straightLine`) and `highlightFill` (Highlight: Fill).
+//! Fields: `gapDetection` and `gapLength` (Gap Detection), `openFilledAsClosed` (Consider Open
+//! Filled Paths as Closed), `clickStrokeSplitsPath` (In Merge Mode, Clicking Stroke Splits the
+//! Path), `pickColorFrom` (`artwork` or `swatches`), `cursorSwatchPreview` (with `swatches`),
+//! `selection` (`freeform` or `straightLine`), `highlightFill` (Highlight: Fill),
+//! `highlightStroke` (Highlight: Stroke When Editable) and `highlightColor` (its color: `#rrggbb`,
+//! or a layer color's name such as "Red").
 
 use serde_json::{Map, Value, json};
+use vectorcraft_color::Color;
+use vectorcraft_doc::LAYER_COLORS;
 
+use super::tile_edge_color::resolve;
 use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
@@ -18,7 +24,18 @@ pub const KIND: &str = "shapeBuilderOptions";
 pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 360.0, ..DialogSpec::FORM };
 
 /// The options the dialog edits.
-const KEYS: [&str; 5] = ["openFilledAsClosed", "pickColorFrom", "cursorSwatchPreview", "selection", "highlightFill"];
+const KEYS: [&str; 10] = [
+    "openFilledAsClosed",
+    "pickColorFrom",
+    "cursorSwatchPreview",
+    "selection",
+    "highlightFill",
+    "gapDetection",
+    "gapLength",
+    "clickStrokeSplitsPath",
+    "highlightStroke",
+    "highlightColor",
+];
 
 /// Width of the label column.
 const LABEL_W: f32 = 110.0;
@@ -37,7 +54,28 @@ pub fn open(app: &mut VectorcraftApp) -> Value {
 }
 
 fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    form::check(ui, d, "gapDetection", tl!("Gap Detection"));
+    ui.add_enabled_ui(d.bool("gapDetection"), |ui| {
+        widgets::label_row(ui, tl!("Gap Length:"), LABEL_W, |ui| {
+            let lengths = vectorcraft_tools::builder::GAP_LENGTHS;
+            let len = d.f64("gapLength", lengths[0]);
+            let current = lengths.iter().position(|n| *n == len).unwrap_or(3);
+            let labels = [tl!("Small"), tl!("Medium"), tl!("Large"), tl!("Custom")];
+            if let Some(i) = widgets::dropdown(ui, "shape-builder-gap", labels[current], &labels, 120.0) {
+                d.fields.insert("gapLength".into(), json!(lengths.get(i).copied().unwrap_or(9.0)));
+            }
+            ui.add_enabled_ui(current == 3, |ui| {
+                if let Some(n) =
+                    widgets::range_field(ui, "shape-builder-gap-length", len, 0.0..=vectorcraft_tools::builder::SHAPE_BUILDER_MAX_GAP, "pt", 1, 64.0)
+                {
+                    d.fields.insert("gapLength".into(), json!(n));
+                }
+            });
+        });
+    });
+    ui.add_space(8.0);
     form::check(ui, d, "openFilledAsClosed", tl!("Consider Open Filled Paths as Closed"));
+    form::check(ui, d, "clickStrokeSplitsPath", tl!("In Merge Mode, Clicking Stroke Splits the Path"));
     ui.add_space(8.0);
     let sources = [("artwork", tl!("Artwork")), ("swatches", tl!("Color Swatches"))];
     form::choice(ui, d, "pickColorFrom", tl!("Pick Color From:"), (LABEL_W, 160.0), &sources);
@@ -55,7 +93,28 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         }
     });
-    widgets::label_row(ui, tl!("Highlight:"), LABEL_W, |ui| form::check(ui, d, "highlightFill", tl!("Fill")));
+    widgets::label_row(ui, tl!("Highlight:"), LABEL_W, |ui| {
+        form::check(ui, d, "highlightFill", tl!("Fill"));
+        form::check(ui, d, "highlightStroke", tl!("Stroke When Editable"));
+    });
+    // The stroke highlight takes a layer color, or any other color from the color button.
+    let color = resolve(&d.str("highlightColor")).unwrap_or(Color::BLACK);
+    let [r, g, b, _] = color.to_rgba8(1.0);
+    let preset = LAYER_COLORS.iter().position(|(_, c)| *c == [r, g, b]);
+    let names: Vec<&str> = LAYER_COLORS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
+    ui.add_enabled_ui(d.bool("highlightStroke"), |ui| {
+        widgets::label_row(ui, tl!("Color:"), LABEL_W, |ui| {
+            if let Some((_, [r, g, b])) = widgets::dropdown(ui, "shape-builder-color", names[preset.unwrap_or(LAYER_COLORS.len())], &names, 130.0)
+                .and_then(|i| LAYER_COLORS.get(i))
+            {
+                d.fields.insert("highlightColor".into(), json!(Color::rgb8(*r, *g, *b).to_hex()));
+            }
+            let mut rgb = [r, g, b];
+            if ui.color_edit_button_srgb(&mut rgb).changed() {
+                d.fields.insert("highlightColor".into(), json!(Color::rgb8(rgb[0], rgb[1], rgb[2]).to_hex()));
+            }
+        });
+    });
     false
 }
 
@@ -79,6 +138,22 @@ mod tests {
     /// The labels the open dialog paints.
     fn painted(app: &mut VectorcraftApp) -> String {
         crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
+    }
+
+    #[test]
+    fn gap_options_share_the_existing_dialog_and_custom_is_capped() {
+        let mut a = app();
+        a.run("tool.options", json!({"tool": "shapeBuilder"})).unwrap();
+        let text = painted(&mut a);
+        assert!(text.contains("Gap Detection") && text.contains("Gap Length:"), "{text}");
+        let d = a.ui.dialog.as_mut().unwrap();
+        d.fields.insert("gapDetection".into(), json!(true));
+        d.fields.insert("gapLength".into(), json!(1000));
+        super::super::confirm(&mut a).unwrap();
+        let opts = a.session.tool_options_of("shapeBuilder");
+        assert_eq!(opts["gapLength"], 72.0);
+        assert_eq!(opts["gapDetection"], true);
+        assert_eq!(opts["openFilledAsClosed"], true);
     }
 
     #[test]
@@ -124,11 +199,56 @@ mod tests {
         let o = app.session.tool_options_of("shapeBuilder");
         assert_eq!(
             o,
-            json!({"openFilledAsClosed": false, "pickColorFrom": "swatches", "cursorSwatchPreview": true, "selection": "straightLine", "highlightFill": false})
+            json!({
+                "openFilledAsClosed": false,
+                "pickColorFrom": "swatches",
+                "cursorSwatchPreview": true,
+                "selection": "straightLine",
+                "highlightFill": false,
+                "gapDetection": false,
+                "gapLength": 3.0,
+                "clickStrokeSplitsPath": false,
+                "highlightStroke": true,
+                "highlightColor": "#ff4f4f"
+            })
         );
         app.run("tool.options", json!({"tool": "shapeBuilder"})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.str("selection"), d.bool("highlightFill")), ("straightLine".into(), false));
+    }
+
+    #[test]
+    fn the_stroke_rows_turn_on_stroke_splitting_and_its_highlight_color() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap();
+        app.run("tool.options", json!({"tool": "shapeBuilder"})).unwrap();
+        let text = painted(&mut app);
+        for label in ["In Merge Mode, Clicking Stroke Splits the Path", "Stroke When Editable", "Color:", "Red"] {
+            assert!(text.contains(label), "{label} in {text}");
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!((d.bool("clickStrokeSplitsPath"), d.bool("highlightStroke"), d.str("highlightColor")), (false, true, "#ff4f4f".into()));
+        d.fields.insert("clickStrokeSplitsPath".into(), json!(true));
+        d.fields.insert("highlightColor".into(), json!("Green"));
+        super::super::confirm(&mut app).unwrap();
+        let o = app.session.tool_options_of("shapeBuilder");
+        assert_eq!((&o["clickStrokeSplitsPath"], &o["highlightStroke"], &o["highlightColor"]), (&json!(true), &json!(true), &json!("#4fff4f")));
+        // A click on the rectangle's top side highlights it in that color and splits the rectangle
+        // into the side and the rest.
+        app.run("select.all", json!({})).unwrap();
+        app.select_tool("shapeBuilder");
+        let view = app.view_info();
+        let ev = |kind| vectorcraft_tools::PointerEvent::new(kind, 200.0, 100.5);
+        crate::canvas::dispatch(&mut app, &ev(vectorcraft_tools::PointerKind::Move), view);
+        let ov = app.session.overlays(view);
+        assert!(ov.iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Path { color: [0x4f, 0xff, 0x4f], .. })), "{ov:?}");
+        crate::canvas::dispatch(&mut app, &ev(vectorcraft_tools::PointerKind::Down), view);
+        crate::canvas::dispatch(&mut app, &ev(vectorcraft_tools::PointerKind::Up), view);
+        let doc = &app.session.doc().unwrap().doc;
+        let mut bounds: Vec<_> =
+            doc.layers[0].children().unwrap().iter().filter_map(|n| doc.bounds_of(&[n.id], false)).map(|b| [b.x0, b.y0, b.x1, b.y1]).collect();
+        bounds.sort_by(|a, b| a[3].total_cmp(&b[3]));
+        assert_eq!(bounds, vec![[100.0, 100.0, 300.0, 100.0], [100.0, 100.0, 300.0, 200.0]]);
     }
 
     #[test]

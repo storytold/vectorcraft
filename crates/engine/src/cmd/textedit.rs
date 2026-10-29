@@ -9,7 +9,10 @@ use vectorcraft_text::edit;
 
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, id_param,
+    index, number_or, point_param, str_param, switch_or, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -23,11 +26,20 @@ pub fn specs() -> Vec<CommandSpec> {
             edit_range
         ),
         cmd!(
+            "text.startList",
+            "Bullets and Numbering",
+            [],
+            None,
+            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), or \"* \", \"# \", \"> \" or \"+ \" (a bulleted list with the filled dot), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
+            has_doc,
+            start_list
+        ),
+        cmd!(
             "text.setRangeStyle",
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -83,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Shift+."),
             "{by?: steps (1)} type.step {attribute: size}",
             has_selection,
-            |s, p| type_step(s, &json!({"attribute": "size", "by": f64_or(p, "by", 1.0)}))
+            |s, p| type_step(s, &json!({"attribute": "size", "by": number_or(p, "by", 1.0, "type.size.increase")?}))
         ),
         cmd!(
             "type.size.decrease",
@@ -92,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Shift+,"),
             "{by?: steps (1)} type.step {attribute: size, by: -by}",
             has_selection,
-            |s, p| type_step(s, &json!({"attribute": "size", "by": -f64_or(p, "by", 1.0)}))
+            |s, p| type_step(s, &json!({"attribute": "size", "by": -number_or(p, "by", 1.0, "type.size.decrease")?}))
         ),
         cmd!(
             "type.size.increaseByFive",
@@ -174,14 +186,18 @@ pub(crate) fn set_plain_text(d: &mut vectorcraft_doc::Document, id: NodeId, text
     Ok(())
 }
 
+/// The byte offset that `k` holds, read with [`index`].
 fn byte_param(p: &Value, k: &str) -> Option<usize> {
-    p.get(k).and_then(Value::as_u64).map(|v| v as usize)
+    p.get(k).and_then(Value::as_u64).map(index)
 }
 
-fn range_of(p: &Value, len: usize) -> (usize, usize) {
+/// The bytes `start..end` of `p` in text of `len` bytes, clamped and ordered (without them, all of
+/// it). A `start` or `end` that is not a number or null, such as `"2"`, is an error.
+fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
+    check_numbers(p, &["start", "end"], cmd)?;
     let a = byte_param(p, "start").unwrap_or(0).min(len);
     let b = byte_param(p, "end").unwrap_or(len).min(len);
-    (a.min(b), a.max(b))
+    Ok((a.min(b), a.max(b)))
 }
 
 fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
@@ -189,7 +205,7 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
-    let (a, b) = range_of(p, len);
+    let (a, b) = range_of(p, len, C)?;
     let styled: Option<Vec<TextRun>> = match p.get("runs") {
         None | Some(Value::Null) => None,
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| bad(C, format!("bad `runs`: {e}")))?),
@@ -208,25 +224,71 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
             Some(r) => edit::replace_range_styled(&mut t.runs, a, b, r),
             None => edit::replace_range(&mut t.runs, a, b, &insert),
         };
+        // Ruby over the edited text moves with it (its ranges are plain-text bytes).
+        t.ruby_after_replace(a, b, inserted.len());
         refresh_bounds(t);
         Ok(caret)
     })?;
     Ok(json!({"id": id.0, "caret": caret}))
 }
 
+fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.startList";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    check_numbers(p, &["at"], C)?;
+    let t = text_ref(s, id)?;
+    let len = edit::runs_len(&t.runs);
+    let at = byte_param(p, "at").unwrap_or(len).min(len);
+    let Some((start, list)) = t.typed_list_at(at) else {
+        return Ok(json!({"id": id.0, "started": false, "caret": at}));
+    };
+    s.edit("Bullets and Numbering", |d, _| {
+        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+        t.splice_paras(start, at, "");
+        edit::replace_range(&mut t.runs, start, at, "");
+        t.ruby_after_replace(start, at, 0);
+        let i = t.paragraphs_in(start, start).start;
+        t.edit_paras(Some(i..i + 1), |para| {
+            para.list = Some(list);
+            // A paragraph with no left or first-line indent gets the hanging indent.
+            if para.left_indent == 0.0 && para.first_line_indent == 0.0 {
+                para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
+                para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
+            }
+        });
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({"id": id.0, "started": true, "caret": start}))
+}
+
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
-    let (a, b) = range_of(p, len);
+    let (a, b) = range_of(p, len, "text.getRange")?;
     let mut runs = edit::slice_runs(&t.runs, a, b);
-    if p.get("effective").and_then(Value::as_bool).unwrap_or(false) {
+    if switch_or(p, "effective", false, "text.getRange")? {
         for run in &mut runs {
             run.style = t.effective_char_style(&run.style).ok_or_else(|| bad("text.getRange", "text transform is collapsed or unrepresentable"))?;
         }
     }
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     Ok(json!({"text": text, "runs": runs, "length": len}))
+}
+
+/// Keep `st`'s font style when its family has it, else take the family's closest one: a family
+/// whose styles are numbered (W3, W6) has no Regular (#4128). A family that isn't installed keeps
+/// the style as it is.
+pub(crate) fn fit_font_style(st: &mut CharStyle) {
+    let db = vectorcraft_text::FontDb::global();
+    let styles = db.styles(&st.font_family);
+    if !styles.is_empty()
+        && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style))
+        && let Some(face) = db.face(&st.font_family, &st.font_style)
+    {
+        st.font_style = face.style.clone();
+    }
 }
 
 /// Character attribute changes parsed from params (shared by range and whole-object styling).
@@ -253,9 +315,25 @@ pub(crate) struct CharChange {
     position: Option<vectorcraft_doc::CharPosition>,
     small_caps: Option<Option<f64>>,
     char_align: Option<vectorcraft_doc::CharAlign>,
+    char_direction: Option<Option<vectorcraft_doc::ParaDirection>>,
     proportional_metrics: Option<bool>,
+    tate_chu_yoko: Option<bool>,
+    no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
     font_axes: Option<AxisChange>,
+}
+
+/// `charDirection: "default"|"leftToRight"|"rightToLeft"` → the Character Direction to set (`None`
+/// inside: Default).
+pub(crate) fn char_direction_param(p: &Value, cmd: &str) -> Result<Option<Option<vectorcraft_doc::ParaDirection>>> {
+    use vectorcraft_doc::ParaDirection;
+    let Some(v) = p.get("charDirection").filter(|v| !v.is_null()) else { return Ok(None) };
+    Ok(Some(match v.as_str() {
+        Some("default") => None,
+        Some("leftToRight") => Some(ParaDirection::LeftToRight),
+        Some("rightToLeft") => Some(ParaDirection::RightToLeft),
+        _ => return Err(bad(cmd, "`charDirection` must be \"default\", \"leftToRight\" or \"rightToLeft\"")),
+    }))
 }
 
 /// `digits: "default"|"arabic"|"hindi"|"farsi"` → the numeral system the digits are drawn in.
@@ -379,6 +457,8 @@ fn auto_or_num(p: &Value, k: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 impl CharChange {
     /// `setup` gives the superscript, subscript and small caps proportions.
     pub(crate) fn parse(p: &Value, cmd: &str, setup: &vectorcraft_doc::DocSetup) -> Result<Self> {
+        check_numbers(p, &["size", "tracking", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
+        check_switches(p, &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "noBreak"], cmd)?;
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
         let (position, small_caps) = super::docsetup::script_params(p, setup, cmd)?;
         let flag = |k: &str| p.get(k).and_then(Value::as_bool);
@@ -411,7 +491,10 @@ impl CharChange {
             position,
             small_caps,
             char_align: char_align_param(p, cmd)?,
+            char_direction: char_direction_param(p, cmd)?,
             proportional_metrics: flag("proportionalMetrics"),
+            tate_chu_yoko: flag("tateChuYoko"),
+            no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
         };
@@ -452,7 +535,10 @@ impl CharChange {
             && self.position.is_none()
             && self.small_caps.is_none()
             && self.char_align.is_none()
+            && self.char_direction.is_none()
             && self.proportional_metrics.is_none()
+            && self.tate_chu_yoko.is_none()
+            && self.no_break.is_none()
             && self.digits.is_none()
             && self.font_axes.is_none()
     }
@@ -471,13 +557,7 @@ impl CharChange {
             st.font_family = f.clone();
             // Keep the style when the new family has it, else its closest match.
             if self.style.is_none() {
-                let styles = vectorcraft_text::FontDb::global().styles(f);
-                if !styles.is_empty()
-                    && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style))
-                    && let Some(face) = vectorcraft_text::FontDb::global().face(f, &st.font_style)
-                {
-                    st.font_style = face.style.clone();
-                }
+                fit_font_style(st);
             }
         }
         if let Some(v) = &self.style {
@@ -545,8 +625,17 @@ impl CharChange {
         if let Some(v) = self.char_align {
             st.char_align = v;
         }
+        if let Some(v) = self.char_direction {
+            st.char_direction = v;
+        }
         if let Some(v) = self.proportional_metrics {
             st.proportional_metrics = v;
+        }
+        if let Some(v) = self.tate_chu_yoko {
+            st.tate_chu_yoko = v;
+        }
+        if let Some(v) = self.no_break {
+            st.no_break = v;
         }
         if let Some(v) = self.digits {
             st.digits = v;
@@ -610,6 +699,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
         },
     };
     let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
+    super::paint::check_keep_model(p, C)?;
     change.store_colors(s, p);
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
@@ -617,7 +707,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
     let t = text_ref(s, id)?;
     change.localize(&t, C)?;
-    let (a, b) = range_of(p, edit::runs_len(&t.runs));
+    let (a, b) = range_of(p, edit::runs_len(&t.runs), C)?;
     let n = s.edit("Character", |d, _| {
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
         if a == b && !t.plain_text().is_empty() {
@@ -647,6 +737,7 @@ fn glyph_em(t: &TextObject, g: &vectorcraft_text::PositionedGlyph) -> Option<f64
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.touchType";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    check_numbers(p, &["start"], C)?;
     let start = byte_param(p, "start").ok_or_else(|| bad(C, "missing `start` (the byte offset of a character)"))?;
     if !["dx", "dy", "hScale", "vScale", "rotation"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
         return Err(bad(C, "nothing to change: give dx, dy, hScale, vScale or rotation"));
@@ -674,7 +765,8 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     if dx != 0.0 && g.rtl {
         return Err(bad(C, "a right-to-left character moves only up and down (dy)"));
     }
-    let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.byte + h.len == a);
+    // A list marker's glyphs (length 0) stand for no character.
+    let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.len > 0 && h.byte + h.len == a);
     let pr = prev.map(|h| (h.byte, h.byte + h.len));
     let em = glyph_em(&t, g).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
     let em_prev = match prev {
@@ -730,7 +822,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
             let mut trial = t.clone();
             touch(&mut trial, None, None, to - shift);
             let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
-            l.glyphs.iter().find(|h| h.byte == a).map(|h| h.xf * Point::ZERO)
+            l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map(|h| h.xf * Point::ZERO)
         };
         let per_step = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
             (Some(p), Some(q)) => linear(t.xf, q - p).hypot() / step.abs(),
@@ -747,7 +839,9 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // out alone, in point type of the same orientation, before and after the change.
     let grown = {
         let mut alone = TextObject { kind: TextKind::Point, runs: edit::slice_runs(&t.runs, a, b), paras: Vec::new(), ..t.clone() };
-        let advance = |o: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), o).glyphs.iter().map(|h| h.advance).sum::<f64>();
+        let advance = |o: &TextObject| {
+            vectorcraft_text::layout(vectorcraft_text::FontDb::global(), o).glyphs.iter().filter(|h| h.len > 0).map(|h| h.advance).sum::<f64>()
+        };
         let old = advance(&alone);
         edit::style_range(&mut alone.runs, 0, b - a, |st| change.apply(st));
         (advance(&alone) - old) * lay.fit_scale
@@ -755,15 +849,15 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // The character lands `moved` further on, and the character after it on its line keeps its
     // distance from it, wider or narrower only by the character's new scales.
     let goal = pen(g) + moved;
-    let next_goal = lay.glyphs.iter().find(|h| h.byte == b && h.line == g.line).map(|h| pen(h) + grown);
+    let next_goal = lay.glyphs.iter().find(|h| h.byte == b && h.len > 0 && h.line == g.line).map(|h| pen(h) + grown);
     // How far the character and the character after it on its line miss their places, along the
     // line, with the kerning `k` (before, own) added.
     let miss = |k: (Option<f64>, Option<f64>)| {
         let mut trial = t.clone();
         touch(&mut trial, k.0, k.1, raise);
         let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
-        let h = l.glyphs.iter().find(|h| h.byte == a)?;
-        let next = match (l.glyphs.iter().find(|n| n.byte == b && n.line == h.line), next_goal) {
+        let h = l.glyphs.iter().find(|h| h.byte == a && h.len > 0)?;
+        let next = match (l.glyphs.iter().find(|n| n.byte == b && n.len > 0 && n.line == h.line), next_goal) {
             (Some(n), Some(at)) => pen(n) - at,
             _ => 0.0,
         };
@@ -830,6 +924,9 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path && !path.is_closed() && path.bounds().is_none_or(|b| b.width() < 1.0 || b.height() < 1.0) {
         return Err(bad(C, "area type needs a path that encloses an area"));
     }
+    super::paint::check_keep_model(p, C)?;
+    check_numbers(p, &["size"], C)?;
+    check_switches(p, &["vertical", "placeholder"], C)?;
     let style = super::create::new_type_style(s, p);
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {
@@ -842,14 +939,19 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         kind,
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style, inline: None }],
+        ruby: Vec::new(),
         para: super::create::new_type_para(),
         paras: Vec::new(),
+        first_para_continues: false,
         area: Default::default(),
         path_effect: Default::default(),
         path_align: Default::default(),
         path_spacing: 0.0,
         wrap: Vec::new(),
         optical_margin: false,
+        system_layout: false,
+        fractional_widths: true,
+        list_count: 0,
         cached_bounds: None,
         cached_baselines: Vec::new(),
     };
@@ -857,6 +959,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path {
         t.area.fit = super::create::new_area_fit(s, p, C)?;
     }
+    t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
     } else {
@@ -912,7 +1015,7 @@ fn type_ranges(
 ) -> Result<Vec<(NodeId, usize, usize, bool)>> {
     // (text, its range; None: all of it).
     let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
-        Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs))))],
+        Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs), c)?))],
         None => {
             let editing = editing_range(s)?.filter(|_| p.get("ids").filter(|v| !v.is_null()).is_none());
             match editing {
@@ -950,7 +1053,7 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
         Some("baselineShift") => Step::BaselineShift,
         _ => return Err(bad(C, "attribute must be size|leading|tracking|kerning|baselineShift")),
     };
-    let by = f64_or(p, "by", 1.0);
+    let by = number_or(p, "by", 1.0, C)?;
     if !by.is_finite() {
         return Err(bad(C, "by must be a number"));
     }
@@ -981,12 +1084,35 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
                     1.0
                 };
                 let mut runs = edit::slice_runs(&t.runs, a, b);
-                for run in &mut runs {
+                // Auto leading steps from the leading its paragraph's Justification › Auto Leading
+                // sets, so each run covers one paragraph and knows which.
+                let mut paras = vec![];
+                if matches!(step, Step::Leading) {
+                    let plain = t.plain_text();
+                    let mut para = plain.get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
+                    let mut split = Vec::with_capacity(runs.len());
+                    for run in runs {
+                        if run.inline.is_some() || !run.text.contains('\n') {
+                            paras.push(para);
+                            para += run.text.bytes().filter(|&c| c == b'\n').count();
+                            split.push(run);
+                            continue;
+                        }
+                        for piece in run.text.split_inclusive('\n') {
+                            paras.push(para);
+                            para += usize::from(piece.ends_with('\n'));
+                            split.push(TextRun::new(piece, run.style.clone()));
+                        }
+                    }
+                    runs = split;
+                }
+                for (i, run) in runs.iter_mut().enumerate() {
                     let st = &mut run.style;
                     match step {
                         Step::Size => st.size = super::typecmd::local_type_value(t, st.size * points + inc, (0.1, 1296.0), false, C)?,
                         Step::Leading => {
-                            st.leading = Some(super::typecmd::local_type_value(t, st.effective_leading() * points + inc, (0.1, 5000.0), false, C)?);
+                            let leading = t.para_at(paras.get(i).copied().unwrap_or(0)).effective_leading(st);
+                            st.leading = Some(super::typecmd::local_type_value(t, leading * points + inc, (0.1, 5000.0), false, C)?);
                         }
                         Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
                         Step::Kerning => st.kerning = Some((st.kerning.unwrap_or(0.0) + inc).clamp(-1000.0, 10000.0)),
@@ -1062,14 +1188,20 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             kind: TextKind::Point,
             xf: Affine::IDENTITY,
             runs: head.clone(),
+            // Ruby over the counted part; the layout clamps it to `head`.
+            ruby: t.ruby.clone(),
             para: Default::default(),
             paras: Vec::new(),
+            first_para_continues: false,
             area: Default::default(),
             path_effect: Default::default(),
             path_align: Default::default(),
             path_spacing: 0.0,
             wrap: Vec::new(),
             optical_margin: false,
+            system_layout: t.system_layout,
+            fractional_widths: t.fractional_widths,
+            list_count: 0,
             cached_bounds: None,
             cached_baselines: Vec::new(),
         };
@@ -1139,6 +1271,7 @@ fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
             st.doc = created.doc.clone();
             st.history.undo.truncate(k);
             st.selection.prune(&st.doc);
+            super::globaledit::follow_history(st);
             st.revision += 1;
             return Ok(json!({"removed": true}));
         }

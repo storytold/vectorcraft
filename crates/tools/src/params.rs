@@ -69,6 +69,12 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
     if let Some(f) = &g.freeform {
         v["freeform"] = freeform_json(f);
     }
+    if g.gradient.dither {
+        v["dither"] = json!(true);
+    }
+    if !g.gradient.method.is_classic() {
+        v["method"] = json!(g.gradient.method.label().to_lowercase());
+    }
     v
 }
 

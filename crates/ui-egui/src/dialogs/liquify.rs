@@ -87,15 +87,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     }
     widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::plain_field(ui, "lq-angle", d.f64("angle", 0.0), "°", 1, 110.0) {
-            d.fields.insert("angle".into(), json!(v.clamp(-360.0, 360.0)));
+        if let Some(v) = widgets::range_field(ui, "lq-angle", d.f64("angle", 0.0), -360.0..=360.0, "°", 1, 110.0) {
+            d.fields.insert("angle".into(), json!(v));
         }
     });
     let pressure = d.bool("usePressure");
     widgets::label_row(ui, tl!("Intensity:"), LABEL_W, |ui| {
         ui.add_enabled_ui(!pressure, |ui| {
-            if let Some(v) = widgets::plain_field(ui, "lq-intensity", d.f64("intensity", 50.0), "%", 0, 110.0) {
-                d.fields.insert("intensity".into(), json!(v.clamp(1.0, 100.0)));
+            if let Some(v) = widgets::range_field(ui, "lq-intensity", d.f64("intensity", 50.0), 1.0..=100.0, "%", 0, 110.0) {
+                d.fields.insert("intensity".into(), json!(v));
             }
         });
     });

@@ -4,8 +4,9 @@
 //! and reflection, reference point and Random options are the Transform effect's too.
 //!
 //! Fields: `scaleH`, `scaleV` (%), `moveH`, `moveV` (pt), `rotate` (°), `reflectX`, `reflectY`,
-//! `random`, `reference` (0..8, the 9-point grid), `copy`, `objects`, `patterns`, `corners`,
-//! `strokes` (the last two default to the preferences, which OK updates) and `preview`.
+//! `random`, `reference` (0..8, the 9-point grid), `copy` (set by the Copy button, which confirms),
+//! `objects`, `patterns`, `corners`, `strokes` (the last two default to the preferences, which OK
+//! updates) and `preview`. It opens on the values it was last confirmed with, Copy aside (#1732).
 
 use serde_json::{Value, json};
 
@@ -21,12 +22,40 @@ pub const KIND: &str = "transformEach";
 
 const CMD: &str = "object.transformEach";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Transform Each").into(), body, confirm, preview: true, min_width: 360.0, ..DialogSpec::FORM };
+/// OK transforms each object; Copy, left of Cancel as in the documented dialog, transforms a copy
+/// of each ([Scale multiple objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/scale-multiple-objects.html)).
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Transform Each").into(),
+    body,
+    confirm,
+    alternate: Some(("Copy", "copy")),
+    preview: true,
+    min_width: 360.0,
+    inputs: |_| &["objects", "patterns", "corners", "strokes"],
+    ..DialogSpec::FORM
+};
 
 /// The fields a fresh dialog starts with.
 pub fn fields() -> Value {
     json!({"scaleH": 100, "scaleV": 100, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": false, "reference": 4, "copy": false})
+}
+
+/// The fields kept from the last OK or Copy (`UiState::transform_each`): all but Copy, Transform
+/// Patterns (the preference it starts from) and the scale options (preferences too).
+const REMEMBERED: [&str; 11] = ["scaleH", "scaleV", "moveH", "moveV", "rotate", "reflectX", "reflectY", "random", "reference", "objects", "preview"];
+
+/// The fields the menu item opens with: [`fields`], with the values it was last confirmed with.
+/// A kept value of the wrong kind (a hand-edited file) is left out.
+pub fn open_fields(app: &VectorcraftApp) -> Value {
+    let mut out = fields();
+    for k in REMEMBERED {
+        match app.ui.transform_each.get(k) {
+            Some(v @ Value::Number(_)) if out.get(k).is_some_and(Value::is_number) => out[k] = v.clone(),
+            Some(v @ Value::Bool(_)) if out.get(k).is_none_or(Value::is_boolean) => out[k] = v.clone(),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The command's parameters without the scale options.
@@ -107,7 +136,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             object_options(app, ui, d);
             scale_options(app, ui, d);
             reflect_options(ui, d);
-            form::check(ui, d, "copy", tl!("Copy"));
         });
     });
     let mut p = params(d);
@@ -121,7 +149,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = params(d);
     add_object_options(app, d, &mut p);
     let p = with_scale_options(app, d, p)?;
-    form::commit_preview(app, CMD, p)
+    let mut kept = serde_json::Map::new();
+    for k in REMEMBERED {
+        let v = if k == "preview" { json!(d.bool("preview")) } else { p[k].clone() };
+        kept.insert(k.into(), v);
+    }
+    let r = form::commit_preview(app, CMD, p)?;
+    app.ui.transform_each = Value::Object(kept);
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -157,5 +192,119 @@ mod tests {
         assert_eq!(n.appearance.stroke_width(), 1.0, "strokes kept their weight");
         let (cmd, p) = app.session.journal.last().unwrap();
         assert_eq!((cmd.as_str(), &p["strokes"], &p["objects"]), (CMD, &json!(false), &json!(true)), "#1448: Transform Objects goes along");
+    }
+
+    /// An app with a selected 50 × 50 square at (20, 20).
+    fn square_app() -> (VectorcraftApp, NodeId) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        (app, NodeId(id))
+    }
+
+    fn open(app: &mut VectorcraftApp) -> &mut Dialog {
+        crate::menus::invoke(app, CMD, json!({}));
+        let d = app.ui.dialog.as_mut().expect("Transform Each is open");
+        assert_eq!(d.kind, KIND);
+        d
+    }
+
+    #[test]
+    fn a_fresh_app_opens_on_the_defaults() {
+        let (mut app, _) = square_app();
+        let d = open(&mut app);
+        assert_eq!(Value::Object(d.fields.clone()), fields());
+    }
+
+    /// #1732: the dialog opens on the values it was last confirmed with (as Move and Offset Path
+    /// do), but never on Copy.
+    #[test]
+    fn it_reopens_on_the_values_confirmed_last() {
+        let (mut app, _) = square_app();
+        let d = open(&mut app);
+        for (k, v) in [
+            ("scaleH", json!(150)),
+            ("moveH", json!(20)),
+            ("rotate", json!(15)),
+            ("reflectX", json!(true)),
+            ("random", json!(true)),
+            ("reference", json!(0)),
+            ("objects", json!(false)),
+            ("patterns", json!(true)),
+            ("copy", json!(true)),
+        ] {
+            d.fields.insert(k.into(), v);
+        }
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let d = open(&mut app);
+        for (k, v) in [
+            ("scaleH", json!(150.0)),
+            ("scaleV", json!(100.0)),
+            ("moveH", json!(20.0)),
+            ("rotate", json!(15.0)),
+            ("reflectX", json!(true)),
+            ("reflectY", json!(false)),
+            ("random", json!(true)),
+            ("reference", json!(0)),
+            ("objects", json!(false)),
+            ("preview", json!(false)),
+            ("copy", json!(false)),
+        ] {
+            assert_eq!(d.fields.get(k), Some(&v), "{k}");
+        }
+        // Cancel keeps nothing new.
+        d.fields.insert("scaleH".into(), json!(300));
+        super::super::cancel(&mut app);
+        assert_eq!(open(&mut app).fields["scaleH"], json!(150.0));
+        // The remembered values go with the UI state; one saved before they existed loads, and
+        // opens on the defaults.
+        app.ui.dialog = None;
+        app.ui = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert_eq!(open(&mut app).fields["scaleH"], json!(150.0));
+        app.ui = serde_json::from_value(json!({"move_options": {"copy": true}})).unwrap();
+        assert_eq!(Value::Object(open(&mut app).fields.clone()), fields());
+    }
+
+    /// #1732: the Copy button transforms a copy of each object, in one undo step, and Transform
+    /// Again makes a further copy; there is no Copy checkbox.
+    #[test]
+    fn the_copy_button_transforms_a_copy_of_each_object() {
+        use egui_kittest::kittest::Queryable;
+        let (mut app, id) = square_app();
+        let d = open(&mut app);
+        d.fields.insert("moveH".into(), json!(100));
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        assert!(h.query_by_role_and_label(egui::accesskit::Role::CheckBox, "Copy").is_none(), "no Copy checkbox");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(3);
+        let app = h.state_mut();
+        assert!(app.ui.dialog.is_none(), "Copy closes the dialog");
+        let xs = |app: &VectorcraftApp| {
+            let st = app.session.doc().unwrap();
+            let mut xs: Vec<f64> = st.doc.layers[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap().x0.round()).collect();
+            xs.sort_by(f64::total_cmp);
+            xs
+        };
+        assert_eq!(xs(app), vec![20.0, 120.0], "the square stays, its copy moved 100 pt");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert!(app.session.doc().unwrap().doc.node(id).is_some());
+        assert_eq!(open(app).fields["copy"], json!(false), "Copy isn't remembered");
+        app.ui.dialog = None;
+        app.run("object.transformAgain", json!({})).unwrap();
+        assert_eq!(xs(app), vec![20.0, 120.0, 220.0], "Transform Again copies once more");
+        h.ctx.forget_all_images();
     }
 }

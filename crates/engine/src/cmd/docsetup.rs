@@ -7,7 +7,7 @@ use vectorcraft_doc::{Background, CharPosition, CharStyle, DocSetup, Document, E
 
 use super::flatten::{FlattenOptions, FlattenerPreset};
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, color_value, has_doc};
 
 const C: &str = "document.setup";
 
@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Document Setup",
         [],
         None,
-        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedFonts?: bool, highlightSubstitutedGlyphs?: bool, gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
+        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedGlyphs?: bool (Highlight Substituted Fonts is a preference: prefs.set highlightSubstitutedFonts; a highlightSubstitutedFonts key is ignored and the reply carries a warning),gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
         has_doc,
         setup
     )]
@@ -31,7 +31,6 @@ pub(crate) fn setup_json(d: &Document) -> Value {
         "units": d.units.label(),
         "bleed": s.bleed,
         "outlineImages": s.outline_images,
-        "highlightSubstitutedFonts": s.highlight_substituted_fonts,
         "highlightSubstitutedGlyphs": s.highlight_substituted_glyphs,
         "gridSize": s.grid_size.id(),
         "gridColors": s.grid_colors.map(|c| c.to_hex()),
@@ -72,9 +71,19 @@ fn setup(s: &mut Session, p: &Value) -> Result<Value> {
         }
         apply(&mut new, &mut units, k, v, &s.prefs.flattener_presets)?;
     }
+    // An older build's reply passed back still applies; the moved key only gets a warning.
+    let reply = |d: &Document| {
+        let mut r = setup_json(d);
+        if o.contains_key("highlightSubstitutedFonts")
+            && let Some(m) = r.as_object_mut()
+        {
+            m.insert("warnings".into(), json!([MOVED_FONTS_HIGHLIGHT]));
+        }
+        r
+    };
     let st = s.doc()?;
     if new == st.doc.setup && units == st.doc.units {
-        return Ok(setup_json(&st.doc));
+        return Ok(reply(&st.doc));
     }
     s.edit("Document Setup", |d, _| {
         let scripts_changed =
@@ -86,8 +95,12 @@ fn setup(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(setup_json(&s.doc()?.doc))
+    Ok(reply(&s.doc()?.doc))
 }
+
+/// The warning for `highlightSubstitutedFonts`, which `document.setup` ignores.
+const MOVED_FONTS_HIGHLIGHT: &str =
+    "highlightSubstitutedFonts is ignored: it is a preference (Preferences › Type), set with prefs.set {key: \"highlightSubstitutedFonts\", value}";
 
 fn flag(k: &str, v: &Value) -> Result<bool> {
     v.as_bool().ok_or_else(|| bad(C, format!("{k} must be true or false")))
@@ -102,7 +115,10 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
         "units" => *units = v.as_str().and_then(vectorcraft_doc::Unit::named).ok_or_else(|| bad(C, "unknown units"))?,
         "bleed" => s.bleed = bleed_param(v, s.bleed, C)?,
         "outlineImages" => s.outline_images = flag(k, v)?,
-        "highlightSubstitutedFonts" => s.highlight_substituted_fonts = flag(k, v)?,
+        // Preferences › Type holds it for every document: ignored, with a warning in the reply.
+        "highlightSubstitutedFonts" => {
+            flag(k, v)?;
+        }
         "highlightSubstitutedGlyphs" => s.highlight_substituted_glyphs = flag(k, v)?,
         "gridSize" => s.grid_size = v.as_str().and_then(GridSize::parse).ok_or_else(|| bad(C, "gridSize must be small, medium or large"))?,
         "gridColors" => s.grid_colors = grid_colors(v)?,
@@ -125,7 +141,7 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
         "exportText" => s.export_text = v.as_str().and_then(ExportText::parse).ok_or_else(|| bad(C, "exportText must be editable or appearance"))?,
         "backgroundContents" => s.background = background_param(v, C)?,
         // Read-only values `document.setup` reports.
-        "gridColorsName" => {}
+        "gridColorsName" | "warnings" => {}
         _ => return Err(bad(C, format!("unknown setting `{k}`"))),
     }
     Ok(())

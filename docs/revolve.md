@@ -86,6 +86,8 @@ with the standard command.
 
 ## Initial limits
 
+- Lighting offers Standard, Diffuse, Top Left and Right, using the [shared original rigs](three-d.md#presets).
+  Other effective settings show Custom; changing the view does not change the recognized lighting preset.
 - Paths and compound paths only. Type, images and groups must be converted to paths first.
 - Open profiles have circular end caps by default; turning Cap off keeps them open. Partial-sweep angular cut sides remain open. Closed profile boundaries are swept as provided.
 - One Revolve per source object. Edit its options rather than applying another.

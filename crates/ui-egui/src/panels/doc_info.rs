@@ -1,6 +1,6 @@
 //! Document Info panel: the document's setup and what it contains (objects by kind, graphic
 //! styles, brushes, spot colors, patterns, gradients, symbols, fonts and their files, linked and embedded
-//! images), for the whole document or the selection only. The flyout picks one category (or all)
+//! images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
 use egui::Ui;
@@ -87,7 +87,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The rows of Document Info section `id` labelled by a name (an artboard, a style, a swatch, a
-/// font, an image) rather than an interface label: every row of the lists, and in Document the
+/// font, an image, a repeat object) rather than an interface label: every row of the lists, and in Document the
 /// artboards, which follow the Artboards count. Names are shown as they are.
 fn named_rows(id: &str, rows: &[Value]) -> std::ops::Range<usize> {
     match id {
@@ -183,7 +183,13 @@ mod tests {
         let text = crate::tests_labels::painted_text(&mut app, show);
         assert!(text.contains("Color Mode") && text.contains("Artboard 1"), "{text}");
         let menu_text = crate::tests_labels::painted_text(&mut app, menu);
-        assert!(menu_text.contains("Font Details") && menu_text.contains("Brushes") && menu_text.contains("Save…"), "{menu_text}");
+        assert!(
+            menu_text.contains("Font Details")
+                && menu_text.contains("Brushes")
+                && menu_text.contains("Repeat Objects")
+                && menu_text.contains("Save…"),
+            "{menu_text}"
+        );
         let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
             set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
             show(app, ui);
@@ -199,6 +205,6 @@ mod tests {
         let r = app.run("docInfo.save", json!({"path": "/tmp/info.txt"})).unwrap();
         assert_eq!(r["path"], "/tmp/info.txt");
         let report = String::from_utf8(written.borrow().clone()).unwrap();
-        assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n"), "{report}");
+        assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n") && report.contains("\nREPEAT OBJECTS\n"), "{report}");
     }
 }

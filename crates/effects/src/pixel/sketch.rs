@@ -1,8 +1,12 @@
-//! Effect › Sketch (Chalk & Charcoal, Chrome, Halftone Pattern, Note Paper, Plaster, Reticulation and Water Paper; Graphic Pen lives in
+//! Effect › Sketch (Bas Relief, Chalk & Charcoal, Charcoal, Chrome, Conté Crayon, Halftone Pattern, Note Paper, Photocopy,
+//! Plaster, Reticulation, Stamp, Torn Edges and Water Paper; Graphic Pen lives in
 //! [`super::brushstrokes`]). Original filters built from public behaviour documentation:
 //! <https://helpx.adobe.com/illustrator/using/summary-effects.html> (Sketch effects redraw in
-//! black and white; Water Paper flows colours on damp fibrous paper) and the public Photoshop Elements Artistic filters guide. Visual
-//! approximations, not proprietary reproductions.
+//! black and white; Water Paper flows colours on damp fibrous paper; Conté Crayon draws dark areas
+//! in black and light areas in white) and the public Photoshop Elements Sketch filters guide
+//! (<https://helpx.adobe.com/photoshop-elements/using/sketch-filters.html>: Conté Crayon's
+//! foreground and background levels and texture options). Visual approximations, not proprietary
+//! reproductions.
 
 use std::f64::consts::{FRAC_1_SQRT_2, TAU};
 
@@ -11,11 +15,13 @@ use vectorcraft_geom::{Point, Vec2};
 use super::distort::displace;
 use super::edges::sobel;
 use super::pixelate::{Place, cell, rand, value_noise};
-use super::texture::{Light, Tones, luma, premultiply, smooth_noise, straight};
+use super::texture::{Light, Texture, Tones, luma, premultiply, smooth_noise, straight, texturizer};
 use super::{PixelSpace, blur_plane, pick};
 
 const SALT_CHALK: u64 = 216;
 const SALT_CHROME: u64 = 0xC40_4D45;
+const SALT_CONTE: u64 = 0xC047E;
+const SALT_TORN: u64 = 0x746f726e5f6564;
 const SALT_WATER: u64 = 208;
 const EDGE_SOFT: f64 = 0.8;
 const TONE_SOFT: f64 = 1.0;
@@ -357,6 +363,127 @@ pub(super) fn reticulation(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
         let grain = 0.55 * coarse + 0.45 * fine;
         let ink = if tone + (grain - 0.5) * spread > 0.5 { 1.0 } else { 0.0 };
         *p = premultiply([(1.0 - ink) as f32; 3], f32::from(p[3]) / 255.0);
+    });
+}
+
+/// How far (document units) Conté Crayon samples the softened tones that choose its crayons.
+pub(super) const CONTE_REACH: f64 = 3.0 * TONE_SOFT + 1.0;
+
+/// How much of a crayon is laid down where `amount` (0..1: how dark, for the dark crayon, or how
+/// light, for the light one) meets its `level` (0..1) and `grain` (0..1, the paper's tooth and the
+/// stroke): at level 0 only the deepest tones take the crayon, at level 1 it reaches past the
+/// middle tone; the grain breaks its edge.
+fn crayon(amount: f64, level: f64, grain: f64) -> f64 {
+    ramp((amount - (0.9 - 0.45 * level) + 0.4 * (grain - 0.5)) / 0.12 + 0.5)
+}
+
+/// Conté Crayon: the dark areas drawn in a dense black crayon and the light areas in a pure white
+/// one, on mid-grey paper whose tooth (`texture` scaled by `scaling` (0.5..2), its heights turned
+/// over when `invert`) and diagonal strokes break the crayons. `foreground` and `background`
+/// (0..20) set how far the black and the white crayon reach into the midtones; the paper then
+/// stands in relief as strong as `relief` (0..50), lit from `light`, as Texturizer draws it.
+/// Coverage is kept.
+#[allow(clippy::too_many_arguments)] // the effect's seven options
+pub(super) fn conte_crayon(
+    px: &mut [[u8; 4]],
+    w: usize,
+    h: usize,
+    space: &PixelSpace,
+    foreground: f64,
+    background: f64,
+    texture: &Texture,
+    scaling: f64,
+    relief: f64,
+    light: Light,
+    invert: bool,
+) {
+    if !([foreground, background, scaling, relief].iter().all(|v| v.is_finite()) && scaling > 0.0) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let fg = foreground.clamp(0.0, 20.0) / 20.0;
+    let bg = background.clamp(0.0, 20.0) / 20.0;
+    let tones = Tones::new(px, w, h, TONE_SOFT / place.px);
+    // The tooth: how far the surface stands above its neighbours a quarter point (or half a pixel)
+    // away, so that crayon catches on the peaks and leaves the hollows bare.
+    let step = (0.25f64).max(0.5 * place.px / scaling);
+    let flip = if invert { -1.0 } else { 1.0 };
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let t = Point::new(q.x / scaling, q.y / scaling);
+        let tooth = if t.x.is_finite() && t.y.is_finite() {
+            let at = |dx: f64, dy: f64| texture.height(Point::new(t.x + dx, t.y + dy));
+            let ridge = (at(0.0, 0.0) - 0.25 * (at(-step, 0.0) + at(step, 0.0) + at(0.0, -step) + at(0.0, step))) / step;
+            let tooth = 0.5 + 0.5 * (2.0 * flip * ridge).tanh();
+            if tooth.is_finite() { tooth } else { 0.5 }
+        } else {
+            0.5
+        };
+        // Strokes along the two diagonals, about a point across and several long.
+        let (u, v) = ((q.x + q.y) * FRAC_1_SQRT_2, (q.x - q.y) * FRAC_1_SQRT_2);
+        let dark_stroke = value_noise(SALT_CONTE, u * 1.2, v * 0.15);
+        let light_stroke = value_noise(SALT_CONTE + 1, v * 1.2, u * 0.15);
+        let tone = tones.get(x, y);
+        let black = crayon(1.0 - tone, fg, 0.55 * tooth + 0.45 * dark_stroke);
+        let white = crayon(tone, bg, 0.55 * tooth + 0.45 * light_stroke);
+        let paper = 0.4 + 0.2 * tone;
+        let grey = ((paper + (1.0 - paper) * white) * (1.0 - black)) as f32;
+        *p = premultiply([grey; 3], f32::from(p[3]) / 255.0);
+    });
+    if relief > 0.0 {
+        texturizer(px, w, h, space, texture, scaling, relief, light, invert);
+    }
+}
+
+/// Torn Edges: the object in high-contrast black and white with ragged edges. `image_balance`
+/// (0..50) shifts whether midtones fall to ink or paper; `smoothness` (0..15) softens tones and
+/// the fraying; `contrast` (0..20) hardens the split. Coverage is kept.
+pub(super) fn torn_edges(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, image_balance: f64, smoothness: f64, contrast: f64) {
+    if !(image_balance.is_finite() && smoothness.is_finite() && contrast.is_finite()) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    if w == 0 || h == 0 || w.checked_mul(h) != Some(px.len()) {
+        return;
+    }
+    let mut tone: Vec<f32> = px.iter().map(|p| luma(straight(*p)) * f32::from(p[3]) / 255.0).collect();
+    let cover: Vec<f32> = px.iter().map(|p| f32::from(p[3]) / 255.0).collect();
+    let sigma = (0.12 * smoothness.clamp(0.0, 15.0)) / place.px.max(1e-9);
+    if sigma > 0.0 {
+        blur_plane(&mut tone, w, h, sigma);
+    }
+    let mut edges: Vec<f32> = sobel(&tone, w, h).into_iter().zip(sobel(&cover, w, h)).map(|(t, c)| t.max(c)).collect();
+    let edge_soft = (0.08 * smoothness.clamp(0.0, 15.0)) / place.px.max(1e-9);
+    if edge_soft > 0.0 {
+        blur_plane(&mut edges, w, h, edge_soft);
+    }
+    let peak = edges.iter().copied().fold(0.0f32, f32::max);
+    let balance = image_balance.clamp(0.0, 50.0);
+    // Lower balance favours ink (darker result); higher balance favours paper.
+    let balance_tone = 0.25 + balance / 50.0 * 0.75;
+    let steep = 4.0 + contrast.clamp(0.0, 20.0) * 0.45;
+    let hard = contrast.clamp(0.0, 20.0) >= 18.0;
+    let fray = 0.25 + 0.05 * smoothness.clamp(0.0, 15.0);
+    place.each(px, |x, y, p| {
+        let a = f32::from(p[3]) / 255.0;
+        if a <= 0.0 {
+            *p = [0; 4];
+            return;
+        }
+        let i = y * w + x;
+        let t = tone.get(i).copied().unwrap_or(0.0);
+        let e = if peak > 1e-6 { edges.get(i).copied().unwrap_or(0.0) / peak } else { 0.0 };
+        let noise = smooth_noise(SALT_TORN, place.at(x, y), 2.5 + 0.3 * smoothness) as f32;
+        let local = (1.0 - balance_tone) as f32 + e * fray as f32 * noise;
+        let mut ink = 1.0 / (1.0 + (steep as f32 * (t - local)).exp());
+        if hard {
+            ink = if ink > 0.5 { 1.0 } else { 0.0 };
+        }
+        let paper = 1.0 - ink.clamp(0.0, 1.0);
+        *p = premultiply([paper, paper, paper], a);
     });
 }
 

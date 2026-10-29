@@ -178,7 +178,8 @@ fn third_vp(ui: &mut egui::Ui, d: &mut Dialog, i: usize, unit: Unit, enabled: bo
     v.resize(2, json!(0));
     let pt = v.get(i).and_then(Value::as_f64).map(|x| unit.to_pt(x));
     ui.label(if i == 0 { "X:" } else { "Y:" });
-    if let Some(x) = ui.add_enabled_ui(enabled, |ui| widgets::num_field(ui, ("persp-vp3", i), pt, unit, 84.0)).inner {
+    let name = if i == 0 { crate::i18n::t("X:") } else { crate::i18n::t("Y:") };
+    if let Some(x) = ui.add_enabled_ui(enabled, |ui| widgets::num_field_named(ui, ("persp-vp3", i), Some(name), pt, unit, 84.0)).inner {
         v[i] = json!(unit.from_pt(x));
         d.fields.insert("thirdVp".into(), Value::Array(v));
     }
@@ -333,11 +334,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let v = d.f64("opacity", 50.0).clamp(0.0, 100.0);
         let track = |x: f32| egui::Color32::from_gray((60.0 + x * 160.0) as u8);
         let shown = widgets::SliderValue::field(v, 0.0..=100.0, "%", 0);
-        let mut new = widgets::color_slider_valued(ui, "persp-opacity", tl!("Opacity:"), Some(shown), (v / 100.0) as f32, form::SLIDER_WIDTH, &track)
-            .0
-            .map(|x| (f64::from(x) * 100.0).round());
-        if let Some(x) = widgets::plain_field(ui, "persp-opacity-field", v, "%", 0, 52.0) {
-            new = Some(x.round().clamp(0.0, 100.0));
+        let (x, _, keyed) =
+            widgets::color_slider_stepped(ui, "persp-opacity", tl!("Opacity:"), Some(shown), (v / 100.0) as f32, form::SLIDER_WIDTH, &track);
+        let mut new = x.map(|x| (f64::from(x) * 100.0).round()).or(keyed);
+        if let Some(x) = widgets::range_field(ui, "persp-opacity-field", v, 0.0..=100.0, "%", 0, 52.0) {
+            new = Some(x);
         }
         if let Some(n) = new.filter(|n| *n != v) {
             d.fields.insert("opacity".into(), json!(n));

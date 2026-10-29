@@ -1,18 +1,78 @@
-//! Effect › Artistic (Cutout, Film Grain, Neon Glow, Plastic Wrap, Poster Edges). Original filters built from
+//! Effect › Artistic (Colored Pencil, Cutout, Dry Brush, Film Grain, Fresco, Neon Glow, Paint Daubs, Palette Knife, Plastic Wrap, Poster
+//! Edges, Rough Pastels, Smudge Stick, Sponge, Underpainting and Watercolor). Original filters built from
 //! public behaviour documentation:
 //! <https://helpx.adobe.com/illustrator/using/summary-effects.html> and
 //! <https://helpx.adobe.com/photoshop-elements/using/artistic-filters.html>.
 //! These are visual approximations, not reproductions of a proprietary algorithm.
 
-use super::edges::sobel;
-use super::pixelate::{Place, cell, rand};
+use std::f64::consts::TAU;
 
+use super::brushstrokes::{LEFT, RIGHT, Smear, TONE_SOFTNESS, mix, streak, stroke_reach, unit, unpremultiply};
+use super::edges::sobel;
+use super::pixelate::{Around, Place, Soft, cell, point_in, rand, value_noise};
+use super::texture::{self, Light, Texture, Tones, luma, premultiply, smooth_noise, straight, texturizer};
+use super::{PixelSpace, blur_plane, pick};
+use vectorcraft_geom::{Point, Vec2};
+
+const SALT_DRY: u64 = 264;
+const MARGIN: f64 = 1.0;
 const SALT_PLASTIC: u64 = 512;
-use super::texture::{luma, premultiply, straight};
-use super::{PixelSpace, blur_plane};
-use vectorcraft_geom::Point;
+
+const SALT_PASTEL: u64 = 200;
 
 const SALT_FILM: u64 = 256;
+const SALT_DAUB: u64 = 272;
+
+/// Paint Daubs' brush types, in the Brush Type menu's order: (label, parameter value).
+/// Illustrator's list: <https://helpx.adobe.com/illustrator/using/filter-effects.html#paint_daubs>.
+pub const PAINT_DAUB_BRUSH_TYPES: [(&str, &str); 6] = [
+    ("Simple", "simple"),
+    ("Light Rough", "lightRough"),
+    ("Dark Rough", "darkRough"),
+    ("Wide Sharp", "wideSharp"),
+    ("Wide Blurry", "wideBlurry"),
+    ("Sparkle", "sparkle"),
+];
+
+/// A Paint Daubs brush ([`PAINT_DAUB_BRUSH_TYPES`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaintDaubBrush {
+    Simple,
+    LightRough,
+    DarkRough,
+    WideSharp,
+    WideBlurry,
+    Sparkle,
+}
+
+impl PaintDaubBrush {
+    const ALL: [PaintDaubBrush; 6] = [
+        PaintDaubBrush::Simple,
+        PaintDaubBrush::LightRough,
+        PaintDaubBrush::DarkRough,
+        PaintDaubBrush::WideSharp,
+        PaintDaubBrush::WideBlurry,
+        PaintDaubBrush::Sparkle,
+    ];
+
+    /// The brush of Brush Type `value` (a [`PAINT_DAUB_BRUSH_TYPES`] value, any case); Simple otherwise.
+    pub fn parse(value: &str) -> Self {
+        if value.eq_ignore_ascii_case("wideRough") {
+            return PaintDaubBrush::WideSharp;
+        }
+        if value.eq_ignore_ascii_case("hue") {
+            return PaintDaubBrush::WideBlurry;
+        }
+        pick(&PAINT_DAUB_BRUSH_TYPES, &Self::ALL, value, PaintDaubBrush::Simple)
+    }
+}
+
+/// How far (document units) a dab reaches past its centre at `size` (1..50).
+pub(super) fn paint_daub_radius(size: f64) -> f64 {
+    size.clamp(1.0, 50.0) * 0.48
+}
+const SALT_PENCIL: u64 = 304;
+const SALT_FRESCO: u64 = 320;
 
 /// Keep the last cell's four corner values: magnified adjacent pixels often share a cell.
 /// The cache changes only cost, never the field, and needs constant storage per raster.
@@ -161,6 +221,55 @@ fn planes(px: &[[u8; 4]]) -> ([Vec<f32>; 3], Vec<f32>) {
     (std::array::from_fn(|k| colours.iter().map(|c| c[k]).collect()), px.iter().map(|p| f32::from(p[3]) / 255.0).collect())
 }
 
+/// How far (document units) Colored Pencil reaches at pencil width `width`: soften at
+/// `0.12 * width` and the Sobel neighbourhood around it.
+pub(super) fn colored_pencil_reach(width: f64) -> f64 {
+    3.0 * 0.12 * width.clamp(1.0, 24.0) + 1.0
+}
+
+/// Colored Pencil: the object redrawn with coloured pencil strokes along local edges, keeping its
+/// hues. `width` (1..24) sets the stroke spacing in document units; `pressure` (0..15) darkens
+/// along the strokes; `paper` (0..50) lifts lighter areas toward the paper. Coverage is kept.
+pub(super) fn colored_pencil(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, width: f64, pressure: f64, paper: f64) {
+    if !([width, pressure, paper].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
+        return;
+    }
+    let width = width.clamp(1.0, 24.0);
+    let pressure = (pressure / 15.0).clamp(0.0, 1.0) as f32;
+    let paper_lift = (paper / 50.0).clamp(0.0, 1.0) as f32;
+    if pressure == 0.0 && paper_lift == 0.0 {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let (mut colour, alpha) = planes(px);
+    soften(&mut colour, &alpha, w, h, (0.12 * width) / space.px);
+    let tones: Vec<f32> = (0..px.len()).map(|k| luma([colour[0][k], colour[1][k], colour[2][k]])).collect();
+    let mut edges = vec![0.0f32; px.len()];
+    for (e, s) in edges.iter_mut().zip(sobel(&tones, w, h)) {
+        *e = (s / 4.0).min(1.0);
+    }
+    let spacing = (0.35 * width).max(1.0);
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let k = y * w + x;
+        let c = [colour[0][k], colour[1][k], colour[2][k]];
+        let gx = tone_at(&tones, w, h, x as isize + 1, y as isize) - tone_at(&tones, w, h, x as isize - 1, y as isize);
+        let gy = tone_at(&tones, w, h, x as isize, y as isize + 1) - tone_at(&tones, w, h, x as isize, y as isize - 1);
+        let angle = gy.atan2(gx) + std::f32::consts::FRAC_PI_2;
+        let (dx, dy) = (angle.cos() as f64, angle.sin() as f64);
+        let q = place.at(x, y);
+        let along = q.x * dx + q.y * dy;
+        let grain = value_noise(SALT_PENCIL, along / spacing, (q.x * 0.37 + q.y * 0.11) / spacing);
+        let stroke = (0.5 + 0.5 * (along / spacing * TAU + grain * 3.0).sin()) as f32;
+        let ink = pressure * (0.3 + 0.55 * stroke) * (0.55 + 0.45 * edges[k]);
+        let lift = paper_lift * (1.0 - luma(c)) * 0.35;
+        let c = c.map(|v| (v * (1.0 - ink * 0.45) + lift * (1.0 - v)).clamp(0.0, 1.0));
+        *p = premultiply(c, f32::from(p[3]) / 255.0);
+    });
+}
+
 /// Cutout: the object as flat pieces of coloured paper. Its colours, softened as `simplicity`
 /// (0..10) asks and less as `fidelity` (1..3) keeps detail, fall into `levels` (2..8) steps per
 /// colour channel; each step's piece is painted in the average colour of what falls into it, so
@@ -241,6 +350,136 @@ pub(super) fn poster_edges(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
     }
 }
 
+/// Paint Daubs: thick round dabs on a grid `size` (1..50) points apart, each dab painted in the
+/// local colour around its centre, with edges as sharp as `sharpness` (0..40) and a profile from
+/// `kind`. Coverage is kept.
+pub(super) fn paint_daubs(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, size: f64, sharpness: f64, kind: PaintDaubBrush) {
+    if !([size, sharpness].iter().all(|v| v.is_finite()) && size > 0.0) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let spacing = size.clamp(1.0, 50.0);
+    let brush_r = paint_daub_radius(size);
+    let edge = 1.0 + 2.5 * (sharpness.clamp(0.0, 40.0) / 40.0);
+    let soft = Soft::new(px, w, (spacing * 0.15) / place.px);
+    let dab = |i: i64, j: i64| {
+        let at = point_in(SALT_DAUB, i, j);
+        let center = Point::new(at.x * spacing, at.y * spacing);
+        (center, soft.at(place.index(center)))
+    };
+    let cover = |q: Point, center: Point, colour: [f32; 4]| -> f32 {
+        if colour[3] <= 0.0 {
+            return 0.0;
+        }
+        let (dx, dy) = (q.x - center.x, q.y - center.y);
+        let (dx, dy) = match kind {
+            PaintDaubBrush::WideSharp | PaintDaubBrush::WideBlurry => (dx * 0.65, dy * 1.35),
+            _ => (dx, dy),
+        };
+        let t = (dx.hypot(dy) / brush_r).clamp(0.0, 1.0);
+        let edge_k = match kind {
+            PaintDaubBrush::WideSharp => edge * 1.35,
+            PaintDaubBrush::WideBlurry => edge * 0.55,
+            _ => edge,
+        };
+        let mut c = (1.0 - t).powf(edge_k) as f32;
+        let tone = luma(unpremultiply(colour).0);
+        match kind {
+            PaintDaubBrush::LightRough => c *= 0.7 + 0.35 * rough_bristle(q, 0),
+            PaintDaubBrush::DarkRough => c *= 0.55 + 0.45 * (1.0 - rough_bristle(q, 1)),
+            PaintDaubBrush::Sparkle if rough_bristle(center, 2) > 0.92 && tone > 0.55 => c = c.max(0.85),
+            PaintDaubBrush::Simple | PaintDaubBrush::WideSharp | PaintDaubBrush::WideBlurry | PaintDaubBrush::Sparkle => {}
+        }
+        c
+    };
+    let mut around = Around::new();
+    place.each(px, |x, y, out| {
+        if out[3] == 0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let (u, v) = (q.x / spacing, q.y / spacing);
+        let (Some(i), Some(j)) = (cell(u), cell(v)) else { return };
+        let mut sum = [0.0f32; 3];
+        let mut weight = 0.0f32;
+        for k in 0..9 {
+            let Some((center, colour)) = around.get((i, j), k, dab) else { continue };
+            let w = cover(q, center, colour);
+            if w <= 0.0 {
+                continue;
+            }
+            let c = unpremultiply(colour).0;
+            for (s, v) in sum.iter_mut().zip(c) {
+                *s += v * w;
+            }
+            weight += w;
+        }
+        if weight <= 1e-6 {
+            return;
+        }
+        let c = sum.map(|v| (v / weight).clamp(0.0, 1.0));
+        *out = premultiply(c, f32::from(out[3]) / 255.0);
+    });
+}
+
+fn rough_bristle(p: Point, k: u64) -> f32 {
+    let (Some(i), Some(j)) = (cell(p.x * 3.7), cell(p.y * 3.7)) else { return 0.5 };
+    rand(SALT_DAUB + 3, i, j, k) as f32
+}
+
+/// Fresco: coarse brush dabs on a plaster wall. `brush_size` (1..10) sets dab spacing,
+/// `brush_detail` (0..10) keeps sharper edges when high, and `texture` (1..3) deepens the
+/// relief. Coverage is kept.
+pub(super) fn fresco(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, brush_size: f64, brush_detail: f64, texture: f64) {
+    if !([brush_size, brush_detail, texture].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
+        return;
+    }
+    let Some(place) = Place::new(space, w, h) else { return };
+    let brush_size = brush_size.clamp(1.0, 10.0);
+    let brush_detail = brush_detail.clamp(0.0, 10.0);
+    let texture = texture.round().clamp(1.0, 3.0);
+    let side = 2.0 + 1.8 * brush_size;
+    let sigma = (0.15 * (10.0 - brush_detail) * brush_size / place.px).max(0.0);
+    let soft = Soft::new(px, w, sigma);
+    let tex_strength = 0.08 + 0.07 * (texture - 1.0);
+    let tex_scale = 3.0 / texture;
+    let streak_mix = 0.25 * (1.0 - brush_detail / 10.0);
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let (Some(i), Some(j)) = (cell(q.x / side), cell(q.y / side)) else { return };
+        let jx = (rand(SALT_FRESCO, i, j, 0) - 0.5) * 0.35 * side;
+        let jy = (rand(SALT_FRESCO, i, j, 1) - 0.5) * 0.35 * side;
+        let sample = Point::new(q.x + jx, q.y + jy);
+        let mut sampled = soft.at(place.index(sample));
+        if sampled[3] <= 0.0 {
+            sampled = soft.at(place.index(q));
+        }
+        if sampled[3] <= 0.0 {
+            return;
+        }
+        let [r, g, b, alpha] = sampled;
+        let c = [r, g, b].map(|v| v / alpha);
+        let angle = TAU * rand(SALT_FRESCO, i, j, 2);
+        let (fx, fy) = (q.x - i as f64 * side, q.y - j as f64 * side);
+        let along = fx * angle.cos() + fy * angle.sin();
+        let streak = (1.0 - streak_mix * (0.5 + 0.5 * (along / side).sin().powi(2))) as f32;
+        let bump = (1.0 + tex_strength * smooth_noise(SALT_FRESCO + 3, q, tex_scale * side)) as f32;
+        let lit = c.map(|v| (v * streak * bump).clamp(0.0, 1.0));
+        *p = premultiply(lit, f32::from(p[3]) / 255.0);
+    });
+}
+
+/// How far (document units) a Fresco dab can reach from a pixel.
+pub(super) fn fresco_reach(brush_size: f64, brush_detail: f64) -> f64 {
+    let brush_size = brush_size.clamp(1.0, 10.0);
+    let brush_detail = brush_detail.clamp(0.0, 10.0);
+    let side = 2.0 + 1.8 * brush_size;
+    side + 0.15 * (10.0 - brush_detail) * brush_size
+}
+
 /// How far (document units) Plastic Wrap's softened relief is sampled at `smoothness` (1..15).
 pub(super) fn plastic_reach(smoothness: f64) -> f64 {
     3.0 * (0.15 + 0.35 * smoothness.clamp(1.0, 15.0))
@@ -314,9 +553,142 @@ pub(super) fn plastic_wrap(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pixel
     });
 }
 
+/// Stroke length (document units) for Dry Brush at Brush Size `size` (1..10).
+fn dry_brush_length(size: f64) -> f64 {
+    2.0 + 2.8 * (size.clamp(1.0, 10.0) - 1.0)
+}
+
+/// How much Dry Brush softens before smearing at Brush Detail `detail` (0..10; 10 keeps the most detail).
+fn dry_brush_sigma(detail: f64) -> f64 {
+    0.22 * (10.0 - detail.clamp(0.0, 10.0))
+}
+
+/// How far (document units) Dry Brush reads from a pixel.
+pub(super) fn dry_brush_reach(size: f64, detail: f64) -> f64 {
+    stroke_reach(dry_brush_length(size)) + 3.0 * dry_brush_sigma(detail) + MARGIN
+}
+
 /// How far (document units) Neon Glow's glow spreads at `size` (-24..24).
 pub(super) fn glow_spread(size: f64) -> f64 {
     0.25 * size.abs().min(24.0)
+}
+
+/// Underpainting: broad brush strokes (`brush_size`, 0..40) over a relief `texture` surface
+/// (`scaling`, `relief`, `light`, `invert`, as Texturizer uses), blended in as strongly as
+/// `texture_coverage` (0..40) says. Coverage is kept.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn underpainting(
+    px: &mut [[u8; 4]],
+    w: usize,
+    h: usize,
+    space: &PixelSpace,
+    brush_size: f64,
+    texture_coverage: f64,
+    texture: &Texture,
+    scaling: f64,
+    relief: f64,
+    light: Light,
+    invert: bool,
+) {
+    if !(brush_size.is_finite() && texture_coverage.is_finite() && space.px.is_finite() && space.px > 0.0) {
+        return;
+    }
+    let brush_size = brush_size.clamp(0.0, 40.0);
+    let coverage = (texture_coverage / 40.0).clamp(0.0, 1.0) as f32;
+    let (mut colour, alpha) = planes(px);
+    let sigma = (0.1 * brush_size.max(0.25)) / space.px;
+    if sigma > 0.0 {
+        soften(&mut colour, &alpha, w, h, sigma);
+    }
+    for (k, p) in px.iter_mut().enumerate() {
+        if p[3] == 0 {
+            continue;
+        }
+        let c = [colour[0][k], colour[1][k], colour[2][k]];
+        *p = premultiply(c, f32::from(p[3]) / 255.0);
+    }
+    if coverage <= 0.0 {
+        return;
+    }
+    let softened = px.to_vec();
+    texture::texturizer(px, w, h, space, texture, scaling, relief, light, invert);
+    if coverage >= 1.0 {
+        return;
+    }
+    let mix = 1.0 - coverage;
+    for (k, p) in px.iter_mut().enumerate() {
+        if p[3] == 0 {
+            continue;
+        }
+        let a = f32::from(p[3]) / 255.0;
+        let tex = straight(*p);
+        let soft = straight(softened[k]);
+        let c = [
+            (soft[0] * mix + tex[0] * coverage).clamp(0.0, 1.0),
+            (soft[1] * mix + tex[1] * coverage).clamp(0.0, 1.0),
+            (soft[2] * mix + tex[2] * coverage).clamp(0.0, 1.0),
+        ];
+        *p = premultiply(c, a);
+    }
+}
+
+/// How far (document units) Rough Pastels reaches with strokes `len` long.
+pub(super) fn rough_pastels_reach(len: f64) -> f64 {
+    super::brushstrokes::stroke_reach(len).max(super::brushstrokes::TONE_REACH)
+}
+
+/// Rough Pastels: soft diagonal pastel strokes `length` (0..40) long with bristle `detail` (1..20),
+/// then the shared Texturizer surface (`texture`, `scaling`, `relief`, `light`, `invert`).
+/// Coverage is kept.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn rough_pastels(
+    px: &mut [[u8; 4]],
+    w: usize,
+    h: usize,
+    space: &PixelSpace,
+    length: f64,
+    detail: f64,
+    texture: &Texture,
+    scaling: f64,
+    relief: f64,
+    light: Light,
+    invert: bool,
+) {
+    if !([length, detail, scaling, relief].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
+        return;
+    }
+    let length = length.clamp(0.0, 40.0);
+    let detail = detail.clamp(1.0, 20.0);
+    if length > 0.0 {
+        let Some(place) = Place::new(space, w, h) else { return };
+        let smear = Smear::new(px, w, h, &place, length.max(1.0));
+        let tones = Tones::new(px, w, h, TONE_SOFTNESS / place.px);
+        let row = (0.18 * smear.len).max(1.0);
+        let stroke_mix = (0.35 + 0.0225 * detail).clamp(0.35, 0.8) as f32;
+        let bristle = (0.015 + 0.0035 * detail) as f32;
+        let src = px.to_vec();
+        place.each(px, |x, y, p| {
+            if p[3] == 0 {
+                return;
+            }
+            let q = place.at(x, y);
+            let pm = mix(smear.stroke(SALT_PASTEL, q, RIGHT, row), smear.stroke(SALT_PASTEL + 1, q, LEFT, row), 0.5);
+            let orig = unit(src.get(y * w + x).copied().unwrap_or([0; 4]));
+            let pm = mix(orig, pm, stroke_mix);
+            let (mut c, a) = unpremultiply(pm);
+            if a <= 0.0 {
+                *p = [0; 4];
+                return;
+            }
+            let dir = if tones.get(x, y) > 0.52 { RIGHT } else { LEFT };
+            let n = bristle * streak(SALT_PASTEL + 2, q, dir, smear.len.max(1.0), row) as f32;
+            c = c.map(|v| (v + n).clamp(0.0, 1.0));
+            *p = premultiply(c, orig[3]);
+        });
+    }
+    if relief > 0.0 {
+        texturizer(px, w, h, space, texture, scaling, relief, light, invert);
+    }
 }
 
 /// Neon Glow: the object in dimmed greys, lit by `colour` glowing from its light areas (`size`
@@ -341,5 +713,164 @@ pub(super) fn neon_glow(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpa
         let lit = (3.0 * g * strength).clamp(0.0, 1.0);
         let c = colour.map(|v| 1.0 - (1.0 - base) * (1.0 - v.clamp(0.0, 1.0) * lit));
         *p = premultiply(c, f32::from(p[3]) / 255.0);
+    }
+}
+
+/// The tone at `(x, y)` in `tone`, `w` × `h`, or 0 outside.
+fn tone_at(tone: &[f32], w: usize, h: usize, x: isize, y: isize) -> f32 {
+    if x < 0 || y < 0 {
+        return 0.0;
+    }
+    let (x, y) = (x as usize, y as usize);
+    if x >= w || y >= h {
+        return 0.0;
+    }
+    tone[y * w + x]
+}
+
+/// A unit vector along the image gradient's tangent at `(x, y)`, or horizontal when flat.
+fn dry_brush_dir(tone: &[f32], w: usize, h: usize, x: usize, y: usize) -> Vec2 {
+    let gx = 0.5 * (tone_at(tone, w, h, x as isize + 1, y as isize) - tone_at(tone, w, h, x as isize - 1, y as isize));
+    let gy = 0.5 * (tone_at(tone, w, h, x as isize, y as isize + 1) - tone_at(tone, w, h, x as isize, y as isize - 1));
+    let v = Vec2::new(-f64::from(gy), f64::from(gx));
+    let len = v.hypot();
+    if len > 1e-6 { v / len } else { Vec2::new(1.0, 0.0) }
+}
+
+/// Premultiplied RGBA (0..1) at document `q`, bilinearly from `src`.
+fn sample_pm(src: &[[f32; 4]], w: usize, h: usize, place: &Place, q: Point) -> [f32; 4] {
+    let p = place.to_px * q;
+    if !(p.x.is_finite() && p.y.is_finite()) {
+        return [0.0; 4];
+    }
+    let (x, y) = (p.x - 0.5, p.y - 0.5);
+    let (i, j) = (x.floor() as isize, y.floor() as isize);
+    let (fx, fy) = (x - i as f64, y - j as f64);
+    let mut acc = [0.0f32; 4];
+    for (row, wy) in [(j, 1.0 - fy), (j + 1, fy)] {
+        let Some(row) = usize::try_from(row).ok().filter(|r| *r < h) else { continue };
+        for (col, wx) in [(i, 1.0 - fx), (i + 1, fx)] {
+            let Some(col) = usize::try_from(col).ok().filter(|c| *c < w) else { continue };
+            let k = (wx * wy) as f32;
+            if let Some(p) = src.get(row * w + col) {
+                for (a, v) in acc.iter_mut().zip(p) {
+                    *a += *v * k;
+                }
+            }
+        }
+    }
+    acc
+}
+
+/// Dry Brush: the object repainted with short strokes along its form, edges darkened. `size`
+/// (1..10) sets the stroke length, `detail` (0..10) how much is softened first (10 keeps the most
+/// detail), and `texture` (1..3) how strongly edges and bristle grain contrast. Coverage is kept.
+pub(super) fn dry_brush(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, size: f64, detail: f64, texture: f64) {
+    if !([size, detail, texture].iter().all(|v| v.is_finite()) && space.px.is_finite() && space.px > 0.0) {
+        return;
+    }
+    let len = dry_brush_length(size);
+    let sigma = dry_brush_sigma(detail);
+    let texture = texture.clamp(1.0, 3.0);
+    let edge_gain = (0.25 + 0.2 * (texture - 1.0)) as f32;
+    let bristle = (0.04 + 0.05 * (texture - 1.0)) as f32;
+    let (mut colour, alpha) = planes(px);
+    if sigma > 0.0 {
+        soften(&mut colour, &alpha, w, h, sigma);
+    }
+    let at = |k: usize| [0, 1, 2].map(|i| colour[i].get(k).copied().unwrap_or(0.0));
+    let tone: Vec<f32> = (0..w * h)
+        .map(|k| {
+            let c = at(k);
+            let a = alpha.get(k).copied().unwrap_or(0.0);
+            (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) * a
+        })
+        .collect();
+    let edges = sobel(&tone, w, h);
+    let src: Vec<[f32; 4]> = (0..w * h)
+        .map(|k| {
+            let c = at(k);
+            let a = alpha.get(k).copied().unwrap_or(0.0);
+            [c[0] * a, c[1] * a, c[2] * a, a]
+        })
+        .collect();
+    let Some(place) = Place::new(space, w, h) else { return };
+    const SAMPLES: usize = 5;
+    let mut out = px.to_vec();
+    for (k, p) in out.iter_mut().enumerate() {
+        if p[3] == 0 {
+            continue;
+        }
+        let (x, y) = (k % w, k / w);
+        let q = place.at(x, y);
+        let dir = dry_brush_dir(&tone, w, h, x, y);
+        let mut acc = [0.0f32; 4];
+        for i in 0..SAMPLES {
+            let t = (i as f64 / (SAMPLES - 1) as f64 - 0.5) * len;
+            let s = sample_pm(&src, w, h, &place, q + dir * t);
+            for (a, v) in acc.iter_mut().zip(s) {
+                *a += v;
+            }
+        }
+        for a in &mut acc {
+            *a /= SAMPLES as f32;
+        }
+        let a = acc[3].clamp(0.0, 1.0);
+        let c = if a > 1e-6 { [0, 1, 2].map(|i| (acc[i] / a).clamp(0.0, 1.0)) } else { straight(*p) };
+        let edge = edges[k].min(1.0);
+        let dark = (edge_gain * edge).clamp(0.0, 0.75);
+        let grain = bristle * (2.0 * value_noise(SALT_DRY, q.x / (5.0 * space.px), q.y / (5.0 * space.px)) - 1.0) as f32;
+        let c = c.map(|v| (v * (1.0 - dark) + grain).clamp(0.0, 1.0));
+        *p = premultiply(c, f32::from(p[3]) / 255.0);
+    }
+    px.copy_from_slice(&out);
+}
+
+const SALT_KNIFE: u64 = 208;
+
+/// How far Palette Knife reaches with strokes `stroke_size` long and Softness `softness` (0..10).
+pub(super) fn palette_knife_reach(stroke_size: f64, softness: f64) -> f64 {
+    stroke_reach(stroke_size) + 3.0 * 0.35 * softness.clamp(0.0, 10.0) + 1.0
+}
+
+/// Artistic › Palette Knife: the object repainted with short, angled knife strokes that smear its
+/// colours; `stroke_size` (1..50) sets their length, `stroke_detail` (1..3) keeps more of the
+/// original where it's higher, and `softness` (0..10) softens the strokes. Coverage is kept.
+pub(super) fn palette_knife(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, stroke_size: f64, stroke_detail: f64, softness: f64) {
+    let Some(place) = Place::new(space, w, h) else { return };
+    if !(stroke_size.is_finite() && stroke_detail.is_finite() && softness.is_finite()) {
+        return;
+    }
+    let len = stroke_size.clamp(1.0, 50.0);
+    let keep = ((stroke_detail.clamp(1.0, 3.0) - 1.0) / 2.0) as f32;
+    let smear = Smear::new(px, w, h, &place, len);
+    let row = (0.25 * smear.len).max(1.0);
+    let cell = len * 0.35;
+    let src = px.to_vec();
+    place.each(px, |x, y, p| {
+        if p[3] == 0 {
+            return;
+        }
+        let q = place.at(x, y);
+        let angle = TAU * value_noise(SALT_KNIFE, q.x / cell, q.y / cell);
+        let dir = Vec2::new(angle.cos(), angle.sin());
+        let pm = smear.stroke(SALT_KNIFE + 1, q, dir, row);
+        let orig = unit(src.get(y * w + x).copied().unwrap_or([0; 4]));
+        let coverage = orig[3];
+        let (c, _) = unpremultiply(mix(orig, pm, 1.0 - keep));
+        *p = premultiply(c, coverage);
+    });
+    let sigma = 0.35 * softness.clamp(0.0, 10.0) / place.px;
+    if sigma > 0.0 {
+        let (mut colour, alpha) = planes(px);
+        let cover = alpha.clone();
+        soften(&mut colour, &alpha, w, h, sigma);
+        for (k, p) in px.iter_mut().enumerate() {
+            if cover[k] == 0.0 {
+                continue;
+            }
+            let c = [colour[0][k], colour[1][k], colour[2][k]];
+            *p = premultiply(c, cover[k]);
+        }
     }
 }

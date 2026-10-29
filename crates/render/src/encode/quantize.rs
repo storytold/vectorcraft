@@ -197,7 +197,9 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
     }
     let weights = o.reduction.weights();
     let dither = if exact { Dither::None } else { o.dither };
-    let mut indices = map(&colors, width as usize, &palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, |i| clear(&px[i]));
+    // (A width past the pixels there are would size the error rows from a number nothing checked.)
+    let mut indices =
+        map(&colors, (width as usize).min(colors.len()), &palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, |i| clear(&px[i]));
     // Drop the entries no pixel uses (fixed palettes), keeping the order.
     let mut used = [false; 256];
     for (i, &ix) in indices.iter().enumerate() {

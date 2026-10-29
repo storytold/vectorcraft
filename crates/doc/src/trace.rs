@@ -103,6 +103,7 @@ mod tests {
                 xf: Affine::IDENTITY,
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         );
         source.visible = false;

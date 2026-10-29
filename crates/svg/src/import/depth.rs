@@ -7,7 +7,12 @@
 //! refers to, and a clip path, mask, pattern, marker or filter is converted where it is used
 //! (`clip-path: url(#a)` on an element of a clip path makes a chain as deep as there are clip
 //! paths). So each element's depth is the deepest of what it holds and what it refers to.
+//!
+//! An SVG image (`<image>` of SVG data or an SVG file) is read while the SVG showing it is, on
+//! the same stack: the depths of the SVGs around it are added to its own, and an image past the
+//! cap is left out (`files`).
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
@@ -69,24 +74,88 @@ fn references<'a, 'i>(n: XNode<'a, 'i>, ids: &HashMap<&str, XNode<'a, 'i>>, css:
     }
 }
 
-/// Do the elements of the XML text `svg` nest deeper than [`MAX_ELEMENT_DEPTH`]? Read from the
-/// text, before any XML reader: roxmltree (ours and usvg's) reads elements by recursion too. Tags
-/// are counted as the text has them; markup in the values of a document type's entities counts
-/// ten times (how deep entities may refer to one another), on top of the deepest element.
+/// What one pass over the XML text `svg` finds before any XML reader: whether its elements nest
+/// deeper than [`MAX_ELEMENT_DEPTH`] (roxmltree, ours and usvg's, reads elements by recursion
+/// too), and the text the prepass searches for its markers, with the data URLs in its elements'
+/// attribute values left out. An embedded picture is one and is most of the text when there is: with
+/// a 1 MB picture, each of the prepass's dozen substring searches was a pass over a megabyte, and
+/// no tag, attribute name, selector or CSS declaration can be inside a data URL.
+pub(crate) struct Prescan<'s> {
+    pub too_deep: bool,
+    /// `svg` with each data URL in an element's attribute values left out: a `data:` value's
+    /// quotes kept, a `url(…)`'s parentheses and quotes. Borrowed when there is none.
+    pub markers: Cow<'s, str>,
+}
+
+/// [`Prescan::too_deep`] of `svg` alone (a linked file, a filter's definitions).
 pub(crate) fn xml_too_deep(svg: &str) -> bool {
+    prescan(svg).too_deep
+}
+
+/// Do the elements of the XML text `svg` nest deeper than `most`? See [`prescan_with`].
+pub(super) fn xml_deeper_than(svg: &str, most: usize) -> bool {
+    prescan_with(svg, most).too_deep
+}
+
+/// [`prescan_with`] against [`MAX_ELEMENT_DEPTH`].
+pub(crate) fn prescan(svg: &str) -> Prescan<'_> {
+    prescan_with(svg, MAX_ELEMENT_DEPTH)
+}
+
+/// The one pass, with elements allowed to nest `most` deep: tags are counted as the text has
+/// them; markup in the values of a document type's entities counts ten times (how deep entities
+/// may refer to one another), on top of the deepest element. Past the cap the pass stops, and
+/// the markers are the whole text.
+fn prescan_with(svg: &str, most: usize) -> Prescan<'_> {
     let b = svg.as_bytes();
     let find =
         |from: usize, what: &[u8]| b.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at + what.len());
-    // The end of the tag starting at `from` (past its `>`), and whether it closes itself.
-    let tag_end = |from: usize| {
+    // The `data:` attribute values seen: each from past its opening quote to its closing quote.
+    let mut data_values: Vec<(usize, usize)> = vec![];
+    let is = |at: usize, what: &[u8]| b.get(at..at + what.len()).is_some_and(|v| v.eq_ignore_ascii_case(what));
+    // The end of the tag starting at `from` (past its `>`), and whether it closes itself. An
+    // element's `data:` values are noted, and in its other values (a `style`, a `fill`) the data
+    // URL of each `url(…)`, up to its closing quote or `)`: what follows it, `display:none` say,
+    // stays. The document type's quoted values are entities, whose markup becomes elements, so
+    // none of them is. Where a URL's end is unclear, less is left out, never more.
+    // The first `what` or `quote` at or after `at`: a data URL's end, or its value's.
+    let next = |at: usize, what: u8, quote: u8| b.get(at..).and_then(|rest| rest.iter().position(|c| *c == what || *c == quote)).map(|n| at + n);
+    let mut tag_end = |from: usize, element: bool| {
         let mut quote = None;
-        for (i, c) in b.iter().enumerate().skip(from) {
-            match (quote, c) {
-                (None, b'"' | b'\'') => quote = Some(*c),
-                (Some(q), c) if q == *c => quote = None,
-                (None, b'>') => return (i + 1, b.get(i.wrapping_sub(1)) == Some(&b'/')),
+        let mut i = from;
+        while let Some(&c) = b.get(i) {
+            match quote {
+                None if c == b'"' || c == b'\'' => {
+                    quote = Some(c);
+                    // A `data:` value: one search for its closing quote, not a step a byte.
+                    if element && is(i + 1, b"data:") {
+                        let Some(end) = next(i + 1, c, c) else { return (b.len(), false) };
+                        data_values.push((i + 1, end));
+                        i = end;
+                        continue;
+                    }
+                }
+                None if c == b'>' => return (i + 1, b.get(i.wrapping_sub(1)) == Some(&b'/')),
+                Some(q) if c == q => quote = None,
+                Some(q) if element && is(i, b"url(") => {
+                    let at = b.get(i + 4..).and_then(|rest| rest.iter().position(|c| !c.is_ascii_whitespace())).map_or(b.len(), |n| i + 4 + n);
+                    let (at, close) = match b.get(at) {
+                        Some(&inner @ (b'"' | b'\'')) if inner != q => (at + 1, inner),
+                        _ => (at, b')'),
+                    };
+                    // Its data URL, up to the byte that closes it; a value that ends first keeps it.
+                    if is(at, b"data:") {
+                        let Some(end) = next(at, close, q) else { return (b.len(), false) };
+                        if b.get(end) == Some(&close) {
+                            data_values.push((at, end));
+                        }
+                        i = end;
+                        continue;
+                    }
+                }
                 _ => {}
             }
+            i += 1;
         }
         (b.len(), false)
     };
@@ -105,7 +174,7 @@ pub(crate) fn xml_too_deep(svg: &str) -> bool {
             find(at, b"?>").unwrap_or(b.len())
         } else if rest.starts_with(b"<!DOCTYPE") {
             // Up to the `>` that ends it: after its internal subset (`[` … `]`) when it has one.
-            let plain = tag_end(at).0;
+            let plain = tag_end(at, false).0;
             let subset = b.get(at..plain).is_some_and(|head| head.contains(&b'['));
             doctype_end = if subset { find(at, b"]>").unwrap_or(b.len()) } else { plain };
             at + 2
@@ -114,7 +183,7 @@ pub(crate) fn xml_too_deep(svg: &str) -> bool {
             at + 2
         } else if rest.starts_with(b"</") {
             depth.0 = depth.0.saturating_sub(1);
-            tag_end(at).0
+            tag_end(at, false).0
         } else if at < doctype_end {
             // In an entity's value, itself in quotes: up to the tag's `>`.
             let end = find(at, b">").unwrap_or(b.len());
@@ -122,21 +191,34 @@ pub(crate) fn xml_too_deep(svg: &str) -> bool {
             depth.0 += usize::from(b.get(end.wrapping_sub(2)) != Some(&b'/'));
             end
         } else {
-            let (end, empty) = tag_end(at);
+            let (end, empty) = tag_end(at, true);
             depth.1 = depth.1.max(depth.0 + 1);
             depth.0 += usize::from(!empty);
             end
         };
-        if elements.1 + 10 * entities.1 > MAX_ELEMENT_DEPTH {
-            return true;
+        if elements.1 + 10 * entities.1 > most {
+            return Prescan { too_deep: true, markers: Cow::Borrowed(svg) };
         }
     }
-    false
+    let markers = if data_values.is_empty() {
+        Cow::Borrowed(svg)
+    } else {
+        let mut text = String::with_capacity(svg.len().saturating_sub(data_values.iter().map(|(start, end)| end.saturating_sub(*start)).sum()));
+        let mut from = 0;
+        for &(start, end) in &data_values {
+            // Each end is at a quote or a `)`, so both are character boundaries.
+            text.push_str(svg.get(from..start).unwrap_or_default());
+            from = end;
+        }
+        text.push_str(svg.get(from..).unwrap_or_default());
+        Cow::Owned(text)
+    };
+    Prescan { too_deep: false, markers }
 }
 
-/// Does anything in `xml` nest deeper than [`MAX_ELEMENT_DEPTH`], references followed? Without
-/// recursion.
-pub(super) fn too_deep(xml: &roxmltree::Document) -> bool {
+/// How deep the elements of `xml` nest, references followed (the root alone is 1); `None` past
+/// `most`. Without recursion.
+pub(super) fn height(xml: &roxmltree::Document, most: usize) -> Option<usize> {
     let elements = || xml.descendants().filter(|n| n.is_element());
     let ids: HashMap<&str, XNode> = elements().filter_map(|n| Some((n.attribute("id")?, n))).collect();
     let css = Styles::new(xml);
@@ -166,14 +248,14 @@ pub(super) fn too_deep(xml: &roxmltree::Document) -> bool {
                 let held = n.children().filter(|c| c.is_element()).map(of).max().unwrap_or(0);
                 let used = |inherited: bool| refs.iter().filter(|(_, i)| *i == inherited).map(|(t, _)| of(*t)).max().unwrap_or(0);
                 let height = 1 + held.max(used(false)) + used(true);
-                if height > MAX_ELEMENT_DEPTH {
-                    return true;
+                if height > most {
+                    return None;
                 }
                 heights.insert(n.id(), height);
             }
         }
     }
-    false
+    heights.get(&xml.root_element().id()).copied()
 }
 
 #[cfg(test)]
@@ -181,7 +263,7 @@ mod tests {
     use super::*;
 
     fn deep(svg: &str) -> bool {
-        too_deep(&roxmltree::Document::parse(svg).unwrap())
+        height(&roxmltree::Document::parse(svg).unwrap(), MAX_ELEMENT_DEPTH).is_none()
     }
 
     fn svg(body: &str) -> String {
@@ -203,6 +285,15 @@ mod tests {
     }
 
     #[test]
+    fn what_is_left_of_the_cap_is_measured_too() {
+        let ten = svg(&groups(8));
+        assert!(!xml_deeper_than(&ten, 10) && xml_deeper_than(&ten, 9));
+        let xml = roxmltree::Document::parse(&ten).unwrap();
+        assert_eq!((height(&xml, 10), height(&xml, 9)), (Some(10), None));
+        assert_eq!(height(&roxmltree::Document::parse("<svg/>").unwrap(), 1), Some(1));
+    }
+
+    #[test]
     fn the_text_is_measured_as_xml_reads_it() {
         let many = r#"<g a='>' b="<g>"><rect/></g>"#.repeat(500);
         assert!(!xml_too_deep(&svg(&many)), "side by side, with `>` and tags in attribute values");
@@ -217,6 +308,47 @@ mod tests {
         let bomb = format!("<!DOCTYPE svg [ <!ENTITY a \"{}&a;{}\"> ]>", "<g>".repeat(tenth), "</g>".repeat(tenth));
         assert!(xml_too_deep(&format!("{bomb}<svg>&a;</svg>")));
         assert!(!xml_too_deep(""));
+    }
+
+    /// The prepass searches the markers, not the text: an embedded picture is left out of them,
+    /// and everything a search may need to find stays, a short `style` value included.
+    #[test]
+    fn the_markers_leave_out_every_data_url_and_keep_the_rest() {
+        let picture = format!("data:image/png;base64,{}", "<use>display<script>".repeat(1000));
+        let text = svg(&format!(
+            r#"<image href="{picture}"/><image xlink:href='{picture}'/><rect style="display:none" data-x='1' d="M0 0h1"/><a HREF="DATA:text/plain,<g>"><g/></a>"#
+        ));
+        let scan = prescan(&text);
+        assert!(!scan.too_deep);
+        let markers = scan.markers.as_ref();
+        assert!(!markers.contains("<use") && !markers.contains("script") && !markers.contains("base64"), "{markers}");
+        assert!(markers.contains(r#"href=""/>"#) && markers.contains("xlink:href=''/>") && markers.contains(r#"HREF="""#), "{markers}");
+        assert!(markers.contains(r#"style="display:none" data-x='1' d="M0 0h1""#) && markers.contains("<g/></a>"), "{markers}");
+        assert!(markers.len() < text.len() / 10);
+        // Without one, the text itself is the markers, unchanged.
+        let plain = svg("<rect width='1' height='1' style='fill:url(#p)'/>");
+        assert!(matches!(prescan(&plain).markers, Cow::Borrowed(m) if m == plain));
+        // A quote inside a comment or character data starts no value.
+        let odd = svg(r#"<!-- "data:x --><![CDATA["data:y]]><rect/>"#);
+        assert!(matches!(prescan(&odd).markers, Cow::Borrowed(_)));
+        // Nor does one in the document type: an entity's value is markup the tree will hold.
+        let entity = format!(r#"<!DOCTYPE svg [<!ENTITY e "data:<script href='a.js'/>">]>{}"#, svg("<g>&e;</g>"));
+        assert!(matches!(prescan(&entity).markers, Cow::Borrowed(_)));
+        // In a style or a paint, the data URL of a `url(…)` alone, up to its quote or `)`; what
+        // follows it stays.
+        let styled = svg(&format!(
+            r#"<rect style="fill:url(data:image/png;base64,{0});display:none"/><rect fill='url( "{1}" )' stroke="URL(DATA:x)"/>"#,
+            "script".repeat(500),
+            picture
+        ));
+        let markers = prescan(&styled).markers.into_owned();
+        assert!(!markers.contains("script") && !markers.contains("base64") && !markers.contains("DATA:"), "{markers}");
+        assert!(markers.contains(r#"style="fill:url();display:none""#) && markers.contains(r#"fill='url( "" )' stroke="URL()""#), "{markers}");
+        // A `url(…)` that does not hold a data URL, or never closes inside its value, is kept.
+        let kept = svg(r#"<rect style="fill:url(#p);stroke:url( data:x" fill="url('data:y)"/><rect fill="url("data:z)"/>"#);
+        assert!(matches!(prescan(&kept).markers, Cow::Borrowed(_)));
+        // Past the cap, nothing more is read.
+        assert!(prescan(&svg(&groups(MAX_ELEMENT_DEPTH))).too_deep);
     }
 
     #[test]

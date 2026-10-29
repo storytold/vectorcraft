@@ -5,23 +5,17 @@
 # on GitHub Actions' native windows-11-arm runner.
 name: Windows ARM64
 
+# Nightly on main and on pushes to `release` (dependency and runner-image drift shows up within a
+# day, and always before a release ships), and on PRs that change the Windows packaging itself.
 on:
+  schedule:
+    - cron: "3 5 * * *"
   push:
-    branches: [main]
-    paths:
-      - ".github/workflows/windows-arm64.yml"
-      - "packaging/windows/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+    branches: [release]
   pull_request:
-    branches: [main]
     paths:
-      - ".github/workflows/windows-arm64.yml"
-      - "packaging/windows/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+      - .github/workflows/windows-arm64.yml
+      - packaging/windows/**
   workflow_dispatch:
 
 concurrency:
@@ -33,8 +27,10 @@ permissions:
 
 jobs:
   windows-arm64:
-    # Intentionally tracked at @main (not SHA-pinned) so org-wide CI improvements, security fixes, and build optimizations propagate without PR churn across all craftapp repos.
-    uses: storytold/craft-common-actions/.github/workflows/windows-arm64.yml@main
+    # Immutable supporting workflow revision until the new install contract lands upstream.
+    uses: storytold/craft-common-actions/.github/workflows/windows-arm64.yml@8bb4e5ab95443171104ad88113fe1ef9b0e5ce3f
     with:
       app-name: vectorcraft
       app-dir: VectorCraft
+      install-relative-path: Programs/ArtCraft/VectorCraft
+      install-scope: perUser

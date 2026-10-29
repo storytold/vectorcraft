@@ -322,6 +322,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Export Data Sets…"), !vars.is_empty(), false) {
         crate::picks::button(app, export_datasets);
     }
+    // Its file dialog, shown off the UI thread, loads the library when it answers.
+    if widgets::menu_item(ui, tl!("Load Variable Library…"), true, false) {
+        crate::picks::button(app, load_library);
+    }
     ui.separator();
     // What the highlighted variable drives, selected — its bindings are left alone.
     if widgets::menu_item(ui, tl!("Select Bound Object"), !highlighted_bound.is_empty(), false) {
@@ -346,6 +350,16 @@ fn export_datasets(app: &mut VectorcraftApp) {
     let pick = crate::FilePick { name: "datasets.csv".into(), filters: vec![crate::FilePick::filter("CSV", &["csv"])], ..Default::default() };
     let Some(path) = crate::picks::save(app, &pick) else { return };
     if let Err(e) = app.run("dataset.export", json!({"path": path})) {
+        app.status(e);
+    }
+}
+
+/// Variables panel: Load Variable Library… opens a file dialog for an XML file and runs
+/// `variable.loadLibrary` on the chosen file.
+fn load_library(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("XML", &["xml"])], ..Default::default() };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
+    if let Err(e) = app.run("variable.loadLibrary", json!({"path": path})) {
         app.status(e);
     }
 }
@@ -436,6 +450,7 @@ mod tests {
             "Update Data Set",
             "Rename Data Set…",
             "Delete Data Set",
+            "Load Variable Library…",
             "Select Bound Object",
             "Select All Bound Objects",
         ] {
@@ -455,6 +470,23 @@ mod tests {
         // The panel still draws while they are locked.
         let text = crate::tests_labels::painted_text(&mut app, show);
         assert!(text.contains("Name") && text.contains("Data Set 1"), "{text}");
+    }
+
+    /// Load Variable Library's warning about variables that aren't text shows in the status bar,
+    /// translated in every language but English.
+    #[test]
+    fn the_variable_library_warning_shows_in_the_status_bar() {
+        use crate::i18n::{Lang, message};
+        let mut app = app_with_data();
+        let xml = r#"<variableSets><variableSet><variables><variable varName="Logo" trait="other"/></variables></variableSet></variableSets>"#;
+        app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
+        assert_eq!(app.ui.status, "variables that aren't text were left out: other (1)");
+        let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
+        assert!(langs.len() >= 23, "{} languages", langs.len());
+        for l in langs {
+            let shown = message(l, &app.ui.status);
+            assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
+        }
     }
 
     /// What the panel acts on is the highlight, and only while it names a variable: a stale one

@@ -11,6 +11,9 @@
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
 //! {stop}`) and switches back to that tool.
+//!
+//! Brush Options' Key Color eyedropper sets `brushKeyColor` and `stop`: the next click samples into
+//! the open dialog (`brushKeyColor` UI request) and switches back.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -20,12 +23,16 @@ use vectorcraft_geom::Point;
 
 use super::paint_owner;
 use crate::params::color_json;
-use crate::{Action, Cursor, Mods, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 #[derive(Default)]
 pub struct EyedropperTool {
     /// Sampling for the selected gradient stop: the tool to switch back to afterwards.
     stop: Option<String>,
+    /// The Type tool's highlighted range while sampling, including its selection overlay.
+    text_selection: crate::text::TypeTool,
+    /// Brush Options › Key Color (Hue Shift): sample into the dialog, then [`Self::stop`].
+    brush_key_color: bool,
 }
 
 /// The colour of `paint` at `p` (gradients are sampled along their vector, radial ones honouring
@@ -83,6 +90,19 @@ impl Tool for EyedropperTool {
         // A click inside a fill or among characters samples it too, whatever Object and Type
         // Object Selection by Path Only say.
         let opts = vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..cx.hit_options() };
+        if self.brush_key_color {
+            let h = hit_test_visible(cx.doc, ev.pos, opts);
+            let Some(h) = h else { return vec![] };
+            let src = paint_owner(cx.doc, h.leaf);
+            let Some(n) = cx.doc.node(src) else { return vec![] };
+            let image = matches!(n.kind, NodeKind::Image(_));
+            let sampled = if image { image_color_at(cx, n, ev.pos) } else { paint_sample(n, h.kind == HitKind::Stroke, ev.pos) };
+            let Some(c) = sampled else { return vec![] };
+            let back = self.stop.clone().unwrap_or_else(|| "selection".to_string());
+            self.brush_key_color = false;
+            self.stop = None;
+            return vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)];
+        }
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
         // Reading a source is independent of its editability. Only Alt's reverse operation
         // writes to the clicked object; Shift+Alt appends its appearance to the selection.
@@ -107,14 +127,35 @@ impl Tool for EyedropperTool {
         out
     }
 
+    /// Expose a transient text range alongside gradient-stop and brush-key sampling state.
     fn options(&self) -> Value {
-        json!({ "stop": self.stop })
+        let selected = self.text_selection.options();
+        let mut options = if selected.get("editing").is_some_and(|v| !v.is_null()) { selected } else { json!({}) };
+        if let Some(o) = options.as_object_mut() {
+            o.insert("stop".into(), json!(self.stop));
+            o.insert("brushKeyColor".into(), json!(self.brush_key_color));
+        }
+        options
     }
 
+    /// Accept a stop target or the selection transferred from the Type tool.
     fn set_option(&mut self, key: &str, value: &Value) {
-        if key == "stop" {
-            self.stop = value.as_str().map(str::to_string);
+        match key {
+            "stop" => self.stop = value.as_str().map(str::to_string),
+            "brushKeyColor" => self.brush_key_color = value.as_bool().unwrap_or(false),
+            "textSelection" => self.text_selection.set_option(key, value),
+            _ => {}
         }
+    }
+
+    /// Drop the range when its text is removed or no longer selected.
+    fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.text_selection.after_command(cx)
+    }
+
+    /// Keep the sampled character range highlighted without activating text input.
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if self.text_selection.options().get("editing").is_some_and(|v| !v.is_null()) { self.text_selection.overlays(cx) } else { vec![] }
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
@@ -127,6 +168,22 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    /// Upstream brush-key sampling and highlighted-text transfer keep independent state.
+    #[test]
+    fn text_range_and_brush_sampling_options_coexist() {
+        let mut tool = EyedropperTool::default();
+        tool.set_option("textSelection", &json!({"editing": 1, "anchor": 0, "caret": 4}));
+        tool.set_option("stop", &json!("selection"));
+        tool.set_option("brushKeyColor", &json!(true));
+        let options = tool.options();
+        assert_eq!((options["editing"].as_u64(), options["start"].as_u64(), options["end"].as_u64()), (Some(1), Some(0), Some(4)));
+        assert_eq!(options["stop"], "selection");
+        assert_eq!(options["brushKeyColor"], true);
+        tool.set_option("brushKeyColor", &json!(false));
+        assert_eq!(tool.options()["editing"], 1);
+        assert_eq!(tool.options()["brushKeyColor"], false);
+    }
 
     #[test]
     fn click_copies_appearance_shift_samples_color() {
@@ -175,7 +232,7 @@ mod tests {
         let mut cx = cx(&d, &s, &p);
         let mut t = EyedropperTool::default();
         t.set_option("stop", &json!("gradient"));
-        assert_eq!(t.options(), json!({"stop": "gradient"}));
+        assert_eq!(t.options(), json!({"stop": "gradient", "brushKeyColor": false}));
         // Without a selected stop the click copies the appearance as usual.
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
         assert!(matches!(&a[0], Action::Exec(c, _) if c == "appearance.copyFrom"));
@@ -190,7 +247,24 @@ mod tests {
                 Action::SwitchTool("gradient".into())
             ]
         );
-        assert_eq!(t.options(), json!({"stop": null}), "one sample only");
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
+    }
+
+    #[test]
+    fn brush_key_color_samples_into_the_dialog_then_switches_back() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = EyedropperTool::default();
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("selection"));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(
+            a,
+            vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&Color::WHITE) })), Action::SwitchTool("selection".into())]
+        );
+        assert_eq!(t.options(), json!({ "stop": null, "brushKeyColor": false }));
     }
 
     /// The hex of the colour a `paint.sampleColor` action samples.
@@ -243,6 +317,7 @@ mod tests {
             xf: vectorcraft_geom::Affine::scale(10.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let (s, p) = (Selection::default(), paint());
@@ -279,6 +354,7 @@ mod tests {
             xf: vectorcraft_geom::Affine::scale(10.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
         let (s, p) = (Selection::default(), paint());

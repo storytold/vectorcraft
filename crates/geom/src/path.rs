@@ -180,9 +180,58 @@ fn is_collinear(p: Point, a: Point, b: Point) -> bool {
     cross.abs() <= 1e-6 * va.hypot().max(1.0) * vb.hypot().max(1.0) && va.dot(vb) < 0.0
 }
 
+/// Most anchors [`with_anchor_budget`] lets paths read together: 32M (about 1.5 GB), 4M in the web
+/// build.
+pub const MAX_READ_ANCHORS: usize = if cfg!(target_arch = "wasm32") { 4 << 20 } else { 32 << 20 };
+
+std::thread_local! {
+    /// Anchors the paths being read on this thread may still have ([`with_anchor_budget`]).
+    static ANCHORS_LEFT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// Run `f` (which reads paths with serde) letting the paths it reads have at most `max` anchors
+/// together; reading more fails. A compressed file of repeated anchors stays small while its paths
+/// take gigabytes once read, past what the web build can address.
+pub fn with_anchor_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<usize>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            ANCHORS_LEFT.set(self.0);
+        }
+    }
+    let _restore = Restore(ANCHORS_LEFT.replace(Some(max)));
+    f()
+}
+
+/// A subpath's anchors read within [`with_anchor_budget`].
+fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>, D::Error> {
+    struct V;
+    impl<'de> serde::de::Visitor<'de> for V {
+        type Value = Vec<Anchor>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list of anchors")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Vec<Anchor>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(anchor) = a.next_element::<Anchor>()? {
+                if let Some(left) = ANCHORS_LEFT.get() {
+                    let left = left
+                        .checked_sub(1)
+                        .ok_or_else(|| serde::de::Error::custom(format!("the paths have more than {MAX_READ_ANCHORS} anchors")))?;
+                    ANCHORS_LEFT.set(Some(left));
+                }
+                out.push(anchor);
+            }
+            Ok(out)
+        }
+    }
+    d.deserialize_seq(V)
+}
+
 /// An open or closed run of anchors.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubPath {
+    #[serde(deserialize_with = "anchors_within")]
     pub anchors: Vec<Anchor>,
     #[serde(default)]
     pub closed: bool,
@@ -561,8 +610,25 @@ impl PathData {
     }
     /// Total length of all segments.
     pub fn length(&self) -> f64 {
-        self.to_bezpath().segments().map(|s| kurbo::ParamCurveArclen::arclen(&s, 1e-6)).sum()
+        self.to_bezpath().segments().map(|s| measured_arclen(&s, 1e-6)).sum()
     }
+}
+
+/// The largest x or y, in size, of a segment's control points for which its length is measured.
+/// Document coordinates are far inside it; past it (or not finite) the integrator's arithmetic
+/// overflows and it subdivides without end.
+const MEASURE_LIMIT: f64 = 1e9;
+
+/// The length of `seg` to `accuracy`; 0 for a segment whose control points are not finite or past
+/// [`MEASURE_LIMIT`].
+pub(crate) fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
+    let ok = |p: Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MEASURE_LIMIT && p.y.abs() <= MEASURE_LIMIT;
+    let fits = match seg {
+        PathSeg::Line(l) => ok(l.p0) && ok(l.p1),
+        PathSeg::Quad(q) => ok(q.p0) && ok(q.p1) && ok(q.p2),
+        PathSeg::Cubic(c) => ok(c.p0) && ok(c.p1) && ok(c.p2) && ok(c.p3),
+    };
+    if fits { kurbo::ParamCurveArclen::arclen(seg, accuracy) } else { 0.0 }
 }
 
 /// The largest x or y, in size, of a segment's control points for which [`segment_bounds`]

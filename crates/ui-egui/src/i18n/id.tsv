@@ -20,6 +20,11 @@
 	Medium Light	Agak terang
 	Light	Terang
 	Quit VectorCraft	Keluar dari VectorCraft
+# Artwork drag between document tabs.
+	Drop Artwork	Letakkan karya
+@msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
+@msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
+
 	File	Berkas
 	New…	Baru…
 	New Without Dialog	Baru tanpa dialog
@@ -52,6 +57,7 @@
 	Check Script	Periksa skrip
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
+	Switch Units	Ganti satuan
 	Document Color Mode	Mode warna dokumen
 	CMYK Color	Warna CMYK
 	RGB Color	Warna RGB
@@ -170,6 +176,7 @@
 	Other Layers	Lapisan lain
 	Unlock All	Buka kunci semua
 	Hide	Sembunyikan
+	Unselected Artwork	Karya seni yang tidak dipilih
 	Show All	Tampilkan semua
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
@@ -202,6 +209,7 @@
 	Offset Path…	Jalur ofset…
 	Reverse Path Direction	Balikkan arah jalur
 	Simplify…	Sederhanakan…
+	Smooth…	Haluskan…
 	Add Anchor Points	Tambahkan titik jangkar
 	Remove Anchor Points	Hapus titik jangkar
 	Divide Objects Below	Bagi objek di bawah
@@ -279,6 +287,16 @@
 	Glyphs	Glif
 	Insert Special Character	Sisipkan karakter khusus
 	Bullet	Poin
+	Bullets	Poin
+	Bullets and Numbering	Poin dan penomoran
+	Apply Bullets	Terapkan poin
+	Numbered List	Daftar bernomor
+	Apply Numbers	Terapkan penomoran
+	Convert to Text	Konversi ke teks
+	Filled Dot	Titik penuh
+	Dash	Tanda pisah
+	Hollow Circle	Lingkaran kosong
+	Filled Square	Persegi penuh
 	Copyright Symbol	Simbol hak cipta
 	Ellipsis	Elipsis
 	Paragraph Symbol	Simbol paragraf
@@ -322,6 +340,7 @@
 	Create	Buat
 	Release Selection	Lepaskan seleksi
 	Remove Threading	Hapus rangkaian
+	Break Thread	Putus rangkaian
 	Fit Headline	Sesuaikan judul
 	Find Font…	Cari font…
 	Change Case	Ubah huruf besar-kecil
@@ -357,6 +376,11 @@
 	Fill Color	Warna isian
 	Opacity	Opasitas
 	Stroke Color	Warna stroke
+	Fill Gradient	Gradien isian
+	Stroke Gradient	Gradien stroke
+	Fill Pattern	Pola isian
+	Stroke Pattern	Pola stroke
+	Patterns	Pola
 	Stroke Weight	Ketebalan stroke
 	Graphic Style	Gaya grafis
 	Symbol Instance	Instans simbol
@@ -522,6 +546,7 @@
 	Save Grid as Preset…	Simpan kisi sebagai preset…
 	Snap to Pixel	Snap ke piksel
 	Precise Cursors	Kursor presisi
+	Image Trace Preview	Pratinjau Image Trace
 	Snap to Point	Snap ke titik
 	Snap to Glyph	Snap ke glif
 	New View…	Tampilan baru…
@@ -536,6 +561,21 @@
 	Saved View 8	Tampilan tersimpan 8
 	Saved View 9	Tampilan tersimpan 9
 	Saved View 10	Tampilan tersimpan 10
+	Saved View 11	Tampilan tersimpan 11
+	Saved View 12	Tampilan tersimpan 12
+	Saved View 13	Tampilan tersimpan 13
+	Saved View 14	Tampilan tersimpan 14
+	Saved View 15	Tampilan tersimpan 15
+	Saved View 16	Tampilan tersimpan 16
+	Saved View 17	Tampilan tersimpan 17
+	Saved View 18	Tampilan tersimpan 18
+	Saved View 19	Tampilan tersimpan 19
+	Saved View 20	Tampilan tersimpan 20
+	Saved View 21	Tampilan tersimpan 21
+	Saved View 22	Tampilan tersimpan 22
+	Saved View 23	Tampilan tersimpan 23
+	Saved View 24	Tampilan tersimpan 24
+	Saved View 25	Tampilan tersimpan 25
 	Window	Jendela
 	New Window	Jendela baru
 	Cascade	Bertingkat
@@ -693,7 +733,6 @@
 	% of all commits	% dari semua komit
 	Lines +/−	Baris +/−
 	Drag to move	Seret untuk memindahkan
-	Drag to move out of the set	Seret untuk memindahkan keluar dari set
 	Drag to float as a toolbar	Seret untuk mengambang sebagai bilah alat
 	Put back in the toolbar	Kembalikan ke bilah alat
 	Float Panel	Mengambangkan panel
@@ -711,7 +750,7 @@
 	Units	Satuan
 	Guides & Grid	Panduan & kisi
 	Hyphenation	Pemenggalan kata
-	Performance & Storage	Kinerja & penyimpanan
+	Plug-ins & Scratch Disks	Plug-in & Disk scratch
 	User Interface	Antarmuka pengguna
 	Performance	Kinerja
 	File Handling	Penanganan berkas
@@ -724,6 +763,7 @@
 	Shaper	Shaper
 	Expand Shaper Group	Perluas grup Shaper
 	Release Shaper Group	Lepaskan grup Shaper
+	Remove from Shaper Group	Hapus dari grup Shaper
 	Select Shaper Face	Seleksi sisi Shaper
 	Constrain	Batasi
 	Free Transform	Transformasi bebas
@@ -761,6 +801,7 @@
 	Activate Panel	Aktifkan panel
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
+	Collapse Panel Group	Ciutkan grup panel
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -1244,6 +1285,7 @@ lighting	Light	Cahaya
 	Hide Thumbnail	Sembunyikan thumbnail
 	Mixed Appearances	Penampilan campuran
 	Mixed Objects	Objek campuran
+	Mixed	Campuran
 	No options	Tidak ada opsi
 	No Selection	Tidak ada seleksi
 	Offset X	Offset X
@@ -1287,7 +1329,6 @@ lighting	Light	Cahaya
 	URL:	URL:
 	Use Even-Odd Fill Rule	Gunakan aturan isian genap-ganjil
 	Use Non-Zero Winding Fill Rule	Gunakan aturan isian lilitan tak nol
-	Brush Libraries (on the roadmap)	Pustaka kuas (masih dalam roadmap)
 	List View	Tampilan daftar
 	New Art Brush from Selection	Kuas seni baru dari seleksi
 	New Bristle Brush	Kuas bristle baru
@@ -1311,6 +1352,7 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
 	Hindi	Hindi
@@ -1378,6 +1420,7 @@ lighting	Light	Cahaya
 	{count} more rules: Export writes every one.	{count} aturan lagi: Ekspor menuliskan semuanya.
 	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} objek tanpa nama tidak disertakan: beri nama, atau aktifkan Objek Tanpa Nama di menu panel.
 	All Categories	Semua kategori
+	Repeat Objects	Objek pengulangan
 	Save…	Simpan…
 	Selection Only	Hanya seleksi
 	{title} (selection)	{title} (seleksi)
@@ -1411,6 +1454,7 @@ lighting	Light	Cahaya
 	Edit the selected point's colour in the Color panel	Edit warna titik terpilih di panel Warna
 	Edit the stop	Edit stop
 	Eyedropper: click the art to sample the stop's colour	Pipet: klik karya seni untuk mengambil sampel warna stop
+	Eyedropper: click the art to sample the key color	Pipet: klik karya seni untuk mengambil sampel warna kunci
 	Gradient across stroke	Gradien melintasi stroke
 	Gradient along stroke	Gradien sepanjang stroke
 	Gradient Fill: click to apply, drag onto art	Isian gradien: klik untuk menerapkan, seret ke karya seni
@@ -1458,6 +1502,12 @@ lighting	Light	Cahaya
 	Document Library	Pustaka dokumen
 	Library:	Pustaka:
 	Tracing Presets	Preset penelusuran
+	Manage Presets	Kelola preset
+	Save as New Preset…	Simpan sebagai preset baru…
+	Rename…	Ganti nama…
+	Rename Preset	Ganti nama preset
+	Save Image Trace Preset	Simpan preset telusur gambar
+	Delete Image Trace Preset	Hapus preset telusur gambar
 	Method:	Metode:
 	Mode:	Mode:
 	Noise	Derau
@@ -1600,6 +1650,13 @@ lighting	Light	Cahaya
 	Repeat Pathfinder	Ulangi Pathfinder
 	Repeat {name}	Ulangi {name}
 	Trap…	Trap…
+	Trap	Trap
+	Height/Width	Tinggi/Lebar
+	Tint Reduction	Pengurangan Tint
+	Traps with Process Color	Trap dengan Warna Proses
+	Reverse Traps	Balikkan Trap
+	Precision	Presisi
+	Remove Redundant Points	Hapus Titik Berlebih
 	Bottom in Front	Bawah di depan
 	Brick by Column	Bata per kolom
 	Brick by Row	Bata per baris
@@ -1726,7 +1783,6 @@ lighting	Light	Cahaya
 	{kind}, {model}	{kind}, {model}
 	No symbols in this document	Tidak ada simbol dalam dokumen ini
 	Select art and click New Symbol to make one.	Pilih karya seni dan klik Simbol Baru untuk membuatnya.
-	Symbol Libraries (on the roadmap)	Pustaka simbol (ada di peta jalan)
 	Align On:	Ratakan pada:
 	Bottom-Justified Tab	Tab rata bawah
 	Center-Justified Tab	Tab rata tengah
@@ -1845,6 +1901,10 @@ lighting	Light	Cahaya
 	Outer Corner Tile	Ubin sudut luar
 	Side Tile	Ubin sisi
 	Inner Corner Tile	Ubin sudut dalam
+	Auto-Centered	Otomatis-tengah
+	Auto-Between	Otomatis-antara
+	Auto-Sliced	Otomatis-iris
+	Auto-Overlap	Otomatis-tumpang
 	Start Tile	Ubin awal
 	End Tile	Ubin akhir
 	Fit	Pas
@@ -1856,6 +1916,13 @@ lighting	Light	Cahaya
 	Tints and Shades	Tint dan shade
 	Hue Shift	Pergeseran rona
 	Key Color:	Warna kunci:
+	Tips	Kiat
+	Colorization Tips	Kiat pewarnaan
+	The samples show this brush on a blue stroke.	Contoh menampilkan kuas ini pada stroke biru.
+	The art keeps its own colors.	Karya seni mempertahankan warnanya sendiri.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Hitam menjadi warna stroke dan putih tetap putih. Warna lain menjadi tint dari warna stroke, dan makin terang suatu warna, makin terang tint-nya.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Hitam tetap hitam dan putih tetap putih. Warna lain menjadi shade dari warna stroke jika gelap dan tint darinya jika terang.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Warna kunci menjadi warna stroke. Warna lain bergeser di roda warna sejauh warna kunci bergeser dan mempertahankan saturasi serta kecerahannya.
 	Size:	Ukuran:
 	Calligraphic Brush Options	Opsi kuas kaligrafi
 	Bristle Brush Options	Opsi kuas bristle
@@ -2075,6 +2142,7 @@ lighting	Light	Cahaya
 	Fidelity:	Fidelitas:
 	Fill new strokes	Isi stroke baru
 	Alt key toggles to Smooth Tool	Tombol Alt beralih ke Alat penghalus
+	Live curve fitting	Penyesuaian kurva langsung
 	The document has no colour swatches.	Dokumen tidak memiliki swatch warna.
 	Style Name:	Nama gaya:
 	Crop To	Pangkas ke
@@ -2168,11 +2236,11 @@ lighting	Light	Cahaya
 	Fonts whose licence doesn't allow embedding are not copied.	Font yang lisensinya tidak mengizinkan penyematan tidak disalin.
 	Package collects a saved document with its linked files and fonts.	Package mengumpulkan dokumen tersimpan beserta file dan font yang tertaut.
 	Package created	Paket dibuat
-	Packaged {n} file(s) in {folder}{note}	{n} file dipaketkan dalam {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	{n} file dipaketkan dalam {folder}{note}
 	Packaged {n} file(s){note}	{n} file dipaketkan{note}
 	Relink Linked Files to the Document	Tautkan ulang file tertaut ke dokumen
 	Save the document first?	Simpan dokumen terlebih dahulu?
-	{count} file(s) in {folder}{note}. Show the package folder?	{count} file dalam {folder}{note}. Tampilkan folder paket?
+	{count} file(s) in {folder} {note}. Show the package folder?	{count} file dalam {folder}{note}. Tampilkan folder paket?
 	{count} linked file(s) not found	{count} file tertaut tidak ditemukan
 	fonts not copied: {fonts}	font tidak disalin: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Preset bawaan bersifat hanya-baca: Baru… memulai salinan yang dapat diedit.
@@ -2219,6 +2287,11 @@ lighting	Light	Cahaya
 	File Dimensions	Dimensi file
 	Transforms	Transformasi
 	Background Color:	Warna latar belakang:
+	Show Center Mark	Tampilkan tanda tengah
+	Show Cross Hairs	Tampilkan garis silang
+	Show Video Safe Areas	Tampilkan area aman video
+	Video Ruler Pixel Aspect Ratio:	Rasio aspek piksel penggaris video:
+	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
 	Lossless (lossy WebP isn't available yet)	Tanpa kehilangan (WebP lossy belum tersedia)
@@ -2672,12 +2745,21 @@ lighting	Light	Cahaya
 	Darken	Menggelapkan
 	Exclusion	Pengecualian
 	Hard Light	Cahaya keras
+	Hard Mix	Campuran keras
 	Lighten	Menerangkan
 	Luminosity	Luminositas
 	Overlay	Menimpa
 	Soft Light	Cahaya lembut
+	Soft Mix	Campuran lembut
 	Crosshatch	Arsir silang
 	Fine Dots	Titik halus
+
+	Simple	Sederhana
+	Light Rough	Kasar terang
+	Dark Rough	Kasar gelap
+	Wide Sharp	Lebar tajam
+	Wide Blurry	Lebar buram
+	Sparkle	Kilau
 	Medium Dots	Titik sedang
 	Grainy Dots	Titik berbutir
 	Coarse Dots	Titik kasar
@@ -2749,6 +2831,14 @@ theme	Appearance	Tampilan
 	Edit Symbol	Edit simbol
 	Expand Brush Strokes	Perluas guratan kuas
 	New Brush…	Kuas baru…
+	New Brush	Kuas baru
+	Calligraphic Brush	Kuas kaligrafi
+	Scatter Brush	Kuas sebar
+	Art Brush	Kuas seni
+	Bristle Brush	Kuas bristle
+	Pattern Brush	Kuas pola
+	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
+	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
 	New Symbol…	Simbol baru…
 	Place Symbol Instance	Tempatkan instansi simbol
@@ -3209,6 +3299,7 @@ theme	Appearance	Tampilan
 	Scale Corners	Skalakan sudut
 	Scale Cursor Proportional to UI	Skalakan kursor proporsional dengan UI
 	Scale Strokes & Effects	Skalakan guratan & efek
+	Scale Text Attributes	Skalakan atribut teks
 	Scratch Disks	Disk scratch
 	Secondary	Sekunder
 	Select Same Tint %	Pilih tint yang sama %
@@ -3224,6 +3315,7 @@ theme	Appearance	Tampilan
 	Size/Leading	Ukuran/Leading
 	Snapping Tolerance	Toleransi kancing
 	Spacing Guides	Panduan jarak
+	Invoke Distance Guides	Panggil panduan pengukuran jarak
 	Spanish	Spanyol
 	Subdivisions	Subdivisi
 	Templates Folder	Folder templat
@@ -3309,6 +3401,7 @@ theme	Appearance	Tampilan
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel
+	Move Brush	Pindahkan kuas
 	Move Swatch	Pindahkan sampel
 	New Color Group	Grup warna baru
 	New Swatch	Sampel baru
@@ -3522,10 +3615,10 @@ effect	Regular	Reguler
 	Replace With Font	Ganti dengan font
 	  — substituted by {style}	  — digantikan oleh {style}
 	  — {n} characters from another font	  — {n} karakter dari font lain
-	Drag to float the panel group	Seret untuk mengapungkan grup panel
-	Put back in the dock	Kembalikan ke dok
 	All Scripts	Semua skrip
 	Any Kind	Jenis apa pun
+	Font Technology	Teknologi font
+font-technology	Variable	Variabel
 	Decorative	Dekoratif
 	Favorites	Favorit
 	Latin	Latin
@@ -3619,6 +3712,7 @@ effect	Regular	Reguler
 	View:	Tampilan:
 	Tracing Result	Hasil penelusuran
 	Outlines with Source Image	Kontur dengan gambar sumber
+	Press and hold to view the source image	Tekan dan tahan untuk melihat gambar sumber
 	SVG Options	Opsi SVG
 	Maximize	Maksimalkan
 	Restore	Pulihkan
@@ -3790,6 +3884,7 @@ imageTrace	Outline	Kontur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah ditutup
+@msg	Couldn't place {name}: the document it was placed in was closed	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah ditutup
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks
@@ -3815,6 +3910,7 @@ imageTrace	Outline	Kontur
 @msg	Installed plug-in {_1}	Berhasil memasang plug-in {_1}
 @msg	Internal error: {msg} (please report this bug)	Kesalahan internal: {msg} (harap laporkan bug ini)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Gabungkan Live Paint: pilih grup Live Paint dan jalur yang akan ditambahkan
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint menerima jalur dan jalur majemuk: konversikan dulu teks, gambar, dan objek lain menjadi jalur
 @msg	Live Paint: select paths or compound paths	Live Paint: pilih jalur atau jalur majemuk
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: jalur ini terlalu terdegenerasi untuk dicat
 @msg	Make Guides: select paths	Buat panduan: pilih jalur
@@ -3826,8 +3922,9 @@ imageTrace	Outline	Kontur
 @msg	Opened {url}	Berhasil membuka {url}
 @msg	Outline Stroke: no stroked paths selected	Ubah goresan menjadi kontur: tidak ada jalur dengan goresan yang dipilih
 @msg	PDF settings are not an object	Pengaturan PDF bukan objek
+@msg	PDF security settings are not an object	Pengaturan keamanan PDF bukan objek
 @msg	PDF writer error: {0}	Kesalahan penulis PDF: {0}
-@msg	Packaged {n} file(s) in {folder}{note}	Berhasil mengemas {n} file di {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	Berhasil mengemas {n} file di {folder}{note}
 @msg	Packaged {n} file(s){note}	Berhasil mengemas {n} file{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pratinjau di Peramban memerlukan aplikasi desktop (versi web mengunduh file sebagai gantinya)
 @msg	Release Guides: no guides	Lepaskan panduan: tidak ada panduan
@@ -3941,6 +4038,7 @@ imageTrace	Outline	Kontur
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	sumbu harus "vertical", "horizontal", atau sudut dalam derajat, bukan `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparan, putih, hitam, atau warna seperti "#ff8800"
 @msg	bad color {v}	warna tidak valid {v}
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio harus berupa angka dari 0,1 sampai 10
 @msg	bad colour `{hex}` (#rrggbb)	warna tidak valid `{hex}` (#rrggbb)
 @msg	bad page tree	pohon halaman tidak valid
 @msg	bad shortcut	pintasan tidak valid
@@ -3984,7 +4082,7 @@ imageTrace	Outline	Kontur
 @msg	give horizontal or vertical	berikan horizontal atau vertikal
 @msg	give the path `id` and the width point `index`	berikan jalur `id` dan titik lebar `index`
 @msg	guides are locked	panduan terkunci
-@msg	image '{key}' has no pixels and was left out	gambar '{key}' tidak memiliki piksel dan dilewati
+@msg	an image has no pixels and was left out	gambar tanpa piksel dilewati
 @msg	image data `{_1}` is missing	data gambar `{_1}` tidak ada
 @msg	image would be too large; lower the resolution	gambar akan menjadi terlalu besar; turunkan resolusinya
 @msg	index must be a number or first, previous, next or last	index harus berupa angka atau first, previous, next, atau last
@@ -4007,10 +4105,11 @@ imageTrace	Outline	Kontur
 @msg	missing `id` (see plugin.list)	`id` tidak ada (lihat plugin.list)
 @msg	missing `name`	`name` tidak ada
 @msg	missing `tool`	`tool` tidak ada
+@msg	missing id	id tidak ada
 @msg	missing index	indeks tidak ada
 @msg	missing number `{key}`	angka `{key}` tidak ada
 @msg	missing integer `{key}`	bilangan bulat `{key}` tidak ada
-@msg	multiple windows land with M11.5	beberapa jendela hadir bersama M11.5
+@msg	New Window isn't available yet: a document opens in one window	Jendela baru belum tersedia: dokumen dibuka dalam satu jendela
 @msg	name the file	beri nama file
 @msg	no CSS to copy: select objects with CSS of their own	tidak ada CSS untuk disalin: pilih objek yang memiliki CSS sendiri
 @msg	no Live Paint edge near that point	tidak ada tepi Live Paint di dekat titik itu
@@ -4029,6 +4128,7 @@ imageTrace	Outline	Kontur
 @msg	no bounds	tidak ada batas
 @msg	no brush named `{name}`	tidak ada kuas bernama `{name}`
 @msg	no brush selected	tidak ada kuas yang dipilih
+@msg	brushes move only within their type	kuas hanya dapat dipindahkan di dalam jenisnya sendiri
 @msg	no catalog	tidak ada katalog
 @msg	no changes since the last save	tidak ada perubahan sejak penyimpanan terakhir
 @msg	no clock to keep a heartbeat by	tidak ada jam untuk menjaga detak
@@ -4037,6 +4137,7 @@ imageTrace	Outline	Kontur
 @msg	no current layer	tidak ada lapisan saat ini
 @msg	no data	tidak ada data
 @msg	no dialog open	tidak ada dialog yang terbuka
+@msg	the open dialog has no Reset	dialog yang terbuka tidak memiliki tombol Atur ulang
 @msg	no document	tidak ada dokumen
 @msg	no document open	tidak ada dokumen yang terbuka
 @msg	no effect applied yet	belum ada efek yang diterapkan
@@ -4110,8 +4211,10 @@ imageTrace	Outline	Kontur
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
+@msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu
 @msg	nothing encoded	tidak ada yang dikodekan
 @msg	nothing selected	tidak ada yang dipilih
+@msg	nothing selected is in a group	tidak ada yang dipilih yang berada dalam grup
 @msg	nothing to align	tidak ada yang dapat disejajarkan
 @msg	nothing to distort	tidak ada yang dapat didistorsi
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	tidak ada yang dapat diekspor: dokumen tidak memiliki karya seni yang terlihat (atau aktifkan Gunakan Artboard)
@@ -4132,6 +4235,7 @@ imageTrace	Outline	Kontur
 @msg	path is already closed	jalur sudah tertutup
 @msg	paths contain invalid coordinates	jalur berisi koordinat yang tidak valid
 @msg	paths: give at least one file	jalur: berikan setidaknya satu berkas
+@msg	replace: the object to replace was changed or deleted	ganti: objek yang akan diganti telah diubah atau dihapus
 @msg	pattern missing	pola hilang
 @msg	patterns nested too deeply are filled with mid-grey	pola yang bersarang terlalu dalam diisi dengan abu-abu tengah
 @msg	percent must be above 0 and at most 6400, not {p}	persen harus di atas 0 dan paling banyak 6400, bukan {p}
@@ -4176,6 +4280,7 @@ imageTrace	Outline	Kontur
 @msg	select an object in perspective	pilih objek dalam perspektif
 @msg	select artwork (or a colour group) to recolor	pilih karya seni (atau grup warna) untuk diwarnai ulang
 @msg	select at least two objects	pilih setidaknya dua objek
+@msg	exit isolation mode first	keluar dari mode isolasi terlebih dahulu
 @msg	select objects, not layers	pilih objek, bukan lapisan
 @msg	select one path, or give its `id`	pilih satu jalur, atau berikan `id`-nya
 @msg	select paths to join	pilih jalur yang akan digabungkan
@@ -4226,10 +4331,14 @@ imageTrace	Outline	Kontur
 @msg	the layer or group is locked	lapisan atau grup terkunci
 @msg	the guide is on a hidden or locked layer	panduan berada di lapisan yang tersembunyi atau terkunci
 @msg	the target layer is locked or hidden	lapisan target terkunci atau tersembunyi
+@msg	the object is hidden or locked	objek tersembunyi atau terkunci
+@msg	the object is outside the isolated group	objek berada di luar grup yang diisolasi
+@msg	type objects can't be isolated	objek teks tidak dapat diisolasi
 @msg	the layer to flatten into is hidden	lapisan tujuan perataan tersembunyi
 @msg	the object already has an opacity mask	objek sudah memiliki masker opasitas
 @msg	the object has no geometry	objek tidak memiliki geometri
 @msg	the object has no opacity mask	objek tidak memiliki masker opasitas
+@msg	stop editing the opacity mask first	hentikan pengeditan masker opasitas terlebih dahulu
 @msg	the object has no stroke	objek tidak memiliki goresan
 @msg	the object is beyond the plane's horizon	objek berada di luar horizon bidang
 @msg	the object isn't in perspective	objek tidak dalam perspektif
@@ -4259,6 +4368,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	pintasan alat harus satu tombol (opsional dengan Shift)
 @msg	truncated	terpotong
 @msg	unknown command `{0}`	perintah `{0}` tidak dikenal
+@msg	unknown command `{0}`; did you mean `{1}`?	perintah `{0}` tidak dikenal; apakah maksud Anda `{1}`?
 @msg	unknown effect `{id}`	efek `{id}` tidak dikenal
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
@@ -4289,6 +4399,7 @@ imageTrace	Outline	Kontur
 @msg	{_1} font families available	{_1} keluarga font tersedia
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} adalah efek langsung (Efek › Plug-in)
 @msg	{_1} is already used by {_2}	{_1} sudah digunakan oleh {_2}
+@msg	{_1} is reserved by the system	{_1} dicadangkan oleh sistem
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} berkas tertaut tidak dapat dibaca di sini: yang ditampilkan adalah pratinjaunya
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msg	{_1}: not saved, so not closed	{_1}: tidak disimpan, sehingga tidak ditutup
@@ -4316,6 +4427,8 @@ imageTrace	Outline	Kontur
 @msg	Saving	Menyimpan
 @msg	Saving {_1}	Menyimpan {_1}
 @msg	Exporting {_1}	Mengekspor {_1}
+@msg	Packaging {_1}	Mengemas {_1}
+@msg	Placing {_1}	Menempatkan {_1}
 @msg	Saving recovery data for {_1}	Menyimpan data pemulihan untuk {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} dokumen hasil pemulihan dibuang
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
@@ -4398,7 +4511,9 @@ imageTrace	Outline	Kontur
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	jalur otomatisasi ditolak: di luar akar baca {root}: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	jalur otomatisasi ditolak: di luar akar-akar baca {roots}: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	jalur otomatisasi ditolak: di luar akar tulis {root}: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	jalur otomatisasi ditolak: di luar akar-akar tulis {roots}: {path}
 @msg	automation path rejected: path is empty	jalur otomatisasi ditolak: jalur kosong
 @msg	automation path rejected: a link that leads nowhere: {path}	jalur otomatisasi ditolak: tautan yang tidak mengarah ke mana pun: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	jalur otomatisasi ditolak: tidak dapat menyelesaikan {path}: {e}
@@ -4421,6 +4536,11 @@ imageTrace	Outline	Kontur
 @msg	before must name a panel	before harus menyebutkan panel
 @msg	docking action contains an unknown panel or an excessive split path	tindakan docking berisi panel tidak dikenal atau jalur pemisahan berlebihan
 @msg	group must be true or false	group harus true atau false
+@msg	panel is not in a dock group	panel tidak berada dalam grup dok
+@msg	only a dock group above or below others collapses, not one beside another	hanya grup dok di atas atau di bawah grup lain yang bisa diciutkan, bukan yang berada di sampingnya
+@msg	icon must be true or false	icon harus true atau false
+@msg	icon only docks a panel in the icon column, with no anchor	icon hanya menambatkan panel di kolom ikon, tanpa anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column menambatkan satu set sebagai kolom dok, tanpa anchor atau icon
 @msg	move requires a destination panel	move memerlukan panel tujuan
 @msg	move requires an existing destination panel	move memerlukan panel tujuan yang sudah ada
 @msg	onto must name a floating panel	onto harus menyebutkan panel mengambang
@@ -4480,6 +4600,7 @@ imageTrace	Outline	Kontur
 	Logo 1000×1000	Logo 1000×1000
 	Business Card 3.5 × 2 in	Kartu nama 3.5 × 2 in
 	Business Card 85 × 55 mm	Kartu nama 85 × 55 mm
+	Business Card 91 × 55 mm	Kartu nama 91 × 55 mm
 	Letterhead Letter	Kop surat Letter
 	Letterhead A4	Kop surat A4
 	Envelope DL	Amplop DL
@@ -4787,6 +4908,7 @@ mark-style	Japanese	Jepang
 @msg	unknown parameter `{key}`; the command takes: {keys}	parameter `{key}` tidak dikenal; perintah menerima: {keys}
 	Load EPS into Clipboard	Muat EPS ke papan klip
 @msg	an image of {w} × {h} pixels is too large to draw	gambar {w} × {h} piksel terlalu besar untuk digambar
+@msg	an image of {w} × {h} pixels is shown at reduced size	gambar {w} × {h} piksel ditampilkan dalam ukuran yang diperkecil
 	Fill and Stroke Controls	Kontrol isian dan goresan
 	Coloring Controls	Kontrol pewarnaan
 	Draw Mode Controls	Kontrol mode menggambar
@@ -4807,6 +4929,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	3D Lighting Preset	Preset Pencahayaan 3D
+	Standard	Standar
+	Diffuse	Difus
 # 3D light management.
 	Lights	Lampu
 	Add Light	Tambah Lampu
@@ -4851,6 +4976,7 @@ mark-style	Japanese	Jepang
 	Painting	Painting
 	Printing and Proofing	Printing and Proofing
 	Tracing	Tracing
+	Touch	Touch
 	Typography	Typography
 	VectorCraft	VectorCraft
 	Web	Web
@@ -4917,6 +5043,7 @@ mark-style	Japanese	Jepang
 @msg	Measured anchor no longer exists	Titik jangkar yang diukur sudah tidak ada
 @msg	Measured segment no longer exists	Segmen yang diukur sudah tidak ada
 @msg	Non-finite dimension	Dimensi bukan bilangan berhingga
+@msg	Scale Text Attributes: selected type has no scale to bake	Skalakan atribut teks: teks yang dipilih tidak memiliki skala untuk diterapkan
 @msg	Scale must be drawing:real, for example 1:10	Skala harus dalam format gambar:sebenarnya, misalnya 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Rasio skala harus antara 1:1000000 dan 1000000:1
 @msg	Second measured segment no longer exists	Segmen yang diukur kedua sudah tidak ada
@@ -4933,8 +5060,11 @@ mark-style	Japanese	Jepang
 	This system has no screen color sampler	Sistem ini tidak memiliki pengambil warna layar
 	Color blindness – Tritanopia-type	Buta warna – tipe Tritanopia
 	Panels Except Tools and Control	Semua panel kecuali Alat dan Kontrol
-	Reset Tracking and Kerning	Atur ulang pelacakan dan kerning
+	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
+	Highlight Font Name	Sorot nama font
+	Highlight Kerning	Sorot kerning
+	Highlight Tracking	Sorot tracking
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
@@ -4943,6 +5073,8 @@ mark-style	Japanese	Jepang
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…
 	Export Data Sets…	Ekspor himpunan data…
+	Load Variable Library…	Muat pustaka variabel…
+@msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
 	Make Graph Dynamic	Jadikan grafik dinamis
 	Batch…	Batch…
 	Source Folder:	Folder sumber:
@@ -5083,20 +5215,29 @@ swatch	Bright Violet	Violet cerah
 	Show Original Path	Tampilkan jalur asli
 	Open this dialog with these settings next time	Buka dialog ini dengan pengaturan ini lain kali
 	Auto-Simplify	Sederhanakan otomatis
+	Auto-Smooth	Haluskan otomatis
 @msg	check a layer to export	centang lapisan yang akan diekspor
 @msg	select the art to export first	pilih dulu karya yang akan diekspor
 @msg	no saved selection recalled	tidak ada seleksi tersimpan yang dipanggil
 	Merge only with selection	Gabungkan hanya dengan seleksi
 	Consider Open Filled Paths as Closed	Anggap jalur terbuka yang terisi sebagai tertutup
+	In Merge Mode, Clicking Stroke Splits the Path	Dalam mode gabung, mengeklik stroke memisahkan jalur
 	Pick Color From:	Ambil warna dari:
 	Artwork	Karya seni
 	Cursor Swatch Preview	Pratinjau swatch di kursor
 	Selection:	Seleksi:
 	Straight Line	Garis lurus
 	Highlight:	Sorotan:
+	Stroke When Editable	Stroke saat dapat diedit
 	Sketch	Sketsa
 	Halftone Pattern…	Pola halftone…
 	Halftone Pattern	Pola halftone
+	Torn Edges…	Tepi robek…
+	Torn Edges	Tepi robek
+	Conté Crayon…	Krayon Conté…
+	Conté Crayon	Krayon Conté
+	Foreground Level	Tingkat latar depan
+	Background Level	Tingkat latar belakang
 	Pattern Type	Jenis pola
 	Dot	Titik
 	Export Type:	Jenis ekspor:
@@ -5147,12 +5288,24 @@ swatch	Bright Violet	Violet cerah
 	Lock Variables	Kunci variabel
 	Unlock Variables	Buka kunci variabel
 	Change to Artboard Rulers	Ubah ke penggaris artboard
+	Colored Pencil…	Pensil warna…
+	Colored Pencil	Pensil warna
 	Cutout…	Potongan…
+	Dry Brush…	Kuas kering…
 	Neon Glow…	Pendar neon…
+	Palette Knife…	Pisau palet…
 	Poster Edges…	Tepi poster…
+	Rough Pastels…	Pastel kasar…
 	Cutout	Potongan
+	Dry Brush	Kuas kering
 	Neon Glow	Pendar neon
+	Paint Daubs…	Coretan cat…
+	Paint Daubs	Coretan cat
+	Palette Knife	Pisau palet
 	Poster Edges	Tepi poster
+	Rough Pastels	Pastel kasar
+	Underpainting…	Underpainting…
+	Underpainting	Underpainting
 	Apply Data Set	Terapkan set data
 	Cancel Pattern Editing	Batalkan pengeditan pola
 	Copy Appearance	Salin tampilan
@@ -5229,8 +5382,15 @@ swatch	Bright Violet	Violet cerah
 	Thread Text	Untai teks
 	Typing	Mengetik
 	Persistent	Persisten
+	Locate Library…	Temukan pustaka…
 	Library Panel Options	Opsi panel pustaka
+	Snapping	Snap
+	Snap to Tangent	Snap ke garis singgung
+	Snap to Perpendicular	Snap tegak lurus
+@msg	unknown snap option `{key}` (use {options})	opsi snap `{key}` tidak dikenal (gunakan {options})
+	Gap Length:	Panjang celah:
 	Artboard {n} of {total}	Artboard {n} dari {total}
+	File {n} of {total}	Berkas {n} dari {total}
 	Encoding and writing the file…	Mengodekan dan menulis berkas…
 @plural	{n} more export waiting|{n} more exports waiting	{n} ekspor lagi menunggu
 	Continue in Background	Lanjutkan di latar belakang
@@ -5241,11 +5401,19 @@ swatch	Bright Violet	Violet cerah
 	Word Spacing:	Spasi Kata:
 	Letter Spacing:	Spasi Huruf:
 	Glyph Scaling:	Penskalaan Glif:
-	Auto Leading:	Spasi Baris Otomatis:
+	Auto Leading:	Leading otomatis:
 	Single Word Justification:	Perataan Kata Tunggal:
 	Full Justify	Rata Penuh
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum.
 	Justification	Justifikasi
+	Add filters from the list above	Tambahkan filter dari daftar di atas
+	Add to Stack	Tambahkan ke Tumpukan
+	Applied Filters	Filter yang Diterapkan
+	Categories	Kategori
+	Choose a filter	Pilih filter
+	Effect Gallery	Galeri Efek
+	Filters	Filter
+	Select artwork to apply effects	Pilih grafis untuk menerapkan efek
 # Select by Color (select.color)
 	Select by Color	Pilih berdasarkan warna
 	Smudge Stick…	Tongkat olesan…
@@ -5255,6 +5423,7 @@ swatch	Bright Violet	Violet cerah
 	Watercolor…	Cat air…
 	Watercolor	Cat air
 	Brush Size	Ukuran kuas
+	Texture Coverage	Cakupan tekstur
 	Definition	Definisi
 	Brush Detail	Detail kuas
 	Shadow Intensity	Intensitas bayangan
@@ -5288,3 +5457,125 @@ swatch	Bright Violet	Violet cerah
 	Note Paper	Kertas Catatan
 	Water Paper…	Kertas Basah…
 	Water Paper	Kertas Basah
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Geometric Guides	Panduan Geometris
+	Ease In	Awal Lambat
+	Ease Out	Akhir Lambat
+	Ease In Out	Awal dan Akhir Lambat
+	Ease Out In	Akhir dan Awal Lambat
+	Ramp:	Kekuatan:
+	Shift:	Pergeseran:
+	Fresco…	Fresko…
+	Fresco	Fresko
+	Lock Artboards	Kunci artboard
+	Unlock Artboards	Buka kunci artboard
+	Lock Selected	Kunci yang dipilih
+	Lock All Except Selected	Kunci semua kecuali yang dipilih
+	Lock All	Kunci semua
+	Unlock Selected	Buka kunci yang dipilih
+	Effect Gallery…	Galeri Efek…
+	Effect Gallery Dialog	Dialog Galeri Efek
+	Arc Segment Tool Options	Opsi alat segmen busur
+	Base Along:	Dasar sepanjang:
+	Closed	Tertutup
+	Convex	Cembung
+	Fill Arc	Isi busur
+	Length X-Axis:	Panjang sumbu X:
+	Length Y-Axis:	Panjang sumbu Y:
+	Slope:	Kemiringan:
+axis	X Axis	Sumbu X
+axis	Y Axis	Sumbu Y
+@msg	Packaged {n} file(s) in {folder}	Berhasil mengemas {n} file di {folder}
+@msg	Packaged {n} file(s) {note}	Berhasil mengemas {n} file {note}
+@msg	Packaged {n} file(s)	Berhasil mengemas {n} file
+	Packaged {n} file(s)	Berhasil mengemas {n} file
+	Packaged {n} file(s) in {folder}	Berhasil mengemas {n} file di {folder}
+	Packaged {n} file(s) {note}	Berhasil mengemas {n} file {note}
+	{count} file(s) in {folder}. Show the package folder?	{count} file dalam {folder}. Tampilkan folder paket?
+	Clockwise	Searah jarum jam
+	Dither	Dither
+	Fine noise hides banding in the gradient fill	Derau halus menyembunyikan pita warna pada isian gradien
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` berlaku untuk isian gradien (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` berlaku untuk isian gradien (paint.setFill)
+@msg	`dither` must be true or false	`dither` harus true atau false
+@msg	`method` must be classic or perceptual	`method` harus classic atau perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	Instal “{name}”, yang meminta anggaran komputasi besar?
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Setiap kali dijalankan, plug-in ini bisa memakan waktu hingga {minutes} menit dan melakukan {times} kali pekerjaan yang diizinkan untuk plug-in lain. Plug-in ini berjalan di latar belakang, dan Anda dapat membatalkannya.
+	It may take minutes, so it runs in the background, where you can cancel it.	Ini bisa memakan waktu beberapa menit, jadi berjalan di latar belakang, tempat Anda dapat membatalkannya.
+	The plug-in is computing…	Plug-in sedang menghitung…
+	Inspect Plug-in	Periksa plug-in
+	Cancel Plug-in Run	Batalkan jalannya plug-in
+# Actions panel: action sets (#3712).
+	New Set…	Set baru…
+	New Set	Set baru
+	Set Options…	Opsi set…
+	Set Options	Opsi set
+	Create New Set	Buat set baru
+	Stop Global Edit	Hentikan edit global
+	Global Edit Options	Opsi edit global
+	Match	Cocokkan
+	On Artboards	Di artboard
+	All Artboards	Semua artboard
+	Include Objects On Canvas	Sertakan objek di kanvas
+	Result(s): {count}	Hasil: {count}
+	Add to Symbols	Tambahkan ke simbol
+	Basic Shapes	Bentuk dasar
+	Open Symbol Library	Buka pustaka simbol
+	Save Symbol Library	Simpan pustaka simbol
+	Save Symbol Library…	Simpan pustaka simbol…
+	Save Symbols…	Simpan simbol…
+	Selected Symbols Only	Hanya simbol terpilih
+	Symbol Libraries Menu	Menu pustaka simbol
+	Symbol Library	Pustaka simbol
+	User Symbol Library 1	Pustaka simbol pengguna 1
+	User Symbol Library 2	Pustaka simbol pengguna 2
+	User Symbol Library 3	Pustaka simbol pengguna 3
+	User Symbol Library 4	Pustaka simbol pengguna 4
+	User Symbol Library 5	Pustaka simbol pengguna 5
+	User Symbol Library 6	Pustaka simbol pengguna 6
+	User Symbol Library 7	Pustaka simbol pengguna 7
+	User Symbol Library 8	Pustaka simbol pengguna 8
+	User Symbol Library 9	Pustaka simbol pengguna 9
+	User Symbol Library 10	Pustaka simbol pengguna 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	Trap: select two or more objects filled with solid colours	Trap: pilih dua objek atau lebih yang diisi warna solid
+@msg	Trap: no edges of different colours meet among the selected objects	Trap: tidak ada tepi berwarna berbeda yang bertemu di antara objek yang dipilih
+@msg	thickness must be from 0.01 to 5000 pt	thickness harus dari 0,01 sampai 5000 pt
+@msg	heightWidth must be from 1 to 1000 %	heightWidth harus dari 1 sampai 1000 %
+@msg	tintReduction must be from 0 to 100 %	tintReduction harus dari 0 sampai 100 %
+	Rectangular Grid Tool Options	Opsi alat kisi persegi panjang
+	Polar Grid Tool Options	Opsi alat kisi polar
+	Fill Line	Isi garis
+	Pathfinder Options	Opsi Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Bagi dan Garis luar menghapus karya seni tanpa warna
+@msg	precision must be from 0.001 to 10 pt	precision harus dari 0,001 sampai 10 pt
+@msg	`pathfinder` must be an object	`pathfinder` harus berupa objek
+	Add to Brushes	Tambahkan ke kuas
+	Brush Library	Pustaka kuas
+	Save Brush Library	Simpan pustaka kuas
+	Save Brushes…	Simpan kuas…
+	Open Brush Library	Buka pustaka kuas
+	Selected Brushes Only	Hanya kuas terpilih
+	Brush Libraries Menu	Menu pustaka kuas
+	User Brush Library 1	Pustaka kuas pengguna 1
+	User Brush Library 2	Pustaka kuas pengguna 2
+	User Brush Library 3	Pustaka kuas pengguna 3
+	User Brush Library 4	Pustaka kuas pengguna 4
+	User Brush Library 5	Pustaka kuas pengguna 5
+	User Brush Library 6	Pustaka kuas pengguna 6
+	User Brush Library 7	Pustaka kuas pengguna 7
+	User Brush Library 8	Pustaka kuas pengguna 8
+	User Brush Library 9	Pustaka kuas pengguna 9
+	User Brush Library 10	Pustaka kuas pengguna 10
+	Art Ribbons	Pita seni
+	Calligraphic Nibs	Pena kaligrafi
+	Pattern Borders	Bingkai pola
+	Scatter Shapes	Bentuk sebar
+	Save Brush Library…	Simpan pustaka kuas…
+@msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
+	Scale Presets	Preset skala
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Perluas tampilan terlebih dahulu (Objek › Perluas tampilan)
+	Live preview	Pratinjau langsung

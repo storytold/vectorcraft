@@ -7,7 +7,9 @@ use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, Te
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, find_command, has_clipboard, has_doc, has_selection, ids_param, str_param, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -43,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?|id?} area type → point type; soft line wraps become line breaks → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks, and a frame of threaded text leaves its thread with the text it holds → {ids}",
             has_selection,
             to_point
         ),
@@ -329,6 +331,8 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let TextKind::Area { frame } = &t.kind else { continue };
             let fb = frame.bounds().unwrap_or_default();
+            // Point type is in no thread: its first paragraph starts in it.
+            t.first_para_continues = false;
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
@@ -520,7 +524,9 @@ pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
         TextKind::Area { frame } => {
             let b = frame.bounds().unwrap_or_default();
             let chars_per_line = (b.width() / (style.size * 0.5)).max(1.0);
-            let lines = (b.height() / style.effective_leading()).max(1.0);
+            // The first paragraph's Auto Leading sets the leading of Auto type (a leading of 0
+            // counts as a tenth of a point a line).
+            let lines = (b.height() / t.para_at(0).effective_leading(&style).max(0.1)).max(1.0);
             let want = (chars_per_line * lines) as usize;
             let mut out = String::new();
             for (i, w) in PLACEHOLDER.split(' ').cycle().enumerate() {
@@ -646,9 +652,10 @@ pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bo
 
 fn all_texts(d: &Document) -> Vec<NodeId> {
     let mut v = vec![];
+    let locks = d.locked_artboards();
     for l in d.layers.iter().filter(|l| l.visible && !l.locked) {
         l.walk(&mut |n| {
-            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked {
+            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked && !locks.holds_id(n.id) {
                 v.push(n.id);
             }
         });

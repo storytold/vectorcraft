@@ -3,6 +3,30 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod axes;
+mod bidi;
+mod bitmaps;
+mod colr;
+mod combos;
+mod devanagari;
+mod embed;
+mod fit;
+mod hang;
+mod inline;
+mod joiners;
+mod justify;
+mod path_joins;
+mod ruby;
+mod scripts;
+mod snap;
+mod svg_glyphs;
+mod sysfonts;
+mod typo;
+mod variable;
+mod versions;
+mod vertical;
+mod vietnamese;
+
 /// The bundled fonts only: what these tests measure doesn't change with the fonts installed.
 fn db() -> &'static FontDb {
     static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
@@ -65,6 +89,63 @@ fn add_font_rejects_garbage_and_duplicates() {
     assert_eq!(db().add_font(vec![1, 2, 3]), 0);
     let bytes = include_bytes!("../../../assets/fonts/Inter-Regular.ttf").to_vec();
     assert_eq!(db().add_font(bytes), 0, "already bundled");
+}
+
+/// Character panel menu › System Layout: each character that takes space advances by a whole
+/// number of points, at least one. Off (the default) keeps the font's fractional advances. A
+/// tate-chu-yoko continuation stays at zero.
+/// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+#[test]
+fn system_layout_rounds_positive_advances_to_whole_points() {
+    let mut off = point("Hi", style(13.0));
+    off.runs[0].style.tracking = 50.0;
+    assert!(!off.system_layout);
+    let fractional: Vec<f64> = layout(db(), &off).glyphs.iter().map(|g| g.advance).collect();
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    let mut on = off.clone();
+    on.system_layout = true;
+    let whole: Vec<f64> = layout(db(), &on).glyphs.iter().map(|g| g.advance).collect();
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    let mut tiny = point("i", style(0.4));
+    tiny.system_layout = true;
+    let laid = layout(db(), &tiny);
+    assert!(laid.glyphs.iter().any(|g| (g.advance - 1.0).abs() < 1e-9), "{:?}", laid.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    let mut tcy = point("10", style(20.0));
+    tcy.vertical = true;
+    tcy.system_layout = true;
+    let adv: Vec<f64> = layout(db(), &tcy).glyphs.iter().map(|g| g.advance).collect();
+    assert!(adv.contains(&0.0), "a tate-chu-yoko continuation stays at zero: {adv:?}");
+    assert!(adv.iter().all(|a| *a == 0.0 || (a - a.round()).abs() < 1e-9), "{adv:?}");
+}
+
+/// Character panel menu › Fractional Widths, off: each character that takes space advances by a
+/// whole number of points, at least one. On (the default) keeps the font's fractional advances,
+/// including tracking. A tate-chu-yoko continuation stays at zero.
+/// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+#[test]
+fn fractional_widths_off_rounds_positive_advances_to_whole_points() {
+    let mut on = point("Hi", style(13.0));
+    on.runs[0].style.tracking = 50.0;
+    assert!(on.fractional_widths);
+    let fractional: Vec<f64> = layout(db(), &on).glyphs.iter().map(|g| g.advance).collect();
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    let mut off = on.clone();
+    off.fractional_widths = false;
+    let whole: Vec<f64> = layout(db(), &off).glyphs.iter().map(|g| g.advance).collect();
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    // Smaller than half a point: rounding alone would be 0, which would run the type together.
+    let mut tiny = point("i", style(0.4));
+    tiny.fractional_widths = false;
+    let laid = layout(db(), &tiny);
+    assert!(laid.glyphs.iter().any(|g| (g.advance - 1.0).abs() < 1e-9), "{:?}", laid.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    let mut tcy = point("10", style(20.0));
+    tcy.vertical = true;
+    tcy.fractional_widths = false;
+    let adv: Vec<f64> = layout(db(), &tcy).glyphs.iter().map(|g| g.advance).collect();
+    assert!(adv.contains(&0.0), "a tate-chu-yoko continuation stays at zero: {adv:?}");
+    assert!(adv.iter().all(|a| *a == 0.0 || (a - a.round()).abs() < 1e-9), "{adv:?}");
 }
 
 #[test]
@@ -580,6 +661,436 @@ fn tab_leaders_line_up_from_line_to_line_and_stop_short_of_the_stop() {
     assert!(short.last().is_some_and(|&x| x < 120.0));
 }
 
+/// Bullets: a list paragraph's first line starts with its bullet, glyphs that stand for no
+/// character, in the run and size of the paragraph's first character. After the bullet the text
+/// starts at the left indent, and the lines it wraps to start there too. The caret before the
+/// first character stands at the text, a click on the bullet puts it there, an underline leaves
+/// the bullet out, and a paragraph without text has no bullet.
+#[test]
+fn a_list_paragraph_starts_with_its_bullet_and_its_text_at_the_left_indent() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let bulleted = |text: &str, size: f64| {
+        let mut t = area(text, style(size), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left);
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = -18.0;
+        t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+        t
+    };
+    let t = bulleted(LOREM, 12.0);
+    let lay = layout(db(), &t);
+    assert_eq!(lay.markers.len(), 1, "{:?}", lay.markers);
+    let m = &lay.markers[0];
+    assert_eq!((m.text.as_str(), m.glyphs.start, m.glyphs.len()), ("\u{2022}", lay.lines[0].glyph_start, 2));
+    let marker = &lay.glyphs[m.glyphs.clone()];
+    assert!(marker.iter().all(|g| g.len == 0 && g.byte == 0 && g.run == 0 && g.line == 0), "{marker:?}");
+    assert!(marker[0].origin.x.abs() < 1e-6, "the bullet starts the first line at its first-line indent: {}", marker[0].origin.x);
+    assert!(!marker[0].outline.elements().is_empty() && marker[1].outline.elements().is_empty(), "the bullet draws, its tab doesn't");
+    assert!((marker[1].origin.x + marker[1].advance - 18.0).abs() < 1e-6, "the tab reaches the left indent");
+    // The text starts at the left indent on the first line and on every line it wraps to.
+    assert!(lay.lines.len() > 2, "the paragraph wraps");
+    for (i, line) in lay.lines.iter().enumerate() {
+        let first = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        assert!((first.origin.x - 18.0).abs() < 1e-6, "line {i} starts at {}", first.origin.x);
+    }
+    let (top, _) = caret_position(&lay, 0);
+    assert!((top.x - 18.0).abs() < 1e-6, "the caret before the first character: {top:?}");
+    assert_eq!(hit_byte(&lay, Point::new(marker[0].origin.x + 1.0, lay.lines[0].baseline - 3.0)), 0);
+    // A selection from the paragraph's start highlights the text, not the bullet.
+    let quads = selection_quads(&lay, 0, 5);
+    assert!((quads[0][0].x - 18.0).abs() < 1e-6, "the selection starts at the text: {:?}", quads[0]);
+    // The bullet takes the size of the paragraph's first character.
+    let big = layout(db(), &bulleted(LOREM, 24.0));
+    assert!((big.glyphs[0].advance - 2.0 * lay.glyphs[0].advance).abs() < 1e-6, "{} {}", big.glyphs[0].advance, lay.glyphs[0].advance);
+    // A baseline shift or rotation of the first character leaves the bullet on the baseline.
+    let mut raised = bulleted("Raised", 12.0);
+    raised.runs[0].style.baseline_shift = 5.0;
+    raised.runs[0].style.rotation = 30.0;
+    let lay = layout(db(), &raised);
+    let (bullet, first) = (&lay.glyphs[0], lay.glyphs.iter().find(|g| g.len > 0).unwrap());
+    assert!((bullet.xf.translation().y - lay.lines[0].baseline).abs() < 1e-6, "{:?}", bullet.xf);
+    assert!((bullet.xf.as_coeffs()[1]).abs() < 1e-9 && first.xf.as_coeffs()[1].abs() > 1e-3, "the bullet isn't rotated");
+    // An underline starts at the text, not under the bullet.
+    let mut underlined = bulleted("Underlined", 12.0);
+    underlined.runs[0].style.underline = true;
+    let lay = layout(db(), &underlined);
+    let bars = decorations(&lay, db(), &underlined);
+    assert_eq!(bars.len(), 1);
+    assert!((bars[0].1.bounding_box().x0 - 18.0).abs() < 1e-6, "{:?}", bars[0].1.bounding_box());
+    // Only the paragraphs with text have a bullet.
+    let lay = layout(db(), &bulleted("One\n\nThree", 12.0));
+    assert_eq!(lay.markers.iter().map(|m| lay.glyphs[m.glyphs.start].byte).collect::<Vec<_>>(), [0, 5]);
+}
+
+/// Bullets: in vertical type the bullet is drawn the same whether or not the paragraph's first
+/// characters are set tate-chu-yoko.
+#[test]
+fn a_vertical_list_paragraphs_bullet_is_not_set_tate_chu_yoko() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let bullet = |tcy: bool| {
+        let mut t = point("", style(12.0));
+        t.vertical = true;
+        t.runs = vec![TextRun::new("12", CharStyle { tate_chu_yoko: tcy, ..style(12.0) }), TextRun::new(" vertical", style(12.0))];
+        t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+        let lay = layout(db(), &t);
+        let g = &lay.glyphs[lay.markers[0].glyphs.start];
+        (g.advance, g.xf)
+    };
+    let (plain, set) = (bullet(false), bullet(true));
+    let same = (plain.0 - set.0).abs() < 1e-9 && plain.1.as_coeffs().iter().zip(set.1.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9);
+    assert!(same, "{plain:?} {set:?}");
+}
+
+/// Bullets: a right-to-left list paragraph starts at its right with the bullet, then the gap, then
+/// the text, and the caret before its first character stands at the text.
+#[test]
+fn a_right_to_left_list_paragraph_starts_with_its_bullet_at_the_right() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut t = area("שלום עולם", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Auto);
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let lay = layout(db(), &t);
+    let m = &lay.markers[0];
+    assert_eq!(m.tab, m.glyphs.start, "the tab is drawn first, left of the bullet");
+    assert_eq!((lay.marker_text(m.tab), lay.marker_text(m.glyphs.start + 1)), (Some("\t"), Some("\u{2022}")));
+    let (tab, bullet) = (&lay.glyphs[m.tab], &lay.glyphs[m.glyphs.start + 1]);
+    assert!((bullet.origin.x + bullet.advance - 200.0).abs() < 1e-6, "the bullet ends the line at the right: {bullet:?}");
+    assert!((tab.origin.x + tab.advance - bullet.origin.x).abs() < 1e-6, "the gap is right before the bullet");
+    let text_right = lay.glyphs.iter().filter(|g| g.len > 0).map(|g| g.origin.x + g.advance).fold(0.0, f64::max);
+    assert!((text_right - tab.origin.x).abs() < 1e-6, "the text ends at the gap: {text_right} {}", tab.origin.x);
+    let (top, _) = caret_position(&lay, 0);
+    assert!((top.x - text_right).abs() < 1e-6, "the caret before the first character: {top:?}");
+    // A selection across two right-to-left list items highlights their characters alone.
+    let mut two = area("שלום\nעולם", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Auto);
+    two.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    let lay = layout(db(), &two);
+    assert_eq!(lay.markers.len(), 2);
+    let quads = selection_quads(&lay, 0, two.plain_text().len());
+    assert_eq!(quads.len(), lay.glyphs.iter().filter(|g| g.len > 0).count(), "one quad per character glyph: {quads:?}");
+}
+
+/// Bullets: a right-to-left list paragraph has its indents mirrored. Its bullet hangs at the right,
+/// its right indent is kept at the left, and the lines it wraps to start at the right where the
+/// first line's text starts after the bullet. A right-to-left paragraph without a list keeps its
+/// left and first-line indents at the left, and a left-to-right list keeps its bullet at the left.
+#[test]
+fn a_right_to_left_list_paragraph_mirrors_its_hanging_indent() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let hebrew = "שלום עולם ".repeat(12);
+    let para = |text: &str, justify: Justify, list: bool| {
+        let mut t = area(text.trim_end(), style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), justify);
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = -18.0;
+        t.para.right_indent = 5.0;
+        t.para.list = list.then(|| ParaList::bulleted(Bullet::Dot));
+        t
+    };
+    // The left and right ends of line `k`'s glyphs, its spaces left out.
+    let ends = |t: &TextObject, lay: &TextLayout, k: usize| {
+        let line = &lay.lines[k];
+        let text = t.plain_text();
+        let glyphs = lay.glyphs[line.glyph_start..line.glyph_end].iter().filter(|g| !text[g.byte..].starts_with(' '));
+        let (l, r) = glyphs.fold((f64::MAX, f64::MIN), |(l, r), g| (l.min(g.origin.x), r.max(g.origin.x + g.advance)));
+        (l, r)
+    };
+    let close = |(l, r): (f64, f64), (el, er): (f64, f64)| (l - el).abs() < 1e-6 && (r - er).abs() < 1e-6;
+    for justify in [Justify::Auto, Justify::JustifyLeft] {
+        let t = para(&hebrew, justify, true);
+        let lay = layout(db(), &t);
+        assert!(lay.lines.len() > 2, "{justify:?}: the paragraph wraps");
+        let m = &lay.markers[0];
+        let (tab, bullet) = (&lay.glyphs[m.tab], &lay.glyphs[m.glyphs.start + 1]);
+        assert!((bullet.origin.x + bullet.advance - 200.0).abs() < 1e-6, "{justify:?}: the bullet ends the first line at the right: {bullet:?}");
+        assert!(
+            (tab.origin.x - 182.0).abs() < 1e-6,
+            "{justify:?}: the text after the bullet starts at the left indent from the right: {}",
+            tab.origin.x
+        );
+        // Justify with Last Line Aligned Left sets the last line at the left.
+        let wrapped = if justify == Justify::JustifyLeft { 1..lay.lines.len() - 1 } else { 1..lay.lines.len() };
+        for k in wrapped {
+            let (_, r) = ends(&t, &lay, k);
+            assert!((r - tab.origin.x).abs() < 1e-6, "{justify:?}: line {k}'s right edge is at {r}, the first line's text's at {}", tab.origin.x);
+        }
+        if justify == Justify::JustifyLeft {
+            assert!(close(ends(&t, &lay, 0), (5.0, 200.0)), "the first line: {:?}", ends(&t, &lay, 0));
+            assert!(close(ends(&t, &lay, 1), (5.0, 182.0)), "a wrapped line: {:?}", ends(&t, &lay, 1));
+        }
+    }
+    // Without a list a right-to-left paragraph keeps its indents: the left and first-line indents
+    // at the left, the right indent at the right.
+    let t = para(&hebrew, Justify::JustifyLeft, false);
+    let lay = layout(db(), &t);
+    assert!(lay.markers.is_empty() && lay.lines.len() > 2);
+    assert!(close(ends(&t, &lay, 0), (0.0, 195.0)), "the first line: {:?}", ends(&t, &lay, 0));
+    assert!(close(ends(&t, &lay, 1), (18.0, 195.0)), "a wrapped line: {:?}", ends(&t, &lay, 1));
+    // A left-to-right list: the bullet at the left, every line's text at the left indent.
+    let t = para(LOREM, Justify::JustifyLeft, true);
+    let lay = layout(db(), &t);
+    assert!(lay.lines.len() > 2);
+    assert!(lay.glyphs[lay.markers[0].glyphs.start].origin.x.abs() < 1e-6, "the bullet starts the first line");
+    assert!(close(ends(&t, &lay, 0), (0.0, 195.0)), "the first line: {:?}", ends(&t, &lay, 0));
+    assert!(close(ends(&t, &lay, 1), (18.0, 195.0)), "a wrapped line: {:?}", ends(&t, &lay, 1));
+}
+
+/// Bullets: area type in a frame that isn't a rectangle, centered vertically, flows again until it
+/// settles, and keeps one marker for each list paragraph, at that paragraph's bullet.
+#[test]
+fn vertically_centered_list_paragraphs_in_a_round_frame_keep_one_bullet_each() {
+    use vectorcraft_doc::VerticalAlign;
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let text = format!("{LOREM}\n{LOREM}");
+    let frame = kurbo::Ellipse::new((150.0, 150.0), (150.0, 150.0), 0.0).to_path(0.1);
+    let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let top = layout(db(), &t);
+    t.area.vertical_align = VerticalAlign::Center;
+    let lay = layout(db(), &t);
+    assert!(lay.lines[0].baseline > top.lines[0].baseline + 1.0, "the text moves down");
+    let starts: Vec<usize> = lay.markers.iter().map(|m| m.glyphs.start).collect();
+    assert_eq!(starts.len(), 2, "{:?}", lay.markers);
+    for (m, para_start) in lay.markers.iter().zip([0, LOREM.len() + 1]) {
+        let glyphs = &lay.glyphs[m.glyphs.clone()];
+        assert!(glyphs.iter().all(|g| g.len == 0 && g.byte == para_start), "{m:?}: {glyphs:?}");
+        assert!(!glyphs[0].outline.elements().is_empty(), "the bullet draws");
+    }
+}
+
+/// Bullets: in a frame narrower at the top than the bullet, its gap and the first word, the first
+/// line goes down to where they fit, and every line stays inside the frame.
+#[test]
+fn a_list_paragraph_starts_where_its_bullet_and_first_word_fit() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut triangle = BezPath::new();
+    triangle.move_to((150.0, 0.0));
+    triangle.line_to((300.0, 300.0));
+    triangle.line_to((0.0, 300.0));
+    triangle.close_path();
+    let mut t = area("Extraordinarily long words follow", style(12.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&triangle) };
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let lay = layout(db(), &t);
+    assert_eq!(lay.markers.len(), 1);
+    for (i, line) in lay.lines.iter().enumerate() {
+        for g in &lay.glyphs[line.glyph_start..line.glyph_end] {
+            let (l, r) = (g.origin.x, g.origin.x + g.advance);
+            assert!(l >= line.avail.0 - 0.01 && r <= line.avail.1 + 0.01, "line {i}: {l}..{r} outside {:?}", line.avail);
+        }
+    }
+}
+
+/// Bullets: type on a path starts with its bullet and the gap after it, the caret before its
+/// first character stands at the text, and a selection of the text highlights the characters
+/// alone.
+#[test]
+fn type_on_a_path_starts_with_its_bullet() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let mut t = point("Path", style(20.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let lay = layout(db(), &t);
+    assert_eq!(lay.markers.len(), 1, "{:?}", lay.markers);
+    let m = &lay.markers[0];
+    assert_eq!((m.glyphs.clone(), m.tab, lay.marker_text(0)), (0..2, 1, Some("\u{2022}")));
+    assert!(lay.glyphs[0].origin.x.abs() < 1e-6 && !lay.glyphs[0].outline.elements().is_empty(), "{:?}", lay.glyphs[0].origin);
+    let first = lay.glyphs.iter().find(|g| g.len > 0).unwrap();
+    assert!((first.origin.x - 18.0).abs() < 1e-6, "the text starts at {}", first.origin.x);
+    let (top, _) = caret_position(&lay, 0);
+    assert!((top.x - 18.0).abs() < 1e-6, "the caret before the first character: {top:?}");
+    let quads = selection_quads(&lay, 0, 4);
+    assert_eq!(quads.len(), 4, "one quad per character");
+    assert!(quads.iter().all(|q| q[0].x >= 18.0 - 1e-6), "{quads:?}");
+    // A right-to-left list item on a path reads from its bullet: the bullet is drawn right of the
+    // text, with the gap between them.
+    let mut rtl = point("שלום", style(20.0));
+    rtl.kind = t.kind.clone();
+    rtl.para = t.para.clone();
+    let lay = layout(db(), &rtl);
+    let m = &lay.markers[0];
+    let (tab, bullet) = (&lay.glyphs[m.tab], &lay.glyphs[m.glyphs.start + 1]);
+    let text_right = lay.glyphs.iter().filter(|g| g.len > 0).map(|g| g.origin.x + g.advance).fold(f64::MIN, f64::max);
+    assert!((tab.origin.x - text_right).abs() < 1e-6 && (bullet.origin.x - tab.origin.x - tab.advance).abs() < 1e-6, "{tab:?} {bullet:?}");
+    assert!((tab.advance + bullet.advance - 18.0).abs() < 1e-6, "the bullet and its gap take the left indent: {} {}", tab.advance, bullet.advance);
+    // Optical Margin Alignment leaves a dash bullet at the start bracket, with room before it.
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.1, end: None };
+    t.para.list = Some(ParaList::bulleted(Bullet::Dash));
+    for optical in [false, true] {
+        t.optical_margin = optical;
+        let lay = layout(db(), &t);
+        assert!((lay.glyphs[0].origin.x - 50.0).abs() < 1e-6, "optical {optical}: the dash starts at {}", lay.glyphs[0].origin.x);
+    }
+}
+
+/// Bullets: after the bullet the text starts at an explicit tab stop that comes before the left
+/// indent, at the next stop past the bullet when the bullet reaches past the left indent, and a
+/// line holds the bullet and the start of its first word however narrow the frame. Justified lines
+/// and Optical Margin Alignment leave the bullet and the gap after it as they are.
+#[test]
+fn a_list_paragraph_starts_its_text_at_the_next_tab_stop_after_the_bullet() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let text_x = |t: &TextObject| layout(db(), t).glyphs.iter().find(|g| g.byte == 0 && g.len > 0).map(|g| g.origin.x).unwrap();
+    for (text, justify, optical) in
+        [(LOREM, Justify::JustifyLeft, false), (LOREM, Justify::Left, true), (LOREM, Justify::JustifyAll, true), ("Item", Justify::JustifyAll, false)]
+    {
+        let mut t = area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), justify);
+        t.para.list = Some(ParaList::bulleted(Bullet::Dash));
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = -18.0;
+        t.optical_margin = optical;
+        let lay = layout(db(), &t);
+        let marker = &lay.glyphs[lay.markers[0].glyphs.clone()];
+        assert!(marker[0].origin.x.abs() < 1e-6, "{justify:?}, optical {optical}: the dash starts at {}", marker[0].origin.x);
+        assert!((text_x(&t) - 18.0).abs() < 1e-6, "{justify:?}, optical {optical}: the text starts at {}", text_x(&t));
+        if justify != Justify::Left && !optical {
+            let line = &lay.lines[0];
+            let ends = lay.glyphs[line.glyph_start..line.glyph_end]
+                .iter()
+                .filter(|g| !t.plain_text()[g.byte..].starts_with(' '))
+                .map(|g| g.origin.x + g.advance)
+                .fold(0.0, f64::max);
+            assert!((ends - 200.0).abs() < 1e-6, "{justify:?}: the justified first line ends at {ends}");
+        }
+    }
+    // A right-aligned item ends at the frame's right edge, its bullet and gap before it.
+    let mut right = area("Item", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Right);
+    right.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    right.para.left_indent = 18.0;
+    right.para.first_line_indent = -18.0;
+    let lay = layout(db(), &right);
+    let last = lay.glyphs.last().unwrap();
+    assert!((last.origin.x + last.advance - 200.0).abs() < 1e-6, "the line ends at {}", last.origin.x + last.advance);
+    let marker = &lay.glyphs[lay.markers[0].glyphs.clone()];
+    assert!((marker[1].origin.x + marker[1].advance - text_x(&right)).abs() < 1e-6, "the text follows the gap");
+    let mut t = area("Item", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), Justify::Left);
+    t.para.list = Some(ParaList::bulleted(Bullet::Dash));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    t.para.tabs = vec![TabStop { position: 12.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    assert!((text_x(&t) - 12.0).abs() < 1e-6, "{}", text_x(&t));
+    // No indents: the bullet starts the line and the text goes to the next default stop.
+    t.para.tabs.clear();
+    t.para.left_indent = 0.0;
+    t.para.first_line_indent = 0.0;
+    assert!((text_x(&t) - 36.0).abs() < 1e-6, "{}", text_x(&t));
+    // A frame with no room for a letter after the bullet: the first line still holds the bullet and
+    // the word's first letter.
+    let mut narrow = area("Pneumonoultramicroscopic", style(12.0), Rect::new(0.0, 0.0, 20.0, 400.0), Justify::Left);
+    narrow.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    narrow.para.left_indent = 18.0;
+    narrow.para.first_line_indent = -18.0;
+    let lay = layout(db(), &narrow);
+    let first = &lay.glyphs[lay.lines[0].glyph_start..lay.lines[0].glyph_end];
+    assert!(first.iter().any(|g| g.len > 0), "the first line holds more than the bullet: {:?}", lay.lines);
+}
+
+/// The list markers of `t`'s layout, in text order.
+fn marker_texts(t: &TextObject) -> Vec<String> {
+    layout(db(), t).markers.iter().map(|m| m.text.clone()).collect()
+}
+
+/// Area type `text` whose paragraphs have the lists `lists` and an 18 pt hanging indent.
+fn listed(text: &str, lists: &[Option<vectorcraft_doc::text::ParaList>]) -> TextObject {
+    let mut t = area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left);
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let styles = lists.iter().map(|&list| vectorcraft_doc::ParaStyle { list, ..t.para.clone() }).collect();
+    t.set_paragraph_styles(styles);
+    t
+}
+
+/// Numbered lists: each list paragraph starts with its number and a period, counted through the
+/// list paragraphs before it, and its text starts at the left indent after the number. An empty
+/// paragraph has no number and is not counted, a bulleted paragraph keeps its bullet and is not
+/// counted, and a paragraph in no list starts the count again. Each number style writes its
+/// numbers and rolls over, and a number wider than the indent takes the text to the next tab stop.
+#[test]
+fn numbered_list_paragraphs_are_numbered_in_order() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let numbered = Some(ParaList::numbered(NumberStyle::Arabic));
+    let t = listed("One\nTwo\nThree", &[numbered; 3]);
+    assert_eq!(marker_texts(&t), ["1.", "2.", "3."]);
+    let lay = layout(db(), &t);
+    for (k, m) in lay.markers.iter().enumerate() {
+        let number = &lay.glyphs[m.glyphs.start];
+        let line = &lay.lines[number.line];
+        let text = lay.glyphs[line.glyph_start..line.glyph_end].iter().find(|g| g.len > 0).unwrap();
+        assert!(number.origin.x.abs() < 1e-6 && (text.origin.x - 18.0).abs() < 1e-6, "item {k}: {} {}", number.origin.x, text.origin.x);
+        assert_eq!((m.tab, lay.marker_text(m.tab)), (m.glyphs.end - 1, Some("\t")), "item {k}");
+    }
+    assert_eq!(marker_texts(&listed("One\n\nTwo", &[numbered; 3])), ["1.", "2."]);
+    assert_eq!(marker_texts(&listed("A\nB\nC\nD\nE", &[numbered, numbered, None, numbered, numbered])), ["1.", "2.", "1.", "2."]);
+    assert_eq!(marker_texts(&listed("A\nB\nC", &[numbered, Some(ParaList::bulleted(Bullet::Dash)), numbered])), ["1.", "\u{2013}", "2."]);
+    // The count goes on from the earlier frames of a thread.
+    let mut t = listed("One\nTwo", &[numbered; 2]);
+    t.list_count = 9;
+    assert_eq!(marker_texts(&t), ["10.", "11."]);
+    // Each style, from the count before its rollover.
+    for (style, before, numbers) in [
+        (NumberStyle::Arabic, 0, ["1.", "2."]),
+        (NumberStyle::UpperLetters, 25, ["Z.", "AA."]),
+        (NumberStyle::LowerLetters, 25, ["z.", "aa."]),
+        (NumberStyle::UpperRoman, 3, ["IV.", "V."]),
+        (NumberStyle::LowerRoman, 8, ["ix.", "x."]),
+        (NumberStyle::TwoDigits, 98, ["99.", "100."]),
+        (NumberStyle::ThreeDigits, 998, ["999.", "1000."]),
+    ] {
+        let mut t = listed("One\nTwo", &[Some(ParaList::numbered(style)); 2]);
+        t.list_count = before;
+        assert_eq!(marker_texts(&t), numbers, "{style:?}");
+    }
+    // "1000." is wider than the 18 pt before the left indent: the text goes to the next default stop.
+    let mut wide = listed("One", &[Some(ParaList::numbered(NumberStyle::ThreeDigits))]);
+    wide.list_count = 999;
+    let lay = layout(db(), &wide);
+    let number_width: f64 = lay.glyphs[..lay.markers[0].tab].iter().map(|g| g.advance).sum();
+    let text = lay.glyphs.iter().find(|g| g.len > 0).unwrap();
+    assert!(number_width > 18.0 && (text.origin.x - 36.0).abs() < 1e-6, "{number_width} {}", text.origin.x);
+    // Type on a path numbers its paragraphs too.
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let mut on_path = listed("One\nTwo", &[numbered; 2]);
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    assert_eq!(marker_texts(&on_path), ["1.", "2."]);
+}
+
+/// Numbered lists: a right-to-left list paragraph's number ends its first line at the right and
+/// reads left to right, with its period at its left and the gap before the text left of that.
+#[test]
+fn a_right_to_left_numbered_paragraph_has_its_period_left_of_its_number() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let numbered = Some(ParaList::numbered(NumberStyle::Arabic));
+    // The glyphs of "1", "2" and "." in a left-to-right "12.".
+    let mut ltr = listed("One", &[numbered]);
+    ltr.list_count = 11;
+    let lay = layout(db(), &ltr);
+    let gids: Vec<u32> = lay.glyphs[..lay.markers[0].tab].iter().map(|g| g.gid).collect();
+    assert_eq!(gids.len(), 3, "{gids:?}");
+    let mut rtl = listed("שלום עולם", &[numbered]);
+    rtl.edit_paras(None, |p| p.justify = Justify::Auto);
+    rtl.list_count = 11;
+    let lay = layout(db(), &rtl);
+    let m = &lay.markers[0];
+    assert_eq!(m.text, "12.");
+    assert_eq!(m.tab, m.glyphs.start, "the gap is drawn first, left of the number");
+    let drawn = &lay.glyphs[m.glyphs.start + 1..m.glyphs.end];
+    assert_eq!(drawn.iter().map(|g| g.gid).collect::<Vec<_>>(), [gids[2], gids[0], gids[1]], "drawn left to right: the period, 1, 2");
+    assert!(drawn.windows(2).all(|w| w[0].origin.x < w[1].origin.x), "{drawn:?}");
+    let last = drawn.last().unwrap();
+    assert!((last.origin.x + last.advance - 200.0).abs() < 1e-6, "the number ends the line at the right: {last:?}");
+}
+
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {
@@ -935,10 +1446,90 @@ fn optical_margin_alignment_hangs_punctuation_and_letter_edges_outside_the_margi
     };
     let (on, off) = (vertical(true), vertical(false));
     assert!((on[1].origin - off[0].origin).hypot() < 1e-6, "{:?} {:?}", on[1].origin, off[0].origin);
-    // Right-to-left paragraphs are placed as before: a full stop ending one, set at the left of a
-    // left-aligned line, doesn't hang.
-    let rtl = |on: bool| lay("שלום, עולם.", Justify::Left, on).iter().map(|g| g.origin).collect::<Vec<_>>();
-    assert_eq!(rtl(true), rtl(false));
+}
+
+/// Right-to-left paragraphs hang at the margins their alignment places their lines against: Auto
+/// and right-aligned lines hang at the right, left-aligned lines hang at the left, and justified
+/// lines hang at both. The line is read from right to left, so `."` ending it hangs both glyphs at its left, and `".`
+/// starting it hangs only the quotation mark at its right. Roman Hanging Punctuation hangs them
+/// the same way. In vertical type the characters run from the top down, and the pair is read
+/// from the top.
+#[test]
+fn optical_margin_alignment_hangs_right_to_left_paragraphs() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 400.0);
+    let object = |text: &str, justify: Justify, on: bool| {
+        let mut t = area(text, style(20.0), frame, justify);
+        t.optical_margin = on;
+        t
+    };
+    let lay = |text: &str, justify: Justify, on: bool| layout(db(), &object(text, justify, on)).glyphs;
+    let at = |glyphs: &[PositionedGlyph], b: usize| glyphs.iter().find(|g| g.byte == b).cloned().unwrap();
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let end = |g: &PositionedGlyph| g.origin.x + g.advance;
+    let alef = 'א'.len_utf8();
+    // Auto aligns the line at the right: the opening quotation mark (logically first, drawn at the
+    // right end) hangs wholly past the right edge, and the letter after it ends at the edge.
+    let text = "\"שלום\" עולם";
+    let (on, off) = (lay(text, Justify::Auto, true), lay(text, Justify::Auto, false));
+    assert!(off.iter().all(|g| g.rtl) && near(end(&at(&off, 0)), 300.0), "{off:?}");
+    assert!(near(at(&on, 0).origin.x, 300.0) && at(&on, 0).advance > 1.0, "{:?}", at(&on, 0).origin);
+    assert!(near(end(&at(&on, 1)), 300.0), "{}", end(&at(&on, 1)));
+    // Left aligned: the full stop ending the line is drawn at its left and hangs there.
+    let text = "שלום, עולם.";
+    let stop = text.len() - 1;
+    let (on, off) = (lay(text, Justify::Left, true), lay(text, Justify::Left, false));
+    assert!(near(off[0].origin.x, 0.0) && near(at(&on, stop).origin.x, -at(&on, stop).advance), "{:?}", at(&on, stop).origin);
+    // Justified: `."` ending the line hangs both glyphs at the left; the right end doesn't hang.
+    let text = "שלום עולם.\"";
+    let (quote, stop) = (text.len() - 1, text.len() - 2);
+    let on = lay(text, Justify::JustifyAll, true);
+    let (q, s) = (at(&on, quote), at(&on, stop));
+    assert!(near(q.origin.x, -q.advance - s.advance) && near(s.origin.x, -s.advance), "{:?} {:?}", q.origin, s.origin);
+    assert!(near(end(&at(&on, 0)), 300.0), "{}", end(&at(&on, 0)));
+    // A justified line of one word, spread between its letters: the opening quotation mark hangs
+    // wholly past the right edge, the letter after it ends at the edge, and the last letter starts
+    // at the left edge.
+    let on = lay("\"שלום", Justify::JustifyAll, true);
+    let mem = 1 + 3 * alef;
+    assert!(near(at(&on, 0).origin.x, 300.0) && near(end(&at(&on, 1)), 300.0), "{:?} {:?}", at(&on, 0).origin, at(&on, 1).origin);
+    assert!(near(at(&on, mem).origin.x, 0.0), "{:?}", at(&on, mem).origin);
+    // `".` starting a right-aligned line: the quotation mark hangs and the full stop doesn't.
+    let on = lay("\".שלום", Justify::Right, true);
+    assert!(near(at(&on, 0).origin.x, 300.0) && near(end(&at(&on, 1)), 300.0), "{:?} {:?}", at(&on, 0).origin, at(&on, 1).origin);
+    // A wrapped left-aligned line: the comma ending it hangs, and the space after it stays to its left.
+    let first = width(&point("אבגד, ", style(20.0)));
+    let mut t = area("אבגד, הוזח", style(20.0), Rect::new(0.0, 0.0, first + 1.0, 400.0), Justify::Left);
+    t.optical_margin = true;
+    let l = layout(db(), &t);
+    let (comma, space) = (at(&l.glyphs, 4 * alef), at(&l.glyphs, 4 * alef + 1));
+    assert!(l.lines.len() == 2 && near(comma.origin.x, -comma.advance), "{:?} {:?}", l.lines, comma.origin);
+    assert!(near(end(&space), comma.origin.x), "{:?} {:?}", space.origin, comma.origin);
+    // Point type: Auto grows the line left from its anchor, and the opening quotation mark hangs
+    // to the right of the anchor.
+    let mut t = point("\"שלום", style(20.0));
+    (t.para.justify, t.optical_margin) = (Justify::Auto, true);
+    let l = layout(db(), &t);
+    assert!(near(at(&l.glyphs, 0).origin.x, 0.0) && near(end(&at(&l.glyphs, 1)), 0.0), "{:?}", at(&l.glyphs, 0).origin);
+    // Roman Hanging Punctuation hangs the full stop the same way.
+    let mut t = area("שלום, עולם.", style(20.0), frame, Justify::Left);
+    t.para.roman_hanging = true;
+    let l = layout(db(), &t);
+    let stop = "שלום, עולם".len();
+    assert!(near(at(&l.glyphs, stop).origin.x, -at(&l.glyphs, stop).advance), "{:?}", at(&l.glyphs, stop).origin);
+    // Vertical type: the letter after the quotation mark takes the mark's place at the column's top.
+    let vertical = |text: &str, justify: Justify, on: bool| {
+        let mut t = object(text, justify, on);
+        t.vertical = true;
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (vertical("\"שלום", Justify::Left, true), vertical("\"שלום", Justify::Left, false));
+    assert!((at(&on, 1).origin - at(&off, 0).origin).hypot() < 1e-6, "{:?} {:?}", at(&on, 1).origin, at(&off, 0).origin);
+    // …and `."` ending a line at the column's bottom hangs both glyphs there.
+    let text = "שלום.\"";
+    let (on, off) = (vertical(text, Justify::Right, true), vertical(text, Justify::Right, false));
+    let (stop, mem) = (text.len() - 2, text.len() - 2 - alef);
+    let shift = at(&off, stop).advance + at(&off, stop + 1).advance;
+    assert!(near((at(&on, mem).origin - at(&off, mem).origin).hypot(), shift), "{:?} {:?}", at(&on, mem).origin, at(&off, mem).origin);
 }
 
 /// Roman Hanging Punctuation (a paragraph attribute) hangs the punctuation Optical Margin
@@ -985,7 +1576,8 @@ fn roman_hanging_punctuation_hangs_punctuation_but_not_letters() {
 /// start bracket, a right-aligned line at the end bracket, a centered line at both, and the
 /// justified alignments where they place the line. A mark hanging past the end bracket doesn't
 /// overflow. A hang never takes a glyph off an open path's ends, nor past the other bracket of a
-/// closed path. Roman Hanging Punctuation hangs path type the same way, without the letters.
+/// closed path. Right-to-left type hangs at the bracket Auto places it at and is read from right to
+/// left. Roman Hanging Punctuation hangs path type the same way, without the letters.
 #[test]
 fn optical_margin_alignment_hangs_type_on_a_path_at_its_brackets() {
     // A straight path along y = 50 from x = 0 to 500: distance along it is x.
@@ -1099,16 +1691,34 @@ fn optical_margin_alignment_hangs_type_on_a_path_at_its_brackets() {
     let origins = |on: bool| closed(Justify::Center, on).iter().map(|g| g.origin).collect::<Vec<_>>();
     let (on, off) = (origins(true), origins(false));
     assert!(on.iter().zip(&off).all(|(a, b)| (*a - *b).hypot() < 1e-6), "{on:?} {off:?}");
-    // Right-to-left type on a path is placed as before.
-    let rtl = |on: bool| lay("שלום, עולם.", Justify::Left, on).glyphs.iter().map(|g| g.origin).collect::<Vec<_>>();
-    assert_eq!(rtl(true), rtl(false));
-    // So is vertical type on a path whose paragraph runs right to left.
-    let vertical_rtl = |on: bool| {
-        let mut t = on_path("שלום, עולם.", Justify::Right, 0.1, Some(0.9), on);
-        t.vertical = true;
-        layout(db(), &t).glyphs.iter().map(|g| g.origin).collect::<Vec<_>>()
+    // Right-to-left type on a path hangs too. Auto places it at the end bracket, where its opening
+    // quotation mark, drawn last, hangs wholly past the bracket.
+    let (on, off) = (lay("\"שלום\" עולם", Justify::Auto, true), lay("\"שלום\" עולם", Justify::Auto, false));
+    let n = on.glyphs.len();
+    assert!(near(end(&off.glyphs[n - 1]), 450.0) && near(on.glyphs[n - 1].origin.x, 450.0), "{:?}", on.glyphs[n - 1].origin);
+    assert!(!on.overflow);
+    // The line is read from right to left: left aligned, `."` ending it hangs both glyphs before the
+    // start bracket.
+    let (on, off) = (lay("עולם.\"", Justify::Left, true), lay("עולם.\"", Justify::Left, false));
+    assert!(near(off.glyphs[0].origin.x, 50.0) && near(on.glyphs[2].origin.x, 50.0), "{:?}", on.glyphs[2].origin);
+    // On a closed path, Auto right-to-left type takes the stretch past the end bracket first, as
+    // right-aligned type does.
+    let closed_rtl = |on: bool| {
+        let mut t = on_path("\"שלום\"", Justify::Auto, 0.1, None, on);
+        t.kind = TextKind::OnPath { path: square.clone(), start: 0.1, end: Some((102.0 - gap) / 1020.0) };
+        layout(db(), &t).glyphs
     };
-    assert_eq!(vertical_rtl(true), vertical_rtl(false));
+    let (on, off) = (closed_rtl(true), closed_rtl(false));
+    assert!(near(off.last().map_or(0.0, end), 102.0 - gap) && near(on.last().map_or(0.0, end), 102.0), "{on:?}");
+    // Vertical type on a path whose paragraph runs right to left reads from the top: the letter
+    // after the quotation mark takes the mark's place.
+    let vertical_rtl = |on: bool| {
+        let mut t = on_path("\"שלום", Justify::Left, 0.1, Some(0.9), on);
+        t.vertical = true;
+        layout(db(), &t).glyphs
+    };
+    let (on, off) = (vertical_rtl(true), vertical_rtl(false));
+    assert!((on[1].origin - off[0].origin).hypot() < 1e-6 && (on[0].origin - off[0].origin).hypot() > 1.0, "{:?} {:?}", on[1].origin, off[0].origin);
     // Roman Hanging Punctuation hangs the quotation mark and no letters.
     let roman = |text: &str| {
         let mut t = on_path(text, Justify::Left, 0.1, Some(0.9), false);
@@ -1172,4 +1782,21 @@ fn thai_loanwords_stay_whole() {
     // No line ends inside the word, whatever the Thai font's widths put beside it.
     let word = text.find("โปรแกรม").unwrap();
     assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
+}
+
+/// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps
+/// at the space without the mark.
+#[test]
+fn no_break_keeps_marked_words_on_one_line() {
+    let plain = style(20.0);
+    let marked = CharStyle { no_break: true, ..plain.clone() };
+    let hello: f64 = layout(db(), &point("hello ", plain.clone())).glyphs.iter().map(|g| g.advance).sum();
+    let whole: f64 = layout(db(), &point("hello world", plain.clone())).glyphs.iter().map(|g| g.advance).sum();
+    assert!(whole > hello + 1.0, "the second word takes room");
+    let frame = Rect::new(0.0, 0.0, hello + 1.0, 200.0);
+    let wrapped = layout(db(), &area("hello world", plain, frame, Justify::Left));
+    assert!(wrapped.lines.len() > 1, "it wraps at the space");
+    let kept = layout(db(), &area("hello world", marked, frame, Justify::Left));
+    assert_eq!(kept.lines.len(), 1, "the marked words stay together");
+    assert_eq!(kept.lines[0].end, "hello world".len());
 }

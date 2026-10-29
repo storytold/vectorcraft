@@ -7,6 +7,7 @@
 //! directions.
 
 use std::io::Cursor;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use vectorcraft_geom::Point;
@@ -26,6 +27,15 @@ const RELIEF: f64 = 1.0;
 /// How many decoded textures [`texture`] keeps.
 const KEEP: usize = 4;
 
+/// Most bytes of gray levels the loaded textures alive at once may hold, wherever they are kept
+/// (the effects of every drawing hold theirs): a texture that would pass it isn't decoded. Each
+/// one is decoded within [`vectorcraft_doc::MAX_RASTER_ALLOC`], but a document's many Glass
+/// effects each kept their own.
+const MAX_LIVE: usize = 512 << 20;
+
+/// Bytes of gray levels the [`LoadedTexture`]s alive hold ([`MAX_LIVE`]).
+static LIVE: AtomicUsize = AtomicUsize::new(0);
+
 /// A loaded texture: `width` × `height` gray levels, row by row from the top.
 #[derive(Debug, PartialEq, Eq)]
 pub struct LoadedTexture {
@@ -34,7 +44,19 @@ pub struct LoadedTexture {
     gray: Vec<u8>,
 }
 
+impl Drop for LoadedTexture {
+    fn drop(&mut self) {
+        LIVE.fetch_sub(self.gray.len(), Ordering::Relaxed);
+    }
+}
+
 impl LoadedTexture {
+    /// A texture of `gray`, counted in [`LIVE`].
+    fn new(width: u32, height: u32, gray: Vec<u8>) -> Self {
+        LIVE.fetch_add(gray.len(), Ordering::Relaxed);
+        Self { width, height, gray }
+    }
+
     /// The texture of `width` × `height` straight (not premultiplied) RGBA pixels: each pixel's
     /// luma over middle gray, as much as its alpha covers it (a transparent pixel is middle gray).
     /// `None` when the image is empty or `rgba` doesn't hold exactly that many pixels.
@@ -52,7 +74,7 @@ impl LoadedTexture {
                 ((a * l + (1.0 - a) * 0.5) * 255.0).round().clamp(0.0, 255.0) as u8
             })
             .collect();
-        Some(Self { width, height, gray })
+        Some(Self::new(width, height, gray))
     }
 
     /// The size in pixels.
@@ -71,14 +93,23 @@ impl LoadedTexture {
 
     /// The texture of a PNG's gray levels, decoded within [`vectorcraft_doc::MAX_RASTER_ALLOC`];
     /// `None` when `png` isn't a PNG or holds no pixels.
+    /// `None` too when its gray levels would take the live textures past [`MAX_LIVE`].
     fn from_png(png: &[u8]) -> Option<Self> {
-        let mut reader = image::ImageReader::with_format(Cursor::new(png), image::ImageFormat::Png);
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
-        reader.limits(limits);
-        let img = reader.decode().ok()?.to_luma8();
+        let reader = || {
+            let mut reader = image::ImageReader::with_format(Cursor::new(png), image::ImageFormat::Png);
+            let mut limits = image::Limits::default();
+            limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
+            reader.limits(limits);
+            reader
+        };
+        let (w, h) = reader().into_dimensions().ok()?;
+        let gray = (w as usize).checked_mul(h as usize)?;
+        if LIVE.load(Ordering::Relaxed).saturating_add(gray) > MAX_LIVE {
+            return None;
+        }
+        let img = reader().decode().ok()?.to_luma8();
         let (width, height) = img.dimensions();
-        (width > 0 && height > 0).then(|| Self { width, height, gray: img.into_raw() })
+        (width > 0 && height > 0).then(|| Self::new(width, height, img.into_raw()))
     }
 
     /// The surface's height (points) at `p` (points at 100 %, from the object's center): the gray
@@ -99,24 +130,26 @@ impl LoadedTexture {
     }
 }
 
-/// The textures [`texture`] decoded last, with their stored form, the newest last.
-static DECODED: Mutex<Vec<(String, Arc<LoadedTexture>)>> = Mutex::new(Vec::new());
+/// The textures [`texture`] decoded last, with their PNG, the newest last.
+static DECODED: Mutex<Vec<(Vec<u8>, Arc<LoadedTexture>)>> = Mutex::new(Vec::new());
 
 /// The texture a [`TEXTURE_IMAGE`] value holds; `None` when it isn't base64 of a PNG. The last
-/// [`KEEP`] textures decoded are kept for the next call.
+/// [`KEEP`] textures decoded are kept for the next call, found by their PNG: values that differ
+/// only in how the base64 is spaced share one.
 pub fn texture(stored: &str) -> Option<Arc<LoadedTexture>> {
+    let png = base64_decode(stored)?;
     let mut decoded = DECODED.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(i) = decoded.iter().position(|(s, _)| s == stored) {
+    if let Some(i) = decoded.iter().position(|(p, _)| *p == png) {
         let entry = decoded.remove(i);
         let t = entry.1.clone();
         decoded.push(entry);
         return Some(t);
     }
-    let t = Arc::new(LoadedTexture::from_png(&base64_decode(stored)?)?);
+    let t = Arc::new(LoadedTexture::from_png(&png)?);
     if decoded.len() >= KEEP {
         decoded.remove(0);
     }
-    decoded.push((stored.to_string(), t.clone()));
+    decoded.push((png, t.clone()));
     Some(t)
 }
 

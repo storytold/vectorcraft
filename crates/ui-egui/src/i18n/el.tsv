@@ -29,6 +29,13 @@
 	Channel 4	Κανάλι 4
 	Cell Size	Μέγεθος κελιού
 	Fine Dots	Λεπτές κουκκίδες
+
+	Simple	Απλό
+	Light Rough	Ελαφρύ τραχύ
+	Dark Rough	Σκούρο τραχύ
+	Wide Sharp	Ευρύ οξύ
+	Wide Blurry	Ευρύ θολό
+	Sparkle	Λάμψη
 	Medium Dots	Μεσαίες κουκκίδες
 	Grainy Dots	Κοκκώδεις κουκκίδες
 	Coarse Dots	Χοντρές κουκκίδες
@@ -167,6 +174,8 @@
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
 	Anti-aliasing:	Εξομάλυνση ακμών:
 	Any Kind	Οποιοσδήποτε τύπος
+	Font Technology	Τεχνολογία γραμματοσειράς
+font-technology	Variable	Μεταβλητές
 	Appearance	Εμφάνιση
 	Appearance Attribute	Χαρακτηριστικό εμφάνισης
 	Appearance Item	Στοιχείο εμφάνισης
@@ -248,6 +257,11 @@
 	Average…	Μέσος όρος…
 	Axis:	Άξονας:
 	Background Color:	Χρώμα φόντου:
+	Show Center Mark	Εμφάνιση σημαδιού κέντρου
+	Show Cross Hairs	Εμφάνιση σταυρονήματος
+	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
+	Video Ruler Pixel Aspect Ratio:	Αναλογία διαστάσεων pixel χαράκων βίντεο:
+	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
 	Background Contents:	Περιεχόμενο φόντου:
 	Background:	Φόντο:
@@ -306,13 +320,22 @@
 	Brush Affects:	Το πινέλο επηρεάζει:
 	Brush Definition	Ορισμός πινέλου
 	Brush Libraries	Βιβλιοθήκες πινέλων
-	Brush Libraries (on the roadmap)	Βιβλιοθήκες πινέλων (στον σχεδιασμό)
 	Brush Options…	Επιλογές πινέλου…
 	Brush Strokes	Πινελιές
 	Brushes	Πινέλα
 	Built-in Libraries	Ενσωματωμένες βιβλιοθήκες
 	Bulge…	Διόγκωση…
 	Bullet	Κουκκίδα
+	Bullets	Κουκκίδες
+	Bullets and Numbering	Κουκκίδες και αρίθμηση
+	Apply Bullets	Εφαρμογή κουκκίδων
+	Numbered List	Αριθμημένη λίστα
+	Apply Numbers	Εφαρμογή αρίθμησης
+	Convert to Text	Μετατροπή σε κείμενο
+	Filled Dot	Γεμάτη κουκκίδα
+	Dash	Παύλα
+	Hollow Circle	Κενός κύκλος
+	Filled Square	Γεμάτο τετράγωνο
 	Butt Cap	Επίπεδο άκρο
 	Byte Order:	Σειρά byte:
 	Calligraphic	Καλλιγραφικό
@@ -999,6 +1022,7 @@
 	Eyedropper Picks Up:	Το σταγονόμετρο λαμβάνει:
 	Eyedropper Tool	Σταγονόμετρο (Eyedropper Tool)
 	Eyedropper: click the art to sample the stop's colour	Σταγονόμετρο: κλικ στα γραφικά για δειγματοληψία χρώματος σημείου διακοπής
+	Eyedropper: click the art to sample the key color	Σταγονόμετρο: κλικ στα γραφικά για δειγματοληψία βασικού χρώματος
 	Favorites	Αγαπημένα
 	Feather…	Απαλό περίγραμμα…
 	Feet	Πόδια
@@ -1007,6 +1031,11 @@
 	Fidelity:	Πιστότητα:
 	Figure Space	Κενό ψηφίου
 	Figure:	Σχήμα:
+# Artwork drag between document tabs.
+	Drop Artwork	Απόθεση γραφικών
+@msg	{key} must be [x, y] with finite coordinates	Το {key} πρέπει να είναι [x, y] με πεπερασμένες συντεταγμένες
+@msg	ids must contain 1–10000 object ids	Το ids πρέπει να περιέχει 1–10000 αναγνωριστικά αντικειμένων
+
 	File	Αρχείο
 	File Dimensions	Διαστάσεις αρχείου
 	File Format:	Μορφή αρχείου:
@@ -1026,6 +1055,7 @@
 	Fill and Stroke	Γέμισμα και περίγραμμα
 	Fill new strokes	Γέμισμα νέων περιγραμμάτων
 	Alt key toggles to Smooth Tool	Το πλήκτρο Alt αλλάζει στο εργαλείο Εξομάλυνση (Smooth Tool)
+	Live curve fitting	Προσαρμογή καμπύλης σε πραγματικό χρόνο
 	Fill Color	Χρώμα γεμίσματος
 	Fill New Type Objects With Placeholder Text	Συμπλήρωση νέων αντικειμένων κειμένου με κείμενο υπόδειξης
 	Fill Rule	Κανόνας γεμίσματος
@@ -1247,6 +1277,7 @@
 	Hand-Drawn	Σχεδιασμένο στο χέρι
 	Handles	Λαβές
 	Hard Light	Έντονο φως
+	Hard Mix	Έντονη ανάμειξη
 	Harmony Rules:	Κανόνες χρωματικής αρμονίας:
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
@@ -1295,7 +1326,7 @@
 	Clear History	Εκκαθάριση ιστορικού
 	Set History Limit…	Ορισμός ορίου ιστορικού…
 	History States	Καταστάσεις ιστορικού
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	Εφαρμογή συνόλου δεδομένων
 	Cancel Pattern Editing	Ακύρωση επεξεργασίας μοτίβου
 	Copy Appearance	Αντιγραφή εμφάνισης
@@ -1420,6 +1451,12 @@
 	Image Trace	Ανίχνευση περιγραμμάτων εικόνας
 	Image Tracing	Ανίχνευση περιγραμμάτων εικόνας
 	Tracing Presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+	Manage Presets	Διαχείριση προεπιλογών
+	Save as New Preset…	Αποθήκευση ως νέας προεπιλογής…
+	Rename…	Μετονομασία…
+	Rename Preset	Μετονομασία προεπιλογής
+	Save Image Trace Preset	Αποθήκευση προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
+	Delete Image Trace Preset	Διαγραφή προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
 	Image Trace Presets	Προεπιλογές ανίχνευσης περιγραμμάτων εικόνας
 	Image:	Εικόνα:
 	Images:	Εικόνες:
@@ -1624,6 +1661,14 @@
 	Pressure	Πίεση
 	Shape:	Σχήμα:
 	New Brush…	Νέο πινέλο…
+	New Brush	Νέο πινέλο
+	Calligraphic Brush	Καλλιγραφικό πινέλο
+	Scatter Brush	Πινέλο διασποράς
+	Art Brush	Πινέλο σχεδίου
+	Bristle Brush	Πινέλο με τρίχες
+	Pattern Brush	Πινέλο μοτίβου
+	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
+	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
 	New Swatch…	Νέο δείγμα χρώματος…
 	New Window	Νέο παράθυρο
@@ -1721,6 +1766,7 @@
 	Proof Colors	Χρώματα δοκιμίου
 	Proof Setup	Ρύθμιση δοκιμίου
 	Properties	Ιδιότητες
+	Character Direction	Κατεύθυνση χαρακτήρων
 	Digits	Ψηφία
 	Punctuation	Στίξη
 	Puppet Warp	Παραμόρφωση με σημεία ελέγχου
@@ -1826,6 +1872,7 @@
 	Simplify	Απλοποίηση
 	Simplify:	Απλοποίηση:
 	Simplify…	Απλοποίηση…
+	Smooth…	Εξομάλυνση…
 	Size	Μέγεθος
 	Size:	Μέγεθος:
 	Skew	Λοξότητα
@@ -1844,11 +1891,13 @@
 	Absolute	Απόλυτο
 	View:	Προβολή:
 	Outlines	Περιγράμματα
+	Press and hold to view the source image	Πατήστε παρατεταμένα για να δείτε την αρχική εικόνα
 	Snap to Grid	Προσκόλληση στο πλέγμα
 	Snap to Pixel	Προσκόλληση σε εικονοστοιχείο
 	Snap to Point	Προσκόλληση σε σημείο
 	Snap to Unit	Προσκόλληση σε μονάδα
 	Soft Light	Απαλό φως
+	Soft Mix	Απαλή ανάμειξη
 	Solid	Συνεχές
 	Spacing:	Απόσταση:
 	Total:	Σύνολο:
@@ -1863,6 +1912,11 @@
 	Strikethrough	Διακριτή διαγραφή
 	Stroke	Περίγραμμα
 	Stroke Color	Χρώμα περιγράμματος
+	Fill Gradient	Ντεγκραντέ γεμίσματος
+	Stroke Gradient	Ντεγκραντέ περιγράμματος
+	Fill Pattern	Μοτίβο γεμίσματος
+	Stroke Pattern	Μοτίβο περιγράμματος
+	Patterns	Μοτίβα
 	Stroke Options	Επιλογές περιγράμματος
 	Character:	Χαρακτήρας:
 	Stroke:	Περίγραμμα:
@@ -1904,6 +1958,13 @@
 	Transparency	Διαφάνεια
 	Transparent	Διαφανές
 	Trap…	Παγίδευση χρωμάτων…
+	Trap	Παγίδευση χρωμάτων
+	Height/Width	Ύψος/Πλάτος
+	Tint Reduction	Μείωση απόχρωσης
+	Traps with Process Color	Παγιδεύσεις με χρώματα τετραχρωμίας
+	Reverse Traps	Αντίστροφες παγιδεύσεις
+	Precision	Ακρίβεια
+	Remove Redundant Points	Αφαίρεση περιττών σημείων
 	Trim	Περικοπή περιθωρίων
 	Twist…	Συστροφή…
 	Type	Κείμενο
@@ -1998,6 +2059,13 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
+@msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
+@msg	the selection has no gradient stroke	η επιλογή δεν έχει ντεγκραντέ περιγράμματος
+@msg	the selection has no pattern fill	η επιλογή δεν έχει μοτίβο γεμίσματος
+@msg	the selection has no pattern stroke	η επιλογή δεν έχει μοτίβο περιγράμματος
+@msg	no gradient swatch `{name}`	δεν υπάρχει δείγμα ντεγκραντέ `{name}`
+@msg	no pattern swatch `{name}`	δεν υπάρχει δείγμα μοτίβου `{name}`
+@msg	the library item is damaged	το στοιχείο της βιβλιοθήκης είναι κατεστραμμένο
 @msg	{_1} has no {_2} style	Το {_1} δεν έχει στυλ {_2}
 @msg	a layer couldn't be read	Δεν ήταν δυνατή η ανάγνωση ενός επιπέδου
 @msg	it has more than one artboard	Περιέχει περισσότερους από έναν πίνακες σχεδίασης
@@ -2018,6 +2086,7 @@ axis	Both	Και τα δύο
 @msg	its type is to come in as outlines, which only its page has	Το κείμενό του θα εισαχθεί ως περιγράμματα, τα οποία υπάρχουν μόνο στη σελίδα του
 @msg	the art on them differs from the page's in {_1}% of it	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	Τα γραφικά τους διαφέρουν από εκείνα της σελίδας κατά {_1}%, αλλά θα χρησιμοποιηθούν τα δεδομένα επεξεργασίας
+@msg	`Custom` stands for changed settings: save the preset under another name	Το `Custom` αντιστοιχεί σε αλλαγμένες ρυθμίσεις: αποθηκεύστε την προεπιλογή με άλλο όνομα
 @msg	`to` must be "corner" or "smooth"	Το `to` πρέπει να είναι "corner" ή "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Τα αρχεία BMP πρέπει να είναι RGB ή σε κλίμακα του γκρι: colorModel rgb ή gray
 @msg	Blend colors: select at least three objects with filled colours	Ανάμειξη χρωμάτων: επιλέξτε τουλάχιστον τρία αντικείμενα με χρώμα γεμίσματος
@@ -2030,6 +2099,7 @@ axis	Both	Και τα δύο
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο έκλεισε
+@msg	Couldn't place {name}: the document it was placed in was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο έκλεισε
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
@@ -2055,6 +2125,7 @@ axis	Both	Και τα δύο
 @msg	Installed plug-in {_1}	Εγκαταστάθηκε η επέκταση {_1}
 @msg	Internal error: {msg} (please report this bug)	Εσωτερικό σφάλμα: {msg} (παρακαλούμε αναφέρετε αυτό το σφάλμα)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Συγχώνευση δυναμικής βαφής: επιλέξτε ομάδα δυναμικής βαφής και τις διαδρομές προς προσθήκη
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Η δυναμική βαφή δέχεται διαδρομές και σύνθετες διαδρομές: μετατρέψτε πρώτα κείμενο, εικόνες και άλλα αντικείμενα σε διαδρομές
 @msg	Live Paint: select paths or compound paths	Δυναμική βαφή: επιλέξτε διαδρομές ή σύνθετες διαδρομές
 @msg	Live Paint: these paths are too degenerate to paint	Δυναμική βαφή: αυτές οι διαδρομές είναι πολύ εκφυλισμένες για να χρωματιστούν
 @msg	Make Guides: select paths	Δημιουργία οδηγών: επιλέξτε διαδρομές
@@ -2066,8 +2137,9 @@ axis	Both	Και τα δύο
 @msg	Opened {url}	Άνοιξε το {url}
 @msg	Outline Stroke: no stroked paths selected	Μετατροπή περιγράμματος σε διαδρομή: δεν επιλέχθηκαν διαδρομές με περίγραμμα
 @msg	PDF settings are not an object	Οι ρυθμίσεις PDF δεν είναι αντικείμενο
+@msg	PDF security settings are not an object	Οι ρυθμίσεις ασφαλείας PDF δεν είναι αντικείμενο
 @msg	PDF writer error: {0}	Σφάλμα εγγραφής PDF: {0}
-@msg	Packaged {n} file(s) in {folder}{note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
 @msg	Packaged {n} file(s){note}	Συσκευάστηκαν {n} αρχεία{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
@@ -2120,6 +2192,13 @@ axis	Both	Και τα δύο
 @msg	`{key}` must be between {min} and {max} (got {x})	Το `{key}` πρέπει να είναι μεταξύ {min} και {max} (δόθηκε {x})
 @msg	`{key}` must be one of {_1}	Το `{key}` πρέπει να είναι ένα από τα {_1}
 @msg	`{key}` must be true or false	Το `{key}` πρέπει να είναι true ή false
+@msg	`top` and `below` can't both be true	Τα `top` και `below` δεν μπορούν να είναι και τα δύο true
+@msg	`select` must be true or false	Το `select` πρέπει να είναι true ή false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	Τα `minAnchors` και `maxAnchors` πρέπει να είναι ακέραιοι αριθμοί
+@msg	`{key}` must be a number not below 0	Το `{key}` πρέπει να είναι αριθμός όχι μικρότερος από 0
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	Το `{key}` πρέπει να είναι [x, y, width, height]: τέσσερις πεπερασμένοι αριθμοί, με πλάτος και ύψος όχι αρνητικά
+@msg	`{min_key}` is greater than `{max_key}`	Το `{min_key}` είναι μεγαλύτερο από το `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	δώστε τουλάχιστον ένα από τα `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`{k}` must be [x, y]	Το `{k}` πρέπει να είναι [x, y]
 @msg	`{name}` has no options	Το `{name}` δεν έχει επιλογές
 @msg	`{name}` is a built-in workspace; choose another name	Το `{name}` είναι ενσωματωμένος χώρος εργασίας· επιλέξτε άλλο όνομα
@@ -2211,6 +2290,7 @@ effect	Soft	Απαλό
 	Activate Panel	Ενεργοποίηση πάνελ
 	Change Panel Layout	Αλλαγή διάταξης πάνελ
 	Close Panel	Κλείσιμο πάνελ
+	Collapse Panel Group	Σύμπτυξη ομάδας πάνελ
 	Move Panel	Μετακίνηση πάνελ
 	Group with	Ομαδοποίηση με
 	Resize panels	Αλλαγή μεγέθους πάνελ
@@ -2249,12 +2329,24 @@ lighting	Light	Φως
 	Left Diagonal	Αριστερή διαγώνιος
 	Artistic	Καλλιτεχνικό
 	Film Grain…	Κόκκος φιλμ…
+	Colored Pencil…	Έγχρωμο μολύβι…
+	Colored Pencil	Έγχρωμο μολύβι
 	Cutout…	Αποκοπή…
 	Cutout	Αποκοπή
+	Dry Brush…	Ξηρό πινέλο…
+	Dry Brush	Ξηρό πινέλο
 	Neon Glow…	Λάμψη νέον…
+	Palette Knife…	Μαχαίρι παλέτας…
 	Neon Glow	Λάμψη νέον
+	Paint Daubs…	Πινελιές βαφής…
+	Paint Daubs	Πινελιές βαφής
+	Palette Knife	Μαχαίρι παλέτας
 	Poster Edges…	Άκρες αφίσας…
+	Rough Pastels…	Χοντρά παστέλ…
 	Poster Edges	Άκρες αφίσας
+	Rough Pastels	Χοντρά παστέλ
+	Underpainting…	Υποζωγραφία…
+	Underpainting	Υποζωγραφία
 	Levels	Επίπεδα
 	Edge Simplicity	Απλότητα άκρων
 	Edge Fidelity	Πιστότητα άκρων
@@ -2545,6 +2637,7 @@ theme	Appearance	Εμφάνιση
 	Miter Limit:	Όριο οξείας σύνδεσης:
 	Mixed Appearances	Μεικτές εμφανίσεις
 	Mixed Objects	Μεικτά αντικείμενα
+	Mixed	Μικτό
 	Modified	Τροποποιήθηκε
 	Modified since it was read: {path}	Τροποποιήθηκε μετά την ανάγνωση: {path}
 	Modified:	Τροποποιήθηκε:
@@ -2581,6 +2674,7 @@ theme	Appearance	Εμφάνιση
 	Move Slices	Μετακίνηση τομών
 	Move Spine Point	Μετακίνηση σημείου κεντρικής καμπύλης
 	Reshape Spine Segment	Αναδιαμόρφωση τμήματος κεντρικής καμπύλης
+	Move Brush	Μετακίνηση πινέλου
 	Move Swatch	Μετακίνηση δείγματος χρώματος
 	Move Up	Μετακίνηση επάνω
 	My Themes	Τα θέματά μου
@@ -2613,6 +2707,10 @@ theme	Appearance	Εμφάνιση
 	Outer Corner Tile	Πλακίδιο εξωτερικής γωνίας
 	Side Tile	Πλευρικό πλακίδιο
 	Inner Corner Tile	Πλακίδιο εσωτερικής γωνίας
+	Auto-Centered	Αυτόματο κεντραρισμένο
+	Auto-Between	Αυτόματο ενδιάμεσο
+	Auto-Sliced	Αυτόματο κομμένο
+	Auto-Overlap	Αυτόματη επικάλυψη
 	Start Tile	Αρχικό πλακίδιο
 	End Tile	Τελικό πλακίδιο
 	Stretch to fit	Επέκταση για προσαρμογή
@@ -2623,6 +2721,13 @@ theme	Appearance	Εμφάνιση
 	Tints and Shades	Αποχρώσεις και σκιάσεις
 	Hue Shift	Μετατόπιση απόχρωσης
 	Key Color:	Βασικό χρώμα:
+	Tips	Συμβουλές
+	Colorization Tips	Συμβουλές χρωματισμού
+	The samples show this brush on a blue stroke.	Τα δείγματα δείχνουν αυτό το πινέλο σε μπλε περίγραμμα.
+	The art keeps its own colors.	Το σχέδιο διατηρεί τα δικά του χρώματα.
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Το μαύρο γίνεται το χρώμα του περιγράμματος και το λευκό μένει λευκό. Τα άλλα χρώματα γίνονται αποχρώσεις του χρώματος του περιγράμματος, και όσο πιο ανοιχτό είναι ένα χρώμα, τόσο πιο ανοιχτή είναι η απόχρωσή του.
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Το μαύρο μένει μαύρο και το λευκό μένει λευκό. Τα άλλα χρώματα γίνονται σκιάσεις του χρώματος του περιγράμματος όταν είναι σκούρα και αποχρώσεις του όταν είναι ανοιχτά.
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Το βασικό χρώμα γίνεται το χρώμα του περιγράμματος. Τα άλλα χρώματα μετακινούνται στον χρωματικό τροχό όσο και το βασικό χρώμα και διατηρούν τον κορεσμό και τη φωτεινότητά τους.
 	Bristle Length:	Μήκος τριχών:
 	Bristle Density:	Πυκνότητα τριχών:
 	Bristle Thickness:	Πάχος τριχών:
@@ -2795,7 +2900,7 @@ theme	Appearance	Εμφάνιση
 	Override Character Color	Παράκαμψη χρώματος χαρακτήρων
 	Package collects a saved document with its linked files and fonts.	Η συσκευασία συγκεντρώνει ένα αποθηκευμένο έγγραφο μαζί με συνδεδεμένα αρχεία και γραμματοσειρές.
 	Package created	Η συσκευασία δημιουργήθηκε
-	Packaged {n} file(s) in {folder}{note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}{note}
 	Packaged {n} file(s){note}	Συσκευάστηκαν {n} αρχεία{note}
 	Page	Σελίδα
 	Page information	Πληροφορίες σελίδας
@@ -2835,7 +2940,7 @@ theme	Appearance	Εμφάνιση
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Τα PDF/X-1a είναι CMYK: κάθε χρώμα μετατρέπεται στον προορισμό (αν είναι κενό, στο προφίλ CMYK της εξόδου), χωρίς ετικέτα.
 	per slice	ανά τομή
 	Perceptual Scales	Αντιληπτικές κλίμακες
-	Performance & Storage	Επιδόσεις και αποθήκευση
+	Plug-ins & Scratch Disks	Πρόσθετα & Δίσκοι προσωρινής αποθήκευσης
 	Permissions	Δικαιώματα
 	Permissions password:	Κωδικός δικαιωμάτων:
 	Perspective Grid	Πλέγμα προοπτικής
@@ -3066,6 +3171,7 @@ theme	Appearance	Εμφάνιση
 	Remove Plug-in	Αφαίρεση προσθέτου
 	Remove Selected Assets	Αφαίρεση επιλεγμένων στοιχείων
 	Remove Threading	Αφαίρεση σύνδεσης κειμένου
+	Break Thread	Διακοπή σύνδεσης κειμένου
 	Remove “{keyword}”	Αφαίρεση «{keyword}»
 	Rename Asset	Μετονομασία στοιχείου
 	Rename Character Style	Μετονομασία στυλ χαρακτήρων
@@ -3076,6 +3182,7 @@ theme	Appearance	Εμφάνιση
 	Rendering intent:	Σκοπός απόδοσης:
 	Reorder	Αναδιάταξη
 	Reorder Appearance Item	Αναδιάταξη στοιχείου εμφάνισης
+	Repeat Objects	Αντικείμενα επανάληψης
 	Repeat Options	Επιλογές επανάληψης
 	Repeat Pathfinder	Επανάληψη Pathfinder
 	Repeat Tab	Επανάληψη στηλοθέτη
@@ -3211,6 +3318,7 @@ theme	Appearance	Εμφάνιση
 	Scale Cursor Proportional to UI	Αναλογική κλιμάκωση δείκτη ως προς το περιβάλλον
 	Scale Lineweights	Κλιμάκωση πάχους γραμμών
 	Scale Strokes & Effects	Κλιμάκωση περιγραμμάτων και εφέ
+	Scale Text Attributes	Κλιμάκωση ιδιοτήτων κειμένου
 	Scale to Fit Artboard	Κλιμάκωση για προσαρμογή στον πίνακα σχεδίασης
 	Scale Tool	Κλιμάκωση (Scale Tool)
 	Scallop Tool	Κυματιστές άκρες (Scallop Tool)
@@ -3336,6 +3444,7 @@ theme	Appearance	Εμφάνιση
 	Show Original Path	Εμφάνιση αρχικής διαδρομής
 	Open this dialog with these settings next time	Άνοιγμα αυτού του παραθύρου με αυτές τις ρυθμίσεις την επόμενη φορά
 	Auto-Simplify	Αυτόματη απλοποίηση
+	Auto-Smooth	Αυτόματη εξομάλυνση
 	Show Package	Εμφάνιση συσκευασίας
 	Show Panel	Εμφάνιση πίνακα
 	Show Pattern Swatches	Εμφάνιση δειγμάτων μοτίβου
@@ -3375,7 +3484,7 @@ theme	Appearance	Εμφάνιση
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
 	Size/Leading	Μέγεθος/διάστιχο
 	Ridges per segment:	Ράχες ανά τμήμα:
-	Size: {size}  Tracking: {tracking}	Μέγεθος: {size}  Αραίωση: {tracking}
+	Size: {size}  Tracking: {tracking}	Μέγεθος: {size}  Απόσταση χαρακτήρων: {tracking}
 	Skin Tone Ramps	Χρωματικές κλίμακες τόνων δέρματος
 	Skip Blank Artboards	Παράλειψη κενών πινάκων σχεδίασης
 	Sky Gradients	Ντεγκραντέ ουρανού
@@ -3403,6 +3512,7 @@ theme	Appearance	Εμφάνιση
 	Snap Options	Επιλογές προσκόλλησης
 	Snap to Glyph	Προσκόλληση σε γλυφή
 	Precise Cursors	Δείκτες ακριβείας
+	Image Trace Preview	Προεπισκόπηση ανίχνευσης περιγραμμάτων εικόνας
 	Snapping Tolerance	Ανοχή προσκόλλησης
 	Social Square Post 1080×1080	Τετράγωνη δημοσίευση κοινωνικών δικτύων 1080×1080
 	Sort by Kind	Ταξινόμηση κατά είδος
@@ -3413,6 +3523,7 @@ theme	Appearance	Εμφάνιση
 	Space Before Paragraph	Διάστημα πριν από την παράγραφο
 	Spaces	Διαστήματα
 	Spacing Guides	Οδηγοί αποστάσεων
+	Invoke Distance Guides	Εμφάνιση οδηγών μέτρησης απόστασης
 	Spanish	Ισπανικά
 	Specified Distance	Καθορισμένη απόσταση
 	Specified Steps	Καθορισμένα βήματα
@@ -3484,6 +3595,7 @@ theme	Appearance	Εμφάνιση
 	Swatch Options	Επιλογές δείγματος χρώματος
 	Swatch Options…	Επιλογές δείγματος χρώματος…
 	Swatch Tiles	Πλακίδια δειγμάτων χρωμάτων
+	Switch Units	Αλλαγή μονάδων
 	Switch workspace	Αλλαγή χώρου εργασίας
 	Add Content	Προσθήκη περιεχομένου
 	Click to apply to the selected type	Κλικ για εφαρμογή στο επιλεγμένο κείμενο
@@ -3518,7 +3630,6 @@ theme	Appearance	Εμφάνιση
 	Show all open documents	Εμφάνιση όλων των ανοιχτών εγγράφων
 	Symbol Instance	Στιγμιότυπο συμβόλου
 	Symbol Libraries	Βιβλιοθήκες συμβόλων
-	Symbol Libraries (on the roadmap)	Βιβλιοθήκες συμβόλων (προγραμματισμένη λειτουργία)
 	Symbol Screener Tool	Αραίωση συμβόλων (Symbol Screener Tool)
 	Symbol Scruncher Tool	Σύμπτυξη συμβόλων (Symbol Scruncher Tool)
 	Symbol Shifter Tool	Μετατόπιση συμβόλων (Symbol Shifter Tool)
@@ -3658,6 +3769,7 @@ theme	Appearance	Εμφάνιση
 	Unlock Guides	Ξεκλείδωμα οδηγών
 	Unnamed Objects	Αντικείμενα χωρίς όνομα
 	Unprintable margin:	Μη εκτυπώσιμο περιθώριο:
+	Unselected Artwork	Μη επιλεγμένα γραφικά στοιχεία
 	Unshift	Αναίρεση μετατόπισης
 	Update Link	Ενημέρωση συνδέσμου
 	Update Links	Ενημέρωση συνδέσμων
@@ -3779,7 +3891,7 @@ theme	Appearance	Εμφάνιση
 	Zoom to Selection	Ζουμ στην επιλογή
 	Zoom with Mouse Wheel	Ζουμ με τον τροχό του ποντικιού
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
-	{count} file(s) in {folder}{note}. Show the package folder?	{count} αρχεία στον φάκελο {folder}{note}. Να εμφανιστεί ο φάκελος συσκευασίας;
+	{count} file(s) in {folder} {note}. Show the package folder?	{count} αρχεία στον φάκελο {folder}{note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 	{count} linked file(s) not found	Δεν βρέθηκαν {count} συνδεδεμένα αρχεία
 	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
@@ -3818,11 +3930,8 @@ theme	Appearance	Εμφάνιση
 	Joins	Συνδέσεις
 	Axis	Άξονας
 	Drag to move	Σύρετε για μετακίνηση
-	Drag to move out of the set	Σύρετε για αφαίρεση από το σύνολο
 	Drag to float as a toolbar	Σύρετε για αποδέσμευση ως γραμμή εργαλείων
 	Put back in the toolbar	Επαναφορά στη γραμμή εργαλείων
-	Drag to float the panel group	Σύρετε για αποδέσμευση της ομάδας πινάκων
-	Put back in the dock	Επαναφορά στην περιοχή σύνδεσης
 	Drag to float the toolbar	Σύρετε για αποδέσμευση της γραμμής εργαλείων
 	Drag to the window's left edge to dock	Σύρετε στο αριστερό άκρο του παραθύρου για σύνδεση
 	Float Tool Group	Αποδέσμευση ομάδας εργαλείων
@@ -3866,6 +3975,10 @@ theme	Appearance	Εμφάνιση
 @msg	a page tree node has no kids	ο κόμβος δέντρου σελίδων δεν έχει θυγατρικά στοιχεία
 @msg	a page's placement is not finite	η τοποθέτηση της σελίδας δεν έχει πεπερασμένες τιμές
 @msg	a preset named `{_1}` exists	υπάρχει ήδη προεπιλογή με όνομα `{_1}`
+@msg	`name` is empty	το `name` είναι κενό
+@msg	`newName` is empty	το `newName` είναι κενό
+@msg	`{name}` is a built-in preset and can't change: save it under another name	η `{name}` είναι ενσωματωμένη προεπιλογή και δεν μπορεί να αλλάξει: αποθηκεύστε την με άλλο όνομα
+@msg	`{name}` is a built-in preset and stays	η `{name}` είναι ενσωματωμένη προεπιλογή και δεν μπορεί να διαγραφεί
 @msg	a swatch or color group named `{n}` exists	υπάρχει ήδη δείγμα χρώματος ή ομάδα χρωμάτων με όνομα `{n}`
 @msg	a slice size must be a positive number of points	το μέγεθος τομής πρέπει να είναι θετικός αριθμός στιγμών
 @msg	a spine keeps at least two points	απαιτούνται τουλάχιστον δύο σημεία κεντρικής καμπύλης
@@ -3882,6 +3995,7 @@ theme	Appearance	Εμφάνιση
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	ο άξονας πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	φόντο {other}: transparent, white, black ή χρώμα όπως "#ff8800"
 @msg	bad color {v}	μη έγκυρο χρώμα {v}
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	Το videoRulerPixelAspectRatio πρέπει να είναι αριθμός από 0,1 έως 10
 @msg	bad colour `{hex}` (#rrggbb)	μη έγκυρο χρώμα `{hex}` (#rrggbb)
 @msg	bad page tree	μη έγκυρο δέντρο σελίδων
 @msg	bad shortcut	μη έγκυρη συντόμευση
@@ -3928,7 +4042,7 @@ theme	Appearance	Εμφάνιση
 @msg	give the path `id` and the width point `index`	δώστε το `id` διαδρομής και το `index` σημείου πλάτους
 @msg	guides are locked	οι οδηγοί είναι κλειδωμένοι
 @msg	handle must be in or out	το handle πρέπει να είναι in ή out
-@msg	image '{key}' has no pixels and was left out	η εικόνα '{key}' δεν περιέχει εικονοστοιχεία και παραλείφθηκε
+@msg	an image has no pixels and was left out	παραλείφθηκε εικόνα χωρίς εικονοστοιχεία
 @msg	image data `{_1}` is missing	λείπουν τα δεδομένα εικόνας `{_1}`
 @msg	image would be too large; lower the resolution	η εικόνα θα ήταν υπερβολικά μεγάλη· μειώστε την ανάλυση
 @msg	index must be a number or first, previous, next or last	ο δείκτης πρέπει να είναι αριθμός ή first, previous, next ή last
@@ -3952,10 +4066,11 @@ theme	Appearance	Εμφάνιση
 @msg	missing `id` (see plugin.list)	λείπει το `id` (δείτε plugin.list)
 @msg	missing `name`	λείπει το `name`
 @msg	missing `tool`	λείπει το `tool`
+@msg	missing id	λείπει το id
 @msg	missing index	λείπει ο δείκτης
 @msg	missing number `{key}`	λείπει ο αριθμός `{key}`
 @msg	missing integer `{key}`	λείπει ο ακέραιος `{key}`
-@msg	multiple windows land with M11.5	τα πολλαπλά παράθυρα θα προστεθούν στην έκδοση M11.5
+@msg	New Window isn't available yet: a document opens in one window	Το Νέο παράθυρο δεν είναι ακόμη διαθέσιμο: ένα έγγραφο ανοίγει σε ένα παράθυρο
 @msg	name the file	δώστε όνομα στο αρχείο
 @msg	no CSS to copy: select objects with CSS of their own	δεν υπάρχει CSS για αντιγραφή: επιλέξτε αντικείμενα με δικό τους CSS
 @msg	no Live Paint edge near that point	δεν υπάρχει ακμή δυναμικής βαφής κοντά σε αυτό το σημείο
@@ -3973,7 +4088,9 @@ theme	Appearance	Εμφάνιση
 @msg	no blend options	δεν υπάρχουν επιλογές ανάμειξης
 @msg	no bounds	δεν υπάρχουν όρια
 @msg	no brush named `{name}`	δεν υπάρχει πινέλο με όνομα `{name}`
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	το όνομα ενός πινέλου με τρίχες μπορεί να έχει έως {max} χαρακτήρες: το `{name}` έχει {count}
 @msg	no brush selected	δεν έχει επιλεγεί πινέλο
+@msg	brushes move only within their type	τα πινέλα μετακινούνται μόνο μέσα στον τύπο τους
 @msg	no catalog	δεν υπάρχει κατάλογος
 @msg	no changes since the last save	δεν υπάρχουν αλλαγές μετά την τελευταία αποθήκευση
 @msg	no clock to keep a heartbeat by	δεν υπάρχει ρολόι για τον παλμό διατήρησης σύνδεσης
@@ -3982,6 +4099,7 @@ theme	Appearance	Εμφάνιση
 @msg	no current layer	δεν υπάρχει τρέχον επίπεδο
 @msg	no data	δεν υπάρχουν δεδομένα
 @msg	no dialog open	δεν υπάρχει ανοιχτό παράθυρο διαλόγου
+@msg	the open dialog has no Reset	το ανοιχτό παράθυρο διαλόγου δεν έχει κουμπί Επαναφορά
 @msg	no document	δεν υπάρχει έγγραφο
 @msg	no document open	δεν υπάρχει ανοιχτό έγγραφο
 @msg	no effect applied yet	δεν έχει εφαρμοστεί ακόμη εφέ
@@ -3992,6 +4110,7 @@ theme	Appearance	Εμφάνιση
 @msg	no file system here	δεν υπάρχει σύστημα αρχείων εδώ
 @msg	no file writer	δεν υπάρχει μηχανισμός εγγραφής αρχείων
 @msg	no files to place	δεν υπάρχουν αρχεία για τοποθέτηση
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	Το `{file}` δεν είναι έγγραφο VectorCraft, PDF ή αρχείο .ai συμβατό με PDF
 @msg	no format to export to	δεν υπάρχει μορφή εξαγωγής
 @msg	no free recovery area	δεν υπάρχει ελεύθερη περιοχή ανάκτησης
 @msg	no gradient stop or freeform point is selected	δεν έχει επιλεγεί σημείο χρώματος ντεγκραντέ ή σημείο ελεύθερης μορφής
@@ -4014,6 +4133,8 @@ theme	Appearance	Εμφάνιση
 @msg	no print service	δεν υπάρχει υπηρεσία εκτύπωσης
 @msg	no revert command	δεν υπάρχει εντολή επαναφοράς
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	δεν υπάρχει αποθηκευμένη προεπιλογή PDF με όνομα `{name}` (οι ενσωματωμένες προεπιλογές είναι μόνο για ανάγνωση: δημιουργήστε νέα από αυτές)
+@msg	no saved preset named `{name}`	δεν υπάρχει αποθηκευμένη προεπιλογή με όνομα `{name}`
+@msg	no saved preset named `{name}` to rename	δεν υπάρχει αποθηκευμένη προεπιλογή με όνομα `{name}` για μετονομασία
 @msg	no saved presets	δεν υπάρχουν αποθηκευμένες προεπιλογές
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	δεν υπάρχει αποθηκευμένη προεπιλογή εκτύπωσης με όνομα `{name}` (η {DEFAULT_PRESET} προστατεύεται: δημιουργήστε νέα από αυτήν)
 @msg	no saved profiles	δεν υπάρχουν αποθηκευμένα προφίλ
@@ -4027,6 +4148,7 @@ theme	Appearance	Εμφάνιση
 @msg	no such action	δεν υπάρχει τέτοια ενέργεια
 @msg	no such anchor	δεν υπάρχει τέτοιο σημείο αγκύρωσης
 @msg	no such artboard	δεν υπάρχει τέτοιος πίνακας σχεδίασης
+@msg	the artboard is locked	ο πίνακας σχεδίασης είναι κλειδωμένος
 @msg	no such document	δεν υπάρχει τέτοιο έγγραφο
 @msg	no such layer or object	δεν υπάρχει τέτοιο επίπεδο ή αντικείμενο
 @msg	no such object {0}	δεν υπάρχει τέτοιο αντικείμενο {0}
@@ -4060,8 +4182,10 @@ theme	Appearance	Εμφάνιση
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
+@msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	δεν υπάρχει τίποτα για εξαγωγή: το έγγραφο δεν έχει ορατό σχέδιο (ή ενεργοποιήστε Χρήση πινάκων σχεδίασης)
@@ -4083,6 +4207,7 @@ theme	Appearance	Εμφάνιση
 @msg	path is already closed	η διαδρομή είναι ήδη κλειστή
 @msg	paths contain invalid coordinates	οι διαδρομές περιέχουν μη έγκυρες συντεταγμένες
 @msg	paths: give at least one file	διαδρομές: δώστε τουλάχιστον ένα αρχείο
+@msg	replace: the object to replace was changed or deleted	αντικατάσταση: το αντικείμενο προς αντικατάσταση άλλαξε ή διαγράφηκε
 @msg	pattern missing	λείπει το μοτίβο
 @msg	patterns nested too deeply are filled with mid-grey	τα πολύ βαθιά ένθετα μοτίβα γεμίζονται με μέτριο γκρι
 @msg	percent must be above 0 and at most 6400, not {p}	το ποσοστό πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
@@ -4128,6 +4253,7 @@ theme	Appearance	Εμφάνιση
 @msg	select an object in perspective	επιλέξτε αντικείμενο σε προοπτική
 @msg	select artwork (or a colour group) to recolor	επιλέξτε σχέδιο (ή ομάδα χρωμάτων) για επαναχρωματισμό
 @msg	select at least two objects	επιλέξτε τουλάχιστον δύο αντικείμενα
+@msg	exit isolation mode first	βγείτε πρώτα από τη λειτουργία απομόνωσης
 @msg	select objects, not layers	επιλέξτε αντικείμενα, όχι επίπεδα
 @msg	select one path, or give its `id`	επιλέξτε μία διαδρομή ή δώστε το `id` της
 @msg	select paths to join	επιλέξτε διαδρομές για ένωση
@@ -4180,10 +4306,14 @@ theme	Appearance	Εμφάνιση
 @msg	the layer or group is locked	το επίπεδο ή η ομάδα είναι κλειδωμένα
 @msg	the guide is on a hidden or locked layer	ο οδηγός βρίσκεται σε κρυφό ή κλειδωμένο επίπεδο
 @msg	the target layer is locked or hidden	το επίπεδο προορισμού είναι κλειδωμένο ή κρυφό
+@msg	the object is hidden or locked	το αντικείμενο είναι κρυφό ή κλειδωμένο
+@msg	the object is outside the isolated group	το αντικείμενο βρίσκεται εκτός της απομονωμένης ομάδας
+@msg	type objects can't be isolated	τα αντικείμενα κειμένου δεν μπορούν να απομονωθούν
 @msg	the layer to flatten into is hidden	το επίπεδο προορισμού ισοπέδωσης είναι κρυφό
 @msg	the object already has an opacity mask	το αντικείμενο έχει ήδη μάσκα αδιαφάνειας
 @msg	the object has no geometry	το αντικείμενο δεν έχει γεωμετρία
 @msg	the object has no opacity mask	το αντικείμενο δεν έχει μάσκα αδιαφάνειας
+@msg	stop editing the opacity mask first	τερματίστε πρώτα την επεξεργασία της μάσκας αδιαφάνειας
 @msg	the object has no stroke	το αντικείμενο δεν έχει περίγραμμα
 @msg	the object is beyond the plane's horizon	το αντικείμενο βρίσκεται πέρα από τον ορίζοντα του επιπέδου
 @msg	the object isn't in perspective	το αντικείμενο δεν βρίσκεται σε προοπτική
@@ -4214,6 +4344,7 @@ theme	Appearance	Εμφάνιση
 @msg	tool shortcuts must be a single key (optionally with Shift)	οι συντομεύσεις εργαλείων πρέπει να περιλαμβάνουν ένα πλήκτρο (προαιρετικά με Shift)
 @msg	truncated	περικομμένο
 @msg	unknown command `{0}`	άγνωστη εντολή `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	άγνωστη εντολή `{0}`· μήπως εννοείτε `{1}`;
 @msg	unknown effect `{id}`	άγνωστο εφέ `{id}`
 @msg	unknown format	άγνωστη μορφή
 @msg	unknown format `{f}` (Save writes {_1})	άγνωστη μορφή `{f}` (η Αποθήκευση υποστηρίζει {_1})
@@ -4228,6 +4359,7 @@ theme	Appearance	Εμφάνιση
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (high, medium, low ή αποθηκευμένη: δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	άγνωστη προεπιλογή `{name}` (δείτε webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	άγνωστη προεπιλογή `{name}`: δεν είναι ενσωματωμένη ούτε αποθηκευμένη (δείτε imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	άγνωστη πλευρά `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	άγνωστο εργαλείο `{tool}`
 @msg	unknown tool `{t}`	άγνωστο εργαλείο `{t}`
@@ -4235,6 +4367,8 @@ theme	Appearance	Εμφάνιση
 @msg	unknown workspace (one of {_1})	άγνωστος χώρος εργασίας (ένας από τους {_1})
 @msg	unsupported: {0}	δεν υποστηρίζεται: {0}
 @msg	variables are locked	οι μεταβλητές είναι κλειδωμένες
+@msg	variables that aren't text were left out: {kinds}	οι μεταβλητές που δεν είναι κειμένου παραλείφθηκαν: {kinds}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	τα `{key}: {top}` και `options.{key}: {inner}` διαφέρουν: δώστε την επιλογή μόνο μία φορά
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	τα αρχεία έκδοσης {0} δεν μπορούν να συμπιεστούν: μόνο η έκδοση {COMPRESSED_SINCE} και νεότερες ανοίγουν συμπιεσμένα αρχεία
 @msg	width and height are at least 1 pixel	το πλάτος και το ύψος πρέπει να είναι τουλάχιστον 1 εικονοστοιχείο
 @msg	workspace name can't be empty	το όνομα χώρου εργασίας δεν μπορεί να είναι κενό
@@ -4246,8 +4380,11 @@ theme	Appearance	Εμφάνιση
 @msg	{_1} font families available	{_1} διαθέσιμες οικογένειες γραμματοσειρών
 @msg	{_1} is a live effect (Effect › Plug-ins)	το {_1} είναι δυναμικό εφέ (Εφέ › Πρόσθετα)
 @msg	{_1} is an exporter (File › Export › Export As…)	το {_1} είναι πρόσθετο εξαγωγής (Αρχείο › Εξαγωγή › Εξαγωγή ως…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	το `documentData` έχει {size} byte (όριο {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	το {_1} χρησιμοποιείται ήδη από το {_2}
+@msg	{_1} is reserved by the system	Το {_1} είναι δεσμευμένο από το σύστημα
 @msg	{_1} linked file(s) can't be read here: their previews show	{_1} συνδεδεμένα αρχεία δεν μπορούν να διαβαστούν εδώ: εμφανίζονται οι προεπισκοπήσεις τους
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msg	Updated {_1} linked file(s) changed on disk	Ενημερώθηκαν {_1} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
 @msg	{_1}: not saved, so not closed	{_1}: δεν αποθηκεύτηκε και επομένως δεν έκλεισε
@@ -4275,6 +4412,8 @@ theme	Appearance	Εμφάνιση
 @msg	Saving	Αποθήκευση σε εξέλιξη
 @msg	Saving {_1}	Αποθήκευση {_1}
 @msg	Exporting {_1}	Εξαγωγή {_1}
+@msg	Packaging {_1}	Συσκευασία {_1}
+@msg	Placing {_1}	Τοποθέτηση {_1}
 @msg	Saving recovery data for {_1}	Αποθήκευση δεδομένων ανάκτησης για {_1}
 @msg	Discarded {_1} recovered document(s)	Απορρίφθηκαν {_1} ανακτημένα έγγραφα
 @msg	Restored {_1} recovered document(s): save them to keep them	Επαναφέρθηκαν {_1} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
@@ -4360,6 +4499,10 @@ theme	Appearance	Εμφάνιση
 	Shaper	Διαμορφωτής σχημάτων (Shaper Tool)
 	Expand Shaper Group	Ανάπτυξη ομάδας διαμόρφωσης σχημάτων
 	Release Shaper Group	Αποδέσμευση ομάδας διαμόρφωσης σχημάτων
+	Remove from Shaper Group	Αφαίρεση από ομάδα διαμόρφωσης σχημάτων
+@msg	source must be the id of a Shaper Group's original shape	Το source πρέπει να είναι το αναγνωριστικό ενός αρχικού σχήματος ομάδας διαμόρφωσης σχημάτων
+@msg	group must be the id of a Shaper Group	Το group πρέπει να είναι το αναγνωριστικό μιας ομάδας διαμόρφωσης σχημάτων
+@msg	the shape is not an editable original shape of that Shaper Group	Το σχήμα δεν είναι επεξεργάσιμο αρχικό σχήμα αυτής της ομάδας διαμόρφωσης σχημάτων
 	Select Shaper Face	Επιλογή επιφάνειας διαμορφωτή
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Σύρετε εδώ σχέδια, χρώματα και στυλ κειμένου για χρήση σε άλλα έγγραφα. Οι βιβλιοθήκες αποθηκεύονται στον υπολογιστή — χωρίς λογαριασμό.
 	1 Color Job	Εργασία ενός χρώματος
@@ -4384,10 +4527,14 @@ theme	Appearance	Εμφάνιση
 @msg	{key} must be an array of non-negative integer object ids	{key}: πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων που είναι μη αρνητικοί ακέραιοι
 @msg	invalid object id {value}: expected a non-negative integer	μη έγκυρο αναγνωριστικό αντικειμένου {value}: αναμένεται μη αρνητικός ακέραιος
 @msg	no such object id {value}	δεν υπάρχει αντικείμενο με αναγνωριστικό {value}
+@msg	id {value} is a layer, not an object	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο
+@msg	id {value} is a layer, not an object; move layers with layer.move	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο· μετακινήστε τα επίπεδα με το layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα ανάγνωσης: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα εγγραφής: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας ανάγνωσης {root}: {path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών ανάγνωσης {roots}: {path}
 @msg	automation path rejected: outside the write root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας εγγραφής {root}: {path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών εγγραφής {roots}: {path}
 @msg	automation path rejected: path is empty	απορρίφθηκε η διαδρομή αυτοματισμού: η διαδρομή είναι κενή
 @msg	automation path rejected: a link that leads nowhere: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: σύνδεσμος χωρίς προορισμό: {path}
 @msg	automation path rejected: cannot resolve {path}: {e}	απορρίφθηκε η διαδρομή αυτοματισμού: δεν ήταν δυνατή η επίλυση του {path}: {e}
@@ -4425,6 +4572,11 @@ theme	Appearance	Εμφάνιση
 @msg	before must name a panel	το before πρέπει να ορίζει πίνακα
 @msg	docking action contains an unknown panel or an excessive split path	η ενέργεια σύνδεσης περιέχει άγνωστο πίνακα ή υπερβολικά βαθιά διαδρομή διαίρεσης
 @msg	group must be true or false	το group πρέπει να είναι true ή false
+@msg	panel is not in a dock group	Το πάνελ δεν βρίσκεται σε ομάδα αγκύρωσης
+@msg	only a dock group above or below others collapses, not one beside another	συμπτύσσεται μόνο ομάδα αγκύρωσης πάνω ή κάτω από άλλες, όχι δίπλα σε άλλη
+@msg	icon must be true or false	το icon πρέπει να είναι true ή false
+@msg	icon only docks a panel in the icon column, with no anchor	το icon αγκυρώνει πάνελ μόνο στη στήλη εικονιδίων, χωρίς anchor
+@msg	column docks a set as a dock column, with no anchor or icon	το column αγκυρώνει ένα σύνολο ως στήλη αγκύρωσης, χωρίς anchor ή icon
 @msg	move requires a destination panel	η μετακίνηση απαιτεί πίνακα προορισμού
 @msg	move requires an existing destination panel	η μετακίνηση απαιτεί υπάρχοντα πίνακα προορισμού
 @msg	onto must name a floating panel	το onto πρέπει να ορίζει αιωρούμενο πίνακα
@@ -4544,6 +4696,7 @@ theme	Appearance	Εμφάνιση
 	Brown	Καφέ
 	Business Card 3.5 × 2 in	Επαγγελματική κάρτα 3,5 × 2 ίντσες
 	Business Card 85 × 55 mm	Επαγγελματική κάρτα 85 × 55 mm
+	Business Card 91 × 55 mm	Επαγγελματική κάρτα 91 × 55 mm
 	CRLF (Windows)	CRLF (Windows)
 	Cap Height	Ύψος κεφαλαίων
 	Chevron	Σχήμα V
@@ -4847,6 +5000,9 @@ theme	Appearance	Εμφάνιση
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	3D Lighting Preset	Προεπιλογή φωτισμού 3D
+	Standard	Τυπικός
+	Diffuse	Διάχυτος
 # 3D light management.
 	Lights	Φώτα
 	Add Light	Προσθήκη φωτός
@@ -4881,6 +5037,7 @@ effect	Points	Σημεία
 	Load EPS into Clipboard	Φόρτωση EPS στο πρόχειρο
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	Άγνωστο στοιχείο ελέγχου `{name}`: fillStroke, coloring, drawMode ή screenMode
 @msg	an image of {w} × {h} pixels is too large to draw	Η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για σχεδίαση
+@msg	an image of {w} × {h} pixels is shown at reduced size	Η εικόνα {w} × {h} εικονοστοιχείων εμφανίζεται σε μειωμένο μέγεθος
 	Open Recent File 1	Άνοιγμα πρόσφατου αρχείου 1
 	Open Recent File 2	Άνοιγμα πρόσφατου αρχείου 2
 	Open Recent File 3	Άνοιγμα πρόσφατου αρχείου 3
@@ -4961,6 +5118,21 @@ effect	Points	Σημεία
 	Saved View 8	Αποθηκευμένη προβολή 8
 	Saved View 9	Αποθηκευμένη προβολή 9
 	Saved View 10	Αποθηκευμένη προβολή 10
+	Saved View 11	Αποθηκευμένη προβολή 11
+	Saved View 12	Αποθηκευμένη προβολή 12
+	Saved View 13	Αποθηκευμένη προβολή 13
+	Saved View 14	Αποθηκευμένη προβολή 14
+	Saved View 15	Αποθηκευμένη προβολή 15
+	Saved View 16	Αποθηκευμένη προβολή 16
+	Saved View 17	Αποθηκευμένη προβολή 17
+	Saved View 18	Αποθηκευμένη προβολή 18
+	Saved View 19	Αποθηκευμένη προβολή 19
+	Saved View 20	Αποθηκευμένη προβολή 20
+	Saved View 21	Αποθηκευμένη προβολή 21
+	Saved View 22	Αποθηκευμένη προβολή 22
+	Saved View 23	Αποθηκευμένη προβολή 23
+	Saved View 24	Αποθηκευμένη προβολή 24
+	Saved View 25	Αποθηκευμένη προβολή 25
 	Three Point Perspective Preset 1	Προεπιλογή προοπτικής τριών σημείων 1
 	Three Point Perspective Preset 2	Προεπιλογή προοπτικής τριών σημείων 2
 	Three Point Perspective Preset 3	Προεπιλογή προοπτικής τριών σημείων 3
@@ -5067,6 +5239,7 @@ effect	Points	Σημεία
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Σχέδιο : πραγματικό μέγεθος — με 1:10 η 1 μονάδα στη σελίδα εμφανίζεται ως 10.
 	Editable	Επεξεργάσιμο
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
+	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
 	Filter	Φίλτρο
 	Filter Layers Panel Rows	Φιλτράρισμα γραμμών πίνακα επιπέδων
 	Flatten	Ισοπέδωση
@@ -5084,12 +5257,14 @@ effect	Points	Σημεία
 	Keep selected	Διατήρηση επιλογής
 	Merge only with selection	Συγχώνευση μόνο με την επιλογή
 	Consider Open Filled Paths as Closed	Οι ανοιχτές γεμισμένες διαδρομές θεωρούνται κλειστές
+	In Merge Mode, Clicking Stroke Splits the Path	Σε λειτουργία συγχώνευσης, το κλικ στο περίγραμμα διαιρεί τη διαδρομή
 	Pick Color From:	Λήψη χρώματος από:
 	Artwork	Γραφικά
 	Cursor Swatch Preview	Προεπισκόπηση δείγματος δίπλα στον δείκτη
 	Selection:	Επιλογή:
 	Straight Line	Ευθεία γραμμή
 	Highlight:	Επισήμανση:
+	Stroke When Editable	Περίγραμμα όταν είναι επεξεργάσιμο
 	Legacy (version 7)	Παλαιού τύπου (έκδοση 7)
 	Legacy .ai Options	Επιλογές .ai παλαιού τύπου
 	Linked Files	Συνδεδεμένα αρχεία
@@ -5106,6 +5281,9 @@ effect	Points	Σημεία
 	Registration:	Σημείο αναφοράς:
 	Reset Horizontal Scale	Επαναφορά οριζόντιας κλίμακας
 	Reset Tracking and Kerning	Επαναφορά απόστασης χαρακτήρων και διαγραμμάτωσης
+	Highlight Font Name	Επισήμανση ονόματος γραμματοσειράς
+	Highlight Kerning	Επισήμανση διαγραμμάτωσης
+	Highlight Tracking	Επισήμανση απόστασης χαρακτήρων
 	Sample Color from Screen	Δειγματοληψία χρώματος από την οθόνη
 	Set as Default	Ορισμός ως προεπιλογή
 	Show Template	Εμφάνιση προτύπου
@@ -5135,6 +5313,7 @@ effect	Points	Σημεία
 @msg	Measured anchor no longer exists	Το μετρημένο σημείο αγκύρωσης δεν υπάρχει πλέον
 @msg	Measured segment no longer exists	Το μετρημένο τμήμα δεν υπάρχει πλέον
 @msg	Non-finite dimension	Η διάσταση δεν είναι πεπερασμένος αριθμός
+@msg	Scale Text Attributes: selected type has no scale to bake	Κλιμάκωση ιδιοτήτων κειμένου: το επιλεγμένο κείμενο δεν έχει κλίμακα προς εφαρμογή
 @msg	Scale must be drawing:real, for example 1:10	Η κλίμακα πρέπει να είναι σχέδιο:πραγματικό, για παράδειγμα 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ο λόγος κλίμακας πρέπει να είναι μεταξύ 1:1000000 και 1000000:1
 @msg	Second measured segment no longer exists	Το δεύτερο μετρημένο τμήμα δεν υπάρχει πλέον
@@ -5159,6 +5338,7 @@ effect	Points	Σημεία
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: το "selection" τοποθετεί το ίδιο το ντεγκραντέ: παραλείψτε τα `start` και `end` (το τοποθετούν ήδη σε συντεταγμένες εγγράφου)
 @msg	the Color Picker is not open	ο επιλογέας χρώματος δεν είναι ανοιχτός
 @msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
+@msg	the Smooth slider is not open	ο ρυθμιστής Εξομάλυνσης δεν είναι ανοιχτός
 @msg	the action has no steps	η ενέργεια δεν έχει βήματα
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	τα επίπεδα του αρχείου δεν διαβάστηκαν ({_1}): εισάγεται ως η σελίδα του, σε ένα επίπεδο
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	τα επίπεδα του αρχείου δεν διαβάστηκαν από τα δεδομένα επεξεργασίας του ({_1}): προέρχονται από το τμήμα PDF του
@@ -5175,6 +5355,12 @@ effect	Points	Σημεία
 	Sketch	Σκίτσο
 	Halftone Pattern…	Μοτίβο ημιτόνου…
 	Halftone Pattern	Μοτίβο ημιτόνου
+	Torn Edges…	Ξεσκισμένες άκρες…
+	Torn Edges	Ξεσκισμένες άκρες
+	Conté Crayon…	Κιμωλία Conté…
+	Conté Crayon	Κιμωλία Conté
+	Foreground Level	Επίπεδο προσκηνίου
+	Background Level	Επίπεδο φόντου
 	Pattern Type	Τύπος μοτίβου
 	Dot	Κουκκίδα
 # User Interface › Color Scheme
@@ -5193,6 +5379,7 @@ effect	Points	Σημεία
 	Watercolor…	Υδατογραφία…
 	Watercolor	Υδατογραφία
 	Brush Size	Μέγεθος πινέλου
+	Texture Coverage	Κάλυψη υφής
 	Definition	Ευκρίνεια
 	Brush Detail	Λεπτομέρεια πινέλου
 	Shadow Intensity	Ένταση σκιών
@@ -5221,13 +5408,27 @@ effect	Points	Σημεία
 @msg	the image's pixels can't be read	τα εικονοστοιχεία της εικόνας δεν μπορούν να διαβαστούν
 	Persistent	Μόνιμη
 	Library Panel Options	Επιλογές πίνακα βιβλιοθήκης
+	Locate Library…	Εντοπισμός βιβλιοθήκης…
 @msg	Persistent libraries not found: {files}	Δεν βρέθηκαν μόνιμες βιβλιοθήκες: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	Το `{given}` δεν είναι πίνακας βιβλιοθήκης (δείτε window.swatchLibrary)
 @msg	library panel `{given}` isn't open	ο πίνακας βιβλιοθήκης `{given}` δεν είναι ανοιχτός
+@msg	too many changed shortcuts	πάρα πολλές τροποποιημένες συντομεύσεις
+@msg	library panel `{given}` isn't missing its library	η βιβλιοθήκη του πίνακα βιβλιοθήκης `{given}` δεν λείπει
 @msg	too many library panels were opened in this session	άνοιξαν πάρα πολλοί πίνακες βιβλιοθηκών σε αυτή τη συνεδρία
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Η εικόνα είναι {_1} × {_2} εικονοστοιχεία, πάνω από {LARGE_TRACE_SIDE} σε μία πλευρά: ανιχνεύεται, αλλά πιο αργά. Μια προρύθμιση χαμηλότερης πιστότητας ή ένα μικρότερο αντίγραφο της εικόνας ανιχνεύεται γρηγορότερα.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Η εικόνα ανιχνεύτηκε σε {_1} × {_2} εικονοστοιχεία, σμικρυμένη από {_3} × {_4} (το πολύ {_5} megapixel).
+	Snapping	Προσκόλληση
+	Snap to Tangent	Προσκόλληση σε εφαπτομένη
+	Snap to Perpendicular	Προσκόλληση σε κάθετο
+@msg	unknown snap option `{key}` (use {options})	άγνωστη επιλογή προσκόλλησης `{key}` (χρησιμοποιήστε {options})
+	Gap Length:	Μήκος κενού:
+@msg	`colorGroup` needs `library: "document"`	το `colorGroup` απαιτεί `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	το `colorGroup` απαιτεί `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	το `colorGroup` απαιτεί `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	δεν υπάρχει ομάδα χρωμάτων `{name}` στο έγγραφο (δείτε swatch.list)
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Η λειτουργία Επίπεδο λογότυπο ανίχνευσε την εικόνα σε {_1} × {_2} εικονοστοιχεία, σμικρυμένη με μέσο όρο από {_3} × {_4}.
 	Artboard {n} of {total}	Πίνακας σχεδίασης {n} από {total}
+	File {n} of {total}	Αρχείο {n} από {total}
 	Encoding and writing the file…	Κωδικοποίηση και εγγραφή του αρχείου…
 @plural	{n} more export waiting|{n} more exports waiting	{n} ακόμη εξαγωγή σε αναμονή|{n} ακόμη εξαγωγές σε αναμονή
 	Continue in Background	Συνέχεια στο παρασκήνιο
@@ -5243,6 +5444,14 @@ effect	Points	Σημεία
 	Full Justify	Στοίχιση και στα δύο άκρα
 	Minimum must not exceed Desired, nor Desired Maximum.	Το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο.
 	Justification	Πλήρης στοίχιση
+	Add filters from the list above	Προσθέστε φίλτρα από τη λίστα παραπάνω
+	Add to Stack	Προσθήκη στη στοίβα
+	Applied Filters	Εφαρμοσμένα φίλτρα
+	Categories	Κατηγορίες
+	Choose a filter	Επιλέξτε φίλτρο
+	Effect Gallery	Συλλογή εφέ
+	Filters	Φίλτρα
+	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
 @msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	οι μεταβλητές και τα σύνολα δεδομένων του αρχείου δεν διαβάστηκαν (μεταβλητές: {variables}, σύνολα δεδομένων: {data_sets}): ο πίνακας Μεταβλητές δεν τα εμφανίζει
 # Select by Color (select.color)
 	Select by Color	Επιλογή βάσει χρώματος
@@ -5266,3 +5475,148 @@ effect	Points	Σημεία
 	Note Paper	Χαρτί σημειώσεων
 	Water Paper…	Βρεγμένο χαρτί…
 	Water Paper	Βρεγμένο χαρτί
+	Ruby…	Ruby…
+	Ruby	Ruby
+	Geometric Guides	Γεωμετρικοί οδηγοί
+	Ease In	Ομαλή αρχή
+	Ease Out	Ομαλό τέλος
+	Ease In Out	Ομαλή αρχή και τέλος
+	Ease Out In	Ομαλό τέλος και αρχή
+	Ramp:	Ένταση:
+	Shift:	Μετατόπιση:
+	Fresco…	Νωπογραφία…
+	Fresco	Νωπογραφία
+	Lock Artboards	Κλείδωμα πινάκων σχεδίασης
+	Unlock Artboards	Ξεκλείδωμα πινάκων σχεδίασης
+	Lock Selected	Κλείδωμα επιλεγμένων
+	Lock All Except Selected	Κλείδωμα όλων εκτός από τα επιλεγμένα
+	Lock All	Κλείδωμα όλων
+	Unlock Selected	Ξεκλείδωμα επιλεγμένων
+	Effect Gallery…	Συλλογή εφέ…
+	Effect Gallery Dialog	Παράθυρο διαλόγου Συλλογή εφέ
+	Arc Segment Tool Options	Επιλογές εργαλείου τμήματος τόξου
+	Base Along:	Βάση κατά:
+	Closed	Κλειστό
+	Convex	Κυρτό
+	Fill Arc	Γέμισμα τόξου
+	Length X-Axis:	Μήκος άξονα X:
+	Length Y-Axis:	Μήκος άξονα Y:
+	Slope:	Κλίση:
+axis	X Axis	Άξονας X
+axis	Y Axis	Άξονας Y
+@msg	Packaged {n} file(s) in {folder}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
+@msg	Packaged {n} file(s) {note}	Συσκευάστηκαν {n} αρχεία {note}
+@msg	Packaged {n} file(s)	Συσκευάστηκαν {n} αρχεία
+	Packaged {n} file(s)	Συσκευάστηκαν {n} αρχεία
+	Packaged {n} file(s) in {folder}	Συσκευάστηκαν {n} αρχεία στον φάκελο {folder}
+	Packaged {n} file(s) {note}	Συσκευάστηκαν {n} αρχεία {note}
+	{count} file(s) in {folder}. Show the package folder?	{count} αρχεία στον φάκελο {folder}. Να εμφανιστεί ο φάκελος συσκευασίας;
+	Clockwise	Δεξιόστροφα
+	Dither	Πρόσθεση θορύβου
+	Fine noise hides banding in the gradient fill	Ο λεπτός θόρυβος κρύβει τις λωρίδες στο γέμισμα ντεγκραντέ
+@msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
+@msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
+@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	Να εγκατασταθεί το «{name}», που ζητά μεγάλο υπολογιστικό προϋπολογισμό;
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Κάθε εκτέλεση μπορεί να διαρκέσει έως {minutes} λεπτά και να κάνει {times} φορές τη δουλειά που επιτρέπεται στα άλλα πρόσθετα. Εκτελείται στο παρασκήνιο και μπορείτε να την ακυρώσετε.
+	It may take minutes, so it runs in the background, where you can cancel it.	Μπορεί να διαρκέσει λεπτά, γι’ αυτό εκτελείται στο παρασκήνιο, όπου μπορείτε να το ακυρώσετε.
+	The plug-in is computing…	Το πρόσθετο υπολογίζει…
+	Inspect Plug-in	Επιθεώρηση προσθέτου
+	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
+@msg	Running “{name}”…	Εκτέλεση του «{name}»…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): εγκαταστήστε το με `allowHeavy: true` μόλις συμφωνήσει ο χρήστης
+# Actions panel: action sets (#3712).
+	New Set…	Νέο σύνολο…
+	New Set	Νέο σύνολο
+	Set Options…	Επιλογές συνόλου…
+	Set Options	Επιλογές συνόλου
+	Create New Set	Δημιουργία νέου συνόλου
+	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
+	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Match	Αντιστοίχιση
+	On Artboards	Σε πίνακες σχεδίασης
+	All Artboards	Όλοι οι πίνακες σχεδίασης
+	Include Objects On Canvas	Συμπερίληψη αντικειμένων στον καμβά
+	Result(s): {count}	Αποτέλεσμα(τα): {count}
+@msg	select one object	επιλέξτε ένα αντικείμενο
+@msg	Global Edit works on paths, compound paths and symbol instances	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές και παρουσίες συμβόλων
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
+	Add to Symbols	Προσθήκη στα σύμβολα
+	Basic Shapes	Βασικά σχήματα
+	Open Symbol Library	Άνοιγμα βιβλιοθήκης συμβόλων
+	Save Symbol Library	Αποθήκευση βιβλιοθήκης συμβόλων
+	Save Symbol Library…	Αποθήκευση βιβλιοθήκης συμβόλων…
+	Save Symbols…	Αποθήκευση συμβόλων…
+	Selected Symbols Only	Μόνο επιλεγμένα σύμβολα
+	Symbol Libraries Menu	Μενού βιβλιοθηκών συμβόλων
+	Symbol Library	Βιβλιοθήκη συμβόλων
+	User Symbol Library 1	Βιβλιοθήκη συμβόλων χρήστη 1
+	User Symbol Library 2	Βιβλιοθήκη συμβόλων χρήστη 2
+	User Symbol Library 3	Βιβλιοθήκη συμβόλων χρήστη 3
+	User Symbol Library 4	Βιβλιοθήκη συμβόλων χρήστη 4
+	User Symbol Library 5	Βιβλιοθήκη συμβόλων χρήστη 5
+	User Symbol Library 6	Βιβλιοθήκη συμβόλων χρήστη 6
+	User Symbol Library 7	Βιβλιοθήκη συμβόλων χρήστη 7
+	User Symbol Library 8	Βιβλιοθήκη συμβόλων χρήστη 8
+	User Symbol Library 9	Βιβλιοθήκη συμβόλων χρήστη 9
+	User Symbol Library 10	Βιβλιοθήκη συμβόλων χρήστη 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	Η `{_1}` δεν έχει σύμβολα για τοποθέτηση
+@msg	missing `library` (see symbol.libraries)	λείπει το `library` (δείτε symbol.libraries)
+@msg	no symbol `{n}`	δεν υπάρχει σύμβολο `{n}`
+@msg	no symbol `{n}` in `{_1}`	δεν υπάρχει σύμβολο `{n}` στη `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	δεν υπάρχει βιβλιοθήκη συμβόλων `{key}` (δείτε symbol.libraries)
+@msg	the document has no symbols to save	το έγγραφο δεν έχει σύμβολα για αποθήκευση
+@msg	Trap: select two or more objects filled with solid colours	Παγίδευση χρωμάτων: επιλέξτε δύο ή περισσότερα αντικείμενα με συμπαγές χρώμα γεμίσματος
+@msg	Trap: no edges of different colours meet among the selected objects	Παγίδευση χρωμάτων: δεν συναντώνται άκρες διαφορετικών χρωμάτων στα επιλεγμένα αντικείμενα
+@msg	thickness must be from 0.01 to 5000 pt	το thickness πρέπει να είναι από 0,01 έως 5000 pt
+@msg	heightWidth must be from 1 to 1000 %	το heightWidth πρέπει να είναι από 1 έως 1000 %
+@msg	tintReduction must be from 0 to 100 %	το tintReduction πρέπει να είναι από 0 έως 100 %
+	Rectangular Grid Tool Options	Επιλογές εργαλείου ορθογώνιου πλέγματος
+	Polar Grid Tool Options	Επιλογές εργαλείου πολικού πλέγματος
+	Fill Line	Γέμισμα γραμμής
+	Pathfinder Options	Επιλογές Pathfinder
+	Divide and Outline Will Remove Unpainted Artwork	Η Διαίρεση και το Περίγραμμα αφαιρούν τα γραφικά χωρίς χρώμα
+@msg	precision must be from 0.001 to 10 pt	το precision πρέπει να είναι από 0,001 έως 10 pt
+@msg	`pathfinder` must be an object	Το `pathfinder` πρέπει να είναι αντικείμενο
+	Add to Brushes	Προσθήκη στα πινέλα
+	Brush Library	Βιβλιοθήκη πινέλων
+	Save Brush Library	Αποθήκευση βιβλιοθήκης πινέλων
+	Save Brushes…	Αποθήκευση πινέλων…
+	Open Brush Library	Άνοιγμα βιβλιοθήκης πινέλων
+	Selected Brushes Only	Μόνο επιλεγμένα πινέλα
+	Brush Libraries Menu	Μενού βιβλιοθηκών πινέλων
+	User Brush Library 1	Βιβλιοθήκη πινέλων χρήστη 1
+	User Brush Library 2	Βιβλιοθήκη πινέλων χρήστη 2
+	User Brush Library 3	Βιβλιοθήκη πινέλων χρήστη 3
+	User Brush Library 4	Βιβλιοθήκη πινέλων χρήστη 4
+	User Brush Library 5	Βιβλιοθήκη πινέλων χρήστη 5
+	User Brush Library 6	Βιβλιοθήκη πινέλων χρήστη 6
+	User Brush Library 7	Βιβλιοθήκη πινέλων χρήστη 7
+	User Brush Library 8	Βιβλιοθήκη πινέλων χρήστη 8
+	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
+	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
+	Art Ribbons	Γραφικές κορδέλες
+	Calligraphic Nibs	Καλλιγραφικές πένες
+	Pattern Borders	Περιθώρια μοτίβου
+	Scatter Shapes	Σχήματα διασποράς
+	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
+@msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
+@msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
+@msg	no brush `{n}`	δεν υπάρχει πινέλο `{n}`
+@msg	no brush `{n}` in `{_1}`	δεν υπάρχει πινέλο `{n}` στη `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	δεν υπάρχει βιβλιοθήκη πινέλων `{key}` (δείτε brush.libraries)
+@msg	the document has no brushes to save	το έγγραφο δεν έχει πινέλα για αποθήκευση
+@msg	no empty artboards to delete	δεν υπάρχουν κενοί πίνακες σχεδίασης για διαγραφή
+	Scale Presets	Προεπιλογές κλίμακας
+@msg	a {width}×{height} screenshot's byte count overflows	το πλήθος byte ενός στιγμιότυπου {width}×{height} υπερχειλίζει
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	το {what} του παραθύρου ({points} σημεία × {scale} DPI) δεν μπορεί να καθορίσει μέγεθος στιγμιότυπου
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Επεκτείνετε πρώτα την εμφάνιση (Αντικείμενο › Επέκταση εμφάνισης)
+	Live preview	Ζωντανή προεπισκόπηση

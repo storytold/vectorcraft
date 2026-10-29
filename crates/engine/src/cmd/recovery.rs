@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob};
 
 use super::fileio::{self, SAVE_FORMATS, SaveJob, SaveMode, SavePlan};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, str_param};
 use crate::DocState;
 
 /// Documents with more objects than this are complex: with Preferences → Turn off Data Recovery
@@ -252,6 +252,34 @@ impl FolderStore {
         }
     }
 
+    /// Create area folder `dir`, and the store's folder when it is missing. On Unix every folder
+    /// made here is owner-only (`0o700`): the copies are unsaved documents, and with the default
+    /// mode other accounts on the machine could read them. A store folder that already exists
+    /// keeps its mode, since it can be one the user picked in Preferences.
+    fn create_area(dir: &std::path::Path) -> std::result::Result<(), String> {
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder.create(dir).map_err(|e| format!("{}: {e}", dir.display()))
+    }
+
+    /// Refuse area folder `dir` unless it is a folder itself, not a link to one, and (on Unix)
+    /// belongs to this account. Listing areas leaves links out, so a name another account had
+    /// linked to a folder of its own in a shared recovery folder looked free, and claiming it
+    /// wrote the copies through the link.
+    fn own_area(dir: &std::path::Path) -> std::result::Result<(), String> {
+        let m = std::fs::symlink_metadata(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        if !m.file_type().is_dir() {
+            return Err(format!("{}: not a folder of its own", dir.display()));
+        }
+        #[cfg(unix)]
+        if std::os::unix::fs::MetadataExt::uid(&m) != rustix::process::geteuid().as_raw() {
+            return Err(format!("{}: belongs to another account", dir.display()));
+        }
+        Ok(())
+    }
+
     /// The plain names of the files (or, `dirs`, folders) in `dir`; none when it doesn't exist.
     fn names(dir: &std::path::Path, dirs: bool) -> std::result::Result<Vec<String>, String> {
         let entries = match std::fs::read_dir(dir) {
@@ -285,7 +313,8 @@ impl RecoveryStore for FolderStore {
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
         let f = self.file(name)?;
         if let Some(dir) = f.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            Self::create_area(dir)?;
+            Self::own_area(dir)?;
         }
         vectorcraft_format::write_atomic(&f, bytes).map_err(|e| format!("{}: {e}", f.display()))
     }
@@ -304,7 +333,8 @@ impl RecoveryStore for FolderStore {
     }
     fn lock(&self, area: &str) -> std::result::Result<Lock, String> {
         let dir = self.area(area)?;
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        Self::create_area(&dir)?;
+        Self::own_area(&dir)?;
         let path = dir.join(LOCK_FILE);
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -559,16 +589,34 @@ static WRITES: Mutex<()> = Mutex::new(());
 type Named = (Weak<Vec<u8>>, String);
 
 /// The entry names of image bytes already hashed ([`blob_name`]), so an image is hashed once,
-/// not at every interval. Bytes behind a live `Weak` never change (`Arc::make_mut` copies them).
-static NAMES: Mutex<Vec<Named>> = Mutex::new(Vec::new());
+/// not at every interval, keyed by the bytes' address. Bytes behind a live `Weak` never change
+/// (`Arc::make_mut` copies them).
+static NAMES: Mutex<Names> = Mutex::new(Names { by_address: None, live_after_sweep: 0 });
+
+struct Names {
+    by_address: Option<std::collections::HashMap<usize, Named>>,
+    /// How many entries were live at the last sweep of dead ones: the next sweep waits until there
+    /// are twice as many, so sweeping costs a constant per name, not a pass over all of them.
+    live_after_sweep: usize,
+}
 
 /// The name of the entry holding `bytes`: from their content (128 bits of hash and the length), so
 /// identical images share one entry and one written before isn't written again.
 fn blob_name(bytes: &Arc<Vec<u8>>) -> String {
-    let mut names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
-    names.retain(|(w, _)| w.strong_count() > 0);
-    if let Some((_, name)) = names.iter().find(|(w, _)| std::ptr::eq(w.as_ptr(), Arc::as_ptr(bytes))) {
+    let mut guard = NAMES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Names { by_address, live_after_sweep } = &mut *guard;
+    let names = by_address.get_or_insert_with(Default::default);
+    let address = Arc::as_ptr(bytes) as usize;
+    // A dead entry at this address named other bytes that were freed there before.
+    if let Some((w, name)) = names.get(&address)
+        && w.strong_count() > 0
+        && std::ptr::eq(w.as_ptr(), Arc::as_ptr(bytes))
+    {
         return name.clone();
+    }
+    if names.len() >= (*live_after_sweep * 2).max(64) {
+        names.retain(|_, (w, _)| w.strong_count() > 0);
+        *live_after_sweep = names.len();
     }
     let hash = |seed: u8| {
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -577,7 +625,7 @@ fn blob_name(bytes: &Arc<Vec<u8>>) -> String {
         h.finish()
     };
     let name = format!("img-{:016x}{:016x}-{}{BLOB_EXT}", hash(1), hash(2), bytes.len());
-    names.push((Arc::downgrade(bytes), name.clone()));
+    names.insert(address, (Arc::downgrade(bytes), name.clone()));
     name
 }
 
@@ -768,6 +816,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             name: format!("{file}{DOC_EXT}"),
             folder: None,
             modified: None,
+            notes: Vec::new(),
         };
         let save = fileio::job_for(s, st, plan)?;
         let meta = Meta {
@@ -947,6 +996,9 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     let meta_bytes = store.read(&format!("{file}{META_EXT}")).unwrap_or_default();
     let meta: Meta = serde_json::from_slice(&meta_bytes).unwrap_or_default();
     let (mut doc, _, mut warnings) = fileio::native_file(&bytes).map_err(|e| EngineError::Other(format!("recovery copy `{file}`: {e}")))?;
+    // A frame whose first paragraph continues from the frame before draws it without the
+    // paragraph's first-line indent and list marker.
+    super::threads::mark_continued(&mut doc);
     // The images, from the entries of the copy's area.
     let from = file.split_once('/').map_or("", |(a, _)| a);
     let mut blobs = vec![];
@@ -987,7 +1039,7 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
         doc.title = if meta.title.is_empty() { stem.to_string() } else { meta.title.clone() };
     }
     // Linked files are looked for from the document's own folder.
-    let links = super::links::resolve(&mut doc, meta.path.as_deref(), s.prefs.update_links == "automatically");
+    let links = super::links::resolve(&mut doc, meta.path.as_deref(), s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
     let index = s.add_document(doc, meta.path.clone());
     let st = s.doc_mut()?;
     st.recovered = true;

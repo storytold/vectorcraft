@@ -231,7 +231,7 @@ fn frame(q: Point, dir: Vec2) -> (f64, f64) {
 /// How far along `dir` the stroke through `q` is shifted: strokes `len` long lie in rows `width`
 /// apart across `dir`, each row starting at random, each stroke shifted by up to [`JITTER`] ×
 /// `len`.
-fn stroke_shift(salt: u64, q: Point, dir: Vec2, len: f64, width: f64) -> f64 {
+pub(super) fn stroke_shift(salt: u64, q: Point, dir: Vec2, len: f64, width: f64) -> f64 {
     if !(len > 0.0 && width > 0.0) {
         return 0.0;
     }

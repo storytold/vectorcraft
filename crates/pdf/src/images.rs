@@ -353,6 +353,7 @@ fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, qual
             let t = if space == ImageColorspace::Rgb { ExtendedColorType::Rgb8 } else { ExtendedColorType::L8 };
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(samples, width, height, t).ok()?;
         }
+        ImageColorspace::DeviceN => return None,
     }
     Image::from_jpeg(out.into(), interpolate).ok()
 }

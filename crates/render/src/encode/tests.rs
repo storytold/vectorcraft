@@ -264,6 +264,7 @@ fn art_bounds_take_in_the_effects_of_groups_type_and_images() {
         xf: vectorcraft_geom::Affine::translate((20.0, 50.0)),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     let cut_off: Vec<_> = [("group", group), ("type", text), ("image", image)]

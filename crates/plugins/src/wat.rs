@@ -36,9 +36,29 @@ pub const ECHO: &str = "(i64.or (i64.shl (i64.extend_i32_u (local.get $il)) (i64
 
 /// A plug-in that always returns `output` (whatever it is given).
 pub fn returning(manifest: &str, output: &str) -> String {
-    let run = format!("(i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
+    then_returning(manifest, "", output)
+}
+
+/// A plug-in whose `vc_run` runs `first` (instructions, with the locals it declares first), then
+/// returns `output`.
+fn then_returning(manifest: &str, first: &str, output: &str) -> String {
+    let run = format!("{first} (i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
     let extra = format!(r#"(data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
     module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
+}
+
+/// A plug-in that counts `steps` down before it returns `output`. Each step costs a few
+/// instructions, so a test picks work that a light budget can't finish and a heavy one can, or
+/// that runs until it is cancelled.
+pub fn spinning(manifest: &str, steps: u64, output: &str) -> String {
+    let spin = format!(
+        "(local $n i64) (local.set $n (i64.const {steps}))
+    (block $done (loop $step
+      (br_if $done (i64.le_s (local.get $n) (i64.const 0)))
+      (local.set $n (i64.sub (local.get $n) (i64.const 1)))
+      (br $step)))"
+    );
+    then_returning(manifest, &spin, output)
 }
 
 /// What [`when_given`] looks through.

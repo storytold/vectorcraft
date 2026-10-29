@@ -9,7 +9,9 @@ use serde_json::Value;
 #[cfg(not(target_arch = "wasm32"))]
 use serde_json::json;
 
-use super::super::*;
+use super::super::{Result, Session, bad};
+#[cfg(not(target_arch = "wasm32"))]
+use super::super::{bool_or, find_command, str_param};
 
 #[cfg(target_arch = "wasm32")]
 pub(super) fn action_batch(_: &mut Session, _: &Value) -> Result<Value> {
@@ -56,7 +58,13 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "batches cannot nest"));
         }
         if find_command(id).is_none() {
-            return Err(bad(C, format!("commands[{i}]: unknown command `{id}`")));
+            return Err(bad(
+                C,
+                match super::super::params::nearest_command(id) {
+                    Some(near) => format!("commands[{i}]: unknown command `{id}`; did you mean `{near}`?"),
+                    None => format!("commands[{i}]: unknown command `{id}`"),
+                },
+            ));
         }
     }
     let source = str_param(p, "source").unwrap_or("folder");

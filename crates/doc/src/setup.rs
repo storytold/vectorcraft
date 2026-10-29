@@ -145,6 +145,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("French", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
     ("Italian", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Spanish", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Catalan", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Portuguese", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Dutch", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Danish", Quotes { double: ['»', '«'], single: ['›', '‹'] }),
@@ -154,6 +155,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("Polish", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    ("Turkish", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Japanese", Quotes { double: ['「', '」'], single: ['『', '』'] }),
     ("Chinese", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
 ];
@@ -211,7 +213,8 @@ pub struct DocSetup {
     pub bleed: [f64; 4],
     /// Show Images in Outline Mode.
     pub outline_images: bool,
-    /// Highlight text whose font is missing (drawn in a substitute font).
+    /// The Highlight Substituted Fonts value older builds kept in Document Setup. Files keep it as
+    /// they were saved; the screen follows Preferences › Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
     /// Highlight glyphs the font lacks (drawn from a fallback font).
     pub highlight_substituted_glyphs: bool,
@@ -238,6 +241,11 @@ pub struct DocSetup {
     pub export_text: ExportText,
     /// Background Contents chosen in New Document.
     pub background: Background,
+    /// Character panel menu › System Layout: every text object advances by whole points. Off by
+    /// default and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+    #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
+    pub system_layout: bool,
 }
 
 impl Default for DocSetup {
@@ -260,6 +268,7 @@ impl Default for DocSetup {
             small_caps_size: 70.0,
             export_text: ExportText::Editable,
             background: Background::Transparent,
+            system_layout: false,
         }
     }
 }

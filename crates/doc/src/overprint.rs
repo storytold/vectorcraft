@@ -142,8 +142,10 @@ impl Document {
         let ids: Vec<NodeId> = list.as_array().into_iter().flatten().filter_map(|v| v.as_u64()).map(NodeId).collect();
         // The old list marked spot-linked blacks too (so the spot names don't matter).
         let op = OverprintBlack { spot: true, ..Default::default() };
-        for id in ids {
-            if let Some(n) = self.node_mut(id) {
+        // One walk of the tree finds them all (a missing id costs a walk each, and a list can repeat it).
+        let paths = self.index_paths(ids);
+        for path in paths.values() {
+            if let Some(n) = self.node_mut_at(path) {
                 op.apply(n, &[]);
             }
         }

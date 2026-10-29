@@ -125,6 +125,24 @@ fn placed_images_come_back_as_linked_files() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Two placed images whose pixel data can't be decoded are left out of the drawing and get no
+/// linked file, and `warnings` holds the note raster exports give, once, without naming either
+/// image's key.
+#[test]
+fn images_that_cant_be_decoded_give_the_raster_note_once() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut s = session(200.0, 100.0, 1);
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    crate::tests_menucmds::place_undecodable_png_sized(&mut s, 32, 16);
+    let keys: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    assert_eq!(keys.len(), 2);
+    let r = s.execute("document.export", &json!({"format": "dxf"})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(w.iter().filter(|w| **w == NOTE).count(), 1, "{w:?}");
+    assert!(!w.iter().any(|w| keys.iter().any(|k| w.contains(k.as_str()))), "{w:?}");
+    assert!(entities(&text(&r)).is_empty() && r.get("linked").is_none(), "{r}");
+}
+
 #[test]
 fn bad_dxf_options_are_refused() {
     let mut s = two_boards();
@@ -169,7 +187,7 @@ fn formats_list_dxf_and_what_can_not_be_written() {
     }
     assert!(r["writable"].as_array().unwrap().contains(&json!("dxf")));
     let unsupported: Vec<&str> = r["unsupported"].as_array().unwrap().iter().map(|u| u["id"].as_str().unwrap()).collect();
-    assert_eq!(unsupported, ["dwg", "pict"]);
+    assert_eq!(unsupported, ["dwg", "pict", "pmd"]);
 }
 
 #[test]
@@ -191,4 +209,9 @@ fn dwg_and_pict_say_what_to_use_instead() {
         .unwrap_err()
         .to_string();
     assert!(e.contains("DWG is not available"), "{e}");
+    let e = s
+        .execute("document.open", &json!({"name": "brochure.PMD", "dataBase64": vectorcraft_format::base64_encode(b"PageMaker")}))
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("brochure.PMD") && e.contains("PageMaker"), "{e}");
 }

@@ -1,44 +1,44 @@
 //! Symbols panel: the document's symbols as rendered thumbnails or a list. Click selects a symbol
-//! (it becomes the Symbol Sprayer's current symbol); double-click places an instance.
+//! (it becomes the Symbol Sprayer's current symbol); double-click places an instance. Symbol
+//! libraries open in library panels ([`SymbolLibraries`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::{Arc, Weak};
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_engine::DocState;
+use vectorcraft_engine::cmd::clipboard::{ArtResources, art_resources};
+use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
+use vectorcraft_engine::cmd::symbollib::{self, SymbolLibrary};
 
+use super::library_panel::{self, LibraryKind, LibraryRef, Row};
+use super::memo::Memo;
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
-/// A thumbnail of symbol `name` (an instance at its natural size), cached by the art's identity.
-fn thumb(ui: &Ui, doc: &Document, name: &str, size: f32) -> Option<egui::TextureHandle> {
+/// A thumbnail of symbol `name` (an instance at its natural size), cached by its key in `keys`
+/// ([`Thumbs`]).
+fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Option<egui::TextureHandle> {
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: crate::graphics::TexCache<HashMap<(usize, String, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
+        static CACHE: crate::graphics::TexCache<HashMap<(u64, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
-    let sym = doc.symbols.iter().find(|s| s.name == name)?;
     let px = (size * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
-    let key = (std::sync::Arc::as_ptr(&sym.art) as usize, name.to_string(), px);
+    let key = (*keys.keys.get(name)?, px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return Some(t);
     }
-    let (w, h) = doc
-        .unknown
-        .get("symbolSizes")
-        .and_then(|m| m.get(name))
-        .and_then(|v| Some((v.get(0)?.as_f64()?, v.get(1)?.as_f64()?)))
-        .unwrap_or((20.0, 20.0));
-    let mut d = Document::new(w.max(1.0), h.max(1.0));
-    d.symbols.push(sym.clone());
-    let id = d.alloc_id();
-    let xf = vectorcraft_geom::Affine::scale_non_uniform(w / 20.0, h / 20.0);
-    let l = d.layers[0].id;
-    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf })).ok()?;
-    let img = RENDERER.with(|r| r.borrow_mut().render_thumbnail(&d, id, px))?;
-    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+    #[cfg(test)]
+    counters::RENDERED.with(|c| c.set(c.get() + 1));
+    let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), doc, name, px))?;
+    let color = crate::canvas::color_image(&img);
     let tex = ui.ctx().load_texture(format!("sym-{name}-{px}"), color, egui::TextureOptions::LINEAR);
     CACHE.with(|c| {
         let mut c = c.borrow_mut();
@@ -50,11 +50,85 @@ fn thumb(ui: &Ui, doc: &Document, name: &str, size: f32) -> Option<egui::Texture
     Some(tex)
 }
 
-/// Symbol `name`'s thumbnail on white in `r` (the panel's tiles and the chip a dragged symbol
-/// shows at the pointer).
-pub(crate) fn chip(ui: &Ui, doc: &Document, r: egui::Rect, name: &str) {
+/// The thumbnail keys of a document version's or a library's symbols, worked out once for it
+/// ([`document_symbols`], [`library_symbols`]): a symbol's key is its name, its art and every
+/// resource the art uses ([`art_resources`]: the symbols it nests, patterns with their options,
+/// swatches and colour groups, gradients, images, styles…), so a thumbnail renders again when one
+/// of those changes and stays cached when anything else does.
+pub(crate) struct Thumbs {
+    keys: HashMap<String, u64>,
+    /// Keeps the addresses the keys count from being reused.
+    _kept: Vec<(Weak<Node>, ArtResources)>,
+}
+
+impl Thumbs {
+    fn of(doc: &Document) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut keys = HashMap::new();
+        let mut kept = vec![];
+        for s in &doc.symbols {
+            #[cfg(test)]
+            counters::KEYED.with(|c| c.set(c.get() + 1));
+            let deps = art_resources(doc, [&*s.art]);
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (&s.name, Arc::as_ptr(&s.art) as usize, deps.key).hash(&mut h);
+            keys.entry(s.name.clone()).or_insert(h.finish());
+            kept.push((Arc::downgrade(&s.art), deps));
+        }
+        Self { keys, _kept: kept }
+    }
+
+    /// The thumbnail key of symbol `name` (none when there is no such symbol).
+    #[cfg(test)]
+    pub(crate) fn key(&self, name: &str) -> Option<u64> {
+        self.keys.get(name).copied()
+    }
+}
+
+/// [`Thumbs`] of the document version `st` shows.
+pub(crate) fn document_symbols(st: &DocState) -> Rc<Thumbs> {
+    thread_local! {
+        static MEMO: RefCell<Memo<Document, Thumbs>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || Thumbs::of(&st.doc)))
+}
+
+/// [`Thumbs`] of symbol library `lib`.
+pub(crate) fn library_symbols(lib: &Arc<SymbolLibrary>) -> Rc<Thumbs> {
+    thread_local! {
+        static MEMO: RefCell<Memo<SymbolLibrary, Thumbs>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| m.borrow_mut().get(lib, 0, || Thumbs::of(&lib.doc)))
+}
+
+/// Symbol thumbnails' keys worked out and thumbnails rendered on this test thread.
+#[cfg(test)]
+pub(crate) mod counters {
+    thread_local! {
+        pub(crate) static KEYED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static RENDERED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+}
+
+/// Symbol `name` of `doc` rendered `px` pixels wide: an instance at its natural size, alone on a
+/// copy of `doc` that keeps its resources (the symbols it nests, patterns, images, swatches,
+/// brushes, graphic styles) but none of its art.
+fn render_thumb(r: &mut vectorcraft_render::Renderer, doc: &Document, name: &str, px: u32) -> Option<vectorcraft_render::Rendered> {
+    let (w, h) = symbol_size(doc, name);
+    let mut d = doc.clone();
+    let layer = d.alloc_id();
+    d.layers = vec![Arc::new(Node::layer(layer, "Preview", vectorcraft_doc::LayerColor::Preset(0)))];
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(w / 20.0, h / 20.0);
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf })).ok()?;
+    r.render_thumbnail(&d, id, px)
+}
+
+/// Symbol `name`'s thumbnail (keyed by `keys`, [`document_symbols`] or [`library_symbols`] of
+/// `doc`) on white in `r`: the panel's tiles and the chip a dragged symbol shows at the pointer.
+pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str) {
     ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    if let Some(tex) = thumb(ui, doc, name, r.width()) {
+    if let Some(tex) = thumb(ui, doc, keys, name, r.width()) {
         ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
 }
@@ -77,7 +151,7 @@ fn has_instances_selected(app: &VectorcraftApp) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let list: bool = pstate(ui.ctx(), "sym-list");
     let sel = current(app);
@@ -99,7 +173,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.hovered() {
                     ui.painter().rect_filled(r, 0.0, t.hover);
                 }
-                chip(ui, &doc, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
+                chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
                 ui.painter().text(r.left_center() + vec2(32.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(12.5), t.text);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
@@ -112,7 +186,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
                     widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
-                    chip(ui, &doc, r.shrink(2.0), n);
+                    chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = sel.as_deref() == Some(n.as_str());
                     ui.painter().rect_stroke(
                         r,
@@ -131,7 +205,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.min_rect()
     });
-    let zone = ui.interact(list_rect, ui.id().with("symbols-drop"), Sense::hover());
+    let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
     if let Some(ids) = widgets::art_drop(ui, &zone)
         && let Err(e) = app.run("symbol.new", json!({ "ids": ids }))
     {
@@ -146,7 +220,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", tl!("Symbol Libraries (on the roadmap)"), false, false, 24.0);
+        let open = library_panel::any_open::<SymbolLibraries>(&app.ui);
+        let lr = widgets::icon_button(ui, "library", SymbolLibraries::MENU, open, 24.0);
+        egui::Popup::menu(&lr).show(|ui| {
+            ui.set_min_width(200.0);
+            library_panel::library_menu::<SymbolLibraries>(app, ui);
+        });
         if widgets::icon_button_enabled(ui, "dc-place-symbol", tl!("Place Symbol Instance"), false, sel.is_some(), 24.0).clicked() {
             app.run("symbol.place", json!({})).ok();
         }
@@ -197,6 +276,176 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("List View"), true, list) {
         set_pstate(ui.ctx(), "sym-list", true);
     }
+    ui.separator();
+    ui.menu_button(tl!("Open Symbol Library"), |ui| library_panel::library_menu::<SymbolLibraries>(app, ui));
+    let has_symbols = app.session.active().is_some_and(|d| !d.doc.symbols.is_empty());
+    if menu_item(ui, tl!("Save Symbol Library…"), has_symbols, false) {
+        save_library(app, sel.into_iter().collect());
+    }
+}
+
+/// Save Symbol Library… for the document's symbols (`names`: the one selected in the panel).
+fn save_library(app: &mut VectorcraftApp, names: Vec<String>) {
+    if let Err(e) = app.run("ui.saveSymbolLibrary", json!({ "names": names })) {
+        app.status(e);
+    }
+}
+
+// ---------- libraries ----------
+
+/// A symbol of a library as the library panel shows it.
+pub(crate) struct LibSymbol {
+    lib: Arc<SymbolLibrary>,
+    index: usize,
+}
+
+impl LibSymbol {
+    fn name(&self) -> &str {
+        self.lib.doc.symbols.get(self.index).map_or("", |s| s.name.as_str())
+    }
+}
+
+/// Symbol libraries in library panels (engine: `symbol.libraries`, `symbol.addFromLibrary`…).
+pub(crate) struct SymbolLibraries;
+
+impl LibraryKind for SymbolLibraries {
+    const KIND: &str = "symbols";
+    const OPEN: &str = "window.symbolLibrary";
+    const LIST: &str = "symbol.libraries";
+    const LOAD: &str = "symbol.loadLibrary";
+    const MENU: &str = "Symbol Libraries Menu";
+    const ADD: &str = "Add to Symbols";
+    /// Symbols need room to show their art.
+    const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
+    type Lib = Arc<Vec<LibSymbol>>;
+    type Item = LibSymbol;
+
+    fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
+        let libs = symbollib::libraries(&app.session).into_iter();
+        libs.map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
+    }
+    fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
+        let (info, lib) = symbollib::library(&app.session, id)?;
+        let shown = (0..lib.len()).map(|index| LibSymbol { lib: lib.clone(), index }).collect();
+        Some((info.name, Arc::new(shown)))
+    }
+    fn find(app: &VectorcraftApp, key: &str) -> library_panel::Found {
+        symbollib::library(&app.session, key).map(|(info, lib)| (info.id, info.name, lib.len()))
+    }
+    fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
+        app.session.symbol_libraries.path(id).map(str::to_string)
+    }
+    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibSymbol>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+        lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
+    }
+    /// The symbol's art on white, as the Symbols panel shows it.
+    fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {
+        chip(ui, &s.lib.doc, &library_symbols(&s.lib), r, s.name());
+        super::graphic_styles::outline(ui, r, selected, hovered);
+    }
+    fn row_icons(_: &Ui, _: egui::Rect, _: &LibSymbol) {}
+    /// Its natural size.
+    fn describe(s: &LibSymbol) -> String {
+        let (w, h) = symbol_size(&s.lib.doc, s.name());
+        let num = |v: f64| format!("{}", (v * 100.0).round() / 100.0);
+        crate::i18n::fmt(tl!("{w} × {h} pt"), &[("w", &num(w)), ("h", &num(h))])
+    }
+    /// Adds the symbol to the document's Symbols, as the current symbol.
+    fn click(app: &mut VectorcraftApp, _: &Ui, id: &str, name: &str) {
+        add(app, json!({"library": id, "name": name}));
+    }
+    fn add(app: &mut VectorcraftApp, id: &str, names: Vec<String>) {
+        add(app, json!({"library": id, "names": names}));
+    }
+    /// Dragged onto the canvas, the symbol is added and an instance placed where it is dropped.
+    fn drag(id: &str, name: &str) -> Option<PanelDrag> {
+        Some(PanelDrag::LibrarySymbol { library: id.to_string(), name: name.to_string() })
+    }
+    fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
+        ui.separator();
+        // As a command, so its file dialog, shown off the UI thread, loads the library when it
+        // answers.
+        if menu_item(ui, tl!("Other Library…"), true, false)
+            && let Err(e) = app.run("window.symbolLibrary.other", json!({}))
+        {
+            app.status(e);
+        }
+        let has_symbols = app.session.active().is_some_and(|d| !d.doc.symbols.is_empty());
+        if menu_item(ui, tl!("Save Symbols…"), has_symbols, false) {
+            let sel = current(app);
+            save_library(app, sel.into_iter().collect());
+        }
+    }
+}
+
+/// Run `symbol.addFromLibrary` with `p`; a failure goes to the status bar.
+fn add(app: &mut VectorcraftApp, p: Value) {
+    if let Err(e) = app.run("symbol.addFromLibrary", p) {
+        app.status(e);
+    }
+}
+
+/// Symbol `name`'s natural size in `doc`.
+fn symbol_size(doc: &Document, name: &str) -> (f64, f64) {
+    let size = doc.unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get(name));
+    size.and_then(|v| Some((v.get(0)?.as_f64()?, v.get(1)?.as_f64()?)))
+        .unwrap_or((2.0 * vectorcraft_doc::SYMBOL_HALF, 2.0 * vectorcraft_doc::SYMBOL_HALF))
+}
+
+/// `window.symbolLibrary {library}`: open a symbol library in its own panel (`library` null closes
+/// every symbol library panel).
+pub(crate) fn open_library(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    library_panel::open_command::<SymbolLibraries>(app, p)
+}
+
+/// `symbol.loadLibrary` params, then open the library in its panel.
+pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let r = app.run("symbol.loadLibrary", params)?;
+    open_library(app, &json!({ "library": r["library"] }))
+}
+
+/// Other Library…: load the symbols of the document at `path`, else of one picked in an open
+/// dialog.
+pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SymbolLibraries::KIND))? {
+        Some(path) => load_library(app, json!({ "path": path })),
+        None => Ok(Value::Null),
+    }
+}
+
+/// The id prefix of the Window → Symbol Libraries → User Defined slots.
+pub(crate) const USER_SLOT: &str = "window.userSymbolLibrary";
+
+/// The User Defined library slot `id` (`window.userSymbolLibrary3`) stands for.
+pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<LibraryInfo> {
+    library_panel::user_slot(id, USER_SLOT, symbollib::libraries(&app.session))
+}
+
+/// Window → Symbol Libraries.
+pub(crate) fn window_menu() -> Vec<Item> {
+    const SLOTS: [&str; 10] = [
+        "window.userSymbolLibrary1",
+        "window.userSymbolLibrary2",
+        "window.userSymbolLibrary3",
+        "window.userSymbolLibrary4",
+        "window.userSymbolLibrary5",
+        "window.userSymbolLibrary6",
+        "window.userSymbolLibrary7",
+        "window.userSymbolLibrary8",
+        "window.userSymbolLibrary9",
+        "window.userSymbolLibrary10",
+    ];
+    let open = |b: &'static symbollib::BuiltinSymbolLibrary| Item::Cmd(b.name, SymbolLibraries::OPEN, json!({ "library": b.id }));
+    let mut items: Vec<Item> = symbollib::BUILTIN.iter().map(open).collect();
+    items.extend([
+        Item::Sep,
+        Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
+        Item::Sep,
+        Item::Cmd("Other Library…", "window.symbolLibrary.other", Value::Null),
+        Item::Cmd("Save Symbols…", "ui.saveSymbolLibrary", Value::Null),
+    ]);
+    items
 }
 
 #[cfg(test)]
@@ -221,6 +470,37 @@ mod tests {
     fn symbols(app: &mut VectorcraftApp) -> Vec<String> {
         let list = app.run("symbol.list", json!({})).unwrap();
         list["symbols"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap_or_default().to_string()).collect()
+    }
+
+    /// Pixels of `img` that something paints opaquely, and those of them that are red.
+    fn painted(img: &vectorcraft_render::Rendered) -> (usize, usize) {
+        let painted: Vec<&[u8; 4]> = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[3] > 200).collect();
+        let red = painted.iter().filter(|p| p[0] > 150 && p[1] < 80 && p[2] < 80).count();
+        (painted.len(), red)
+    }
+
+    /// A symbol that nests another (a library's included) shows the nested art in its
+    /// thumbnail: the preview keeps the document's symbols and patterns, not its art.
+    #[test]
+    fn thumbnails_show_the_symbols_a_symbol_nests() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        // The instance "Dot" leaves behind becomes all of "Badge".
+        s.execute("symbol.new", &json!({"name": "Dot"})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Badge"})).unwrap();
+        // Other art of the document stays out of the preview.
+        s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+        let lib = vectorcraft_engine::cmd::symbollib::SymbolLibrary::from_document(&s.doc().unwrap().doc, &["Badge".into()], "Kit".into()).unwrap();
+        let mut r = vectorcraft_render::Renderer::new();
+        for doc in [&*s.doc().unwrap().doc, &lib.doc] {
+            let img = render_thumb(&mut r, doc, "Badge", 32).expect("a thumbnail");
+            let (painted, red) = painted(&img);
+            assert!(painted > 0 && red * 10 >= painted * 9, "the nested Dot paints it: {painted} painted, {red} red");
+        }
     }
 
     #[test]
@@ -305,6 +585,97 @@ mod tests {
         app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
         assert!(app.ui.dialog.as_ref().unwrap().bool("nineSlice"));
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("sliceLeft", 0.0), 20.0);
+    }
+
+    /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
+    /// are still the Transform and Info panels' keys, and Cmd+Shift+F8 is still Edit Pattern's. No
+    /// other command, tool or panel has F8 by default.
+    #[test]
+    fn f8_is_symbol_options() {
+        use crate::shortcut_editor::{PANEL_SHORTCUTS, command_for_key, default_command_shortcut};
+        assert_eq!(default_command_shortcut("ui.symbolOptions"), Some("F8"));
+        assert_eq!(command_for_key("F8"), Some("ui.symbolOptions"));
+        assert_eq!(command_for_key("Cmd+Shift+F8"), Some("object.pattern.edit"));
+        let panel = |key: &str| PANEL_SHORTCUTS.iter().find(|(_, sc)| *sc == key).map(|(p, _)| *p);
+        assert_eq!((panel("Shift+F8"), panel("Cmd+F8"), panel("F8")), (Some("transform"), Some("info"), None));
+        let chord = crate::shortcuts::parse("F8").expect("parses");
+        assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::NONE, egui::Key::F8));
+        assert_eq!(crate::menus::pretty_shortcut("F8"), "F8");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let listed = app.run("shortcuts.list", json!({"query": "ui.symbolOptions"})).unwrap();
+        let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["default"].clone())).collect();
+        assert_eq!(rows, [(json!("Symbol Options…"), json!("F8"))], "Keyboard Shortcuts lists it");
+        assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    }
+
+    /// F8, pressed through the shortcut handler, opens Symbol Options for a new symbol from the
+    /// selection, as the panel menu's New Symbol… does, and no symbol is made until OK. OK makes the
+    /// symbol and puts an instance of it in the art's place, and Cancel makes none. With nothing
+    /// selected, neither F8 nor New Symbol… opens a dialog or makes a symbol, and after F8 the
+    /// status bar says that nothing is selected.
+    #[test]
+    fn f8_opens_symbol_options_for_a_new_symbol_as_new_symbol_does() {
+        fn press(app: &mut VectorcraftApp) {
+            let ctx = egui::Context::default();
+            let ev = egui::Event::Key { key: egui::Key::F8, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+            let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        /// A document with one selected rectangle.
+        fn one_rect() -> VectorcraftApp {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+            app
+        }
+        /// Click the panel menu's New Symbol… item.
+        fn click_new_symbol(app: &mut VectorcraftApp) {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let labels = menu_frame(&ctx, app, vec![]);
+            let item = labels.iter().find(|(t, _)| t.trim() == "New Symbol…").map(|(_, r)| r.center()).expect("New Symbol… in the menu");
+            menu_frame(&ctx, app, vec![egui::Event::PointerMoved(item), button(item, true)]);
+            menu_frame(&ctx, app, vec![button(item, false)]);
+        }
+        let dialog = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone()));
+        let mut keyed = one_rect();
+        press(&mut keyed);
+        let mut clicked = one_rect();
+        click_new_symbol(&mut clicked);
+        let opened = dialog(&keyed).expect("the key opens a dialog");
+        assert_eq!(
+            (opened.0.as_str(), opened.1.get("__edit"), opened.1.get("name")),
+            ("symbolOptions", Some(&json!(false)), Some(&json!("New Symbol")))
+        );
+        assert_eq!(dialog(&clicked), Some(opened), "the key opens what New Symbol… opens");
+        assert!(symbols(&mut keyed).is_empty(), "no symbol until OK");
+        for app in [&mut keyed, &mut clicked] {
+            crate::dialogs::confirm(app).unwrap();
+        }
+        assert_eq!(symbols(&mut keyed), ["New Symbol"]);
+        assert_eq!(symbols(&mut clicked), ["New Symbol"]);
+        let doc = &keyed.session.active().unwrap().doc;
+        let art = doc.layers[0].children().unwrap();
+        assert_eq!(art.len(), 1);
+        assert!(matches!(&art[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "New Symbol"), "the rectangle became an instance");
+        // Cancel makes no symbol.
+        keyed.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 30, "height": 20})).unwrap();
+        press(&mut keyed);
+        assert!(keyed.ui.dialog.is_some());
+        crate::dialogs::cancel(&mut keyed);
+        assert!(keyed.ui.dialog.is_none());
+        assert_eq!(symbols(&mut keyed), ["New Symbol"]);
+        // With nothing selected, neither the key nor New Symbol… opens a dialog.
+        for app in [&mut keyed, &mut clicked] {
+            app.run("select.none", json!({})).unwrap();
+        }
+        press(&mut keyed);
+        click_new_symbol(&mut clicked);
+        for app in [&mut keyed, &mut clicked] {
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(symbols(app), ["New Symbol"]);
+        }
+        assert_eq!(keyed.ui.status, "nothing selected");
     }
 
     #[test]

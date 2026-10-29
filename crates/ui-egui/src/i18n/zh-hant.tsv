@@ -4,7 +4,7 @@
 #            @id                  a command id (e.g. file.saveAs): wins over the English text for
 #                                 that menu item, so one id can read differently from its twin
 #            @plural              `source` is "one|other" (English forms); Chinese has one form, so
-#                                 the translation is a single string (see `plural` in i18n/mod.rs)
+#                                 the translation is a single string (see `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
 #   lines starting with # and blank lines are ignored.
@@ -152,6 +152,8 @@
 	Anti-aliased Artwork	消除鋸齒的圖稿
 	Anti-aliasing:	消除鋸齒：
 	Any Kind	所有類型
+	Font Technology	字體技術
+font-technology	Variable	可變
 	Appearance	外觀
 	Appearance Attribute	外觀屬性
 	Appearance Item	外觀項目
@@ -236,6 +238,11 @@
 	Average…	平均…
 	Axis:	軸：
 	Background Color:	背景顏色：
+	Show Center Mark	顯示中心標記
+	Show Cross Hairs	顯示十字線
+	Show Video Safe Areas	顯示視訊安全區域
+	Video Ruler Pixel Aspect Ratio:	視訊尺標像素長寬比：
+	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
 	Background Contents:	背景內容：
 	Background:	背景：
@@ -297,7 +304,6 @@
 	Brush Affects:	筆刷影響：
 	Brush Definition	筆刷定義
 	Brush Libraries	筆刷資料庫
-	Brush Libraries (on the roadmap)	筆刷資料庫 (規劃中)
 	Brush Options…	筆刷選項…
 	Brush Strokes	筆刷筆畫
 	Brushes	筆刷
@@ -307,6 +313,16 @@
 	Built-in presets don't change: New… starts an editable copy.	內建預設集不會變動：「新增…」會建立可編輯的複本。
 	Bulge…	鼓起…
 	Bullet	項目符號
+	Bullets	項目符號
+	Bullets and Numbering	項目符號與編號
+	Apply Bullets	套用項目符號
+	Numbered List	編號清單
+	Apply Numbers	套用編號
+	Convert to Text	轉換為文字
+	Filled Dot	實心圓點
+	Dash	短破折號
+	Hollow Circle	空心圓
+	Filled Square	實心方塊
 	Butt Cap	平端點
 	Byte Order:	位元組順序：
 	Calligraphic	書法
@@ -1024,6 +1040,7 @@
 	Eyedropper Picks Up:	滴管擷取：
 	Eyedropper Tool	滴管工具
 	Eyedropper: click the art to sample the stop's colour	滴管：點擊圖稿以取樣色標的顏色
+	Eyedropper: click the art to sample the key color	滴管：點擊圖稿以取樣主要顏色
 	Favorites	我的最愛
 	Feather…	羽化…
 	Feet	英呎
@@ -1032,6 +1049,11 @@
 	Fidelity:	精確度：
 	Figure Space	數字空格
 	Figure:	數字：
+# Artwork drag between document tabs.
+	Drop Artwork	放置圖稿
+@msg	{key} must be [x, y] with finite coordinates	{key} 必須是具有有限座標的 [x, y]
+@msg	ids must contain 1–10000 object ids	ids 必須包含 1–10000 個物件 ID
+
 	File	檔案
 	File Dimensions	檔案尺寸
 	File Format:	檔案格式：
@@ -1052,9 +1074,11 @@
 	Fill Color	填色顏色
 	Fill new strokes	為新筆畫套用填色
 	Alt key toggles to Smooth Tool	Alt 鍵切換為平滑工具
+	Live curve fitting	即時曲線擬合
 	Keep selected	保持選取狀態
 	Merge only with selection	僅與選取物件合併
 	Consider Open Filled Paths as Closed	將有填色的開放路徑視為封閉路徑
+	In Merge Mode, Clicking Stroke Splits the Path	在合併模式下，按一下筆畫可分割路徑
 	Pick Color From:	顏色來源：
 	Artwork	圖稿
 	Cursor Swatch Preview	在指標旁預覽色票
@@ -1062,6 +1086,7 @@
 	Freeform	自由
 	Straight Line	直線
 	Highlight:	強調顯示：
+	Stroke When Editable	可編輯時的筆畫
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
@@ -1089,6 +1114,9 @@
 	Increase Font Size by Five Steps	按五個增量放大字體大小
 	Reset Tracking and Kerning	重設字距與字距微調
 	Reset Horizontal Scale	重設水平縮放
+	Highlight Font Name	反白顯示字體名稱
+	Highlight Kerning	反白顯示字距微調
+	Highlight Tracking	反白顯示字距
 	Spacing	間距
 	Step Type	依增量調整文字
 	Fit in View	符合檢視
@@ -1298,6 +1326,7 @@ file-filter	Templates	範本
 	Hand-Drawn	手繪
 	Handles	控制把手
 	Hard Light	實光
+	Hard Mix	實色混合
 	Harmony Rules:	色彩調和規則：
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -1347,7 +1376,7 @@ file-filter	Templates	範本
 	Clear History	清除步驟記錄
 	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
-# History panel: the names of undo steps (`every_undo_label_is_translated`).
+# History panel: the names of undo steps (`untranslated_report` lists any that are missing).
 	Apply Data Set	套用資料集
 	Area Type	區域文字
 	Bloat	膨脹
@@ -1487,6 +1516,12 @@ file-filter	Templates	範本
 	Image Trace	影像描圖
 	Image Tracing	影像描圖物件
 	Tracing Presets	描圖預設集
+	Manage Presets	管理預設集
+	Save as New Preset…	儲存為新預設集…
+	Rename…	重新命名…
+	Rename Preset	重新命名預設集
+	Save Image Trace Preset	儲存影像描圖預設集
+	Delete Image Trace Preset	刪除影像描圖預設集
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -1571,11 +1606,12 @@ file-filter	Templates	範本
 	Keyboard Shortcuts…	鍵盤快速鍵…
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
 # stays English for agents and tests. `{_1}`, `{_2}` … stand for the `{}` of the format string, in order
-# (`complete_languages_translate_every_message` lists any that are missing). Command ids, parameter
+# (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 # Traditional Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list; 「」 around the name of
 # a panel, menu item or setting.
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` 代表已變更的設定：請以其他名稱儲存預設集
 @msg	`{key}` must be an array of these names: {_1}	`{key}` 必須是由下列名稱組成的陣列：{_1}
 @msg	Reset {_1}	重設 {_1}
 @msg	Saving	正在儲存
@@ -1610,7 +1646,7 @@ file-filter	Templates	範本
 @msg	the scale is not a usable number	比例不是可用的數字
 @msg	the drawing is too large to open	圖面過大，無法開啟
 @msg	scale must be a number from {_1} to {_2}, not {_3}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
-@msg	image '{key}' has no pixels and was left out	影像 '{key}' 沒有像素，已略過
+@msg	an image has no pixels and was left out	已略過沒有像素的影像
 @msg	Embedded {n} image(s)	已內嵌 {n} 個影像
 @msg	object {0} cannot have children	物件 {0} 不能有子物件
 @msg	range `{s}` is empty	範圍 `{s}` 是空的
@@ -1621,12 +1657,15 @@ file-filter	Templates	範本
 @msg	Show All Hidden Attributes: nothing is hidden	顯示所有隱藏屬性：沒有隱藏的項目
 @msg	Expand: no brush strokes selected	展開：未選取筆刷筆畫
 @msg	no brush named `{name}`	沒有名為 `{name}` 的筆刷
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	鬃毛筆刷的名稱最多 {max} 個字元：`{name}` 有 {count} 個字元
 @msg	no brush selected	未選取筆刷
+@msg	brushes move only within their type	筆刷只能在同一類型內移動
 @msg	no symbol instances selected	未選取符號實體
 @msg	select a symbol instance	請選取符號實體
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	即時上色只接受路徑和複合路徑：請先將文字、影像和其他物件轉換為路徑
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
@@ -1664,6 +1703,7 @@ file-filter	Templates	範本
 @msg	no saved selection recalled	未叫出任何已儲存的選取範圍
 @msg	no saved selections	沒有已儲存的選取範圍
 @msg	no such artboard	沒有這個工作區域
+@msg	the artboard is locked	工作區域已鎖定
 @msg	cannot split an open path at its end point	無法在開放路徑的端點處分割路徑
 @msg	closing needs three anchors	封閉需要三個錨點
 @msg	empty brush stroke	筆刷筆畫是空的
@@ -1743,6 +1783,9 @@ file-filter	Templates	範本
 @msg	the layer or group is locked	圖層或群組已鎖定
 @msg	the guide is on a hidden or locked layer	參考線位於隱藏或鎖定的圖層上
 @msg	the target layer is locked or hidden	目標圖層已鎖定或隱藏
+@msg	the object is hidden or locked	物件已隱藏或鎖定
+@msg	the object is outside the isolated group	物件位於隔離的群組之外
+@msg	type objects can't be isolated	無法隔離文字物件
 @msg	the layer to flatten into is hidden	要平面化到的圖層已隱藏
 @msg	there are no objects to release	沒有可釋放的物件
 @msg	no library `{id}`	沒有資料庫 `{id}`
@@ -1754,12 +1797,14 @@ file-filter	Templates	範本
 @msg	select a blend	請選取漸變物件
 @msg	select a gradient mesh	請選取漸層網格
 @msg	the object has no opacity mask	物件沒有不透明度遮色片
+@msg	stop editing the opacity mask first	請先停止編輯不透明度遮色片
 @msg	Convert to Artboards: selection has no area	轉換為工作區域：選取範圍沒有面積
 @msg	Convert to Shape: no rectangles or ellipses selected	轉換為形狀：未選取矩形或橢圓形
 @msg	image would be too large; lower the resolution	影像會過大；請降低解析度
 @msg	clipboard is empty	剪貼簿是空的
 @msg	no anchor points selected	未選取錨點
 @msg	select at least two objects	請選取至少兩個物件
+@msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
 @msg	compound paths can only contain paths	複合路徑只能包含路徑
 @msg	no bounds	沒有邊界
@@ -1799,6 +1844,7 @@ file-filter	Templates	範本
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
 @msg	not in pattern editing mode	不在圖樣編輯模式中
+@msg	finish editing the pattern first	請先完成圖樣編輯
 @msg	pattern missing	找不到圖樣
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
@@ -1872,6 +1918,7 @@ file-filter	Templates	範本
 @msg	objects can't be nested more than 32 deep	物件的巢狀層級不能超過 32 層
 @msg	the SVG's elements are nested more than {0} deep	SVG 的元素巢狀超過 {0} 層
 @msg	unknown command `{0}`	未知的指令 `{0}`
+@msg	unknown command `{0}`; did you mean `{1}`?	未知的指令 `{0}`；您是指 `{1}` 嗎？
 @msg	`{what}` closes nothing	`{what}` 沒有可結束的內容
 @msg	`{what}` closes something it didn't open	`{what}` 結束了並非由它開始的內容
 @msg	a path has too many points	有一條路徑的點過多
@@ -1950,6 +1997,7 @@ file-filter	Templates	範本
 @msg	invalid image data for `{0}`	`{0}` 的影像資料無效
 @msg	not a VectorCraft file: {0}	不是 VectorCraft 檔案：{0}
 @msg	the compressed file unpacks to more than {_1} MB	壓縮檔解壓縮後超過 {_1} MB
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` 與 `options.{key}: {inner}` 不一致：該選項只能指定一次
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	版本 {0} 的檔案無法壓縮：只有版本 {COMPRESSED_SINCE} 及更新版本才能開啟壓縮檔
 @msg	a bitmap is empty	有一個點陣圖是空的
 @msg	a bitmap is too large to read	有一個點陣圖過大，無法讀取
@@ -2000,6 +2048,8 @@ file-filter	Templates	範本
 @msg	SVG parse error: {0}	SVG 剖析錯誤：{0}
 @msg	decimals must be {_1}–{_2} (got {_3})	小數位數必須為 {_1}–{_2} (收到 {_3})
 @msg	Exporting {_1}	正在匯出 {_1}
+@msg	Packaging {_1}	正在封裝 {_1}
+@msg	Placing {_1}	正在置入 {_1}
 @msg	Exported {what}	已匯出 {what}
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" 不是顏色：請寫成 #rrggbb
 @msg	could not decode image: {0}	無法解碼影像：{0}
@@ -2013,8 +2063,10 @@ file-filter	Templates	範本
 @msg	{label}…	{label}…
 @msg	no blend options	沒有漸變選項
 @msg	bad color {v}	顏色 {v} 無效
+@msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必須是 0.1 到 10 之間的數字
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
 @msg	the Simplify slider is not open	「簡化」滑桿未開啟
+@msg	the Smooth slider is not open	「平滑」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
@@ -2040,9 +2092,10 @@ file-filter	Templates	範本
 @msg	no such layer or object	沒有這個圖層或物件
 @msg	`{tool}` isn't a Liquify tool	`{tool}` 不是液化工具
 @msg	{_1} linked file(s) can't be read here: their previews show	此處無法讀取 {_1} 個連結檔案：顯示的是其預覽
+@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	無法解碼 {undecoded} 張影像：它們顯示為打叉的方框
 @msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	有 {_1} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msg	pick a colour, gradient or pattern to save as a swatch	請挑選要儲存為色票的顏色、漸層或圖樣
-@msg	Packaged {n} file(s) in {folder}{note}	已將 {n} 個檔案封裝到 {folder}{note}
+@msg	Packaged {n} file(s) in {folder} {note}	已將 {n} 個檔案封裝到 {folder}{note}
 @msg	Packaged {n} file(s){note}	已封裝 {n} 個檔案{note}
 @msg	choose a location for the package	請選擇封裝的位置
 @msg	missing `folder`	未提供 `folder`
@@ -2055,7 +2108,12 @@ file-filter	Templates	範本
 @msg	no plug-in {id} is installed	未安裝增效模組 {id}
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} 是即時效果 (效果 › 增效模組)
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是匯出增效模組 (檔案 › 匯出 › 匯出為…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 為 {size} 位元組（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名為 `{_1}` 的預設集已存在
+@msg	`name` is empty	`name` 為空
+@msg	`newName` is empty	`newName` 為空
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` 是內建預設集，無法變更：請以其他名稱儲存
+@msg	`{name}` is a built-in preset and stays	`{name}` 是內建預設集，無法刪除
 @msg	a swatch or color group named `{n}` exists	名為 `{n}` 的色票或顏色群組已存在
 @msg	no print preset named `{base}`	沒有名為 `{base}` 的列印預設集
 @msg	no print preset named `{name}`	沒有名為 `{name}` 的列印預設集
@@ -2072,7 +2130,10 @@ file-filter	Templates	範本
 @msg	name the file	請為檔案命名
 @msg	unknown format	未知的格式
 @msg	PDF settings are not an object	PDF 設定不是物件
+@msg	PDF security settings are not an object	PDF 安全性設定不是物件
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	沒有名為 `{name}` 的已儲存 PDF 預設集 (內建預設集為唯讀：請以它們為基礎新增一個)
+@msg	no saved preset named `{name}`	沒有名為 `{name}` 的已儲存預設集
+@msg	no saved preset named `{name}` to rename	沒有名為 `{name}` 的已儲存預設集可供重新命名
 @msg	Saved to User Defined: {_1}	已儲存至「使用者定義」：{_1}
 @msg	choose a direction to divide in	請選擇分割方向
 @msg	choice must be "merge" or "add", not `{choice}`	choice 必須是 "merge" 或 "add"，而非 `{choice}`
@@ -2112,14 +2173,22 @@ file-filter	Templates	範本
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必須是選單項目會開啟對話框的指令 (請參閱 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
+@msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
+@msg	`select` must be true or false	`select` 必須是 true 或 false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必須是整數
+@msg	`{key}` must be a number not below 0	`{key}` 必須是不小於 0 的數字
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` 必須是 [x, y, width, height]：四個有限數字，寬度和高度不能為負
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` 大於 `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	請至少提供下列其中之一：`name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness 必須是 dark|mediumDark|mediumLight|light
 @msg	index must be a number or first, previous, next or last	index 必須是數字，或 first、previous、next 或 last
 @msg	index must be a number or first, previous, next or last, not `{other}`	index 必須是數字，或 first、previous、next 或 last，而非 `{other}`
 @msg	lang must be one of {_1}	lang 必須是 {_1} 其中之一
 @msg	missing `name`	未提供 `name`
 @msg	missing `tool`	未提供 `tool`
+@msg	missing id	未提供 id
 @msg	missing index	未提供 index
-@msg	multiple windows land with M11.5	多個視窗將於 M11.5 推出
+@msg	New Window isn't available yet: a document opens in one window	新增視窗尚無法使用：文件會在一個視窗中開啟
 @msg	no PNG encoder	沒有 PNG 編碼器
 @msg	no document open	沒有開啟的文件
 @msg	no effect applied yet	尚未套用任何效果
@@ -2138,6 +2207,13 @@ file-filter	Templates	範本
 @msg	choose a folder to export to	請選擇要匯出至的資料夾
 @msg	the selection has no URL (or they differ)	選取範圍沒有 URL (或其 URL 各不相同)
 @msg	select some type first	請先選取一些文字
+@msg	the selection has no gradient fill	選取範圍沒有漸層填色
+@msg	the selection has no gradient stroke	選取範圍沒有漸層筆畫
+@msg	the selection has no pattern fill	選取範圍沒有圖樣填色
+@msg	the selection has no pattern stroke	選取範圍沒有圖樣筆畫
+@msg	no gradient swatch `{name}`	沒有漸層色票 `{name}`
+@msg	no pattern swatch `{name}`	沒有圖樣色票 `{name}`
+@msg	the library item is damaged	資料庫項目已損毀
 @msg	{_1} font families available	有 {_1} 個可用的字體家族
 @msg	{_1} has no {_2} style	{_1} 沒有 {_2} 樣式
 @msg	Copied the CSS of {rules} object(s)	已複製 {rules} 個物件的 CSS
@@ -2147,6 +2223,7 @@ file-filter	Templates	範本
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	未知的疊印方式 `{o}` (preserve、simulate 或 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	未知的預設集 `{name}` (請參閱 flattener.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	未知的預設集 `{name}`：既不是內建預設集，也不是已儲存的預設集 (請參閱 imageTrace.presets)
 @msg	Select text or click into text with the Type tool to insert glyphs	請選取文字，或使用文字工具在文字中按一下，以插入字符
 @msg	`library` is a library id or name (see {list})	`library` 是資料庫 id 或名稱 (請參閱 {list})
 @msg	no library `{key}` (see {list})	沒有資料庫 `{key}` (請參閱 {list})
@@ -2161,8 +2238,11 @@ file-filter	Templates	範本
 @msg	no swatch library `{l}` (see swatch.library.list)	沒有色票資料庫 `{l}` (請參閱 swatch.library.list)
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
+@msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
 @msg	no files to place	沒有要置入的檔案
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
+@msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
@@ -2177,6 +2257,7 @@ file-filter	Templates	範本
 @msg	can't parse shortcut `{c}`	無法剖析快速鍵 `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	無法剖析 `{k}` 的快速鍵 `{s}`
 @msg	no dialog open	沒有開啟的對話框
+@msg	the open dialog has no Reset	開啟的對話框沒有「重設」按鈕
 @msg	no file reader	沒有檔案讀取器
 @msg	no file writer	沒有檔案寫入器
 @msg	not a VectorCraft shortcut set (missing `overrides`)	不是 VectorCraft 快速鍵組 (沒有 `overrides`)
@@ -2186,9 +2267,11 @@ file-filter	Templates	範本
 @msg	unknown preset (one of {_1})	未知的預設集 (應為 {_1} 其中之一)
 @msg	unknown tool or command `{key}`	未知的工具或指令 `{key}`
 @msg	{_1} is already used by {_2}	{_1} 已由 {_2} 使用
+@msg	{_1} is reserved by the system	{_1} 已被系統保留
 @msg	Couldn't copy to the system clipboard: {e}	無法複製到系統剪貼簿：{e}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	nothing selected	未選取任何物件
+@msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多個工具的工具列群組中
@@ -2229,7 +2312,9 @@ file-filter	Templates	範本
 @msg	automation filesystem access is not granted: read authority is absent: {path}	未授予自動化檔案系統存取權：沒有讀取權限：{path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自動化檔案系統存取權：沒有寫入權限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒絕自動化路徑：位於讀取根目錄 {root} 之外：{path}
+@msg	automation path rejected: outside the read roots {roots}: {path}	已拒絕自動化路徑：位於所有讀取根目錄 {roots} 之外：{path}
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
+@msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
 @msg	automation path rejected: a link that leads nowhere: {path}	已拒絕自動化路徑：連結指向不存在的位置：{path}
 @msg	automation path rejected: cannot resolve {path}: {e}	已拒絕自動化路徑：無法解析 {path}：{e}
@@ -2253,6 +2338,11 @@ file-filter	Templates	範本
 @msg	before must name a panel	before 必須指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停駐動作包含未知的面板或過長的分割路徑
 @msg	group must be true or false	group 必須是 true 或 false
+@msg	panel is not in a dock group	面板不在停駐群組中
+@msg	only a dock group above or below others collapses, not one beside another	只有位於其他群組上方或下方的停駐群組可以摺疊，並排的不行
+@msg	icon must be true or false	icon 必須為 true 或 false
+@msg	icon only docks a panel in the icon column, with no anchor	icon 只會將面板停駐到圖示欄中，不能帶 anchor
+@msg	column docks a set as a dock column, with no anchor or icon	column 會將一組面板停駐為停駐欄，不能帶 anchor 或 icon
 @msg	move requires a destination panel	移動需要目的地面板
 @msg	move requires an existing destination panel	移動需要現有的目的地面板
 @msg	onto must name a floating panel	onto 必須指定浮動面板
@@ -2288,6 +2378,7 @@ file-filter	Templates	範本
 @msg	Measured anchor no longer exists	測量的錨點已不存在
 @msg	Measured segment no longer exists	測量的線段已不存在
 @msg	Non-finite dimension	尺寸標註不是有限值
+@msg	Scale Text Attributes: selected type has no scale to bake	縮放文字屬性：所選文字沒有可套用的縮放
 @msg	Scale must be drawing:real, for example 1:10	比例必須為 圖紙:實際，例如 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	比例必須介於 1:1000000 和 1000000:1 之間
 @msg	Second measured segment no longer exists	第二條測量線段已不存在
@@ -2317,9 +2408,16 @@ file-filter	Templates	範本
 @msg	Persistent libraries not found: {files}	找不到持久資料庫：{files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` 不是資料庫面板 (請參閱 window.swatchLibrary)
 @msg	library panel `{given}` isn't open	資料庫面板 `{given}` 未開啟
+@msg	too many changed shortcuts	已變更的快速鍵過多
+@msg	library panel `{given}` isn't missing its library	資料庫面板 `{given}` 的資料庫未遺失
 @msg	too many library panels were opened in this session	本次工作階段開啟的資料庫面板過多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	影像為 {_1} × {_2} 像素，有一邊超過 {LARGE_TRACE_SIDE}：仍會描圖，但速度較慢。使用精確度較低的預設集或較小的影像拷貝，描圖會較快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	影像已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 縮小而來 (最多 {_5} 百萬像素)。
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	文件中沒有顏色群組 `{name}` (請參閱 swatch.list)
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	「扁平標誌」模式已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 平均縮小而來。
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	只有 http、https 和 mailto URL 會在瀏覽器中開啟，「{url}」不會
@@ -2585,6 +2683,7 @@ file-filter	Templates	範本
 	Miter Limit:	尖角限度：
 	Mixed Appearances	混合外觀
 	Mixed Objects	混雜物件
+	Mixed	混合
 	Mode:	模式：
 	Model	模型
 	Modified	已修改
@@ -2641,6 +2740,7 @@ file-filter	Templates	範本
 @msg	x and y must be finite	x 和 y 必須是有限值
 @msg	t, dx and dy must be finite	t、dx 和 dy 必須是有限值
 @msg	handle must be in or out	handle 必須是 in 或 out
+	Move Brush	移動筆刷
 	Move Swatch	移動色票
 	Move Up	上移
 	Move…	移動…
@@ -2687,6 +2787,10 @@ file-filter	Templates	範本
 	Outer Corner Tile	外角拼貼
 	Side Tile	邊線拼貼
 	Inner Corner Tile	內角拼貼
+	Auto-Centered	自動置中
+	Auto-Between	自動居間
+	Auto-Sliced	自動切片
+	Auto-Overlap	自動重疊
 	Start Tile	起點拼貼
 	End Tile	終點拼貼
 	Fit	符合
@@ -2698,6 +2802,13 @@ file-filter	Templates	範本
 	Tints and Shades	淺色與暗色
 	Hue Shift	色相偏移
 	Key Color:	主要顏色：
+	Tips	提示
+	Colorization Tips	上色提示
+	The samples show this brush on a blue stroke.	範例顯示此筆刷在藍色筆畫上的效果。
+	The art keeps its own colors.	圖稿保留自己的顏色。
+	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黑色變為筆畫顏色，白色維持白色。其他顏色變為筆畫顏色的淺色，顏色越淺，淺色就越淺。
+	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黑色維持黑色，白色維持白色。其他顏色較暗時變為筆畫顏色的暗色，較亮時變為筆畫顏色的淺色。
+	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	主要顏色變為筆畫顏色。其他顏色在色輪上移動與主要顏色相同的距離，並保留其飽和度和亮度。
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
@@ -2718,6 +2829,14 @@ file-filter	Templates	範本
 	Round Fan	圓扇頭
 	Flat Fan	扁扇頭
 	New Brush…	新增筆刷…
+	New Brush	新增筆刷
+	Calligraphic Brush	書法筆刷
+	Scatter Brush	散佈筆刷
+	Art Brush	藝術筆刷
+	Bristle Brush	鬃毛筆刷
+	Pattern Brush	圖樣筆刷
+	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
+	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
 	New Character Style	新增字元樣式
 	New Color Group	新增顏色群組
@@ -2956,7 +3075,7 @@ file-filter	Templates	範本
 	Package	封裝
 	Package collects a saved document with its linked files and fonts.	封裝會將已儲存的文件連同其連結檔案與字體一併收集。
 	Package created	已建立封裝
-	Packaged {n} file(s) in {folder}{note}	已將 {n} 個檔案封裝於 {folder}{note}
+	Packaged {n} file(s) in {folder} {note}	已將 {n} 個檔案封裝於 {folder}{note}
 	Packaged {n} file(s){note}	已封裝 {n} 個檔案{note}
 	Package…	封裝…
 	Page	頁面
@@ -3020,7 +3139,7 @@ file-filter	Templates	範本
 	Performance	效能
 diagnostics	render	繪製
 diagnostics	ui	介面
-	Performance & Storage	效能與儲存空間
+	Plug-ins & Scratch Disks	增效模組 & 暫存磁碟
 	Permissions	權限
 	Permissions password:	權限密碼：
 	Perspective	透視
@@ -3144,6 +3263,7 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
 	Hindi	印地數字
@@ -3326,6 +3446,7 @@ font-script	Japanese	漢字
 	Remove Plug-in	移除增效模組
 	Remove Selected Assets	移除所選資產
 	Remove Threading	移除串連
+	Break Thread	中斷串連
 	Remove “{keyword}”	移除「{keyword}」
 	Rename	重新命名
 	Rename Asset	重新命名資產
@@ -3338,6 +3459,7 @@ font-script	Japanese	漢字
 	Reorder	重新排序
 	Reorder Appearance Item	重新排序外觀項目
 	Repeat	重複
+	Repeat Objects	重複物件
 	Repeat Options	重複選項
 	Repeat Pathfinder	重複路徑管理員
 	Repeat Tab	重複定位點
@@ -3526,7 +3648,22 @@ font-script	Japanese	漢字
 	Saved to User Defined: {}	已儲存至使用者自訂：{}
 	Saved View 1	已儲存的檢視 1
 	Saved View 10	已儲存的檢視 10
+	Saved View 11	已儲存的檢視 11
+	Saved View 12	已儲存的檢視 12
+	Saved View 13	已儲存的檢視 13
+	Saved View 14	已儲存的檢視 14
+	Saved View 15	已儲存的檢視 15
+	Saved View 16	已儲存的檢視 16
+	Saved View 17	已儲存的檢視 17
+	Saved View 18	已儲存的檢視 18
+	Saved View 19	已儲存的檢視 19
 	Saved View 2	已儲存的檢視 2
+	Saved View 20	已儲存的檢視 20
+	Saved View 21	已儲存的檢視 21
+	Saved View 22	已儲存的檢視 22
+	Saved View 23	已儲存的檢視 23
+	Saved View 24	已儲存的檢視 24
+	Saved View 25	已儲存的檢視 25
 	Saved View 3	已儲存的檢視 3
 	Saved View 4	已儲存的檢視 4
 	Saved View 5	已儲存的檢視 5
@@ -3549,6 +3686,7 @@ font-script	Japanese	漢字
 	Scale Cursor Proportional to UI	游標依介面比例縮放
 	Scale Lineweights	縮放線條寬度
 	Scale Strokes & Effects	縮放筆畫與效果
+	Scale Text Attributes	縮放文字屬性
 	Scale to Fit Artboard	縮放至符合工作區域
 	Scale Tool	縮放工具
 	Scale:	縮放比例：
@@ -3720,6 +3858,7 @@ font-script	Japanese	漢字
 	Show Original Path	顯示原始路徑
 	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
 	Auto-Simplify	自動簡化
+	Auto-Smooth	自動平滑
 	Color Panel Options	顏色面板選項
 	Show Package	顯示封裝
 	Show Panel	顯示面板
@@ -3756,6 +3895,7 @@ font-script	Japanese	漢字
 	Simplify	簡化
 	Simplify:	簡化：
 	Simplify…	簡化…
+	Smooth…	平滑…
 	Simulate Colored Paper	模擬有色紙張
 	Simulate Paper	模擬紙張
 	Double Column	雙欄
@@ -3809,17 +3949,20 @@ font-script	Japanese	漢字
 	Outlines	外框
 	Outlines with Source Image	外框（含來源影像）
 	Source Image	來源影像
+	Press and hold to view the source image	按住以檢視來源影像
 	Image Trace View	影像描圖檢視
 	Snap Options	靠齊選項
 	Snap to Glyph	靠齊字符
 	Snap to Grid	靠齊格點
 	Snap to Pixel	靠齊像素
 	Precise Cursors	精確游標
+	Image Trace Preview	影像描圖預覽
 	Snap to Point	靠齊控制點
 	Snap to Unit	靠齊單位
 	Snapping Tolerance	靠齊容許度
 	Social Square Post 1080×1080	社群正方形貼文 1080×1080
 	Soft Light	柔光
+	Soft Mix	柔和混合
 	Solid	實心
 	Sort by Kind	依類型排序
 	Sort by Name	依名稱排序
@@ -3830,6 +3973,7 @@ font-script	Japanese	漢字
 	Space Before Paragraph	段前間距
 	Spaces	空格
 	Spacing Guides	間距參考線
+	Invoke Distance Guides	叫用距離參考線
 	Spacing:	間距：
 	Spanish	西班牙文
 	Specified Distance	指定距離
@@ -3872,6 +4016,11 @@ font-script	Japanese	漢字
 	Stroke	筆畫
 	Stroke (X), double-click for the Color Picker	筆畫 (X)，按兩下開啟檢色器
 	Stroke Color	筆畫顏色
+	Fill Gradient	填色漸層
+	Stroke Gradient	筆畫漸層
+	Fill Pattern	填色圖樣
+	Stroke Pattern	筆畫圖樣
+	Patterns	圖樣
 	Stroke Options	筆畫選項
 	Character:	字元：
 	Character options	字元選項
@@ -3928,6 +4077,7 @@ font-script	Japanese	漢字
 	Swatch Options…	色票選項…
 	Swatch Tiles	色票拼貼
 	Swatches	色票
+	Switch Units	切換單位
 	Switch workspace	切換工作區
 	Add Content	新增內容
 	Click to apply to the selected type	按一下以套用到所選文字
@@ -3967,7 +4117,6 @@ font-script	Japanese	漢字
 	Show all open documents	顯示所有開啟的文件
 	Symbol Instance	符號範例
 	Symbol Libraries	符號資料庫
-	Symbol Libraries (on the roadmap)	符號資料庫 (已列入路線圖)
 	Symbol Screener Tool	符號濾色器工具
 	Symbol Scruncher Tool	符號緊縮器工具
 	Symbol Shifter Tool	符號移位器工具
@@ -4064,6 +4213,7 @@ font-script	Japanese	漢字
 	Top-to-Top Leading	上緣至上緣行距
 	Top:	上：
 	Total Width:	總寬度：
+	Touch	觸控
 	Touch Type	觸控文字
 	Touch Type Tool	觸控文字工具
 	Trace	描圖
@@ -4098,6 +4248,13 @@ font-script	Japanese	漢字
 	Transparent Background	透明背景
 	Transverse (the page a quarter turn on the paper)	橫向轉置 (頁面在紙張上轉四分之一圈)
 	Trap…	補漏白…
+	Trap	補漏白
+	Height/Width	高度/寬度
+	Tint Reduction	色調減淡
+	Traps with Process Color	使用印刷色補漏白
+	Reverse Traps	反向補漏白
+	Precision	精確度
+	Remove Redundant Points	移除多餘的點
 	Trim	剪裁
 	Trim mark weight:	剪裁標記寬度：
 	Trim marks	剪裁標記
@@ -4159,6 +4316,7 @@ font-script	Japanese	漢字
 	Unlock Guides	解除鎖定參考線
 	Unnamed Objects	未命名物件
 	Unprintable margin:	不可列印邊界：
+	Unselected Artwork	未選取的圖稿
 	Unshift	取消位移
 	Untitled	未命名
 	Update Link	更新連結
@@ -4224,6 +4382,7 @@ font-script	Japanese	漢字
 	Lock Variables	鎖定變數
 	Unlock Variables	解除鎖定變數
 @msg	variables are locked	變數已鎖定
+@msg	variables that aren't text were left out: {kinds}	已略過非文字變數：{kinds}
 	List Variables	列出變數
 	Bind Variable	綁定變數
 	Unbind Variable	解除變數綁定
@@ -4337,7 +4496,7 @@ font-script	Japanese	漢字
 	Zoom Tool	縮放工具
 	Zoom with Mouse Wheel	使用滑鼠滾輪縮放
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
-	{count} file(s) in {folder}{note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
+	{count} file(s) in {folder} {note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
 	{count} linked file(s) not found	找不到 {count} 個連結檔案
 	fonts not copied: {fonts}	未複製的字體：{fonts}
 	{count} linked image(s) changed since this document was saved. Show the new versions?	自儲存此文件後，有 {count} 個連結影像已變更。要顯示新版本嗎？
@@ -4487,13 +4646,10 @@ axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	兩者
 	Drag to move	拖曳以移動
-	Drag to move out of the set	拖曳以移出該組合
 	Drag to float as a toolbar	拖曳使其浮動為工具列
 	Put back in the toolbar	放回工具列
 	Float Panel	浮動面板
 	Dock Panel	停駐面板
-	Drag to float the panel group	拖曳以浮動面板群組
-	Put back in the dock	放回停駐區
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left edge to dock	拖曳到視窗左側邊緣以停駐
 	Float Tool Group	浮動工具組
@@ -4515,6 +4671,10 @@ axis	Both	兩者
 	Shaper	Shaper
 	Expand Shaper Group	展開 Shaper 群組
 	Release Shaper Group	釋放 Shaper 群組
+	Remove from Shaper Group	從 Shaper 群組中移除
+@msg	source must be the id of a Shaper Group's original shape	source 必須是 Shaper 群組中原始形狀的 ID
+@msg	group must be the id of a Shaper Group	group 必須是 Shaper 群組的 ID
+@msg	the shape is not an editable original shape of that Shaper Group	該形狀不是該 Shaper 群組中可編輯的原始形狀
 	Select Shaper Face	選取 Shaper 區域
 	Constrain	強制
 	Free Transform	任意變形
@@ -4541,6 +4701,13 @@ axis	Both	兩者
 	Channel 4	色版 4
 	Cell Size	單元大小
 	Fine Dots	細點
+
+	Simple	簡單
+	Light Rough	淺色粗糙
+	Dark Rough	深色粗糙
+	Wide Sharp	寬銳
+	Wide Blurry	寬模糊
+	Sparkle	閃光
 	Medium Dots	中等點
 	Grainy Dots	顆粒點
 	Coarse Dots	粗點
@@ -4655,6 +4822,7 @@ effect	Soft	柔和
 	Activate Panel	啟用面板
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
+	Collapse Panel Group	摺疊面板群組
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -4723,12 +4891,24 @@ lighting	Light	光源
 	Reset Ruler Origin	重設尺標原點
 	Artistic	藝術效果
 	Film Grain…	底片顆粒…
+	Colored Pencil…	彩色鉛筆…
+	Colored Pencil	彩色鉛筆
 	Cutout…	剪紙…
+	Dry Brush…	乾畫筆…
 	Cutout	剪紙
+	Dry Brush	乾畫筆
 	Neon Glow…	霓虹光…
+	Palette Knife…	調色刀…
 	Neon Glow	霓虹光
+	Paint Daubs…	繪畫塗抹…
+	Paint Daubs	繪畫塗抹
+	Palette Knife	調色刀
 	Poster Edges…	海報邊緣…
+	Rough Pastels…	粗糙粉彩…
 	Poster Edges	海報邊緣
+	Rough Pastels	粗糙粉彩
+	Underpainting…	底紋效果…
+	Underpainting	底紋效果
 	Levels	色階數
 	Edge Simplicity	邊緣簡化度
 	Edge Fidelity	邊緣逼真度
@@ -4792,6 +4972,7 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+@msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的影像以縮小的尺寸顯示
 	Basic	基本
 	Fill and Stroke Controls	填色和筆畫控制項
 	Coloring Controls	顏色控制項
@@ -4810,6 +4991,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	3D Lighting Preset	3D 光照預設
+	Standard	標準
+	Diffuse	漫射
 # 3D light management.
 	Lights	光源清單
 	Add Light	新增光源
@@ -4849,6 +5033,7 @@ lighting	Light	光源
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…
 	Export Data Sets…	匯出資料集…
+	Load Variable Library…	載入變數資料庫…
 	Make Graph Dynamic	使圖表動態化
 	Batch…	批次處理…
 	Source Folder:	來源資料夾：
@@ -4867,6 +5052,12 @@ lighting	Light	光源
 	Sketch	素描
 	Halftone Pattern…	半色調圖樣…
 	Halftone Pattern	半色調圖樣
+	Torn Edges…	撕裂邊緣…
+	Torn Edges	撕裂邊緣
+	Conté Crayon…	孔特蠟筆…
+	Conté Crayon	孔特蠟筆
+	Foreground Level	前景層級
+	Background Level	背景層級
 	Pattern Type	圖樣類型
 	Dot	網點
 # User Interface › Color Scheme
@@ -4885,6 +5076,7 @@ lighting	Light	光源
 	Watercolor…	水彩…
 	Watercolor	水彩
 	Brush Size	筆刷大小
+	Texture Coverage	紋理覆蓋
 	Definition	清晰度
 	Brush Detail	筆刷細節
 	Shadow Intensity	陰影強度
@@ -4901,8 +5093,15 @@ lighting	Light	光源
 	Light/Dark Balance	明暗平衡
 	Enable Guides for 9-Slice Scaling	啟用 9-slice 縮放參考線
 	Persistent	持久
+	Locate Library…	尋找資料庫…
 	Library Panel Options	資料庫面板選項
+	Snapping	靠齊
+	Snap to Tangent	靠齊切線
+	Snap to Perpendicular	靠齊垂線
+@msg	unknown snap option `{key}` (use {options})	未知的靠齊選項 `{key}`（可用：{options}）
+	Gap Length:	間隙長度：
 	Artboard {n} of {total}	工作區域 {n} / {total}
+	File {n} of {total}	檔案 {n} / {total}
 	Encoding and writing the file…	正在編碼並寫入檔案…
 @plural	{n} more export waiting|{n} more exports waiting	另有 {n} 個匯出等待中
 	Continue in Background	在背景繼續
@@ -4919,6 +5118,14 @@ lighting	Light	光源
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
 	Minimum	最小值
 	Justification	對齊設定
+	Add filters from the list above	從上方清單新增濾鏡
+	Add to Stack	加入堆疊
+	Applied Filters	已套用的濾鏡
+	Categories	類別
+	Choose a filter	選擇濾鏡
+	Effect Gallery	效果庫
+	Filters	濾鏡
+	Select artwork to apply effects	選取要套用效果的圖稿
 # Select by Color (select.color)
 	Select by Color	依顏色選取
 @msg	missing integer `{key}`	未提供整數 `{key}`
@@ -4927,6 +5134,8 @@ lighting	Light	光源
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
+@msg	id {value} is a layer, not an object	id {value} 是圖層，不是物件
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層
 	Move Anchor Point	移動錨點
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} 只保留文件 {n} 個工作區域中的 1 個：檔案重新開啟時只有一個。開啟「保留編輯功能」可全部保留。
 	Chalk & Charcoal…	粉筆和炭筆…
@@ -4947,3 +5156,150 @@ lighting	Light	光源
 	Note Paper	便條紙
 	Water Paper…	水彩畫紙…
 	Water Paper	水彩畫紙
+	Ruby…	注音…
+	Ruby	注音
+	Geometric Guides	幾何參考線
+	Ease In	緩入
+	Ease Out	緩出
+	Ease In Out	緩入緩出
+	Ease Out In	緩出緩入
+	Ramp:	強度：
+	Shift:	偏移：
+	Fresco…	壁畫…
+	Fresco	壁畫
+	Lock Artboards	鎖定工作區域
+	Unlock Artboards	解除鎖定工作區域
+	Lock Selected	鎖定所選
+	Lock All Except Selected	鎖定所選以外的全部
+	Lock All	全部鎖定
+	Unlock Selected	解除鎖定所選
+	Effect Gallery…	效果庫…
+	Effect Gallery Dialog	效果庫對話框
+	Arc Segment Tool Options	弧段工具選項
+	Base Along:	基線方向:
+	Closed	封閉
+	Concave	凹
+	Convex	凸
+	Fill Arc	填色弧形
+	Length X-Axis:	X 軸長度:
+	Length Y-Axis:	Y 軸長度:
+	Slope:	斜率:
+axis	X Axis	X 軸
+axis	Y Axis	Y 軸
+@msg	Packaged {n} file(s) in {folder}	已將 {n} 個檔案封裝到 {folder}
+@msg	Packaged {n} file(s) {note}	已封裝 {n} 個檔案 {note}
+@msg	Packaged {n} file(s)	已封裝 {n} 個檔案
+	Packaged {n} file(s)	已封裝 {n} 個檔案
+	Packaged {n} file(s) in {folder}	已將 {n} 個檔案封裝到 {folder}
+	Packaged {n} file(s) {note}	已封裝 {n} 個檔案 {note}
+	{count} file(s) in {folder}. Show the package folder?	{folder} 中有 {count} 個檔案。要顯示封裝資料夾嗎？
+	Clockwise	順時針
+	Dither	仿色
+	Fine noise hides banding in the gradient fill	細微雜色可隱藏漸層填色中的色帶
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` 適用於漸層填色 (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
+@msg	`dither` must be true or false	`dither` 必須是 true 或 false
+	Perceptual	感知
+@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+# Heavy plug-in filters (plugin.inspect, plug-in runs)
+	Install “{name}”, which asks for a heavy budget?	要安裝需要大量運算預算的「{name}」嗎？
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次執行最多可能需要 {minutes} 分鐘，並可完成其他增效模組所允許工作量的 {times} 倍。它會在背景執行，您可以隨時取消。
+	It may take minutes, so it runs in the background, where you can cancel it.	這可能需要數分鐘，因此會在背景執行，您可以在執行時取消。
+	The plug-in is computing…	增效模組正在運算…
+	Inspect Plug-in	檢查增效模組
+	Cancel Plug-in Run	取消執行增效模組
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文件或增效模組在此期間已變更：請重新執行
+@msg	Running “{name}”…	正在執行「{name}」…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+# Actions panel: action sets (#3712).
+	New Set…	新增組…
+	New Set	新增組
+	Set Options…	組選項…
+	Set Options	組選項
+	Create New Set	建立新組
+	Stop Global Edit	停止整體編輯
+	Global Edit Options	整體編輯選項
+	Match	符合
+	On Artboards	在工作區域上
+	All Artboards	所有工作區域
+	Include Objects On Canvas	包含畫布上的物件
+	Result(s): {count}	結果：{count}
+@msg	select one object	請選取一個物件
+@msg	Global Edit works on paths, compound paths and symbol instances	整體編輯適用於路徑、複合路徑和符號實體
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
+	Add to Symbols	新增至符號
+	Basic Shapes	基本形狀
+	Open Symbol Library	開啟符號資料庫
+	Save Symbol Library	儲存符號資料庫
+	Save Symbol Library…	儲存符號資料庫…
+	Save Symbols…	儲存符號…
+	Selected Symbols Only	僅限選取的符號
+	Symbol Libraries Menu	符號資料庫選單
+	Symbol Library	符號資料庫
+	User Symbol Library 1	使用者符號資料庫 1
+	User Symbol Library 2	使用者符號資料庫 2
+	User Symbol Library 3	使用者符號資料庫 3
+	User Symbol Library 4	使用者符號資料庫 4
+	User Symbol Library 5	使用者符號資料庫 5
+	User Symbol Library 6	使用者符號資料庫 6
+	User Symbol Library 7	使用者符號資料庫 7
+	User Symbol Library 8	使用者符號資料庫 8
+	User Symbol Library 9	使用者符號資料庫 9
+	User Symbol Library 10	使用者符號資料庫 10
+	{w} × {h} pt	{w} × {h} pt
+@msg	`{_1}` has no symbols to place	`{_1}` 中沒有可置入的符號
+@msg	missing `library` (see symbol.libraries)	未提供 `library`（請參閱 symbol.libraries）
+@msg	no symbol `{n}`	沒有符號 `{n}`
+@msg	no symbol `{n}` in `{_1}`	`{_1}` 中沒有符號 `{n}`
+@msg	no symbol library `{key}` (see symbol.libraries)	沒有符號資料庫 `{key}`（請參閱 symbol.libraries）
+@msg	the document has no symbols to save	文件中沒有可儲存的符號
+@msg	Trap: select two or more objects filled with solid colours	補漏白：請選取兩個或更多以實色填色的物件
+@msg	Trap: no edges of different colours meet among the selected objects	補漏白：所選物件中沒有不同顏色相接的邊緣
+@msg	thickness must be from 0.01 to 5000 pt	thickness 必須介於 0.01 到 5000 pt 之間
+@msg	heightWidth must be from 1 to 1000 %	heightWidth 必須介於 1 到 1000 % 之間
+@msg	tintReduction must be from 0 to 100 %	tintReduction 必須介於 0 到 100 % 之間
+	Rectangular Grid Tool Options	矩形格線工具選項
+	Polar Grid Tool Options	極座標格點工具選項
+	Fill Line	填色線段
+	Pathfinder Options	路徑管理員選項
+	Divide and Outline Will Remove Unpainted Artwork	分割和外框將移除未上色的圖稿
+@msg	precision must be from 0.001 to 10 pt	precision 必須介於 0.001 到 10 pt 之間
+@msg	`pathfinder` must be an object	`pathfinder` 必須是物件
+	Add to Brushes	新增至筆刷
+	Brush Library	筆刷資料庫
+	Save Brush Library	儲存筆刷資料庫
+	Save Brushes…	儲存筆刷…
+	Open Brush Library	開啟筆刷資料庫
+	Selected Brushes Only	僅限選取的筆刷
+	Brush Libraries Menu	筆刷資料庫選單
+	User Brush Library 1	使用者筆刷資料庫 1
+	User Brush Library 2	使用者筆刷資料庫 2
+	User Brush Library 3	使用者筆刷資料庫 3
+	User Brush Library 4	使用者筆刷資料庫 4
+	User Brush Library 5	使用者筆刷資料庫 5
+	User Brush Library 6	使用者筆刷資料庫 6
+	User Brush Library 7	使用者筆刷資料庫 7
+	User Brush Library 8	使用者筆刷資料庫 8
+	User Brush Library 9	使用者筆刷資料庫 9
+	User Brush Library 10	使用者筆刷資料庫 10
+	Art Ribbons	藝術緞帶
+	Calligraphic Nibs	書法筆尖
+	Pattern Borders	圖樣邊框
+	Scatter Shapes	散佈形狀
+	Save Brush Library…	儲存筆刷資料庫…
+@msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
+@msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
+@msg	no brush `{n}`	沒有筆刷 `{n}`
+@msg	no brush `{n}` in `{_1}`	`{_1}` 中沒有筆刷 `{n}`
+@msg	no brush library `{key}` (see brush.libraries)	沒有筆刷資料庫 `{key}`（請參閱 brush.libraries）
+@msg	the document has no brushes to save	文件中沒有可儲存的筆刷
+@msg	no empty artboards to delete	沒有可刪除的空白工作區域
+	Scale Presets	縮放預設集
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 螢幕擷取畫面的位元組數溢出
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	視窗的{what}（{points} 點 × {scale} DPI）無法決定螢幕擷取畫面的大小
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	請先展開外觀（物件 › 展開外觀）
+	Live preview	即時預覽

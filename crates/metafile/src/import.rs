@@ -20,7 +20,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect, Shape, Vec2, shapes};
 
-use crate::dib::Rgba;
+use crate::dib::{self, Rgba};
 use crate::{Imported, Kind};
 
 /// Most objects an import makes (a hostile file can't exhaust memory with them).
@@ -47,6 +47,7 @@ const HATCHES: &str = "hatched brushes are filled with their colour";
 const PATTERN_BRUSHES: &str = "pattern brushes are filled grey";
 const EXCLUDED_CLIPS: &str = "clip areas cut out of the clip (excluded rectangles, differences) are ignored";
 const BAD_IMAGE: &str = "an image that couldn't be read was left out";
+const TOO_MANY_PIXELS: &str = "images past the most pixels one file may hold were left out";
 const FAR_AWAY: &str = "objects far outside the picture were left out";
 
 /// Is `r` finite and within [`LIMIT`]?
@@ -196,6 +197,8 @@ pub(crate) struct Player {
     warnings: Vec<String>,
     skipped: usize,
     next_clip: u32,
+    /// Pixels the file's bitmaps may still decode to ([`dib::MAX_FILE_PIXELS`]).
+    pub pixels_left: u64,
     /// The file holds EMF+ records (which aren't read).
     pub emf_plus: bool,
 }
@@ -280,6 +283,7 @@ impl Player {
             warnings: vec![],
             skipped: 0,
             next_clip: 0,
+            pixels_left: dib::MAX_FILE_PIXELS,
             emf_plus: false,
         }
     }
@@ -773,6 +777,7 @@ impl Player {
         }
         let img = match img {
             Ok(i) => i,
+            Err(e) if e == dib::OVER_BUDGET => return self.warn(TOO_MANY_PIXELS),
             Err(_) => return self.warn(BAD_IMAGE),
         };
         let img = crop(img, src);
@@ -788,7 +793,7 @@ impl Player {
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
             return;
         }
-        let im = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() };
+        let im = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         let mut n = Node::new(vectorcraft_doc::NodeId(0), NodeKind::Image(Box::new(im)));
         n.opacity = opacity.clamp(0.0, 1.0) as f32;
         self.push(n);

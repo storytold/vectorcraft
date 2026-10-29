@@ -150,7 +150,7 @@ fn gradient_doc(kind: GradientKind) -> Document {
         GradientStop::new(0.4, Color::rgb(1.0, 1.0, 0.0)),
         GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
     ];
-    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind, stops })));
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops))));
     doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)])
 }
 
@@ -268,6 +268,7 @@ fn png_doc() -> Document {
         xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     let layer = d.layers[0].id;
@@ -498,4 +499,62 @@ fn a_rich_document_is_well_formed_at_both_levels() {
             assert!(page.lines().count() > 50, "{page}");
         }
     }
+}
+
+/// A colour bitmap glyph (emoji) is written as an image where it sits; the type's fill doesn't
+/// paint it.
+#[test]
+fn colour_bitmap_glyphs_are_images() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(false).unwrap());
+    let d = doc_with(|d| {
+        let st = CharStyle { font_family: colour_bitmap_family(false).into(), size: 32.0, ..CharStyle::default() };
+        vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), &COLOUR_CHAR.to_string(), st))))]
+    });
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    checked_page(&ps);
+    assert!(ps.contains("/Width 16 /Height 16"), "{ps}");
+    // One em (32 pt) square, its top 24 pt above the baseline (12 of 16 px), 4 pt right of the
+    // origin (2 px), in text space.
+    assert!(ps.contains("[32 0 0 32 4 -24] cm"), "{ps}");
+}
+
+#[test]
+fn colr_glyphs_are_vector_art() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colr_family, colr_font};
+    vectorcraft_text::FontDb::global().add_font(colr_font(false).unwrap());
+    let d = doc_with(|d| {
+        let fill = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+        let st = CharStyle { font_family: colr_family(false).into(), size: 32.0, fill, ..CharStyle::default() };
+        vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), &COLOUR_CHAR.to_string(), st))))]
+    });
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    checked_page(&ps);
+    assert!(!ps.contains("/Width"), "no image: {ps}");
+    assert!(ps.contains("1 0 0 rg"), "the red layer: {ps}");
+    assert!(ps.contains("0 0 1 rg"), "the foreground layer in the fill: {ps}");
+}
+
+/// Ruby (furigana) is written with its base text, as the canvas draws it: one more `m` per contour
+/// of the reading's glyphs.
+#[test]
+fn ruby_is_written_with_its_type() {
+    use vectorcraft_doc::{CharStyle, RubySpan, TextObject};
+    let typed = |ruby: bool| {
+        let mut t = TextObject::point(Point::new(20.0, 100.0), "AB", CharStyle { size: 30.0, ..CharStyle::default() });
+        if ruby {
+            t.ruby = vec![RubySpan::new(0, 2, "xyz")];
+        }
+        t
+    };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &typed(true));
+    let reading = lay.ruby.iter().flat_map(|g| g.outline.elements()).filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+    assert!(reading >= 3, "the reading has ink: {reading}");
+    let moves = |ruby: bool| {
+        let d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(typed(ruby))))]);
+        page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
+    };
+    assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
 }

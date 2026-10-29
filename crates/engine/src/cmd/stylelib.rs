@@ -16,7 +16,7 @@ use vectorcraft_doc::{Document, GraphicStyle, PatternDef, StyleLibrary};
 use super::menucmds::squash;
 use super::swatch::str_list;
 use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param, unique_name};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

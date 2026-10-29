@@ -45,6 +45,11 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 
+# Whether a recovery area folder is this account's own (`FolderStore::own_area`). Already in
+# Cargo.lock (tempfile, ui-egui), so this adds no new crate.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["std", "process"] }
+
 [dev-dependencies]
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }

@@ -1,7 +1,7 @@
 //! The Gradient panel and the Gradient tool: in-place gradient edits and the gradient vector.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{Document, Node, NodeKind, StrokeGradientMode};
 use vectorcraft_geom::{Affine, Point, Rect};
@@ -10,7 +10,10 @@ use vectorcraft_tools::params::color_json;
 use super::appearance::{ItemTarget, edit_items, edits_stroke, item_target};
 use super::edit::{outermost, selected_roots};
 use super::paint::swatch_solid;
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, has_doc, index,
+    leaf_targets, point_param, str_param,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -20,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual (how the colours between the stops mix: in display RGB, or perceptually (OKLab) so the steps look even, which SVG and PDF exports draw as an image; freeform gradients mix their own way), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, dither?: bool (fills only: a linear or radial gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -60,7 +63,7 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
         None => return Err(bad(C, "missing `index` (a stop index, or null to clear)")),
         Some(Value::Null) => None,
         Some(v) => {
-            let i = v.as_u64().ok_or_else(|| bad(C, "`index` must be a whole number or null"))? as usize;
+            let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`index` must be a whole number or null"))?;
             let n = active_gradient(s).ok_or_else(|| bad(C, "the active paint is not a gradient"))?.gradient.stops.len();
             if i >= n {
                 return Err(bad(C, format!("no stop {i} (the gradient has {n})")));
@@ -105,6 +108,14 @@ fn parse_kind(k: &str) -> Parsed<GradientKind> {
     GradientKind::parse(k).ok_or_else(|| format!("unknown gradient kind `{k}` (linear, radial, freeform)"))
 }
 
+/// The `method` param of `p`, if given: how the colours between the stops mix.
+fn method_param(p: &Value) -> Parsed<Option<GradientMethod>> {
+    match p.get("method") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_str().and_then(GradientMethod::parse).map(Some).ok_or_else(|| "`method` must be classic or perceptual".into()),
+    }
+}
+
 /// `v` (params holding `stops`) with each stop that names a `swatch` resolved through `d`
 /// ([`swatch_solid`]): a global or spot colour or a tint swatch gives the stop its colour, link and
 /// tint, a process colour just its colour. A stop linked to a swatch that no longer exists keeps
@@ -117,7 +128,12 @@ pub(crate) fn link_stops(d: &Document, v: &Value) -> Parsed<Value> {
         if d.swatch(&name).is_none() && st.get("color").is_some() {
             continue;
         }
-        let tint = st.get("tint").and_then(Value::as_f64).map(|t| (t / 100.0).clamp(0.0, 1.0) as f32);
+        let tint = st
+            .get("tint")
+            .filter(|v| !v.is_null())
+            .map(|v| v.as_f64().ok_or_else(|| format!("stop {i}: `{k}` must be a number", k = "tint")))
+            .transpose()?;
+        let tint = tint.map(|t| (t / 100.0).clamp(0.0, 1.0) as f32);
         let Paint::Solid { color, swatch, tint } = swatch_solid(d, &name, tint).map_err(|e| format!("stop {i}: {e}"))? else {
             continue;
         };
@@ -219,7 +235,12 @@ pub(crate) fn parse_gradient(g: &Value) -> Parsed<GradientPaint> {
     }
     let kind = str_param(g, "kind").map(parse_kind).transpose()?.unwrap_or_default();
     let stops = g.get("stops").map(parse_stops).transpose()?.unwrap_or_else(|| Gradient::default().stops);
-    let mut gp = GradientPaint::new(Gradient { kind, stops });
+    let mut gp = GradientPaint::new(Gradient::new(kind, stops));
+    gp.gradient.dither = match g.get("dither") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or("`dither` must be true or false")?,
+    };
+    gp.gradient.method = method_param(g)?.unwrap_or_default();
     gp.angle = f64_or(g, "angle", 0.0);
     gp.swatch = str_param(g, "swatch").map(str::to_string);
     let geom = GeomEdit::parse(g)?;
@@ -314,6 +335,12 @@ pub(crate) fn apply_gradient_edit_in(
         // Midpoints mirrored with their segments.
         gp.gradient.reverse();
     }
+    if let Some(d) = p.get("dither").and_then(Value::as_bool) {
+        gp.gradient.dither = d;
+    }
+    if let Some(m) = method_param(p)? {
+        gp.gradient.method = m;
+    }
     // Angle and aspect edits keep the focal point in its place in the extent ellipse.
     let before = gp.geom;
     if let Some(a) = p.get("angle").and_then(Value::as_f64) {
@@ -372,7 +399,9 @@ pub(crate) fn apply_gradient_edit_in(
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
     let item = item_target(s, p, C)?;
-    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active, C)?;
+    check_switches(p, &["reverse", "dither"], C)?;
+    check_numbers(p, &["angle"], C)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
     // How the gradient lies on a stroke (the panel's Stroke buttons).
@@ -381,6 +410,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) if !stroke => return Err(bad(C, "`strokeMode` applies to strokes (stroke: true)")),
         Some(m) => Some(StrokeGradientMode::parse(m).ok_or_else(|| bad(C, format!("strokeMode must be within|along|across, got {m}")))?),
     };
+    if p.get("dither").and_then(Value::as_bool).is_some() && stroke {
+        return Err(bad(C, "`dither` applies to gradient fills (stroke: false)"));
+    }
+    super::paint::check_keep_model(p, C)?;
     // New RGB stop colors take the document's model; those of the swatches the stops name don't.
     let stored = stop_colors(s, p, p);
     // Stops naming swatches take their colours from them.
@@ -553,10 +586,12 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let p = &p;
     let item = item_target(s, p, C)?;
-    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active, C)?;
     let item = item.of_kind(s, !stroke);
     let targets = match item {
-        ItemTarget::Top => leaf_targets(s, &ids_param(p, "ids").map_or_else(|| selected_roots(s), |ids| Ok(outermost(&s.doc()?.doc, ids)))?)?,
+        ItemTarget::Top => {
+            leaf_targets(s, &super::given_objects(s, p, C)?.map_or_else(|| selected_roots(s), |ids| Ok(outermost(&s.doc()?.doc, ids)))?)?
+        }
         _ => item.targets(s, p)?,
     };
     if targets.is_empty() {

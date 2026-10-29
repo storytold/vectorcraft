@@ -8,7 +8,7 @@ use vectorcraft_doc::{ExportAsset, NodeId};
 
 use super::edit::{roots_of, selected_roots};
 use super::fileio::{SCREEN_SETTINGS_KEYS, check_screen_settings, export_crop, export_screens, store_screen_settings};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, has_doc, ok, str_param};
 
 /// The longest asset name kept (characters).
 const MAX_NAME: usize = 255;
@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// `e` as an error of command `cmd` (for errors of the export underneath).
-fn of_cmd(cmd: &str, e: EngineError) -> EngineError {
+pub(crate) fn of_cmd(cmd: &str, e: EngineError) -> EngineError {
     match e {
         EngineError::BadParams { msg, .. } => bad(cmd, msg),
         e => e,

@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_geom::Rect;
 
-use super::super::*;
+use super::super::{NodeId, Result, Session, bad, str_param};
 use super::encode::single_artboard;
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
@@ -26,6 +26,8 @@ use super::{
 };
 
 const C: &str = "document.exportForScreens";
+/// The Asset Export panel's export, which exports through [`export`].
+const ASSETS: &str = "assets.export";
 
 /// How big a raster row's files are.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,7 +46,14 @@ impl ScreenSize {
     /// `2x` (or `2`), `100w`, `100h` or `72ppi`, in any case; positive numbers only.
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
-        let num = |t: &str| t.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0);
+        // Digits and `.` only: `str::parse` would also take `+2`, `1e2`, `inf` and `nan`.
+        let num = |t: &str| {
+            let t = t.trim();
+            if !t.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
+                return None;
+            }
+            t.parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0)
+        };
         if let Some(n) = s.strip_suffix("ppi") {
             return num(n).map(Self::Ppi);
         }
@@ -86,9 +95,9 @@ impl ScreenSize {
         }
     }
 
-    /// Pixels per point for `region`.
-    fn scale_for(self, region: Rect) -> Result<f64> {
-        let per = |px: f64, pt: f64| (pt > 0.0).then(|| px / pt).ok_or_else(|| bad(C, "an empty artboard has no width or height to scale to"));
+    /// Pixels per point for `region` (`cmd` names the command in the error).
+    pub(super) fn scale_for(self, cmd: &str, region: Rect) -> Result<f64> {
+        let per = |px: f64, pt: f64| (pt > 0.0).then(|| px / pt).ok_or_else(|| bad(cmd, "an empty artboard has no width or height to scale to"));
         match self {
             Self::Width(w) => per(w, region.width()),
             Self::Height(h) => per(h, region.height()),
@@ -162,11 +171,14 @@ pub(super) fn file_part(s: &str) -> String {
 /// trailing periods and spaces, and with `-` after a Windows device name that is the whole name or
 /// comes before its first period: `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9` and `LPT1` to `LPT9`,
 /// also with `¹`, `²` or `³` for the digit, in any case (`CON.png` becomes `CON-.png`). The same on
-/// every platform.
+/// every platform. Spaces between the device name and the period are dropped (`CON .png` becomes
+/// `CON-.png`).
 pub(crate) fn safe_file_name(s: &str) -> String {
     let name = file_part(s);
     let name = name.trim_end_matches(['.', ' ']);
     let (base, rest) = name.split_at(name.find('.').unwrap_or(name.len()));
+    // Windows ignores spaces before the extension, so `CON .png` is the CON device too.
+    let base = base.trim_end_matches(' ');
     let upper = base.to_ascii_uppercase();
     let numbered = |n: &str| n.chars().count() == 1 && n.chars().all(|c| matches!(c, '1'..='9' | '¹' | '²' | '³'));
     let device = matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
@@ -252,7 +264,7 @@ impl Row {
                 // The resolution is stored in the file too.
                 ScreenSize::Ppi(ppi) => o["ppi"] = json!(ppi),
                 size => {
-                    o["scale"] = json!(size.scale_for(region)?);
+                    o["scale"] = json!(size.scale_for(C, region)?);
                     if let Some(m) = o.as_object_mut() {
                         m.remove("ppi");
                     }
@@ -364,9 +376,9 @@ impl ScreenParams {
 }
 
 /// How a batch export names its files and sorts them into folders.
-struct Naming<'a> {
+struct Naming {
     /// The `name` pattern, when it holds more than spaces.
-    pattern: Option<&'a str>,
+    pattern: Option<String>,
     /// The `prefix`, through [`file_part`].
     prefix: String,
     /// The document's name, safe as a file name (`<filename>`, the Full Document's item).
@@ -379,9 +391,9 @@ struct Naming<'a> {
     folders: Folders,
 }
 
-impl<'a> Naming<'a> {
-    /// The naming of params `o` for a document titled `title`.
-    fn of(o: &'a ScreenParams, title: &str) -> Result<Self> {
+impl Naming {
+    /// The naming of params `o` for a document named `title`: its file's path, or its title before it is saved.
+    fn of(o: &ScreenParams, title: &str) -> Result<Self> {
         let folders = Folders::of(o)?;
         // A prefix names files, not folders.
         let prefix = file_part(o.prefix.as_deref().unwrap_or(""));
@@ -395,7 +407,7 @@ impl<'a> Naming<'a> {
             Some(c) => return Err(bad(C, format!("counterPer `{c}`: item or file"))),
         };
         let filename = safe_name(&super::file_stem(title)).unwrap_or_else(|| "Untitled".into());
-        let pattern = o.name.as_deref().filter(|n| !n.trim().is_empty());
+        let pattern = o.name.clone().filter(|n| !n.trim().is_empty());
         Ok(Self { pattern, prefix, filename, when, counter_start: o.counter_start.unwrap_or(1), per_file, folders })
     }
 
@@ -405,7 +417,7 @@ impl<'a> Naming<'a> {
         let counter = self.counter_start.saturating_add(if self.per_file { files } else { index as u64 });
         let ext = r.format.extensions.first().copied().unwrap_or(r.format.id);
         let prefix = &self.prefix;
-        let stem = match self.pattern {
+        let stem = match self.pattern.as_deref() {
             Some(pattern) => {
                 let parts = NameParts {
                     filename: &self.filename,
@@ -507,8 +519,15 @@ impl Output {
         None
     }
 
-    /// Write `bytes` as `name` (relative) under `folder`, or keep them.
-    fn put(&mut self, folder: Option<&str>, keep: bool, name: String, bytes: Vec<u8>) -> Result<()> {
+    /// Write `bytes` as `name` (relative) under `folder` with `writer`, or keep them.
+    fn put(
+        &mut self,
+        folder: Option<&str>,
+        keep: bool,
+        name: String,
+        bytes: Vec<u8>,
+        writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>,
+    ) -> Result<()> {
         match folder {
             Some(dir) if !keep => {
                 if let Some((sub, _)) = name.rsplit_once('/')
@@ -517,7 +536,9 @@ impl Output {
                     create_dir(&format!("{dir}/{sub}"))?;
                 }
                 let path = format!("{dir}/{name}");
-                write_file(&path, &bytes)?;
+                // A cancel that came while the file was encoded writes nothing more.
+                vectorcraft_doc::cancel::check()?;
+                writer(&path, &bytes)?;
                 self.written.push(path);
             }
             _ => self.kept.push((name, bytes)),
@@ -658,13 +679,11 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
-    let naming = Naming::of(&o, &s.doc()?.doc.title)?;
-    let folder = o.folder.as_deref().filter(|f| !f.is_empty());
+    // `<filename>`: the document's file, as Save names it, or its title before it is saved.
+    let st = s.doc()?;
+    let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
-    if let Some(dir) = folder {
-        create_dir(dir)?;
-    }
     let doc = s.doc()?.doc.clone();
     // Include Bleed: each artboard grown by the document's bleed.
     let doc = if o.include_bleed && doc.setup.has_bleed() {
@@ -678,12 +697,77 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
+    // Appearance of Black › Printing / Exporting for RGB raster rows.
+    let rows = rows.into_iter().map(|r| Row { options: with_black_output(s, &r.options), ..r }).collect();
+    let export = ScreenExport { cmd: C, o, rows, naming, items };
+    match &mut s.screens_hand_off {
+        Some(slot) => {
+            *slot = Some(export);
+            Ok(Value::Null)
+        }
+        None => export.write(&mut |path, bytes| write_file(path, bytes)),
+    }
+}
+
+/// An export as `document.exportForScreens` and `assets.export` take it from the session: the
+/// params, the format rows, the naming, and each item with the document it writes
+/// ([`Session::prepare_screen_export`]). [`ScreenExport::write`] encodes and writes its files
+/// without the session, on any thread.
+pub struct ScreenExport {
+    /// The command whose errors it gives: `document.exportForScreens` or `assets.export`.
+    cmd: &'static str,
+    o: ScreenParams,
+    rows: Vec<Row>,
+    naming: Naming,
+    items: Vec<Item>,
+}
+
+impl Session {
+    /// Run `assets.export` when `id` names it, else `document.exportForScreens`, with `params` as
+    /// a command (checked and journaled as any other; Export for Screens remembers its settings)
+    /// that encodes and writes nothing → the export it prepared, which [`ScreenExport::write`]
+    /// encodes and writes (on the desktop with Background Export on, Export for Screens and the
+    /// Asset Export panel do this on the background thread).
+    pub fn prepare_screen_export(&mut self, id: &str, params: &Value) -> Result<ScreenExport> {
+        let cmd = if id == ASSETS { ASSETS } else { C };
+        self.screens_hand_off = Some(None);
+        let r = self.execute(cmd, params);
+        let handed = self.screens_hand_off.take().flatten();
+        match (r, handed) {
+            (Err(e), _) => Err(e),
+            (Ok(_), Some(export)) => Ok(ScreenExport { cmd, ..export }),
+            // Every run that succeeds hands one over.
+            (Ok(_), None) => Err(bad(cmd, "nothing to export")),
+        }
+    }
+}
+
+impl ScreenExport {
+    /// Make the export folder, encode the files and write each with `writer` into the folder and
+    /// its sub-folders, or keep them to zip (the zip written with `writer` into the folder) or to
+    /// return → the reply of `document.exportForScreens`. It reports one progress step per file
+    /// ([`vectorcraft_doc::cancel::progress`]), and a cancel stops it before it encodes or writes
+    /// another file.
+    pub fn write(self, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        let cmd = self.cmd;
+        // A refusal names `assets.export` when that command prepared the export, as its reply does.
+        encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) })
+    }
+}
+
+/// [`ScreenExport::write`].
+fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    let ScreenExport { o, rows, naming, items, .. } = export;
+    let folder = o.folder.as_deref().filter(|f| !f.is_empty());
+    if let Some(dir) = folder {
+        create_dir(dir)?;
+    }
     let mut out = Output::default();
     // The encoders' warnings for every file, each once.
     let mut warnings: Vec<String> = Vec::new();
-    // Appearance of Black › Printing / Exporting for RGB raster rows.
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
-        let (bytes, notes) = encode_with_warnings(doc, format, &with_black_output(s, options))?;
+        // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
+        let (bytes, notes) = vectorcraft_doc::cancel::quiet(|| encode_with_warnings(doc, format, options))?;
         for w in notes {
             if !warnings.contains(&w) {
                 warnings.push(w);
@@ -694,8 +778,14 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     // A whole-document copy of an artboard, for the formats that write documents to edit.
     let mut board_docs: std::collections::HashMap<usize, Arc<Document>> = std::collections::HashMap::new();
     let mut files = 0u64;
+    // One step per item and row, the files a name collision skips included.
+    let steps = (items.len() * rows.len()) as u64;
+    let mut step = 0u64;
     for (index, item) in items.iter().enumerate() {
         for r in &rows {
+            vectorcraft_doc::cancel::check()?;
+            vectorcraft_doc::cancel::progress(step, steps, &format!("Exporting file {} of {steps}", step + 1));
+            step += 1;
             let (sub, file) = naming.file(item, index, files, r);
             let name = sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}"));
             let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key), o.name.is_some()) else { continue };
@@ -706,23 +796,44 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 write(all, "pdf", &options)?
             } else if r.whole_document() && item.artboard.is_some() {
                 let b = item.artboard.unwrap_or(0);
-                let d = board_docs.entry(b).or_insert_with(|| Arc::new(single_artboard(&item.doc, item.region, &item.name))).clone();
-                write(&d, r.format.id, &r.options_for(item.region, None)?)?
+                // That artboard alone, as Save's separateArtboards writes it: its art, not the others' (#3868).
+                let d = board_docs
+                    .entry(b)
+                    .or_insert_with(|| {
+                        let mut d = single_artboard(&item.doc, item.region, &item.name);
+                        super::save::keep_art_on(&mut d, item.region);
+                        Arc::new(d)
+                    })
+                    .clone();
+                let mut options = r.options_for(item.region, None)?;
+                // An EPS page is the artboard, not its art's bounds: an artboard without art still writes.
+                if r.format.id == "eps" {
+                    options["useArtboards"] = json!(true);
+                }
+                write(&d, r.format.id, &options)?
             } else {
                 write(&item.doc, r.format.id, &r.options_for(item.region, item.artboard)?)?
             };
-            out.put(folder, o.zip, name, bytes)?;
+            out.put(folder, o.zip, name, bytes, writer)?;
             files += 1;
         }
     }
+    // A cancel that came while the last file was encoded returns no files. A folder export
+    // without a ZIP has written every file by now, so it returns them.
+    if o.zip || folder.is_none() {
+        vectorcraft_doc::cancel::check()?;
+    }
     let names: Vec<&str> = out.kept.iter().map(|(n, _)| n.as_str()).collect();
     if o.zip {
-        let zip = super::zip::store(&out.kept).map_err(|e| bad(C, e))?;
+        let zip = super::zip::deflate(&out.kept, super::zip::FIXED_TIME, vectorcraft_doc::cancel::is_cancelled);
+        // A cancel that came while the files were deflated returns and writes no archive.
+        vectorcraft_doc::cancel::check()?;
+        let zip = zip.map_err(|e| bad(C, e))?;
         let zip_name = safe_file_name(&format!("{}{}.zip", naming.prefix, naming.filename));
         return match folder {
             Some(dir) => {
                 let path = format!("{dir}/{zip_name}");
-                write_file(&path, &zip)?;
+                writer(&path, &zip)?;
                 Ok(json!({ "path": path, "bytes": zip.len(), "files": names, "warnings": warnings }))
             }
             None => Ok(
@@ -754,13 +865,14 @@ pub fn first_file(s: &Session, p: &Value) -> Result<String> {
     let rows = rows_of(s, &p, o.preset.as_deref())?;
     o.one_source()?;
     let selection = o.selection_mode()?;
-    let doc = &s.doc()?.doc;
+    let st = s.doc()?;
+    let doc = &st.doc;
     let mut selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
     // A file per object: objects that draw nothing write no file.
     if selection == Some(true) {
         selected = selected.into_iter().find(|id| export_crop(doc, &[*id]).is_some()).into_iter().collect();
     }
-    let naming = Naming::of(&o, &doc.title)?;
+    let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&doc.title))?;
     let items = items(doc, &o, selection, &selected, &naming.filename, false, false)?;
     let (Some(item), Some(r)) = (items.first(), rows.first()) else { return Err(bad(C, "nothing to export")) };
     let (sub, file) = naming.file(item, 0, 0, r);
@@ -800,10 +912,12 @@ fn items(
     };
     if o.full_document {
         // The bounds of all visible art, as the one artboard of the files that aren't PDFs (a PDF
-        // row writes every artboard of the document itself).
+        // row writes every artboard of the document itself). It is named after the document: an
+        // SVG of one artboard takes the artboard's name as its title (#3544), and this one stands
+        // for the whole document.
         let (whole, region) = if crop {
             let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
-            (Arc::new(single_artboard(doc, bounds, "Document")), bounds)
+            (Arc::new(single_artboard(doc, bounds, &doc.title)), bounds)
         } else {
             (doc.clone(), Rect::ZERO)
         };
@@ -900,4 +1014,30 @@ pub(crate) fn store_settings(s: &mut Session, settings: Map<String, Value>) -> R
 /// `document.exportSettings`: the Export for Screens settings the document last exported with.
 pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "settings": s.doc()?.doc.export_settings }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ScreenSize, safe_file_name};
+
+    #[test]
+    fn size_parse_refuses_signs_and_exponents() {
+        for s in ["+2x", "+2", "+100w", "+100h", "+72ppi", "-2x", "1e2", "2e0w"] {
+            assert_eq!(ScreenSize::parse(s), None, "{s}");
+        }
+        assert_eq!(ScreenSize::parse("2x"), Some(ScreenSize::Scale(2.0)));
+        assert_eq!(ScreenSize::parse("1.5"), Some(ScreenSize::Scale(1.5)));
+        assert_eq!(ScreenSize::parse("100W"), Some(ScreenSize::Width(100.0)));
+        assert_eq!(ScreenSize::parse("72ppi"), Some(ScreenSize::Ppi(72.0)));
+    }
+
+    #[test]
+    fn device_name_with_space_before_extension_is_protected() {
+        assert_eq!(safe_file_name("CON.png"), "CON-.png");
+        assert_eq!(safe_file_name("CON .png"), "CON-.png");
+        assert_eq!(safe_file_name("NUL .png"), "NUL-.png");
+        assert_eq!(safe_file_name("COM1 .png"), "COM1-.png");
+        assert_eq!(safe_file_name("lpt9  .png"), "lpt9-.png");
+        assert_eq!(safe_file_name("My CON .png"), "My CON .png");
+    }
 }

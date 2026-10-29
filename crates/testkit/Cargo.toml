@@ -13,7 +13,7 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
-vectorcraft-engine = { workspace = true }
+vectorcraft-engine = { workspace = true, features = ["bundled-fonts"] }
 vectorcraft-render = { workspace = true }
 vectorcraft-format = { workspace = true }
 vectorcraft-svg = { workspace = true }

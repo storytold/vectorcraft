@@ -768,17 +768,24 @@ fn errors_say_what_the_postscript_error_means() {
 fn every_postscript_error_the_reader_raises_has_a_meaning() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("import");
     let mut raised = std::collections::BTreeSet::new();
-    for entry in std::fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        if !name.ends_with(".rs") || name.starts_with("tests") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        for marker in ["Ps(\"", "ps_err(\""] {
-            for (at, _) in text.match_indices(marker) {
-                let rest = &text[at + marker.len()..];
-                raised.insert(rest[..rest.find('"').unwrap()].to_string());
+    let mut stack = vec![dir];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !name.ends_with(".rs") || name.starts_with("tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for marker in ["Ps(\"", "ps_err(\""] {
+                for (at, _) in text.match_indices(marker) {
+                    let rest = &text[at + marker.len()..];
+                    raised.insert(rest[..rest.find('"').unwrap()].to_string());
+                }
             }
         }
     }
@@ -1102,4 +1109,20 @@ fn restore_puts_dictionaries_back() {
     // `cachestatus` gives a device's cache sizes; its last, the most bytes one cached glyph may
     // take, is positive (chapter 8), and programs divide by it.
     super::tests::check("cachestatus 7 1 roll 6 { pop } repeat 0 gt");
+}
+
+/// #3567: what a `filter` decodes counts against the memory budget, not just its input. A
+/// small string that inflates to 16 MiB, decoded over and over (each result dropped), ends
+/// the program; a single one does not.
+#[test]
+fn filter_output_counts_against_the_memory_budget() {
+    fn hex(data: &[u8]) -> String {
+        data.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    let z = hex(&deflate(&vec![0u8; 16 << 20]));
+    let once = import(&file("t", &format!("/z <{z}> def z /FlateDecode filter pop 0 0 1 1 rectfill"))).unwrap();
+    assert!(once.warnings.iter().all(|w| !w.contains("memory")), "{:?}", once.warnings);
+    let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
+    let Err(err) = many else { panic!("the budget ends the program") };
+    assert!(err.contains("too much memory"), "{err}");
 }

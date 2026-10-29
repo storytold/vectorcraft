@@ -14,6 +14,8 @@
 //! `stroke.widthPoint.copy {id, index, t}` or, for several points, `stroke.widthProfile.set {ids,
 //! points}`, and commit on release; Delete runs `stroke.widthPoint.remove {id, indices}`.
 //!
+//! Escape deselects the selected width points and sends no command.
+//!
 //! A compound path's stroke is the compound's: its members are edited through it, and the width
 //! points show on every subpath of the stroke (one profile runs along each). The cursor says what a
 //! drag does: add a width point on a stroke, or move or widen the one under it.
@@ -137,8 +139,9 @@ pub fn sides_at(st: &StrokeLayer, t: f64) -> (f64, f64) {
 impl WidthTool {
     /// The stroked path nearest to `p` within reach (stroke half-width + a few pixels).
     fn spot_at(cx: &ToolContext, p: Point) -> Option<Spot> {
+        let editable = cx.doc.editable();
         let consider = |id: NodeId| -> Option<(f64, Spot)> {
-            if !cx.doc.is_editable(id) {
+            if !editable(id) {
                 return None;
             }
             let n = cx.doc.node(id)?;
@@ -390,14 +393,19 @@ impl Tool for WidthTool {
             },
         }
     }
-    /// Delete/Backspace remove the selected width points; with none selected they are the
-    /// shortcut's (Clear deletes the selected objects).
+    /// Delete/Backspace remove the selected width points and Escape deselects them; with none
+    /// selected the keys do what they do with other tools (Clear deletes the selected objects, and
+    /// Escape leaves isolation mode, for one).
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Delete | ToolKey::Backspace)
+        matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Escape)
             && self.drag.is_none()
             && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty())
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.drag.is_none() {
+            self.selected = None;
+            return vec![];
+        }
         if !matches!(key, ToolKey::Delete | ToolKey::Backspace) {
             return vec![];
         }
@@ -647,6 +655,40 @@ mod tests {
             t.key(&cx, ToolKey::Delete, Mods::default()),
             vec![Action::Exec("stroke.widthPoint.remove".into(), json!({"id": c.0, "indices": [1]}))]
         );
+    }
+
+    #[test]
+    fn escape_deselects_the_width_points() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        // With nothing selected the tool leaves Escape to the app.
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        // Select the points at t = 0.25 and 0.75: Escape is the tool's and deselects both, sending
+        // nothing to the document.
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, shift));
+        t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0, shift));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        t.pointer(&c, &ev(PointerKind::Move, 200.0, 202.0, none));
+        let thick = |t: &WidthTool| t.overlays(&c).iter().filter(|o| matches!(o, Overlay::Path { width, .. } if *width > 2.0)).count();
+        assert_eq!(thick(&t), 2, "the two selected diamonds are drawn selected");
+        assert!(t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Escape, none).is_empty());
+        assert!(t.selected_indices(&c, id).is_empty());
+        assert_eq!(thick(&t), 0, "no diamond is drawn selected");
+        // Delete then removes nothing, and Escape is the app's again.
+        assert!(!t.claims_key(&c, ToolKey::Delete) && !t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Delete, none).is_empty());
+        // During a drag the dragged point stays selected.
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Drag, 210.0, 200.0, none));
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        t.key(&c, ToolKey::Escape, none);
+        assert!(t.selected.is_some());
     }
 
     #[test]

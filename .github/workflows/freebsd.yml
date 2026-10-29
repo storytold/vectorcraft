@@ -1,25 +1,19 @@
 # FreeBSD build and package check in a QEMU VM.
 name: FreeBSD
 
+# The VM build is slow, so it runs nightly on main and on pushes to `release`, not on every pull
+# request: a drifted dependency still shows up within a day, and always before a release ships.
+# PRs that change the FreeBSD workflow or packaging itself still run it.
 on:
   push:
-    branches: [main]
-    paths:
-      - ".github/workflows/freebsd.yml"
-      - "packaging/freebsd/**"
-      - "packaging/env.sh"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+    branches: [release]
   pull_request:
-    branches: [main]
     paths:
-      - ".github/workflows/freebsd.yml"
-      - "packaging/freebsd/**"
-      - "packaging/env.sh"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
+      - .github/workflows/freebsd.yml
+      - packaging/freebsd/**
+      - packaging/env.sh
+  schedule:
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -35,5 +29,5 @@ jobs:
     uses: storytold/craft-common-actions/.github/workflows/freebsd.yml@main
     with:
       require-craft-fonts: true
-      craft-fonts-ref: a71c20e30af613287c504f7e685ca8fad77752bc
+      craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       run-package-check: true

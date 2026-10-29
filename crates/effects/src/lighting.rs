@@ -71,7 +71,7 @@ pub(crate) fn shade(c: Color, rgb: [f64; 3]) -> Color {
 pub(crate) fn smooth_paint(g: vectorcraft_three_d::LightGradient, color: Color) -> Paint {
     use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
     let stops = g.stops().into_iter().map(|(at, rgb)| GradientStop::new(at, shade(color, rgb))).collect();
-    let mut p = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
+    let mut p = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     p.geom = Some(GradientGeom { start: g.diffuse.start, end: g.diffuse.end, aspect: 1.0, focal: None });
     Paint::Gradient(Box::new(p))
 }
@@ -334,7 +334,7 @@ mod tests {
         stop.opacity = 0.4;
         stop.midpoint = 0.3;
         let g = GradientPaint {
-            gradient: Gradient { kind: GradientKind::Linear, stops: vec![stop, GradientStop::new(1.0, Color::BLACK)] },
+            gradient: Gradient::new(GradientKind::Linear, vec![stop, GradientStop::new(1.0, Color::BLACK)]),
             geom: Some(GradientGeom { start: Point::new(20.0, 30.0), end: Point::new(100.0, 30.0), aspect: 1.0, focal: None }),
             angle: 0.0,
             swatch: None,

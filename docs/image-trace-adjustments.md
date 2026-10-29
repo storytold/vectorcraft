@@ -32,11 +32,52 @@ white beside a cream), at most six; scattered specks of a colour add none. Adobe
 its own palettes are chosen; this is VectorCraft's own method (see
 [image-trace-quality.md](image-trace-quality.md#auto-color-keeps-rare-colours)).
 
+**Document Library color groups.** With Palette › Document Library and Library › Document Swatches,
+the panel's **Colors** menu traces with every document swatch (**All**) or with the colors of one
+color group from the Swatches panel, as the public
+[Image Trace panel options](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html)
+page ([archived](https://web.archive.org/web/20251230195658/https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html))
+describes Document Library. In the params of `imageTrace.make` or `imageTrace.makeAndExpand`,
+`"colorGroup": "<name>"` names the group. It needs `"mode": "color"`, `"palette": "documentLibrary"` and
+`"library": "document"`; a `colorGroup` with a nonempty name and any other mode, palette or library is refused. An
+empty name names no group and is accepted with any mode, palette or library; with Document Library and
+`"library": "document"` it traces with every document swatch. A group whose name matches exactly is used first, then one whose name differs only in case. At
+most `colors` of its colors are used. A missing group and a group with no solid colors are refused. Choosing another
+mode, palette or library in the panel clears the group. A group the active document does not have shows as All
+and traces as All.
+
+**Document Library linked colors.** With Library › Document Swatches, with or without a color group,
+a traced fill or stroke whose color comes from a global or spot swatch is linked to that swatch, and
+one whose color comes from a tint swatch is linked to its base at the tint. Editing the swatch
+recolors the trace. Colors from process swatches and from swatch libraries are not linked.
+
+**Document Library** traces with the library's colors as they are. Each pixel takes the library
+color nearest to it in lightness and hue, with a difference in hue or chroma counted three times
+as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
+library color rather than a saturated color of the same lightness.
+**Abutting and Overlapping.** Abutting is the default Method, and the Default, Auto Color, 3 Colors,
+6 Colors and 16 Colors presets use it. With Abutting, two neighboring colors share one exact edge. The
+canvas smooths the edges of each path on its own, so each of the two paths covers only part of the
+pixels along that edge, and a thin line of the background can show between the colors. Web browsers
+and PDF viewers usually draw an exported SVG or PDF file the same way and show the same line. Raster
+exports (PNG, JPEG, TIFF and the other bitmap formats) with None anti-aliasing do not show it at any
+size. Raster exports with Art Optimized anti-aliasing, the default, do not show it up to 10 million
+pixels and 16,384 pixels on a side. A raster export shows the line as the canvas does when it uses
+Type Optimized anti-aliasing, or when it uses Art Optimized and is larger than either limit.
+Overlapping stacks the colors instead: a lower color continues under the edge of the color above it,
+and no background shows along that edge.
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)
 page describes the same warning for images over 1500 px). An image of more than 64 megapixels (up to
-192) is traced from a copy scaled down to 64 megapixels, and the trace says that too. A trace that would
+192) is traced from a copy scaled down to 64 megapixels, and the trace says that too. Flat Logo traces at
+most 1024 pixels on a side: a larger decoded raster is averaged down in whole-number blocks first (a 1025-pixel
+image is traced at 513, and a 16,000 × 12,000 image, decoded at 9,459 × 7,094, is traced at 946 × 710), and the trace names both sizes in `warnings`. Flat Logo gives that note in place
+of the slower-trace note for an image over 1500 pixels and in place of the 64-megapixel note. An image at most
+1024 pixels on a side is traced at its own size, also when the named `logoColors` differ slightly from the
+image's colors. Only an image with more than 150,000 different pixel values that are not exactly one traced
+color is averaged down further: the factor doubles until at most 150,000 remain or the working copy has at
+most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps
 about 90 bytes an anchor; a 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million.

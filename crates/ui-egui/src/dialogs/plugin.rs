@@ -5,13 +5,15 @@
 //! effect dialog (`effect.dialog`). A filter with parameters opens dialog `plugin`: one field per
 //! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
 //! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
-//! at once. Exporters are formats of File › Export › Export As; one with parameters opens dialog
-//! `pluginExport` once the file is picked, and its Export button writes the file.
+//! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
+//! it runs in the background ([`crate::plugin_runs`]). Exporters are formats of File › Export ›
+//! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
+//! Export button writes the file.
 
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_plugins::{Kind, Manifest, Plugin, registry};
+use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, registry};
 
 use super::{DialogSpec, form};
 use crate::VectorcraftApp;
@@ -80,10 +82,12 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let given = p.get("params").filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
     if m.params.is_empty() || given.is_some() {
-        return app.run(CMD, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
+        return run(app, &plugin, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
     }
     let mut fields = fields_for(m);
-    fields.insert("preview".into(), json!(true));
+    if m.budget == Budget::Light {
+        fields.insert("preview".into(), json!(true));
+    }
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
 }
@@ -113,16 +117,48 @@ fn params(d: &Dialog) -> Value {
     json!({"id": d.str("__plugin"), "params": form::params(d)})
 }
 
+/// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background when it is
+/// heavy.
+fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
+    match plugin.manifest().budget {
+        Budget::Light => app.run(CMD, p),
+        Budget::Heavy => crate::plugin_runs::start(app, p),
+    }
+}
+
+/// The plug-in's description and fields, then the live Preview; a heavy filter has a note instead
+/// that it runs in the background, since a run may take minutes.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let Some(plugin) = described(ui, d) else { return true };
     form::schema_fields(app, ui, d, plugin.manifest());
-    let (label, p) = (d.str("__label"), params(d));
-    form::preview(app, ui, d, &label, CMD, p);
+    match plugin.manifest().budget {
+        Budget::Light => {
+            let (label, p) = (d.str("__label"), params(d));
+            form::preview(app, ui, d, &label, CMD, p);
+        }
+        // No Preview: each run may take minutes.
+        Budget::Heavy => {
+            ui.add_space(8.0);
+            let note = tl!("It may take minutes, so it runs in the background, where you can cancel it.");
+            ui.label(egui::RichText::new(note).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
+        }
+    }
     false
 }
 
+/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, starts
+/// in the background ([`run`]) and the dialog closes.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, CMD, params(d))
+    match registry::get(&d.str("__plugin")) {
+        Some(plugin) if plugin.manifest().budget == Budget::Heavy => {
+            let r = run(app, &plugin, params(d));
+            if r.is_ok() {
+                app.ui.dialog = None;
+            }
+            r
+        }
+        _ => form::commit_preview(app, CMD, params(d)),
+    }
 }
 
 /// The dialog kind of an exporter's parameters, after Export As picked the file.

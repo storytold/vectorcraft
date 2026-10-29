@@ -185,7 +185,7 @@ fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
     file[102..106].copy_from_slice(&1u32.to_le_bytes());
     let e = raster_image(&file).err().expect("refused");
     assert!(e.to_string().contains("an image of 3 × 2147483649 pixels is too large to draw"), "{e}");
-    assert!(too_large_note(&file).is_some());
+    assert!(load::too_large_note(&file).is_some());
     assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
 }
 
@@ -382,6 +382,14 @@ fn open_exts_cover_every_readable_format() {
     );
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
+}
+
+#[test]
+fn library_open_filters_list_library_formats_first() {
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS).collect();
+    assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
+    assert!(filters[0].1.contains(&"ase"));
+    assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
 }
 
 /// The extensions usage texts list for export: one per writable format, each picking that format
@@ -691,6 +699,58 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
         })
         .unwrap_err();
     assert_eq!(e.to_string(), "disk full");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
+/// values is refused before anything is written; `compress`, `version` or `preview` beside the path of a format that doesn't
+/// read it is named in the warnings.
+#[test]
+fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
+    let d = tmp_dir("save-options");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let path = d.join("both.vectorcraft").to_string_lossy().to_string();
+    for cmd in ["document.save", "file.saveAs", "file.saveCopy", "file.saveAsTemplate"] {
+        let e = s.execute(cmd, &json!({"path": path, "compress": true, "options": {"compress": false}})).unwrap_err().to_string();
+        assert!(e.contains("`compress: true` and `options.compress: false` disagree") && e.contains(&format!("`{cmd}`")), "{cmd}: {e}");
+    }
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    assert!(!d.join("both.vctemplate").exists(), "nor a template");
+    // An SVG option given in `svg: {…}` or in `options.svg` counts as given there.
+    let svg = d.join("a.svg").to_string_lossy().to_string();
+    for p in [
+        json!({"svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+        json!({"hiddenLayers": false, "options": {"svg": {"hiddenLayers": true}}}),
+        json!({"hiddenLayers": true, "svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(svg);
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("`hiddenLayers: false` and `options.hiddenLayers: true` disagree") && e.contains("`file.saveCopy`"), "{p}: {e}");
+    }
+    assert!(!std::path::Path::new(&svg).exists(), "nothing is written");
+    // Agreeing values, or one of them null, save as asked; `3` and `3.0` agree.
+    for p in [
+        json!({"compress": true, "options": {"compress": true}}),
+        json!({"compress": null, "options": {"compress": true}}),
+        json!({"compress": true, "version": 3, "options": {"compress": true, "version": 3.0}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(path);
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{p}: {r}");
+        assert_eq!(std::fs::read(&path).unwrap()[..2], [0x1f, 0x8b], "{p}");
+    }
+    // An SVG file reads none of the native options; a .ai file reads `compress` only.
+    let r = s.execute("file.saveCopy", &json!({"path": svg, "compress": true, "version": 3, "preview": null})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.contains(&"`compress` was not used: SVG files don't read it"), "{w:?}");
+    assert!(w.contains(&"`version` was not used: SVG files don't read it") && !w.iter().any(|w| w.starts_with("`preview`")), "{w:?}");
+    assert!(std::fs::read(&svg).unwrap().starts_with(b"<"), "plain SVG");
+    let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

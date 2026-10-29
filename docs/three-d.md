@@ -101,6 +101,34 @@ saves the angle.
 
 ## Lighting
 
+### Presets
+
+The Lighting tab has **Standard**, **Diffuse**, **Top Left** and **Right** choices. Choosing one
+replaces the whole light rig with one white front light at 80% intensity and sets Ambient Light.
+It leaves Shading, the object's view, geometry and other effect options unchanged. Manual edits
+remain available; the list shows **Custom** whenever the effective lighting matches none of the
+presets, including when there is more than one light. An equivalent explicit single light is
+recognized too. Reset all returns to Standard. Preview, Cancel and Undo work as for other options.
+
+These are original VectorCraft settings based on the public preset names and directions. Adobe's
+documentation does not publish numeric rigs; the values are not copied from its software or files
+and are not claimed to reproduce its presets exactly. Standard retains the existing default.
+
+| Preset | Rotation | Height | Softness | Ambient Light |
+|---|---:|---:|---:|---:|
+| Standard | 125.26438968275465 degrees | 30 degrees | 0% | 25% |
+| Diffuse | 125.26438968275465 degrees | 30 degrees | 100% | 35% |
+| Top Left | 135 degrees | 45 degrees | 0% | 25% |
+| Right | 0 degrees | 30 degrees | 0% | 25% |
+
+`effect.lightingPreset {index: 0, item: null, preset: "standard" | "diffuse" | "topLeft" | "right", ids?, target?}`
+applies the same settings through commands, CLI and MCP. The index and item address an already
+applied 3D effect. Every target must have a 3D effect at that position; validation is atomic, and
+the whole operation is one undo step. The numeric light settings are saved, not a preset name.
+Existing documents keep their appearance unless a preset is chosen.
+
+### Light settings
+
 One to ten directional lights. **Lights** selects the light whose settings and artboard gizmo are edited. **Add Light** adds and selects a white front light; **Delete Light** removes the selected light while retaining at least one. Ambient Light is shared by all lights. The public panel options' Light Settings are kept in their order:
 
 | Option | |
@@ -138,7 +166,7 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base, Adobe Substance and graphics), light presets, **shadows**
+- **Materials** (base, Adobe Substance and graphics), **shadows**
   and **ray-traced rendering** are not built: shading uses directional lights, in the paint of the fill or
   stroke the solid is built for ([Fills and strokes](#fills-and-strokes)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
@@ -161,4 +189,5 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
 | 2026-10-17 | Smooth colored Inflate lighting and surface batching; legacy white-light appearance and the 0.05 seam minimum preserved; shared light Color and multiple lights remain vector output. |

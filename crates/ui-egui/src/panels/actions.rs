@@ -55,6 +55,15 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
     let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
+    if widgets::menu_item(ui, tl!("New Set…"), true, false) {
+        crate::dialogs::action_set_options::open_new(app);
+    }
+    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
+    if widgets::menu_item(ui, tl!("Set Options…"), current.is_some(), false)
+        && let Some(s) = current
+    {
+        crate::dialogs::action_set_options::open(app, s);
+    }
     if widgets::menu_item(ui, tl!("Batch…"), has, false)
         && let Some((s, a)) = selected
         && let Err(e) = crate::dialogs::action_batch::open(app, s, a)
@@ -75,10 +84,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // value per type, so reading the bare pair never found it and no action stayed selected (#1629).
     const SELECTED: &str = "actions-selected";
     let mut selected: Option<(usize, usize)> = pstate(ui.ctx(), SELECTED);
+    // A set made with New Set, or whose name was clicked, is current with none of its actions
+    // selected.
+    if selected.is_some_and(|(s, _)| app.ui.action_set != Some(s)) {
+        selected = None;
+    }
+    let mut current = app.ui.action_set;
     let mut play_req = None;
     egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
         for (si, set) in app.ui.action_sets.iter().enumerate() {
-            ui.label(egui::RichText::new(format!("▾ {}", set.name)).color(t.text));
+            let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
+            if current == Some(si) && selected.is_none() {
+                ui.painter().rect_filled(r, 0.0, t.row_selected);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 0.0, t.hover);
+            }
+            ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, format!("▾ {}", set.name), egui::FontId::proportional(12.5), t.text);
+            if resp.clicked() {
+                current = Some(si);
+                selected = None;
+            }
             for (ai, a) in set.actions.iter().enumerate() {
                 let sel = selected == Some((si, ai));
                 let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.0), egui::Sense::click());
@@ -103,6 +128,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 );
                 if resp.clicked() {
                     selected = Some((si, ai));
+                    current = Some(si);
                 }
                 if resp.double_clicked() {
                     play_req = Some((si, ai));
@@ -111,8 +137,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
     });
     set_pstate(ui.ctx(), SELECTED, selected);
+    app.ui.action_set = current;
     widgets::divider(ui);
-    // Bottom bar: stop, record, play, new, delete.
+    // Bottom bar: stop, record, play, new set, delete.
     ui.horizontal(|ui| {
         let recording = app.ui.recording.is_some();
         if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
@@ -129,11 +156,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let (r, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
         ui.painter().circle_filled(r.center(), 6.0, if recording { egui::Color32::from_rgb(0xe0, 0x30, 0x30) } else { t.icon });
         if resp.on_hover_text(tl!("Begin Recording")).clicked() && !recording {
-            let n = app.ui.action_sets.first().map(|s| s.actions.len()).unwrap_or(0) + 1;
             if app.ui.action_sets.is_empty() {
                 app.ui.action_sets.push(ActionSet { name: "Set 1".into(), actions: vec![] });
             }
-            let set = selected.map(|s| s.0).unwrap_or(0);
+            let set = current.filter(|&s| s < app.ui.action_sets.len()).unwrap_or(0);
+            let n = app.ui.action_sets.get(set).map_or(0, |s| s.actions.len()) + 1;
             let start = app.session.journal.len();
             // Keep every step from here on until recording stops, however long it runs.
             app.session.journal.hold(Some(start));
@@ -143,6 +170,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             && let Some(s) = selected
         {
             play_req = Some(s);
+        }
+        if widgets::icon_button(ui, "dc-folder", tl!("Create New Set"), false, 24.0).clicked() {
+            crate::dialogs::action_set_options::open_new(app);
         }
         if widgets::icon_button(ui, "trash-2", tl!("Delete Selection"), false, 24.0).clicked()
             && let Some((si, ai)) = selected
@@ -197,10 +227,10 @@ mod tests {
         click(&ctx, &mut app, text_rect(&texts, "Reflect Horizontal").center(), show);
         frame_events(&ctx, &mut app, vec![], show);
         assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 5)), "selected on the frames after the click");
-        // The bottom bar's 24-point buttons, left to right: stop, record, play, delete.
+        // The bottom bar's 24-point buttons, left to right: stop, record, play, new set, delete.
         let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
         bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        let [_, _, play, delete] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        let [_, _, play, _, delete] = bar[..] else { panic!("the bottom bar: {bar:?}") };
         click(&ctx, &mut app, text_rect(&texts, "Duplicate and Offset 10 pt").center(), show);
         click(&ctx, &mut app, play.center(), show);
         assert_eq!(app.session.active().unwrap().selection.len(), 1);
@@ -211,6 +241,72 @@ mod tests {
         assert_eq!(names(&app), before[1..], "the selected action is deleted");
         click(&ctx, &mut app, delete.center(), show);
         assert_eq!(names(&app), before[1..], "nothing selected after a delete: nothing more goes");
+    }
+
+    /// #3712: Create New Set asks for a name (Set 1 when free), the new set is the current one, so a
+    /// recording goes into it, and a click on another set's name makes that one current. The sets
+    /// are saved with the UI preferences.
+    #[test]
+    fn create_new_set_names_a_set_that_recordings_go_into() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        // The bottom bar's 24-point buttons, left to right: stop, record, play, new set, delete. A new
+        // set or action moves the bar down.
+        let bar = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            frame_events(ctx, app, vec![], show);
+            let mut bar = crate::toolbar::tests::widget_rects(ctx, egui::vec2(24.0, 24.0));
+            bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            let [stop, record, _, new_set, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+            (stop, record, new_set)
+        };
+        let (_, _, new_set) = bar(&ctx, &mut app);
+        click(&ctx, &mut app, new_set.center(), show);
+        let d = app.ui.dialog.as_ref().expect("New Set asks for a name");
+        assert_eq!((d.kind.as_str(), d.str("name")), ("actionSetOptions", "Set 1".to_string()));
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Print"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let sets = |app: &VectorcraftApp| app.ui.action_sets.iter().map(|s| (s.name.clone(), s.actions.len())).collect::<Vec<_>>();
+        assert_eq!(sets(&app), [("Default Actions".to_string(), 6), ("Print".into(), 0)]);
+        let rect = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+        let (stop, record, _) = bar(&ctx, &mut app);
+        click(&ctx, &mut app, record.center(), show);
+        app.run("shape.rectangle", rect.clone()).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        assert_eq!(sets(&app), [("Default Actions".to_string(), 6), ("Print".into(), 1)], "recorded into the new set");
+        assert_eq!(app.ui.action_sets[1].actions[0].name, "Action 1", "numbered within its set");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "▾ Default Actions").center(), show);
+        let (stop, record, _) = bar(&ctx, &mut app);
+        click(&ctx, &mut app, record.center(), show);
+        app.run("shape.rectangle", rect).unwrap();
+        click(&ctx, &mut app, stop.center(), show);
+        assert_eq!(sets(&app), [("Default Actions".to_string(), 7), ("Print".into(), 1)], "recorded into the set clicked");
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        let restored = serde_json::from_value::<crate::state::UiState>(saved).unwrap();
+        assert_eq!(restored.action_sets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Default Actions", "Print"]);
+    }
+
+    /// #3712: the panel menu's Set Options… renames the current set and keeps its actions.
+    #[test]
+    fn set_options_renames_the_current_set() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui.action_sets.push(ActionSet { name: "Mine".into(), actions: vec![] });
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "▾ Mine").center(), show);
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Set Options…").map(|(_, r)| *r).expect("Set Options… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        let d = app.ui.dialog.as_ref().expect("Set Options opens");
+        assert_eq!((d.kind.as_str(), d.str("name")), ("actionSetOptions", "Mine".to_string()));
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Web"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let names = app.ui.action_sets.iter().map(|s| (s.name.as_str(), s.actions.len())).collect::<Vec<_>>();
+        assert_eq!(names, [("Default Actions", 6), ("Web", 0)], "the clicked set is renamed, the other kept");
     }
 
     /// A recording keeps its steps when a canceled undo group drops journal entries made before the
@@ -231,10 +327,10 @@ mod tests {
         }
         let ctx = egui::Context::default();
         frame_events(&ctx, &mut app, vec![], show);
-        // The bottom bar's 24-point buttons, left to right: stop, record, play, delete.
+        // The bottom bar's 24-point buttons, left to right: stop, record, play, new set, delete.
         let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
         bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        let [stop, record, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        let [stop, record, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
         click(&ctx, &mut app, record.center(), show);
         for (id, p) in [("document.activate", json!({"index": 1})), ("shape.rectangle", rect(50)), ("edit.undoGroup.end", json!({"cancel": true}))] {
             app.run(id, p).unwrap();

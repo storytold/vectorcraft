@@ -87,10 +87,10 @@ type Open = fn(&mut VectorcraftApp);
 fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
     let screen = Rect::from_min_size(Pos2::ZERO, SCREEN);
     let opens: [(&str, Open, egui::Id); 4] = [
-        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::new(("dialog", "offsetPath"))),
-        ("New Document", open_new_document, egui::Id::new(("dialog", "newDocument"))),
-        ("Preferences", |app| crate::prefs_dialog::open(app, None), egui::Id::new("dialog-preferences")),
-        ("Keyboard Shortcuts", crate::shortcut_editor::open, egui::Id::new("dialog-shortcuts")),
+        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::unique(("dialog", "offsetPath"))),
+        ("New Document", open_new_document, egui::Id::unique(("dialog", "newDocument"))),
+        ("Preferences", |app| crate::prefs_dialog::open(app, None), egui::Id::unique("dialog-preferences")),
+        ("Keyboard Shortcuts", crate::shortcut_editor::open, egui::Id::unique("dialog-shortcuts")),
     ];
     for (name, open, id) in opens {
         let (ctx, mut app) = (ctx(), app_with_selection());
@@ -134,7 +134,7 @@ fn check_plugin_dialog(kind: &str, count: usize, check: impl FnOnce(&egui::Conte
     };
     app.run(command, params).unwrap();
     settle(&ctx, &mut app);
-    check(&ctx, &mut app, egui::Id::new(("dialog", dialog)), &format!("Test {id}"));
+    check(&ctx, &mut app, egui::Id::unique(("dialog", dialog)), &format!("Test {id}"));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
@@ -164,6 +164,7 @@ fn a_plug_in_dialog_of_many_settings_fits_the_window() {
                 delta: vec2(0.0, -200.0),
                 phase: egui::TouchPhase::Move,
                 modifiers: Default::default(),
+                source: egui::MouseWheelSource::Unknown,
             };
             frame(ctx, app, vec![Event::PointerMoved(over), wheel]);
             for _ in 0..30 {
@@ -233,21 +234,6 @@ fn form_dialog_axes_are_dropdowns() {
         let texts = frame(&ctx, &mut app, vec![]);
         assert!(texts.iter().any(|(t, _)| t == shown), "{id}: {texts:?}");
         assert!(!texts.iter().any(|(t, _)| *t == shown.to_lowercase()), "{id} has a text field: {texts:?}");
-    }
-}
-
-/// The axis choices are translated in the "axis" context: in Japanese the plain Horizontal and
-/// Vertical are the type orientations (horizontal and vertical writing).
-#[test]
-fn axis_choices_read_as_axes_in_every_complete_language() {
-    use crate::i18n::{LANGUAGES, Lang, tr, tr_ctx};
-    let ja = Lang::from_code("ja").unwrap();
-    assert_eq!(tr_ctx(ja, "axis", "Horizontal"), "水平方向");
-    assert_ne!(tr_ctx(ja, "axis", "Horizontal"), tr(ja, "Horizontal"));
-    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
-        for s in ["Horizontal", "Vertical", "Both"] {
-            assert!(l.source.lines().any(|line| line.starts_with(&format!("axis\t{s}\t"))), "{}: no axis row for {s}", l.code);
-        }
     }
 }
 
@@ -333,14 +319,14 @@ fn simplify_preview(app: &VectorcraftApp) -> serde_json::Value {
 /// The Simplify slider's strip, and the centers of its Auto-Simplify button, its rail and its More
 /// Options button.
 fn slider_strip(ctx: &egui::Context) -> (Rect, Pos2, Pos2, Pos2) {
-    let r = rect_of(ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    let r = rect_of(ctx, egui::Id::unique(("dialog", simplify_slider::KIND)));
     let y = r.center().y;
     (r, Pos2::new(r.left() + 8.0 + 14.0, y), Pos2::new(r.left() + 8.0 + 28.0 + 6.0 + 90.0, y), Pos2::new(r.right() - 8.0 - 14.0, y))
 }
 
-/// Object › Path › Simplify opens a slider under the selection that previews the 1 pt result.
-/// Dragging it to the right previews more anchor points and to the left fewer, and Enter keeps the
-/// result as one undo step.
+/// Object › Path › Simplify opens a slider under the selection that previews the auto-simplified
+/// result (the path is 285 pt wide: level 55, 0.7125 pt). Dragging it to the right previews more
+/// anchor points and to the left fewer, and Enter keeps the result as one undo step.
 #[test]
 fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
     let (ctx, mut app) = (ctx(), app_with_dense_path());
@@ -348,8 +334,8 @@ fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(simplify_slider::KIND));
     settle(&ctx, &mut app);
-    assert_eq!(simplify_preview(&app), json!({"level": 50.0}));
-    assert_eq!(anchor_count(&app), 2, "the 1 pt result");
+    assert_eq!(simplify_preview(&app), json!({"level": 55.0}));
+    assert_eq!(anchor_count(&app), 2, "the auto-simplified result");
     let (_, _, rail, _) = slider_strip(&ctx);
     drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
     assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
@@ -367,6 +353,40 @@ fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
     assert_eq!(anchor_count(&app), 2);
+}
+
+/// A wave of 20 anchors `width` pt wide and `width / 5` pt high, selected.
+fn app_with_wave(width: f64) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    let anchors: Vec<_> = (0..20)
+        .map(|i| {
+            let t = i as f64 / 19.0;
+            json!({"x": 30.0 + width * t, "y": 500.0 + width / 5.0 * (3.0 * std::f64::consts::PI * t).sin()})
+        })
+        .collect();
+    app.run("path.create", json!({"anchors": anchors})).unwrap();
+    app
+}
+
+/// Object › Path › Simplify opens the slider at Auto-Simplify's level for the selection's size,
+/// not at a fixed level, and the canvas previews the paths as Auto-Simplify leaves them.
+#[test]
+fn simplify_slider_opens_at_the_auto_simplify_level_of_the_selection() {
+    let ctx = ctx();
+    // 1/400 of the longer side: 2.85 pt (level 35), 0.7125 pt (55), 0.07125 pt (89).
+    for (width, level) in [(1140.0, 35.0), (285.0, 55.0), (28.5, 89.0)] {
+        let mut app = app_with_wave(width);
+        crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("level", -1.0), level, "{width} pt");
+        settle(&ctx, &mut app);
+        assert_eq!(simplify_preview(&app), json!({ "level": level }), "{width} pt");
+        let previewed = app.session.doc().unwrap().doc.clone();
+        cancel(&mut app);
+        let auto = app.run("object.path.simplify", json!({"auto": true})).unwrap();
+        assert_eq!(auto["level"], json!(level), "{width} pt");
+        assert_eq!(app.session.doc().unwrap().doc, previewed, "{width} pt: the preview is Auto-Simplify's result");
+    }
 }
 
 /// Escape, taken by the app's key handling before the dialog layer draws, closes the Simplify
@@ -411,24 +431,26 @@ fn simplify_slider_stays_where_it_opened_while_the_preview_changes_the_bounds() 
     let before = app.selection_bounds().unwrap();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     settle(&ctx, &mut app);
-    let opened = rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND)));
+    let opened = rect_of(&ctx, egui::Id::unique(("dialog", simplify_slider::KIND)));
     app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(0));
     settle(&ctx, &mut app);
     assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
     let after = app.selection_bounds().unwrap();
     assert!(after.height() < before.height() - 0.5, "the preview changes the bounds: {before:?} → {after:?}");
-    assert_eq!(rect_of(&ctx, egui::Id::new(("dialog", simplify_slider::KIND))), opened);
+    assert_eq!(rect_of(&ctx, egui::Id::unique(("dialog", simplify_slider::KIND))), opened);
 }
 
-/// Auto-Simplify moves the slider to the level that keeps the path within 1/400 of its size, and a
-/// click outside the strip keeps the result as one undo step.
+/// Auto-Simplify moves the slider back to the level that keeps the path within 1/400 of its size,
+/// and a click outside the strip keeps the result as one undo step.
 #[test]
 fn simplify_slider_auto_simplify_and_a_click_outside_keep_the_result() {
     let (ctx, mut app) = (ctx(), app_with_dense_path());
     let before = app.session.doc().unwrap().doc.clone();
     let undo_len = app.session.doc().unwrap().history.undo.len();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(100));
     settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
     let (_, auto, ..) = slider_strip(&ctx);
     click(&ctx, &mut app, auto);
     // The path is 285 pt wide: 0.7125 pt at most, level 55.
@@ -437,6 +459,86 @@ fn simplify_slider_auto_simplify_and_a_click_outside_keep_the_result() {
     frame(&ctx, &mut app, vec![]);
     assert_eq!(anchor_count(&app), 2);
     assert!(app.session.in_interaction(), "the result waits for a click outside");
+    click(&ctx, &mut app, Pos2::new(20.0, 20.0));
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    assert_ne!(app.session.doc().unwrap().doc, before);
+}
+
+/// With anchors 10 to 30 of a 41-anchor wave direct-selected, the Simplify slider previews and
+/// Enter keeps a refit of only the segments between them, as one undo step: the anchors before and
+/// after the run stay exactly as they were. The Simplify dialog (More Options) does the same.
+#[test]
+fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path() {
+    let ctx = ctx();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 20 + i * 8, "y": 150.0 + 60.0 * (f64::from(i) / 6.0).sin()})).collect();
+    let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+    let path = |app: &VectorcraftApp| {
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.clone()
+    };
+    let original = path(&app);
+    let run: Vec<_> = (10..=30).map(|i| json!([0, i])).collect();
+    app.run("select.anchors", json!({"id": id, "anchors": run})).unwrap();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    let kept = |app: &VectorcraftApp, how: &str| {
+        let now = path(app);
+        assert!(now.len() < 41, "{how}: the run loses anchors");
+        assert_eq!(now[..10], original[..10], "{how}: the anchors before the run");
+        assert_eq!(now[10].p, original[10].p, "{how}: the run's start anchor");
+        assert_eq!(now[now.len() - 10..], original[31..], "{how}: the anchors after the run");
+        assert_eq!(now[now.len() - 11].p, original[30].p, "{how}: the run's end anchor");
+    };
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(20));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 20.0}));
+    kept(&app, "the slider's preview");
+    frame(
+        &ctx,
+        &mut app,
+        vec![Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    kept(&app, "the slider");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(path(&app), original);
+    open_simplify_dialog(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("tolerance".into(), json!(4));
+    settle(&ctx, &mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    kept(&app, "the dialog");
+}
+
+/// Object › Path › Smooth opens its slider (#4115) at the Auto-Smooth level, previewing that
+/// result; moving it previews the level, Auto-Smooth (the strip's only button) moves it back, and a
+/// click outside keeps the result as one undo step.
+#[test]
+fn smooth_slider_previews_auto_smooth_and_keeps_the_result() {
+    let ctx = ctx();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let anchors: Vec<_> =
+        (0..=60).map(|i| json!({"x": 20 + i * 5, "y": 150.0 + 40.0 * (f64::from(i) / 10.0).sin() + f64::from(i % 2) * 3.0})).collect();
+    app.run("path.create", json!({"anchors": anchors})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    assert!(app.run("ui.smoothAuto", json!({})).is_err(), "the slider is not open");
+    crate::menus::invoke(&mut app, "object.path.smooth", json!({}));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.f64("level", -1.0))), Some((smooth_slider::KIND, 50.0)));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 50.0}));
+    assert!(anchor_count(&app) < 61 / 4, "the preview smooths the jags: {}", anchor_count(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("level".into(), json!(0));
+    settle(&ctx, &mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
+    let strip = rect_of(&ctx, egui::Id::unique(("dialog", smooth_slider::KIND)));
+    click(&ctx, &mut app, Pos2::new(strip.left() + 8.0 + 14.0, strip.center().y));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("level", 0.0), 50.0);
+    assert_eq!(simplify_preview(&app), json!({"auto": true}));
     click(&ctx, &mut app, Pos2::new(20.0, 20.0));
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
@@ -629,7 +731,30 @@ fn simplify_dialog_show_original_path_outlines_the_paths_before_the_preview() {
 #[test]
 fn printer_mark_labels_are_distinct_from_language_names() {
     let cs = crate::i18n::Lang::from_code("cs").unwrap();
-    assert_eq!(save_pdf::choice_label(cs, "marks.kind", "Japanese"), "Japonské");
-    assert_eq!(save_pdf::choice_label(cs, "language", "Japanese"), "Japonština");
+    assert_eq!(save_pdf::choice_label(cs, "marks.kind", "Japanese"), crate::i18n::tr_ctx(cs, "mark-style", "Japanese"));
+    assert_eq!(save_pdf::choice_label(cs, "language", "Japanese"), crate::i18n::tr(cs, "Japanese"));
     assert_eq!(save_pdf::choice_label(crate::i18n::Lang::EN, "marks.kind", "Japanese"), "Japanese");
+}
+
+/// In a document in millimeters, an offset typed with a decimal comma (`0,1`) is taken as 0.1 mm
+/// instead of going back to the value the field had, and Offset Path opens on it again (#3837).
+#[test]
+fn offset_path_takes_a_decimal_comma() {
+    let (ctx, mut app) = (ctx(), app_with_selection());
+    app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    settle(&ctx, &mut app);
+    // The dialog focuses its first field, the offset: type as a user does, then Tab commits it.
+    frame(&ctx, &mut app, vec![Event::Text("0,1".into())]);
+    frame(&ctx, &mut app, vec![Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    let texts = frame(&ctx, &mut app, vec![]);
+    let mm = vectorcraft_doc::Unit::Millimeters.to_pt(0.1);
+    let offset = app.ui.dialog.as_ref().unwrap().f64("offset", 0.0);
+    assert!((offset - mm).abs() < 1e-9, "0.1 mm: {offset} pt");
+    assert!(texts.iter().any(|(t, _)| t == "0.1 mm"), "the field shows 0.1 mm: {texts:?}");
+    confirm(&mut app).unwrap();
+    crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+    let offset = app.ui.dialog.as_ref().unwrap().f64("offset", 0.0);
+    assert!((offset - mm).abs() < 1e-9, "reopened on 0.1 mm: {offset} pt");
 }

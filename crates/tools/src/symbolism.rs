@@ -261,6 +261,9 @@ impl Tool for BrushPaintTool {
             self.inner.set_option(key, v);
         }
     }
+    fn wants_samples(&self) -> bool {
+        self.inner.wants_samples()
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
     }

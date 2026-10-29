@@ -2,14 +2,15 @@
 //! reviewed before it fills Edit › Keyboard Shortcuts' working set.
 //!
 //! Each entry's name is matched against the tools, commands and panels Keyboard Shortcuts lists
-//! ([`vectorcraft_engine::namematch`]). Its key and modifier codes are decoded from the user's earlier
+//! ([`craft_keymap::import::namematch`]). Its key and modifier codes are decoded from the user's earlier
 //! answers (`importMatches`), from the two codes the format's public description gives (`/Key 48` is
 //! the 0 key and `/Modifiers 0` is none), and by agreement with VectorCraft's default shortcuts: each
 //! entry whose match has a default votes for what its codes stand for, and a code is proposed when at
 //! least two entries vote for it and four votes in five agree. The user answers the rest in the Keys
-//! section. Apply assigns the rows that are ready, in the file's order, through
-//! [`shortcut_editor::assign`]; when two rows want one shortcut, the later row takes it. Keyboard
-//! Shortcuts then shows the set, and its OK keeps it.
+//! section. Apply hands the rows that are ready, in the file's order, to [`craft_keymap::plan`], each
+//! row's target given as the user's answer for it: when two rows want one shortcut, the later row
+//! takes it, and the tools, commands and panels outside the set lose the shortcuts the set gives.
+//! Keyboard Shortcuts then shows the set, and its OK keeps it.
 //!
 //! Fields: `name`, `start` (`defaults` or `current`), `remember`, `rows` ([`Row`]s), `keys` and `mods`
 //! ([`Code`]s by code), `notes` (`[{line, text}]`: the parts of the file not read), `truncated`,
@@ -20,9 +21,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 
+use craft_keymap::import::namematch::{Candidate, Matcher, Proposal};
+use craft_keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
+use craft_keymap::{CommandRef, ForeignEntry, ForeignKey, ForeignSet, ImportOptions, Keymap, NoneDefined, Start, Trigger, plan};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_engine::namematch::{Candidate, Matcher, Proposal};
 
 use crate::shortcut_editor::{self, Entry};
 use crate::state::Dialog;
@@ -188,10 +191,21 @@ impl Review {
             });
         }
         let codes = |list: &Value, field: &str, described: &[(i64, &str)], of: fn(&Row) -> Option<i64>| -> BTreeMap<i64, Code> {
+            // The first few names for each code, in one pass over the rows: a scan per code made a
+            // file of many distinct codes cost codes × rows.
+            let mut examples: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+            for r in &rows {
+                if let Some(value) = of(r) {
+                    let names = examples.entry(value).or_default();
+                    if names.len() < NAMES_SHOWN {
+                        names.push(r.name.clone());
+                    }
+                }
+            }
             let mut out = BTreeMap::new();
             for c in list.as_array().into_iter().flatten() {
                 let Some(value) = c["value"].as_i64() else { continue };
-                let names = rows.iter().filter(|r| of(r) == Some(value)).take(NAMES_SHOWN).map(|r| r.name.clone()).collect();
+                let names = examples.get(&value).cloned().unwrap_or_default();
                 let (text, from) = match (c[field].as_str(), described.iter().find(|(v, _)| *v == value)) {
                     (Some(t), _) => (Some(t.to_string()), "saved"),
                     (None, Some((_, t))) => (Some(t.to_string()), "described"),
@@ -470,7 +484,7 @@ pub fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     open_read(app, json!({ "path": path }))
 }
 
-/// Apply: the ready rows assigned in the file's order over VectorCraft's defaults (or the current
+/// Apply: the ready rows applied as one set ([`apply_ready`]) over VectorCraft's defaults (or the current
 /// shortcuts), and Keyboard Shortcuts shown with the result as its working set; its OK keeps it. With
 /// Remember My Choices on, the matches and codes used are kept for later imports (`importMatches.set`).
 /// → `{applied, rows}`
@@ -478,19 +492,14 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let review = Review::of(d);
     let statuses = review.statuses();
     let back = super::parent(d);
-    let mut ov: BTreeMap<String, String> = match (d.str("start") == "current", &back) {
-        (true, Some(b)) => b.fields.get("overrides").and_then(|v| BTreeMap::deserialize(v).ok()).unwrap_or_default(),
+    let current = d.str("start") == "current";
+    let ov = match (current, &back) {
+        (true, Some(b)) => b.fields.get("overrides").map(|v| crate::keymap::stored::from_value(v.clone())).unwrap_or_default(),
         (true, None) => app.ui.shortcut_overrides.clone(),
-        (false, _) => BTreeMap::new(),
+        (false, _) => craft_keymap::Overrides::new(),
     };
-    let mut applied = 0usize;
-    for (r, (status, chord)) in review.rows.iter().zip(&statuses) {
-        if let (Status::Ready, Some(t), Some(c)) = (status, r.target.as_deref(), chord)
-            && shortcut_editor::assign(&mut ov, t, Some(c), true).is_ok()
-        {
-            applied += 1;
-        }
-    }
+    let mut km = crate::keymap::keymap_with(&ov);
+    let applied = apply_ready(&mut km, &review, &statuses, if current { Start::Current } else { Start::Defaults });
     let remembered = if d.bool("remember") { remember(app, &review, &statuses) } else { Ok(()) };
     let name = d.str("name");
     let set = Some(name.trim()).filter(|n| !n.is_empty()).unwrap_or(shortcut_editor::CUSTOM).to_string();
@@ -499,7 +508,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         shortcut_editor::open(app);
     }
     if let Some(k) = app.ui.dialog.as_mut() {
-        k.fields.insert("overrides".into(), serde_json::to_value(&ov).unwrap_or_else(|_| json!({})));
+        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(km.overrides()));
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }
@@ -507,6 +516,59 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.status(e);
     }
     Ok(json!({ "applied": applied, "rows": review.rows.len() }))
+}
+
+/// Text cut to what [`craft_keymap::plan`] reads, so an entry's [`ForeignEntry::remember_key`] is
+/// the one `plan` looks up.
+fn within_cap(s: &str) -> String {
+    s.chars().take(MAX_IMPORT_TEXT).collect()
+}
+
+/// The ready rows applied to `km` as one set through [`craft_keymap::plan`]. Each row's target is
+/// passed as the user's answer for its entry, so the review's matching decides; a binding the plan
+/// gives any other command is left out. → the number of rows applied.
+fn apply_ready(km: &mut Keymap, review: &Review, statuses: &[(Status, Option<String>)], start: Start) -> usize {
+    let mut entries: Vec<ForeignEntry> = vec![];
+    // Per entry: its row's line and target.
+    let mut rows: Vec<(usize, &str)> = vec![];
+    let mut remembered: BTreeMap<String, CommandRef> = BTreeMap::new();
+    for (r, (status, chord)) in review.rows.iter().zip(statuses) {
+        let (Status::Ready, Some(target), Some(text)) = (*status, r.target.as_deref(), chord.as_deref()) else { continue };
+        let Some(chord) = crate::keymap::vc_chord(text) else { continue };
+        // Room for the name and a `#line` segment within the segments `plan` reads.
+        let mut path: Vec<String> =
+            r.section.split(" › ").filter(|s| !s.is_empty()).take(MAX_PATH_SEGMENTS.saturating_sub(2)).map(within_cap).collect();
+        path.push(within_cap(&r.name));
+        let key = ForeignKey { context: None, text: text.to_string(), trigger: Ok(Trigger::single(chord)), notes: vec![] };
+        let mut entry = ForeignEntry::new(None, path.clone()).with_key(key).at_line(r.line);
+        if target.starts_with("tool:") {
+            entry = entry.tool();
+        }
+        let command = crate::keymap::command_of(target);
+        // Rows with one name in one section can stand for different items: each keeps its own answer.
+        let mut n = 0usize;
+        while remembered.get(&entry.remember_key()).is_some_and(|c| *c != command) {
+            n += 1;
+            entry.path = path.clone();
+            entry.path.push(if n == 1 { format!("#{}", r.line) } else { format!("#{}-{n}", r.line) });
+        }
+        remembered.insert(entry.remember_key(), command);
+        entries.push(entry);
+        rows.push((r.line, target));
+    }
+    let options = ImportOptions { remembered, start, none_defined: NoneDefined::Keep, suggest: false, ..ImportOptions::default() };
+    let mut planned = plan(&ForeignSet::new(entries), km, &options);
+    for p in &mut planned.commands {
+        let key = crate::keymap::entry_key(&p.command);
+        p.bindings.retain(|b| rows.get(b.order).is_some_and(|(_, t)| *t == key));
+    }
+    let report = planned.apply(km);
+    let planned_rows: HashSet<usize> = planned.commands.iter().flat_map(|p| p.bindings.iter().map(|b| b.order)).collect();
+    let left_out = |line: usize, target: &str| {
+        report.skipped.iter().any(|s| s.line == Some(line) && crate::keymap::entry_key(&s.command) == target)
+            || report.failed.iter().any(|f| crate::keymap::entry_key(&f.command) == target)
+    };
+    rows.iter().enumerate().filter(|(i, (line, target))| planned_rows.contains(i) && !left_out(*line, target)).count()
 }
 
 /// Keep for later imports the targets and codes the user chose, and those of the rows Apply assigns.
@@ -592,7 +654,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let statuses = review.statuses();
     // The Keys and Shortcuts lists get the window's height less the rest of the dialog, as the frame
     // before drew it.
-    let id = egui::Id::new("dialog-shortcut-import");
+    let id = egui::Id::unique("dialog-shortcut-import");
     let rest = ctx.data(|m| m.get_temp::<f32>(id.with("rest"))).unwrap_or(0.0);
     let (keys, mods) = review.asked();
     let keys_open = d.bool("__keysOpen") && (!keys.is_empty() || !mods.is_empty());
@@ -605,7 +667,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
             let mut name = d.str("name");
-            if ui.add(egui::TextEdit::singleline(&mut name).desired_width(260.0)).changed() {
+            if ui.add(egui::TextEdit::singleline(&mut name).align(egui::Align2::LEFT_CENTER).desired_width(260.0)).changed() {
                 d.fields.insert("name".into(), json!(name));
             }
         });
@@ -805,7 +867,7 @@ fn rows_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, statuses
             }
             ui.add_space(8.0);
             let mut q = d.str("__query");
-            if ui.add(egui::TextEdit::singleline(&mut q).hint_text(tl!("Search")).desired_width(180.0)).changed() {
+            if ui.add(egui::TextEdit::singleline(&mut q).align(egui::Align2::LEFT_CENTER).hint_text(tl!("Search")).desired_width(180.0)).changed() {
                 d.fields.insert("__query".into(), json!(q));
             }
         });
@@ -861,40 +923,51 @@ fn rows_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, statuses
     list.inner.inner_rect.height()
 }
 
-/// Row `r`'s target picker: "No equivalent" and the row's choices, then Keyboard Shortcuts' entries
-/// that match the search. → the target picked ("" for no equivalent).
-fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<String> {
+/// Row `r`'s target picker: the search field, "No equivalent" and the row's choices stay at the
+/// top, over Keyboard Shortcuts' entries that match the search, which scroll. → the target picked
+/// ("" for no equivalent).
+pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<String> {
     let current = target_label(r.target.as_deref());
-    widgets::combo(ui, ("shortcut-import-target", i), &current, TARGET_W, true, |ui| {
-        let field = ui.id().with("query");
-        if ui.memory(|m| m.focused().is_none()) {
-            ui.memory_mut(|m| m.request_focus(field.with("edit")));
-        }
-        let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-        let mut picked = None;
-        let mut option = |ui: &mut egui::Ui, key: &str, label: &str| {
-            if ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked() {
-                picked = Some(key.to_string());
-            }
-        };
-        option(ui, "", tl!("No equivalent"));
-        let list: Vec<&Entry> = if q.is_empty() {
-            for e in r.choices.iter().filter_map(|c| entry(c)) {
-                option(ui, &e.key, &shown(e));
-            }
-            ui.separator();
-            shortcut_editor::entries().iter().collect()
-        } else {
-            shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
-        };
-        egui::ScrollArea::vertical().max_height(300.0).show_rows(ui, ROW_H, list.len(), |ui, range| {
-            for e in range.filter_map(|k| list.get(k)) {
-                option(ui, &e.key, &shown(e));
-            }
-        });
-        if picked.is_some() {
-            ui.close();
-        }
-        picked
+    // The entries' list is up to 300 points tall under the header, which was this tall last frame.
+    let header_id = egui::Id::unique(("shortcut-import-target-header", i));
+    let height = ui.data(|d| d.get_temp::<f32>(header_id)).unwrap_or(0.0) + 300.0;
+    let option = |ui: &mut egui::Ui, key: &str, label: &str| {
+        ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked().then(|| key.to_string())
+    };
+    widgets::combo_menu(ui, ("shortcut-import-target", i), &current, TARGET_W, |menu| {
+        menu.height(height).show_rows_with_header(
+            |ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                let field = ui.scope_id().with("query");
+                if ui.memory(|m| m.focused().is_none()) {
+                    ui.memory_mut(|m| m.request_focus(field.with("edit")));
+                }
+                let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
+                let mut picked = option(ui, "", tl!("No equivalent"));
+                let list: Vec<&Entry> = if q.is_empty() {
+                    for e in r.choices.iter().filter_map(|c| entry(c)) {
+                        picked = option(ui, &e.key, &shown(e)).or(picked);
+                    }
+                    ui.separator();
+                    shortcut_editor::entries().iter().collect()
+                } else {
+                    shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
+                };
+                ui.data_mut(|d| d.insert_temp(header_id, ui.min_rect().height()));
+                (list, picked)
+            },
+            ROW_H,
+            |(list, _)| list.len(),
+            |ui, range, (list, mut picked)| {
+                for e in range.filter_map(|k| list.get(k)) {
+                    picked = option(ui, &e.key, &shown(e)).or(picked);
+                }
+                if picked.is_some() {
+                    ui.close();
+                }
+                picked
+            },
+        )
     })
+    .flatten()
 }

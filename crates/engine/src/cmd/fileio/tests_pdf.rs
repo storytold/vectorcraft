@@ -131,6 +131,32 @@ fn options_not_applied_yet_and_document_features_warn() {
     assert!(warnings(&s.execute("document.export", &json!({"format": "png"})).unwrap()).is_empty());
 }
 
+/// A placed 16-bit PNG is written at 8 bits a sample in PDF 1.3 and 1.4 files (PDF/X-3 and the
+/// pages of a .ai file too), and keeps 16 bits from PDF 1.5.
+#[test]
+fn a_16_bit_png_is_written_at_8_bits_before_pdf_1_5() {
+    let mut s = session(1);
+    let deep = image::ImageBuffer::from_fn(8, 8, |x, y| image::Rgb([x as u16 * 8000, y as u16 * 8000, 40000]));
+    let mut png = vec![];
+    image::DynamicImage::ImageRgb16(deep).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "deep.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [50, 40]})).unwrap();
+    let readable = json!({"compressText": false});
+    for (cmd, p, depth) in [
+        ("document.exportPdf", json!({"compatibility": "1.3", "compression": readable}), 8),
+        ("document.exportPdf", json!({"compatibility": "1.4", "compression": readable}), 8),
+        ("document.exportPdf", json!({"standard": "pdfX3", "compression": readable}), 8),
+        ("file.saveCopy", json!({"format": "ai", "compatibility": "1.4", "compress": false}), 8),
+        ("document.exportPdf", json!({"compatibility": "1.5", "compression": readable}), 16),
+        ("document.exportPdf", json!({"compression": readable}), 16),
+    ] {
+        let v = s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        let text = String::from_utf8_lossy(&b64(&v)).into_owned();
+        let (eight, sixteen) = (text.contains("/BitsPerComponent 8"), text.contains("/BitsPerComponent 16"));
+        assert_eq!((eight, sixteen), (depth == 8, depth == 16), "{cmd} {p}");
+        assert!(warnings(&v).iter().all(|w| !w.contains("decoded")), "{cmd} {p}: {}", v["warnings"]);
+    }
+}
+
 /// A placed image whose pixel data can't be decoded is left out of every PDF the engine writes,
 /// and the rest of the page is written. Each reply that carries the PDF's warnings has the note
 /// raster exports give, once.

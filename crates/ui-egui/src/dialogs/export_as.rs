@@ -1,5 +1,6 @@
 //! File → Export → Export As…: the format and Use Artboards (All or a range: one file per
-//! artboard, or one page each in a PDF); without artboards the export covers the visible art. OK
+//! artboard, after a central file of the whole document for EPS with two or more when art shows,
+//! or one page each in a PDF); without artboards the export covers the visible art. OK
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
 //! Options, Text Export Options, DXF Options, EPS Options, and Save PDF for artboards as pages),
 //! else the file is written. DWG is listed, greyed out, with what to use instead. The formats of
@@ -102,7 +103,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).desired_width(90.0)).changed() {
+            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0)).changed() {
                 d.fields.insert("range".into(), json!(range));
             }
         });
@@ -140,8 +141,25 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         return Err("nothing to export: the document has no visible art (or turn on Use Artboards)".into());
     }
     app.ui.dialog = None;
-    let path = io::target_path(app, None, f.extensions[0])?;
+    let path = io::export_path(app, None, f)?;
     let range = if all { "all".to_string() } else { range };
+    let r = options_or_write(app, f, plugin, path, use_artboards, all, range);
+    // The options follow the save panel: the Enter that closed it isn't theirs (as in Save As).
+    super::opened_by_panel(app);
+    r
+}
+
+/// After the save panel picked `path`: the options dialog of format `f` (or of its exporter
+/// plug-in), else the file written.
+fn options_or_write(
+    app: &mut VectorcraftApp,
+    f: &'static Format,
+    plugin: Option<std::sync::Arc<vectorcraft_plugins::Plugin>>,
+    path: String,
+    use_artboards: bool,
+    all: bool,
+    range: String,
+) -> Result<Value, String> {
     match f.id {
         "svg" | "svgz" => {
             svg_options::open(app, svg_options::Mode::Export, Some(&path));

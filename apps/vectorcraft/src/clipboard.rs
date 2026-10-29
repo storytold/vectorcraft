@@ -143,6 +143,13 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
             Some(p) if p.ends_with('\r') => PathBuf::from(p.trim_end_matches('\r')),
             _ => path,
         };
+        // A paste sent by automation reads only what its roots allow.
+        match path.to_str() {
+            Some(p) => vectorcraft_engine::file_access::check_read(p).ok()?,
+            // A lossy name would check another file than the one opened.
+            None if vectorcraft_engine::file_access::current().is_none() => {}
+            None => return None,
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
         std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
@@ -157,7 +164,9 @@ mod win {
 
     use clipboard_win::{formats, options::NoClear, raw};
 
-    use super::*;
+    use super::{
+        BITMAP, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, text_of, windows_formats,
+    };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
     /// other or a `CF_BITMAP` is: the system converts between them.
@@ -302,7 +311,7 @@ mod win {
 mod portable {
     use std::borrow::Cow;
 
-    use super::*;
+    use super::{BITMAP, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
 
     /// What our last write put on the clipboard.
     enum Ours {
@@ -406,7 +415,7 @@ mod mac {
     use objc2_app_kit::NSPasteboard;
     use objc2_foundation::{NSArray, NSString};
 
-    use super::*;
+    use super::{Flavour, pasteboard_types};
 
     /// Does the pasteboard hold one of `mimes` ([`pasteboard_types`])? Asks for its types only.
     pub fn has(mimes: &[&'static str]) -> bool {

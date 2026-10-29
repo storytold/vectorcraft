@@ -1,6 +1,8 @@
 //! Export for Screens: sizes (factor, width, height, resolution), presets and sub-folders, Full
 //! Document, Include Bleed, per-format settings, ZIP downloads and the settings the document keeps.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 
 use super::screens::ScreenSize;
@@ -203,6 +205,39 @@ fn the_first_file_is_the_file_the_export_writes_first() {
     }
 }
 
+/// A saved document's `<filename>`, Full Document file and ZIP are named after its file without the
+/// extension, as Save names it, whatever its File Info title says.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_saved_document_exports_under_its_file_name() {
+    let mut s = session(1);
+    s.execute("file.info", &json!({"title": "Logo: final version"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-screens-filename-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    s.execute("document.save", &json!({"path": dir.join("my-logo.vectorcraft").to_string_lossy()})).unwrap();
+    for (p, name) in [
+        (json!({"name": "<filename>__<name>", "formats": [{"format": "png"}]}), "my-logo__Artboard 1.png"),
+        (json!({"fullDocument": true, "formats": [{"format": "png"}]}), "my-logo.png"),
+    ] {
+        assert_eq!(names(&export(&mut s, p.clone())), [name], "{p}");
+        assert_eq!(super::screens::first_file(&s, &p).unwrap(), name, "{p}");
+    }
+    assert_eq!(export(&mut s, json!({"zip": true, "formats": [{"format": "svg"}]}))["name"], "my-logo.zip");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A document that has not been saved has no file: `<filename>` is its title.
+#[test]
+fn an_unsaved_document_exports_under_its_title() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 40, "height": 30, "name": "Poster"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 20})).unwrap();
+    s.execute("file.info", &json!({"title": "Spring poster"})).unwrap();
+    let p = json!({"name": "<filename>", "formats": [{"format": "png"}]});
+    assert_eq!(names(&export(&mut s, p.clone())), ["Spring-poster.png"]);
+    assert_eq!(super::screens::first_file(&s, &p).unwrap(), "Spring-poster.png");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn sub_folders_are_made_in_the_export_folder() {
@@ -254,6 +289,169 @@ fn a_zip_is_written_into_the_folder() {
     let r = export(&mut s, json!({"folder": folder, "zip": true, "formats": [{"format": "png"}, {"format": "svg"}]}));
     let zip = std::fs::read(r["path"].as_str().unwrap()).unwrap();
     assert_eq!(super::zip::entries(&zip).unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The reply of a prepared export's [`super::ScreenExport::write`] and the files it gave the
+/// writer, by path.
+fn write_prepared(export: super::ScreenExport) -> (Value, BTreeMap<String, Vec<u8>>) {
+    let mut files = BTreeMap::new();
+    let mut write = |path: &str, bytes: &[u8]| {
+        files.insert(path.to_string(), bytes.to_vec());
+        Ok(())
+    };
+    let r = export.write(&mut write).unwrap_or_else(|e| panic!("{e}"));
+    (r, files)
+}
+
+/// The files reply `r` names (its `files`, else the zip at its `path`) as they are on disk, by path.
+fn on_disk(r: &Value) -> BTreeMap<String, Vec<u8>> {
+    let paths: Vec<&str> = match r["path"].as_str() {
+        Some(zip) => vec![zip],
+        None => r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect(),
+    };
+    paths.into_iter().map(|p| (p.to_string(), std::fs::read(p).unwrap())).collect()
+}
+
+/// [`Session::prepare_screen_export`] runs `document.exportForScreens` and `assets.export` as
+/// commands, journaled, and writes nothing; the export it gives writes the files the command
+/// writes, with the same names (`-2` included), sub-folders, bytes and reply, into a folder, as a
+/// zip in it and without a folder, through the writer it is given. Export for Screens remembers
+/// its settings when it is prepared.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_prepared_export_writes_what_the_command_writes() {
+    let mut s = session(2);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "Icon"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "icon"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-screens-prepared-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let rows = json!([{"format": "png", "suffix": ""}, {"format": "png", "scale": "2x"}, {"format": "svg"}]);
+    for zip in [false, true] {
+        let p = json!({"folder": folder, "zip": zip, "folders": "rows", "name": "<name>", "formats": rows});
+        let want = export(&mut s, p.clone());
+        if !zip {
+            let names = ["1x/Icon.png", "2x/Icon@2x.png", "SVG/Icon.svg", "1x/icon-2.png", "2x/icon@2x-2.png", "SVG/icon-2.svg"];
+            assert_eq!(want["files"], json!(names.map(|n| format!("{folder}/{n}"))));
+        }
+        let disk = on_disk(&want);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let journaled = s.journal.len();
+        let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+        assert_eq!((s.journal.len(), s.journal.last().map(|(id, _)| id.as_str())), (journaled + 1, Some("document.exportForScreens")));
+        assert!(!dir.exists(), "nothing is written until the export writes");
+        let (got, files) = write_prepared(prepared);
+        assert_eq!(got, want, "zip: {zip}");
+        assert_eq!(files, disk, "zip: {zip}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    // Without a folder, the files come back in the reply and nothing is written.
+    let p = json!({"name": "<name>", "formats": rows});
+    let want = export(&mut s, p.clone());
+    let (got, files) = write_prepared(s.prepare_screen_export("document.exportForScreens", &p).unwrap());
+    assert_eq!((got, files.len()), (want, 0));
+    // The settings are remembered when the export is prepared.
+    s.prepare_screen_export("document.exportForScreens", &json!({"prefix": "pre-", "formats": rows})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("prefix"), Some(&json!("pre-")));
+    // The Asset Export panel's export.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("assets.add", &json!({"multiple": false})).unwrap();
+    let p = json!({"folder": folder, "formats": rows});
+    let want = s.execute("assets.export", &p).unwrap();
+    let disk = on_disk(&want);
+    assert_eq!(disk.len(), 3, "{want}");
+    std::fs::remove_dir_all(&dir).unwrap();
+    let prepared = s.prepare_screen_export("assets.export", &p).unwrap();
+    assert_eq!(s.journal.last().map(|(id, _)| id.as_str()), Some("assets.export"));
+    assert_eq!(write_prepared(prepared), (want, disk));
+    // An encoder's refusal names the command, as the command's own reply does.
+    let p = json!({"folder": folder, "formats": [{"format": "bmp", "colorModel": "cmyk"}]});
+    let want = s.execute("assets.export", &p).unwrap_err();
+    let got = s.prepare_screen_export("assets.export", &p).unwrap().write(&mut |_: &str, _: &[u8]| Ok(())).unwrap_err();
+    assert!(matches!(&got, crate::EngineError::BadParams { cmd, .. } if cmd == "assets.export"), "{got:?}");
+    assert_eq!(got.to_string(), want.to_string());
+    // The checks come first, as the command's do.
+    let journaled = s.journal.len();
+    assert!(s.prepare_screen_export("document.exportForScreens", &json!({"range": "9"})).is_err());
+    assert_eq!(s.journal.len(), journaled);
+    assert!(s.screens_hand_off.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_prepared_export_holds_the_document_as_it_was() {
+    let mut s = session(1);
+    let p = json!({"formats": [{"format": "svg"}]});
+    let want = export(&mut s, p.clone());
+    let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_ne!(export(&mut s, p), want, "the edit changes the file");
+    assert_eq!(write_prepared(prepared).0, want);
+}
+
+/// Output All Blacks as Rich Black (Appearance of Black › Printing / Exporting) makes the RGB files
+/// draw a CMYK black as RGB black, prepared or not.
+#[test]
+fn rich_black_reaches_the_files() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 40, "height": 30, "colorMode": "cmyk"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+    let p = json!({"formats": [{"format": "png"}]});
+    let px = |r: &Value| image::load_from_memory(&files(r)[0].1).unwrap().to_rgba8().get_pixel(10, 10).0;
+    let accurate = px(&export(&mut s, p.clone()));
+    assert!(accurate[0] > 10, "accurate: dark grey, {accurate:?}");
+    s.execute("prefs.set", &json!({"key": "blackOutput", "value": "rich"})).unwrap();
+    assert_eq!(px(&export(&mut s, p.clone())), [0, 0, 0, 255]);
+    let (prepared, _) = write_prepared(s.prepare_screen_export("document.exportForScreens", &p).unwrap());
+    assert_eq!(px(&prepared), [0, 0, 0, 255]);
+}
+
+/// A cancel stops a prepared export before its next file; the file written before it stays.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_canceled_export_stops_before_its_next_file() {
+    let mut s = session(3);
+    let dir = std::env::temp_dir().join(format!("vc-screens-cancel-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let prepared = s.prepare_screen_export("document.exportForScreens", &json!({"folder": folder, "formats": [{"format": "svg"}]})).unwrap();
+    let progress = super::progress::Progress::new();
+    let mut written = vec![];
+    let r = super::progress::scope(&progress, || {
+        prepared.write(&mut |path: &str, _: &[u8]| {
+            written.push(path.to_string());
+            progress.cancel();
+            Ok(())
+        })
+    });
+    assert!(matches!(r, Err(crate::EngineError::Cancelled)), "{r:?}");
+    assert_eq!(written, [format!("{folder}/Artboard-1.svg")]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A prepared export reports one progress step per file, and the raster encoders' artboard steps
+/// are not reported.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_prepared_export_counts_its_files() {
+    let mut s = session(3);
+    let dir = std::env::temp_dir().join(format!("vc-screens-steps-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let rows = json!([{"format": "png"}, {"format": "png", "scale": "2x"}]);
+    let prepared = s.prepare_screen_export("document.exportForScreens", &json!({"folder": folder, "formats": rows})).unwrap();
+    let progress = super::progress::Progress::of_files();
+    let mut seen = vec![];
+    let r = super::progress::scope(&progress, || {
+        prepared.write(&mut |_: &str, _: &[u8]| {
+            seen.push(progress.counts());
+            Ok(())
+        })
+    });
+    assert!(r.is_ok(), "{r:?}");
+    assert_eq!(seen, (0..6).map(|n| (n, 6)).collect::<Vec<_>>());
+    assert!(progress.counts_files());
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -434,6 +632,151 @@ fn zip_archives_store_their_files() {
     let at = broken.windows(5).position(|w| w == b"hello").unwrap();
     broken[at] = b'j';
     assert!(super::zip::entries(&broken).is_err(), "the CRC catches a changed byte");
+}
+
+/// The compression method of each file in `zip` (0: stored, 8: deflated), from its central directory.
+fn methods(zip: &[u8]) -> Vec<u16> {
+    let u16_at = |at: usize| usize::from(u16::from_le_bytes([zip[at], zip[at + 1]]));
+    let end = zip.len() - 22;
+    let mut at = u32::from_le_bytes(zip[end + 16..end + 20].try_into().unwrap()) as usize;
+    (0..u16_at(end + 10))
+        .map(|_| {
+            let method = u16_at(at + 10) as u16;
+            at += 46 + u16_at(at + 28) + u16_at(at + 30) + u16_at(at + 32);
+            method
+        })
+        .collect()
+}
+
+#[test]
+fn zip_archives_deflate_what_gets_smaller() {
+    // A xorshift run: bytes that deflating makes larger.
+    let mut x = 0x9E37_79B9u32;
+    let noise: Vec<u8> = (0..4096)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x as u8
+        })
+        .collect();
+    let text = "<rect x=\"5\" y=\"5\" width=\"20\" height=\"20\"/>\n".repeat(100).into_bytes();
+    let files = [("art.svg", text.clone()), ("sub/ünï.png", noise.clone()), ("empty", vec![])];
+    let zip = super::zip::deflate(&files, super::zip::FIXED_TIME, || false).unwrap();
+    assert_eq!(methods(&zip), [8, 0, 0], "the text deflated, the noise and the empty file stored");
+    assert!(zip.windows(noise.len()).any(|w| w == noise.as_slice()), "a stored file's bytes are in the archive as they are");
+    assert!(zip.len() < super::zip::store(&files).unwrap().len());
+    let back = super::zip::entries(&zip).unwrap();
+    assert_eq!(back.len(), 3);
+    for ((n, b), (m, c)) in files.iter().zip(&back) {
+        assert_eq!((*n, b), (m.as_str(), c));
+    }
+    assert_eq!(super::zip::deflate(&files, super::zip::FIXED_TIME, || false).unwrap(), zip, "the same files, the same archive");
+}
+
+/// `deflate` asks `stop` before each chunk of a file and drops the archive when it answers true.
+#[test]
+fn zip_deflating_stops_between_chunks() {
+    let big = vec![7u8; 3 * super::zip::DEFLATE_CHUNK];
+    let files = [("a.bin", big.clone()), ("b.bin", big)];
+    let asked = std::cell::Cell::new(0);
+    let all = super::zip::deflate(&files, super::zip::FIXED_TIME, || {
+        asked.set(asked.get() + 1);
+        false
+    });
+    assert!(all.is_ok());
+    assert_eq!(asked.get(), 6, "once per chunk of each file");
+    asked.set(0);
+    let r = super::zip::deflate(&files, super::zip::FIXED_TIME, || {
+        asked.set(asked.get() + 1);
+        asked.get() == 2
+    });
+    assert!(r.is_err(), "stopped");
+    assert_eq!(asked.get(), 2, "nothing more is deflated after the stop");
+}
+
+/// A cancel that comes after the last file was encoded (here: during the last step, a row that
+/// repeats the one before it and writes nothing) returns no files and no archive, as it writes no
+/// archive into a folder.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_cancel_after_the_last_file_returns_nothing() {
+    let mut s = session(1);
+    let dir = std::env::temp_dir().join(format!("vc-screens-cancel-last-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let rows = json!([{"format": "svg"}, {"format": "svg"}]);
+    for p in [json!({ "formats": rows }), json!({ "formats": rows, "zip": true }), json!({ "formats": rows, "zip": true, "folder": folder })] {
+        let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+        let token = vectorcraft_doc::cancel::CancelToken::new();
+        let on_last = token.clone();
+        let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(move |done, total, _| {
+            if done + 1 == total {
+                on_last.cancel();
+            }
+        });
+        let mut written = vec![];
+        let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || {
+            prepared.write(&mut |path: &str, _: &[u8]| {
+                written.push(path.to_string());
+                Ok(())
+            })
+        });
+        assert!(matches!(r, Err(crate::EngineError::Cancelled)), "{p}: {r:?}");
+        assert_eq!(written, Vec::<String>::new(), "{p}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A folder export without a ZIP writes each file as it goes: a cancel during the last step, a
+/// row that repeats the one before it and writes nothing, comes after every file was written, so
+/// the export returns the written files instead of the cancelled error.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_cancel_after_the_last_file_keeps_a_finished_folder_export() {
+    let mut s = session(1);
+    let dir = std::env::temp_dir().join(format!("vc-screens-cancel-folder-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let p = json!({ "formats": [{"format": "svg"}, {"format": "svg"}], "folder": folder });
+    let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    let on_last = token.clone();
+    let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(move |done, total, _| {
+        if done + 1 == total {
+            on_last.cancel();
+        }
+    });
+    let mut written = vec![];
+    let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || {
+        prepared.write(&mut |path: &str, _: &[u8]| {
+            written.push(path.to_string());
+            Ok(())
+        })
+    });
+    let r = r.unwrap();
+    assert_eq!(written.len(), 1, "{written:?}");
+    assert_eq!(r["files"], json!(written));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn zip_exports_deflate_their_files() {
+    let mut s = session(1);
+    for i in 0..40 {
+        s.execute("shape.rectangle", &json!({"x": i % 30, "y": i % 20, "width": 8, "height": 6})).unwrap();
+    }
+    let p = json!({"formats": [{"format": "svg"}, {"format": "png"}]});
+    let plain = files(&export(&mut s, p.clone()));
+    let mut q = p;
+    q["zip"] = json!(true);
+    let r = export(&mut s, q);
+    let zip = b64(&r);
+    assert_eq!(super::zip::entries(&zip).unwrap(), plain, "every file comes back byte for byte");
+    let svg = plain.iter().position(|(n, _)| n.ends_with(".svg")).unwrap();
+    let png = plain.iter().position(|(n, _)| n.ends_with(".png")).unwrap();
+    let methods = methods(&zip);
+    assert_eq!((methods[svg], methods[png]), (8, 0), "the SVG deflated, the PNG stored");
+    assert!(zip.len() < super::zip::store(&plain).unwrap().len(), "smaller than the stored archive");
+    assert_eq!(r["bytes"].as_u64(), Some(zip.len() as u64));
 }
 
 #[test]

@@ -119,7 +119,7 @@ fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
     let px = (r.width() * ui.ctx().pixels_per_point()).round() as u32;
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
         let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
-        let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+        let color = crate::canvas::color_image(&img);
         let tex = ui.ctx().load_texture(format!("graph-design-{key}"), color, egui::TextureOptions::LINEAR);
         CACHE.with(|c| {
             let mut c = c.borrow_mut();

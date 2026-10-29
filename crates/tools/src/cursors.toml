@@ -1,4 +1,4 @@
-# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/lib.rs).
+# The cursors VectorCraft needs: one [[cursor]] per `Cursor` value (crates/tools/src/cursor.rs).
 #
 # This is the source of truth for what each cursor is for, written for whoever draws them:
 # designers never decide what a cursor is for, this file does. `cargo xtask cursors` warns about
@@ -130,10 +130,10 @@ look = "Arrow with a type badge (a letter T)."
 id = "LoadedText"
 group = "Selection"
 shown_when = [
-    "The Selection tool after a click on the red out port of selected area type whose text overflows: the pointer carries that text until a click threads it into a closed path, a click on empty canvas makes a new frame of the same shape there, or a drag draws the new frame. Escape or another tool drops it.",
+    "The Selection tool after a click on the out port or the in port of selected area type or type on a path, threaded, overflowing or not: the pointer carries that text until a click threads it into a closed path, area type or type on a path, a click on empty canvas makes a new frame of the same kind and shape there, or a drag draws the new frame; from the in port the frame placed comes before the clicked one. Escape or another tool drops it.",
 ]
 hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
-look = "A small block of text lines: the overflow text the pointer carries. Until it is drawn it borrows the I-beam (Text)."
+look = "A small block of text lines: the overflow text the pointer carries."
 
 # ── Pen family ────────────────────────────────────────────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ shown_when = [
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The nib's tip."
-look = "A pen nib. Every Pen-family cursor is this nib with a different badge."
+look = "A fountain-pen nib pointing up-left along the selection arrow's axis (so swapping to the selection tools doesn't rotate the cursor), its slit widening into the breather hole and its heel clipped at the back; the shape approximates the pen tool's icon. Every Pen-family cursor is this nib with a different badge."
 
 [[cursor]]
 id = "PenDrawing"
@@ -163,7 +163,7 @@ id = "PenAdd"
 group = "Pen"
 shown_when = [
     "The Pen over a segment of a selected path with Auto Add/Delete on (Shift off), or over a selected blend's spine.",
-    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool with Alt).",
+    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool and the Scissors tool with Alt).",
     "The Curvature tool over a segment.",
     "Stands in for MeshAdd and PuppetPin until they're drawn.",
 ]
@@ -530,15 +530,39 @@ look = "Crosshair with a minus badge."
 [[cursor]]
 id = "Pencil"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Alt while drawing closes the path."]
+shown_when = ["The Pencil tool: draws a freeform path; starting near the end of a selected open path continues it; Shift held at the press, or Alt held at the press when Alt key toggles to Smooth Tool is off, draws a straight line; Alt pressed after the drag starts, when that option is off, closes the path; when it is on, Alt held at the press gives the Smooth tool."]
 hotspot = "The lead tip."
+
+[[cursor]]
+id = "PencilNew"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a small star badge, where PencilClose has its ring."
 
 [[cursor]]
 id = "PencilClose"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool with Alt held, before a press and while drawing, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path."]
+shown_when = [
+    "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
+    "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
+
+[[cursor]]
+id = "PencilStraight"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
+hotspot = "The lead tip."
+look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
+
+[[cursor]]
+id = "PencilContinue"
+group = "Drawing and editing tools"
+shown_when = ["The Pencil tool over an end of a selected open path, within Edit Selected Paths, with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line that continues the path from that end."]
+hotspot = "The lead tip."
+look = "PencilStraight's badge with a small filled square at the line's lower end (the end point the line continues from)."
 
 [[cursor]]
 id = "Paintbrush"
@@ -549,7 +573,10 @@ hotspot = "The bristle tip."
 [[cursor]]
 id = "PaintbrushClose"
 group = "Drawing and editing tools"
-shown_when = ["The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path."]
+shown_when = [
+    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+]
 hotspot = "The bristle tip."
 look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClose."
 
@@ -595,14 +622,14 @@ hotspot = "The blade's point."
 [[cursor]]
 id = "Scissors"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool over a path segment: a click splits the path there."]
+shown_when = ["The Scissors tool over a path segment, Alt up: a click splits the path there."]
 hotspot = "Where the blades cross, exact enough to cut where aimed."
 look = "Scissors. ScissorsNotAllowed is this drawing with a badge."
 
 [[cursor]]
 id = "ScissorsNotAllowed"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool away from every path segment: a click does nothing."]
+shown_when = ["The Scissors tool away from every path segment, Alt up: a click does nothing."]
 hotspot = "The same point as Scissors."
 look = "The Scissors with a small not-allowed badge, so the cursor keeps its size and shape and only the badge says a click won't cut."
 

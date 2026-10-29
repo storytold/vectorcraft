@@ -65,7 +65,8 @@ impl MeshEdit {
         {
             return Some(MeshGrab { id, index, handle: Some(h) });
         }
-        ids.iter().filter(|id| cx.doc.is_editable(**id)).find_map(|id| {
+        let editable = cx.doc.editable();
+        ids.iter().filter(|id| editable(**id)).find_map(|id| {
             let index = grid_of(cx.doc.node(*id)?)?.point_near(p, tol)?;
             Some(MeshGrab { id: *id, index, handle: None })
         })
@@ -99,6 +100,11 @@ impl MeshEdit {
     /// End a drag (`None` when nothing was being dragged).
     pub fn release(&mut self) -> Option<Vec<Action>> {
         self.drag.take().map(|_| vec![Action::Commit])
+    }
+
+    /// Cancel a drag: the point or handle goes back (`None` when nothing was being dragged).
+    pub fn cancel(&mut self) -> Option<Vec<Action>> {
+        self.drag.take().map(|_| vec![Action::Cancel])
     }
 
     pub fn dragging(&self) -> bool {
@@ -191,6 +197,34 @@ mod tests {
             t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 160.0)),
             vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0}))]
         );
+    }
+
+    /// Escape during a drag of a mesh point or handle, with the Mesh tool or Direct Selection,
+    /// cancels it, and the release after it does nothing; the point stays the focused one.
+    #[test]
+    fn escape_cancels_a_mesh_point_drag() {
+        let (d, e) = doc_with_envelope();
+        let mut s = Selection::default();
+        s.set([e]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let tools: [(&str, Box<dyn Tool>); 2] =
+            [("mesh", crate::meshblend::create("mesh").unwrap()), ("directSelection", Box::new(crate::direct::DirectSelectionTool::new(false)))];
+        for (what, mut t) in tools {
+            // A point, then (once the point is focused) its handle.
+            for (x, y) in [(200.0, 100.0), (200.0, 133.33333)] {
+                assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y)), vec![Action::Begin("Move Mesh Point".into())], "{what}");
+                t.pointer(&c, &PointerEvent::new(PointerKind::Drag, x + 10.0, y - 10.0));
+                assert!(t.key(&c, crate::ToolKey::Enter, crate::Mods::default()).is_empty(), "{what}: Enter leaves the drag alone");
+                assert!(t.busy(), "{what}");
+                assert_eq!(t.key(&c, crate::ToolKey::Escape, crate::Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+                assert!(!t.busy(), "{what}");
+                assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, x + 20.0, y - 20.0)).is_empty(), "{what}: the drag is over");
+                assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, x + 20.0, y - 20.0)).is_empty(), "{what}: the release does nothing");
+                assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Handle { .. })), "{what}: the point stays focused");
+            }
+            assert!(t.key(&c, crate::ToolKey::Escape, crate::Mods::default()).is_empty(), "{what}: nothing to cancel");
+        }
     }
 
     #[test]

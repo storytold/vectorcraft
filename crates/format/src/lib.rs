@@ -40,6 +40,7 @@ mod unpack;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::io::{Read as _, Write};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
@@ -65,13 +66,17 @@ pub const EXTENSION: &str = "vectorcraft";
 pub const LEGACY_EXTENSION: &str = "drawcraft";
 /// Most bytes the JSON of a compressed file may unpack to (a guard against decompression bombs,
 /// as are [`MAX_BLOB`] and [`MAX_BLOBS`]). A compressed save refuses a document past any of them,
-/// so every file VectorCraft writes reads back.
-pub const MAX_JSON: u64 = 1 << 30;
+/// so every file VectorCraft writes reads back. On wasm32 the cap is a quarter of the native
+/// one: the JSON is deserialized into a document several times its size, and the 4 GiB address
+/// space also holds the file, the JSON, the document and the app (#3587).
+pub const MAX_JSON: u64 = if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 };
 /// Most bytes one entry of the data after the JSON (an image, a placed document, the PDF, a
 /// profile) may have in a compressed file.
 pub const MAX_BLOB: u64 = 1 << 30;
-/// Most bytes the entries after the JSON may have together in a compressed file.
-pub const MAX_BLOBS: u64 = 4 << 30;
+/// Most bytes the entries after the JSON may have together in a compressed file: 1 GiB in the web
+/// build, whose 4 GiB address space also holds the JSON, the document and the app, so 4 GiB of
+/// entries failed to allocate rather than being refused.
+pub const MAX_BLOBS: u64 = if cfg!(target_arch = "wasm32") { 1 << 30 } else { 4 << 30 };
 /// Most bytes a compressed file whose JSON isn't followed by the marker where VectorCraft puts it
 /// (hand-made or damaged files) may unpack to: it is unpacked whole.
 const MAX_UNPACKED: u64 = 512 << 20;
@@ -250,17 +255,25 @@ impl SaveOptions {
         Ok(())
     }
 
-    /// The defaults for saving `doc` to disk: pretty when small (see [`PRETTY_MAX_OBJECTS`] and
-    /// [`PRETTY_MAX_BYTES`]).
+    /// The defaults for saving `doc` to disk: pretty when small (see [`Self::pretty_fits`]).
     pub fn for_doc(doc: &Document) -> Self {
+        let o = Self::default();
+        Self { pretty: o.pretty_fits(doc), ..o }
+    }
+
+    /// Is `doc` small enough to save pretty-printed with these options: at most
+    /// [`PRETTY_MAX_OBJECTS`] objects, and at most [`PRETTY_MAX_BYTES`] of pretty-printed JSON
+    /// as [`save_to`] writes the document with them (in their version)?
+    pub fn pretty_fits(&self, doc: &Document) -> bool {
         let objects: usize = doc.layers.iter().map(|l| l.count()).sum();
-        Self { pretty: objects <= PRETTY_MAX_OBJECTS && compact_size_at_most(doc, PRETTY_MAX_BYTES), ..Self::default() }
+        objects <= PRETTY_MAX_OBJECTS && body(doc, self).is_ok_and(|b| pretty_size_at_most(&b, PRETTY_MAX_BYTES))
     }
 }
 
-/// Is `doc` at most `limit` bytes as compact JSON? Serializing stops as soon as it is past the
-/// limit, so a large document costs no more than `limit` bytes of work.
-fn compact_size_at_most(doc: &Document, limit: usize) -> bool {
+/// Is the document in `b` at most `limit` bytes as pretty-printed JSON, indented as a pretty file
+/// holds it? Serializing stops as soon as it is past the limit, so a large document costs no more
+/// than `limit` bytes of work.
+fn pretty_size_at_most(b: &Body, limit: usize) -> bool {
     struct Capped {
         left: usize,
     }
@@ -273,7 +286,47 @@ fn compact_size_at_most(doc: &Document, limit: usize) -> bool {
             Ok(())
         }
     }
-    serde_json::to_writer(Capped { left: limit }, doc).is_ok()
+    // The document is a member of the file's top-level object, indented one level more.
+    write_body(Indent { inner: Capped { left: limit }, on: true }, b.v1.as_ref(), &b.d, true).is_ok()
+}
+
+/// The document as [`save_to`] writes it, with the images it lists outside the document.
+struct Body {
+    d: Document,
+    /// The version 1 form of `d`, written instead of it.
+    v1: Option<serde_json::Value>,
+    blobs: BTreeMap<String, ImageBlob>,
+    /// Images only linked images show (see [`Document::linked_only_images`]).
+    linked: std::collections::BTreeSet<String>,
+}
+
+/// `doc` as [`save_to`] writes it with `o`: without editing-mode working copies, with placed
+/// documents as their art for older versions, and its images taken out.
+fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
+    let version = o.version;
+    let mut d = doc.without_edit_modes().into_owned();
+    // Older apps don't know placed documents: they get the art the objects show, with its
+    // resources. Otherwise resources only exporting adds are never saved.
+    if version < VERSION && d.has_placed() {
+        d = d.with_placed_art().into_owned();
+        d.placed_as_groups();
+    } else {
+        d.drop_placed_resources();
+    }
+    let linked = d.linked_only_images();
+    // The blobs go in the file's `images` (only those the document uses).
+    let blobs = std::mem::take(&mut d.images);
+    if version < 3 {
+        d.store_legacy_color_profiles();
+    }
+    let v1 = if version == 1 {
+        let mut v = serde_json::to_value(&d).map_err(encode_err)?;
+        legacy::anchors_to_v1(&mut v);
+        Some(v)
+    } else {
+        None
+    };
+    Ok(Body { d, v1, blobs, linked })
 }
 
 /// Serialize a document (pretty = human-diffable) in the current version. Editing-mode working
@@ -286,9 +339,9 @@ pub fn save(doc: &Document, pretty: bool) -> Vec<u8> {
 /// compact, where indentation would multiply the file size and slow opening down.
 pub const PRETTY_MAX_OBJECTS: usize = 2000;
 
-/// Documents whose compact JSON is larger than this are saved compact even with few objects:
-/// pretty-printing spreads every path anchor over several lines, so traced or generated art (in
-/// layers, symbols or patterns alike) would grow about tenfold.
+/// Documents whose pretty-printed JSON is larger than this are saved compact even with few
+/// objects: pretty-printing spreads every path anchor over several lines, so traced or generated
+/// art (in layers, symbols or patterns alike) grows about fivefold.
 pub const PRETTY_MAX_BYTES: usize = 1 << 20;
 
 /// Serialize for saving to disk: pretty when small, compact when large.
@@ -314,28 +367,7 @@ const JSON_CHUNK: usize = 64 << 10;
 pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), FormatError> {
     o.check()?;
     let pretty = o.pretty && !o.compress;
-    let mut d = doc.without_edit_modes().into_owned();
-    // Older apps don't know placed documents: they get the art the objects show, with its
-    // resources. Otherwise resources only exporting adds are never saved.
-    if o.version < VERSION && d.has_placed() {
-        d = d.with_placed_art().into_owned();
-        d.placed_as_groups();
-    } else {
-        d.drop_placed_resources();
-    }
-    let linked = d.linked_only_images();
-    // The blobs go in the file's `images` (only those the document uses).
-    let blobs = std::mem::take(&mut d.images);
-    if o.version < 3 {
-        d.store_legacy_color_profiles();
-    }
-    let v1 = if o.version == 1 {
-        let mut v = serde_json::to_value(&d).map_err(encode_err)?;
-        legacy::anchors_to_v1(&mut v);
-        Some(v)
-    } else {
-        None
-    };
+    let Body { d, v1, blobs, linked } = body(doc, o)?;
     let entries = Entries { blobs: &blobs, linked: &linked, include_linked: o.include_linked };
     let mut out_blobs = Blobs { tail: vec![], at: 0, outside: o.version >= 4 };
     // Images are only referenced by image objects' `key` (wherever the objects are: layers,
@@ -490,7 +522,8 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
 pub struct NativeFile {
     pub doc: Document,
     /// What was done to bring the document within the nesting caps
-    /// ([`Document::limit_depth_noting`]: a file saved before them, or a damaged one).
+    /// ([`Document::limit_depth_noting`]: a file saved before them, or a damaged one) and within
+    /// the canvas ([`Document::drop_beyond_canvas`]: a damaged or hand-made file).
     pub depth_notes: Vec<String>,
     pub info: FileInfo,
     /// ICC files by profile name (saved with Embed ICC Profiles; undecodable ones are left out).
@@ -520,9 +553,23 @@ pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
 
 /// [`load`], with everything else the file carries.
 pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
+    load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+}
+
+/// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
+/// before objects' types, so a test can exercise the budgets without documents that large
+/// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
+fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
     let file = unpack::Unpacked::new(bytes)?;
-    // The JSON reader stops at 128 levels (a document's objects use three each).
-    let f: File = serde_json::from_slice(file.json()).map_err(|e| {
+    // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
+    // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
+    // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
+    let read = || {
+        vectorcraft_doc::node::with_node_budget(max_nodes, || {
+            vectorcraft_doc::node::with_buffered_value_budget(max_values, || serde_json::from_slice::<File>(file.json()))
+        })
+    };
+    let f: File = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| {
         let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
         FormatError::NotVectorcraft(why)
     })?;
@@ -534,15 +581,20 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     }
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
-    let mut tail = file.entries(&entries)?.into_iter();
+    let tail = file.entries(&entries)?;
+    // Entries naming the same bytes share them; a profile's own copy of shared bytes counts
+    // against the data's size, so copies never add up to more than the file has (#3574).
+    let mut distinct = HashSet::new();
+    let mut spare: u64 = tail.iter().flatten().filter(|b| distinct.insert(Arc::as_ptr(b))).map(|b| b.len() as u64).sum();
+    let mut tail = tail.into_iter();
     let mut bytes_of = |img: &Image| match img.blob {
         Some(_) => tail.next().flatten(),
-        None => img.inline(),
+        None => img.inline().map(Arc::new),
     };
     let mut doc = f.document;
     for (k, img) in f.images {
         let bytes = bytes_of(&img).ok_or_else(|| FormatError::BadImage(k.clone()))?;
-        let mut blob = ImageBlob::new(img.mime, bytes);
+        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None };
         // Until the linked file is read, the preview stands in for it.
         if img.proxy {
             blob.proxy = Some(blob.bytes.clone());
@@ -560,20 +612,46 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     doc.setup.keep_in_range();
     // Untrusted: capped, named and pointing at objects the file has.
     doc.tidy_saved_selections();
+    // Untrusted: capped, named and with a zoom and centre the canvas can show.
+    doc.tidy_views();
     doc.tidy_graph_designs();
     doc.raster_effects.add_around = doc.raster_effects.add_around.clamp(0.0, vectorcraft_doc::rastersettings::MAX_ADD_AROUND);
     let mut depth_notes = vec![];
     doc.limit_depth_noting(&mut depth_notes);
+    // Untrusted: nothing beyond the canvas, where no edit may leave anything (after the depth
+    // limit: the walk recurses). A file whose artboards all lie there has no page to show (#3575).
+    let had_artboards = !doc.artboards.is_empty();
+    let beyond = doc.drop_beyond_canvas();
+    if had_artboards && doc.artboards.is_empty() {
+        return Err(FormatError::NotVectorcraft(format!(
+            "its artboards all lie beyond the canvas (more than {} pt from the origin)",
+            vectorcraft_doc::MAX_COORD
+        )));
+    }
+    depth_notes.extend(beyond.note());
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
+    // Untrusted: ruby ranges over the type's text, clamped to it (after the depth limit too).
+    doc.fix_ruby();
     // Untrusted: the raster effects resolution, within 1 to 2400 ppi (72 when it isn't finite).
     doc.raster_effects_ppi = Some(doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
     // Untrusted: the superscript, subscript and small caps proportions of the type, the graph
     // labels and the character styles, within the ranges `document.setup` takes (after the depth
     // limit: the walk recurses).
     doc.keep_scripts_in_range();
-    let profiles = f.profiles.into_iter().filter_map(|(name, icc)| Some((name, bytes_of(&icc)?))).collect();
+    let profiles = f
+        .profiles
+        .into_iter()
+        .filter_map(|(name, icc)| Some((name, bytes_of(&icc)?)))
+        .map(|(name, icc)| match Arc::try_unwrap(icc) {
+            Ok(icc) => Ok((name, icc)),
+            Err(icc) => {
+                spare = spare.checked_sub(icc.len() as u64).ok_or(FormatError::TooBig)?;
+                Ok((name, icc.to_vec()))
+            }
+        })
+        .collect::<Result<_, FormatError>>()?;
     Ok(NativeFile { doc, depth_notes, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
 }
 
@@ -591,7 +669,7 @@ fn head_member(bytes: &[u8], pick: impl FnOnce(Head) -> Option<Image>) -> Option
     let head: Head = serde_json::from_slice(file.json()).ok()?;
     let img = pick(head)?;
     match img.blob {
-        Some(at) => file.entries(&[at]).ok()?.pop().flatten(),
+        Some(at) => file.entries(&[at]).ok()?.pop().flatten().map(Arc::unwrap_or_clone),
         None => img.inline(),
     }
 }
@@ -644,16 +722,22 @@ pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
         return None;
     }
     let mut out = Vec::with_capacity(clean.len() / 4 * 3);
-    for c in clean.chunks(4) {
+    let groups = clean.len() / 4;
+    for (i, c) in clean.chunks(4).enumerate() {
         let mut n = 0u32;
         let mut pad = 0;
         for &b in c {
             n <<= 6;
             if b == b'=' {
                 pad += 1;
+            } else if pad > 0 {
+                return None;
             } else {
                 n |= val(b)?;
             }
+        }
+        if pad > 2 || (pad > 0 && i + 1 != groups) {
+            return None;
         }
         out.push((n >> 16) as u8);
         if pad < 2 {
@@ -706,7 +790,7 @@ mod tests {
         d.images.insert("k".into(), ImageBlob::new("image/png", vec![1, 2, 3, 250]));
         // Only images in use are saved.
         let img = d.alloc_id();
-        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default() };
+        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
         d.insert(Some(l), 1, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
         let bytes = save(&d, true);
         assert!(sniff(&bytes));
@@ -714,6 +798,55 @@ mod tests {
         assert_eq!(back.node_count(), d.node_count());
         assert_eq!(back.images["k"].bytes.as_slice(), &[1, 2, 3, 250]);
         assert_eq!(back.node(id).unwrap().path_data(), d.node(id).unwrap().path_data());
+    }
+
+    /// #3587: objects are read within a budget. A compressed file of many small objects stays
+    /// small on disk while they take far more memory once read, so past the budget it is refused
+    /// with a message naming it, before the rest of the document is read.
+    #[test]
+    fn a_documents_objects_are_capped() {
+        assert_eq!(vectorcraft_doc::node::MAX_READ_NODES, if cfg!(target_arch = "wasm32") { 512 << 10 } else { 4 << 20 });
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        for i in 0..200 {
+            let id = d.alloc_id();
+            d.insert(Some(l), i, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        }
+        let n = d.node_count();
+        let bytes = save_with(&d, &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
+        assert!(is_compressed(&bytes));
+        assert_eq!(
+            load_file_within(&bytes, n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc.node_count(),
+            n,
+            "a document of exactly the budget opens"
+        );
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+            panic!("one object past the budget must be refused")
+        };
+        assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+        assert_eq!(load(&bytes).unwrap().node_count(), n, "the real budget opens ordinary documents");
+    }
+
+    /// #3587: a reordered file (its objects' fields before their `type`, as a JSON tool that
+    /// sorts keys writes them) still opens; one whose fields before a `type` hold more values than
+    /// the budget, such as a long array of numbers, is refused as they are read.
+    #[test]
+    fn values_buffered_before_an_objects_type_are_capped() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        // Through `serde_json::Value`, whose objects sort their keys: `children` before `type`.
+        let sorted = serde_json::to_vec(&serde_json::from_slice::<serde_json::Value>(&save(&d, false)).unwrap()).unwrap();
+        assert_eq!(load(&sorted).unwrap().node_count(), d.node_count());
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let zeros = vec![0; 1000];
+        v["document"]["layers"][0]["kind"]["children"] = serde_json::json!([{"id": 90, "kind": {"children": zeros, "type": "group"}}]);
+        let bomb = serde_json::to_vec(&v).unwrap();
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bomb, vectorcraft_doc::node::MAX_READ_NODES, 100) else {
+            panic!("past the budget must be refused")
+        };
+        assert!(why.contains("more than 100 values before its type"), "{why}");
     }
 
     #[test]
@@ -731,5 +864,15 @@ mod tests {
             assert_eq!(base64_decode(&base64_encode(s)).unwrap(), s);
         }
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64_rejects_misplaced_padding() {
+        for s in ["====", "A===", "AA=A", "=AAA", "QQ==QUJD", "QUI=QUJD"] {
+            assert_eq!(base64_decode(s), None, "{s}");
+        }
+        assert_eq!(base64_decode("QQ=="), Some(vec![0x41]));
+        assert_eq!(base64_decode("QUI="), Some(vec![0x41, 0x42]));
+        assert_eq!(base64_decode("QUJD"), Some(vec![0x41, 0x42, 0x43]));
     }
 }

@@ -26,8 +26,10 @@ env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET XDG_CONFIG_HOME="$vector_kde_config" ca
 ```
 
 Run these separately, closing the first test window before the second. Use disposable
-documents and keep the temporary configuration for inspection. Native Wayland tablet and
-file-drop limitations are unchanged; XWayland may blur fractional scaling.
+documents and keep the temporary configuration for inspection. Existing tablet/display-server
+policy is unchanged. The updated pinned winit fork implements native Wayland file-drop delivery;
+that inherited support has not been verified in a live session for this reconciliation.
+XWayland may blur fractional scaling.
 
 Add Plasma's **Global Menu** widget manually if needed. Without its widget, registrar,
 session bus or compositor protocol, the local menu remains available.
@@ -107,6 +109,32 @@ This was not a physical desktop-theme transition or a complete panel interaction
 Full CI remains incomplete: the fresh 120-second run stopped during workspace Clippy,
 and WASM remains blocked by the missing target standard library. Current-main conflicts
 were not resolved as part of this follow-up.
+
+## Migration verification (2026-10-30)
+
+The isolated reconciliation with upstream baseline `e256c4c43` preserves the split host modules,
+egui/winit fork versions and desktop command panic boundary. App/UI all-target checking
+and Clippy with warnings denied passed. The 29 focused regressions passed (six desktop,
+twenty native-menu and three appearance/scaling tests), as did layers, assets, brands,
+PDF dependency checks and the exact WASM stage (23 crates).
+
+The exact `cargo xtask ci` completed successfully: all 12 stages passed, including workspace
+Clippy, 10,966 workspace tests (14 ignored), doctests, the no-bundled-fonts checks, PDF
+dependencies, 334 attributed assets, brands, cursors, i18n reporting, layers and WASM.
+The UI suite passed all 2,377 tests. Required fonts used the workflow-pinned craft-fonts
+revision `b076417b5880bd4154bd22f00695b1d28c6bea83`; the no-bundled-fonts stage also passed
+its one text and two panel integration tests. Existing optional web-font warnings and
+translation-report gaps are not claims of complete font or language coverage.
+
+The rebuilt native application passed separate Plasma Wayland and XWayland smoke tests.
+In each, a real D-Bus `window.control` activation changed the control-bar state from false
+to true and updated its exported checkmark; Plasma requested the menu layout, screenshots
+were inspected, and normal shutdown removed the menu service without forced termination.
+These checks used isolated configuration and disabled preference persistence.
+
+This verifies the stated baseline, not later upstream commits. Physical file dragging,
+multi-monitor scale transitions, theme transitions and packaged Flatpak acceptance were
+not established. The observations below retain historical results from the older build.
 
 ## Recorded verification (2026-10-21)
 

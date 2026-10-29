@@ -123,13 +123,13 @@ fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
         .collect();
     let grad = |name: &str, a: &str, b: &str, kind: GradientKind| Swatch {
         name: name.into(),
-        paint: Paint::Gradient(Box::new(crate::GradientPaint::new(Gradient {
+        paint: Paint::Gradient(Box::new(crate::GradientPaint::new(Gradient::new(
             kind,
-            stops: vec![
+            vec![
                 GradientStop::new(0.0, Color::from_hex(a).unwrap_or(Color::WHITE)),
                 GradientStop::new(1.0, Color::from_hex(b).unwrap_or(Color::BLACK)),
             ],
-        }))),
+        )))),
         global: false,
         spot: false,
     };

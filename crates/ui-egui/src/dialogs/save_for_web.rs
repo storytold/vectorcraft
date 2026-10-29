@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
     min_width: PREVIEW_W + GAP + SIDE_W,
+    inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
 };
 
@@ -68,11 +69,12 @@ const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality steps: (label, quality).
 const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
 
-/// Open the dialog on the remembered settings.
+/// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let n = app.session.active().ok_or("no document")?.doc.artboards.len();
     let mut s = app.session.last_web_settings();
-    // A remembered artboard this document doesn't have: its first.
+    s.artboard = Some(crate::panels::artboards::selected(app, n));
+    // A document with no artboards has no valid index.
     if s.artboard.is_some_and(|a| a >= n) {
         s.artboard = None;
     }
@@ -371,8 +373,9 @@ struct Cache {
     shots: Vec<(String, Result<Shot, String>)>,
 }
 
+/// Temp-memory key for the Save for Web preview render, original image and optimised shot textures.
 fn cache_id() -> egui::Id {
-    egui::Id::new("save-for-web-previews")
+    egui::Id::unique("save-for-web-previews")
 }
 
 /// The texture of straight RGBA pixels.
@@ -507,7 +510,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(4.0);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
-    let pan_id = egui::Id::new("save-for-web-pan");
+    let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
         pan += resp.drag_delta();
@@ -553,14 +556,16 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     let mut browser = false;
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
-        if let Some(i) = widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0) {
+        let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
+        if let Some(i) = zoom {
             d.fields.insert("__zoom".into(), json!(ZOOMS[i]));
             ui.ctx().data_mut(|m| m.insert_temp(pan_id, egui::Vec2::ZERO));
         }
         let kbps = d.f64("__kbps", 56.6);
         let labels: Vec<String> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
         let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0)
+        let speed = ui.name_inputs(tl!("Download:"), |ui| widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0));
+        if let Some(i) = speed
             && let Some(s) = SPEEDS.get(i)
         {
             d.fields.insert("__kbps".into(), json!(s));
@@ -967,12 +972,12 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         d.fields.insert(key.into(), v);
     };
     widgets::label_row(ui, tl!("W:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::plain_field(ui, "sfw-w", f64::from(w), " px", 0, 80.0) {
-            set(d, "width", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-w", f64::from(w), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "width", json!(v));
         }
         widgets::field_label(ui, tl!("H:"));
-        if let Some(v) = widgets::plain_field(ui, "sfw-h", f64::from(h), " px", 0, 80.0) {
-            set(d, "height", json!(v.round().max(1.0)));
+        if let Some(v) = widgets::range_field(ui, "sfw-h", f64::from(h), 1.0..=f64::INFINITY, " px", 0, 80.0) {
+            set(d, "height", json!(v));
         }
     });
     let percent = region.map_or(100.0, |(_, scale)| (scale * 100.0 * 100.0).round() / 100.0);

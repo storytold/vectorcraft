@@ -176,18 +176,36 @@ pub fn line(a: Point, b: Point) -> PathData {
     PathData::single(SubPath::polyline(&[a, b], false))
 }
 
-/// Quarter-ellipse arc from `a` to `b` (Arc tool default: concave, open, x-axis base).
-pub fn arc(a: Point, b: Point, slope: f64, closed: bool) -> PathData {
-    // Corner of the arc's bounding box is at (a.x, b.y): the arc bows away from it.
-    let k = KAPPA * (1.0 + slope.clamp(-1.0, 1.0) * 0.0);
-    let corner = Point::new(b.x, a.y);
-    let h1 = a + (corner - a) * k;
-    let h2 = b + (corner - b) * k;
+/// Bounding box of an arc segment when reference point `reference` (0…8) is placed on `anchor`.
+pub fn arc_bbox(anchor: Point, reference: usize, length_x: f64, length_y: f64) -> Rect {
+    let w = length_x.abs().max(1e-9);
+    let h = length_y.abs().max(1e-9);
+    let rp = crate::reference_point(Rect::new(0.0, 0.0, w, h), reference.min(8));
+    Rect::new(anchor.x - rp.x, anchor.y - rp.y, anchor.x - rp.x + w, anchor.y - rp.y + h)
+}
+
+/// Arc segment from the Arc tool dialog: lengths, reference point, base axis, slope and open/closed.
+pub fn arc_segment(anchor: Point, reference: usize, length_x: f64, length_y: f64, base_along_x: bool, slope: f64, closed: bool) -> PathData {
+    let r = arc_bbox(anchor, reference, length_x, length_y).abs();
+    let (a, b) = if base_along_x { (Point::new(r.x0, r.y0), Point::new(r.x1, r.y1)) } else { (Point::new(r.x0, r.y1), Point::new(r.x1, r.y0)) };
+    arc(a, b, slope, closed, base_along_x)
+}
+
+/// Quarter-ellipse arc from `a` to `b` (Arc tool default: open). `slope` is −100…100
+/// (concave…convex); 0 is a straight chord. A convex arc bulges toward the corner `(b.x, a.y)`,
+/// and a closed arc closes through the corner `(a.x, b.y)`, so a closed arc at slope 100 is the
+/// quarter-ellipse sector. The shape does not depend on `_base_along_x`: for a Y-base arc,
+/// [`arc_segment`] passes ends on the box mirrored top to bottom.
+pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) -> PathData {
+    let t = slope.clamp(-100.0, 100.0) / 100.0;
+    let corner = if t >= 0.0 { Point::new(b.x, a.y) } else { Point::new(a.x, b.y) };
+    let k = KAPPA * t.abs();
+    let h1 = if k == 0.0 { a } else { a + (corner - a) * k };
+    let h2 = if k == 0.0 { b } else { b + (corner - b) * k };
     let mut anchors =
         vec![Anchor { p: a, h_in: a, h_out: h1, kind: AnchorKind::Corner }, Anchor { p: b, h_in: h2, h_out: b, kind: AnchorKind::Corner }];
     if closed {
-        let o = Point::new(a.x, b.y);
-        anchors.push(Anchor::corner(o));
+        anchors.push(Anchor::corner(Point::new(a.x, b.y)));
     }
     PathData::single(SubPath::new(anchors, closed))
 }
@@ -529,9 +547,42 @@ mod tests {
         }
     }
 
+    /// An arc with Base Along Y, open or closed, convex or concave, is the arc with Base Along X in
+    /// the same box mirrored top to bottom, anchor for anchor and handle for handle.
+    #[test]
+    fn a_y_base_arc_is_the_x_base_arc_mirrored_top_to_bottom() {
+        let mirror = |p: Point| Point::new(p.x, 20.0 + 70.0 - p.y);
+        for closed in [false, true] {
+            for slope in [100.0, 50.0, -50.0, -100.0] {
+                let x = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, true, slope, closed);
+                let y = arc_segment(Point::new(10.0, 20.0), 0, 100.0, 50.0, false, slope, closed);
+                let (xs, ys) = (&x.subpaths[0], &y.subpaths[0]);
+                assert_eq!(ys.closed, closed);
+                assert_eq!(xs.anchors.len(), ys.anchors.len(), "slope {slope}, closed {closed}");
+                for (i, (p, q)) in xs.anchors.iter().zip(&ys.anchors).enumerate() {
+                    for (u, v) in [(p.p, q.p), (p.h_in, q.h_in), (p.h_out, q.h_out)] {
+                        assert!(mirror(u).distance(v) < 1e-9, "slope {slope}, closed {closed}, anchor {i}: {u:?} mirrored is not {v:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// A closed convex arc is the quarter-ellipse sector of its box with either base: its area is
+    /// a quarter of the ellipse's, π/4 of the box's.
+    #[test]
+    fn a_closed_convex_arc_is_a_quarter_ellipse_sector_with_either_base() {
+        for base_along_x in [true, false] {
+            let a = arc_segment(Point::ZERO, 0, 100.0, 50.0, base_along_x, 100.0, true).subpaths[0].signed_area().abs();
+            assert!((a / (100.0 * 50.0) - PI / 4.0).abs() < 0.01, "base along x {base_along_x}: area {a}");
+        }
+    }
+
     #[test]
     fn arc_open_and_closed() {
-        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false).anchor_count(), 2);
-        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true).subpaths[0].closed);
+        assert_eq!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, false, true).anchor_count(), 2);
+        assert!(arc(Point::ZERO, Point::new(10.0, 10.0), 0.0, true, true).subpaths[0].closed);
+        let seg = arc_segment(Point::ZERO, 0, 100.0, 50.0, true, 50.0, false);
+        assert_eq!(seg.anchor_count(), 2);
     }
 }

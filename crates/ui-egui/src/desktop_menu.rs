@@ -33,7 +33,7 @@ pub fn state_key(app: &VectorcraftApp, ctx: &egui::Context) -> u64 {
     let input = ctx
         .input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. } | egui::Event::PointerButton { pressed: false, .. })));
     let mut hash = std::hash::DefaultHasher::new();
-    native_menu::state_hash(app, input.then_some(app.frame)).hash(&mut hash);
+    native_menu::state_hash(app, input.then_some(app.host_iteration)).hash(&mut hash);
     app.ui.dialog.is_some().hash(&mut hash);
     hash.finish()
 }

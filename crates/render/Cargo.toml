@@ -23,11 +23,18 @@ flate2 = { workspace = true }
 jpeg-encoder = { workspace = true }
 gif = { workspace = true }
 # TIFF LZW compression (MIT OR Apache-2.0; already used by the image crate's TIFF reader).
-weezl = "0.1"
+weezl = "0.2"
+# PNG rows read one at a time (MIT OR Apache-2.0; already used by the image crate's PNG reader).
+png = "0.18"
 log = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 vello_cpu = { workspace = true, features = ["multithreading"] }
+
+# The shared image store's budget (src/images.rs) follows the installed memory, which it reads with GlobalMemoryStatusEx
+# through winsafe's safe wrappers over Win32 (MIT), which vectorcraft-cli's src/perf.rs also uses.
+[target.'cfg(windows)'.dependencies]
+winsafe = { version = "0.0.29", default-features = false, features = ["kernel"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

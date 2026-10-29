@@ -147,3 +147,28 @@ sync_github_name = true
 
 [people.addibble]
 sync_github_name = true
+
+[people.mockydevs]
+real_name = "Don Omondi"
+display_name = "Don Omondi"
+
+[people.alpha-rock]
+display_name = "Aditya Sisodiya"
+
+[people.Ronfo2013]
+real_name = "Angelo Bernardini"
+display_name = "Angelo Bernardini"
+sync_github_name = false
+
+[people.DCaioP]
+real_name = "Caio Pontes Magalhães"
+display_name = "Caio Pontes"
+sync_github_name = false
+
+[people.xbirks]
+real_name = "Andrés Ortega Montoya"
+display_name = "Andrés Ortega Montoya"
+sync_github_name = false
+
+[people.krosk93]
+sync_github_name = true

@@ -32,7 +32,7 @@ fn state(app: &mut VectorcraftApp, ctx: &egui::Context) -> Info {
     let Some(st) = app.session.active() else { return Info::default() };
     let sel = &st.selection.objects;
     let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
-    let id = egui::Id::new("svgi-state");
+    let id = egui::Id::unique("svgi-state");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, Info)>(id))
         && k == key
     {

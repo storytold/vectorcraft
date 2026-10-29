@@ -57,7 +57,8 @@ nothing changes: 14, 72, 199 and 98 colours, the same paths, anchors and rendere
 
 
 ## Large images
-Images over 1500 px on a side are traced with a warning that they trace more slowly (see
+Images over 1500 px on a side are traced with a warning that they trace more slowly (Flat Logo names
+the size it traced at instead; see
 [image-trace-adjustments.md](image-trace-adjustments.md)), and the anchor limit that guards memory is
 8,000,000 (2,000,000 on the web) instead of 2,000,000. Measured through `imageTrace.make` (release
 build, 4 cores, one trace at a time; memory is the peak allocated above the placed image, and what the

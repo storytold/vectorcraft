@@ -1,6 +1,7 @@
 //! Selection state (objects and, for direct selection, anchors and segments; ruler guides).
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +49,11 @@ pub struct Selection {
     /// with `key`; [`Self::prune`] clears it when no object is selected to align to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_guide: Option<usize>,
+    /// The new art on a locked artboard that this selection keeps editable
+    /// ([`Document::new_art`]). Undo, Redo and a failed batch restore it with the selection, and
+    /// the engine then sets the document's from it. Editing state, never saved.
+    #[serde(skip)]
+    pub new_art: Arc<HashSet<NodeId>>,
 }
 
 impl Selection {
@@ -206,16 +212,36 @@ impl Selection {
     /// around them (and so the key object when it is one): hidden or locked art can't stay
     /// selected.
     pub fn deselect_uneditable(&mut self, doc: &Document) {
-        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable(*o)).collect();
-        if uneditable.is_empty() {
+        let locks = doc.locked_artboards();
+        let uneditable: HashSet<NodeId> = self.objects.iter().copied().filter(|o| !doc.is_editable_with(&locks, *o)).collect();
+        self.deselect_all(&uneditable);
+    }
+    /// Deselect the objects on a locked artboard ([`crate::LockedArtboards::holds_id`]), whatever
+    /// selected them or moved them there (and so the key object when it is one): they act as
+    /// locked art. A targeted layer stays targeted, as it does with locked objects in it.
+    pub fn deselect_on_locked_artboards(&mut self, doc: &Document) {
+        let locks = doc.locked_artboards();
+        if locks.is_empty() {
+            return;
+        }
+        let locked: HashSet<NodeId> = self.objects.iter().copied().filter(|o| locks.holds_id(*o)).collect();
+        let layer = self.target.filter(|t| doc.node(*t).is_some_and(crate::Node::is_layer));
+        self.deselect_all(&locked);
+        if layer.is_some() {
+            self.target = layer;
+        }
+    }
+    /// Deselect the objects `gone` in one pass, with their anchors, segments and key.
+    fn deselect_all(&mut self, gone: &HashSet<NodeId>) {
+        if gone.is_empty() {
             return;
         }
         self.target = None;
         self.slices.clear();
-        self.objects.retain(|o| !uneditable.contains(o));
-        self.anchors.retain(|id, _| !uneditable.contains(id));
-        self.segments.retain(|id, _| !uneditable.contains(id));
-        if self.key.is_some_and(|k| uneditable.contains(&k)) {
+        self.objects.retain(|o| !gone.contains(o));
+        self.anchors.retain(|id, _| !gone.contains(id));
+        self.segments.retain(|id, _| !gone.contains(id));
+        if self.key.is_some_and(|k| gone.contains(&k)) {
             self.key = None;
         }
     }
@@ -229,12 +255,16 @@ impl Selection {
         self.target = Some(id);
     }
     /// Shift-clicking `id`'s target circle: it (a layer: its art) joins the selection, or leaves it
-    /// when it is all selected already. Several objects are then selected, none targeted.
+    /// when it is all selected already. Several objects are then selected, none targeted. Art on a
+    /// locked artboard is neither counted nor added, since
+    /// [`Selection::deselect_on_locked_artboards`] deselects it.
     pub fn toggle_target(&mut self, doc: &Document, id: NodeId) {
-        let ids = match doc.node(id) {
+        let mut ids = match doc.node(id) {
             Some(n) if n.is_layer() => n.layer_art(true),
             _ => vec![id],
         };
+        let locks = doc.locked_artboards();
+        ids.retain(|i| !locks.holds_id(*i));
         if ids.iter().all(|i| self.contains(*i)) {
             ids.iter().for_each(|i| self.remove(*i));
         } else {

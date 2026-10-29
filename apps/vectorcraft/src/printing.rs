@@ -1,14 +1,7 @@
 //! Desktop printer transport. VectorCraft composes every page and copy before submission;
-//! craft-print owns discovery and spooling. Windows 7 keeps its viewer-based transport because
-//! Windows.Data.Pdf is unavailable there.
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
+//! craft-print owns discovery and spooling.
 use std::process::Command;
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
-
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-mod windows7;
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-use windows7 as system;
 
 pub struct SystemPrint;
 impl PrintService for SystemPrint {
@@ -23,6 +16,11 @@ impl PrintService for SystemPrint {
     fn shared_print(&self) -> Option<vectorcraft_ui_egui::print::SharedPrintFn> {
         Some(std::sync::Arc::new(|job| SystemPrint.print(job)))
     }
+    fn turns_landscape(&self) -> bool {
+        // macOS's `lp` doesn't turn a landscape page to the paper: it cuts it off on upright
+        // paper. craft-print turns each sheet to its own orientation on Windows.
+        !cfg!(target_os = "macos")
+    }
     fn has_setup(&self) -> bool {
         true
     }
@@ -31,9 +29,8 @@ impl PrintService for SystemPrint {
     }
 }
 
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
 mod system {
-    use super::*;
+    use super::{Command, PrintJob, Printer};
     pub fn printers() -> Vec<Printer> {
         craft_print::printers().into_iter().map(|p| Printer { name: p.name, default: p.default }).collect()
     }
@@ -90,7 +87,7 @@ mod system {
     }
 }
 
-#[cfg(all(test, windows, not(any(feature = "windows7", target_vendor = "win7"))))]
+#[cfg(all(test, windows))]
 mod tests {
     use super::system::setup_command;
     use std::ffi::OsStr;
@@ -125,5 +122,16 @@ mod tests {
         assert_eq!(cmd.get_program(), "explorer");
         let args: Vec<&OsStr> = cmd.get_args().collect();
         assert_eq!(args, ["ms-settings:printers"]);
+    }
+}
+
+#[cfg(test)]
+mod turn_tests {
+    use super::SystemPrint;
+    use vectorcraft_ui_egui::print::PrintService;
+
+    #[test]
+    fn only_macos_queues_need_landscape_pages_turned() {
+        assert_eq!(SystemPrint.turns_landscape(), !cfg!(target_os = "macos"));
     }
 }

@@ -5,12 +5,18 @@
 //!
 //! Fields: `folder` (the location), `name` (the package folder), `copyLinks`, `linksFolder`,
 //! `relink`, `copyFonts`, `report`. OK runs `file.package` with them, then offers to show the
-//! package folder (`file.showPackage`).
+//! package folder (`file.showPackage`). On the desktop with Background Export on, the package is
+//! collected and written on the background thread ([`crate::background`]) after the dialog closes.
+
+use std::cell::Cell;
+use std::rc::Rc;
 
 use serde_json::{Value, json};
+use vectorcraft_engine::EngineError;
 
 use super::confirm::ask;
 use super::{DialogSpec, form};
+use crate::background::{self, Writer};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
@@ -110,44 +116,100 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             return Ok(r);
         }
     }
-    let r = app.run("file.package", params)?;
-    app.ui.dialog = None;
+    // Background Export (Preferences › File Handling): the linked files and fonts are collected
+    // and the package is written from the document as it is now, while editing goes on. The jobs
+    // started before it (a save started above, an earlier package to the same folder) are written
+    // first: the worker runs its jobs in order, and a package made at once waits for them.
+    let enabled = app.session.prefs.background_export;
+    if !enabled {
+        background::wait_all(app);
+    }
+    let package = app.session.prepare_package(&params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
+    let label = format!("Packaging {}", d.str("name"));
+    let later = Rc::new(Cell::new(false));
+    let in_background = later.clone();
+    let work = move |write: Writer| {
+        // A writer error that already names the file (an automation root's refusal) is kept as it is.
+        let mut write =
+            |path: &str, bytes: &[u8]| write(path, bytes).map_err(|e| EngineError::Other(if e.contains(path) { e } else { format!("{path}: {e}") }));
+        package.write(&mut write).map_err(|e| e.to_string())
+    };
+    let r = background::run(app, enabled, label, None, work, move |app, r| packaged(app, r, web, in_background.get()))?;
+    if r["background"] == true {
+        later.set(true);
+        app.ui.dialog = None;
+    }
+    Ok(r)
+}
+
+/// Report the package `r` (`file.package`'s reply): the status bar, the web's download, and the
+/// offer to show the package folder. `later`: it was written in the background, after the dialog
+/// closed, and a dialog open now is another one, which stays (the status bar names the folder).
+fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later: bool) -> Result<Value, String> {
+    let r = r.inspect_err(|e| app.ui.status = e.clone())?;
+    if !later {
+        app.ui.dialog = None;
+    }
     let n = r["files"].as_array().map_or(0, Vec::len);
     let missing = r["missingLinks"].as_array().map_or(0, Vec::len);
     // The fonts left out: their license doesn't allow it, or they aren't on this computer.
     let fonts = r["skippedFonts"].as_array().into_iter().flatten().filter_map(|f| f["font"].as_str()).collect::<Vec<_>>().join(", ");
-    let mut note = if missing > 0 { format!(" ({missing} linked file(s) not found)") } else { String::new() };
-    if !fonts.is_empty() {
-        note.push_str(&format!(" (fonts not copied: {fonts})"));
-    }
+    let shown_note = package_status_note(missing, &fonts);
+    let n_s = n.to_string();
     if web {
         let (name, data) = (r["name"].as_str().unwrap_or("package.zip"), r["dataBase64"].as_str().unwrap_or_default());
         let bytes = vectorcraft_format::base64_decode(data).ok_or("the package came back damaged")?;
         io::write_named(app, None, name, &bytes)?;
-        app.status(format!("Packaged {n} file(s){note}"));
+        let status = if shown_note.is_empty() {
+            crate::i18n::fmt(tl!("Packaged {n} file(s)"), &[("n", &n_s)])
+        } else {
+            crate::i18n::fmt(tl!("Packaged {n} file(s) {note}"), &[("n", &n_s), ("note", &shown_note)])
+        };
+        app.status(status);
         return Ok(r);
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
-    app.status(format!("Packaged {n} file(s) in {folder}{note}"));
-    let mut shown_note = if missing > 0 {
-        format!(" ({})", crate::i18n::fmt(tl!("{count} linked file(s) not found"), &[("count", &missing.to_string())]))
+    let status = if shown_note.is_empty() {
+        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder}"), &[("n", &n_s), ("folder", &folder)])
     } else {
-        String::new()
+        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder} {note}"), &[("n", &n_s), ("folder", &folder), ("note", &shown_note)])
     };
-    if !fonts.is_empty() {
-        shown_note.push_str(&format!(" ({})", crate::i18n::fmt(tl!("fonts not copied: {fonts}"), &[("fonts", &fonts)])));
+    app.status(status);
+    let detail = if shown_note.is_empty() {
+        crate::i18n::fmt(tl!("{count} file(s) in {folder}. Show the package folder?"), &[("count", &n_s), ("folder", &folder)])
+    } else {
+        crate::i18n::fmt(
+            tl!("{count} file(s) in {folder} {note}. Show the package folder?"),
+            &[("count", &n_s), ("folder", &folder), ("note", &shown_note)],
+        )
+    };
+    if app.ui.dialog.is_none() {
+        ask(app, tl!("Package created"), &detail, "file.showPackage", json!({ "folder": folder }));
     }
-    let detail = crate::i18n::fmt(
-        tl!("{count} file(s) in {folder}{note}. Show the package folder?"),
-        &[("count", &n.to_string()), ("folder", &folder), ("note", &shown_note)],
-    );
-    ask(app, tl!("Package created"), &detail, "file.showPackage", json!({ "folder": folder }));
     Ok(r)
+}
+
+/// Parenthetical notes after the folder path in a package status (`(2 linked file(s) not found)` …),
+/// joined with spaces and without a leading space (#3494).
+fn package_status_note(missing: usize, fonts: &str) -> String {
+    let mut parts = Vec::new();
+    if missing > 0 {
+        parts.push(format!("({})", crate::i18n::fmt(tl!("{count} linked file(s) not found"), &[("count", &missing.to_string())])));
+    }
+    if !fonts.is_empty() {
+        parts.push(format!("({})", crate::i18n::fmt(tl!("fonts not copied: {fonts}"), &[("fonts", fonts)])));
+    }
+    parts.join(" ")
 }
 
 /// `file.showPackage {folder}`: show a package folder in the file manager.
 pub fn show_package(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    app.refuse_automation("file.showPackage")?;
     let folder = p.get("folder").and_then(Value::as_str).ok_or("missing `folder`")?.to_string();
+    // A package is a folder: an executable, shortcut or app bundle would run, not be shown.
+    if !std::path::Path::new(&folder).is_dir() || folder.to_ascii_lowercase().ends_with(".app") {
+        return Err(format!("{folder} is not a package folder"));
+    }
     io::open_in_app(app, &folder)?;
     Ok(json!({ "folder": folder }))
 }

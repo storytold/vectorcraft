@@ -1,5 +1,5 @@
-//! File → Document Setup: General (units, bleed, Edit Artboards, outline images, substitution
-//! highlights), Transparency (grid size and colours, simulated paper, flattener preset, white
+//! File → Document Setup: General (units, bleed, Edit Artboards, outline images, the substituted
+//! glyphs highlight), Transparency (grid size and colours, simulated paper, flattener preset, white
 //! overprint) and Type (language, quotes, superscript/subscript/small caps, text export) tabs.
 //!
 //! Fields: what `document.setup` reports (and takes back), plus `tab` and `bleedLinked`. OK runs
@@ -78,6 +78,7 @@ fn unit(d: &Dialog) -> Unit {
     Unit::named(&d.str("units")).unwrap_or_default()
 }
 
+/// The General tab of Document Setup (units, bleed, artboard editing, options).
 fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let units: Vec<(&str, &str)> = Unit::ALL.iter().map(|u| (u.label(), u.label())).collect();
     choice(ui, d, "units", tl!("Units:"), &units);
@@ -88,7 +89,7 @@ fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     let mut close = false;
     widgets::label_row(ui, "", LABEL, |ui| {
         // Applies the settings, then edits the artboards with the Artboard tool.
-        if widgets::flat_button(ui, tl!("Edit Artboards"), 120.0).clicked() && confirm(app, d).is_ok() {
+        if widgets::flat_button_fit(ui, tl!("Edit Artboards"), 120.0).clicked() && confirm(app, d).is_ok() {
             app.select_tool("artboard");
             // The shared frame restores its working copy after drawing the body. Tell it to
             // close too, otherwise it reopens the dialog that confirm just closed.
@@ -97,7 +98,6 @@ fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     });
     ui.add_space(12.0);
     check(ui, d, "outlineImages", tl!("Show Images in Outline Mode"));
-    check(ui, d, "highlightSubstitutedFonts", tl!("Highlight Substituted Fonts"));
     check(ui, d, "highlightSubstitutedGlyphs", tl!("Highlight Substituted Glyphs"));
     close
 }
@@ -132,7 +132,8 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.painter().rect_filled(chip, 2.0, crate::panels::c32(&c));
             }
             ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-            if let Some(c) = widgets::hex_field(ui, ("grid-color", i), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
+            let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+            if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
                 let mut v = colors.clone();
                 v.resize(2, "#ffffff".into());
                 v[i] = c.to_hex();
@@ -322,5 +323,24 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("bleed".into(), json!(500));
         assert!(crate::dialogs::confirm(&mut app).is_err());
         assert!(app.ui.dialog.is_some());
+    }
+
+    /// Highlight Substituted Fonts is in Preferences › Type, so the General tab shows only the
+    /// substituted glyphs highlight, and OK still applies.
+    #[test]
+    fn general_tab_has_no_substituted_fonts_checkbox() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().fields.get("highlightSubstitutedFonts").is_none());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        dialog_frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "Highlight Substituted Glyphs"), "{texts:?}");
+        assert!(!texts.iter().any(|t| t == "Highlight Substituted Fonts"), "{texts:?}");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
     }
 }

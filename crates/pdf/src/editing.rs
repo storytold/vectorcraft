@@ -137,7 +137,18 @@ fn page_hash(pdf: &Pdf) -> String {
     for page in pdf.pages().iter() {
         let b = page.media_box();
         h = fnv(h, format!("[{} {} {} {}]", b.x0, b.y0, b.x1, b.y1).as_bytes());
-        h = fnv(h, page.page_stream().unwrap_or_default());
+        // Decode into a temporary rather than through `Page::page_stream`, which keeps every
+        // page's copy for as long as the PDF lives, even when pages share one stream.
+        let contents = page.raw();
+        if let Some(stream) = contents.get::<Stream<'_>>(b"Contents") {
+            h = fnv(h, stream.decoded().as_deref().unwrap_or_default());
+        } else if let Some(array) = contents.get::<Array<'_>>(b"Contents") {
+            for stream in array.iter::<Stream<'_>>() {
+                if let Ok(data) = stream.decoded() {
+                    h = fnv(fnv(h, &data), b" ");
+                }
+            }
+        }
     }
     format!("{h:016x}")
 }

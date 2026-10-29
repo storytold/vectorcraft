@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -49,7 +49,7 @@ pub struct PrefSpec {
     pub kind: PrefKind,
 }
 
-/// Categories in Illustrator's order (Plug-ins & Scratch Disks is "Performance & Storage" here).
+/// Categories in Illustrator's order.
 pub const PREF_CATEGORIES: &[&str] = &[
     "General",
     "Selection & Anchor Display",
@@ -59,7 +59,7 @@ pub const PREF_CATEGORIES: &[&str] = &[
     "Smart Guides",
     "Slices",
     "Hyphenation",
-    "Performance & Storage",
+    "Plug-ins & Scratch Disks",
     "User Interface",
     "Performance",
     "File Handling",
@@ -193,6 +193,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
+    p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
@@ -234,7 +235,10 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("anchorPathLabels", "Smart Guides", "Display Options", "Anchor/Path Labels", bool),
     p!("measurementLabels", "Smart Guides", "Display Options", "Measurement Labels", bool),
     p!("spacingGuides", "Smart Guides", "Display Options", "Spacing Guides", bool),
+    p!("distanceGuides", "Smart Guides", "Display Options", "Invoke Distance Guides", bool),
     p!("snappingTolerance", "Smart Guides", "", "Snapping Tolerance", num(0.0, 40.0, "pt")),
+    p!("snapTangent", "Smart Guides", "Geometric Guides", "Snap to Tangent", bool),
+    p!("snapPerpendicular", "Smart Guides", "Geometric Guides", "Snap to Perpendicular", bool),
     // Slices
     p!("showSliceNumbers", "Slices", "", "Show Slice Numbers", bool),
     p!("sliceLineColor", "Slices", "", "Line Color", color),
@@ -256,10 +260,10 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
-    // Performance & Storage
-    p!("pluginsFolder", "Performance & Storage", "Plug-ins", "Additional Plug-ins Folder", text),
-    p!("scratchPrimary", "Performance & Storage", "Scratch Disks", "Primary", text),
-    p!("scratchSecondary", "Performance & Storage", "Scratch Disks", "Secondary", text),
+    // Plug-ins & Scratch Disks
+    p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
+    p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface
     p!(
         "uiBrightness",
@@ -363,6 +367,16 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The W/H link of the Transform panel, the Properties panel and the Control bar
     p!("constrainProportions", "General", "Transform Panel", "Constrain Width and Height Proportions", bool),
     p!("singleCornerRadius", "General", "Transform Panel", "Single Corner Radius", bool),
+    // The Transform panel menu: what the panel transforms (`default`: as General › Transform
+    // Pattern Tiles, until a choice in the menu), and symbols' registration point
+    p!(
+        "transformPanelPatterns",
+        "General",
+        "Transform Panel",
+        "Transform",
+        choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
+    ),
+    p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -370,17 +384,21 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 }
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
-/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`) and the
-/// Perspective Grid Options (`perspective.widget.options`). `prefs.get`
-/// and `prefs.set` take them by key (a partial object updates what it names) and `prefs.reset`
-/// without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget"];
+/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
+/// Perspective Grid Options (`perspective.widget.options`) and the Pathfinder Options
+/// (`object.pathfinder.options`). `prefs.get` and `prefs.set` take them by key (a partial object
+/// updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
     match key {
         "eyedropper" => {
             let cur: super::EyedropperOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pathfinder" => {
+            let cur: super::PathfinderOptions = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -469,13 +487,14 @@ impl Prefs {
 
     /// The folders the app reads (fonts, plug-ins) or writes (Data Recovery copies, the Templates
     /// folder it makes for its dialogs) on its own, with the access each needs.
-    fn folders_mut(&mut self) -> [(&mut String, crate::file_access::Access); 4] {
+    fn folders_mut(&mut self) -> [(&mut String, &'static [crate::file_access::Access]); 4] {
         use crate::file_access::Access;
         [
-            (&mut self.fonts_folder, Access::Read),
-            (&mut self.plugins_folder, Access::Read),
-            (&mut self.recovery_folder, Access::Write),
-            (&mut self.templates_folder, Access::Write),
+            (&mut self.fonts_folder, &[Access::Read][..]),
+            (&mut self.plugins_folder, &[Access::Read][..]),
+            // Data Recovery lists and restores what is in its folder too.
+            (&mut self.recovery_folder, &[Access::Write, Access::Read][..]),
+            (&mut self.templates_folder, &[Access::Write][..]),
         ]
     }
 
@@ -491,7 +510,7 @@ impl Prefs {
             if folder.is_empty() || folder == old.trim() {
                 continue;
             }
-            if let Err(e) = roots.check(folder, access) {
+            if let Err(e) = access.iter().try_for_each(|a| roots.check(folder, *a)) {
                 refused.push(e);
                 *new = old.clone();
             }
@@ -536,10 +555,26 @@ impl Session {
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
+        let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        if p.trace_presets != self.prefs.trace_presets {
+            self.trace_preset_changes.replaced();
+        }
         self.prefs = p;
+        if corner_radius_changed {
+            // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already
+            // made (active, or lent a selection tool for a drag) takes the new value.
+            let r = serde_json::Value::from(self.prefs.corner_radius);
+            for t in std::iter::once(&mut self.tool).chain(self.lender.as_mut()) {
+                if t.id() == "roundedRectangle" {
+                    t.set_option("cornerRadius", &r);
+                }
+            }
+        }
         if fonts_folder_changed {
             let folder = self.prefs.fonts_folder.trim();
-            vectorcraft_text::set_user_font_dirs(if folder.is_empty() { vec![] } else { vec![folder.into()] });
+            // A folder an automation caller chose is read without following its links out of it.
+            let confined = crate::file_access::current().is_some();
+            vectorcraft_text::set_user_font_dirs_confined(if folder.is_empty() { vec![] } else { vec![folder.into()] }, confined);
             // Once the fonts were scanned, scan again now: the folder's fonts appear (or go) in the
             // font menus, and type in them lays out again. The first scan reads it anyway.
             if vectorcraft_text::FontDb::global().installed_fonts_changed() {

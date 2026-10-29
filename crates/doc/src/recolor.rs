@@ -65,7 +65,9 @@ pub fn recolor_node(n: &mut Node, reach: Reach, v: &mut dyn ColorVisitor) -> usi
             }
             changed += ch as usize;
         }
-        NodeKind::Image(im) if reach.images && im.link.is_none() => {
+        // An image holding its own pixels is a glyph's (emoji in outlined type): it keeps its
+        // colours, as the glyph does in type.
+        NodeKind::Image(im) if reach.images && im.link.is_none() && im.pixels.is_none() => {
             if let Some(k) = v.image(&im.key) {
                 im.key = k;
                 changed += 1;

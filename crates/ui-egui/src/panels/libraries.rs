@@ -1,9 +1,11 @@
-//! Libraries panel (Window › Libraries, #745): the current library's colours, character and
-//! paragraph styles and graphics, from the engine's `library.*` commands. Art dragged off the canvas
-//! onto the panel, and swatches dragged in, are added to it; the + button adds the selection's
-//! graphic, fill or stroke colour or text styles. A colour click paints the selection through the
-//! active Fill/Stroke proxy, a style click applies it to the selected type, and a graphic is
-//! dragged onto the canvas (or double-clicked) to place a copy. Libraries are kept on this machine.
+//! Libraries panel (Window › Libraries, #745): the current library's colors, gradients, patterns,
+//! character and paragraph styles and graphics, from the engine's `library.*` commands. Art
+//! dragged off the canvas onto the panel, and swatches dragged in (colors, gradients and
+//! patterns), are added to it; the + button adds the selection's graphic, fill or stroke color,
+//! pattern or gradient, or text styles. A click on a color, gradient or pattern paints the
+//! selection through the active Fill/Stroke proxy, a style click applies it to the selected type,
+//! and a graphic is dragged onto the canvas (or double-clicked) to place a copy. Libraries are
+//! kept on this machine.
 //!
 //! The search field filters the items by name; items can be moved into user-named groups, shown as
 //! collapsible sections after the ungrouped items; and the panel menu exports the library to a
@@ -14,6 +16,9 @@
 //! group (`library.moveItem` with `before`/`after`), or, dropped elsewhere on a group or on the
 //! ungrouped items, goes into that group or out of its own; a group dragged by its header goes
 //! before or after another group (`library.moveGroup`).
+//!
+//! The buttons beside the library picker show the items as icons (colour chips and graphic tiles,
+//! the default) or in a list, one row each with its name (a colour's hex value too).
 
 use std::collections::HashMap;
 
@@ -30,6 +35,12 @@ use crate::{VectorcraftApp, icons};
 const TILE: f32 = 56.0;
 /// The size of a colour chip.
 const CHIP: f32 = 22.0;
+/// The height of a colour's or style's row in the list view.
+const ROW: f32 = 22.0;
+/// The size of a graphic's thumbnail in the list view (its row is a little taller).
+const LIST_TILE: f32 = 28.0;
+/// The panel state that holds whether the items show in a list (else as icons).
+const LIST_VIEW: &str = "library-list-view";
 /// The height under the list the bottom bar takes (its divider and buttons) until it has been
 /// measured.
 const BAR: f32 = 42.0;
@@ -107,6 +118,19 @@ fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
     }
 }
 
+/// The `library.add` params that add what `drag` holds to library `library`: a color (not one of
+/// that library's own), or a gradient or pattern swatch, by its name.
+fn swatch_add(drag: &PanelDrag, library: &str) -> Option<Value> {
+    let PanelDrag::Paint { paint, params, library: from, .. } = drag else { return None };
+    let swatch = || params.get("swatch").and_then(Value::as_str);
+    match paint {
+        Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => Some(json!({ "kind": "fillColor", "color": color })),
+        Paint::Gradient(_) => swatch().map(|s| json!({ "kind": "fillGradient", "swatch": s })),
+        Paint::Pattern { .. } => swatch().map(|s| json!({ "kind": "fillPattern", "swatch": s })),
+        _ => None,
+    }
+}
+
 /// What the item list draws from.
 struct Items<'a> {
     library: &'a str,
@@ -116,6 +140,8 @@ struct Items<'a> {
     fill_active: bool,
     /// What a drag in progress holds of this library.
     grab: Option<Grab>,
+    /// Whether the items show in a list (else colours and graphics as icons).
+    list: bool,
 }
 
 impl Items<'_> {
@@ -144,19 +170,29 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let mut act: Option<Act> = None;
-    // The library picker.
-    let names: Vec<&str> = libs.all().iter().map(|(_, l)| l.name.as_str()).collect();
-    if let Some((id, _)) = widgets::dropdown_names(ui, "lib-picker", &lib.name, &names, ui.available_width()).and_then(|i| libs.all().get(i)) {
-        act = Some(Act::Run("library.setCurrent", json!({ "library": id })));
-    }
+    let list: bool = super::pstate(ui.ctx(), LIST_VIEW);
+    // The library picker, and the list / icon view toggles at its right.
+    ui.horizontal(|ui| {
+        let names: Vec<&str> = libs.all().iter().map(|(_, l)| l.name.as_str()).collect();
+        let width = (ui.available_width() - 2.0 * (24.0 + ui.spacing().item_spacing.x)).max(60.0);
+        if let Some((id, _)) = widgets::dropdown_names(ui, "lib-picker", &lib.name, &names, width).and_then(|i| libs.all().get(i)) {
+            act = Some(Act::Run("library.setCurrent", json!({ "library": id })));
+        }
+        if widgets::icon_button(ui, "dc-list-view", tl!("Show List View"), list, 24.0).clicked() {
+            super::set_pstate(ui.ctx(), LIST_VIEW, true);
+        }
+        if widgets::icon_button(ui, "dc-grid-view", tl!("Show Thumbnail View"), !list, 24.0).clicked() {
+            super::set_pstate(ui.ctx(), LIST_VIEW, false);
+        }
+    });
     ui.add_space(4.0);
     let empty = lib.items().next().is_none() && lib.groups.is_empty();
-    let query = if empty { String::new() } else { widgets::search_field(ui, egui::Id::new("library-search"), tl!("Search")) };
+    let query = if empty { String::new() } else { widgets::search_field(ui, egui::Id::unique("library-search"), tl!("Search")) };
     let query = query.trim().to_lowercase();
     let searching = !query.is_empty();
     let shown = |name: &str| !searching || name.to_lowercase().contains(&query);
     let grab = egui::DragAndDrop::payload::<PanelDrag>(ui.ctx()).and_then(|d| grabbed(&d, &lib_id));
-    let items = Items { library: &lib_id, lib, groups: lib.group_index(), fill_active, grab };
+    let items = Items { library: &lib_id, lib, groups: lib.group_index(), fill_active, grab, list };
     // The items shown in each section: the ungrouped ones first, then each group's.
     let mut counts = vec![0usize; lib.groups.len() + 1];
     for (kind, key, _) in lib.items().filter(|(_, _, name)| shown(name)) {
@@ -167,7 +203,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     // The list takes the panel's height down to the bottom bar (as tall as it was last frame), and
     // scrolls.
-    let bar_id = egui::Id::new("library-bottom-bar");
+    let bar_id = egui::Id::unique("library-bottom-bar");
     let bar: f32 = ui.data(|d| d.get_temp(bar_id)).unwrap_or(BAR);
     let list_h = ui.available_height() - bar;
     let list_h = if list_h.is_finite() { list_h.max(MIN_LIST) } else { MIN_LIST };
@@ -265,18 +301,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Art dragged off the canvas, or a swatch (not one of this library's colours), dropped on the
     // list is added to the library.
-    let zone = ui.interact(list_rect, ui.id().with("libraries-drop"), Sense::hover());
+    let zone = ui.interact(list_rect, ui.scope_id().with("libraries-drop"), Sense::hover());
     if let Some(ids) = widgets::art_drop(ui, &zone) {
         act = Some(Act::Run("library.add", json!({ "kind": "graphic", "ids": ids })));
     }
     if let Some(drag) = zone.dnd_hover_payload::<PanelDrag>()
-        && let PanelDrag::Paint { paint: Paint::Solid { color, .. }, library, .. } = &*drag
-        && library.as_ref().is_none_or(|(l, _)| *l != lib_id)
+        && let Some(add) = swatch_add(&drag, &lib_id)
     {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
-        let color = *color;
         if zone.dnd_release_payload::<PanelDrag>().is_some() {
-            act = Some(Act::Run("library.add", json!({ "kind": "fillColor", "color": color })));
+            act = Some(Act::Run("library.add", add));
         }
     }
     let bar_top = ui.cursor().top();
@@ -290,6 +324,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ("Graphic", "graphic"),
                 ("Fill Color", "fillColor"),
                 ("Stroke Color", "strokeColor"),
+                ("Fill Pattern", "fillPattern"),
+                ("Stroke Pattern", "strokePattern"),
+                ("Fill Gradient", "fillGradient"),
+                ("Stroke Gradient", "strokeGradient"),
                 ("Character Style", "charStyle"),
                 ("Paragraph Style", "paraStyle"),
             ] {
@@ -333,26 +371,61 @@ impl Items<'_> {
         let colors: Vec<_> = lib.colors.iter().filter(|c| keep(ItemKind::Color, &c.name, &c.name)).collect();
         if !colors.is_empty() {
             heading(ui, tl!("Colors"));
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            self.cells(ui, |ui| {
                 for c in colors {
-                    let (r, resp) = ui.allocate_exact_size(vec2(CHIP, CHIP), Sense::click_and_drag());
                     let paint = Paint::solid(c.color);
-                    widgets::swatch_tile(ui, r, &paint, false, false);
-                    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+                    let (r, resp) = self.cell(ui, CHIP, ROW);
+                    let chip = if self.list {
+                        let hex = c.color.to_hex();
+                        let detail = (!hex.eq_ignore_ascii_case(&c.name)).then_some(hex.as_str());
+                        list_row(ui, r, &resp, &c.name, detail);
+                        Rect::from_center_size(r.left_center() + vec2(10.0, 0.0), vec2(14.0, 14.0))
+                    } else {
+                        r
+                    };
+                    widgets::swatch_tile(ui, chip, &paint, false, false);
+                    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
                     widgets::drag_source(ui, &resp, || PanelDrag::Paint {
                         paint: paint.clone(),
                         params: json!({ "color": c.color }),
                         rows: None,
                         library: Some((self.library.to_string(), c.name.clone())),
                     });
-                    self.drop_next_to(ui, &resp, ItemKind::Color, &c.name, false, act, over);
-                    let resp = resp.on_hover_text(&c.name);
+                    self.drop_next_to(ui, &resp, ItemKind::Color, &c.name, self.list, act, over);
+                    // The list shows the name; a chip says it when hovered.
+                    let resp = if self.list { resp } else { resp.on_hover_text(&c.name) };
                     if resp.clicked() {
                         let to = if self.fill_active { "fill" } else { "stroke" };
                         *act = Some(Act::Run("library.use", json!({ "kind": "fillColor", "item": c.name, "to": to })));
                     }
                     resp.context_menu(|ui| self.item_menu(ui, act, ItemKind::Color, &c.name));
+                }
+            });
+            ui.add_space(6.0);
+        }
+        let gradients: Vec<_> = lib.gradients.iter().filter(|g| keep(ItemKind::Gradient, &g.name, &g.name)).collect();
+        if !gradients.is_empty() {
+            heading(ui, tl!("Gradients"));
+            self.cells(ui, |ui| {
+                for g in gradients {
+                    let (r, resp) = self.cell(ui, CHIP, ROW);
+                    let chip = self.chip_rect(ui, r, &resp, &g.name);
+                    widgets::swatch_tile(ui, chip, &Paint::Gradient(Box::new(g.gradient.clone())), false, false);
+                    self.paint_item(ui, resp, ItemKind::Gradient, &g.name, act, over);
+                }
+            });
+            ui.add_space(6.0);
+        }
+        let patterns: Vec<_> = lib.patterns.iter().filter(|p| keep(ItemKind::Pattern, &p.name, &p.name)).collect();
+        if !patterns.is_empty() {
+            heading(ui, tl!("Patterns"));
+            self.cells(ui, |ui| {
+                for p in patterns {
+                    let (r, resp) = self.cell(ui, CHIP, ROW);
+                    let chip = self.chip_rect(ui, r, &resp, &p.name);
+                    png_tile(ui, chip, self.library, &format!("pattern:{}", p.name), &p.thumbnail);
+                    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+                    self.paint_item(ui, resp, ItemKind::Pattern, &p.name, act, over);
                 }
             });
             ui.add_space(6.0);
@@ -366,13 +439,10 @@ impl Items<'_> {
             }
             heading(ui, title);
             for st in list {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-                if resp.hovered() {
-                    ui.painter().rect_filled(r, 0.0, t.hover);
-                }
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::click_and_drag());
+                list_row(ui, r, &resp, &st.name, None);
                 let icon = if kind == ItemKind::ParaStyle { "pilcrow" } else { "type" };
                 icons::paint(ui, icon, Rect::from_center_size(r.left_center() + vec2(10.0, 0.0), vec2(14.0, 14.0)), t.icon);
-                ui.painter().text(r.left_center() + vec2(24.0, 0.0), egui::Align2::LEFT_CENTER, &st.name, egui::FontId::proportional(12.5), t.text);
                 widgets::drag_source(ui, &resp, || PanelDrag::LibraryItem { library: self.library.to_string(), kind, item: st.name.clone() });
                 self.drop_next_to(ui, &resp, kind, &st.name, true, act, over);
                 let resp = resp.on_hover_text(tl!("Click to apply to the selected type"));
@@ -386,16 +456,22 @@ impl Items<'_> {
         let graphics: Vec<_> = lib.graphics.iter().filter(|g| keep(ItemKind::Graphic, &g.id, &g.name)).collect();
         if !graphics.is_empty() {
             heading(ui, tl!("Graphics"));
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            self.cells(ui, |ui| {
                 for g in graphics {
-                    let (r, resp) = ui.allocate_exact_size(vec2(TILE, TILE), Sense::click_and_drag());
-                    tile(ui, r, self.library, g);
-                    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, if resp.hovered() { t.accent } else { t.border }), StrokeKind::Inside);
+                    let (r, resp) = self.cell(ui, TILE, LIST_TILE + 4.0);
+                    let thumb = if self.list {
+                        list_row(ui, r, &resp, &g.name, None);
+                        Rect::from_min_size(r.left_center() + vec2(3.0, -LIST_TILE / 2.0), vec2(LIST_TILE, LIST_TILE))
+                    } else {
+                        r
+                    };
+                    tile(ui, thumb, self.library, g);
+                    let edge = if resp.hovered() && !self.list { t.accent } else { t.border };
+                    ui.painter().rect_stroke(thumb, 0.0, Stroke::new(1.0, edge), StrokeKind::Inside);
                     // Dragged onto the canvas, a copy is placed where it is dropped.
                     widgets::drag_source(ui, &resp, || PanelDrag::LibraryGraphic { library: self.library.to_string(), item: g.id.clone() });
-                    self.drop_next_to(ui, &resp, ItemKind::Graphic, &g.id, false, act, over);
-                    let resp = resp.on_hover_text(&g.name);
+                    self.drop_next_to(ui, &resp, ItemKind::Graphic, &g.id, self.list, act, over);
+                    let resp = if self.list { resp } else { resp.on_hover_text(&g.name) };
                     let place = || Act::Run("library.use", json!({ "kind": "graphic", "item": g.id }));
                     if resp.double_clicked() {
                         *act = Some(place());
@@ -411,6 +487,51 @@ impl Items<'_> {
             });
             ui.add_space(6.0);
         }
+    }
+
+    /// The cells `add` lays out: rows stacked downwards in the list view, else chips and tiles
+    /// running across and wrapping.
+    fn cells(&self, ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+        if self.list {
+            add(ui);
+        } else {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+                add(ui);
+            });
+        }
+    }
+
+    /// The next item's cell: a `side`-point square in the icon view, else a row `row` points tall
+    /// across the list.
+    fn cell(&self, ui: &mut Ui, side: f32, row: f32) -> (Rect, egui::Response) {
+        let size = if self.list { vec2(ui.available_width(), row) } else { vec2(side, side) };
+        ui.allocate_exact_size(size, Sense::click_and_drag())
+    }
+
+    /// Where a gradient's or pattern's chip goes in its cell `r`: the whole cell in the icon view,
+    /// else a small chip at the left of its row, which shows `name`.
+    fn chip_rect(&self, ui: &Ui, r: Rect, resp: &egui::Response, name: &str) -> Rect {
+        if self.list {
+            list_row(ui, r, resp, name, None);
+            Rect::from_center_size(r.left_center() + vec2(10.0, 0.0), vec2(14.0, 14.0))
+        } else {
+            r
+        }
+    }
+
+    /// A gradient's or pattern's cell `resp`: it drags to another place in the list, says its name
+    /// when hovered in the icon view, paints the selection through the active Fill/Stroke proxy
+    /// when clicked, and has the item menu.
+    fn paint_item(&self, ui: &Ui, resp: egui::Response, kind: ItemKind, name: &str, act: &mut Option<Act>, over: &mut bool) {
+        widgets::drag_source(ui, &resp, || PanelDrag::LibraryItem { library: self.library.to_string(), kind, item: name.to_string() });
+        self.drop_next_to(ui, &resp, kind, name, self.list, act, over);
+        let resp = if self.list { resp } else { resp.on_hover_text(name) };
+        if resp.clicked() {
+            let to = if self.fill_active { "fill" } else { "stroke" };
+            *act = Some(Act::Run("library.use", json!({ "kind": kind_param(kind), "item": name, "to": to })));
+        }
+        resp.context_menu(|ui| self.item_menu(ui, act, kind, name));
     }
 
     /// An item of `kind` dragged over item `key`'s cell `resp` lands just before or after it, by
@@ -489,6 +610,8 @@ fn kind_param(kind: ItemKind) -> &'static str {
         ItemKind::Graphic => "graphic",
         ItemKind::CharStyle => "charStyle",
         ItemKind::ParaStyle => "paraStyle",
+        ItemKind::Gradient => "fillGradient",
+        ItemKind::Pattern => "fillPattern",
         ItemKind::Color | ItemKind::Unknown => "fillColor",
     }
 }
@@ -569,6 +692,26 @@ fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>,
     }
 }
 
+/// An item's row `r` in the list (`resp`: its response): highlighted while hovered, `name` after
+/// the item's icon and `detail` dimmed at the right, where the name leaves room for it.
+fn list_row(ui: &Ui, r: Rect, resp: &egui::Response, name: &str, detail: Option<&str>) {
+    let t = Tokens::get(ui.ctx());
+    let painter = ui.painter_at(r);
+    if resp.hovered() {
+        painter.rect_filled(r, 0.0, t.hover);
+    }
+    let left = if r.height() > ROW { LIST_TILE + 10.0 } else { 24.0 };
+    let font = egui::FontId::proportional(12.5);
+    let name = painter.text(r.left_center() + vec2(left, 0.0), egui::Align2::LEFT_CENTER, name, font.clone(), t.text);
+    if let Some(d) = detail {
+        let d = painter.layout_no_wrap(d.to_string(), font, t.text_dim);
+        let at = r.right_center() - vec2(6.0 + d.size().x, d.size().y / 2.0);
+        if at.x > name.right() + 12.0 {
+            painter.galley(at, d, t.text_dim);
+        }
+    }
+}
+
 /// A section heading in the list.
 fn heading(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
@@ -578,8 +721,16 @@ fn heading(ui: &mut Ui, text: &str) {
 
 /// Graphic `g`'s thumbnail on white in `r`.
 fn tile(ui: &Ui, r: Rect, library: &str, g: &LibraryGraphic) {
+    png_tile(ui, r, library, &format!("graphic:{}", g.id), &g.thumbnail);
+}
+
+/// The PNG thumbnail `png` (base64) of item `key` (its kind and key) of `library` on white in `r`.
+fn png_tile(ui: &Ui, r: Rect, library: &str, key: &str, png: &str) {
     ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    if let Some(tex) = thumbnail(ui.ctx(), library, g) {
+    // As many pixels as the tile shows (the art fits inside a 3-point margin).
+    let px = (r.width().max(r.height()) - 6.0) * ui.ctx().pixels_per_point();
+    let px = if px.is_finite() { px.ceil().clamp(8.0, 256.0) as u32 } else { 256 };
+    if let Some(tex) = thumbnail(ui.ctx(), library, key, png, px) {
         let size = tex.size_vec2();
         let k = ((r.width() - 6.0) / size.x).min((r.height() - 6.0) / size.y).min(1.0);
         let fit = Rect::from_center_size(r.center(), size * k);
@@ -587,21 +738,27 @@ fn tile(ui: &Ui, r: Rect, library: &str, g: &LibraryGraphic) {
     }
 }
 
-/// The texture of graphic `g`'s PNG thumbnail, decoded once.
-fn thumbnail(ctx: &egui::Context, library: &str, g: &LibraryGraphic) -> Option<egui::TextureHandle> {
+/// A thumbnail texture's library, item (its kind and key), thumbnail length (for a changed item)
+/// and size.
+type ThumbKey = (String, String, usize, u32);
+
+/// The texture of item `item`'s PNG thumbnail `png` (base64) at most `px` pixels a side, made once
+/// for each size. It is shrunk here, smoothly: the GPU draws it without mipmaps, so a texture much
+/// larger than its tile would break thin strokes up.
+fn thumbnail(ctx: &egui::Context, library: &str, item: &str, png: &str, px: u32) -> Option<egui::TextureHandle> {
     thread_local! {
-        static CACHE: crate::graphics::TexCache<HashMap<(String, String, usize), Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
+        static CACHE: crate::graphics::TexCache<HashMap<ThumbKey, Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
     }
-    let key = (library.to_string(), g.id.clone(), g.thumbnail.len());
+    let key = (library.to_string(), item.to_string(), png.len(), px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return t;
     }
-    let tex = vectorcraft_format::base64_decode(&g.thumbnail)
-        .and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok())
-        .map(|img| {
+    let tex =
+        vectorcraft_format::base64_decode(png).and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()).map(|img| {
+            let img = if img.width().max(img.height()) > px { img.resize(px, px, image::imageops::FilterType::Triangle) } else { img };
             let rgba = img.to_rgba8();
             let image = egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw());
-            ctx.load_texture(format!("library-{library}-{}", g.id), image, egui::TextureOptions::LINEAR)
+            ctx.load_texture(format!("library-{library}-{item}-{px}"), image, egui::TextureOptions::LINEAR)
         });
     CACHE.with(|c| {
         let mut c = c.borrow_mut();
@@ -697,258 +854,4 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::json;
-    use vectorcraft_engine::Session;
-
-    use super::*;
-
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(app, ui);
-            menu(app, ui);
-        });
-        out.textures_delta.clear();
-    }
-
-    /// The panel draws with no library, an empty one and one holding every kind of item (#745).
-    #[test]
-    fn the_panel_draws_its_libraries() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        frame(&mut app);
-        app.run("library.create", json!({"name": "Brand"})).unwrap();
-        frame(&mut app);
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        app.run("library.add", json!({"kind": "graphic"})).unwrap();
-        app.run("library.add", json!({"kind": "fillColor"})).unwrap();
-        let t = app.run("text.create", json!({"x": 10, "y": 80, "text": "Type"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [t]})).unwrap();
-        app.run("library.add", json!({"kind": "charStyle"})).unwrap();
-        app.run("library.add", json!({"kind": "paraStyle"})).unwrap();
-        frame(&mut app);
-        let lib = app.session.libraries.get("Brand").unwrap();
-        assert_eq!((lib.graphics.len(), lib.colors.len(), lib.char_styles.len(), lib.para_styles.len()), (1, 1, 1, 1));
-        // The thumbnail decodes.
-        let ctx = egui::Context::default();
-        assert!(thumbnail(&ctx, "Brand", &lib.graphics[0]).is_some());
-    }
-
-    /// The panel's text: every label it shows in one frame (`query` typed in the search field).
-    fn texts(app: &mut VectorcraftApp, query: &str) -> Vec<String> {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        ctx.data_mut(|d| d.insert_temp(egui::Id::new("library-search"), query.to_string()));
-        let mut shapes = vec![];
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-        out.textures_delta.clear();
-        shapes.append(&mut out.shapes);
-        let mut texts = vec![];
-        for s in shapes {
-            if let egui::epaint::Shape::Text(t) = s.shape {
-                texts.push(t.galley.text().to_string());
-            }
-        }
-        texts
-    }
-
-    /// The search field filters items by name, ignoring case; groups show after the ungrouped
-    /// items, and a search nothing matches says so (#926).
-    #[test]
-    fn the_panel_searches_and_shows_groups() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.run("library.create", json!({"name": "Brand"})).unwrap();
-        for (name, color) in [("Ocean Blue", "#0044aa"), ("Sun Yellow", "#ffcc00")] {
-            app.run("library.add", json!({"kind": "fillColor", "color": color, "name": name})).unwrap();
-        }
-        let t = app.run("text.create", json!({"x": 10, "y": 80, "text": "Type"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [t]})).unwrap();
-        app.run("library.add", json!({"kind": "charStyle", "name": "Headline"})).unwrap();
-        app.run("library.createGroup", json!({"name": "Warm", "items": [{"kind": "fillColor", "item": "Sun Yellow"}]})).unwrap();
-        let all = texts(&mut app, "");
-        let at = |s: &str| all.iter().position(|t| t == s);
-        assert!(at("Headline").is_some() && at("Warm").is_some(), "{all:?}");
-        assert!(at("Headline") < at("Warm"), "groups come after the ungrouped items: {all:?}");
-        // "BLUE" finds the blue swatch only: the style and the group without a match are hidden.
-        let found = texts(&mut app, "BLUE");
-        assert!(!found.iter().any(|t| t == "Headline" || t == "Warm"), "{found:?}");
-        let found = texts(&mut app, "yellow");
-        assert!(found.iter().any(|t| t == "Warm") && !found.iter().any(|t| t == "Headline"), "{found:?}");
-        let none = texts(&mut app, "zzz");
-        assert!(none.iter().any(|t| t == "No results"), "{none:?}");
-    }
-
-    /// A library imported from `styles` (character style names) and `groups` ([(name, its styles)])
-    /// → its id.
-    fn styled(app: &mut VectorcraftApp, styles: &[&str], groups: &[(&str, &[&str])]) -> String {
-        let styles: Vec<Value> = styles.iter().enumerate().map(|(i, n)| json!({"name": n, "attrs": {"size": 8 + i}})).collect();
-        let groups: Vec<Value> = groups
-            .iter()
-            .map(|(g, items)| json!({"name": g, "items": items.iter().map(|i| json!({"kind": "charStyle", "item": i})).collect::<Vec<_>>()}))
-            .collect();
-        let data = json!({"name": "Order", "charStyles": styles, "groups": groups}).to_string();
-        app.run("library.import", json!({"data": data})).unwrap()["id"].as_str().unwrap().to_string()
-    }
-
-    /// One frame of the panel in a 260 × `tall` window with `events` → where each text it shows is
-    /// (its rect), and the panel's height.
-    fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, tall: f32, events: Vec<egui::Event>) -> (Vec<(String, Rect)>, f32) {
-        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(260.0, tall))), events, ..Default::default() };
-        let mut height = 0.0;
-        let mut out = ctx.run_ui(raw, |ui| {
-            show(app, ui);
-            height = ui.min_rect().height();
-        });
-        out.textures_delta.clear();
-        let mut texts = vec![];
-        for s in out.shapes {
-            if let egui::epaint::Shape::Text(t) = s.shape {
-                texts.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2())));
-            }
-        }
-        (texts, height)
-    }
-
-    /// Where text `name` is in `texts`.
-    fn at(texts: &[(String, Rect)], name: &str) -> Rect {
-        texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} isn't shown: {texts:?}"))
-    }
-
-    /// `drag` released at `pos`.
-    fn drop_at(app: &mut VectorcraftApp, ctx: &egui::Context, drag: PanelDrag, pos: egui::Pos2) {
-        egui::DragAndDrop::set_payload(ctx, drag);
-        let up = egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame_at(app, ctx, 600.0, vec![egui::Event::PointerMoved(pos), up]);
-        frame_at(app, ctx, 600.0, vec![]);
-    }
-
-    fn style_order(app: &mut VectorcraftApp) -> Vec<String> {
-        let got = app.run("library.get", json!({})).unwrap();
-        got["charStyles"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect()
-    }
-
-    fn group_names(app: &mut VectorcraftApp) -> Vec<(String, Vec<String>)> {
-        let got = app.run("library.get", json!({})).unwrap();
-        let items = |g: &Value| g["items"].as_array().unwrap().iter().map(|i| i["item"].as_str().unwrap().to_string()).collect();
-        got["groups"].as_array().unwrap().iter().map(|g| (g["name"].as_str().unwrap().to_string(), items(g))).collect()
-    }
-
-    /// Dragging in the list: a style dropped on the top or bottom half of another lands before or
-    /// after it, in its group; one dropped on a group's header goes into that group; a group's
-    /// header dropped on another group moves the group; and with every item grouped, a strip
-    /// takes an item out of its group.
-    #[test]
-    fn items_and_groups_move_by_dragging() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let lib = styled(&mut app, &["A", "B", "C", "D"], &[("Warm", &["D"]), ("Cool", &[])]);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        let item = |name: &str| PanelDrag::LibraryItem { library: lib.clone(), kind: ItemKind::CharStyle, item: name.into() };
-        // C onto A's top half: first.
-        let a = at(&texts, "A");
-        drop_at(&mut app, &ctx, item("C"), egui::pos2(a.center().x, a.top() - 4.0));
-        assert_eq!(style_order(&mut app), ["C", "A", "B", "D"]);
-        // A onto D's bottom half (in Warm): after D, in Warm.
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        let d = at(&texts, "D");
-        drop_at(&mut app, &ctx, item("A"), egui::pos2(d.center().x, d.bottom() + 4.0));
-        assert_eq!(style_order(&mut app), ["C", "B", "D", "A"]);
-        assert_eq!(group_names(&mut app), [("Warm".into(), vec!["D".to_string(), "A".into()]), ("Cool".into(), vec![])]);
-        // B onto Cool's header: into Cool, the order kept.
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        drop_at(&mut app, &ctx, item("B"), at(&texts, "Cool").center());
-        assert_eq!(style_order(&mut app), ["C", "B", "D", "A"]);
-        assert_eq!(group_names(&mut app)[1], ("Cool".into(), vec!["B".to_string()]));
-        // Cool's header onto Warm's header (its top half): Cool first.
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        let warm = at(&texts, "Warm");
-        drop_at(&mut app, &ctx, PanelDrag::LibraryGroup { library: lib.clone(), group: "Cool".into() }, egui::pos2(warm.center().x, warm.top()));
-        assert_eq!(group_names(&mut app).iter().map(|(g, _)| g.as_str()).collect::<Vec<_>>(), ["Cool", "Warm"]);
-        // Every item grouped: while one is dragged a strip takes it out of its group.
-        app.run("library.moveItem", json!({"kind": "charStyle", "item": "C", "group": "Warm"})).unwrap();
-        egui::DragAndDrop::set_payload(&ctx, item("C"));
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        let strip = at(&texts, "Drop here to take it out of its group");
-        drop_at(&mut app, &ctx, item("C"), strip.center());
-        assert!(group_names(&mut app).iter().all(|(_, items)| !items.contains(&"C".to_string())), "{:?}", group_names(&mut app));
-        // Without a drag there is no strip.
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        assert!(!texts.iter().any(|(t, _)| t == "Drop here to take it out of its group"));
-    }
-
-    /// A long list scrolls inside the panel (its bottom bar stays in the window), and a drag held
-    /// near the list's bottom edge scrolls it.
-    #[test]
-    fn a_long_list_scrolls_also_while_dragging() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let names: Vec<String> = (0..60).map(|i| format!("Style {i}")).collect();
-        let lib = styled(&mut app, &names.iter().map(String::as_str).collect::<Vec<_>>(), &[]);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let (texts, height) = frame_at(&mut app, &ctx, 400.0, vec![]);
-        assert!(height <= 400.0, "the panel fits the window: {height}");
-        let first = at(&texts, "Style 0");
-        // The list's bottom edge: the last text drawn before the window's bottom bar area.
-        let bottom = texts.iter().filter(|(t, _)| t.starts_with("Style ")).map(|(_, r)| r.bottom()).fold(0.0, f32::max).min(400.0 - BAR - 4.0);
-        egui::DragAndDrop::set_payload(&ctx, PanelDrag::LibraryItem { library: lib, kind: ItemKind::CharStyle, item: "Style 0".into() });
-        let hold = egui::pos2(first.center().x, bottom - 4.0);
-        for _ in 0..5 {
-            frame_at(&mut app, &ctx, 400.0, vec![egui::Event::PointerMoved(hold)]);
-        }
-        let (texts, _) = frame_at(&mut app, &ctx, 400.0, vec![egui::Event::PointerMoved(hold)]);
-        let moved = texts.iter().find(|(t, _)| t == "Style 0").map_or(f32::NEG_INFINITY, |(_, r)| r.top());
-        assert!(moved < first.top(), "the list scrolled down: {} → {moved}", first.top());
-    }
-
-    /// New Group… and Rename Group… ask for a name and act on the library and group they came
-    /// from; the dialog shows only the name.
-    #[test]
-    fn group_dialogs_run_with_their_library_and_group() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let lib = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
-        app.run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
-        ask_group_name(&mut app, &lib, None, json!([{"kind": "fillColor", "item": "Blue"}]));
-        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Cool"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        ask_group_name(&mut app, &lib, Some("Cool"), Value::Null);
-        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Cold"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let got = app.run("library.get", json!({})).unwrap();
-        assert_eq!(got["groups"], json!([{"name": "Cold", "items": [{"kind": "color", "item": "Blue"}]}]));
-    }
-
-    /// Export Library… writes the library's file and Import Library… adds it back as a new library.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    fn libraries_are_exported_and_imported_from_the_panel_menu() {
-        let dir = vectorcraft_testkit::temp_dir("libraries-panel");
-        let path = dir.join("Brand.vclibrary").to_string_lossy().to_string();
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.run("library.create", json!({"name": "Brand"})).unwrap();
-        app.run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
-        let picked = path.clone();
-        app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
-            assert_eq!(pick.name, "Brand.vclibrary", "the library's name suggested");
-            Some(picked.clone())
-        }));
-        app.services.write = Some(Box::new(|p: &str, bytes: &[u8]| std::fs::write(p, bytes).map_err(|e| e.to_string())));
-        export_picked(&mut app, "Brand", "Brand");
-        assert!(std::path::Path::new(&path).exists());
-        let picked = path.clone();
-        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
-        import_picked(&mut app);
-        let list = app.run("library.list", json!({})).unwrap();
-        let names: Vec<&str> = list["libraries"].as_array().unwrap().iter().map(|l| l["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["Brand", "Brand (2)"]);
-        assert_eq!(app.ui.status, "Imported library Brand (2)");
-    }
-}
+mod tests;

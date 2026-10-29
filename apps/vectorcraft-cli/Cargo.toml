@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
-vectorcraft-engine = { workspace = true }
+vectorcraft-engine = { workspace = true, features = ["bundled-fonts"] }
 vectorcraft-format = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-svg = { workspace = true }
@@ -32,10 +32,10 @@ log = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 winsafe = { version = "0.0.29", default-features = false, features = ["kernel", "psapi"] }
 
-# DirectWrite's system font collection (the desktop app's src/system_fonts.rs, shared): fonts that
-# font services such as Adobe Fonts load in place (#579). MIT OR Apache-2.0.
-[target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
-windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
+# DirectWrite's system font collection and GDI's font list (the desktop app's src/system_fonts.rs,
+# shared): fonts that font services such as Adobe Fonts load in place (#579, #1258). MIT OR
+# Apache-2.0.
+windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi"] }
 
 # CoreText's font manager (the desktop app's src/mac_fonts.rs, shared): fonts that apps and font
 # managers register from their own folders (#579). Zlib OR Apache-2.0 OR MIT.

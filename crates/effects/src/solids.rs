@@ -143,6 +143,13 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     facets(id, &path, rule, b, p).map(|_| ())
 }
 
+/// Can 3D effect `id` (Revolve included, [`is_three_d`]) with parameters `p` draw `n`? Checked
+/// before a command changes the document: Revolve by [`crate::validate_revolve`], the others by
+/// [`validate_solid`].
+pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
+}
+
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and
 /// blend mode (so overlapping facets don't add up their transparency).
 fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool) -> Node {
@@ -351,5 +358,4 @@ pub fn solid_art(n: &Node) -> Option<Node> {
 }
 
 #[cfg(test)]
-#[path = "tests_solids.rs"]
 mod tests;

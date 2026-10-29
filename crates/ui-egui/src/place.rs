@@ -63,6 +63,9 @@ pub struct PlaceState {
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
     info: Option<((u64, u64, u64), Value)>,
+    /// The Place dialog's lines about its files while they are read off the UI thread: the
+    /// dialog's files, and the lines once they are read.
+    reading_lines: Option<(Value, std::sync::mpsc::Receiver<Vec<String>>)>,
 }
 
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
@@ -78,6 +81,12 @@ impl PlaceState {
         for (_, th) in &mut self.thumbs {
             th.tex = None;
         }
+    }
+
+    /// The names of the files the loaded cursor has thumbnails of.
+    #[cfg(test)]
+    pub(crate) fn thumbnails(&self) -> Vec<&str> {
+        self.thumbs.iter().map(|(n, _)| n.as_str()).collect()
     }
 }
 
@@ -97,8 +106,27 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options
 /// asks for them first); with `paths`, the Place dialog for them; with neither, pick the files
-/// first.
+/// first. The file is read and placed at once (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    place_file(app, p, Read::AtOnce)
+}
+
+/// [`run`] for a file the user places (the Place dialog's OK, [`io::place_bytes`], the OK of the
+/// import options Place asks for): on the desktop the file is read off the UI thread
+/// ([`crate::placing::start`]), and the result is then `{background: true, status}`.
+pub fn run_for_user(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    place_file(app, p, Read::ForUser { dropped: false })
+}
+
+/// How [`place_file`] and [`queue_files`] read files: at once, or for the user, off the UI thread
+/// where they can ([`crate::placing::available`]); `dropped` when the file was dropped on the canvas.
+#[derive(Clone, Copy)]
+enum Read {
+    AtOnce,
+    ForUser { dropped: bool },
+}
+
+fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(p) {
         return Ok(crate::dialogs::text_import::open(app, p));
     }
@@ -127,7 +155,16 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     {
         p["at"] = json!([v.center.x, v.center.y]);
     }
-    engine(app, "file.place", &p)
+    match read {
+        Read::ForUser { dropped } if crate::placing::available(app) => {
+            let r = crate::placing::start(app, &p, dropped);
+            if let Err(e) = &r {
+                app.status(e.clone());
+            }
+            r
+        }
+        _ => engine(app, "file.place", &p),
+    }
 }
 
 /// Pick files to place: the Place dialog opens with them (on the web once they arrive).
@@ -153,8 +190,9 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
 /// The Place dialog for `files` (`{path}`, or `{name}` with the bytes in [`PlaceState`]).
 fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
     let units = app.session.active().map(|d| d.doc.units).unwrap_or_default();
-    let info: Vec<String> = files.iter().map(|f| summary(app, f, units)).collect();
+    let info = lines(app, &files, units);
     let one_object = app.session.active().is_some_and(|d| d.selection.objects.len() == 1);
+    let linked: Vec<bool> = files.iter().map(|f| is_vectorcraft_file(app, f)).collect();
     app.ui.dialog = Some(crate::state::Dialog::new(
         crate::dialogs::place::KIND,
         json!({
@@ -163,18 +201,24 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
             "template": false,
             "replace": false,
             "__replace": files.len() == 1 && one_object,
-            "__documents": files.iter().any(is_vectorcraft_file),
-            "__others": !files.iter().all(is_vectorcraft_file),
+            "__documents": linked.contains(&true),
+            "__others": linked.contains(&false),
             "__info": info,
         }),
     ));
 }
 
 /// Is dialog file entry `file` a VectorCraft document on disk (what Link places as one locked
-/// object)?
-fn is_vectorcraft_file(file: &Value) -> bool {
+/// object), or a PDF or `.ai` file on disk? A `.ai` saved without PDF compatibility is PostScript,
+/// which `file.place` embeds whether Link is on or not.
+fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
+    let Some(path) = file.get("path").and_then(Value::as_str) else { return false };
     let native = ["vectorcraft", vectorcraft_format::LEGACY_EXTENSION, "vctemplate"];
-    file.get("path").and_then(Value::as_str).is_some_and(|p| native.contains(&fileio::extension(p).as_str()))
+    match fileio::extension(path).as_str() {
+        e if native.contains(&e) => true,
+        "pdf" | "ai" | "ait" => app.services.read.as_ref().and_then(|r| r(path).ok()).is_none_or(|b| !vectorcraft_pdf::is_postscript(&b)),
+        _ => false,
+    }
 }
 
 /// The engine params naming `file` (a dialog file entry).
@@ -187,13 +231,73 @@ fn source(app: &VectorcraftApp, file: &Value) -> Option<Value> {
     Some(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }))
 }
 
-/// One line about `file` for the Place dialog ("300 × 150 px, 300 ppi, RGB (1 in × 0.5 in)"), or
-/// why it can't be placed.
+/// The Place dialog's line about each of `files`, read at once, or where the files the user places
+/// are read off the UI thread ([`crate::placing::available`]) on a thread of its own: the lines are
+/// then empty until [`fill_lines`] shows them.
+fn lines(app: &mut VectorcraftApp, files: &[Value], units: vectorcraft_doc::Unit) -> Vec<String> {
+    if crate::placing::available(app) {
+        let sources: Vec<Option<Value>> = files.iter().map(|f| source(app, f)).collect();
+        let (tx, read) = std::sync::mpsc::channel();
+        // The automation roots in force here are in force there.
+        let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
+        let spawned = std::thread::Builder::new().name("vectorcraft-place-info".into()).spawn(move || {
+            let lines: Vec<String> = scope.run(|| {
+                sources
+                    .iter()
+                    .map(|p| match p {
+                        None => "not found".to_string(),
+                        Some(p) => line(
+                            vectorcraft_engine::guard::catch_panic(|| vectorcraft_engine::cmd::place::read_info(p).map_err(|e| e.to_string()))
+                                .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)"))),
+                            units,
+                        ),
+                    })
+                    .collect()
+            });
+            // The app may have quit meanwhile: nothing to hand them to.
+            let _ = tx.send(lines);
+        });
+        if spawned.is_ok() {
+            app.place.reading_lines = Some((json!(files), read));
+            return vec![String::new(); files.len()];
+        }
+    }
+    files.iter().map(|f| summary(app, f, units)).collect()
+}
+
+/// The open Place dialog `d`'s lines about its files once they have been read off the UI thread
+/// ([`lines`]) → whether they are still being read.
+pub(crate) fn fill_lines(app: &mut VectorcraftApp, d: &mut crate::state::Dialog) -> bool {
+    let Some((files, read)) = &app.place.reading_lines else { return false };
+    if d.fields.get("files") != Some(files) {
+        return false;
+    }
+    match read.try_recv() {
+        Ok(lines) => {
+            d.fields.insert("__info".into(), json!(lines));
+            app.place.reading_lines = None;
+            false
+        }
+        Err(std::sync::mpsc::TryRecvError::Empty) => true,
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            app.place.reading_lines = None;
+            false
+        }
+    }
+}
+
+/// One line about `file` for the Place dialog, read at once ([`line`]).
 fn summary(app: &mut VectorcraftApp, file: &Value, units: vectorcraft_doc::Unit) -> String {
     let Some(p) = source(app, file) else { return "not found".into() };
-    let i = match app.session.execute("file.place.info", &p) {
+    line(app.session.execute("file.place.info", &p).map_err(|e| e.to_string()), units)
+}
+
+/// One line for the Place dialog from `file.place.info`'s reply `i` ("300 × 150 px, 300 ppi, RGB
+/// (1 in × 0.5 in)"), or why the file can't be placed.
+fn line(i: Result<Value, String>, units: vectorcraft_doc::Unit) -> String {
+    let i = match i {
         Ok(i) => i,
-        Err(e) => return e.to_string(),
+        Err(e) => return e,
     };
     let size = format!("{} × {}", units.format(i["width"].as_f64().unwrap_or(0.0)), units.format(i["height"].as_f64().unwrap_or(0.0)));
     match (i["pixelWidth"].as_u64(), i["pixelHeight"].as_u64()) {
@@ -222,6 +326,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
     let (link, template) = (d.bool("link"), d.bool("template"));
     app.ui.place_link = link;
     app.ui.dialog = None;
+    app.place.reading_lines = None;
     let r = match &sources[..] {
         [one] => {
             let mut p = one.clone();
@@ -230,12 +335,12 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             if d.bool("replace") && d.bool("__replace") {
                 p["replace"] = json!(true);
             }
-            run(app, &p)
+            run_for_user(app, &p)
         }
         many => {
             let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
-            queue(app, &json!({ "paths": paths, "files": files, "link": link, "template": template }))
+            queue_files(app, &json!({ "paths": paths, "files": files, "link": link, "template": template }), Read::ForUser { dropped: false })
         }
     };
     app.place.picked.clear();
@@ -244,13 +349,44 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
 
 // ---------- the place cursor ----------
 
-/// `file.place.queue` with thumbnails for the cursor (unless `thumbnail` is given).
+/// `file.place.queue` with thumbnails for the cursor (unless `thumbnail` is given), the files read
+/// at once (MCP, scripts).
 pub fn queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    queue_files(app, p, Read::AtOnce)
+}
+
+fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
     let mut p = p.clone();
     if p.get("thumbnail").is_none() {
         p["thumbnail"] = json!(THUMB);
     }
+    if matches!(read, Read::ForUser { .. }) && crate::placing::available(app) {
+        let r = crate::placing::start_queue(app, &p);
+        if let Err(e) = &r {
+            app.status(e.clone());
+        }
+        return r;
+    }
     let r = engine(app, "file.place.queue", &p)?;
+    show_thumbnails(app, &r);
+    Ok(r)
+}
+
+/// The file a click or drag of the place cursor places (`file.place` with `p`, its `rect` set):
+/// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
+/// once. An error shows in the status bar.
+pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
+    if crate::placing::available(app) {
+        if let Err(e) = crate::placing::start(app, p, false) {
+            app.status(e);
+        }
+    } else {
+        let _ = engine(app, "file.place", p);
+    }
+}
+
+/// The cursor's thumbnails from `file.place.queue`'s reply `r`.
+pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value) {
     app.place.thumbs = r["files"]
         .as_array()
         .into_iter()
@@ -262,7 +398,6 @@ pub fn queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color), tex: None }))
         })
         .collect();
-    Ok(r)
 }
 
 /// The loaded place cursor at `pos`: the current file's thumbnail with the number of files loaded.
@@ -352,7 +487,7 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
-                run(app, &p).map(|_| ())
+                place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
             DropTarget::Open => match path.as_deref() {
                 Some(path) if app.services.read.is_some() => io::open_path(app, path).map(|_| ()),

@@ -8,6 +8,9 @@
 //! renderer stops drawing and keeps no half-drawn pattern tile or effect raster. Encoders that
 //! make one file in one go report nothing: the frontend shows them as busy and checks
 //! [`Progress::cancelled`] itself before writing, so a cancelled export never writes a file.
+//! Export for Screens ([`super::ScreenExport::write`]) reports one step per file instead, keeps
+//! its encoders' reports out, and stops before the next file, so the files it wrote before the
+//! cancel stay.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -21,11 +24,23 @@ pub struct Progress {
     token: CancelToken,
     done: AtomicU64,
     total: AtomicU64,
+    /// The steps are files (Export for Screens), not artboards.
+    files: bool,
 }
 
 impl Progress {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
+    }
+
+    /// A [`Progress`] whose steps are files: the export of [`super::ScreenExport::write`].
+    pub fn of_files() -> Arc<Self> {
+        Arc::new(Self { files: true, ..Self::default() })
+    }
+
+    /// Are the steps files rather than artboards?
+    pub fn counts_files(&self) -> bool {
+        self.files
     }
 
     /// `(steps done, steps in all)`; `total` is 0 while the export can't say (one file made in one go).

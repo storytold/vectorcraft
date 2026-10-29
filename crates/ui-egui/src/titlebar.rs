@@ -30,7 +30,7 @@ const CAPTIONS: [Caption; 3] = [Caption::Minimize, Caption::Maximize, Caption::C
 
 /// Caption button ids (stable, so tests and agents can find them).
 fn caption_id(c: Caption) -> Id {
-    Id::new(("titlebar-caption", c as u8))
+    Id::unique(("titlebar-caption", c as u8))
 }
 
 fn maximized(ctx: &egui::Context) -> bool {
@@ -45,7 +45,7 @@ fn toggle_maximize(ctx: &egui::Context) {
 /// maximize. Call it before laying out the bar so its widgets, registered later, take the clicks.
 pub fn drag_area(ui: &Ui, rect: Rect) {
     let ctx = ui.ctx();
-    let resp = ui.interact(rect, Id::new("titlebar-drag"), Sense::click_and_drag());
+    let resp = ui.interact(rect, Id::unique("titlebar-drag"), Sense::click_and_drag());
     // egui hands a drag that starts on a click-only widget (a menu title) to the drag-sensing
     // background below it, so remember whether the press itself landed on bare background.
     if ctx.input(|i| i.pointer.any_pressed()) {
@@ -159,10 +159,10 @@ pub fn resize_zones(ui: &mut Ui) {
         return;
     }
     let w = ctx.content_rect();
-    let layer = LayerId::new(Order::Foreground, Id::new("titlebar-resize"));
+    let layer = LayerId::new(Order::Foreground, Id::unique("titlebar-resize"));
     let zui = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(w));
     for (i, (r, dir, cursor)) in zones(w).into_iter().enumerate() {
-        let resp = zui.interact(r, Id::new(("titlebar-resize", i)), Sense::drag()).on_hover_cursor(cursor);
+        let resp = zui.interact(r, Id::unique(("titlebar-resize", i)), Sense::drag()).on_hover_cursor(cursor);
         if resp.drag_started_by(PointerButton::Primary) {
             ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
             handed_to_os(&ctx);
@@ -253,7 +253,7 @@ mod tests {
 
         /// The bar's clickable widgets other than its background and the caption buttons.
         fn bar_widgets(&self) -> Vec<Rect> {
-            let skip: Vec<Id> = std::iter::once(Id::new("titlebar-drag")).chain(CAPTIONS.map(caption_id)).collect();
+            let skip: Vec<Id> = std::iter::once(Id::unique("titlebar-drag")).chain(CAPTIONS.map(caption_id)).collect();
             self.ctx.viewport(|v| {
                 v.prev_pass
                     .widgets

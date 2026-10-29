@@ -20,7 +20,7 @@
 
 use serde_json::Value;
 
-use super::{bad, find_command};
+use super::{bad, command_specs, find_command};
 use crate::Result;
 
 /// What a params description says about the keys of the params object.
@@ -161,6 +161,32 @@ pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
+/// Does the description `doc` take `id` as `ids` of one object (`{ids?|id?}`, `{id?, ids?: …
+/// (instead of id)}`, `{id} or {ids: […]}`): it names both keys, and no params object of it names
+/// `ids` beside a required `id`, which is something else (`plugin.run {id, ids?}`: the plug-in's)?
+pub(crate) fn id_stands_for_ids(doc: &'static str) -> bool {
+    fn head(alternative: &str) -> &str {
+        alternative.split([':', '=', '(']).next().unwrap_or_default().trim()
+    }
+    if !takes_key(doc, "ids") || !takes_key(doc, "id") {
+        return false;
+    }
+    let mut rest = doc;
+    while let Ok((body, after)) = object_body(rest) {
+        let entries = split_top(body, ',');
+        let required_id = entries.iter().any(|e| split_top(e, '|').len() == 1 && head(e) == "id");
+        let names_ids = entries.iter().any(|e| split_top(e, '|').iter().any(|a| head(a).trim_end_matches('?').trim_end() == "ids"));
+        if required_id && names_ids {
+            return false;
+        }
+        match after.trim_start().strip_prefix("or ").or_else(|| after.trim_start().strip_prefix("| ")).filter(|r| r.starts_with('{')) {
+            Some(next) => rest = next,
+            None => break,
+        }
+    }
+    true
+}
+
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());
@@ -182,8 +208,12 @@ fn distance(a: &str, b: &str) -> usize {
 
 /// The key of `keys` a misspelt `key` most likely meant: the nearest one, when it is near.
 fn nearest<'a>(key: &str, keys: &[&'a str]) -> Option<&'a str> {
-    let near = keys.iter().map(|k| (distance(key, k), *k)).min()?;
-    (near.0 <= (key.chars().count() / 3).max(1)).then_some(near.1)
+    let len = key.chars().count();
+    let most = (len / 3).max(1);
+    // A key whose length differs by more than `most` is more than `most` edits away and isn't
+    // measured.
+    let near = keys.iter().filter(|k| k.chars().count().abs_diff(len) <= most).map(|k| (distance(key, k), *k)).min()?;
+    (near.0 <= most).then_some(near.1)
 }
 
 /// `params` has only keys the description `doc` of command `id` names, or the parameter error
@@ -202,7 +232,7 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
-fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
     bad(
         id,
         match nearest(key, keys) {
@@ -452,6 +482,21 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The command id a misspelled `id`, which names no command, most likely meant: the nearest one,
+/// when it is near (as [`check_keys`] matches a misspelled key).
+pub(crate) fn nearest_command(id: &str) -> Option<&'static str> {
+    let ids: Vec<&'static str> = command_specs().iter().map(|c| c.id).collect();
+    nearest(id, &ids)
+}
+
+/// The error for `id`, which names no command: with the nearest command id, when one is near.
+pub(crate) fn unknown_command(id: &str) -> crate::EngineError {
+    match nearest_command(id) {
+        Some(near) => crate::EngineError::UnknownCommandNear(id.to_string(), near.to_string()),
+        None => crate::EngineError::UnknownCommand(id.to_string()),
+    }
 }
 
 impl crate::Session {

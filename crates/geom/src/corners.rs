@@ -39,7 +39,11 @@ impl Side {
 
     /// The side's length.
     fn length(&self) -> f64 {
-        if self.straight() { self.curve.p0.distance(self.curve.p3) } else { self.curve.arclen(ARCLEN_ACCURACY) }
+        if self.straight() {
+            self.curve.p0.distance(self.curve.p3)
+        } else {
+            crate::path::measured_arclen(&kurbo::PathSeg::Cubic(self.curve), ARCLEN_ACCURACY)
+        }
     }
 
     /// The parameter `s` along the side from the corner, the point there and the direction the

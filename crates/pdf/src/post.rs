@@ -3,10 +3,12 @@
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
 //! through between its two steps so that it stays linearised. Also here: what makes a file say it
 //! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, the file's
-//! modification date ([`modification_date`]) and the pages' user units ([`user_units`]), which the
-//! export writes in that order before the thumbnails.
+//! modification date ([`modification_date`]), its copyright ([`rights`]) and the pages' user units
+//! ([`user_units`]), which the export writes in that order before the thumbnails.
 
 use std::borrow::Cow;
+
+use vectorcraft_doc::{CopyrightStatus, DocMetadata};
 
 use crate::encrypt::Obj;
 use crate::linearize::{self, Parsed};
@@ -119,6 +121,78 @@ pub(crate) fn modification_date(pdf: Vec<u8>, modified: i64) -> Result<Vec<u8>, 
         }
     }
     patch.apply(&pdf, &xref)
+}
+
+/// `pdf` with File Info's copyright (`info`) added to the catalog's XMP metadata, after the
+/// writer's properties: the notice as `dc:rights`, the URL as `xmpRights:WebStatement` and the
+/// status as `xmpRights:Marked` (`True` for a copyrighted work, `False` for a public-domain one,
+/// none when it is unknown), as [`crate::file_info`] reads them. Unchanged when `info` gives none of
+/// them or the file has no XMP metadata.
+pub(crate) fn rights(pdf: Vec<u8>, info: &DocMetadata) -> Result<Vec<u8>, PdfError> {
+    let props = rights_properties(info);
+    if props.is_empty() {
+        return Ok(pdf);
+    }
+    let failed = |why: &str| PdfError::Write(format!("can't write the file's copyright: {why}"));
+    let Parsed { xref, objects, root, .. } = linearize::parse(&pdf).map_err(failed)?;
+    let metadata = match objects.get(&root).and_then(|c| c.value.get(b"Metadata")) {
+        Some(&Obj::Ref(n, _)) => objects.get(&n),
+        _ => None,
+    };
+    let Some(o) = metadata else { return Ok(pdf) };
+    let Some(&Obj::Int { value, start, end }) = o.value.get(b"Length") else { return Err(failed("its metadata has no direct length")) };
+    let xmp = pdf.get(o.value_span.1..o.endobj).unwrap_or_default();
+    let close = crate::lab_spot::rfind(xmp, b"</rdf:Description>").ok_or_else(|| failed("its metadata has no description"))?;
+    let at = o.value_span.1 + close;
+    let mut patch = Patch::new(&xref);
+    patch.replace(start, end, (value + props.len() as i64).to_string().into_bytes());
+    patch.replace(at, at, props.into_bytes());
+    patch.apply(&pdf, &xref)
+}
+
+/// The XMP properties [`rights`] adds, each declaring its namespace; empty when `info` has no
+/// copyright notice or URL and its status is unknown.
+fn rights_properties(info: &DocMetadata) -> String {
+    use crate::file_info::{DC, XMP_RIGHTS};
+    let mut out = String::new();
+    let notice = info.copyright_notice.trim();
+    if !notice.is_empty() {
+        out.push_str(&format!(
+            "<dc:rights xmlns:dc=\"{DC}\"><rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt></dc:rights>",
+            xml_text(notice)
+        ));
+    }
+    let url = info.copyright_url.trim();
+    if !url.is_empty() {
+        out.push_str(&format!("<xmpRights:WebStatement xmlns:xmpRights=\"{XMP_RIGHTS}\">{}</xmpRights:WebStatement>", xml_text(url)));
+    }
+    let marked = match info.copyright_status {
+        CopyrightStatus::Copyrighted => Some("True"),
+        CopyrightStatus::PublicDomain => Some("False"),
+        CopyrightStatus::Unknown => None,
+    };
+    if let Some(m) = marked {
+        out.push_str(&format!("<xmpRights:Marked xmlns:xmpRights=\"{XMP_RIGHTS}\">{m}</xmpRights:Marked>"));
+    }
+    out
+}
+
+/// `s` as XML character data: `&`, `<`, `>` and `"` escaped, a carriage return written as the
+/// character reference `&#xD;`, and the characters XML 1.0 doesn't allow left out.
+fn xml_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\r' => out.push_str("&#xD;"),
+            '\t' | '\n' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'.. => out.push(c),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Linearise `pdf`, encrypting it on the way as `set` says.

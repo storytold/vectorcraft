@@ -5,12 +5,14 @@ use std::sync::Arc;
 
 use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
+use unicode_segmentation::UnicodeSegmentation;
 
 use harfrust::{Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
 use skrifa::MetadataProvider;
+use skrifa::charmap::Charmap;
 use skrifa::instance::Size;
 use vectorcraft_doc::text::INLINE_CHAR;
-use vectorcraft_doc::{CharStyle, InlineArt};
+use vectorcraft_doc::{CharStyle, Digits, InlineArt};
 
 use crate::features::{OtFeatures, ligatures_suppressed_by};
 use crate::fontdb::{FontDb, FontFace};
@@ -62,6 +64,31 @@ pub(crate) struct SGlyph {
     /// A word of a script written without spaces (Thai, Lao, Khmer, Myanmar) ends after the
     /// glyph's cluster, so a line may break there ([`mark_word_ends`]).
     pub word_end: bool,
+    /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
+    /// glyphs that have it.
+    pub no_break: bool,
+    /// The glyph is of a script whose letters join (Arabic, Syriac, N'Ko, Mongolian, Adlam…),
+    /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
+    /// along the path so its joins meet.
+    pub cursive: bool,
+}
+
+/// Does `script` join its letters (a cursive script, whose neighbouring glyphs touch)?
+pub(crate) fn joins(script: Script) -> bool {
+    matches!(
+        script,
+        Script::Arabic
+            | Script::Syriac
+            | Script::Nko
+            | Script::Mongolian
+            | Script::Adlam
+            | Script::Mandaic
+            | Script::Manichaean
+            | Script::Psalter_Pahlavi
+            | Script::Hanifi_Rohingya
+            | Script::Sogdian
+            | Script::Phags_Pa
+    )
 }
 
 /// How `vpal` and the vertical kerning with it move an upright glyph in vertical type and change
@@ -107,7 +134,10 @@ impl SGlyph {
     }
     /// A line may break after this glyph.
     pub fn break_after(&self) -> bool {
-        self.is_space() || self.word_end || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN) || is_cjk(self.ch)
+        self.is_space()
+            || self.word_end
+            || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN | '\u{2028}')
+            || is_cjk(self.ch)
     }
     /// A soft (discretionary) hyphen: invisible unless a line breaks after it.
     pub fn is_soft_hyphen(&self) -> bool {
@@ -368,24 +398,23 @@ pub(crate) fn shape_range(
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
-        let mut cache: Vec<(char, Arc<FontFace>)> = Vec::new();
+        let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
         let mut script = Script::Common;
-        for (i, c) in text[a..b].char_indices() {
+        // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
+        for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
             // Digits are drawn in the style's numeral system: the font must cover that digit.
-            let c = st.digits.map(c);
+            let Some(c) = cluster.chars().next().map(|c| st.digits.map(c)) else { continue };
             let level = level_at(i);
             // Whitespace the primary font doesn't map goes to the fallback face like any other
             // character (#1844): an ideographic space set at zero width would remove an indent.
-            // What the layout handles itself (tab, line and paragraph breaks) stays.
-            let covered = c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
-            let face = if covered {
+            let face = if drawn_chars(cluster, st.digits).all(|c| in_face(pmap.as_ref(), c)) {
                 primary.clone()
-            } else if let Some((_, f)) = cache.iter().find(|(k, _)| *k == c) {
+            } else if let Some(f) = cache.get(cluster) {
                 f.clone()
             } else {
-                let f = db.fallback_for_style(c, primary.id(), primary.weight, primary.italic).unwrap_or_else(|| primary.clone());
-                cache.push((c, f.clone()));
+                let f = fallback_face(db, &primary, pmap.as_ref(), cluster, st.digits);
+                cache.insert(cluster, f.clone());
                 f
             };
             let small = small_caps && c.is_lowercase();
@@ -430,9 +459,10 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
-/// character style's name, leading, baseline shift, rotation, Character Alignment, the kerning
-/// (each glyph takes its run's, see [`shape_segment`]) and the tracking, as long as the tracking
-/// keeps or drops standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
+/// character style's name, leading, baseline shift, rotation, Character Alignment, Character
+/// Direction (text is shaped apart where its bidi level changes), the kerning (each glyph takes its
+/// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
+/// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     // Every field is named, so that a new attribute has to be sorted into one group or the other.
     let CharStyle {
@@ -466,8 +496,11 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         position,
         small_caps,
         char_align: _,
+        char_direction: _,
         proportional_metrics,
+        tate_chu_yoko,
         digits,
+        no_break,
     } = a;
     *font_family == b.font_family
         && *font_style == b.font_style
@@ -481,8 +514,36 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *position == b.position
         && *small_caps == b.small_caps
         && *proportional_metrics == b.proportional_metrics
+        && *tate_chu_yoko == b.tate_chu_yoko
         && *digits == b.digits
+        && *no_break == b.no_break
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
+}
+
+/// The characters of a grapheme cluster that need a glyph of their own, in the numeral system
+/// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
+/// variation selectors.
+fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
+    cluster
+        .chars()
+        .map(move |c| digits.map(c))
+        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+}
+
+/// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
+fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
+    map.is_none_or(|m| m.map(c).is_some())
+}
+
+/// The face of a grapheme cluster the primary face (charmap `pmap`) lacks a character of: the
+/// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
+/// it (#4491); when there is none, the face its first character takes on its own.
+fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
+    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
+    drawn_chars(cluster, digits)
+        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
+        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
+        .unwrap_or_else(|| primary.clone())
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
@@ -550,6 +611,8 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         level,
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
+        no_break: st.no_break,
+        cursive: false,
     }
 }
 
@@ -600,6 +663,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let last = span.partition_point(|(r, _)| r.start < range.end).max(first);
     let source_runs = &(source_runs.start + first..source_runs.start + last);
     let text_seg = &text[range.clone()];
+    // The segment's script: that of its first character of a script of its own.
+    let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
     let (pos_scale, pos_shift) = st.position.scale_shift(full);
@@ -776,7 +841,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
-        if ch == SOFT_HYPHEN {
+        if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else if last_in_cluster {
             let tracking = gst.tracking / 1000.0 * size;
@@ -809,6 +874,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             level: *level,
             inline: None,
             word_end: false,
+            no_break: gst.no_break,
+            cursive,
         });
     }
 }

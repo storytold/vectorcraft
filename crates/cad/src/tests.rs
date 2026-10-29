@@ -247,6 +247,52 @@ fn closed_circular_arc_with_a_closing_chord_is_not_a_circle() {
 }
 
 #[test]
+fn a_closed_sliver_along_a_circle_is_not_a_circle() {
+    let d = doc_with(|d| {
+        let (cx, cy, r) = (60.0, 250.0, 200.0);
+        let at = |deg: f64| {
+            let rad = deg.to_radians();
+            Point::new(cx + r * rad.cos(), cy + r * rad.sin())
+        };
+        let along = |sliver: &mut vectorcraft_geom::BezPath, deg0: f64, deg1: f64| {
+            let p0 = at(deg0);
+            let p3 = at(deg1);
+            let step = (deg1 - deg0).to_radians();
+            let k = 4.0 / 3.0 * (step / 4.0).tan();
+            let r0 = deg0.to_radians();
+            let r1 = deg1.to_radians();
+            let p1 = Point::new(p0.x - r * r0.sin() * k, p0.y + r * r0.cos() * k);
+            let p2 = Point::new(p3.x + r * r1.sin() * k, p3.y - r * r1.cos() * k);
+            sliver.curve_to(p1, p2, p3);
+        };
+        let mut sliver = vectorcraft_geom::BezPath::new();
+        sliver.move_to(at(-110.0));
+        along(&mut sliver, -110.0, -90.0);
+        along(&mut sliver, -90.0, -70.0);
+        along(&mut sliver, -70.0, -110.0);
+        sliver.close_path();
+        vec![path(d, PathData::from_bezpath(&sliver), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+
+    let modern = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&modern), ["CIRCLE"]);
+    assert_eq!(kinds(&modern), ["SPLINE"]);
+}
+
+#[test]
+fn cubic_with_hidden_angular_reversal_is_not_promoted_to_arc() {
+    let d = doc_with(|d| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(Point::new(-8.404028665134, 62.061475842818));
+        b.curve_to(Point::new(-13.285253116737, 62.103123153545), Point::new(52.811163576591, 52.471253544459), Point::new(60.0, 50.0));
+        vec![path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+    let dxf = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&dxf), ["ARC"]);
+    assert_eq!(kinds(&dxf), ["SPLINE"]);
+}
+
+#[test]
 fn spline_closed_flags_follow_path_intent_across_versions_without_changing_geometry() {
     let cases = [(true, true), (true, false), (false, false), (false, true)];
     let make_doc = |keep_closure: bool| {
@@ -456,6 +502,66 @@ fn type_is_text_or_outlines() {
     }
 }
 
+/// A list paragraph's bullet is a TEXT entity of its own where it is drawn, and the paragraph's
+/// text starts after it, at the left indent.
+#[test]
+fn a_bullet_is_text_of_its_own_before_its_paragraph() {
+    let mut d = text_doc("Item", 20.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.para.list = Some(vectorcraft_doc::text::ParaList::bulleted(vectorcraft_doc::text::Bullet::Dot));
+        t.para.left_indent = 18.0;
+        t.para.first_line_indent = -18.0;
+    }
+    let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&out);
+    assert_eq!(kinds(&out), ["TEXT", "TEXT"]);
+    assert_eq!((get(&e[0], 1), get(&e[1], 1)), (Some("\u{2022}"), Some("Item")));
+    assert_eq!((all(&e[0], 10)[0], all(&e[1], 10)[0]), (10.0, 28.0), "the bullet at the anchor, the text 18 pt on");
+    // In a right-to-left paragraph the bullet is drawn after the text, at the right, and its tab
+    // lies between the two.
+    let mut d = text_doc("שלום", 20.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut bullet_x = f64::NAN;
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.para.list = Some(vectorcraft_doc::text::ParaList::bulleted(vectorcraft_doc::text::Bullet::Dot));
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let m = &lay.markers[0];
+        let bullet = m.glyphs.clone().find(|&i| i != m.tab).unwrap();
+        assert!(lay.glyphs[m.tab].origin.x < lay.glyphs[bullet].origin.x, "the tab before the bullet");
+        bullet_x = 10.0 + lay.glyphs[bullet].origin.x;
+    }
+    let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&out);
+    assert_eq!(kinds(&out), ["TEXT", "TEXT"]);
+    assert_eq!((get(&e[0], 1), get(&e[1], 1)), (Some("שלום"), Some("\u{2022}")));
+    assert!((all(&e[1], 10)[0] - bullet_x).abs() < 1e-6, "the bullet where it is drawn: {} and {bullet_x}", all(&e[1], 10)[0]);
+}
+
+/// A numbered list paragraph's number and period are a TEXT entity of their own where they are
+/// drawn, in the order they are drawn: in a right-to-left paragraph the period comes first, at the
+/// number's left.
+#[test]
+fn a_number_is_text_of_its_own_before_its_paragraph() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let numbered = |text: &str, count: u32| {
+        let mut d = text_doc(text, 20.0);
+        let id = d.layers[0].children().unwrap()[0].id;
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic));
+            t.para.left_indent = 30.0;
+            t.para.first_line_indent = -30.0;
+            t.list_count = count;
+        }
+        let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+        entities(&out).iter().map(|e| (get(e, 1).map(str::to_string), all(e, 10)[0])).collect::<Vec<_>>()
+    };
+    assert_eq!(numbered("Item", 11), [(Some("12.".to_string()), 10.0), (Some("Item".to_string()), 40.0)]);
+    let rtl = numbered("שלום", 11);
+    assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
+    assert!(rtl[1].1 > rtl[0].1, "the number right of the text: {rtl:?}");
+}
+
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.
 #[test]
 fn shrunk_area_type_is_text_at_the_size_it_draws_at() {
@@ -500,6 +606,7 @@ fn images_link_png_or_jpeg_files() {
             xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
             link: None,
             placement: Default::default(),
+            pixels: None,
         };
         vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
@@ -524,6 +631,32 @@ fn images_link_png_or_jpeg_files() {
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
     assert!(entities(&r12).is_empty() && r12.images.is_empty());
     assert!(r12.warnings.iter().any(|w| w.contains("no images")));
+}
+
+#[test]
+fn images_without_pixels_are_left_out_with_one_note() {
+    // One image has no data in the document, and the other image's data is empty.
+    let mut d = doc_with(|d| {
+        ["raster-1", "raster-2"]
+            .into_iter()
+            .map(|key| {
+                let im = ImageObject {
+                    key: key.into(),
+                    width: 4,
+                    height: 2,
+                    xf: Affine::IDENTITY,
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))
+            })
+            .collect()
+    });
+    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None });
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(entities(&out).is_empty() && out.images.is_empty());
+    assert_eq!(out.warnings, ["an image has no pixels and was left out"]);
 }
 
 #[test]

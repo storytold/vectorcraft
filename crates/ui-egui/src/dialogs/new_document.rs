@@ -23,8 +23,8 @@ pub(super) const KIND: &str = "newDocument";
 /// More Settings.
 pub(super) const MORE: &str = "newDocumentMore";
 
-pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
-pub(super) const MORE_SPEC: DialogSpec = DialogSpec::window(show_more, confirm);
+pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show, confirm) };
+pub(super) const MORE_SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show_more, confirm) };
 
 /// The fields `file.new` takes.
 const PARAMS: [&str; 12] = [
@@ -171,7 +171,7 @@ fn set_layout(d: &mut Dialog, key: &str, v: Value) {
 
 /// The New Document dialog window `id` in the shared modal frame.
 fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui::Ui)) {
-    super::modal::show(ctx, id, egui::Id::new(("dialog", id)), -20.0, margin, add);
+    super::modal::show(ctx, id, egui::Id::unique(("dialog", id)), -20.0, margin, add);
 }
 
 /// What the buttons of a window asked for.

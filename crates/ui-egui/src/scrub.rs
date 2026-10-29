@@ -9,6 +9,8 @@
 //! drag is one undo step and Escape takes it back. Preferences › General › Scrub Numeric Fields by
 //! Dragging turns it off.
 
+use std::ops::RangeInclusive;
+
 use egui::{Context, CursorIcon, Id, Key, Rect, Response, Sense, Ui};
 
 use crate::VectorcraftApp;
@@ -20,16 +22,17 @@ const LABEL_GAP: f32 = 64.0;
 
 /// Where the scrub in progress is kept (egui memory).
 fn state_id() -> Id {
-    Id::new("numeric-field-scrub")
+    Id::unique("numeric-field-scrub")
 }
 
 /// Where the last label drawn waits for its field.
 fn label_id() -> Id {
-    Id::new("numeric-field-label")
+    Id::unique("numeric-field-label")
 }
 
+/// Temp-memory key for the numeric-field scrub preference.
 fn enabled_id() -> Id {
-    Id::new("numeric-field-scrub-enabled")
+    Id::unique("numeric-field-scrub-enabled")
 }
 
 /// Turn scrubbing on or off (General › Scrub Numeric Fields by Dragging; on until set).
@@ -131,11 +134,11 @@ fn take_label(ui: &Ui, field: Rect) -> Option<Rect> {
 }
 
 /// Scrub numeric field `field`, its box at `rect`, showing `text`: `value` in its units, rounded
-/// to `decimals` places. → The value a drag on the field's label steps it to, or the value it
-/// started at when Escape cancels the drag. A click on the label (or a press held without
-/// stepping) focuses the field with all of `text` selected. Nothing for a field without a label,
-/// disabled or showing no value (objects that differ).
-pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f64>, decimals: i32) -> Option<f64> {
+/// to `decimals` places and kept within `bounds` (#3370). → The value a drag on the field's label
+/// steps it to, or the value it started at when Escape cancels the drag. A click on the label (or a
+/// press held without stepping) focuses the field with all of `text` selected. Nothing for a field
+/// without a label, disabled or showing no value (objects that differ).
+pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f64>, decimals: i32, bounds: &RangeInclusive<f64>) -> Option<f64> {
     let label = take_label(ui, rect)?;
     let value = value.filter(|v| v.is_finite())?;
     if !enabled(ui.ctx()) || !ui.is_enabled() {
@@ -143,7 +146,7 @@ pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f6
     }
     // On top of the label, which may sense clicks itself (selectable text).
     let resp = ui.interact(label, field.with("scrub-label"), Sense::click_and_drag());
-    drag(ui, &resp, field, text, value, decimals)
+    drag(ui, &resp, field, text, value, decimals).map(|v| v.max(*bounds.start()).min(*bounds.end()))
 }
 
 /// What a drag on `resp`, the label of field `field`, does this frame.

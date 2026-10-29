@@ -141,7 +141,7 @@ fn the_menus_reach_asset_export() {
     let window = entries.iter().find(|e| e.label == "Asset Export").unwrap();
     assert_eq!(window.params, json!({"panel": crate::panels::asset_export::ID, "toggle": true}));
     app.run("window.panel", window.params.clone()).unwrap();
-    assert_eq!(app.ui.open_panel.as_deref(), Some(crate::panels::asset_export::ID));
+    assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID));
     app.run("assets.add", json!({"multiple": false})).unwrap();
     assert_eq!(assets(&mut app).len(), 1);
 }

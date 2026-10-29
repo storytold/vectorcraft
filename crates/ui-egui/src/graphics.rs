@@ -42,7 +42,7 @@ impl GraphicsLoss {
 /// context's.
 pub(crate) fn context_tag(ctx: &egui::Context) -> u64 {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    let id = egui::Id::new("vectorcraft-context-tag");
+    let id = egui::Id::unique("vectorcraft-context-tag");
     if let Some(tag) = ctx.data(|d| d.get_temp::<u64>(id)) {
         return tag;
     }
@@ -105,14 +105,22 @@ impl VectorcraftApp {
     /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`].
     pub(crate) fn adopt_context(&mut self, ctx: &egui::Context) {
         let tag = context_tag(ctx);
+        self.ui_ctx = Some(ctx.clone());
         if self.context == tag {
             return;
         }
         if self.context != 0 {
             log::info!("vectorcraft: new graphics context: uploading the UI again");
             forget_textures();
+            // The IME tracker's pass numbers are per context. A new context starts at pass 0; only
+            // an explicit teardown guarantees it cannot look continuous with the old context's
+            // last observed pass and reuse its owner/baseline generation.
+            self.ime_context.end_viewport(ctx.viewport_id());
             self.styled = false;
             self.fonts_ready = false;
+            // Shortcut input is keyed by context identity. Preserve a first pass already
+            // handled for this new context before UI setup, or toggle keys execute twice.
+            self.injected_settle_hook = false;
             self.ui_fonts = Default::default();
             self.canvas.texture = None;
             self.canvas.key = None;
@@ -182,6 +190,8 @@ mod tests {
         assert_eq!(CACHE.with(|c| c.borrow().clone()), [8], "and filled again");
     }
 
+    /// After the graphics are lost, the app uploads its canvas and previews to the new context and
+    /// applies its theme and fonts there again.
     #[test]
     fn the_app_uploads_everything_again_in_a_new_context() {
         let mut app = app();
@@ -212,7 +222,8 @@ mod tests {
         assert_eq!(texture_name(&new, canvas).as_deref(), Some("canvas"), "uploaded to the new context");
         assert_eq!(texture_name(&new, preview(&new)).as_deref(), Some("preview-8x8@1:loss"), "cached previews are made again");
         assert_eq!(new.global_style().visuals.panel_fill, old.global_style().visuals.panel_fill, "the theme is applied again");
-        assert!(new.fonts(|f| f.definitions().font_data.contains_key("SourceSans3")), "and the fonts installed");
+        let families = new.fonts(|f| f.definitions().families.clone());
+        assert!(families.contains_key(&egui::FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into())), "and the fonts installed");
     }
 
     #[test]

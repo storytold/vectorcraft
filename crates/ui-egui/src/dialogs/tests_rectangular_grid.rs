@@ -222,7 +222,7 @@ fn rectangular_grid_creates_exact_dividers_as_one_undo_redo_step() {
     assert_eq!(app.session.doc().unwrap().doc, before.doc);
     assert_eq!(app.session.doc().unwrap().selection.objects, before.selected);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
-    let saved = json!({"rows": 2, "columns": 3, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false});
+    let saved = json!({"rows": 2, "columns": 3, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false, "width": 120.0, "height": 60.0, "reference": 0});
     assert_eq!(app.session.tool_options_of(KIND), saved, "undo does not undo the saved tool settings");
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, created);
@@ -380,7 +380,7 @@ fn rectangular_grid_dialog_edits_skews_frame_and_fill() {
     }
     let x = paths[7].subpaths[0].anchors[0].p.x;
     assert!(x > 10.0 && x < 30.0, "toward the left: {x}");
-    let saved = json!({"rows": 3, "columns": 1, "rowSkew": 100.0, "columnSkew": -250.0, "frame": false, "fill": true});
+    let saved = json!({"rows": 3, "columns": 1, "rowSkew": 100.0, "columnSkew": -250.0, "frame": false, "fill": true, "width": 100.0, "height": 100.0, "reference": 0});
     assert_eq!(app.session.tool_options_of(KIND), saved);
     // A drag draws with the same options.
     pointer(&mut app, PointerKind::Down, Point::new(300.0, 300.0));

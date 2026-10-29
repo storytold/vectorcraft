@@ -23,13 +23,16 @@ impl Rng {
     }
 }
 
+/// The synthetic document's page, in points.
+const SYNTHETIC_PAGE: (f64, f64) = (1600.0, 1200.0);
+
 /// `n` mixed paths (ellipses with strokes, translucent rectangles, stroked stars) on a 1600×1200 page.
 pub fn synthetic(n: usize) -> Result<Document, String> {
-    let mut d = Document::new(1600.0, 1200.0);
+    let mut d = Document::new(SYNTHETIC_PAGE.0, SYNTHETIC_PAGE.1);
     let l = d.layers.first().map(|l| l.id);
     let mut r = Rng(42);
     for i in 0..n {
-        let (x, y, s) = (r.next() * 1600.0, r.next() * 1200.0, 3.0 + r.next() * 22.0);
+        let (x, y, s) = (r.next() * SYNTHETIC_PAGE.0, r.next() * SYNTHETIC_PAGE.1, 3.0 + r.next() * 22.0);
         let c = Color::rgb(r.next() as f32, r.next() as f32, r.next() as f32);
         let id = d.alloc_id();
         let mut node = match i % 3 {
@@ -282,7 +285,7 @@ fn deep(n: usize) -> Result<(), String> {
             let key = format!("photo {i}");
             d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", photo));
             let xf = Affine::translate((f64::from(i % 2) * 800.0, f64::from(i / 2) * 600.0)) * Affine::scale(800.0 / 6000.0);
-            let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default() };
+            let image = vectorcraft_doc::ImageObject { key, width: 6000, height: 4000, xf, link: None, placement: Default::default(), pixels: None };
             let id = d.alloc_id();
             d.insert(l, usize::MAX, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(image)))).map_err(|e| e.to_string())?;
         }
@@ -295,6 +298,27 @@ fn deep(n: usize) -> Result<(), String> {
         });
         rows.push(("render 4 embedded 24 MP photos with 3 renderers (cold)".into(), ms));
         note("after rendering the photos with 3 renderers");
+    }
+    // An SVG with one embedded picture opened from its text, as picture-heavy SVGs come: the
+    // importer's passes over the text before usvg reads it, most of which is the data URL. The
+    // picture is the synthetic page drawn at 1.25x (about 2 MB as a PNG; the row names its size);
+    // the hidden rectangle is a marker, so the prepass walks the tree as it does for a file that
+    // has one, instead of returning at its first check.
+    {
+        let k = 1.25;
+        let (w, h) = ((SYNTHETIC_PAGE.0 * k).round() as u32, (SYNTHETIC_PAGE.1 * k).round() as u32);
+        let photo = Renderer::new().render(&synthetic(3000)?, w, h, Affine::scale(k), &opts).to_png()?;
+        let data = vectorcraft_svg::base64_encode(&photo);
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}"><image width="{w}" height="{h}" href="data:image/png;base64,{data}"/><rect width="100" height="100" style="display:none"/></svg>"#
+        );
+        // One import checked first, so a failure is reported rather than timed; the same text
+        // imports the same way each time. Its document is kept for the memory reading.
+        let imported = vectorcraft_svg::import_with_report(&svg).map_err(|e| e.to_string())?;
+        let ms = median_ms(5, || drop(vectorcraft_svg::import_with_report(&svg)));
+        rows.push((format!("import SVG, one embedded {} KB PNG", photo.len() / 1024), ms));
+        note("after the import of an embedded picture");
+        drop(imported);
     }
     // Output hashes, to compare builds: the SVG export and a save → open → save round trip.
     let fnv = |b: &[u8]| b.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &x| (h ^ u64::from(x)).wrapping_mul(0x100_0000_01b3));
@@ -317,6 +341,9 @@ fn deep(n: usize) -> Result<(), String> {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    if crate::help_requested(args, &["--paths"]) {
+        return crate::help();
+    }
     let mut n = 50_000usize;
     let mut want_deep = false;
     let mut it = args.iter();
