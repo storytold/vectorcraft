@@ -5209,3 +5209,374 @@ axis	Y Axis	Y축
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 스크린샷의 바이트 수가 넘칩니다
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	창의 {what}({points}포인트 × {scale} DPI)로는 스크린샷 크기를 정할 수 없습니다
 	Live preview	실시간 미리 보기
+	Source Sans 3	Source Sans 3
+	1 Color Job	1색 작업
+	2 Color Job	2색 작업
+	3 Color Job	3색 작업
+	CMYK Equivalents	CMYK 대응 색상
+	3 x 3 Average	3 × 3 평균
+	5 x 5 Average	5 × 5 평균
+	PDF File	PDF 파일
+	CMYK profile in effect	적용 중인 CMYK 프로파일
+	1 bit	1비트
+	16 Colors	16색
+	16 bit	16비트
+	16 bits/pixel	16비트/픽셀
+	2-Up	2개 보기
+	24 bit	24비트
+	24 bits/pixel	24비트/픽셀
+	256 Colors	256색
+	2K Cinema	2K 시네마
+	2up	2개 보기
+	3 Colors	3색
+	32 bit	32비트
+	32 bits/pixel	32비트/픽셀
+	4 bit	4비트
+	4-Up	4개 보기
+	4K Cinema	4K 시네마
+	4K UHD	4K UHD
+	4up	4개 보기
+	6 Colors	6색
+	8 Colors	8색
+	8 bit	8비트
+	8K UHD	8K UHD
+	A3	A3
+	A4	A4
+	A5	A5
+	Absolute Colorimetric	절대 색도계
+	Adaptive	최적화
+	All Affected Objects	영향받는 모든 개체
+	All Layers	모든 레이어
+	All Rasterized Regions	모든 래스터화 영역
+	All Slices	모든 분할 영역
+	All shortcuts reset to defaults.	모든 단축키를 기본값으로 초기화했습니다.
+	Alt+Click	Alt+클릭
+	Alt+Drag	Alt+드래그
+	Analogous	유사색
+	Analogous 2	유사색 2
+	Any except extracting pages	페이지 추출을 제외한 모든 작업
+	Arrow	화살표
+	Arrow (open)	화살표(열림)
+	Art & Illustration	아트 및 일러스트레이션
+	Art Optimized	아트 최적화
+	Ascent	어센트
+	Auto Size	자동 크기
+	B4	B4
+	B5	B5
+	Bar	막대
+	Barbed	갈고리
+	Baseline (Standard)	기준선(표준)
+	Baseline Optimized	기준선 최적화
+	Bicubic	쌍입방
+	Black & White	흑백
+	Black Outline	검은 윤곽선
+	Bounding Box	테두리 상자
+	Bracket	괄호
+	Branding	브랜딩
+	Brown	갈색
+	Business Card 3.5 × 2 in	명함 3.5 × 2인치
+	Business Card 85 × 55 mm	명함 85 × 55 mm
+	CRLF (Windows)	CRLF (Windows)
+	Cap Height	대문자 높이
+	Chevron	갈매기형
+	Circle (open)	원(열림)
+	Click, then press the new shortcut (Esc cancels)	클릭한 뒤 새 단축키를 누르세요(Esc: 취소).
+	Clip Group	클리핑 그룹
+	Command	명령
+	Commenting, filling in form fields and signing	주석, 양식 필드 작성 및 서명
+	Complementary	보색
+	Complementary 2	보색 2
+	Complete	완료
+	Composite	합성
+	Compound	복합
+	Compound 2	복합 2
+	Convert to destination	대상으로 변환
+	Convert to destination (preserve numbers)	대상으로 변환(수치 유지)
+	Cool	차갑게
+	Copyright and Contact Info	저작권 및 연락처 정보
+	Copyrighted	저작권 있음
+	Cross	십자
+	Custom Scale	사용자 지정 배율
+	DWG (use DXF)	DWG(DXF 사용)
+	Default Graphic Style	기본 그래픽 스타일
+	Diamond (open)	마름모(열림)
+	Diffusion	확산
+	Do Not Scale	크기 조절 안 함
+	Don't include profiles	프로파일 포함 안 함
+	Dot on Bar	막대 위 점
+	Double Arrow	이중 화살표
+	Double Bar	이중 막대
+	Double Slash	이중 사선
+	Down (right reading)	아래(정방향 읽기)
+	Drop	물방울
+	Envelope	외피 왜곡
+	Envelope #10	봉투 #10
+	Envelope DL	봉투 DL
+	Exact	정확하게
+	Expanded Patterns	확장된 패턴
+	Feather	페더
+	Filling in form fields and signing	양식 필드 작성 및 서명
+	Film & Video	영화 및 비디오
+	Fit to Page	페이지에 맞추기
+	Fork	갈래
+	GIF, 128 colours	GIF, 128색
+	Go to Conflict	충돌 항목으로 이동
+	Gray	회색
+	Greeting Card	인사 카드
+	Guide	안내선
+	HDTV 1080p	HDTV 1080p
+	HDTV 720p	HDTV 720p
+	HTML and Images	HTML 및 이미지
+	Half Arrow (left)	반쪽 화살표(왼쪽)
+	Half Arrow (right)	반쪽 화살표(오른쪽)
+	Half Circle	반원
+	Heavy Ink	진한 잉크
+	Hexagon	육각형
+	Hexagon (open)	육각형(열림)
+	High Contrast	높은 대비
+	High Contrast 2	높은 대비 2
+	High Contrast 3	높은 대비 3
+	High Fidelity Photo	고충실도 사진
+	High Quality Print	고품질 인쇄
+	High Resolution	고해상도
+	High resolution	고해상도
+	Images Only	이미지만
+	Include all profiles	모든 프로파일 포함
+	Include destination profile	대상 프로파일 포함
+	Include tagged source profiles	태그가 지정된 소스 프로파일 포함
+	Inserting, deleting and rotating pages	페이지 삽입, 삭제 및 회전
+	Justify	양쪽 정렬
+	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	문서를 계속 편집할 수 있도록 유지합니다. VectorCraft에서 PDF를 다시 열어도 손실이 없습니다. 다시 편집할 파일에 사용하세요.
+	Keyboard Shortcuts	키보드 단축키
+	Kite	연 모양
+	LF (macOS, Linux)	LF (macOS, Linux)
+	Landscape (flipped)	가로(뒤집힘)
+	Language Level 2	언어 수준 2
+	Language Level 3	언어 수준 3
+	Leaf	잎
+	Left Complement	왼쪽 보색
+	Legal	Legal
+	Length	길이
+	Letterhead A4	레터헤드 A4
+	Letterhead Letter	레터헤드 Letter
+	Line Art	선화
+	Logo 1000×1000	로고 1000×1000
+	Low Fidelity Photo	저충실도 사진
+	Low Resolution	저해상도
+	Low resolution (150 ppi)	저해상도(150 ppi)
+	Maximize Editability	편집 가능성 극대화
+	Medium Resolution	중간 해상도
+	Menu Commands	메뉴 명령
+	Mesh	메시
+	Mobile	모바일
+	Monochromatic	단색 조화
+	Muted	차분하게
+	Negative	음화
+	No Dither	디더 없음
+	No Slices	분할 영역 없음
+	No conversion	변환 없음
+	No downsampling	다운샘플링 없음
+	None (Color Preview)	없음(색상 미리 보기)
+	Orange	주황
+	Outlined Strokes	윤곽선으로 변환된 획
+	Outlined Text	윤곽선으로 변환된 텍스트
+	Oval	타원
+	PDF 1.7	PDF 1.7
+	PDF/X-1a:2001	PDF/X-1a:2001
+	PDF/X-3:2002	PDF/X-3:2002
+	PDF/X-4:2010	PDF/X-4:2010
+	Page Cover 1640×624	페이지 커버 1640×624
+	Pattern Swatches	패턴 견본
+	Pentagram	오각별
+	Phone 360×800	휴대폰 360×800
+	Phone 375×667	휴대폰 375×667
+	Phone 393×852	휴대폰 393×852
+	Phone 412×915	휴대폰 412×915
+	Phone 430×932	휴대폰 430×932
+	Placed Document	배치된 문서
+	Plus	더하기
+	Portrait (flipped)	세로(뒤집힘)
+	Positive	양화
+	Poster 18 × 24 in	포스터 18 × 24인치
+	Poster 24 × 36 in	포스터 24 × 36인치
+	Preserve	유지
+	Preserve Appearance	모양 유지
+	Preserve Tints	색조 유지
+	Press Quality	출판 품질
+	Press keys…	키를 누르세요…
+	Profile Cover 1500×500	프로필 커버 1500×500
+	Public Domain	퍼블릭 도메인
+	Purple	보라
+	RGB	RGB
+	Rasterized Complex Regions	래스터화된 복잡한 영역
+	Relative Colorimetric	상대 색도계
+	Remove the shortcut	단축키 제거
+	Reset to Defaults	기본값으로 초기화
+	Reverse Triangle	역삼각형
+	Right Complement	오른쪽 보색
+	Run Length	런 렝스
+	SVG 1.1	SVG 1.1
+	Scale Tints	색조 비율 조절
+	Selected Slices	선택한 분할 영역
+	Selective	선택적
+	Separations	분판
+	Set:	세트:
+	Shades	음영
+	Shades of Gray	회색 음영
+	Shift+Click	Shift+클릭
+	Shift+Drag	Shift+드래그
+	Shrink Text to Fit	텍스트를 축소하여 맞추기
+	Silhouettes	실루엣
+	Simulate	시뮬레이션
+	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	시뮬레이션은 오버프린트 미리 보기에 보이는 대로 겹쳐 인쇄합니다. 분판에서는 항상 오버프린트를 유지합니다. 사전 설정은 인쇄 전에 투명도를 병합합니다(PostScript 파일은 항상 병합).
+	Sketched Art	스케치 아트
+	Slash	사선
+	Smallest File Size	최소 파일 크기
+	Social	소셜
+	Social Landscape Post 1200×630	소셜 가로 게시물 1200×630
+	Social Portrait Post 1080×1350	소셜 세로 게시물 1080×1350
+	Social Story 1080×1920	소셜 스토리 1080×1920
+	Social Tall Post 1000×1500	소셜 긴 게시물 1000×1500
+	Sort by Hue	색조순 정렬
+	Sort by Luminance	휘도순 정렬
+	Sort by Popularity	사용 빈도순 정렬
+	Spectrum	스펙트럼
+	Split Complementary	분할 보색
+	Square (open)	사각형(열림)
+	Square 8 × 8 in	정사각형 8 × 8인치
+	Subsample	서브샘플링
+	Subset	부분 집합
+	Sunshine	햇살
+	Swallowtail	제비꼬리
+	Symbol	심볼
+	TIFF (8-bit Color)	TIFF(8비트 색상)
+	TIFF (Black & White)	TIFF(흑백)
+	Tablet 1024×1366	태블릿 1024×1366
+	Tablet 768×1024	태블릿 768×1024
+	Tablet 800×1280	태블릿 800×1280
+	Tablet 820×1180	태블릿 820×1180
+	Tablet 834×1194	태블릿 834×1194
+	Tabloid	Tabloid
+	Tag	태그
+	Tag (open)	태그(열림)
+	Technical Drawing	기술 도면
+	Tetrad	4색 조화
+	Tetrad 2	4색 조화 2
+	Tetrad 3	4색 조화 3
+	Tile Imageable Areas	인쇄 가능 영역 분할 인쇄
+	Tool	도구
+	Transparent Objects	투명 개체
+	Triad	3색 조화
+	Triad 2	3색 조화 2
+	Triad 3	3색 조화 3
+	Triangle	삼각형
+	Triangle (open)	삼각형(열림)
+	Triangle to Bar	막대가 있는 삼각형
+	True Colors	트루 컬러
+	Type Optimized	문자 최적화
+	UTF-16 (Unicode)	UTF-16 (Unicode)
+	Unknown	알 수 없음
+	Unsorted	정렬 안 됨
+	Up (right reading)	위(정방향 읽기)
+	Use Default	기본값 사용
+	VectorCraft Default	VectorCraft 기본값
+	VectorCraft Defaults	VectorCraft 기본값
+	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 일반 CMYK(SWOP 유사)
+	VectorCraft Swatches (.vcswatches)	VectorCraft 견본(.vcswatches)
+	Video Banner 2560×1440	비디오 배너 2560×1440
+	Video Thumbnail 1280×720	비디오 썸네일 1280×720
+	Visible & Printable Layers	표시되고 인쇄 가능한 레이어
+	Visible Layers	표시된 레이어
+	Vivid	선명하게
+	Warm	따뜻하게
+	Watch 184×224	워치 184×224
+	Watch 198×242	워치 198×242
+	Web 1024×768	웹 1024×768
+	Web 1280×800	웹 1280×800
+	Web 1366×768	웹 1366×768
+	Web 1440×900	웹 1440×900
+	Web 1600×900	웹 1600×900
+	WebP	WebP
+	[Custom]	[사용자 지정]
+	[Default]	[기본값]
+	of	중
+	sRGB IEC61966-2.1	sRGB IEC61966-2.1
+	x Height	x 높이
+	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord}은(는) 이미 {names}에서 사용 중이었습니다. 기존 할당을 해제했습니다.
+@id	file.close	닫기
+@id	pathfinder.add	합치기
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	단축키 {n}개가 중복 할당되어 있습니다.
+effect	Points	점
+effect	Regular	보통
+	Automation	자동화
+	Essentials	필수 기능
+	Essentials Classic	클래식 필수 기능
+	Layout	레이아웃
+	OpenType	OpenType
+	Painting	페인팅
+	Printing and Proofing	인쇄 및 교정
+	Tracing	추적
+	Typography	타이포그래피
+	VectorCraft	VectorCraft
+	Web	웹
+	[1P-High View]	[1점 투시-높은 시점]
+	[1P-Low View]	[1점 투시-낮은 시점]
+	[1P-Normal View]	[1점 투시-보통 시점]
+	[2P-High View]	[2점 투시-높은 시점]
+	[2P-Low View]	[2점 투시-낮은 시점]
+	[2P-Normal View]	[2점 투시-보통 시점]
+	[3P-Low View]	[3점 투시-낮은 시점]
+	[3P-Normal View]	[3점 투시-보통 시점]
+swatch	[None]	[없음]
+swatch	[Registration]	[맞춰찍기]
+swatch	White	흰색
+swatch	Black	검정
+swatch	Red	빨강
+swatch	Orange Red	주홍
+swatch	Orange	주황
+swatch	Amber	호박색
+swatch	Yellow	노랑
+swatch	Yellow Green	황록
+swatch	Lime	라임
+swatch	Green	초록
+swatch	Emerald	에메랄드
+swatch	Teal	틸
+swatch	Aqua	아쿠아
+swatch	Cyan Green	녹청
+swatch	Cyan	시안
+swatch	Azure	하늘색
+swatch	Blue	파랑
+swatch	Indigo	남색
+swatch	Violet	청보라
+swatch	Purple	보라
+swatch	Magenta	자홍
+swatch	Rose	장미색
+swatch	Pink	분홍
+swatch	Brown	갈색
+swatch	Tan	황갈색
+swatch	Coffee	커피색
+swatch	Chocolate	초콜릿색
+swatch	Sand	모래색
+swatch	Copper	구리색
+swatch	Rust	녹슨 갈색
+swatch	Walnut	호두색
+swatch	Espresso	에스프레소색
+swatch	White, Black	흰색, 검정
+swatch	Radial White, Black	방사형 흰색, 검정
+swatch	Sunset	노을
+swatch	Ocean	바다
+swatch	Grays	회색 계열
+swatch	Brights	밝은 색상
+swatch	Bright Red	밝은 빨강
+swatch	Bright Yellow	밝은 노랑
+swatch	Bright Green	밝은 초록
+swatch	Bright Blue	밝은 파랑
+swatch	Bright Violet	밝은 보라
+	Include All Subdirectories	모든 하위 디렉터리 포함
+	Override Action "Open" Commands	액션의 "열기" 명령 무시
+	Override Action "Save" Commands	액션의 "저장" 명령 무시
+	Override Action "Export" Commands	액션의 "내보내기" 명령 무시
+	Stop on Errors	오류 발생 시 중지
+	Save and Close	저장 후 닫기
+	Play:	재생:
+font-script	Japanese	일본어
