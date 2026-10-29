@@ -345,9 +345,13 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
         p.circle_filled(at, radius, KNOB_FILL);
         p.circle_stroke(at, radius, Stroke::new(2.0, KNOB_STROKE));
     };
+    let dragging = app.session.tool_blend_handle();
     for h in &handles {
-        // The chevrons of the step count, in the knob (over its fill, under its outline).
-        let c = xf.to_screen(h.steps_at);
+        // The chevrons of the step count, in the knob (over its fill, under its outline). While
+        // it drags the knob follows the pointer up or down the edge; let go and it rests at the
+        // top again.
+        let steps = dragging.filter(|(id, part, _)| *id == h.id && *part == BlendPart::Steps).map_or(h.steps_at, |(_, _, p)| p);
+        let c = xf.to_screen(steps);
         p.circle_filled(c, HANDLE_RADIUS, KNOB_FILL);
         let (d, w) = (2.5_f32, 3.0_f32);
         for (dy, dir) in [(-3.5, 1.0), (3.5, -1.0)] {

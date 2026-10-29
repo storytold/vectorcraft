@@ -167,6 +167,9 @@ impl Tool for BlendTool {
     fn busy(&self) -> bool {
         self.first.is_some() || self.drag.is_some()
     }
+    fn blend_handle(&self) -> Option<(NodeId, crate::blendhandles::BlendPart, Point)> {
+        self.drag.as_ref().map(crate::blendhandles::BlendDrag::handle)
+    }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         (self.first, self.chained) = (None, false);
         self.drag.take().map_or_else(Vec::new, |d| d.finish())
@@ -361,18 +364,31 @@ mod tests {
             "{acts:?}"
         );
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 70.0, 24.0));
-        // The steps handle rides the box's right edge, its height the count: dragging it up adds
-        // steps (halfway up the edge is 10), and the label says the count.
+        // The steps handle rides the box's right edge, its height the count: halfway from the
+        // bottom (1) to the count now (3) is 2, and half a box above the top reaches the 1000
+        // cap. The knob follows the pointer while it drags.
         let rest = 0.0;
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 142.0, rest));
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 142.0, 10.0));
         assert!(
             matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options" && p["spacing"] == json!("steps") && p["steps"] == json!(10)),
+                if id == "object.blend.options" && p["spacing"] == json!("steps") && p["steps"] == json!(2)),
             "{acts:?}"
         );
-        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "10")), "{:?}", t.overlays(&c));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "2")), "{:?}", t.overlays(&c));
+        let live = t.blend_handle().expect("the steps knob is live");
+        assert_eq!((live.0, live.1), (b, crate::blendhandles::BlendPart::Steps));
+        assert!(live.2.distance(Point::new(142.0, 10.0)) < 1e-6, "{live:?}");
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 142.0, 10.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 142.0, rest));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 142.0, -10.0));
+        assert!(
+            matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
+                if id == "object.blend.options" && p["spacing"] == json!("steps") && p["steps"] == json!(1000)),
+            "{acts:?}"
+        );
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "1000")), "{:?}", t.overlays(&c));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 142.0, -10.0));
         // Never keeps the easing handles: the easing moves the steps between any two keys.
         let (d2, b2) = doc_with_blend(BlendSpineMode::Never);
         let (mut s2, p2) = (Selection::default(), paint());

@@ -1,13 +1,14 @@
 //! Object → Blend → Blend Options (also the Blend tool's double-click, Alt-click and toolbar
 //! button): Spacing (Smooth Color, Specified Steps or Specified Distance) with its value,
-//! Orientation (Align to Page or Align to Path), Spine (Auto, Always or Never) and the Blend
-//! panel's easing (Type, Ramp and the independent color Shift), opened on the selected blend's
-//! options and previewed live on it; OK keeps the preview as one undo step (`object.blend.options`).
-//! With no blend selected it sets the options new blends start with (the easing is per blend).
+//! Orientation (Align to Page or Align to Path), Spine (Auto, Always or Never), the Blend panel's
+//! easing (Type, Ramp, Midpoint and the independent color Shift), and Direction and Reverse Spine,
+//! opened on the selected blend's options and previewed live on it; OK keeps the preview as one
+//! undo step (`object.blend.options`). With no blend selected it sets the options new blends start
+//! with (the easing is per blend).
 //!
 //! Fields: `spacing` (`smooth` | `steps` | `distance`), `steps` (1..1000), `distance` (pt),
 //! `orientation` (`page` | `path`), `spineMode` (`auto` | `always` | `never`), `easingType`,
-//! `ramp`, `colorShift`, `spineFollowed`, `preview`, and `__target` (`blend` or `defaults`, from
+//! `ramp`, `midpoint`, `colorShift`, `preview`, and `__target` (`blend` or `defaults`, from
 //! `object.blend.info`).
 
 use egui::{CornerRadius, Sense, Stroke, Vec2, pos2, vec2};
@@ -38,7 +39,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let target = fields["target"].clone();
     let Some(o) = fields.as_object_mut() else { return Err("no blend options".into()) };
     o.retain(|k, _| {
-        matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "spineMode" | "easingType" | "ramp" | "colorShift" | "spineFollowed")
+        matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "spineMode" | "easingType" | "ramp" | "midpoint" | "colorShift")
     });
     o.insert("__target".into(), target);
     o.insert("preview".into(), json!(true));
@@ -63,6 +64,7 @@ fn params(d: &Dialog) -> Value {
     if on_blend(d) {
         p["easingType"] = json!(d.str("easingType"));
         p["ramp"] = json!(d.f64("ramp", 0.0));
+        p["midpoint"] = json!(d.f64("midpoint", 50.0));
         p["colorShift"] = json!(d.f64("colorShift", 0.0));
     }
     p
@@ -115,29 +117,33 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     if on_blend(d) {
-        // The easing rows match the Blend panel's: Type and Ramp need the blend to follow a spine
-        // (Always, a replaced spine or Align to Path), Shift works without one.
-        let spined = d.bool("spineFollowed");
-        ui.add_enabled_ui(spined, |ui| {
-            ui.add_space(6.0);
-            widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
-                let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
-                let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
-                let mode = d.str("easingType");
-                let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
-                if let Some(i) = widgets::dropdown(ui, "blend-easing", labels[index], &labels, 150.0)
-                    && let Some(mode) = modes.get(i)
-                {
-                    d.fields.insert("easingType".into(), json!(mode));
-                }
-            });
-            ui.add_space(6.0);
-            widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-                let mut ramp = d.f64("ramp", 0.0);
-                if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                    d.fields.insert("ramp".into(), json!(ramp));
-                }
-            });
+        // The easing rows match the Blend panel's: Type, Ramp and Midpoint move the steps between
+        // any two keys, spine or not, and Shift moves the colours on their own.
+        ui.add_space(6.0);
+        widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
+            let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
+            let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
+            let mode = d.str("easingType");
+            let index = modes.iter().position(|m| *m == mode).unwrap_or(0);
+            if let Some(i) = widgets::dropdown(ui, "blend-easing", labels[index], &labels, 150.0)
+                && let Some(mode) = modes.get(i)
+            {
+                d.fields.insert("easingType".into(), json!(mode));
+            }
+        });
+        ui.add_space(6.0);
+        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
+            let mut ramp = d.f64("ramp", 0.0);
+            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
+                d.fields.insert("ramp".into(), json!(ramp));
+            }
+        });
+        ui.add_space(6.0);
+        widgets::label_row(ui, tl!("Midpoint:"), LABEL_W, |ui| {
+            let mut midpoint = d.f64("midpoint", 50.0);
+            if ui.add(egui::Slider::new(&mut midpoint, 1.0..=99.0).suffix("%")).changed() {
+                d.fields.insert("midpoint".into(), json!(midpoint));
+            }
         });
         ui.add_space(6.0);
         widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
@@ -146,10 +152,40 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("colorShift".into(), json!(shift));
             }
         });
+        // Direction and Reverse Spine act on the blend at once, not as dialog fields: roll the
+        // preview back, run the command as its own undo step, and preview the fields again next
+        // frame on top of the result.
+        ui.add_space(6.0);
+        widgets::label_row(ui, tl!("Direction:"), LABEL_W, |ui| {
+            let cmd = "object.blend.reverseFrontToBack";
+            let on = crate::menus::enabled(app, cmd);
+            let button = ui.add_enabled_ui(on, |ui| widgets::flat_button_icon(ui, "dc-swap", "Reverse Front to Back", ui.available_width()));
+            if button.inner.clicked() {
+                reverse(app, d, cmd);
+            }
+        });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.add_space(LABEL_W);
+            let cmd = "object.blend.reverseSpine";
+            let on = crate::menus::enabled(app, cmd);
+            let width = ui.available_width().max(120.0);
+            if ui.add_enabled_ui(on, |ui| widgets::flat_button(ui, tl!("Reverse Spine"), width)).inner.clicked() {
+                reverse(app, d, cmd);
+            }
+        });
         let p = params(d);
         form::preview(app, ui, d, "Blend Options", CMD, p);
     }
     false
+}
+
+/// Run a blend command from the dialog: cancel the live preview's undo step, run the command as
+/// its own step, and let the next frame preview the dialog's fields on top of the result.
+fn reverse(app: &mut VectorcraftApp, d: &mut Dialog, cmd: &str) {
+    let _ = app.session.cancel_interaction();
+    d.fields.remove(form::PREVIEWED);
+    app.run(cmd, json!({})).ok();
 }
 
 /// An orientation toggle drawn in code: three bars on a curve, upright (Align to Page) or square
@@ -257,18 +293,59 @@ mod tests {
         let id = app.run("object.blend.make", json!({"steps": 4, "spineMode": "always"})).unwrap()["id"].as_u64().unwrap();
         app.run("ui.blendOptions", json!({})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
-        assert!(d.bool("spineFollowed") && d.str("easingType") == "easeIn", "the easing rows read the blend");
-        // Type, Ramp and the color Shift preview like the panel's.
+        assert!(d.str("easingType") == "easeIn", "the easing rows read the blend");
+        // Type, Ramp, Midpoint and the color Shift preview like the panel's.
         let d = app.ui.dialog.as_mut().unwrap();
         d.fields.insert("easingType".into(), json!("easeOut"));
         d.fields.insert("ramp".into(), json!(40.0));
+        d.fields.insert("midpoint".into(), json!(25.0));
         d.fields.insert("colorShift".into(), json!(-20.0));
         frame(&mut app);
         let s = spec(&app, id);
-        assert_eq!((s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, s.color_shift as i32), ("easeOut", 40, -20), "previewed");
+        assert_eq!(
+            (s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, (s.ease.midpoint * 100.0) as i32, s.color_shift as i32),
+            ("easeOut", 40, 25, -20),
+            "previewed"
+        );
         crate::dialogs::confirm(&mut app).unwrap();
         let s = spec(&app, id);
-        assert_eq!((s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, s.color_shift as i32), ("easeOut", 40, -20));
+        assert_eq!(
+            (s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, (s.ease.midpoint * 100.0) as i32, s.color_shift as i32),
+            ("easeOut", 40, 25, -20)
+        );
+    }
+
+    #[test]
+    fn direction_and_reverse_spine_keep_the_preview_and_undo_separately() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let id = app.run("object.blend.make", json!({"steps": 4, "spineMode": "always"})).unwrap()["id"].as_u64().unwrap();
+        let keys = |app: &VectorcraftApp| -> Vec<vectorcraft_doc::NodeId> {
+            app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().children().unwrap().iter().map(|k| k.id).collect()
+        };
+        let before = keys(&app);
+        app.run("ui.blendOptions", json!({})).unwrap();
+        // A field change has a live preview running.
+        app.ui.dialog.as_mut().unwrap().fields.insert("ramp".into(), json!(40.0));
+        frame(&mut app);
+        assert!((spec(&app, id).ease.ramp - 0.4).abs() < 1e-9, "previewed");
+        let depth = app.session.doc().unwrap().history.undo.len();
+        // The Direction button runs the command on its own: the preview rolls back first, the
+        // command lands as one undo step, and the next frame previews the fields again.
+        let mut d = app.ui.dialog.take().unwrap();
+        reverse(&mut app, &mut d, "object.blend.reverseFrontToBack");
+        app.ui.dialog = Some(d);
+        assert_eq!(keys(&app), before.iter().rev().copied().collect::<Vec<_>>());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1);
+        frame(&mut app);
+        assert!((spec(&app, id).ease.ramp - 0.4).abs() < 1e-9, "the fields preview again on top");
+        // Cancel rolls the preview back but keeps the reversal.
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(keys(&app), before.iter().rev().copied().collect::<Vec<_>>());
+        assert!(spec(&app, id).ease.ramp.abs() < 1e-9, "the preview rolled back");
     }
 
     #[test]

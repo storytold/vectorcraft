@@ -534,6 +534,12 @@ impl Session {
         self.tool.busy()
     }
 
+    /// The blend handle a drag is moving, and where it is now (`Tool::blend_handle`), so the
+    /// canvas can draw the step knob at the pointer while it drags.
+    pub fn tool_blend_handle(&self) -> Option<(vectorcraft_doc::NodeId, vectorcraft_tools::blendhandles::BlendPart, Point)> {
+        self.tool.blend_handle()
+    }
+
     /// Is the pointer button held: was the last pointer event a press or a drag, not a release or a
     /// move? A tool that is busy while the button is not held is waiting between its clicks (the
     /// Dimension tool after its first point).

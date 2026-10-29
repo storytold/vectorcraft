@@ -832,7 +832,7 @@ impl Spine {
             segs.push((bez, total, len));
             total += len;
         }
-        if segs.len() < 1 {
+        if segs.is_empty() {
             return None;
         }
         if !sp.closed {

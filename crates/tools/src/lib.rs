@@ -138,6 +138,11 @@ pub trait Tool: Send {
     fn busy(&self) -> bool {
         false
     }
+    /// The blend handle a drag is moving, and where it is now (the canvas draws the step knob
+    /// at the pointer while it drags).
+    fn blend_handle(&self) -> Option<(NodeId, blendhandles::BlendPart, Point)> {
+        None
+    }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
     /// so only the art is seen going with the pointer)?
     fn transforming(&self) -> bool {

@@ -183,7 +183,7 @@ pub(super) fn ease_param(p: &Value, cmd: &str, current: BlendEase) -> Result<Ble
         Some(v) => v
             .as_f64()
             .filter(|n| n.is_finite() && (0.0..=100.0).contains(n))
-            .map(|n| (n / 100.0).clamp(0.05, 0.95))
+            .map(|n| (n / 100.0).clamp(0.01, 0.99))
             .ok_or_else(|| bad(cmd, "midpoint must be a percentage from 0 to 100"))?,
     };
     Ok(BlendEase { kind, ramp: percent_param(p, cmd, "ramp", current.ramp * 100.0, 0.0)? / 100.0, midpoint })

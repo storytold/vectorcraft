@@ -560,6 +560,13 @@ impl Tool for SelectionTool {
         !matches!(self.state, State::Idle) || self.guide.busy()
     }
 
+    fn blend_handle(&self) -> Option<(NodeId, crate::blendhandles::BlendPart, Point)> {
+        match &self.state {
+            State::BlendControls(d) => Some(d.handle()),
+            _ => None,
+        }
+    }
+
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {

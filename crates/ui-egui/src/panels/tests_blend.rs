@@ -250,23 +250,23 @@ fn spine_mode_edits_the_selected_blend_and_undoes() {
 }
 
 #[test]
-fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
-    // Type and Ramp need a spine: Align to Path gives the blend one.
-    let mut app = app();
-    let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+fn panel_easing_type_ramp_midpoint_and_shift_edit_the_blend_and_undo() {
+    // The easing moves the steps between any two keys, spine or not, so Type, Ramp and Midpoint
+    // need only a blend selected.
+    let (mut app, id) = blended();
     let mut f = Frames::new();
-    for label in ["Type:", "Ease In", "Ramp:", "Shift:"] {
+    for label in ["Type:", "Ease In", "Ramp:", "Midpoint:", "Shift:"] {
         f.text(&mut app, label);
     }
     f.click_text(&mut app, "Ease In");
     f.click_text(&mut app, "Ease Out In");
     assert_eq!(spec(&app, id).ease.kind, vectorcraft_doc::BlendEaseType::OutIn);
     // Click each real slider: its command updates the engine, and Undo restores the old value.
-    for (index, key) in [(0, "ramp"), (1, "colorShift")] {
+    for (index, key) in [(0, "ramp"), (1, "midpoint"), (2, "colorShift")] {
         let out = f.run(&mut app, vec![]);
         let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
         let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
-        // The tree is not in layout order: Ramp sits above Shift.
+        // The tree is not in layout order: Ramp sits above Midpoint, which sits above Shift.
         sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
         let slider = sliders[index];
         let b = slider.1.bounds().unwrap();
@@ -280,6 +280,9 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     }
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    // The Blend Options dialog matches the panel: the same Type, Ramp and Shift to tweak.
-    assert!(text.contains("Type:") && text.contains("Ramp:") && text.contains("Shift:"), "{text}");
+    // The Blend Options dialog matches the panel: the same Type, Ramp, Midpoint, Shift, Direction
+    // and Reverse Spine to tweak.
+    for label in ["Type:", "Ramp:", "Midpoint:", "Shift:", "Direction:", "Reverse Front to Back", "Reverse Spine"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
 }

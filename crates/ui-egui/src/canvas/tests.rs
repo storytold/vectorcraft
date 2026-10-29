@@ -7189,3 +7189,53 @@ fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
     assert_eq!(at.len(), 4, "{at:?}");
     assert!(at.iter().any(|q| q.distance(xf.to_screen(h.steps_at)) < 2.0), "{at:?}");
 }
+
+/// The step-count knob follows the pointer up the box's edge while it drags, and when it is let
+/// go the new count becomes the top of its scale, so the knob snaps back to the box's top.
+#[test]
+fn the_step_count_knob_follows_the_pointer_and_snaps_back_to_the_top() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 0, "width": 20, "height": 20})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let id = app.run("object.blend.make", json!({"steps": 4, "spineMode": "always"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let handles = |app: &mut VectorcraftApp| {
+        let frame_box = app.selection_box();
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::blendhandles::BlendHandles::selected(&st.doc, &st.selection, frame_box, xf.zoom).unwrap()
+    };
+    let rest = handles(&mut app).steps_at;
+    let top = xf.to_screen(rest);
+    let middle = xf.to_screen(Point::new(rest.x, 10.0));
+    let stroke = super::tool_overlays::KNOB_STROKE;
+    let knobs = |app: &mut VectorcraftApp| -> Vec<egui::Pos2> {
+        shapes(app, &ctx)
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Circle(c) if c.stroke.color == stroke && c.stroke.width == 2.0 => Some(c.center),
+                _ => None,
+            })
+            .collect()
+    };
+    let near = |at: &[egui::Pos2], what: &str, p: egui::Pos2| assert!(at.iter().any(|q| q.distance(p) < 2.0), "{what} at {p:?} among {at:?}");
+    // Press at rest and drag halfway down the edge: the count goes from 4 to 2, and the knob
+    // draws at the pointer instead of at the top.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(top), primary(top, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(middle)]);
+    let at = knobs(&mut app);
+    near(&at, "the dragging steps knob", middle);
+    assert!(at.iter().all(|q| q.distance(top) > 2.0), "not resting at the top while it drags: {at:?}");
+    // Let go: 2 is the count now, so it becomes the new top of the scale and the knob rests there.
+    frame(&mut app, &ctx, vec![primary(middle, false)]);
+    let h = handles(&mut app);
+    assert_eq!(h.steps_now, 2);
+    near(&knobs(&mut app), "the steps knob after the drag", xf.to_screen(h.steps_at));
+}
