@@ -259,7 +259,7 @@ id = "TypeArea"
 group = "Type"
 shown_when = ["Type and Area Type over a closed path's outline, Alt up for Type: a click sets area type inside the path."]
 hotspot = "The I-beam's centre."
-look = "The I-beam between two arcs, like a pair of parentheses around it: the type goes inside the shape."
+look = "The Text I-beam with a small badge below right: a square frame with three short lines of type in it."
 
 [[cursor]]
 id = "TypeAreaVertical"
@@ -273,7 +273,7 @@ id = "TypeOnPath"
 group = "Type"
 shown_when = ["Type over an open path's outline, or a closed one with Alt held; Type on a Path over any path's outline; Area Type over an open path with Alt held: a click sets type along the path."]
 hotspot = "The I-beam's centre."
-look = "The I-beam crossing a wavy line below its centre: the type runs along the line."
+look = "The Text I-beam with a small badge below right: a short smooth curve with a dot on it."
 
 [[cursor]]
 id = "TypeOnPathVertical"
