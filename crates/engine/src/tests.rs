@@ -29,6 +29,7 @@ mod colorguidelib;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compare;
 mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
