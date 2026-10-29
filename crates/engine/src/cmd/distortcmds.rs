@@ -14,7 +14,10 @@ use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Pl
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
 use super::edit::{duplicate_in, outermost, selected_roots};
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
+    ids_param, matrix_param, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+};
 use crate::EngineError;
 
 mod perspective;
@@ -195,8 +198,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Text",
             [],
             None,
-            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again → {id}",
-            has_doc,
+            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again; refused while an opacity mask is edited → {id}",
+            super::maskedit::outside_mask_editing,
             edit_text
         ),
     ]

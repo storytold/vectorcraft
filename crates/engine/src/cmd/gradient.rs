@@ -10,7 +10,10 @@ use vectorcraft_tools::params::color_json;
 use super::appearance::{ItemTarget, edit_items, edits_stroke, item_target};
 use super::edit::{outermost, selected_roots};
 use super::paint::swatch_solid;
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, has_doc, index,
+    leaf_targets, point_param, str_param,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {

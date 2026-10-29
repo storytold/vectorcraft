@@ -67,9 +67,14 @@ fn opened_without(app: &mut VectorcraftApp, root: &Path, names: &[&str]) -> Vec<
     files
 }
 
-/// Draw the dialog until its search ends (10 seconds at most).
+/// How long a test waits for the dialog's search to end. The wait only ends a test whose search
+/// never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// Draw the dialog until its search ends ([`WAIT`] at most).
 fn searched(app: &mut VectorcraftApp) {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while app.ui.dialog.as_ref().is_some_and(|d| d.str("state") == "searching") && Instant::now() < until {
         frame(app);
         std::thread::sleep(Duration::from_millis(5));

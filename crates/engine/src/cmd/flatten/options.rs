@@ -2,7 +2,7 @@ use super::analysis::draws_image;
 use super::apply::{apply, kept_work, plan};
 use super::presets::{FlattenerPreset, saved_preset};
 use super::report::target_roots;
-use super::*;
+use super::{BTreeSet, Deserialize, EngineError, Node, Result, Serialize, Session, Value, bad, json, str_param};
 
 /// Object → Flatten Transparency settings: a preset's, adjusted by the command's params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -1,4 +1,10 @@
-use super::*;
+use vectorcraft_color::Swatch;
+use vectorcraft_doc::ImageObject;
+
+use super::{
+    Appearance, AppearanceItem, Arc, Beside, Color, Document, EngineError, LineCap, LineJoin, LiveShape, Node, NodeId, NodeKind, Paint, Point,
+    Result, Session, StrokeLayer, TRACE_NAME, TraceView, Value, bad, fill_only, ids_json, json, root_ids, shape_node, str_param, switch_or, tr,
+};
 
 // ---------- Image Trace ----------
 
@@ -15,24 +21,183 @@ fn view_param(cmd: &str, p: &Value) -> Result<Option<TraceView>> {
     v.as_str().and_then(TraceView::from_id).map(Some).ok_or_else(|| bad(cmd, format!("view must be one of {}", ids())))
 }
 
-/// The parameters command `c` traces with: the preset's, with `params` over them.
-fn trace_params(c: &str, p: &Value) -> Result<tr::TraceParams> {
-    let name = str_param(p, "preset").unwrap_or("Default");
+/// A saved Image Trace preset ([`crate::Prefs::trace_presets`]): a name and its settings.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TracePreset {
+    pub name: String,
+    #[serde(default)]
+    pub params: tr::TraceParams,
+}
+
+/// A change to the saved tracing presets: `imageTrace.presets.save` saved `name` (made it,
+/// changed its settings, or renamed it from `renamed_from`), or `imageTrace.presets.delete`
+/// deleted it. `revision` is [`Session::trace_presets_revision`] after the change.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TracePresetChange {
+    pub revision: u64,
+    pub name: String,
+    pub renamed_from: Option<String>,
+    pub deleted: bool,
+}
+
+/// The revision of the saved tracing presets and their latest changes ([`TracePresetChange`]).
+#[derive(Default)]
+pub(crate) struct TracePresetChanges {
+    revision: u64,
+    /// Every change the commands made in this session, oldest first, so a panel that was closed
+    /// meanwhile still follows a rename (one record for each save or delete).
+    changes: Vec<TracePresetChange>,
+}
+
+impl TracePresetChanges {
+    /// A change the commands made: a new revision that records it.
+    fn note(&mut self, mut change: TracePresetChange) {
+        self.revision += 1;
+        change.revision = self.revision;
+        self.changes.push(change);
+    }
+
+    /// A change made by replacing the preferences: a new revision with no record.
+    pub(crate) fn replaced(&mut self) {
+        self.revision += 1;
+    }
+}
+
+impl Session {
+    /// A number that grows each time the saved tracing presets change: saved, renamed or deleted
+    /// by `imageTrace.presets.save` and `.delete`, or replaced with the preferences
+    /// ([`Session::apply_prefs`]). A list read at one revision holds until the number changes.
+    pub fn trace_presets_revision(&self) -> u64 {
+        self.trace_preset_changes.revision
+    }
+
+    /// The changes `imageTrace.presets.save` and `.delete` made after `revision`, oldest first.
+    pub fn trace_preset_changes_since(&self, revision: u64) -> impl Iterator<Item = &TracePresetChange> {
+        let changes = &self.trace_preset_changes.changes;
+        let from = changes.partition_point(|c| c.revision <= revision);
+        changes.get(from..).unwrap_or_default().iter()
+    }
+
+    /// The saved tracing preset `name`, any case.
+    pub fn trace_preset(&self, name: &str) -> Option<&TracePreset> {
+        self.prefs.trace_presets.iter().find(|q| q.name.eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// The index of the saved tracing preset `name`.
+    fn trace_preset_index(&self, name: &str) -> Option<usize> {
+        self.prefs.trace_presets.iter().position(|q| q.name.eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// Whether `name` is a built-in preset's, "Custom" (changed settings, as the panel and a traced
+    /// object show them), or a saved preset's other than the one at `except`.
+    fn trace_preset_taken(&self, name: &str, except: Option<usize>) -> bool {
+        tr::preset(name).is_some() || name.trim().eq_ignore_ascii_case("Custom") || self.trace_preset_index(name).is_some_and(|i| Some(i) != except)
+    }
+
+    /// The first free "Tracing Preset N": the name a new tracing preset gets.
+    pub fn new_trace_preset_name(&self) -> String {
+        (1..).map(|i| format!("Tracing Preset {i}")).find(|n| !self.trace_preset_taken(n, None)).unwrap_or_default()
+    }
+}
+
+pub(super) fn trace_presets_save(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.save";
+    // A name or preset of the wrong type is an error, not dropped: dropping it would save other
+    // settings, or under another name.
+    let new_name = opt_str(C, p, "newName")?;
+    let preset = opt_str(C, p, "preset")?;
+    let name = match opt_str(C, p, "name")?.map(str::trim) {
+        Some("") => return Err(bad(C, "`name` is empty")),
+        Some(n) => n.to_string(),
+        None => s.new_trace_preset_name(),
+    };
+    if tr::preset(&name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and can't change: save it under another name")));
+    }
+    if name.eq_ignore_ascii_case("Custom") {
+        return Err(bad(C, "`Custom` stands for changed settings: save the preset under another name"));
+    }
+    let at = s.trace_preset_index(&name);
+    // The saved preset's name as it was saved.
+    let old = at.and_then(|i| s.prefs.trace_presets.get(i)).map(|q| q.name.clone());
+    if old.is_none() && new_name.is_some() {
+        return Err(bad(C, format!("no saved preset named `{name}` to rename")));
+    }
+    // A saved preset changes from its own settings unless `preset` says where to start.
+    let mut q = p.clone();
+    if let (Some(old), Some(o), None) = (&old, q.as_object_mut(), preset) {
+        o.insert("preset".into(), json!(old));
+    }
+    let params = trace_params(s, C, &q)?;
+    let name = match new_name.map(str::trim) {
+        Some("") => return Err(bad(C, "`newName` is empty")),
+        Some(n) if s.trace_preset_taken(n, at) => return Err(bad(C, format!("a preset named `{n}` exists"))),
+        Some(n) => n.to_string(),
+        None => old.clone().unwrap_or(name),
+    };
+    let json_params = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
+    let preset = TracePreset { name: name.clone(), params };
+    match at.and_then(|i| s.prefs.trace_presets.get_mut(i)) {
+        Some(slot) => *slot = preset,
+        None => s.prefs.trace_presets.push(preset),
+    }
+    let renamed_from = old.as_ref().filter(|o| **o != name).cloned();
+    s.trace_preset_changes.note(TracePresetChange { revision: 0, name: name.clone(), renamed_from: renamed_from.clone(), deleted: false });
+    Ok(json!({"name": name, "params": json_params, "created": old.is_none(), "renamedFrom": renamed_from}))
+}
+
+pub(super) fn trace_presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.delete";
+    let name = opt_str(C, p, "name")?.ok_or_else(|| bad(C, "missing `name`"))?;
+    if tr::preset(name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and stays")));
+    }
+    let i = s.trace_preset_index(name).ok_or_else(|| bad(C, format!("no saved preset named `{name}`")))?;
+    let deleted = s.prefs.trace_presets.remove(i).name;
+    s.trace_preset_changes.note(TracePresetChange { revision: 0, name: deleted.clone(), renamed_from: None, deleted: true });
+    Ok(json!({ "deleted": deleted }))
+}
+
+/// The string `key` of `p` (`None` when it is missing or null); any other type is an error of
+/// command `c`.
+fn opt_str<'a>(c: &str, p: &'a Value, key: &str) -> Result<Option<&'a str>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v)),
+        Some(_) => Err(bad(c, format!("`{key}` must be a string"))),
+    }
+}
+
+/// The parameters command `c` traces with: the preset's (built-in, else the `savedPreset`
+/// settings a journal entry records, else saved), with `params` over them.
+fn trace_params(s: &Session, c: &str, p: &Value) -> Result<tr::TraceParams> {
+    let name = opt_str(c, p, "preset")?.unwrap_or("Default");
     let enhanced = switch_or(p, "enhanced", false, c)?;
-    // (A preset without an enhanced version is traced as it is.)
+    let recorded = match p.get("savedPreset").filter(|v| !v.is_null()) {
+        Some(v) => Some(serde_json::from_value::<tr::TraceParams>(v.clone()).map_err(|e| bad(c, format!("savedPreset: {e}")))?),
+        None => None,
+    };
+    // (A preset without an enhanced version, a saved one too, is traced as it is.)
     let base = enhanced.then(|| tr::enhanced_preset(name)).flatten().or_else(|| tr::preset(name));
-    let base = base.ok_or_else(|| bad(c, format!("unknown preset `{name}` (see imageTrace.presets)")))?;
-    let Some(over) = p.get("params").filter(|v| !v.is_null()) else { return Ok(base) };
-    let mut v = serde_json::to_value(&base).map_err(|e| EngineError::Other(e.to_string()))?;
-    let (Some(o), Some(src)) = (v.as_object_mut(), over.as_object()) else { return Err(bad(c, "params must be an object")) };
-    // A key that isn't one of the settings is an error, with the nearest setting.
-    if let Some(key) = src.keys().find(|k| !o.contains_key(k.as_str())) {
-        return Err(crate::cmd::params::unknown(c, key, &o.keys().map(String::as_str).collect::<Vec<_>>()));
-    }
-    for (k, val) in src {
-        o.insert(k.clone(), val.clone());
-    }
-    let params: tr::TraceParams = serde_json::from_value(v).map_err(|e| bad(c, e.to_string()))?;
+    let base = base.or(recorded).or_else(|| s.trace_preset(name).map(|q| q.params.clone()));
+    let base = base.ok_or_else(|| bad(c, format!("unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)")))?;
+    let params: tr::TraceParams = match p.get("params").filter(|v| !v.is_null()) {
+        None => base,
+        Some(over) => {
+            let mut v = serde_json::to_value(&base).map_err(|e| EngineError::Other(e.to_string()))?;
+            let (Some(o), Some(src)) = (v.as_object_mut(), over.as_object()) else { return Err(bad(c, "params must be an object")) };
+            // A key that isn't one of the settings is an error, with the nearest setting.
+            if let Some(key) = src.keys().find(|k| !o.contains_key(k.as_str())) {
+                return Err(crate::cmd::params::unknown(c, key, &o.keys().map(String::as_str).collect::<Vec<_>>()));
+            }
+            for (k, val) in src {
+                o.insert(k.clone(), val.clone());
+            }
+            serde_json::from_value(v).map_err(|e| bad(c, e.to_string()))?
+        }
+    };
+    // (Recorded and saved settings are checked too.)
     if !params.fills && !params.strokes {
         return Err(bad(c, "Create needs fills, strokes or both"));
     }
@@ -55,41 +220,59 @@ fn trace_params(c: &str, p: &Value) -> Result<tr::TraceParams> {
     Ok(params)
 }
 
+/// Document swatch `w`'s solid color with the paint a trace fills with it: a global or spot color,
+/// or a tint of one, linked to its swatch as `swatch_solid` (paint.rs) links it; any other color
+/// unlinked. The color is the one the paint shows (a Lab spot color's CMYK equivalent when the Spot
+/// Colors options use CMYK values).
+fn trace_swatch_paint(d: &Document, w: &Swatch) -> Option<(Color, Paint)> {
+    let linked = d.swatch_link(&w.name).and_then(|(base, tint)| d.tint_paint(&base, tint));
+    let color = linked.as_ref().and_then(Paint::color).or_else(|| w.paint.color())?;
+    Some((color, linked.unwrap_or_else(|| Paint::solid(color))))
+}
+
 /// Document Library with `colorGroup`: the solid colors of the active document's color group
-/// `name` (so named exactly, else ignoring case). Errors name command `c`.
-/// ([`trace_params`] has checked that the library is the document's swatches.)
-fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<Color>> {
-    let groups = &s.doc()?.doc.swatch_groups;
+/// `name` (so named exactly, else ignoring case), each with its paint ([`trace_swatch_paint`]).
+/// Errors name command `c`. ([`trace_params`] has checked that the library is the document's
+/// swatches.)
+fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<(Color, Paint)>> {
+    let d = &s.doc()?.doc;
+    let groups = &d.swatch_groups;
     let lower = name.to_lowercase();
     let group = groups
         .iter()
         .find(|g| g.name == name)
         .or_else(|| groups.iter().find(|g| g.name.to_lowercase() == lower))
         .ok_or_else(|| bad(c, format!("no color group `{name}` in the document (see swatch.list)")))?;
-    Ok(group.swatches.iter().filter_map(|w| w.paint.color()).collect())
+    Ok(group.swatches.iter().filter_map(|w| trace_swatch_paint(d, w)).collect())
 }
 
 /// Document Library in Color mode: look the library's colors (or its color group's) up into
-/// `params.swatches` → each one as traced (sRGB) with the color to fill with. Errors name command `c`.
-fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Color)>> {
+/// `params.swatches` → each one as traced (sRGB) with the paint to fill with. The document's
+/// global and spot colors fill linked to their swatches ([`trace_swatch_paint`]); a swatch
+/// library's colors fill unlinked. Errors name command `c`.
+fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Paint)>> {
     if params.mode != tr::Mode::Color || params.palette != tr::Palette::DocumentLibrary {
         return Ok(vec![]);
     }
     let group = params.color_group.as_deref().filter(|g| !g.is_empty());
     let key = group.unwrap_or(params.library.as_str());
-    let colors = match group {
+    let missing = || bad(c, format!("no swatch library `{key}` (see swatch.library.list; \"document\": the document's swatches)"));
+    let colors: Vec<(Color, Paint)> = match group {
         Some(name) => trace_group_colors(c, s, name)?,
-        None => crate::cmd::swatchlib::library_colors(s, key)
-            .ok_or_else(|| bad(c, format!("no swatch library `{key}` (see swatch.library.list; \"document\": the document's swatches)")))?,
+        None if key == crate::cmd::swatchlib::DOCUMENT_SWATCHES => {
+            let d = &s.active().ok_or_else(missing)?.doc;
+            d.swatches_iter().filter_map(|w| trace_swatch_paint(d, w)).collect()
+        }
+        None => crate::cmd::swatchlib::library_colors(s, key).ok_or_else(missing)?.into_iter().map(|c| (c, Paint::solid(c))).collect(),
     };
     if colors.is_empty() {
         return Err(bad(c, format!("`{key}` has no colours")));
     }
-    let library: Vec<([u8; 3], Color)> = colors
+    let library: Vec<([u8; 3], Paint)> = colors
         .into_iter()
-        .map(|c| {
+        .map(|(c, paint)| {
             let [r, g, b, _] = c.to_rgba8(1.0);
-            ([r, g, b], c)
+            ([r, g, b], paint)
         })
         .collect();
     params.swatches = library.iter().map(|l| l.0).collect();
@@ -187,19 +370,50 @@ fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec
     roots.iter().filter_map(|&r| built.get_mut(r)?.take()).chain(ring).collect()
 }
 
-pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
-    let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
-    let mut params = trace_params(c, p)?;
+/// What a trace depends on: the object traced (an image, or an Image Trace object traced again),
+/// its image, and the settings it is traced with. The tracer makes the same paths of the same
+/// inputs, so a trace made away from the command ([`TraceRun`]) stands in for the command's own.
+#[derive(Clone, Debug, PartialEq)]
+struct TraceInputs {
+    target: NodeId,
+    image: Box<ImageObject>,
+    /// The settings traced with, as JSON.
+    params: Value,
+    /// Document Library: the library's colours, which the JSON leaves out
+    /// ([`tr::TraceParams::swatches`]).
+    swatches: Vec<[u8; 3]>,
+}
+
+/// What `imageTrace.make` and `imageTrace.makeAndExpand` take from the session before they trace.
+struct Prepared {
+    inputs: TraceInputs,
+    trace: tr::TraceParams,
+    view: Option<TraceView>,
+    /// The settings asked for, which the Image Trace object keeps.
+    params_json: Value,
+    preset_label: String,
+    library: Vec<([u8; 3], Paint)>,
+    bytes: Arc<Vec<u8>>,
+}
+
+/// What command `c` with params `p` traces, and how, from the session: everything but the trace.
+fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
+    let mut params = trace_params(s, c, p)?;
     let view = view_param(c, p)?;
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    // The preset's name if the parameters are exactly that preset's or its enhanced version's,
-    // else "Custom".
+    // The preset's name if the parameters are exactly that preset's or its enhanced version's (a
+    // saved preset's under its saved name), else "Custom".
     let named = str_param(p, "preset").unwrap_or("Default");
     let is = |b: Option<tr::TraceParams>| b.and_then(|b| serde_json::to_value(&b).ok()).as_ref() == Some(&params_json);
-    let preset_label = if is(tr::preset(named)) || is(tr::enhanced_preset(named)) { named.to_string() } else { "Custom".to_string() };
+    let saved = s.trace_preset(named).filter(|q| tr::preset(named).is_none() && is(Some(q.params.clone()))).map(|q| q.name.clone());
+    let preset_label = match saved {
+        Some(name) => name,
+        None if is(tr::preset(named)) || is(tr::enhanced_preset(named)) => named.to_string(),
+        None => "Custom".to_string(),
+    };
     let roots = root_ids(s, p)?;
     // The image (inside a trace group, or selected directly).
-    let (target, img) = {
+    let (target, image) = {
         let d = &s.doc()?.doc;
         roots
             .iter()
@@ -216,15 +430,128 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             })
             .ok_or_else(|| bad(c, "select an image (or an Image Trace group)"))?
     };
-    let blob = s.doc()?.doc.images.get(&img.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", img.key)))?;
-    // An image over the tracer's size is traced scaled down (the paths are scaled back below).
-    let raster = tr::Raster::decode_to_fit(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    let blob = s.doc()?.doc.images.get(&image.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", image.key)))?;
+    let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
-    let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
-    let warnings = trace_warnings((img.width, img.height), (raster.width, raster.height), res.worked_at);
+    let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
+    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone() };
+    Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library, bytes })
+}
+
+/// What a trace made of an image: the size in pixels it was decoded at, and the paths.
+pub struct Traced {
+    inputs: TraceInputs,
+    raster: (u32, u32),
+    res: tr::TraceResult,
+}
+
+impl Traced {
+    /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]), which
+    /// applies it as one undo step instead of tracing again. Any other trace drops it.
+    pub fn hand_in(self, s: &mut Session) {
+        s.trace_hand_off = Some(self);
+    }
+}
+
+/// Decode the image `bytes` and trace it with `params`, telling `steps` how far it has got
+/// ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
+fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, bytes: &[u8], steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+    // An image over the tracer's size is traced scaled down (the paths are scaled back).
+    let raster = tr::Raster::decode_to_fit(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    if !steps(0, 0) {
+        return Err(EngineError::Cancelled);
+    }
+    let res = tr::trace_watched(&raster, params, MAX_TRACE_ANCHORS, steps).map_err(|e| match e {
+        tr::TraceError::Cancelled => EngineError::Cancelled,
+        e => EngineError::Other(e.to_string()),
+    })?;
+    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res })
+}
+
+/// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
+/// takes what `imageTrace.make` or `imageTrace.makeAndExpand` traces from the session, checked as
+/// the command checks it; [`TraceRun::run`] decodes and traces the image without the session, on
+/// any thread; [`Traced::hand_in`] gives the result to the command.
+pub struct TraceRun {
+    command: &'static str,
+    params: Value,
+    prepared: Prepared,
+}
+
+impl TraceRun {
+    /// The trace `command` (`imageTrace.make` or `imageTrace.makeAndExpand`) with params `p` makes
+    /// in the active document.
+    pub fn prepare(s: &Session, command: &str, p: &Value) -> Result<TraceRun> {
+        let command = match command {
+            "imageTrace.make" => "imageTrace.make",
+            "imageTrace.makeAndExpand" => "imageTrace.makeAndExpand",
+            other => return Err(EngineError::Other(format!("`{other}` doesn't trace an image"))),
+        };
+        let prepared = prepare(s, command, p)?;
+        // The object traced is named, so the command applies the trace to it whatever is
+        // selected by then.
+        let mut params = if p.is_object() { p.clone() } else { json!({}) };
+        if let Some(o) = params.as_object_mut() {
+            o.remove("ids");
+            o.insert("id".into(), json!(prepared.inputs.target.0));
+        }
+        Ok(TraceRun { command, params, prepared })
+    }
+
+    /// `imageTrace.make` or `imageTrace.makeAndExpand`.
+    pub fn command(&self) -> &'static str {
+        self.command
+    }
+
+    /// The command's params that apply this trace: those it was prepared with, the object traced
+    /// in `id`.
+    pub fn params(&self) -> &Value {
+        &self.params
+    }
+
+    /// The object it traces: an image, or an Image Trace object traced again.
+    pub fn target(&self) -> NodeId {
+        self.prepared.inputs.target
+    }
+
+    /// The size in pixels of the image it traces.
+    pub fn image_size(&self) -> (u32, u32) {
+        (self.prepared.inputs.image.width, self.prepared.inputs.image.height)
+    }
+
+    /// Does it still apply: would the command trace the same object, image and settings now?
+    pub fn current(&self, s: &Session) -> bool {
+        prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
+    }
+
+    /// Decode and trace the image, telling `steps` how far it has got → what it traced, or why it
+    /// failed or stopped ([`EngineError::Cancelled`] once `steps` answers `false`). It touches no
+    /// document, so it can run on any thread.
+    pub fn run(&self, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+        trace_now(&self.prepared.inputs, &self.prepared.trace, &self.prepared.bytes, steps)
+    }
+}
+
+pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
+    let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
+    let Prepared { inputs, trace, view, params_json, preset_label, library, bytes } = prepare(s, c, p)?;
+    // A saved preset's settings join the journal entry, so a replay traces as this run did after
+    // the preset is changed, renamed or deleted.
+    let named = str_param(p, "preset").unwrap_or("Default");
+    if let Some(q) = s.trace_preset(named).filter(|_| tr::preset(named).is_none()) {
+        let recorded = serde_json::to_value(&q.params).map_err(|e| EngineError::Other(e.to_string()))?;
+        s.note_journal("savedPreset", recorded);
+    }
+    // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
+    let Traced { raster, res, .. } = match s.trace_hand_off.take() {
+        Some(traced) if traced.inputs == inputs => traced,
+        _ => trace_now(&inputs, &trace, &bytes, &|_, _| true)?,
+    };
+    let TraceInputs { target, image: img, .. } = inputs;
+    let warnings = trace_warnings((img.width, img.height), raster, res.worked_at);
     // Pixel space of the decoded raster → the image object's pixel space → document.
-    let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
-    let sy = img.height.max(1) as f64 / raster.height.max(1) as f64;
+    let sx = img.width.max(1) as f64 / raster.0.max(1) as f64;
+    let sy = img.height.max(1) as f64 / raster.1.max(1) as f64;
     let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
     // Document units per raster pixel (stroke widths).
     let unit = xf.determinant().abs().sqrt();
@@ -257,10 +584,14 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 *path = shape.to_path();
                 *live = Some(Box::new(shape));
             }
-            // A library colour fills with the swatch's own colour (its model kept).
-            let color = library.iter().find(|(rgb, _)| *rgb == tp.color).map_or_else(|| Color::rgb8(tp.color[0], tp.color[1], tp.color[2]), |l| l.1);
+            // A library color fills with the swatch's own color (its model kept), linked to a
+            // global or spot swatch of the document.
+            let solid = library
+                .iter()
+                .find(|(rgb, _)| *rgb == tp.color)
+                .map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |l| l.1.clone());
             // Gradients: a path the tracer found to be a linear gradient is filled with it.
-            let paint = tp.gradient.as_ref().map_or_else(|| Paint::solid(color), |g| traced_gradient(g, xf));
+            let paint = tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {
                 // Traced lines: round corners, and ends round or square as the tracer found them.
                 Some(width) => Appearance {

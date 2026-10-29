@@ -8,7 +8,11 @@ use vectorcraft_doc::{Document, Node, NodeId, RulerMode, Unit};
 use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
-use super::*;
+use super::{
+    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
+    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_or_artboard_tool, has_selection_or_guides, id_param, index, ok, point_param,
+    str_param,
+};
 use crate::{Clipboard, EngineError, inspect};
 
 /// Register editing commands, including document-to-document artwork drops and their parameter contracts.
@@ -37,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{units: \"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Pixels\"|\"Feet & Inches\"|\"Meters\"|\"Yards\"|\"Feet\"} the document's units: every length the UI shows and reads (General)",
             has_doc,
             set_units
+        ),
+        cmd!(
+            "document.switchUnits",
+            "Switch Units",
+            [],
+            Some("Cmd+Alt+Shift+U"),
+            "{} the document's units become the next of Points, Picas, Inches, Millimeters, Centimeters, Pixels, Feet & Inches, Meters, Yards and Feet (the order a right-click on a ruler lists them), Feet going back to Points; one undo step → {units}",
+            has_doc,
+            switch_units
         ),
         cmd!(
             query "document.rulerOrigin",
@@ -326,6 +339,14 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
     let u = str_param(p, "units").and_then(Unit::named).ok_or_else(|| bad("document.setUnits", "unknown units"))?;
     s.set_document_units(u)?;
     ok()
+}
+
+/// Switch Units: the unit after the document's in [`Unit::ALL`], wrapping around.
+fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
+    let now = s.doc()?.doc.units;
+    let next = Unit::ALL.iter().position(|u| *u == now).and_then(|i| Unit::ALL.get((i + 1) % Unit::ALL.len())).copied().unwrap_or_default();
+    s.set_document_units(next)?;
+    Ok(json!({ "units": next.label() }))
 }
 
 /// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.

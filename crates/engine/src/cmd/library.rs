@@ -7,15 +7,21 @@
 //! merged into the document's). Items can be put in user-named groups, and a library can be
 //! exported to a `.vclibrary` file and imported from one (#926). Items and groups are kept in the
 //! order the Libraries panel shows them, which dragging them there changes.
+//!
+//! A gradient is kept without the placement it had on its art, and fits each object it paints. A
+//! pattern is kept as a native document holding one swatch's worth of the pattern (its
+//! definition and the resources its art uses) and a thumbnail; using it adds the pattern to the
+//! document, as its swatch, and paints the selection with it.
 
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::TextStyleDef;
+use vectorcraft_color::{Color, GradientPaint, Paint};
+use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
-use super::*;
+use super::clipboard::SwatchChoices;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index, ok, point_param, str_param};
 use crate::Clipboard;
 
 /// The extension of a library file.
@@ -34,6 +40,8 @@ const MAX_NAME: usize = 256;
 const MAX_THUMBNAIL: usize = 4 << 20;
 /// Pixels a side a thumbnail may claim (they are made at most 256).
 const MAX_THUMBNAIL_SIDE: u32 = 1024;
+/// Stops a gradient read from a file may have (fewer than 2 is no gradient).
+const MAX_STOPS: usize = 1024;
 
 /// A library: its name and its items, newest last.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -48,6 +56,11 @@ pub struct Library {
     pub para_styles: Vec<TextStyleDef>,
     #[serde(default)]
     pub graphics: Vec<LibraryGraphic>,
+    /// Files written before gradients and patterns have none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gradients: Vec<LibraryGradient>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub patterns: Vec<LibraryPattern>,
     /// User-named groups of its items, in the order they were made (#926); an item is in one
     /// group at most, the others are ungrouped. Files written before groups have none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -77,6 +90,8 @@ pub enum ItemKind {
     CharStyle,
     ParaStyle,
     Graphic,
+    Gradient,
+    Pattern,
     /// A kind this version doesn't know (a newer one wrote it): dropped when the file is read.
     #[serde(other)]
     Unknown,
@@ -100,6 +115,27 @@ pub struct LibraryGraphic {
     /// The native document, base64.
     pub data: String,
     /// A PNG of the art, at most 256 pixels a side, base64 (empty when it draws nothing).
+    #[serde(default)]
+    pub thumbnail: String,
+}
+
+/// A gradient: its stops, kind and angle, without a placement or swatch links.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LibraryGradient {
+    pub name: String,
+    pub gradient: GradientPaint,
+}
+
+/// A pattern: a native document whose objects are painted with pattern `pattern` (its definition
+/// and the resources its art uses), and its thumbnail.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LibraryPattern {
+    pub name: String,
+    /// The pattern's name in `data`.
+    pub pattern: String,
+    /// The native document, base64.
+    pub data: String,
+    /// A PNG of one swatch's worth of the pattern, at most 256 pixels a side, base64.
     #[serde(default)]
     pub thumbnail: String,
 }
@@ -243,8 +279,8 @@ impl Libraries {
 }
 
 impl Library {
-    /// Every item as (kind, key: its name, a graphic's id, name shown): colours, then character
-    /// and paragraph styles, then graphics.
+    /// Every item as (kind, key: its name, a graphic's id, name shown): colors, gradients and
+    /// patterns, then character and paragraph styles, then graphics.
     pub fn items(&self) -> impl Iterator<Item = (ItemKind, &str, &str)> {
         fn styles(kind: ItemKind, list: &[TextStyleDef]) -> impl Iterator<Item = (ItemKind, &str, &str)> {
             list.iter().map(move |t| (kind, t.name.as_str(), t.name.as_str()))
@@ -252,6 +288,8 @@ impl Library {
         self.colors
             .iter()
             .map(|c| (ItemKind::Color, c.name.as_str(), c.name.as_str()))
+            .chain(self.gradients.iter().map(|g| (ItemKind::Gradient, g.name.as_str(), g.name.as_str())))
+            .chain(self.patterns.iter().map(|p| (ItemKind::Pattern, p.name.as_str(), p.name.as_str())))
             .chain(styles(ItemKind::CharStyle, &self.char_styles))
             .chain(styles(ItemKind::ParaStyle, &self.para_styles))
             .chain(self.graphics.iter().map(|g| (ItemKind::Graphic, g.id.as_str(), g.name.as_str())))
@@ -294,6 +332,8 @@ impl Library {
         let (from, to_key) = (r.item.as_str(), to.item.as_str());
         match r.kind {
             ItemKind::Color => shift(&mut self.colors, |c| c.name.as_str(), from, to_key, after),
+            ItemKind::Gradient => shift(&mut self.gradients, |g| g.name.as_str(), from, to_key, after),
+            ItemKind::Pattern => shift(&mut self.patterns, |p| p.name.as_str(), from, to_key, after),
             ItemKind::CharStyle => shift(&mut self.char_styles, |c| c.name.as_str(), from, to_key, after),
             ItemKind::ParaStyle => shift(&mut self.para_styles, |c| c.name.as_str(), from, to_key, after),
             ItemKind::Graphic => shift(&mut self.graphics, |g| g.id.as_str(), from, to_key, after),
@@ -304,16 +344,27 @@ impl Library {
     /// Make a library read from a file (hand-edited, imported) safe and consistent: at most
     /// [`MAX_ITEMS`] items of each kind and [`MAX_GROUPS`] groups, names clipped to [`MAX_NAME`]
     /// characters and unique within their kind (a repeated one gets a number), sizes finite, a
-    /// thumbnail only when it is a small PNG, and groups holding only items there are, each in one
-    /// group at most.
+    /// thumbnail only when it is a small PNG, gradients of 2 to [`MAX_STOPS`] stops in range
+    /// ([`clean_gradient`]; others are dropped), and groups holding only items there are, each in
+    /// one group at most.
     fn sanitize(&mut self) {
         clip(&mut self.name);
         self.colors.truncate(MAX_ITEMS);
+        self.gradients.retain_mut(|g| clean_gradient(&mut g.gradient));
+        self.gradients.truncate(MAX_ITEMS);
+        self.patterns.truncate(MAX_ITEMS);
         self.char_styles.truncate(MAX_ITEMS);
         self.para_styles.truncate(MAX_ITEMS);
         self.graphics.truncate(MAX_ITEMS);
         self.groups.truncate(MAX_GROUPS);
         uniquify(self.colors.iter_mut().map(|c| &mut c.name), "Color", " ", false);
+        uniquify(self.gradients.iter_mut().map(|g| &mut g.name), "Gradient", " ", false);
+        uniquify(self.patterns.iter_mut().map(|p| &mut p.name), "Pattern", " ", false);
+        for p in &mut self.patterns {
+            if !thumbnail_ok(&p.thumbnail) {
+                p.thumbnail.clear();
+            }
+        }
         uniquify(self.char_styles.iter_mut().map(|t| &mut t.name), "Character Style", " ", false);
         uniquify(self.para_styles.iter_mut().map(|t| &mut t.name), "Paragraph Style", " ", false);
         uniquify(self.graphics.iter_mut().map(|g| &mut g.name), "Graphic", " ", false);
@@ -337,6 +388,33 @@ impl Library {
         }
         self.groups = groups;
     }
+}
+
+/// Make `g` a library gradient: no placement, freeform points or swatch links (a linked stop keeps
+/// the color it shows), the angle its placement showed (a finite one), and stops in order with
+/// offsets, opacities and midpoints in range. False when it has fewer than 2 or more than
+/// [`MAX_STOPS`] stops.
+fn clean_gradient(g: &mut GradientPaint) -> bool {
+    if !(2..=MAX_STOPS).contains(&g.gradient.stops.len()) {
+        return false;
+    }
+    g.angle = g.geom.map_or(g.angle, |geom| geom.angle_deg());
+    g.geom = None;
+    g.freeform = None;
+    g.swatch = None;
+    if !g.angle.is_finite() {
+        g.angle = 0.0;
+    }
+    let within = |v: f32, lo: f32, hi: f32, or: f32| if v.is_finite() { v.clamp(lo, hi) } else { or };
+    for st in &mut g.gradient.stops {
+        st.offset = within(st.offset, 0.0, 1.0, 0.0);
+        st.opacity = within(st.opacity, 0.0, 1.0, 1.0);
+        st.midpoint = within(st.midpoint, 0.13, 0.87, 0.5);
+        st.swatch = None;
+        st.tint = 1.0;
+    }
+    g.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    true
 }
 
 /// `name` cut to [`MAX_NAME`] characters.
@@ -429,6 +507,10 @@ enum Kind {
     Graphic,
     FillColor,
     StrokeColor,
+    FillGradient,
+    StrokeGradient,
+    FillPattern,
+    StrokePattern,
     CharStyle,
     ParaStyle,
 }
@@ -440,20 +522,37 @@ impl Kind {
             Some("fillColor") => Kind::FillColor,
             Some("strokeColor") => Kind::StrokeColor,
             Some("color") => Kind::FillColor,
+            Some("fillGradient" | "gradient") => Kind::FillGradient,
+            Some("strokeGradient") => Kind::StrokeGradient,
+            Some("fillPattern" | "pattern") => Kind::FillPattern,
+            Some("strokePattern") => Kind::StrokePattern,
             Some("charStyle") => Kind::CharStyle,
             Some("paraStyle") => Kind::ParaStyle,
-            _ => return Err(bad(cmd, "kind must be graphic, fillColor, strokeColor, charStyle or paraStyle")),
+            _ => {
+                return Err(bad(
+                    cmd,
+                    "kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle",
+                ));
+            }
         })
     }
 
-    /// The kind as a group names it (fill and stroke colours are one list).
+    /// The kind as a group names it (fill and stroke colors, gradients and patterns are one list
+    /// each).
     fn item_kind(self) -> ItemKind {
         match self {
             Kind::Graphic => ItemKind::Graphic,
             Kind::FillColor | Kind::StrokeColor => ItemKind::Color,
+            Kind::FillGradient | Kind::StrokeGradient => ItemKind::Gradient,
+            Kind::FillPattern | Kind::StrokePattern => ItemKind::Pattern,
             Kind::CharStyle => ItemKind::CharStyle,
             Kind::ParaStyle => ItemKind::ParaStyle,
         }
+    }
+
+    /// Whether the kind paints strokes by default.
+    fn stroke(self) -> bool {
+        matches!(self, Kind::StrokeColor | Kind::StrokeGradient | Kind::StrokePattern)
     }
 }
 
@@ -464,7 +563,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, graphics, colors, charStyles, paraStyles, groups} (counts)], current: the current library's id or null, folder: the library folder, or null when libraries last for the session only (the web, headless)}",
+            "{} → {libraries: [{id, name, graphics, colors, gradients, patterns, charStyles, paraStyles, groups} (counts)], current: the current library's id or null, folder: the library folder, or null when libraries last for the session only (the web, headless)}",
             always,
             list
         ),
@@ -473,7 +572,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Library",
             [],
             None,
-            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}], groups: [{name, items: [{kind: color|charStyle|paraStyle|graphic, item: name (graphic: id)}]}] (an item is in one group at most; the others are ungrouped)}",
+            "{library?: id or name (default: the current library)} → {id, name, graphics: [{id, name, width, height, thumbnail: PNG base64}], colors: [{name, hex, color}], gradients: [{name, gradient: {gradient: {kind, stops}, angle}}], patterns: [{name, pattern: its name in the item, thumbnail: PNG base64}], charStyles: [{name, attrs}], paraStyles: [{name, attrs}], groups: [{name, items: [{kind: color|gradient|pattern|charStyle|paraStyle|graphic, item: name (graphic: id)}]}] (an item is in one group at most; the others are ungrouped)}",
             always,
             get
         ),
@@ -518,7 +617,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Library",
             [],
             None,
-            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
+            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). An item the library already has (same kind and contents) isn't added again → {library, kind, name, id?: graphic id, existing: bool}",
             has_doc,
             add
         ),
@@ -527,7 +626,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colours; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colours: paint the selection (and the defaults) as paint.setFill/paint.setStroke; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),
@@ -590,7 +689,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Library",
             [],
             None,
-            "{library?: id or name (default: the current library), path?} write a library (its colours, styles, graphics with their art and thumbnails, and groups) as a .vclibrary file (JSON, as libraries are kept) → {path, name}; without path → {data: the file's text, name}",
+            "{library?: id or name (default: the current library), path?} write a library (its colours, gradients, patterns, styles, graphics with their art and thumbnails, and groups) as a .vclibrary file (JSON, as libraries are kept) → {path, name}; without path → {data: the file's text, name}",
             always,
             export
         ),
@@ -599,7 +698,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Library",
             [],
             None,
-            "{path? | data?: file text | dataBase64?, name?: the library's name (default: the file's)} add the library of a .vclibrary file (as library.export writes) as a new library, made the current one; a name another library has gets a number (`Brand (2)`) → {id, name, graphics, colors, charStyles, paraStyles, groups (counts)}",
+            "{path? | data?: file text | dataBase64?, name?: the library's name (default: the file's)} add the library of a .vclibrary file (as library.export writes) as a new library, made the current one; a name another library has gets a number (`Brand (2)`) → {id, name, graphics, colors, gradients, patterns, charStyles, paraStyles, groups (counts)}",
             always,
             import
         ),
@@ -626,6 +725,8 @@ fn counts(lib: &Library) -> Value {
     json!({
         "graphics": lib.graphics.len(),
         "colors": lib.colors.len(),
+        "gradients": lib.gradients.len(),
+        "patterns": lib.patterns.len(),
         "charStyles": lib.char_styles.len(),
         "paraStyles": lib.para_styles.len(),
         "groups": lib.groups.len(),
@@ -656,6 +757,8 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
         "name": lib.name,
         "graphics": lib.graphics.iter().map(|g| json!({"id": g.id, "name": g.name, "width": g.width, "height": g.height, "thumbnail": g.thumbnail})).collect::<Vec<_>>(),
         "colors": lib.colors.iter().map(|c| json!({"name": c.name, "hex": c.color.to_hex(), "color": c.color})).collect::<Vec<_>>(),
+        "gradients": lib.gradients.iter().map(|g| json!({"name": g.name, "gradient": g.gradient})).collect::<Vec<_>>(),
+        "patterns": lib.patterns.iter().map(|p| json!({"name": p.name, "pattern": p.pattern, "thumbnail": p.thumbnail})).collect::<Vec<_>>(),
         "charStyles": lib.char_styles.iter().map(|t| json!({"name": t.name, "attrs": t.attrs})).collect::<Vec<_>>(),
         "paraStyles": lib.para_styles.iter().map(|t| json!({"name": t.name, "attrs": t.attrs})).collect::<Vec<_>>(),
         "groups": lib.groups,
@@ -706,7 +809,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // Read what is added before a library is made for it, so a failure makes none.
     let item = match kind {
         Kind::Graphic => Item::Graphic(graphic_of(s, p, C)?),
-        Kind::FillColor | Kind::StrokeColor => Item::Color(color_of(s, p, kind == Kind::StrokeColor, C)?),
+        Kind::FillColor | Kind::StrokeColor => Item::Color(color_of(s, p, kind.stroke(), C)?),
+        Kind::FillGradient | Kind::StrokeGradient => Item::Gradient(gradient_of(s, p, kind.stroke(), C)?),
+        Kind::FillPattern | Kind::StrokePattern => Item::Pattern(pattern_of(s, p, kind.stroke(), C)?),
         Kind::CharStyle | Kind::ParaStyle => {
             let para = kind == Kind::ParaStyle;
             let attrs = super::textstyles::selected_style_attrs(s, para)?.ok_or_else(|| bad(C, "select some type first"))?;
@@ -740,6 +845,26 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 lib.colors.push(LibraryColor { name: name.clone(), color });
                 json!({ "name": name, "existing": false })
             }
+            Item::Gradient(mut g) => {
+                full(lib.gradients.len())?;
+                if let Some(old) = lib.gradients.iter().find(|o| o.gradient == g.gradient) {
+                    return Ok(json!({ "name": old.name, "existing": true }));
+                }
+                g.name = unique(&given.clone().unwrap_or(g.name), |n| lib.gradients.iter().any(|o| o.name == n));
+                let v = json!({ "name": g.name, "existing": false });
+                lib.gradients.push(g);
+                v
+            }
+            Item::Pattern(mut pat) => {
+                full(lib.patterns.len())?;
+                if let Some(old) = lib.patterns.iter().find(|o| o.data == pat.data) {
+                    return Ok(json!({ "name": old.name, "existing": true }));
+                }
+                pat.name = unique(&given.clone().unwrap_or(pat.name), |n| lib.patterns.iter().any(|o| o.name == n));
+                let v = json!({ "name": pat.name, "existing": false });
+                lib.patterns.push(pat);
+                v
+            }
             Item::Style(para, attrs) => {
                 let list = if para { &mut lib.para_styles } else { &mut lib.char_styles };
                 full(list.len())?;
@@ -762,6 +887,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
 enum Item {
     Graphic(LibraryGraphic),
     Color((String, Color)),
+    Gradient(LibraryGradient),
+    Pattern(LibraryPattern),
     Style(bool, Map<String, Value>),
 }
 
@@ -804,23 +931,7 @@ fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<(String, 
         let color = color_value(c).ok_or_else(|| bad(cmd, "bad colour"))?;
         return Ok((color.to_hex(), color));
     }
-    let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
-        Some(ids) => ids,
-        None => st.selection.objects.clone(),
-    };
-    let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
-        let paint = if stroke { n.appearance.stroke().map(|x| &x.paint) } else { n.appearance.fill().map(|f| &f.paint) };
-        paint.cloned()
-    });
-    let paint = match from_art {
-        Some(p) => p,
-        None => {
-            let d = &s.paint;
-            if stroke { d.stroke.clone() } else { d.fill.clone() }
-        }
-    };
-    match paint {
+    match selected_paint(s, p, stroke)? {
         Paint::Solid { color, swatch, .. } => {
             let name = swatch.filter(|n| !n.is_empty()).unwrap_or_else(|| color.to_hex());
             Ok((name, color))
@@ -828,6 +939,87 @@ fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<(String, 
         Paint::None => Err(bad(cmd, if stroke { "the selection has no stroke colour" } else { "the selection has no fill colour" })),
         _ => Err(bad(cmd, "only solid colours can be added (not gradients or patterns)")),
     }
+}
+
+/// The first selected object's (or `ids`') fill (`stroke`: stroke) paint (type's: its first
+/// character's, as the proxy shows it), else the default one.
+fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
+    let st = s.doc()?;
+    let ids = match ids_param(p, "ids") {
+        Some(ids) => ids,
+        None => st.selection.objects.clone(),
+    };
+    let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
+        let (paint, to_doc, _) = n.proxy_paint(stroke, None)?;
+        // Type's characters paint in its own space: a gradient there takes its placement in the
+        // document, so that it keeps the direction it shows.
+        match (paint, n.proxy_gradient(stroke, None)) {
+            (Paint::Gradient(g), Some((_, geom))) if to_doc != vectorcraft_geom::Affine::IDENTITY => {
+                Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() })))
+            }
+            _ => Some(paint.clone()),
+        }
+    });
+    Ok(match from_art {
+        Some(p) => p,
+        None => {
+            let d = &s.paint;
+            if stroke { d.stroke.clone() } else { d.fill.clone() }
+        }
+    })
+}
+
+/// Gradient swatch `swatch` of the document, else the first selected object's fill (`stroke`:
+/// stroke) gradient, else the default one, as a library gradient ([`clean_gradient`]) named after
+/// its swatch, else "Gradient".
+fn gradient_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<LibraryGradient> {
+    let (name, paint) = match str_param(p, "swatch") {
+        Some(name) => {
+            let sw = s.doc()?.doc.swatch(name).filter(|w| matches!(w.paint, Paint::Gradient(_)));
+            (Some(name.to_string()), sw.ok_or_else(|| bad(cmd, format!("no gradient swatch `{name}`")))?.paint.clone())
+        }
+        None => (None, selected_paint(s, p, stroke)?),
+    };
+    let Paint::Gradient(mut g) = paint else {
+        return Err(bad(cmd, if stroke { "the selection has no gradient stroke" } else { "the selection has no gradient fill" }));
+    };
+    let name = name.or_else(|| g.swatch.clone()).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| "Gradient".to_string());
+    if !clean_gradient(&mut g) {
+        return Err(bad(cmd, "the library item is damaged"));
+    }
+    Ok(LibraryGradient { name, gradient: *g })
+}
+
+/// Pattern swatch `swatch` of the document, else the first selected object's fill (`stroke`:
+/// stroke) pattern, else the default one, as a library pattern named after it: a document of one
+/// rectangle painted with it, one period of its tiling, with the resources its art uses.
+fn pattern_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<LibraryPattern> {
+    let d = &s.doc()?.doc;
+    let name = match str_param(p, "swatch") {
+        Some(name) => match d.swatch(name).map(|w| &w.paint) {
+            Some(Paint::Pattern { pattern, .. }) => pattern.clone(),
+            _ if d.pattern(name).is_some() => name.to_string(),
+            _ => return Err(bad(cmd, format!("no pattern swatch `{name}`"))),
+        },
+        None => match selected_paint(s, p, stroke)? {
+            Paint::Pattern { pattern, .. } => pattern,
+            _ => return Err(bad(cmd, if stroke { "the selection has no pattern stroke" } else { "the selection has no pattern fill" })),
+        },
+    };
+    let def = d.pattern(&name).ok_or_else(|| bad(cmd, format!("no pattern swatch `{name}`")))?;
+    let (w, h) = def.period();
+    let r = vectorcraft_geom::Rect::from_origin_size((0.0, 0.0), (w, h));
+    let paint = vectorcraft_doc::pattern::pattern_paint(&name);
+    let node = Node::path(NodeId(1), vectorcraft_geom::shapes::rectangle(r), Appearance::basic(paint, Paint::None, 0.0));
+    let mut doc = Clipboard::gather(d, vec![node]).to_document();
+    doc.artboards.truncate(1);
+    match doc.artboards.first_mut() {
+        Some(a) => a.rect = r,
+        None => return Err(bad(cmd, "the graphic's document has no artboard")),
+    }
+    let thumbnail = super::fileio::preview_png(&doc)?.map(|b| vectorcraft_format::base64_encode(&b)).unwrap_or_default();
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&doc, false));
+    Ok(LibraryPattern { name: name.clone(), pattern: name, data, thumbnail })
 }
 
 /// A character style's name from its font, style and size ("Source Sans 3 Bold 24 pt"); a
@@ -871,6 +1063,14 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
                     let c = lib.colors.iter().find(|c| c.name == item).ok_or_else(missing)?;
                     json!({ "color": c.color })
                 }
+                Kind::FillGradient | Kind::StrokeGradient => {
+                    let g = lib.gradients.iter().find(|g| g.name == item).ok_or_else(missing)?;
+                    json!({ "gradient": g.gradient })
+                }
+                Kind::FillPattern | Kind::StrokePattern => {
+                    let pat = lib.patterns.iter().find(|x| x.name == item).ok_or_else(missing)?;
+                    json!({ "pattern": pat.pattern, "data": pat.data })
+                }
                 Kind::CharStyle | Kind::ParaStyle => {
                     let list = if kind == Kind::ParaStyle { &lib.para_styles } else { &lib.char_styles };
                     let t = list.iter().find(|t| t.name == item).ok_or_else(missing)?;
@@ -902,15 +1102,29 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(r)
         }
         Kind::FillColor | Kind::StrokeColor => {
-            let stroke = match str_param(p, "to") {
-                Some("fill") => false,
-                Some("stroke") => true,
-                Some(_) => return Err(bad(C, "to must be fill or stroke")),
-                None => kind == Kind::StrokeColor,
-            };
+            let stroke = to_stroke(p, kind)?;
             let color = data.get("color").cloned().ok_or_else(|| bad(C, "no colour"))?;
             s.execute(if stroke { "paint.setStroke" } else { "paint.setFill" }, &json!({ "color": color }))?;
             Ok(json!({ "kind": if stroke { "strokeColor" } else { "fillColor" } }))
+        }
+        Kind::FillGradient | Kind::StrokeGradient => {
+            let stroke = to_stroke(p, kind)?;
+            let damaged = || bad(C, "the library item is damaged");
+            let mut g: GradientPaint = data.get("gradient").cloned().and_then(|v| serde_json::from_value(v).ok()).ok_or_else(damaged)?;
+            if !clean_gradient(&mut g) {
+                return Err(damaged());
+            }
+            // RGB stops in a CMYK document are stored as CMYK, as a library color is.
+            for st in &mut g.gradient.stops {
+                st.color = super::paint::new_color(s, &json!({}), st.color);
+            }
+            super::paint::apply_paint(s, &json!({}), Paint::Gradient(Box::new(g)), !stroke)?;
+            Ok(json!({ "kind": if stroke { "strokeGradient" } else { "fillGradient" } }))
+        }
+        Kind::FillPattern | Kind::StrokePattern => {
+            let stroke = to_stroke(p, kind)?;
+            let pattern = use_pattern(s, &data, stroke)?;
+            Ok(json!({ "kind": if stroke { "strokePattern" } else { "fillPattern" }, "pattern": pattern }))
         }
         Kind::CharStyle | Kind::ParaStyle => {
             let para = kind == Kind::ParaStyle;
@@ -930,6 +1144,62 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(json!({ "kind": if para { "paraStyle" } else { "charStyle" }, "style": style }))
         }
     }
+}
+
+/// The `to` param of `library.use`: whether the item paints the stroke (default: the kind's).
+fn to_stroke(p: &Value, kind: Kind) -> Result<bool> {
+    match str_param(p, "to") {
+        Some("fill") => Ok(false),
+        Some("stroke") => Ok(true),
+        Some(_) => Err(bad("library.use", "to must be fill or stroke")),
+        None => Ok(kind.stroke()),
+    }
+}
+
+/// Add library pattern `data` (`{pattern, data}`) to the document, with its swatch and the
+/// resources its art uses (the same pattern there already is reused; a name the document gives
+/// another one gets a number), and paint the selection's fill (`stroke`: stroke) and the default
+/// with it, one undo step → the pattern's name in the document.
+fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
+    const C: &str = "library.use";
+    let damaged = || bad(C, "the library item is damaged");
+    let bytes = data.get("data").and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or_else(damaged)?;
+    let doc = vectorcraft_format::load(&bytes).map_err(|_| damaged())?;
+    let name = data.get("pattern").and_then(Value::as_str).filter(|n| doc.pattern(n).is_some()).ok_or_else(damaged)?.to_string();
+    // Only what paints with the pattern is brought along.
+    let clip = Clipboard::from_document(&doc);
+    let clip = Clipboard::gather(&doc, clip.nodes.into_iter().filter(|n| vectorcraft_doc::pattern::uses_pattern(n, Some(&name))).collect());
+    if clip.nodes.is_empty() {
+        return Err(damaged());
+    }
+    let choices = SwatchChoices::default();
+    // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
+    let mut probe = (*s.doc()?.doc).clone();
+    let imported = clip.import_into(&mut probe, &choices, false);
+    let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
+    let target = renamed.unwrap_or(&name).to_string();
+    let paint = vectorcraft_doc::pattern::pattern_paint(&target);
+    // A pattern the document holds without a swatch (an imported SVG's) gets one.
+    let has_swatch =
+        |d: &vectorcraft_doc::Document| d.swatches_iter().any(|w| matches!(&w.paint, Paint::Pattern { pattern, .. } if *pattern == target));
+    let added = imported.added > 0 || !has_swatch(&probe);
+    drop(probe);
+    in_one_step(s, |s| {
+        if added {
+            s.edit("Add to Swatches", |d, _| {
+                clip.import_into(d, &choices, false);
+                if !has_swatch(d) {
+                    let swatch = d.free_swatch_name(&target);
+                    d.swatches.push(vectorcraft_color::Swatch { name: swatch, paint: paint.clone(), global: false, spot: false });
+                }
+                Ok(())
+            })?;
+        }
+        // The pattern itself, not a swatch of its name (a color swatch can share it); `swatch` keeps
+        // the placement of a pattern the targets already have, as picking its swatch does.
+        super::paint::apply_paint(s, &json!({ "swatch": target }), paint.clone(), !stroke)
+    })?;
+    Ok(target)
 }
 
 /// Run `f`'s commands as one undo step, or as part of the step of an undo group open in the active
@@ -952,6 +1222,8 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         match kind {
             Kind::Graphic => lib.graphics.retain(|g| g.id != r.item),
             Kind::FillColor | Kind::StrokeColor => lib.colors.retain(|c| c.name != r.item),
+            Kind::FillGradient | Kind::StrokeGradient => lib.gradients.retain(|g| g.name != r.item),
+            Kind::FillPattern | Kind::StrokePattern => lib.patterns.retain(|x| x.name != r.item),
             Kind::CharStyle => lib.char_styles.retain(|t| t.name != r.item),
             Kind::ParaStyle => lib.para_styles.retain(|t| t.name != r.item),
         }

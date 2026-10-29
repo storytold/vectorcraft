@@ -66,7 +66,7 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
-use super::*;
+use super::{ControlResponse, Sender};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Zoom stop stepping reads this (set each UI frame and before commands) so canvas wheel zoom
@@ -483,6 +483,11 @@ pub struct UiState {
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
     pub color_guide_limit: String,
+    /// Color Guide panel: the base color, set by a color chosen in the Color panel, the Swatches
+    /// panel or the Color Picker and by the panel's base chip (none: the current color). Not
+    /// saved.
+    #[serde(skip)]
+    pub color_guide_base: Option<vectorcraft_color::Color>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -550,6 +555,9 @@ pub struct UiState {
     /// them (#1732).
     #[serde(default)]
     pub transform_each: Value,
+    /// The spacing used the last time Rearrange All Artboards was confirmed.
+    #[serde(default)]
+    pub rearrange_artboards_spacing: Value,
     /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
     /// never used).
     #[serde(default)]
@@ -855,6 +863,7 @@ impl Default for UiState {
             library_panels: vec![],
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
+            color_guide_base: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,
@@ -872,6 +881,7 @@ impl Default for UiState {
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
+            rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
             home: None,
             trace_hold_source: None,

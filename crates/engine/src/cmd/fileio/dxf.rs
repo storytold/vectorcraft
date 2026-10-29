@@ -10,7 +10,7 @@ use vectorcraft_cad::{ColorDepth, DxfOptions, DxfVersion, Preserve, RasterFormat
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
 
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, bad, cmd, has_doc};
 use super::{ArtboardPick, Encoded, FormatOption};
 
 const C: &str = "document.export";

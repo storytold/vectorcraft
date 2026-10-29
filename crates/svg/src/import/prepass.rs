@@ -1,6 +1,9 @@
 use super::convert::{MADE_UP_ID, href};
 use super::layers::{INKSCAPE, marked_layer};
-use super::*;
+use super::{
+    Cow, ForeignAttribute, HashMap, HashSet, ImportOptions, MAX_SVG_SCRIPTS, Node, SVG_EVENTS, XNode, css, css_transform, files, roxmltree,
+    symbol_units, vector_effect,
+};
 
 /// What usvg would lose, found in the XML before it runs ([`prepass`]).
 #[derive(Default)]

@@ -87,6 +87,9 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
             || (range && o.name == "artboard")
             || (separate && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
+            // EPS Save keeps a page and the complete editing document; cropped and
+            // selected-only output belongs to Export, never this save dialog.
+            || (f.id == "eps" && matches!(o.name, "useArtboards" | "selectedOnly"))
             || (f.id == "ait" && o.name == "aiVersion"))
     })
 }
@@ -121,7 +124,7 @@ fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            let field = egui::TextEdit::singleline(&mut range).desired_width(90.0).hint_text("1-3, 5");
+            let field = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0).hint_text("1-3, 5");
             if ui.add_enabled(!all, field).changed() {
                 d.fields.insert("range".into(), json!(range));
             }

@@ -1,7 +1,10 @@
 use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
-use super::*;
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeLayer, Writer, Written,
+    WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+};
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
 pub(super) struct SymbolDef {
@@ -559,7 +562,11 @@ impl Writer<'_> {
             NodeKind::Image(im) => {
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
-                let a = self.attrs(&css::transparency(n));
+                let mut props = css::transparency(n);
+                if n.extras().pixelated {
+                    props.push(("image-rendering", "pixelated".into()));
+                }
+                let a = self.attrs(&props);
                 if let Some(shared) = self.shared_images.get(&(im.key.clone(), im.width, im.height)) {
                     let shared = shared.clone();
                     self.line(&format!("<use{id} transform=\"{m}\"{a} xlink:href=\"#{shared}\"/>"));

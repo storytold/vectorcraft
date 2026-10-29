@@ -1,6 +1,9 @@
 use super::envelope::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP, envelope_grid, mesh_at};
 use super::warp::{WarpStyle, flatten_subpath, resample, warp_point};
-use super::*;
+use super::{
+    Affine, Anchor, Arc, Color, CubicBez, Deserialize, Node, ParamCurve, PathData, Point, Rect, Serialize, Shape, SubPath, Vec2, fifty, lerp_color,
+    one,
+};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MeshPoint {
@@ -264,7 +267,8 @@ impl GradientMesh {
     }
 
     /// Create Gradient Mesh → Appearance: lighten the points towards white, to the centre or to
-    /// the edges, by at most `highlight` %.
+    /// the edges, by at most `highlight` %. Each point lightens towards white in its own colour
+    /// model (paper white, no ink, for CMYK), so a CMYK or grey mesh keeps its inks (#3232).
     pub fn highlight(&mut self, appearance: MeshAppearance, highlight: f64) {
         let h = (highlight / 100.0).clamp(0.0, 1.0) as f32;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
@@ -279,7 +283,8 @@ impl GradientMesh {
                 };
                 if w > 0.0 {
                     let i = self.idx(r, c);
-                    self.points[i].color = lerp_color(&self.points[i].color, &Color::WHITE, w);
+                    let color = self.points[i].color;
+                    self.points[i].color = lerp_color(&color, &Color::WHITE.in_model(color.model()), w);
                 }
             }
         }

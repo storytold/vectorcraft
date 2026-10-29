@@ -1,7 +1,7 @@
 use super::build::base_values;
 use super::names::{localized, name};
 use super::traits::{FaceKeys, FontTraits};
-use super::*;
+use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
@@ -213,6 +213,11 @@ impl FontFace {
     /// (ascent, descent) in font units, both positive.
     pub fn vertical_metrics(&self) -> (f64, f64) {
         (self.ascent, self.descent)
+    }
+    /// The height of the lowercase letters in font units, positive (estimated from the ascent
+    /// when the font has no OS/2 value).
+    pub fn x_height(&self) -> f64 {
+        self.x_height
     }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).

@@ -1,4 +1,6 @@
-use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use super::dialogs;
+use super::{VectorcraftApp, browsable_url};
 
 impl VectorcraftApp {
     /// Open a link in the browser (Help → Discord, website, GitHub…).

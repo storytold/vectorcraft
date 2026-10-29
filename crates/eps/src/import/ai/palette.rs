@@ -69,19 +69,25 @@ pub(super) fn palette(data: &[u8]) -> Palette {
     let mut cell: Option<Cell> = None;
     // Inside a gradient's `Bb` … `BB`.
     let mut in_gradient = false;
-    // Inside versioned content's alternate, which repeats what came before it.
-    let mut alternate = false;
+    // How deep in versioned content, and the depth of the block whose later alternatives (which
+    // repeat its first) are being skipped, nested blocks in them included.
+    let (mut depth, mut skipping) = (0usize, None::<usize>);
     while let Some(t) = lex.next_token() {
         if let Tok::Comment(c) = t.tok {
             let line = String::from_utf8_lossy(c);
-            if line.contains("_Alternate_Content") {
-                alternate = true;
-            } else if line.contains("_End_Versioned_Content") || line.contains("_Begin_Content_if_version") {
-                alternate = false;
+            if line.contains("_Begin_Content_if_version") {
+                depth = depth.saturating_add(1);
+            } else if line.contains("_Alternate_Content") {
+                skipping = skipping.or(Some(depth));
+            } else if line.contains("_End_Versioned_Content") {
+                if skipping == Some(depth) {
+                    skipping = None;
+                }
+                depth = depth.saturating_sub(1);
             }
             continue;
         }
-        if alternate {
+        if skipping.is_some() {
             continue;
         }
         let w = match t.tok {
@@ -209,6 +215,19 @@ mod tests {
               %AI17_Alternate_Content\n0 1 1 0 (Red ink) 0 x\n(Red ink)\nPc\n%AI17_End_Versioned_Content\nPB\n",
         );
         assert_eq!(p.swatches.len(), 1);
+    }
+
+    /// Three alternatives, and versioned content nested in a later one: still one swatch.
+    #[test]
+    fn versioned_swatches_with_more_alternatives_are_read_once() {
+        let p = palette(
+            b"0 0 Pb\n%AI17_Begin_Content_if_version_gt:24 15\n0 1 1 0 (Red ink) 0 x\n(Red ink)\nPc\n\
+              %AI17_Alternate_Content_if_version_gt:24 10\n0 1 1 0 (Red ink) 0 x\n(Red ink)\nPc\n\
+              %AI17_Begin_Content_if_version_gt:23 1\n0 0 0 1 k\n(Black)\nPc\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n\
+              0 0 1 0 k\n(Yellow)\nPc\n\
+              %AI17_Alternate_Content\n0 1 1 0 (Red ink) 0 x\n(Red ink)\nPc\n%AI17_End_Versioned_Content\n0 0 0 1 k\n(After)\nPc\nPB\n",
+        );
+        assert_eq!(p.swatches.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["Red ink", "After"]);
     }
 
     #[test]

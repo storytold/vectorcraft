@@ -32,6 +32,8 @@ pub(crate) use output::sanitize_id;
 use output::{entity_value, latin1_refs, valid_xml_value, xml_attr_escape, xml_text};
 use text::FontUse;
 
+const UNIQUE_PLACEHOLDER: &str = "u_vc_unique_-";
+
 pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
     let baked = vectorcraft_effects::bake_document(doc);
@@ -39,11 +41,30 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>
     if opts.object_ids != ObjectIds::Unique {
         return write(doc, opts, native, "");
     }
-    // Unique ids: every id and class name gets a prefix hashed from the output written without
-    // one, so the same document always gets the same ids and different ones never share any.
-    let plain = write(doc, opts, native, "");
-    let prefix = format!("u{:010x}-", fnv1a(plain.svg.as_bytes()) & 0xff_ffff_ffff);
-    write(doc, opts, native, &prefix)
+    // Unique ids: write the body once with a placeholder prefix ([`UNIQUE_PLACEHOLDER`]),
+    // hash the result, and replace the placeholder with the computed prefix in a single pass.
+    let mut out = write(doc, opts, native, UNIQUE_PLACEHOLDER);
+    let prefix = format!("u{:010x}-", fnv1a(out.svg.as_bytes()) & 0xff_ffff_ffff);
+    out.svg = out.svg.replace(UNIQUE_PLACEHOLDER, &prefix);
+    if opts.preserve_editing && native.is_some() {
+        update_editing_hash(&mut out.svg);
+    }
+    out
+}
+
+/// After replacing the unique placeholder prefix, recompute the editing body hash so that
+/// `editing(&svg).unwrap().intact` remains valid when `preserve_editing` is enabled.
+fn update_editing_hash(svg: &mut String) {
+    let opts = usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+    let Some(xml) = usvg::roxmltree::Document::parse_with_options(svg, opts).ok() else { return };
+    let Some(el) = xml.descendants().find(|n| n.tag_name().namespace() == Some(EDITING_NS) && n.tag_name().name() == "document") else { return };
+    let (Some(old_h), Some(meta)) = (el.attribute("hash"), el.parent_element()) else { return };
+    let r = meta.range();
+    let (head, tail) = (svg.get(..r.start).unwrap_or(""), svg.get(r.end..).unwrap_or(""));
+    let new_h = body_hash(&[head, tail]);
+    if new_h != old_h {
+        *svg = svg.replacen(&format!("hash=\"{old_h}\""), &format!("hash=\"{new_h}\""), 1);
+    }
 }
 
 /// `doc` as SVG with `opts`, the native file `native` embedded for Preserve Editing, its generated

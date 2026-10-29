@@ -1,7 +1,7 @@
 use super::document::slot_of;
 use super::ops::{paints_apart, path_rule};
 use super::types::{Frame, GState, Kind, MAX_DEPTH, MAX_NODES};
-use super::*;
+use super::{AppearanceItem, Arc, BezPath, BlendMode, FillRule, HashSet, LayerColor, Node, NodeId, NodeKind, Obj, Paint, PathEl, Rc, Reader, V, obj};
 
 impl<'a> Reader<'a> {
     // ---- frames ----------------------------------------------------------------------------

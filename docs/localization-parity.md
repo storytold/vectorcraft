@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-23 · **Change:** patch (missing translations never fail; `cargo xtask ci` prints the untranslated report)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -37,7 +37,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (602 of 604 message rows; landed 2026-10-10) | Latin | contributor-written, not reviewed | full | — (review) |
 | Korean | `ko` | 4,870 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | all | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
-| Vietnamese | `vi` | 4,886 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form; 4,046 plain + 18 `@plural` + 28 contextual + 794 `@msg` | all | Latin with Vietnamese diacritics (precomposed forms; glyph tests pass) | contributor is a Vietnamese speaker; AI-assisted draft, further native review welcome | full | — (review) |
+| Vietnamese | `vi` | 4,886 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form; 4,046 plain + 18 `@plural` + 28 contextual + 794 `@msg` | all | Latin with Vietnamese diacritics (stacked marks attach in precomposed, decomposed and keyboard forms, #4491; glyph tests pass) | contributor is a Vietnamese speaker; AI-assisted draft, further native review welcome | full | — (review) |
 
 **12-language score: ~82%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 100 + 100 + 100 + 98 + 100 + 100, over 12).
 **To `full` for all twelve: ~50–85 h**, most of it Arabic (right-to-left interface) and Hindi (interface
@@ -62,8 +62,11 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
 | Georgian | `ka` | 5,200 rows (counted 2026-10-21): menus, panels, dialogs, plurals (one count-neutral form) and messages, tested complete; reviewed by a native speaker | full |
+| Turkish | `tr` | 5,558 rows, 880 of them `@msg` (counted 2026-10-28); 6 menu strings and the default swatch names still fall back to English | full |
+| Indonesian | `id` | 5,531 rows, 788 of them `@msg` (counted 2026-10-28): menus and `tl!` literals complete when counted; its messages are partial; one plural form | full |
+| Catalan | `ca` | 5,626 rows, 881 of them `@msg` (counted 2026-10-28): menus, `tl!` literals and messages complete when counted; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
 
-Twenty-three non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
+Twenty-five non-English catalogs in all. Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
@@ -92,6 +95,8 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-29 | minor | Vietnamese text: letters with two marks (Ể, Ứ, Ự) attach in precomposed, decomposed and keyboard forms, and a font lacking the marks falls back for the whole letter (#4491); scores unchanged |
+| 2026-10-28 | minor | Catalan (`ca`): complete catalog under the tests (menus, literals, messages; one/other plurals); every `ca-*` locale resolves here; AI-drafted, native review welcome. Added the Turkish and Indonesian rows the table was missing. Scores and estimates unchanged |
 | 2026-10-23 | patch | A missing translation never fails a test or a build; one untranslated report, printed by `cargo xtask ci` and `cargo xtask i18n-report`, lists the missing strings per language; scores unchanged |
 | 2026-10-16 | minor | Bulgarian (`bg`, #1909) and Greek (`el`, #2076) catalogs added, complete under the tests; Swedish (#2139) and Finnish (#1994) rows for strings added since; eighteen non-English catalogs |
 | 2026-10-16 | minor | Finnish (`fi`) catalog added, complete under the tests (menus, literals, messages; one/other plurals); AI-assisted, native proofreading pending |

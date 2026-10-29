@@ -1,5 +1,5 @@
 use super::bounds::drawn_bounds;
-use super::*;
+use super::{Affine, AppearanceItem, Effect, Frame, Node, NodeKind, RasterFx, Rect, SymbolBoxes, Vec2, effects};
 
 fn visible(effects: &[Effect]) -> bool {
     effects.iter().any(|e| e.visible)

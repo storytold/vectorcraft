@@ -133,6 +133,34 @@ fn modifier_clicks_select_several_swatches_and_groups() {
     assert_eq!(selected(&ctx), ["Grays"], "a plain click on a group selects it alone");
 }
 
+/// A color swatch or a recent color clicked in the panel becomes the Color Guide's base color
+/// (#3137); a modifier click only selects.
+#[test]
+fn a_clicked_color_swatch_becomes_the_color_guides_base() {
+    let mut app = app();
+    let ctx = context();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    click_tile(&mut app, &ctx, "Red", Modifiers::NONE, 0.0);
+    let base = |app: &VectorcraftApp| crate::panels::color_guide::base_color(app).to_hex();
+    assert_eq!(base(&app), "#ed1c24");
+    click_tile(&mut app, &ctx, "Amber", Modifiers::SHIFT, 2.0);
+    assert_eq!(base(&app), "#ed1c24", "a modifier click only selects");
+    // A recent color: the panel's first recent chip.
+    app.run("paint.setFill", json!({"color": "#2050a0"})).unwrap();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    let mut chip = None;
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(4.0), screen_rect, ..Default::default() }, |ui| {
+        show(&mut app, ui);
+        chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect.center());
+    });
+    out.textures_delta.clear();
+    let at = chip.expect("the recent chip is drawn");
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)], 5.0, show);
+    assert_eq!(base(&app), "#2050a0");
+}
+
 /// The hex colors of the stops of the selection's gradient fill, and its stroke's color.
 fn stops_and_stroke(app: &VectorcraftApp) -> (Vec<String>, String) {
     let (fill, stroke) = crate::panels::current_paints(app);

@@ -19,6 +19,8 @@ fn extras_are_written_flat_in_order() {
         e.slice = Some(Box::default());
         e.perspective = Some(Box::new(crate::PerspectiveAttachment::new("left", 1.0)));
         e.live_paint_gaps = Some(Box::default());
+        e.compound_shape = true;
+        e.shape_mode = crate::ShapeMode::Exclude;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -61,8 +63,11 @@ fn extras_are_written_flat_in_order() {
         "bbox_angle",
         "perspective",
         "live_paint_gaps",
+        "compound_shape",
+        "shape_mode",
     ];
     assert_eq!(keys, order);
+    assert_eq!(v["shape_mode"], "exclude");
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -432,4 +437,38 @@ fn bad_kinds_are_errors() {
     for bad in [r#"{"children":[]}"#, r#"{"type":"nothing"}"#, r#"{"type":"group"}"#, r#"{"type":3,"children":[]}"#, r#"[]"#, r#""group""#] {
         assert!(serde_json::from_str::<NodeKind>(bad).is_err(), "{bad}");
     }
+}
+
+/// #3587: [`with_node_budget`] counts every object read, nested ones included, refuses the one past
+/// it with a message naming the budget, and is gone once its reading is done.
+#[test]
+fn objects_are_read_within_the_node_budget() {
+    let group = Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![])), Arc::new(Node::group(NodeId(3), vec![]))]);
+    let json = serde_json::to_string(&group).unwrap();
+    let read = || serde_json::from_str::<Node>(&json);
+    assert_eq!(with_node_budget(3, read).unwrap(), group, "three objects fit a budget of three");
+    let why = with_node_budget(2, read).unwrap_err().to_string();
+    assert!(why.contains("more than 2 objects"), "{why}");
+    assert_eq!(read().unwrap(), group, "no budget outside a read");
+    // A budget left by a read that failed doesn't carry over to the next one.
+    assert!(with_node_budget(1, read).is_err());
+    assert!(with_node_budget(3, read).is_ok());
+}
+
+/// #3587: fields read before an object's `type` are buffered value by value within
+/// [`with_buffered_value_budget`], each counted once: a group read back from the buffer buffers
+/// its own fields again without counting them twice. VectorCraft writes `type` first, which
+/// buffers nothing.
+#[test]
+fn fields_before_the_type_are_buffered_within_the_value_budget() {
+    let reordered = r#"{"id":1,"kind":{"children":[{"id":2,"kind":{"children":[],"type":"group"}}],"type":"group"}}"#;
+    let read = |json: &str| serde_json::from_str::<Node>(json);
+    // The children's array, the inner object, its id, its kind, the kind's empty children and
+    // its type: six values.
+    assert!(with_buffered_value_budget(6, || read(reordered)).is_ok());
+    let why = with_buffered_value_budget(5, || read(reordered)).unwrap_err().to_string();
+    assert!(why.contains("more than 5 values before its type"), "{why}");
+    let written = serde_json::to_string(&Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![]))])).unwrap();
+    assert!(with_buffered_value_budget(0, || read(&written)).is_ok(), "a saved object buffers nothing: {written}");
+    assert!(read(reordered).is_ok(), "no budget outside a read");
 }

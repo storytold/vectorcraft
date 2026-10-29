@@ -3,8 +3,9 @@
 //! Drag draws (Shift = equal axes / square, Alt = from the centre for arc and grids, Space held
 //! moves the shape being drawn); a click without dragging asks the UI for the options dialog. The
 //! start point and the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering too.
-//! While dragging, ↑/↓ change the spiral's segments, the grid rows or the concentric dividers; ←/→
-//! change grid columns / radial dividers.
+//! While dragging, ↑/↓ change the arc's slope, the spiral's segments, the grid rows or the
+//! concentric dividers; ←/→ change grid columns / radial dividers. C switches the arc between open
+//! and closed, and F switches its base between the X and Y axes.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -12,6 +13,9 @@ use vectorcraft_geom::Point;
 use crate::guides::{DrawSnap, Leave};
 use crate::shape::{box_params, drag_rect, turned_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+
+/// How much ↑ or ↓ changes the arc's slope while it is dragged out.
+const ARC_SLOPE_STEP: f64 = 10.0;
 
 pub struct FamilyTool {
     id: &'static str,
@@ -215,6 +219,22 @@ impl Tool for FamilyTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         let Some(s) = self.start.filter(|_| self.began) else { return vec![] };
         let changed = match (self.id, key) {
+            ("arc", ToolKey::Up) => {
+                self.slope = (self.slope + ARC_SLOPE_STEP).min(100.0);
+                true
+            }
+            ("arc", ToolKey::Down) => {
+                self.slope = (self.slope - ARC_SLOPE_STEP).max(-100.0);
+                true
+            }
+            ("arc", ToolKey::Letter('c')) => {
+                self.closed = !self.closed;
+                true
+            }
+            ("arc", ToolKey::Letter('f')) => {
+                self.base_along = if self.base_along == "y" { "x" } else { "y" };
+                true
+            }
             ("spiral", ToolKey::Up) => {
                 self.segments = (self.segments + 1).min(1000);
                 true
@@ -252,6 +272,10 @@ impl Tool for FamilyTool {
         } else {
             vec![]
         }
+    }
+    /// The Arc tool takes C and F while an arc is dragged out: C switches it between open and closed, and F switches its base axis.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        self.id == "arc" && self.began && self.start.is_some() && matches!(key, ToolKey::Letter('c' | 'f'))
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
@@ -467,6 +491,53 @@ mod tests {
                 "fillArc": true,
             })
         );
+    }
+
+    /// While an arc is dragged out, C switches it between open and closed, F switches its base
+    /// between the X and Y axes and ↑/↓ change its slope by 10 within −100…100; the arc drawn
+    /// next keeps them.
+    #[test]
+    fn arc_drag_keys_change_its_type_base_and_slope() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let mut t = FamilyTool::new("arc");
+        let (c, f) = (ToolKey::Letter('c'), ToolKey::Letter('f'));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        assert!(!t.claims_key(&cx, c), "no drag yet");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        assert!(t.claims_key(&cx, c) && t.claims_key(&cx, f) && !t.claims_key(&cx, ToolKey::Letter('e')));
+        let preview = |a: Vec<Action>| match &a[..] {
+            [Action::Preview(c, v)] if c == "shape.arc" => v.clone(),
+            _ => panic!("{a:?}"),
+        };
+        let v = preview(t.key(&cx, c, Mods::default()));
+        assert_eq!((v["closed"].clone(), v["baseAlong"].clone(), v["slope"].clone()), (json!(true), json!("x"), json!(50.0)));
+        let v = preview(t.key(&cx, f, Mods::default()));
+        assert_eq!((v["closed"].clone(), v["baseAlong"].clone()), (json!(true), json!("y")));
+        assert_eq!((v["x"].clone(), v["y"].clone(), v["reference"].clone()), (json!(10.0), json!(10.0), json!(0)), "the reference point stays");
+        assert_eq!(preview(t.key(&cx, ToolKey::Up, Mods::default()))["slope"], json!(60.0));
+        for _ in 0..30 {
+            t.key(&cx, ToolKey::Down, Mods::default());
+        }
+        assert_eq!(preview(t.key(&cx, ToolKey::Down, Mods::default()))["slope"], json!(-100.0));
+        for _ in 0..30 {
+            t.key(&cx, ToolKey::Up, Mods::default());
+        }
+        assert_eq!(preview(t.key(&cx, ToolKey::Up, Mods::default()))["slope"], json!(100.0));
+        let v = preview(t.key(&cx, c, Mods::default()));
+        assert_eq!(v["closed"], json!(false), "C again opens it");
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+        assert!(!t.claims_key(&cx, c), "the drag is over");
+        let o = t.options();
+        assert_eq!((o["closed"].clone(), o["baseAlong"].clone(), o["slope"].clone()), (json!(false), json!("y"), json!(100.0)));
+        // The other tools of the family leave C and F to their shortcuts.
+        let mut g = FamilyTool::new("rectangularGrid");
+        g.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        g.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        assert!(!g.claims_key(&cx, c) && !g.claims_key(&cx, f));
     }
 
     /// General › Constrain Angle: grids are drawn along the turned axes, Shift's square too; at 0°

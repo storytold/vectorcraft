@@ -81,6 +81,27 @@ fn vertical_type_names_the_alignments_top_and_bottom_and_the_position_y() {
     }
 }
 
+/// The position field's label is translated: French puts a no-break space before the colon,
+/// Chinese writes a full-width colon.
+#[test]
+fn position_label_is_translated() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}]})).unwrap();
+    let labels = |app: &mut VectorcraftApp| {
+        let text = crate::tests_labels::painted_text(app, show);
+        ["X:", "Y:", "X\u{a0}:", "Y\u{a0}:", "X：", "Y："].into_iter().filter(|l| text.lines().any(|t| t.trim() == *l)).collect::<Vec<_>>()
+    };
+    for (code, horizontal, vertical) in [("fr", "X\u{a0}:", "Y\u{a0}:"), ("zh-hans", "X：", "Y："), ("en", "X:", "Y:")] {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        app.session.execute("type.orientation.horizontal", &json!({})).unwrap();
+        assert_eq!(labels(&mut app), [horizontal], "{code}");
+        app.session.execute("type.orientation.vertical", &json!({})).unwrap();
+        assert_eq!(labels(&mut app), [vertical], "{code}");
+    }
+}
+
 /// #924: Leader and Align On keep what is typed, frame after frame, until Enter applies it
 /// (spaces kept, eight characters at most).
 #[test]

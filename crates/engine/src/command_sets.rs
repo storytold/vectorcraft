@@ -1,4 +1,4 @@
-use super::*;
+use super::{NodeId, Value, cmd};
 
 /// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
 /// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, Distribute
@@ -77,6 +77,10 @@ pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
     "object.clippingMask.release",
     "object.compoundPath.make",
     "object.compoundPath.release",
+    "object.compoundShape.expand",
+    "object.compoundShape.make",
+    "object.compoundShape.release",
+    "object.compoundShape.setMode",
     "object.group",
     "object.hide",
     "object.lock",

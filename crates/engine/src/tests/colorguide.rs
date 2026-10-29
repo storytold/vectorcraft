@@ -47,6 +47,19 @@ fn harmony_query_returns_the_group_and_its_grid() {
     assert!(s.execute("color.harmony", &json!({"color": "#ff0000", "rule": "triad", "variation": "loud"})).is_err());
 }
 
+/// The Color Guide refuses `steps` or `amount` that is not a number, which it would otherwise
+/// replace with its default.
+#[test]
+fn harmony_refuses_steps_or_amount_that_is_not_a_number() {
+    let mut s = Session::new();
+    for p in [json!({"color": "#ff0000", "rule": "triad", "steps": "2"}), json!({"color": "#ff0000", "rule": "triad", "amount": "100"})] {
+        let e = s.execute("color.harmony", &p).unwrap_err().to_string();
+        assert!(e.contains("must be a number"), "{p}: {e}");
+    }
+    let r = s.execute("color.harmony", &json!({"color": "#ff0000", "rule": "triad", "steps": null, "amount": null})).unwrap();
+    assert_eq!(r["grid"][0].as_array().unwrap().len(), 9, "a null is read as a key left out");
+}
+
 #[test]
 fn new_swatch_saves_several_colours_in_one_step() {
     let mut s = session();

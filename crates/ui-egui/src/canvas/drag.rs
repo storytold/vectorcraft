@@ -1,4 +1,4 @@
-use super::*;
+use super::{Drag, Mods, Point, PointerEvent, PointerKind, Pos2, StylusFeed, Ui, VectorcraftApp, Xf, widgets};
 
 /// Whether drag `d` is a press the tool holds. Every other drag (panning, zooming, turning the
 /// view, a touch gesture, Presentation Mode) never reaches the tool, so its hover ends with it.

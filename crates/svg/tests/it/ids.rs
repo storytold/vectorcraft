@@ -136,3 +136,26 @@ fn label_attributes_name_objects() {
     assert_eq!(d.layers[0].name.as_deref(), Some("Background"));
     assert_eq!(names(&d), ["Background", "Sky box", "Sun disc", "Badge", "plain"]);
 }
+
+#[test]
+fn unique_ids_differ_when_only_gradient_stops_differ() {
+    let make_doc = |stop_color: Color| {
+        let mut d = Document::new(200.0, 200.0);
+        d.title = "Identical Structure".into();
+        let l = d.layers[0].id;
+        let stops = vec![GradientStop::new(0.0, stop_color), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)), Appearance::basic(g, Paint::None, 0.0));
+        d.insert(Some(l), usize::MAX, n).unwrap();
+        d
+    };
+
+    let opts = ExportOptions { object_ids: ObjectIds::Unique, ..Default::default() };
+    let svg1 = export(&make_doc(Color::rgb(1.0, 0.0, 0.0)), &opts);
+    let svg2 = export(&make_doc(Color::rgb(0.0, 1.0, 0.0)), &opts);
+
+    let ids1 = ids(&svg1);
+    let ids2 = ids(&svg2);
+    assert!(!ids1.is_empty() && !ids2.is_empty());
+    assert!(ids1.iter().all(|id| !ids2.contains(id)), "IDs must not collide: {ids1:?} vs {ids2:?}");
+}

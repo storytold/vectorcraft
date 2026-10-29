@@ -9,7 +9,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
-use super::super::*;
+use super::super::{Result, Session, bad, bool_or, edit, f64_or, str_param};
 use super::encode::single_artboard;
 use super::{
     ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,

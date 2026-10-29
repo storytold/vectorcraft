@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
 
-use super::*;
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {

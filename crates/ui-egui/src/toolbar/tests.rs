@@ -177,6 +177,34 @@ fn double_clicking_a_tool_button_opens_its_options() {
     assert!(app.run("tool.options", json!({"tool": "lasso"})).is_err());
 }
 
+/// A click on the Blend tool's button while the Blend tool holds a first pick finishes the
+/// blend: the tool stays chosen, and the next click on the canvas picks a new first object
+/// instead of blending with the first.
+#[test]
+fn clicking_the_active_blend_tool_button_finishes_the_blend() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui.toolbar_advanced = true;
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    for x in [0, 200] {
+        app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 40, "height": 40})).unwrap();
+    }
+    app.select_tool("blend");
+    let index = slots(&app).iter().position(|(_, tools)| tools.contains(&"blend")).expect("a toolbar slot");
+    let ctx = egui::Context::default();
+    let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
+    let down = |x, y| vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
+    let view = app.view_info();
+    app.session.pointer(&down(20.0, 20.0), view).unwrap();
+    assert!(app.session.tool_busy(), "the first rectangle is picked");
+    let layers = app.session.active().unwrap().doc.layers.clone();
+    click_in(&mut app, &ctx, 1.0, at, PointerButton::Primary, 2000.0);
+    assert_eq!(app.session.tool_id(), "blend");
+    assert!(!app.session.tool_busy(), "the click on the button drops the pick");
+    app.session.pointer(&down(220.0, 20.0), view).unwrap();
+    assert!(app.session.tool_busy(), "the second rectangle is a new first pick");
+    assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
+}
+
 /// A double-click on the Type on a Path or Vertical Type on a Path tool opens Type on a Path
 /// Options for the selected type on a path, as the menu item does; with nothing selected, or
 /// with no type on a path selected, nothing opens.
@@ -608,6 +636,35 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     assert!(modes.iter().all(|r| (r.top() - modes[0].top()).abs() < 0.5), "{modes:?}");
     click_in(&mut app, &ctx, 2.0, modes[1].center(), PointerButton::Primary, 900.0);
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
+}
+
+/// A click on the Gradient button applies the last gradient; Cmd/Ctrl-click resets the active
+/// proxy's gradient to the linear White, Black gradient instead, as one undo step.
+#[test]
+fn cmd_click_on_the_gradient_button_resets_to_the_linear_white_black_gradient() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"kind": "radial", "stops": stops}})).unwrap();
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    let fill = |app: &VectorcraftApp| match crate::panels::current_paints(app).0 {
+        Paint::Gradient(g) => (g.gradient.kind, g.gradient.stops.iter().map(|s| s.color.to_hex()).collect::<Vec<_>>()),
+        p => panic!("expected a gradient fill, got {p:?}"),
+    };
+    let ctx = egui::Context::default();
+    frame_in(&mut app, &ctx, 0.0, vec![], 900.0);
+    let gradient = widget_rects(&ctx, vec2(11.0, 11.0))[1].center();
+    click_in(&mut app, &ctx, 1.0, gradient, PointerButton::Primary, 900.0);
+    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Radial, vec!["#ff0000".into(), "#0000ff".into()]), "the last gradient");
+    let m = egui::Modifiers::COMMAND;
+    let b = |pressed| Event::PointerButton { pos: gradient, button: PointerButton::Primary, pressed, modifiers: m };
+    frame_in(&mut app, &ctx, 2.0, vec![Event::ModifiersChanged(m), Event::PointerMoved(gradient), b(true)], 900.0);
+    frame_in(&mut app, &ctx, 2.05, vec![b(false)], 900.0);
+    frame_in(&mut app, &ctx, 2.1, vec![Event::ModifiersChanged(egui::Modifiers::NONE)], 900.0);
+    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Linear, vec!["#ffffff".into(), "#000000".into()]));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fill(&app).0, vectorcraft_color::GradientKind::Radial, "one undo step");
 }
 
 /// How many columns of tool buttons `rects` make.

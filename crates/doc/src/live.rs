@@ -221,6 +221,25 @@ mod tests {
         assert!(matches!(m.color_at(0, 0, 0.5, 0.5).0, Color::Rgb { .. }));
     }
 
+    /// #3232: the Appearance highlight lightens each point towards white in its own model, so a
+    /// CMYK mesh stays CMYK (K shrinks with the other inks) and a grey one stays grey.
+    #[test]
+    fn mesh_highlight_keeps_each_points_model() {
+        let square = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let ink = Color::Cmyk { c: 0.0, m: 0.4, y: 0.6, k: 0.1 };
+        let m = GradientMesh::for_path(&square, 2, 2, ink, MeshAppearance::ToCenter, 50.0).unwrap();
+        assert_eq!(m.points[0].color, ink, "corners stay");
+        let centre = m.points[m.idx(1, 1)].color;
+        let Color::Cmyk { c, m: mg, y, k } = centre else { panic!("{centre:?}") };
+        assert!(c.abs() < 1e-6 && (mg - 0.2).abs() < 1e-6 && (y - 0.3).abs() < 1e-6 && (k - 0.05).abs() < 1e-6, "{c} {mg} {y} {k}");
+        assert!(matches!(m.color_at(0, 0, 0.5, 0.5).0, Color::Cmyk { .. }), "patches mix in CMYK");
+        let m = GradientMesh::for_path(&square, 2, 2, Color::gray(0.8), MeshAppearance::ToEdge, 100.0).unwrap();
+        assert_eq!((m.points[0].color, m.points[m.idx(1, 1)].color), (Color::gray(0.0), Color::gray(0.8)));
+        // RGB lightens in RGB as before.
+        let m = GradientMesh::for_path(&square, 2, 2, Color::rgb(1.0, 0.0, 0.0), MeshAppearance::ToCenter, 100.0).unwrap();
+        assert_eq!(m.points[m.idx(1, 1)].color.to_hex(), "#ffffff");
+    }
+
     /// Alt-clicking a point of a mesh from a file with fewer points than its rows and columns need
     /// deletes nothing (it indexed past the points, a panic).
     #[test]

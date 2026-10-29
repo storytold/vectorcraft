@@ -6,7 +6,10 @@ use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, edit_items_then, item_target};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
-use super::*;
+use super::{
+    Affine, CommandSpec, Result, Session, always, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, leaf_targets, ok,
+    paint_targets, str_param, switch_or,
+};
 use crate::{DocState, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -16,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -68,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself)",
             has_doc,
             transparency
         ),
@@ -420,7 +423,7 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint, cmd: &str) -> Result
 /// Set the fill (or stroke) of the targets of `p` (the `item` and `ids` params, see
 /// `paint.setFill`) and of the defaults for new art, focus its proxy unless `focus` is false, and
 /// remember the paint. Replies `{objects}`: how many objects took the paint.
-fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
+pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let focus = switch_or(p, "focus", true, cmd)?;
     let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
@@ -462,6 +465,12 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
     // The gradient mesh point last clicked with the Mesh tool or Direct Selection: a solid fill
     // recolours just that point of its mesh.
     let mesh_point = if fill && matches!(paint, Paint::Solid { .. }) { focused_mesh_point(s) } else { None };
+    // Without `item`, unless the Appearance panel's active fill item takes the paint.
+    let colorized = if fill && p.get("item").is_none() && item == ItemTarget::Top {
+        colorized_images(&s.doc()?.doc, &ids, &paint).map_err(|e| bad(cmd, e))?
+    } else {
+        vec![]
+    };
     let label = if fill { "Fill Color" } else { "Stroke Color" };
     edit_items_then(
         s,
@@ -471,6 +480,10 @@ fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<V
         label,
         fill,
         |n, index| {
+            if index.is_none() && colorized.contains(&n.id) {
+                n.extras_mut().colorize = paint.color().map(|_| Box::new(paint.clone()));
+                return Ok(());
+            }
             if index.is_none()
                 && let Paint::Solid { color, .. } = &paint
                 && let Some((_, i)) = mesh_point.filter(|(id, _)| *id == n.id)
@@ -591,12 +604,105 @@ fn placed_across(d: &Document, ids: &[NodeId], paint: Paint, p: &Value, fill: bo
     }
 }
 
+/// The images among `ids` that a fill of `paint` colorizes: grayscale and 1-bit images, for a solid
+/// color (or none on a colorized image, which takes the color off). The color may be black, white,
+/// a process color or a spot color; on an image with an alpha channel, only a spot color, black or
+/// white, and other colors are an error.
+fn colorized_images(d: &Document, ids: &[NodeId], paint: &Paint) -> std::result::Result<Vec<NodeId>, String> {
+    let mut out = vec![];
+    for id in ids {
+        let Some(n) = d.node(*id) else { continue };
+        let NodeKind::Image(im) = &n.kind else { continue };
+        // `none` takes a color off whatever the image's pixels have become since.
+        if matches!(paint, Paint::None) && n.extras().colorize.is_some() {
+            out.push(*id);
+            continue;
+        }
+        let Some(gray) = d.image_blob(im).and_then(|b| b.gray_source()) else { continue };
+        match paint {
+            // Without a color, `none` goes to the image's fill item.
+            Paint::None => continue,
+            Paint::Solid { .. } => {
+                if gray.alpha && !colorizes_transparency(d, paint) {
+                    return Err(PROCESS_ON_TRANSPARENCY.into());
+                }
+            }
+            _ => continue,
+        }
+        out.push(*id);
+    }
+    Ok(out)
+}
+
+/// The message for a process color on a grayscale image with an alpha channel.
+const PROCESS_ON_TRANSPARENCY: &str = "a process color can't colorize a grayscale image with transparency: use a spot color, black or white";
+
+/// Can `paint` colorize a grayscale image with an alpha channel: a color linked to a spot swatch
+/// of `d`, black or white?
+fn colorizes_transparency(d: &Document, paint: &Paint) -> bool {
+    match paint {
+        Paint::Solid { color, swatch, .. } => swatch.as_deref().and_then(|name| d.swatch(name)).is_some_and(|w| w.spot) || black_or_white(color),
+        _ => true,
+    }
+}
+
+/// An error when an image with an alpha channel in `d` (its art, opacity masks, symbols, graph
+/// designs and pattern tiles) is colorized with a color that [`colorizes_transparency`] refuses,
+/// as a swatch edit that turns a spot color into a process color or recolors a process swatch
+/// can leave one.
+pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
+    let mut refused = false;
+    let mut visit = |n: &Node| {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+            if let (NodeKind::Image(im), Some(paint)) = (&m.kind, m.extras().colorize.as_deref())
+                && !refused
+                && !colorizes_transparency(d, paint)
+                && d.image_blob(im).and_then(|b| b.gray_source()).is_some_and(|g| g.alpha)
+            {
+                refused = true;
+            }
+        })
+    };
+    d.layers
+        .iter()
+        .chain(d.symbols.iter().map(|s| &s.art))
+        .chain(d.graph_designs.iter().map(|g| &g.art))
+        .chain(d.patterns.iter().flat_map(|p| &p.art))
+        .for_each(|n| visit(n));
+    if refused { Err(PROCESS_ON_TRANSPARENCY.into()) } else { Ok(()) }
+}
+
+/// [`check_colorized`] after an edit, when the document passed it before the edit (`was_ok`), so
+/// an edit doesn't fail over an image it didn't change.
+pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::Result<(), String> {
+    if was_ok { check_colorized(d) } else { Ok(()) }
+}
+
+/// Is `c` black or white (white, or black alone at 100%)?
+fn black_or_white(c: &Color) -> bool {
+    let (none, full) = (|v: f32| v <= 0.0, |v: f32| v >= 1.0);
+    match *c {
+        Color::Gray { k } => none(k) || full(k),
+        Color::Cmyk { c, m, y, k } => none(c) && none(m) && none(y) && (none(k) || full(k)),
+        Color::Rgb { r, g, b } => [r, g, b].into_iter().all(none) || [r, g, b].into_iter().all(full),
+        Color::Lab { .. } => false,
+    }
+}
+
 /// The mesh point the active tool has focused (its `meshPoint` option: the Mesh tool's or Direct
 /// Selection's point last clicked).
 fn focused_mesh_point(s: &Session) -> Option<(NodeId, usize)> {
     let o = s.tool_options();
     let pt = o.get("meshPoint")?;
     Some((NodeId(pt.get("id")?.as_u64()?), usize::try_from(pt.get("index")?.as_u64()?).ok()?))
+}
+
+/// The focused mesh point (see [`focused_mesh_point`]) with its opacity, when `ids` is just the
+/// gradient mesh it belongs to.
+pub(crate) fn focused_mesh_point_of(s: &Session, ids: &[NodeId]) -> Option<(NodeId, usize, f32)> {
+    let (id, index) = focused_mesh_point(s).filter(|(id, _)| ids == [*id])?;
+    let NodeKind::Mesh(m) = &s.doc().ok()?.doc.node(id)?.kind else { return None };
+    Some((id, index, m.points.get(index)?.opacity))
 }
 
 /// A type run's stroke; a painted stroke on a run without one gets 1 pt.
@@ -742,6 +848,19 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     q.remove("item");
     q.remove("id");
     q.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
+    // The gradient mesh point last clicked with the Mesh tool or Direct Selection takes the
+    // opacity itself, so only the mesh around it fades (#4206).
+    if matches!(item, ItemTarget::Top)
+        && let Some(o) = q.get("opacity").and_then(Value::as_f64)
+        && let Some((id, index, _)) = focused_mesh_point_of(s, &ids)
+    {
+        q.remove("opacity");
+        let opacity = f64::from(super::opacitymask::percent(o));
+        s.execute("object.mesh.setPointColor", &json!({"id": id.0, "index": index, "opacity": opacity}))?;
+        if q.keys().all(|k| k == "ids") {
+            return ok();
+        }
+    }
     let ItemTarget::Item { index, explicit, aligned } = item else {
         return s.execute("object.setProps", &Value::Object(q));
     };

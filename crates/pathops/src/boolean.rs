@@ -14,6 +14,12 @@ use vectorcraft_geom::{Anchor, FillRule, PathData, SubPath};
 use crate::PathOpsError;
 use crate::fit::{end_tangent, fit_single, is_straight, sample, start_tangent};
 
+#[cfg(test)]
+thread_local! {
+    /// The contour passes made over an arrangement on this thread, each of which walks all of it.
+    pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Default curve-refit tolerance (document points) used to merge split curve pieces back together.
 /// Similar in spirit to Illustrator's Pathfinder "Precision" option (0.028 pt).
 pub const DEFAULT_PRECISION: f64 = 0.01;
@@ -314,11 +320,13 @@ impl Arrangement {
 
     /// [`Arrangement::contours`] with the test on the windings themselves (see [`Self::covered`]).
     pub(crate) fn contours_where(&self, pred: impl Fn(&Multi) -> bool) -> Contours {
+        #[cfg(test)]
+        CONTOUR_PASSES.with(|n| n.set(n.get() + 1));
         self.top.contours(pred)
     }
 
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
-        self.top.contours(|w| pred(&self.mask(w)))
+        self.contours_where(|w| pred(&self.mask(w)))
     }
 
     /// All distinct non-empty coverage masks that occur next to some edge, sorted.

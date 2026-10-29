@@ -26,7 +26,7 @@ use vectorcraft_tools::intertwine::{Face, drawn_order, face_at, faces, faces_in,
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, checked_ids_param, cmd, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

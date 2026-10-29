@@ -1095,6 +1095,29 @@ mod tests {
     }
 
     #[test]
+    fn escape_cancels_a_grid_tool_drag() {
+        let mut d = Document::new(800.0, 600.0);
+        grid(2).store(&mut d);
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let g = PerspectiveGrid::effective(&d);
+        let mut t = PerspectiveGridTool::default();
+        assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "no drag: Escape is the shortcut's");
+        let widget = g.plane_widgets()[0].1;
+        for (what, at, begin) in [("handle", Point::new(g.vp_left, g.horizon), "Edit Perspective Grid"), ("plane", widget, "Move Plane")] {
+            assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)), vec![Action::Begin(begin.into())], "{what}");
+            assert!(!t.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x - 40.0, at.y + 10.0)).is_empty(), "{what}");
+            assert!(t.key(&c, ToolKey::Enter, Mods::default()).is_empty(), "{what}: Enter leaves the drag alone");
+            assert!(t.busy(), "{what}");
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}");
+            assert!(!t.busy(), "{what}");
+            // The rest of the drag does nothing.
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x - 60.0, at.y)).is_empty(), "{what}");
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x - 60.0, at.y)).is_empty(), "{what}");
+        }
+    }
+
+    #[test]
     fn depth_moves_along_the_plane_normal() {
         // A grid with a viewing angle foreshortens each axis by its own distance.
         let angled = PerspectiveGrid { angle: Some(30.0), ..grid(3) };
@@ -1184,6 +1207,41 @@ mod tests {
         assert!(t.key(&c, ToolKey::Digit(3), Mods::default()).is_empty());
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, mid.x + 20.0, mid.y)), vec![Action::Commit]);
         assert!(!t.busy());
+    }
+
+    #[test]
+    fn escape_cancels_a_perspective_selection_drag() {
+        let (mut d, id) = doc_with_rect();
+        grid(2).store(&mut d);
+        set_attachment(d.node_mut(id).unwrap(), Plane::Right, 0.0);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let g = PerspectiveGrid::current(&d);
+        let (_, _, rect) = g.plane_bounds(&d, &[id]).unwrap();
+        let h = g.homography(Plane::Right).unwrap();
+        let (corner, mid) = (h.apply(Point::new(rect.x1, rect.y1)).unwrap(), h.apply(rect.center()).unwrap());
+        let widget = g.plane_widgets()[0].1;
+        let mut t = PerspectiveSelectionTool::default();
+        assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "no drag: Escape is the shortcut's");
+        for (what, at) in [("resize", corner), ("move", mid), ("plane", widget)] {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x + 20.0, at.y + 10.0));
+            assert!(acts.iter().any(|a| matches!(a, Action::Preview(..))), "{what}: {acts:?}");
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}");
+            assert!(!t.busy(), "{what}");
+            assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })), "{what}: the measurement goes");
+            // The rest of the drag does nothing.
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x + 40.0, at.y)).is_empty(), "{what}");
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 40.0, at.y)).is_empty(), "{what}");
+        }
+        // A press that has not moved past the drag threshold has nothing to cancel.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, mid.x, mid.y));
+        assert!(t.busy());
+        assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty());
+        assert!(!t.busy());
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, mid.x + 20.0, mid.y)).is_empty(), "no move begins");
     }
 
     #[test]

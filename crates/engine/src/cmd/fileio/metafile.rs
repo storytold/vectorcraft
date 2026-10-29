@@ -7,7 +7,7 @@ use serde_json::Value;
 use vectorcraft_doc::Document;
 use vectorcraft_metafile::Kind;
 
-use super::super::*;
+use super::super::{Result, bad};
 use super::{ArtboardPick, Encoded, FormatOption};
 
 const C: &str = "document.export";

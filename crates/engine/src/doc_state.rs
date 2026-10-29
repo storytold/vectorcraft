@@ -1,7 +1,7 @@
 use super::error::{EngineError, Result};
 use super::history::{History, HistoryEntry};
 use super::interaction::{Interaction, LastTransform, UndoGroup};
-use super::*;
+use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access};
 
 /// Per-document editing state.
 #[derive(Clone, Debug)]

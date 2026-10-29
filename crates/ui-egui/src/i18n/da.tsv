@@ -57,6 +57,7 @@
 	Check Script	Kontrollér script
 	Other Script…	Andet script…
 	Document Setup…	Dokumentopsætning…
+	Switch Units	Skift enheder
 	Document Color Mode	Dokumentets farvetilstand
 	CMYK Color	CMYK-farve
 	RGB Color	RGB-farve
@@ -175,6 +176,7 @@
 	Other Layers	Andre lag
 	Unlock All	Lås alle op
 	Hide	Skjul
+	Unselected Artwork	Ikke-markeret grafik
 	Show All	Vis alle
 	Expand…	Udvid…
 	Expand Appearance	Udvid udseende
@@ -207,6 +209,7 @@
 	Offset Path…	Forskyd kurve…
 	Reverse Path Direction	Omvend kurveretning
 	Simplify…	Forenkl…
+	Smooth…	Udglat…
 	Add Anchor Points	Tilføj ankerpunkter
 	Remove Anchor Points	Fjern ankerpunkter
 	Divide Objects Below	Opdel objekter nedenunder
@@ -256,6 +259,7 @@
 	Clipping Mask	Beskæringsmask
 	Edit Clipping Path	Redigér beskæringskurve
 	Compound Path	Sammensat kurve
+	Compound Shape	Sammensat figur
 	Artboards	Tegneflader
 	Convert to Artboards	Konvertér til tegneflader
 	Rearrange All Artboards…	Omarrangér alle tegneflader…
@@ -373,6 +377,11 @@
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
 	Stroke Color	Stregfarve
+	Fill Gradient	Fyldgradient
+	Stroke Gradient	Streggradient
+	Fill Pattern	Fyldmønster
+	Stroke Pattern	Stregmønster
+	Patterns	Mønstre
 	Stroke Weight	Stregtykkelse
 	Graphic Style	Grafisk stil
 	Symbol Instance	Symbolforekomst
@@ -570,6 +579,8 @@
 	Saved View 25	Gemt visning 25
 	Window	Vindue
 	New Window	Nyt vindue
+	Next Document	Næste dokument
+	Previous Document	Forrige dokument
 	Cascade	Kaskade
 	Tile	Fliselæg
 	Float in Window	Flyd i vindue
@@ -755,6 +766,7 @@
 	Shaper	Shaper
 	Expand Shaper Group	Udvid shapergruppe
 	Release Shaper Group	Frigør shapergruppe
+	Remove from Shaper Group	Fjern fra shapergruppe
 	Select Shaper Face	Markér shaperflade
 	Constrain	Begræns
 	Free Transform	Fri transformering
@@ -1493,6 +1505,12 @@ lighting	Light	Lys
 	Document Library	Dokumentbibliotek
 	Library:	Bibliotek:
 	Tracing Presets	Vektoriseringsforudindstillinger
+	Manage Presets	Administrer forudindstillinger
+	Save as New Preset…	Gem som ny forudindstilling…
+	Rename…	Omdøb…
+	Rename Preset	Omdøb forudindstilling
+	Save Image Trace Preset	Gem forudindstilling til billedsporing
+	Delete Image Trace Preset	Slet forudindstilling til billedsporing
 	Method:	Metode:
 	Mode:	Tilstand:
 	Noise	Støj
@@ -1620,13 +1638,13 @@ lighting	Light	Lys
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
 	Single-line Composer	Enlinjesætter
+	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
 	Top-to-Top Leading	Linjeafstand top til top
 	Bottom-to-Bottom Leading	Linjeafstand bund til bund
 	Burasagari	Burasagari
 	Force	Tving
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Udvid gælder sammensatte figurer (Alt-klik på en figurtilstand) — på vejkortet
 	Expand Compound Shape	Udvid sammensat figur
 	Make Compound Shape	Opret sammensat figur
 	Pathfinder Options…	Pathfinder-indstillinger…
@@ -1886,6 +1904,10 @@ lighting	Light	Lys
 	Outer Corner Tile	Ydre hjørneflise
 	Side Tile	Sideflise
 	Inner Corner Tile	Indre hjørneflise
+	Auto-Centered	Auto-centreret
+	Auto-Between	Auto-mellem
+	Auto-Sliced	Auto-skåret
+	Auto-Overlap	Auto-overlap
 	Start Tile	Startflise
 	End Tile	Slutflise
 	Fit	Tilpas
@@ -2144,6 +2166,8 @@ lighting	Light	Lys
 	Locate Selected Objects	Lokalisér markerede objekter
 	Thumbnails:	Miniaturer:
 	Anchor Points	Ankerpunkter
+	"In" Control Points	"Ind"-kontrolpunkter
+	"Out" Control Points	"Ud"-kontrolpunkter
 	Brush Affects:	Penslen påvirker:
 	Complexity:	Kompleksitet:
 	Detail:	Detaljer:
@@ -3701,6 +3725,7 @@ font-technology	Variable	Variable
 	Default Fill and Stroke (D)	Standardfyld og -kontur (D)
 	Fill (X), double-click for the Color Picker	Fyld (X), dobbeltklik for at åbne farvevælgeren
 	Opacity:	Opacitet:
+	Shape Mode	Formtilstand
 	Shape Modes:	Formtilstande:
 	Stroke (X), double-click for the Color Picker	Kontur (X), dobbeltklik for at åbne farvevælgeren
 	Stroke:	Kontur:
@@ -3749,7 +3774,9 @@ font-technology	Variable	Variable
 	Mojikumi	Mojikumi
 	N pt per	N pt per
 	New Character Style	Ny tegnstil
+	New Character Style…	Ny tegnstil…
 	New Paragraph Style	Ny afsnitsstil
+	New Paragraph Style…	Ny afsnitsstil…
 	Paragraph Style Options	Indstillinger for afsnitsstil
 	Redefine Character Style	Omdefinér tegnstil
 	Redefine Paragraph Style	Omdefinér afsnitsstil
@@ -4086,6 +4113,7 @@ imageTrace	Outline	Kontur
 @msg	missing `id` (see plugin.list)	`id` mangler (se plugin.list)
 @msg	missing `name`	`name` mangler
 @msg	missing `tool`	`tool` mangler
+@msg	missing id	id mangler
 @msg	missing index	indeks mangler
 @msg	missing number `{key}`	tallet `{key}` mangler
 @msg	missing integer `{key}`	heltallet `{key}` mangler
@@ -4117,6 +4145,7 @@ imageTrace	Outline	Kontur
 @msg	no current layer	intet aktuelt lag
 @msg	no data	ingen data
 @msg	no dialog open	ingen åben dialogboks
+@msg	the open dialog has no Reset	den åbne dialogboks har ingen Nulstil-knap
 @msg	no document	intet dokument
 @msg	no document open	intet åbent dokument
 @msg	no effect applied yet	ingen effekt er anvendt endnu
@@ -4190,8 +4219,10 @@ imageTrace	Outline	Kontur
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
+@msg	finish editing the pattern first	afslut først redigeringen af mønsteret
 @msg	nothing encoded	intet kodet
 @msg	nothing selected	intet markeret
+@msg	nothing selected is in a group	intet af det markerede er i en gruppe
 @msg	nothing to align	intet at justere
 @msg	nothing to distort	intet at forvrænge
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	intet at eksportere: dokumentet har ingen synlig grafik (eller aktivér Brug artboards)
@@ -4257,6 +4288,7 @@ imageTrace	Outline	Kontur
 @msg	select an object in perspective	markér et objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markér grafik (eller en farvegruppe) for at skifte farver
 @msg	select at least two objects	markér mindst to objekter
+@msg	exit isolation mode first	afslut først isoleringstilstand
 @msg	select objects, not layers	markér objekter, ikke lag
 @msg	select one path, or give its `id`	markér én sti, eller angiv dens `id`
 @msg	select paths to join	markér stier, der skal forbindes
@@ -4307,10 +4339,14 @@ imageTrace	Outline	Kontur
 @msg	the layer or group is locked	laget eller gruppen er låst
 @msg	the guide is on a hidden or locked layer	hjælpelinjen ligger på et skjult eller låst lag
 @msg	the target layer is locked or hidden	mållaget er låst eller skjult
+@msg	the object is hidden or locked	objektet er skjult eller låst
+@msg	the object is outside the isolated group	objektet er uden for den isolerede gruppe
+@msg	type objects can't be isolated	tekstobjekter kan ikke isoleres
 @msg	the layer to flatten into is hidden	laget, der skal flades ud i, er skjult
 @msg	the object already has an opacity mask	objektet har allerede en opacitetsmaske
 @msg	the object has no geometry	objektet har ingen geometri
 @msg	the object has no opacity mask	objektet har ingen opacitetsmaske
+@msg	stop editing the opacity mask first	stop først redigeringen af opacitetsmasken
 @msg	the object has no stroke	objektet har ingen streg
 @msg	the object is beyond the plane's horizon	objektet er uden for planens horisont
 @msg	the object isn't in perspective	objektet er ikke i perspektiv
@@ -5032,8 +5068,11 @@ mark-style	Japanese	Japansk
 	This system has no screen color sampler	Dette system har ingen skærmfarvesampler
 	Color blindness – Tritanopia-type	Farveblindhed – tritanopitype
 	Panels Except Tools and Control	Paneler undtagen værktøjer og kontrol
-	Reset Tracking and Kerning	Nulstil spærring og kerning
+	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
+	Highlight Font Name	Fremhæv skrifttypenavn
+	Highlight Kerning	Fremhæv kerning
+	Highlight Tracking	Fremhæv sporing
 @msg	span must be "object" or "selection", got {v}	span skal være "object" eller "selection", fik {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerer en `gradient`, ikke en farveprøve
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerer en overgang: angiv `gradient`
@@ -5184,6 +5223,7 @@ swatch	Bright Violet	Kraftig violet
 	Show Original Path	Vis oprindelig kurve
 	Open this dialog with these settings next time	Åbn denne dialogboks med disse indstillinger næste gang
 	Auto-Simplify	Forenkl automatisk
+	Auto-Smooth	Udglat automatisk
 @msg	check a layer to export	markér et lag, der skal eksporteres
 @msg	select the art to export first	markér først grafikken, der skal eksporteres
 @msg	no saved selection recalled	ingen gemt markering hentet
@@ -5544,4 +5584,17 @@ axis	Y Axis	Y-akse
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Udvid først udseendet (Objekt › Udvid udseende)
 	Live preview	Direkte forhåndsvisning
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Punkttekst
+	Area Text	Områdetekst
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
+	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
+	Snap to Glyph Options	Indstillinger for fastgørelse til tegn
+	x-height	x-højde
+	Glyph Bounds	Glyfafgrænsning
+	Proximity Guides	Nærhedshjælpelinjer
+	Angular Guides	Vinkelhjælpelinjer

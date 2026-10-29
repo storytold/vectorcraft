@@ -1,4 +1,6 @@
-use super::*;
+use super::{Arc, Ordering, VectorcraftApp, graphics, native_menu, shortcuts, take_frame_once};
+#[cfg(not(target_arch = "wasm32"))]
+use super::{fileio, place};
 
 impl VectorcraftApp {
     /// The first UI pass of a host iteration takes the host's input, once per context, viewport and
@@ -120,6 +122,48 @@ impl VectorcraftApp {
         self.synthetic_modifiers = false;
         self.synthetic_injected = false;
         self.synthetic_frame = false;
+    }
+
+    /// Release the pointer buttons egui still holds down when the system reports that no mouse
+    /// button is down (`system_held` is false), at the pointer's last position. egui ends a drag
+    /// only on a button release or Escape, so a release the window never received leaves a drag,
+    /// such as a dock column's resize, following the pointer (#4326). Frames that carry a button
+    /// event, and control-channel input that holds a button between steps, are left alone.
+    pub fn release_lost_buttons(&self, ctx: &egui::Context, raw: &mut egui::RawInput, system_held: bool) {
+        if system_held
+            || self.synthetic_injected
+            || !self.synthetic.is_empty()
+            || raw.events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. }))
+        {
+            return;
+        }
+        let (down, pos, modifiers) = ctx.input_for(raw.viewport_id, |i| {
+            let p = &i.pointer;
+            let down: Vec<egui::PointerButton> = [
+                egui::PointerButton::Primary,
+                egui::PointerButton::Secondary,
+                egui::PointerButton::Middle,
+                egui::PointerButton::Extra1,
+                egui::PointerButton::Extra2,
+            ]
+            .into_iter()
+            .filter(|b| p.button_down(*b))
+            .collect();
+            (down, p.latest_pos().or_else(|| p.interact_pos()).or_else(|| p.press_origin()), i.modifiers)
+        });
+        // The releases go after this frame's last pointer movement, at its position, so a pointer
+        // that moved away from the press does not end it with a click at the press position.
+        let moved = raw.events.iter().enumerate().rev().find_map(|(i, e)| match e {
+            egui::Event::PointerMoved(p) => Some((i + 1, *p)),
+            _ => None,
+        });
+        let (at, pos) = match moved {
+            Some((at, p)) => (at, Some(p)),
+            None => (0, pos),
+        };
+        let Some(pos) = pos else { return };
+        let releases = down.into_iter().map(|button| egui::Event::PointerButton { pos, button, pressed: false, modifiers });
+        raw.events.splice(at..at, releases);
     }
 
     /// Inject synthetic events (one press/release step, wheel turn or short key sequence per host

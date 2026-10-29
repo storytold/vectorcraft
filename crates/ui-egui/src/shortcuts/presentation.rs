@@ -1,4 +1,4 @@
-use super::*;
+use super::{Key, VectorcraftApp, is_modifier, json};
 
 /// The second press of Escape pressed twice comes less than this many seconds after the first.
 const ESCAPE_PAIR_SECONDS: f64 = 1.0;

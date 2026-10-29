@@ -112,7 +112,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Korean | `ko` | full | 100% |
 | Vietnamese | `vi` | full | 100% |
 
-Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian and Georgian (full), Czech (catalog complete; render-site gaps reduced; native review pending).
+Also shipped: Traditional Chinese (partial, 80%), Bulgarian, Finnish, Greek, Hungarian, Italian, Polish, Russian, Swedish, Ukrainian and Georgian (full), Catalan (full; AI-drafted, native review welcome), Czech (catalog complete; render-site gaps reduced; native review pending).
 The Georgian catalog has had a native speaker's review; no other catalog has. Details: [localization-parity.md](docs/localization-parity.md).
 
 ## Upcoming
@@ -144,6 +144,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 | Date | What landed |
 |---|---|
+| 2026-10-29 | Linux: a clipboard that can't be opened (the Flatpak on GNOME, where arboard has neither data-control nor X11) is retried after 1 s, doubling to a minute, and logged once, where the background Paste check used to reconnect and log a warning every 250 ms (267k warnings in 18 h). Scores and estimates unchanged. |
 | 2026-10-21 | 3D lighting: four original lighting presets shared by Revolve, Extrude & Bevel, Inflate and Rotate, with command access and manual Custom settings; scores and estimates unchanged. |
 | 2026-10-21 | Print: the Print dialog's Media list has the Japanese papers — JIS B4 (257 × 364 mm), JIS B5 (182 × 257 mm) and JIS B6 next to the ISO B4/B5 (which keep their ISO 216 dimensions for settings saved before them), はがき 100 × 148 mm, 往復はがき 148 × 200 mm, 封筒 長形3号 120 × 235 mm / 長形4号 90 × 225 mm / 角形2号 240 × 332 mm / 角形3号 216 × 277 mm and 四六判 127 × 188 mm. A paper is named by its JSON id or its dialog label, any case and spacing (`B5 (JIS)` or `b5jis`), and every added size prints as its own PDF page size. Headline numbers unchanged. |
 | 2026-10-18 | Inch rulers divide the inch in half, not in ten. Zooming in stepped an inch ruler through 0.2, 0.1 and 0.05 of an inch, marks an inch ruler does not carry; below an inch the steps are binary fractions now, 1/2 down to 1/16, with the unlabelled ticks between them binary too (down to 1/128, so the 32nds, 64ths and 128ths appear as the report expects), while the metric units, points, pixels and picas keep their tenths. A label carries the decimals its step needs, so a sixteenth reads 0.0625 rather than the rounded 0.06, with trailing zeros dropped (#2827). Headline numbers unchanged. |
@@ -198,6 +199,7 @@ The full pre-standard record of what landed is kept in [docs/roadmap.md](docs/ro
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-29 | minor | Progress log row for the Linux clipboard retry backoff; headline numbers unchanged. |
 | 2026-10-23 | minor | Progress log row for Pathfinder › Trap; Live vector effects hours 6–10 → 4–8; headline numbers unchanged. |
 | 2026-10-23 | minor | Progress log row for OpenType SVG colour fonts; headline numbers unchanged. |
 | 2026-10-23 | minor | Progress log row for COLR colour fonts; headline numbers unchanged. |

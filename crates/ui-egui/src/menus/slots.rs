@@ -1,4 +1,4 @@
-use super::*;
+use super::{VectorcraftApp, io};
 
 /// The active document's perspective grid (View → Perspective Grid toggles).
 pub(super) fn perspective_grid(app: &VectorcraftApp) -> Option<vectorcraft_tools::distort::perspective::PerspectiveGrid> {

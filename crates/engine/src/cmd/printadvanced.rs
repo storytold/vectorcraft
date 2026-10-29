@@ -14,7 +14,7 @@ use vectorcraft_render::{AntiAlias, RenderOptions};
 use super::fileio::pdf::pdf_error;
 use super::flatten::{FlattenOptions, FlattenerPreset, flatten_document};
 use super::menucmds::{MAX_PIXELS, unique_key};
-use super::*;
+use super::{EngineError, Result, bad};
 
 /// The flattener options of `set`'s preset (`None`: transparency prints live); an error naming
 /// `cmd` for a preset that is neither built in nor in `saved`.

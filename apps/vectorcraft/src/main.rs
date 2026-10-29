@@ -15,13 +15,6 @@
 //! keyboard isn't confined.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
-#[cfg(all(feature = "windows7", any(feature = "wgpu", feature = "accessibility")))]
-compile_error!("windows7 requires --no-default-features (wgpu and accessibility must be disabled)");
-#[cfg(all(windows, feature = "windows7", not(target_vendor = "win7")))]
-compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinary Windows target still imports newer APIs");
-#[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
-compile_error!("the win7 target requires --no-default-features --features windows7");
-
 mod automation_args;
 mod clipboard;
 #[cfg(feature = "wgpu")]
@@ -33,6 +26,8 @@ mod gpu;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
+#[cfg(all(target_os = "macos", feature = "wgpu"))]
+mod mac_color_space;
 #[cfg(target_os = "macos")]
 mod mac_fonts;
 #[cfg(target_os = "macos")]
@@ -50,7 +45,7 @@ mod open_documents;
 mod portal_save;
 mod prefs_dir;
 mod printing;
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 mod system_fonts;
 mod tablet;
 mod window;
@@ -190,7 +185,7 @@ fn main() -> std::process::ExitCode {
     let logger = logging::install();
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
     // Before the first font scan (the app's start): the fonts font services load (#579).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();
@@ -295,7 +290,7 @@ fn main() -> std::process::ExitCode {
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     let options = {
         use winit::platform::windows::EventLoopBuilderExtWindows as _;
         let mut options = options;
@@ -318,8 +313,9 @@ fn main() -> std::process::ExitCode {
             // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
-            create.instance_descriptor.backends =
-                left_out.backends(gpu::backends(create.instance_descriptor.backends, std::env::var_os("WGPU_BACKEND").is_some()));
+            let env_set = std::env::var_os("WGPU_BACKEND").is_some();
+            let opengl = cfg!(windows) && !env_set && gpu::windows_opengl(&left_out);
+            create.instance_descriptor.backends = left_out.backends(gpu::backends(create.instance_descriptor.backends, env_set, opengl));
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
@@ -436,10 +432,6 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
-                #[cfg(feature = "windows7")]
-                {
-                    app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
-                }
                 app.custom_titlebar = custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
@@ -492,6 +484,29 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+/// Tests only: while a test starts another program, the child briefly holds a copy of every file
+/// this process has open, until it runs that program. A file lock held through such a copy outlives
+/// its own handle, so a GPU start test that released the start file and opened it again found it
+/// still locked, as if another copy of the app were running, and failed. A test that starts a
+/// program holds [`spawning`]; a test that depends on the start file's lock holds [`no_spawns`].
+#[cfg(all(
+    test,
+    any(feature = "wgpu", any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))
+))]
+static CHILD_SPAWN: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+/// Held while a test starts another program (see [`CHILD_SPAWN`]).
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
+fn spawning() -> std::sync::RwLockWriteGuard<'static, ()> {
+    CHILD_SPAWN.write().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Held by a test that releases a locked file and opens it again (see [`CHILD_SPAWN`]).
+#[cfg(all(test, feature = "wgpu"))]
+fn no_spawns() -> std::sync::RwLockReadGuard<'static, ()> {
+    CHILD_SPAWN.read().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(all(test, feature = "wgpu"))]

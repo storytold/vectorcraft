@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify, TextRun};
 use vectorcraft_geom::{Rect, Vec2};
 
-use super::*;
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, point_indices};
 use crate::{Clipboard, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {

@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaStyle, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 /// Longest story read (bytes).
@@ -618,7 +618,7 @@ impl Story {
         let r = match self.frames.first()? {
             FrameKind::Area(s) => bounds(s)?,
             FrameKind::OnPath { segments, .. } => bounds(segments)?.inflate(size * 1.5, size * 1.5),
-            FrameKind::Point(_) => {
+            FrameKind::Point(m) => {
                 let longest = self.text.split(['\r', '\x03']).map(|l| l.chars().count()).max().unwrap_or(0) as f64;
                 let reach = longest * size + size;
                 let points: Vec<Point> = self.line_starts(template).into_iter().map(|(_, (x, y))| to_doc * Point::new(x, y)).collect();
@@ -626,7 +626,19 @@ impl Story {
                     let (x, y) = self.place(template);
                     to_doc * Point::new(x, y)
                 });
-                points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)).inflate(reach, size * 1.5)
+                // Along the baseline as far as a line reaches, across it a line and a half: turned
+                // with the type (a dimension's label turned a quarter runs down the page).
+                // (The canvas is y down, the art y up: see [`to_art`].)
+                let along = to_doc * Point::new(m[0], -m[1]) - to_doc * Point::ZERO;
+                let along = if along.hypot() > 1e-9 && along.is_finite() { along / along.hypot() } else { kurbo::Vec2::new(1.0, 0.0) };
+                let across = kurbo::Vec2::new(-along.y, along.x);
+                let mut r = Rect::from_points(first, first);
+                for p in points.iter().chain([&first]) {
+                    for (t, n) in [(-reach, -1.5), (-reach, 1.5), (reach, -1.5), (reach, 1.5)] {
+                        r = r.union_pt(*p + along * t + across * (n * size));
+                    }
+                }
+                r
             }
         };
         r.is_finite().then_some(r)
@@ -790,6 +802,9 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
         space_before: p.space_before * scale,
         space_after: p.space_after * scale,
         hyphenate: p.hyphenate,
+        // A right-to-left paragraph lays its text out from the right whatever letters it has
+        // (" 120.5 mm " reads "mm 120.5"); without the key, from its first strong letter.
+        direction: p.rtl.then_some(ParaDirection::RightToLeft),
         ..ParaStyle::default()
     }
 }
@@ -836,6 +851,37 @@ mod tests {
         // Left to right keeps them.
         assert_eq!(justify(b"/0 0 /33 0"), Justify::Left);
         assert_eq!(justify(b"/0 1 /33 0"), Justify::Right);
+    }
+
+    /// Where point type lies runs along its baseline: a label turned a quarter (as a vertical
+    /// dimension's is) lies in a tall box, not a wide one.
+    #[test]
+    fn point_type_lies_along_its_baseline() {
+        let para =
+            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: Val::Dict(BTreeMap::new()), frames: vec![] }
+                .para(None);
+        let mut s = story(" 80 mm ", &[0.0], &para);
+        let size = |s: &Story| s.region((0.0, 0.0), Affine::IDENTITY).map(|r| (r.width(), r.height())).unwrap();
+        let (w, h) = size(&s);
+        assert!(w > 3.0 * h, "level: {w} × {h}");
+        // Turned −90° on the canvas (y down): the baseline runs down the page.
+        s.frames = vec![FrameKind::Point([0.0, 1.0, -1.0, 0.0, 0.0, 0.0])];
+        let (w, h) = size(&s);
+        assert!(h > 3.0 * w, "turned: {w} × {h}");
+    }
+
+    /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
+    /// letters (a dimension's label " 120.5 mm " reads "mm 120.5"); a left-to-right one, or one
+    /// that doesn't say, goes by its letters.
+    #[test]
+    fn right_to_left_paragraphs_set_their_direction() {
+        let texts =
+            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: read(b"/33 1").unwrap(), frames: vec![] };
+        let direction = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).direction;
+        assert_eq!(direction(b"/0 2"), Some(ParaDirection::RightToLeft), "from the document's defaults");
+        assert_eq!(direction(b"/0 2 /33 0"), None, "the paragraph's own");
+        let plain = Texts { para_defaults: Val::Dict(BTreeMap::new()), ..texts };
+        assert_eq!(para_style(&plain.para(None), 1.0).direction, None);
     }
 
     #[test]

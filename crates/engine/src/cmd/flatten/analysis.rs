@@ -1,4 +1,4 @@
-use super::*;
+use super::{Arc, BTreeSet, Document, Effect, ImageBlob, Knockout, Node, NodeKind, Rect, effects, outline_strokes};
 
 // ---------- plain art ----------
 

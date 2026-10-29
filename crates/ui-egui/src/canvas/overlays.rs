@@ -1,7 +1,7 @@
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
 use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn};
-use super::*;
+use super::{Color32, CornerRadius, NodeKind, Overlay, Point, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };

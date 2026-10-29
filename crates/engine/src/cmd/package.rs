@@ -5,7 +5,6 @@
 //! Without a folder (the web, agents) the same files come back as a zip archive.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::links::hash_bytes;
@@ -14,7 +13,7 @@ use vectorcraft_doc::{Document, LinkInfo};
 use serde_json::{Value, json};
 
 use super::fileio::{create_dir, write_file};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, str_param, unique_name};
 
 const C: &str = "file.package";
 
@@ -550,53 +549,9 @@ fn dos_time() -> (u16, u16) {
 }
 
 /// A zip archive of `files` ((path with `/` separators, bytes)), each deflated, or stored when
-/// that isn't smaller.
+/// that isn't smaller, every entry dated now.
 pub(crate) fn zip(files: &[(String, &[u8])]) -> Result<Vec<u8>> {
-    let too_big = || bad(C, "too large for a zip archive: package to a folder");
-    let io = |e: std::io::Error| EngineError::Other(e.to_string());
-    let (time, date) = dos_time();
-    let (mut out, mut central) = (Vec::new(), Vec::new());
-    for (name, bytes) in files {
-        let mut crc = flate2::Crc::new();
-        crc.update(bytes);
-        let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-        enc.write_all(bytes).map_err(io)?;
-        let deflated = enc.finish().map_err(io)?;
-        let (method, data): (u16, &[u8]) = if deflated.len() < bytes.len() { (8, &deflated) } else { (0, bytes) };
-        let offset = u32::try_from(out.len()).map_err(|_| too_big())?;
-        let (packed, size) = (u32::try_from(data.len()).map_err(|_| too_big())?, u32::try_from(bytes.len()).map_err(|_| too_big())?);
-        let name_len = u16::try_from(name.len()).map_err(|_| too_big())?;
-        // Version 2.0, UTF-8 names, method, time, date, CRC-32, sizes, name length, no extra field.
-        let common = [&20u16.to_le_bytes()[..], &0x0800u16.to_le_bytes(), &method.to_le_bytes(), &time.to_le_bytes(), &date.to_le_bytes()].concat();
-        let sums = [crc.sum().to_le_bytes(), packed.to_le_bytes(), size.to_le_bytes()].concat();
-        out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
-        out.extend_from_slice(&common);
-        out.extend_from_slice(&sums);
-        out.extend_from_slice(&name_len.to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
-        out.extend_from_slice(name.as_bytes());
-        out.extend_from_slice(data);
-        central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
-        central.extend_from_slice(&20u16.to_le_bytes());
-        central.extend_from_slice(&common);
-        central.extend_from_slice(&sums);
-        central.extend_from_slice(&name_len.to_le_bytes());
-        // No extra field or comment, disk 0, no attributes.
-        central.extend_from_slice(&[0; 12]);
-        central.extend_from_slice(&offset.to_le_bytes());
-        central.extend_from_slice(name.as_bytes());
-    }
-    let count = u16::try_from(files.len()).map_err(|_| too_big())?;
-    let (start, len) = (u32::try_from(out.len()).map_err(|_| too_big())?, u32::try_from(central.len()).map_err(|_| too_big())?);
-    out.extend_from_slice(&central);
-    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
-    out.extend_from_slice(&[0; 4]);
-    out.extend_from_slice(&count.to_le_bytes());
-    out.extend_from_slice(&count.to_le_bytes());
-    out.extend_from_slice(&len.to_le_bytes());
-    out.extend_from_slice(&start.to_le_bytes());
-    out.extend_from_slice(&0u16.to_le_bytes());
-    Ok(out)
+    super::fileio::zip::deflate(files, dos_time(), || false).map_err(|_| bad(C, "too large for a zip archive: package to a folder"))
 }
 
 #[cfg(test)]

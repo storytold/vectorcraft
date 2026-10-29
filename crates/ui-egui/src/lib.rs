@@ -65,6 +65,7 @@ pub mod titlebar;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
+pub mod trace_runs;
 mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
@@ -125,6 +126,9 @@ pub struct VectorcraftApp {
     pub last_effect: Option<(String, serde_json::Value)>,
     /// Last confirmed Warp Options (bend, distortion, orientation) for the next new warp dialog.
     pub last_warp: Option<serde_json::Value>,
+    /// The Character panel field that takes the keyboard focus when the panel next draws it
+    /// ([`panels::character::highlight`]).
+    pub(crate) character_focus: Option<panels::character::Field>,
     /// Commands run through [`Self::run`] so far: the native menu bar reads its rows again when it
     /// moves ([`native_menu::sync`]).
     run_count: u64,
@@ -212,6 +216,8 @@ pub struct VectorcraftApp {
     pub plugin_runs: plugin_runs::PluginRuns,
     /// Files being read off the UI thread for Place ([`placing`]).
     pub placing: placing::Placing,
+    /// Image Traces running off the UI thread ([`trace_runs`]).
+    pub trace_runs: trace_runs::TraceRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.

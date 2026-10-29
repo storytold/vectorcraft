@@ -37,7 +37,7 @@ pub use journal::Journal;
 pub use tooling::{UiRequest, ViewInfo};
 pub use vectorcraft_doc as doc;
 pub use vectorcraft_doc::cancel;
-pub use vectorcraft_pathops::{SIMPLIFY_LEVEL, simplify_level_tolerance};
+pub use vectorcraft_pathops::{SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, simplify_level_tolerance};
 pub use vectorcraft_tools as tools;
 
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
@@ -90,6 +90,9 @@ pub struct Session {
     /// The Appearance panel's active fill/stroke row (`appearance.setActiveItem`); not saved. Read
     /// it through [`Session::appearance_item`], which drops it once the selection changes.
     pub(crate) active_appearance_item: Option<cmd::appearance::ActiveItem>,
+    /// What the Eyedropper picked up last (`appearance.copyFrom`): an Alt-click with nothing
+    /// selected puts it on the object clicked (#4382). Not saved.
+    pub(crate) eyedropper_sample: Option<Arc<vectorcraft_doc::Node>>,
     /// The last solid colour applied (the toolbar's Color button; `,` applies it again).
     pub last_solid: Color,
     /// The last gradient applied (the toolbar's Gradient button; `.` applies it again).
@@ -126,6 +129,8 @@ pub struct Session {
     plugin_output: Option<cmd::plugin::HandedIn>,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
+    /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
+    pub(crate) trace_preset_changes: cmd::TracePresetChanges,
     /// The language the UI is drawn in (a language code, never `auto`), set by the UI each frame;
     /// `None` without one (headless), where an explicit `interfaceLanguage` preference counts.
     /// Japanese gives new type the Japanese defaults ([`Session::japanese_interface`]).
@@ -156,6 +161,9 @@ pub struct Session {
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
+    /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
+    pub(crate) trace_hand_off: Option<cmd::Traced>,
     /// Whether a click or drag of the place cursor asks the frontend to place its file
     /// ([`UiRequest::Place`]) instead of running `file.place`: the desktop app sets it to read the
     /// file off the UI thread. False: the file is placed at once.

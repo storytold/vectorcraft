@@ -1,7 +1,7 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::numeric::mixed_field_named;
 use super::panel_chrome::chevron_cell;
-use super::*;
+use super::{Rect, Response, Stroke, StrokeKind, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
 /// first enabled field drawn takes it ([`take_dialog_focus`]).
@@ -24,6 +24,43 @@ pub(crate) fn take_dialog_focus(ui: &Ui, id: egui::Id, text: &str) {
 pub(crate) fn focus_field(ui: &Ui, id: egui::Id, text: &str) {
     select_all(ui, id, text);
     ui.memory_mut(|m| m.request_focus(id));
+}
+
+/// The key under which [`arm_field_focus`] keeps the armed field's id salt.
+fn armed_field_flag() -> egui::Id {
+    egui::Id::unique("armed-field-focus")
+}
+
+/// Arm the field drawn with id salt `salt`: a numeric field's `id`, or a searchable menu's (the
+/// font family menu's). The next one drawn, enabled and outside a sizing pass, takes the keyboard
+/// focus ([`take_armed_focus`]) until [`disarm_field_focus`].
+pub(crate) fn arm_field_focus(ctx: &egui::Context, salt: impl std::hash::Hash) {
+    ctx.data_mut(|d| d.insert_temp(armed_field_flag(), id_with(egui::Id::NULL, salt)));
+}
+
+/// Disarm the field [`arm_field_focus`] armed. → Whether it was still armed: no field took it.
+pub(crate) fn disarm_field_focus(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| {
+        let armed = d.get_temp::<egui::Id>(armed_field_flag()).is_some();
+        d.remove::<egui::Id>(armed_field_flag());
+        armed
+    })
+}
+
+/// Whether the field drawn with id salt `salt` is the one armed and can take the keyboard focus
+/// now (it is enabled, and this is not a sizing pass). It is then disarmed.
+pub(crate) fn take_armed_focus(ui: &Ui, salt: impl std::hash::Hash) -> bool {
+    if ui.is_sizing_pass() || !ui.is_enabled() {
+        return false;
+    }
+    let salt = id_with(egui::Id::NULL, salt);
+    ui.data_mut(|d| {
+        let armed = d.get_temp::<egui::Id>(armed_field_flag()) == Some(salt);
+        if armed {
+            d.remove::<egui::Id>(armed_field_flag());
+        }
+        armed
+    })
 }
 
 /// The modifiers held with an Enter press among this frame's events, `None` without one, as when a
@@ -206,7 +243,11 @@ pub(super) fn recessed_text(
                 .inner_margin(margin)
                 .show(ui, |ui| {
                     crate::theme::strong_selected_text(ui);
-                    let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
+                    let edit = if rows > 1 {
+                        egui::TextEdit::multiline(&mut buf).desired_rows(rows)
+                    } else {
+                        egui::TextEdit::singleline(&mut buf).align(egui::Align2::LEFT_CENTER)
+                    };
                     ui.add(
                         edit.id(id)
                             .frame(egui::Frame::NONE)
@@ -293,6 +334,7 @@ pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
                 egui::TextEdit::singleline(&mut query)
                     .id(id.with("edit"))
                     .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
                     .hint_text(egui::RichText::new(tl!(hint)).italics())
                     .desired_width(ui.available_width()),
             );

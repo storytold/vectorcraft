@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, NodeId, Serialize, Vec2};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Guide {

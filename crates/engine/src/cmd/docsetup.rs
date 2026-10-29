@@ -7,7 +7,7 @@ use vectorcraft_doc::{Background, CharPosition, CharStyle, DocSetup, Document, E
 
 use super::flatten::{FlattenOptions, FlattenerPreset};
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, color_value, has_doc};
 
 const C: &str = "document.setup";
 

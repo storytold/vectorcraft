@@ -536,6 +536,24 @@ fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
     assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
 }
 
+/// The text object `id`.
+fn text_at(s: &Session, id: u64) -> vectorcraft_doc::text::TextObject {
+    match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    }
+}
+
+/// How many list markers text object `id` draws.
+fn marker_count(s: &Session, id: u64) -> usize {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text_at(s, id)).markers.len()
+}
+
+/// The tab stops of paragraph `k` of text object `id`.
+fn tab_stops(s: &Session, id: u64, k: usize) -> Vec<(f64, vectorcraft_doc::TabAlign, String)> {
+    text_at(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect()
+}
+
 /// The glyphs the layout of type `id` draws, each with its glyph, where it is drawn and the
 /// transform it is drawn with (in thousandths), from the top line down and left to right.
 fn drawn_glyphs(s: &Session, id: u64) -> Vec<(u32, i64, i64, [i64; 6])> {
@@ -566,13 +584,7 @@ fn convert_to_text_writes_the_markers_where_they_were_drawn() {
     use vectorcraft_doc::text::{Bullet, ParaList};
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-        NodeKind::Text(t) => (**t).clone(),
-        _ => panic!("text"),
-    };
-    let markers = |s: &Session, id: u64| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.len();
-    let tabs =
-        |s: &Session, id: u64, k: usize| text(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect::<Vec<_>>();
+    let (text, markers, tabs) = (text_at, marker_count, tab_stops);
     let long = "The quick brown fox jumps over the lazy dog and runs far away into the woods beyond the hill";
     let id = s
         .execute("text.create", &json!({"x": 10, "y": 10, "text": format!("One\n{long}\n\nFour\nFive"), "area": {"width": 200, "height": 400}}))
@@ -691,14 +703,19 @@ fn convert_to_text_writes_the_markers_where_they_were_drawn() {
         s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
         assert_eq!((text(&s, id).plain_text().as_str(), tabs(&s, id, 1)), (text_after, stop), "{size} pt");
     }
+    point_and_vertical_type_convert(&mut s);
+}
+
+/// Point type and vertical type convert too, and type with no list paragraph has nothing to convert.
+fn point_and_vertical_type_convert(s: &mut Session) {
     // Point type and vertical type.
     for vertical in [false, true] {
         let id = s.execute("text.create", &json!({"x": 400, "y": 700, "vertical": vertical, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
         s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
-        let before = drawn_glyphs(&s, id);
+        let before = drawn_glyphs(s, id);
         s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
-        assert_eq!(drawn_glyphs(&s, id), before, "vertical {vertical}");
-        assert_eq!(text(&s, id).plain_text(), "1.\tOne\n2.\tTwo");
+        assert_eq!(drawn_glyphs(s, id), before, "vertical {vertical}");
+        assert_eq!(text_at(s, id).plain_text(), "1.\tOne\n2.\tTwo");
     }
     // Type with no list paragraph: nothing to convert and no undo step.
     let plain = s.execute("text.create", &json!({"x": 10, "y": 700, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();

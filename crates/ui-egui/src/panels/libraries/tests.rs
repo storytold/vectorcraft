@@ -34,9 +34,10 @@ fn the_panel_draws_its_libraries() {
     assert_eq!((lib.graphics.len(), lib.colors.len(), lib.char_styles.len(), lib.para_styles.len()), (1, 1, 1, 1));
     // The thumbnail decodes.
     let ctx = egui::Context::default();
-    assert!(thumbnail(&ctx, "Brand", &lib.graphics[0], 256).is_some());
+    let g = &lib.graphics[0];
+    assert!(thumbnail(&ctx, "Brand", &g.id, &g.thumbnail, 256).is_some());
     // Shrunk to the size it is drawn at.
-    let small = thumbnail(&ctx, "Brand", &lib.graphics[0], 40).unwrap();
+    let small = thumbnail(&ctx, "Brand", &g.id, &g.thumbnail, 40).unwrap();
     assert_eq!(small.size().into_iter().max(), Some(40), "{:?}", small.size());
 }
 
@@ -257,6 +258,56 @@ fn a_long_list_scrolls_also_while_dragging() {
     let (texts, _) = frame_at(&mut app, &ctx, 400.0, vec![egui::Event::PointerMoved(hold)]);
     let moved = texts.iter().find(|(t, _)| t == "Style 0").map_or(f32::NEG_INFINITY, |(_, r)| r.top());
     assert!(moved < first.top(), "the list scrolled down: {} → {moved}", first.top());
+}
+
+/// Gradient and pattern swatches dropped on the list are added under their names and show under
+/// their headings; a click on one paints the selection through the active Fill/Stroke proxy.
+#[test]
+fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    let sunset = json!({"stops": [{"offset": 0, "color": "#ffcc00"}, {"offset": 1, "color": "#cc3300"}]});
+    app.run("swatch.new", json!({"name": "Sunset", "gradient": sunset})).unwrap();
+    let dot = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [dot]})).unwrap();
+    app.run("object.pattern.make", json!({"name": "Checks", "width": 16, "height": 16})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let into = at(&texts, "Brand").center() + vec2(0.0, 80.0);
+    for name in ["Sunset", "Checks"] {
+        let paint = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+        let drag = PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: None, library: None };
+        drop_at(&mut app, &ctx, drag, into);
+    }
+    let lib = app.session.libraries.get("Brand").unwrap();
+    assert_eq!((lib.gradients.len(), lib.patterns.len()), (1, 1));
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    for s in ["Gradients", "Sunset", "Patterns", "Checks"] {
+        at(&texts, s);
+    }
+    let id = app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 60, "height": 60})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let click = |pos| {
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        [vec![egui::Event::PointerMoved(pos), button(true)], vec![button(false)]]
+    };
+    let fill = |app: &VectorcraftApp| {
+        let d = &app.session.active().unwrap().doc;
+        d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint()
+    };
+    for events in click(at(&texts, "Sunset").center()) {
+        frame_at(&mut app, &ctx, 600.0, events);
+    }
+    assert!(matches!(fill(&app), Paint::Gradient(_)), "{:?}", fill(&app));
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    for events in click(at(&texts, "Checks").center()) {
+        frame_at(&mut app, &ctx, 600.0, events);
+    }
+    assert!(matches!(fill(&app), Paint::Pattern { ref pattern, .. } if pattern == "Checks"), "{:?}", fill(&app));
 }
 
 /// New Group… and Rename Group… ask for a name and act on the library and group they came

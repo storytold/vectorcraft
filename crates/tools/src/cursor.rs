@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Point, Serialize, Vec2};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Cursor {

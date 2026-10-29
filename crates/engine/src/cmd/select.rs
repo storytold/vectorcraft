@@ -7,7 +7,9 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::wand::{fill_of, stroke_of};
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+};
 use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {

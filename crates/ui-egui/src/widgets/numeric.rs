@@ -1,7 +1,9 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::panel_chrome::chevron_cell;
-use super::text::{after_shift_enter, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_dialog_focus};
-use super::*;
+use super::text::{
+    after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
+};
+use super::{CornerRadius, RangeInclusive, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Unit, id_with, pos2, scrub, vec2};
 
 /// Preferences › Units › Numbers Without Units Are Points (#394; on until set): the app sets it
 /// when the preference changes (`prefs_dialog::apply_runtime`), the length fields read it.
@@ -51,7 +53,7 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY)
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[])
 }
 
 /// Any number: the bounds of a field that has none.
@@ -64,7 +66,8 @@ fn within(v: f64, bounds: &RangeInclusive<f64>) -> f64 {
 
 /// [`num_field`]; with `share_of_value` a percentage typed alone is that share of `value`
 /// ([`share_of`]). ↑/↓, the wheel and a scrub stop at `bounds` (points), and the field shows where
-/// they stopped.
+/// they stopped. A plain ↑/↓ or wheel step also stops at each of `stops` (points; see
+/// [`step_through`]).
 #[allow(clippy::too_many_arguments)]
 fn unit_field(
     ui: &mut Ui,
@@ -76,6 +79,7 @@ fn unit_field(
     width: f32,
     share_of_value: bool,
     bounds: RangeInclusive<f64>,
+    stops: &[f64],
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_default();
@@ -86,7 +90,8 @@ fn unit_field(
     let typed = typed_unit(ui.ctx(), unit);
     let read = |b: &str| typed.parse(&decimal_point(b));
     let bounds = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
-    let stepped = step_value(ui, &resp, &mut buf, &bounds, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None);
+    let stops: Vec<f64> = stops.iter().map(|&s| unit.from_pt(s)).collect();
+    let stepped = step_value(ui, &resp, &mut buf, &bounds, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds);
     let commit = commit && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
@@ -131,11 +136,45 @@ pub(super) fn step_to_multiple(v: f64, size: f64, n: f64) -> f64 {
     (from + n) * size
 }
 
+/// `v` moved `n` steps of `size` (down when negative), where each step goes to the nearer of the
+/// next multiple of `size` ([`step_to_multiple`]) and the next of `stops` in its direction. By 1 with
+/// stops at 0.25, 0.5 and 0.75, 0.52 goes down to 0.5 and up to 0.75, 1 goes down to 0.75, and 14
+/// goes up to 15. A stop or multiple that `same` finds equal to the value counts as reached: a
+/// stop shown with the same text as the value (`0.167 p` for 2 pt, see [`shown_alike`]) moves on
+/// to the next.
+pub(super) fn step_through(v: f64, size: f64, n: f64, stops: &[f64], same: impl Fn(f64, f64) -> bool) -> f64 {
+    let mut v = v;
+    // One call takes at most 1,000 steps.
+    for _ in 0..n.abs().min(1000.0) as u32 {
+        let mut multiple = step_to_multiple(v, size, n.signum());
+        if same(multiple, v) {
+            multiple = step_to_multiple(multiple, size, n.signum());
+        }
+        let ahead = |s: f64| (if n > 0.0 { s > v } else { s < v }) && !same(s, v);
+        let stop = stops.iter().copied().filter(|&s| ahead(s));
+        v = if n > 0.0 { stop.fold(multiple, f64::min) } else { stop.fold(multiple, f64::max) };
+    }
+    v
+}
+
+/// Whether `a` and `b` are within a millionth of `size` of each other.
+#[cfg(test)]
+pub(super) fn within_a_millionth(size: f64) -> impl Fn(f64, f64) -> bool {
+    move |a, b| (a - b).abs() <= size.abs() * 1e-6
+}
+
+/// Whether `show` gives `a` and `b` the same text, for [`step_through`]: the field's ↑/↓ and the
+/// spinner both treat a stop shown as the value as reached.
+pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> bool {
+    move |a, b| show(a) == show(b)
+}
+
 /// ↑/↓ in focused numeric field `resp`, or the mouse wheel turned over it, step the number `buf`
 /// shows (`read` parses it, `show` formats it) per press or wheel notch ([`STEPS`]): a plain step
 /// goes to the next whole number in its direction (5.1 up to 6, down to 5), a Ctrl/Cmd step goes to
 /// the next tenth, and a Shift step adds or takes ten. Steps stop at the field's `bounds` (#3370:
-/// a weight stops at 0, a miter limit at 1). The new value is applied at once, as in
+/// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
+/// ([`step_through`]). The new value is applied at once, as in
 /// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
 /// replaces it. Returns the new number when a step was taken. While the pointer is over the focused
 /// field the wheel is the field's (the panel under it doesn't scroll); an unfocused field leaves the
@@ -147,6 +186,7 @@ fn step_value(
     bounds: &RangeInclusive<f64>,
     (read, show): (impl Fn(&str) -> Option<f64>, impl Fn(f64) -> String),
     step: Option<fn(f64, f64) -> f64>,
+    stops: &[f64],
 ) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
@@ -204,13 +244,14 @@ fn step_value(
             // The field's own steps: ten at once with Shift, one with or without Ctrl/Cmd.
             Some(step) => step(v, if mods == egui::Modifiers::SHIFT { 10.0 * n } else { n }),
             None if mods == egui::Modifiers::SHIFT => v + size * n,
+            None if mods == egui::Modifiers::NONE && !stops.is_empty() => step_through(v, size, n, stops, shown_alike(&show)),
             None => step_to_multiple(v, size, n),
         };
         // Each step stops at the bounds, so a step back in the same frame starts from there.
         v = within(v, bounds);
     }
-    // Rounded as fields show it, within the field's bounds.
-    let v = within(round_to(v, STEP_DECIMALS), bounds);
+    // Rounded as fields show it, within the field's bounds; a stop keeps its places (0.0156 in).
+    let v = within(if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }, bounds);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
     select_all(ui, resp.id, buf);
@@ -240,7 +281,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY)
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[])
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -317,7 +358,8 @@ pub fn mixed_field_named(
 }
 
 /// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
-/// when it is given (see [`SliderValue::step`]).
+/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
+/// takes the keyboard focus with its value selected.
 #[allow(clippy::too_many_arguments)]
 fn bounded_field(
     ui: &mut Ui,
@@ -331,6 +373,7 @@ fn bounded_field(
     bounds: &RangeInclusive<f64>,
     step: Option<fn(f64, f64) -> f64>,
 ) -> Option<f64> {
+    let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let show = |value: f64| field_text(value, suffix, decimals);
     // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
@@ -342,12 +385,19 @@ fn bounded_field(
     };
     let shown = value.map(show).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
+    if armed {
+        focus_field(ui, id, &shown);
+    }
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    if armed {
+        // A field armed while it has focus keeps the text typed into it: select all of that text.
+        select_all(ui, id, &buf);
+    }
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step at the field's precision (a count ignores Ctrl/Cmd's tenth); a drag on
     // its label scrubs it.
     let decimals = decimals.min(6) as i32;
-    let stepped = step_value(ui, &resp, &mut buf, bounds, (read, show), step).map(|v| round_to(v, decimals));
+    let stepped = step_value(ui, &resp, &mut buf, bounds, (read, show), step, &[]).map(|v| round_to(v, decimals));
     let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals, bounds);
     if commit && buf != shown { read(&buf) } else { stepped.or(scrubbed).filter(|&v| Some(v) != value) }
 }
@@ -411,6 +461,28 @@ pub fn spin_field_named(
     spin_field_auto_named(ui, id, name, value, None, unit, width, step, min, presets).and_then(SpinPick::value)
 }
 
+/// [`spin_field_named`] whose plain steps (the spinner, ↑/↓ and the wheel without a modifier) also
+/// stop at each of its presets ([`step_through`]), for the Stroke Weight: by 1 pt with presets at
+/// 0.25, 0.5 and 0.75 pt, 0.52 pt goes down to 0.5 pt and up to 0.75 pt.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_field_stops_named(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    name: Option<&str>,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    step: f64,
+    min: f64,
+    presets: &[f64],
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    spin_generic(ui, label, value, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets)
+    })
+    .and_then(SpinPick::value)
+}
+
 /// What a [`spin_field_auto`] returns: a value (points), or its Auto entry.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SpinPick {
@@ -460,8 +532,8 @@ pub fn spin_field_auto_named(
     presets: &[f64],
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
-    spin_generic(ui, label, value, auto, width, step, min, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY)
+    spin_generic(ui, label, value, auto, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[])
     })
 }
 
@@ -499,7 +571,7 @@ pub fn spin_plain_named(
     let label = take_previous_label(ui);
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, width, step, min, presets, &fmt, &mut |ui, fw, label| {
+    spin_generic(ui, label, value, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None)
     })
     .and_then(SpinPick::value)
@@ -517,6 +589,7 @@ fn spin_generic(
     step: f64,
     min: f64,
     presets: &[f64],
+    stops: &[f64],
     fmt: &dyn Fn(f64) -> String,
     field: &mut SpinField<'_>,
 ) -> Option<SpinPick> {
@@ -553,7 +626,7 @@ fn spin_generic(
             && let Some(v) = value
         {
             let modifiers = ui.input(|i| i.modifiers);
-            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers)));
+            out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
         if let Some(v) = field(ui, fw, label) {
@@ -581,11 +654,31 @@ fn spin_generic(
 }
 
 /// Spinner buttons follow the same modifier sizes as ↑/↓ in a focused number field:
-/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step.
-pub(super) fn spinner_step(value: f64, step: f64, min: f64, up: bool, modifiers: egui::Modifiers) -> f64 {
-    let multiplier = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).map_or(1.0, |(_, factor)| *factor);
-    let delta = step * multiplier;
-    (value + if up { delta } else { -delta }).max(min)
+/// Shift ×10, Ctrl/Cmd ÷10, otherwise the caller's normal step, which also stops at each of
+/// `stops` ([`step_through`]). A stop that `show` writes with the same text as the value counts as
+/// reached, as in the field. As with ↑/↓, a plain or Ctrl/Cmd step goes to the next multiple of its
+/// size ([`step_to_multiple`]), a Shift step adds or takes ten steps, and the result is rounded to
+/// [`STEP_DECIMALS`] places (#4490); a stop keeps its places.
+pub(super) fn spinner_step(
+    value: f64,
+    step: f64,
+    min: f64,
+    up: bool,
+    modifiers: egui::Modifiers,
+    stops: &[f64],
+    show: &dyn Fn(f64) -> String,
+) -> f64 {
+    let (mods, multiplier) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)).copied().unwrap_or((egui::Modifiers::NONE, 1.0));
+    let size = step * multiplier;
+    let n = if up { 1.0 } else { -1.0 };
+    let v = if mods == egui::Modifiers::SHIFT {
+        value + size * n
+    } else if mods == egui::Modifiers::NONE && !stops.is_empty() {
+        step_through(value, size, n, stops, shown_alike(show))
+    } else {
+        step_to_multiple(value, size, n)
+    };
+    (if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }).max(min)
 }
 
 /// A number field that may be empty (Stroke dash/gap): `value` (points) shows in `unit` without
@@ -628,6 +721,7 @@ pub fn opt_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
                 egui::TextEdit::singleline(&mut buf)
                     .id(id)
                     .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
                     .desired_width(width - 10.0)
                     .font(egui::FontId::proportional(12.5))
                     .text_color(if enabled { t.text_strong } else { t.text_disabled }),
@@ -645,6 +739,7 @@ pub fn opt_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
         &lengths,
         (|b: &str| Some(unit.from_pt(unit.parse(&decimal_point(b))?)), |v| unit.number(unit.to_pt(v))),
         None,
+        &[],
     );
     let scrubbed = scrub::field(ui, id, framed.response.rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &lengths);
     let focused = ui.memory(|m| m.has_focus(id));

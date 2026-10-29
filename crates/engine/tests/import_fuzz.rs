@@ -872,9 +872,15 @@ proptest! {
             read = Some(r.as_ref().map(|d| d.layers.iter().any(|l| l.children().is_some_and(|c| !c.is_empty()))).map_err(ToString::to_string));
             r.ok()
         })?;
+        // A function written in the page's resources goes by the page's object (#4366).
+        let why = if function == "spaces past the cap" {
+            "a stream in it (object 3) would decode to more than 256 MB"
+        } else {
+            "a stream in it (object 3) has decode parameters that can't be applied"
+        };
         match read.expect("the import ran") {
             Ok(art) => prop_assert!(!refused && art, "{what}: opened (its art read: {art})"),
-            Err(e) => prop_assert!(refused && e.contains("would decode to more than 256 MB"), "{what}: {e}"),
+            Err(e) => prop_assert!(refused && e.contains(why), "{what}: {e}"),
         }
     }
 }
@@ -1148,9 +1154,14 @@ fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
         let lib = r["id"].clone();
         let Ok(got) = no_panic(s.execute("library.get", &json!({"library": lib}))) else { return };
         let _ = no_panic(s.execute("select.all", &json!({})));
-        for (list, kind, key) in
-            [("graphics", "graphic", "id"), ("colors", "fillColor", "name"), ("charStyles", "charStyle", "name"), ("paraStyles", "paraStyle", "name")]
-        {
+        for (list, kind, key) in [
+            ("graphics", "graphic", "id"),
+            ("colors", "fillColor", "name"),
+            ("gradients", "fillGradient", "name"),
+            ("patterns", "fillPattern", "name"),
+            ("charStyles", "charStyle", "name"),
+            ("paraStyles", "paraStyle", "name"),
+        ] {
             if let Some(item) = got[list].get(0) {
                 let _ = no_panic(s.execute("library.use", &json!({"library": lib, "kind": kind, "item": item[key]})));
                 let to = json!({"library": lib, "kind": kind, "item": item[key], "group": got["groups"][0]["name"]});
@@ -1172,8 +1183,8 @@ fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
     })
 }
 
-/// A Libraries panel library of the rich document's first object (a graphic), a colour, its
-/// type's character and paragraph styles and a group, exported, made once.
+/// A Libraries panel library of the rich document's first object (a graphic) and its gradient, a
+/// colour, a pattern, its type's character and paragraph styles and a group, exported, made once.
 fn saved_library() -> String {
     static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEXT.get_or_init(|| {
@@ -1182,6 +1193,11 @@ fn saved_library() -> String {
         let first = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
         let g = s.execute("library.add", &json!({"kind": "graphic", "ids": [first]})).unwrap()["id"].clone();
         s.execute("library.add", &json!({"kind": "fillColor", "color": "#336699"})).unwrap();
+        s.execute("library.add", &json!({"kind": "fillGradient", "ids": [first]})).unwrap();
+        s.execute("select.set", &json!({"ids": [first]})).unwrap();
+        s.execute("object.pattern.make", &json!({"name": "Tiles", "width": 200, "height": 150})).unwrap();
+        s.execute("object.pattern.done", &json!({})).unwrap();
+        s.execute("library.add", &json!({"kind": "fillPattern", "swatch": "Tiles"})).unwrap();
         s.execute("select.all", &json!({})).unwrap();
         for kind in ["charStyle", "paraStyle"] {
             s.execute("library.add", &json!({"kind": kind})).unwrap();
@@ -1697,6 +1713,60 @@ proptest! {
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
             let _ = no_panic(s.execute("file.place.info", &p));
             let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+}
+
+/// PCX files of each layout, 3 × 2 pixels at 150 dpi: 1 bit in two colors, 1 bit in four planes,
+/// 2 bits with CGA palette settings, 4 bits with the header palette, 8 bits with the 256-color palette after the image data,
+/// and 24 bits in three planes, with runs that cross a scan line.
+fn pcx_samples() -> Vec<(&'static str, Vec<u8>)> {
+    let pcx = |bits: u8, planes: u8, line: u16, data: &[u8]| {
+        let mut f = vec![0x0a, 5, 1, bits, 0, 0, 0, 0, 2, 0, 1, 0, 150, 0, 150, 0];
+        f.extend((0..48u8).map(|i| i.wrapping_mul(37)));
+        f.extend([0, planes]);
+        f.extend(line.to_le_bytes());
+        f.extend(1u16.to_le_bytes());
+        f.resize(128, 0);
+        f.extend(data);
+        f
+    };
+    let mut paletted = pcx(8, 1, 4, &[0xc5, 7, 0xc1, 0xff, 1, 2]);
+    paletted.push(0x0c);
+    paletted.extend((0..=255u8).flat_map(|i| [i, 255 - i, i / 2]));
+    vec![
+        ("a.pcx", pcx(1, 1, 2, &[0xa0, 0, 0x40, 0])),
+        ("b.pcx", pcx(1, 4, 2, &[0xc8, 0xe0, 0x20, 0, 0x60, 0, 0xc4, 0x80])),
+        ("c.pcx", pcx(2, 1, 2, &[0x1b, 0, 0xc2, 0xe4])),
+        ("d.pcx", pcx(4, 1, 2, &[0xf1, 0x70, 0x23, 0x40])),
+        ("e.pcx", paletted),
+        ("f.pcx", pcx(8, 3, 4, &[0xc9, 200, 0xcf, 40])),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated PCX files (header fields, run-length bytes and the palette after the image data)
+    /// never crash placing, opening or pasting them.
+    #[test]
+    fn mutated_pcx_files_place_without_panics(which in 0usize..6, cut in 0usize..960, edits in prop::collection::vec((0usize..960, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = pcx_samples().swap_remove(which);
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at) {
+                *x = b;
+            }
+        }
+        bytes.truncate(cut.max(4));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place.info", &p));
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})));
             let _ = no_panic(s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})));
         });
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
@@ -3752,24 +3822,52 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
     };
     let spaces = calculator(&spaces_past_the_cap(), "");
     let program = deflated(b"{ dup 1 exch sub 0 }");
+    // The message names the stream, so a report of a file that can't be shared says which (#4366).
+    let (parameters, cap) = ("has decode parameters that can't be applied", "would decode to more than 256 MB");
     let files = [
-        ("a form with Columns 0", form(zero, "0 0 5 5 re f")),
-        ("a form with a huge Columns", form(huge, "0 0 5 5 re f")),
-        ("an inline image with Columns 0", deep_pdf(&inline("<< /Predictor 2 /Columns 0 >>"), "<< >>")),
-        ("an inline image with a huge Columns", deep_pdf(&inline("<< /Predictor 15 /Columns 99999999999 >>"), "<< >>")),
-        ("an inline image in a compressed form", form("", &inline("<< /Predictor 2 /Columns 0 >>"))),
-        ("an object stream with Columns 0", pdf_with_object_stream("[0 0 100 100]", zero)),
-        ("a form of spaces past the cap", pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed_as_is(FORM, &spaces_past_the_cap())])),
-        ("a function of spaces past the cap in an array", held(format!("[{spaces}]"))),
-        ("a function of spaces past the cap in a dictionary", held(format!("<< /K {spaces} >>"))),
-        ("a function of spaces past the cap in a shading", shaded(&spaces)),
-        ("a function with Columns 0 in an array", held(format!("[{}]", calculator(&program, "/DecodeParms [null << /Predictor 2 /Columns 0 >>]")))),
+        ("a form with Columns 0", form(zero, "0 0 5 5 re f"), format!("a form in it (object 5) {parameters}")),
+        ("a form with a huge Columns", form(huge, "0 0 5 5 re f"), format!("a form in it (object 5) {parameters}")),
+        (
+            "an inline image with Columns 0",
+            deep_pdf(&inline("<< /Predictor 2 /Columns 0 >>"), "<< >>"),
+            format!("an inline image in the content of object 4 {parameters}"),
+        ),
+        (
+            "an inline image with a huge Columns",
+            deep_pdf(&inline("<< /Predictor 15 /Columns 99999999999 >>"), "<< >>"),
+            format!("an inline image in the content of object 4 {parameters}"),
+        ),
+        (
+            "an inline image in a compressed form",
+            form("", &inline("<< /Predictor 2 /Columns 0 >>")),
+            format!("an inline image in the content of object 5 {parameters}"),
+        ),
+        // Read as the file opens, before its objects can be looked at one by one.
+        (
+            "an object stream with Columns 0",
+            pdf_with_object_stream("[0 0 100 100]", zero),
+            format!("a stream in it {cap}, or its decode parameters can't be applied"),
+        ),
+        (
+            "a form of spaces past the cap",
+            pdf_with("/F Do", "<< /XObject << /F 5 0 R >> >>", &[packed_as_is(FORM, &spaces_past_the_cap())]),
+            format!("a form in it (object 5) {cap}"),
+        ),
+        // A function written inside object 5 goes by it.
+        ("a function of spaces past the cap in an array", held(format!("[{spaces}]")), format!("a stream in it (object 5) {cap}")),
+        ("a function of spaces past the cap in a dictionary", held(format!("<< /K {spaces} >>")), format!("a stream in it (object 5) {cap}")),
+        ("a function of spaces past the cap in a shading", shaded(&spaces), format!("a stream in it (object 5) {cap}")),
+        (
+            "a function with Columns 0 in an array",
+            held(format!("[{}]", calculator(&program, "/DecodeParms [null << /Predictor 2 /Columns 0 >>]"))),
+            format!("a stream in it (object 5) {parameters}"),
+        ),
     ];
     on_a_small_stack(move || {
-        for (what, bytes) in &files {
+        for (what, bytes, why) in &files {
             for name in ["hostile.pdf", "hostile.ai"] {
                 let e = vectorcraft_engine::cmd::fileio::load(name, bytes).err().map(|e| e.to_string());
-                assert!(e.as_deref().is_some_and(|e| e.contains("would decode to more than 256 MB")), "{what} as {name}: {e:?}");
+                assert!(e.as_deref().is_some_and(|e| e.contains(why.as_str())), "{what} as {name}: {e:?}");
             }
         }
     });
@@ -3779,6 +3877,112 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
     for bytes in [form(fine, "0 0 5 5 re f"), deep_pdf(&inline("<< /Predictor 1 >>"), "<< >>"), held(format!("[{function}]")), shaded(&function)] {
         vectorcraft_engine::cmd::fileio::load("fine.pdf", &bytes).expect("opens");
     }
+}
+
+/// A page drawing a thousand times one form that decodes to 64 MiB (of spaces, then a square):
+/// each drawing reads the form again, so the import stops at the page's form content instead of
+/// decoding 64 GB (#3569, which hung).
+#[test]
+fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
+    use std::io::Write as _;
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    for _ in 0..64 {
+        e.write_all(&[b' '; 1 << 20]).unwrap();
+    }
+    e.write_all(b"0 0 5 5 re f").unwrap();
+    let form = packed_as_is(FORM, &e.finish().unwrap());
+    let bytes = pdf_with(&"/F Do ".repeat(1000), "<< /XObject << /F 5 0 R >> >>", &[form]);
+    let start = std::time::Instant::now();
+    let e = vectorcraft_engine::cmd::fileio::load("repeated.pdf", &bytes).err().map(|e| e.to_string());
+    let took = start.elapsed();
+    assert!(e.as_deref().is_some_and(|e| e.contains("no document was imported")), "{e:?}");
+    assert!(took < std::time::Duration::from_secs(60), "took {took:?}");
+}
+
+// A large file the reader would fail on says which stream (#4366): an image with its size in
+// pixels, a page's content, or the editing data an `.ai` keeps in its first page's `PieceInfo`.
+#[test]
+fn a_stream_past_the_cap_is_named() {
+    let image = "/Type /XObject /Subtype /Image /Width 10 /Height 10 /ColorSpace /DeviceRGB /BitsPerComponent 8";
+    let page = |contents: &str, entries: &str| {
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents {contents} /Resources << /XObject << /Im 5 0 R >> >> {entries} >>")
+            .into_bytes()
+    };
+    let plain = |content: &str| format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1).into_bytes();
+    let pdf = |page: Vec<u8>, more: Vec<Vec<u8>>| {
+        let head = [b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(), b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(), page];
+        pdf_of(&head.into_iter().chain(more).collect::<Vec<_>>())
+    };
+    let spaces = spaces_past_the_cap();
+    let editing = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 6 0 R /NumBlock 1 >> >> >>";
+    let files = [
+        (
+            "an image",
+            pdf(page("4 0 R", ""), vec![plain("q 10 0 0 10 0 0 cm /Im Do Q"), packed_as_is(image, &spaces)]),
+            "an image of 10 × 10 px in it (object 5) would decode to more than 256 MB",
+        ),
+        (
+            "a page's content",
+            pdf(page("4 0 R", ""), vec![packed_as_is("", &spaces), packed(image, "\0\0\0")]),
+            "a page's content in it (object 4) would decode to more than 256 MB",
+        ),
+        (
+            "a page's content in an array",
+            pdf(page("[4 0 R]", ""), vec![packed_as_is("", &spaces), packed(image, "\0\0\0")]),
+            "a page's content in it (object 4) would decode to more than 256 MB",
+        ),
+        (
+            "a page's content in an array of its own",
+            pdf(page("6 0 R", ""), vec![packed_as_is("", &spaces), packed(image, "\0\0\0"), b"[4 0 R]".to_vec()]),
+            "a page's content in it (object 4) would decode to more than 256 MB",
+        ),
+        (
+            "the editing data",
+            pdf(page("4 0 R", editing), vec![plain("0 0 5 5 re f"), packed(image, "\0\0\0"), packed_as_is("", &spaces)]),
+            "its editing data (object 6) would decode to more than 256 MB",
+        ),
+    ];
+    on_a_small_stack(move || {
+        for (what, bytes, why) in &files {
+            for name in ["large.pdf", "large.ai"] {
+                let e = vectorcraft_engine::cmd::fileio::load(name, bytes).err().map(|e| e.to_string());
+                assert!(e.as_deref().is_some_and(|e| e.contains(why)), "{what} as {name}: {e:?}");
+            }
+        }
+    });
+}
+
+// Pages that share one `Contents` array, the array an object of its own: its stream is named as
+// a page's content, and a refused stream elsewhere is still found past the pages (#4612 review).
+#[test]
+fn pages_sharing_a_contents_array_name_its_stream() {
+    let image = "/Type /XObject /Subtype /Image /Width 10 /Height 10 /ColorSpace /DeviceRGB /BitsPerComponent 8";
+    let plain = |content: &str| format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1).into_bytes();
+    let spaces = spaces_past_the_cap();
+    // 1 catalog, 2 pages, 3 the shared array, 4 its stream, 5 to 7 the pages, 8 an image they draw.
+    let pdf = |content: Vec<u8>, image: Vec<u8>| {
+        let page = b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 3 0 R /Resources << /XObject << /Im 8 0 R >> >> >>";
+        let head = [
+            b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+            b"<< /Type /Pages /Kids [5 0 R 6 0 R 7 0 R] /Count 3 >>".to_vec(),
+            b"[4 0 R]".to_vec(),
+            content,
+        ];
+        pdf_of(&head.into_iter().chain([page.to_vec(), page.to_vec(), page.to_vec(), image]).collect::<Vec<_>>())
+    };
+    let files = [
+        (pdf(packed_as_is("", &spaces), packed(image, "\0\0\0")), "a page's content in it (object 4) would decode to more than 256 MB"),
+        (
+            pdf(plain("q 10 0 0 10 0 0 cm /Im Do Q"), packed_as_is(image, &spaces)),
+            "an image of 10 × 10 px in it (object 8) would decode to more than 256 MB",
+        ),
+    ];
+    on_a_small_stack(move || {
+        for (bytes, why) in &files {
+            let e = vectorcraft_engine::cmd::fileio::load("shared.pdf", bytes).err().map(|e| e.to_string());
+            assert!(e.as_deref().is_some_and(|e| e.contains(why)), "{why}: {e:?}");
+        }
+    });
 }
 
 #[test]

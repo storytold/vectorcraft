@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Arc, Clipboard, Color, CommandInfo, DocState, Document, DrawMode, EngineError, GradientPaint, Journal, NodeKind, PaintDefaults, Prefs, Result,
+    Session, ViewInfo, cmd, command_specs, file_access,
+};
 
 impl Session {
     /// A session with no document open, the default preferences and the Selection tool. It also
@@ -41,6 +44,7 @@ impl Session {
             menu: Default::default(),
             gradient_stop: None,
             active_appearance_item: None,
+            eyedropper_sample: None,
             last_solid: Color::WHITE,
             last_gradient: GradientPaint::new(Default::default()),
             recent_colors: vec![],
@@ -56,6 +60,7 @@ impl Session {
             plugin_dir: None,
             plugin_output: None,
             recent_urls: vec![],
+            trace_preset_changes: Default::default(),
             ui_language: None,
             journal_note: Default::default(),
             note_depth: 1,
@@ -65,6 +70,7 @@ impl Session {
             batch_steps: None,
             place_hand_off: None,
             queue_hand_off: None,
+            trace_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,

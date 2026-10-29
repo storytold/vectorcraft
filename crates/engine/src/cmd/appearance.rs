@@ -19,6 +19,8 @@
 //! shape that a Convert to Shape or Outline Object effect on them gives them, below or above the
 //! image as its Contents row says; new ones go right below that row.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::appearance::SharedStack;
@@ -28,8 +30,11 @@ use vectorcraft_geom::Rect;
 use super::edit::{outermost, selected_roots};
 use super::opacitymask::percent;
 use super::paint::paint_from;
-use super::*;
 use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
+use super::{
+    CommandSpec, NodeId, Result, Session, bad, check_numbers, check_switches, cmd, has_doc, has_selection, id_param, ids_param, index, leaf_targets,
+    ok, paint_targets, str_param, switch_or, targets,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -120,7 +125,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead; `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
             has_doc,
             copy_from
         ),
@@ -841,15 +846,27 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => outermost(&s.doc()?.doc, v),
         None => selected_roots(s)?,
     };
-    // Reversed, the first selected object's attributes go onto the clicked object.
-    let (src_id, mut targets) = if reverse {
-        let first = leaf_targets(s, &selected)?.into_iter().next().ok_or_else(|| bad(C, "select the object to copy from"))?;
-        (first, leaf_targets(s, &[clicked])?)
+    // Reversed, the first selected object's attributes go onto the clicked object; with nothing
+    // selected, what the Eyedropper picked up last does (#4382).
+    let (source, mut targets) = if reverse {
+        let source = match leaf_targets(s, &selected)?.into_iter().next() {
+            Some(first) => Some(first),
+            None if s.eyedropper_sample.is_some() => None,
+            None => return Err(bad(C, "select the object to copy from")),
+        };
+        (source, leaf_targets(s, &[clicked])?)
     } else {
-        (clicked, leaf_targets(s, &selected)?)
+        (Some(clicked), leaf_targets(s, &selected)?)
     };
-    targets.retain(|id| *id != src_id);
-    let picked = Picked::of(s.doc()?.doc.node(src_id).ok_or(EngineError::NoNode(src_id))?);
+    targets.retain(|id| Some(*id) != source);
+    let node = match source {
+        Some(id) => Arc::new(s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.clone()),
+        None => s.eyedropper_sample.clone().ok_or_else(|| bad(C, "select the object to copy from"))?,
+    };
+    let picked = Picked::of(&node);
+    if !reverse {
+        s.eyedropper_sample = Some(node);
+    }
     let range = range.filter(|(id, _, _)| targets.contains(id));
     // Character styles cannot represent object transparency. Refuse before even changing
     // paint defaults; applying it to the object would also alter the unselected characters.

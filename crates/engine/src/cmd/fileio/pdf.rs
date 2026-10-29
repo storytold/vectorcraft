@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, FormatOption, write_or_return};
 use crate::EngineError;
 

@@ -1,3 +1,5 @@
+#[cfg(not(target_arch = "wasm32"))]
+use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::cache::Catalog;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
@@ -8,7 +10,10 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits};
-use super::*;
+use super::{
+    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
+    Ordering, Size,
+};
 
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's

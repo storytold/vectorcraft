@@ -4,7 +4,7 @@ members = ["crates/*", "apps/*", "xtask"]
 default-members = ["crates/*", "apps/vectorcraft", "apps/vectorcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -116,6 +116,9 @@ webbrowser = "1"
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+wildcard_imports = "deny"
 dbg_macro = "warn"
 # VectorCraft never crashes: shipped code returns `Result`/`Option` instead of panicking (see
 # AGENTS.md › Robustness). Tests may unwrap (clippy.toml).

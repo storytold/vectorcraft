@@ -57,6 +57,7 @@
 	Check Script	Periksa skrip
 	Other Script…	Skrip lain…
 	Document Setup…	Pengaturan dokumen…
+	Switch Units	Ganti satuan
 	Document Color Mode	Mode warna dokumen
 	CMYK Color	Warna CMYK
 	RGB Color	Warna RGB
@@ -175,6 +176,7 @@
 	Other Layers	Lapisan lain
 	Unlock All	Buka kunci semua
 	Hide	Sembunyikan
+	Unselected Artwork	Karya seni yang tidak dipilih
 	Show All	Tampilkan semua
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
@@ -207,6 +209,7 @@
 	Offset Path…	Jalur ofset…
 	Reverse Path Direction	Balikkan arah jalur
 	Simplify…	Sederhanakan…
+	Smooth…	Haluskan…
 	Add Anchor Points	Tambahkan titik jangkar
 	Remove Anchor Points	Hapus titik jangkar
 	Divide Objects Below	Bagi objek di bawah
@@ -256,6 +259,7 @@
 	Clipping Mask	Masker kliping
 	Edit Clipping Path	Edit jalur kliping
 	Compound Path	Jalur majemuk
+	Compound Shape	Bentuk majemuk
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
@@ -373,6 +377,11 @@
 	Fill Color	Warna isian
 	Opacity	Opasitas
 	Stroke Color	Warna stroke
+	Fill Gradient	Gradien isian
+	Stroke Gradient	Gradien stroke
+	Fill Pattern	Pola isian
+	Stroke Pattern	Pola stroke
+	Patterns	Pola
 	Stroke Weight	Ketebalan stroke
 	Graphic Style	Gaya grafis
 	Symbol Instance	Instans simbol
@@ -570,6 +579,8 @@
 	Saved View 25	Tampilan tersimpan 25
 	Window	Jendela
 	New Window	Jendela baru
+	Next Document	Dokumen berikutnya
+	Previous Document	Dokumen sebelumnya
 	Cascade	Bertingkat
 	Tile	Ubin
 	Float in Window	Mengambang di jendela
@@ -755,6 +766,7 @@
 	Shaper	Shaper
 	Expand Shaper Group	Perluas grup Shaper
 	Release Shaper Group	Lepaskan grup Shaper
+	Remove from Shaper Group	Hapus dari grup Shaper
 	Select Shaper Face	Seleksi sisi Shaper
 	Constrain	Batasi
 	Free Transform	Transformasi bebas
@@ -1493,6 +1505,12 @@ lighting	Light	Cahaya
 	Document Library	Pustaka dokumen
 	Library:	Pustaka:
 	Tracing Presets	Preset penelusuran
+	Manage Presets	Kelola preset
+	Save as New Preset…	Simpan sebagai preset baru…
+	Rename…	Ganti nama…
+	Rename Preset	Ganti nama preset
+	Save Image Trace Preset	Simpan preset telusur gambar
+	Delete Image Trace Preset	Hapus preset telusur gambar
 	Method:	Metode:
 	Mode:	Mode:
 	Noise	Derau
@@ -1620,13 +1638,13 @@ lighting	Light	Cahaya
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
 	Single-line Composer	Komposer satu baris
+	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
 	Top-to-Top Leading	Leading dari atas ke atas
 	Bottom-to-Bottom Leading	Leading dari bawah ke bawah
 	Burasagari	Burasagari
 	Force	Paksa
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Perluas berlaku untuk bentuk majemuk (Alt+klik mode bentuk) — masih dalam roadmap
 	Expand Compound Shape	Perluas bentuk majemuk
 	Make Compound Shape	Buat bentuk majemuk
 	Pathfinder Options…	Opsi Pathfinder…
@@ -1886,6 +1904,10 @@ lighting	Light	Cahaya
 	Outer Corner Tile	Ubin sudut luar
 	Side Tile	Ubin sisi
 	Inner Corner Tile	Ubin sudut dalam
+	Auto-Centered	Otomatis-tengah
+	Auto-Between	Otomatis-antara
+	Auto-Sliced	Otomatis-iris
+	Auto-Overlap	Otomatis-tumpang
 	Start Tile	Ubin awal
 	End Tile	Ubin akhir
 	Fit	Pas
@@ -2144,6 +2166,8 @@ lighting	Light	Cahaya
 	Locate Selected Objects	Temukan objek terpilih
 	Thumbnails:	Miniatur:
 	Anchor Points	Titik jangkar
+	"In" Control Points	Titik kontrol "masuk"
+	"Out" Control Points	Titik kontrol "keluar"
 	Brush Affects:	Kuas memengaruhi:
 	Complexity:	Kompleksitas:
 	Detail:	Detail:
@@ -3701,6 +3725,7 @@ font-technology	Variable	Variabel
 	Default Fill and Stroke (D)	Isi dan goresan default (D)
 	Fill (X), double-click for the Color Picker	Isi (X), klik ganda untuk pemilih warna
 	Opacity:	Opasitas:
+	Shape Mode	Mode bentuk
 	Shape Modes:	Mode bentuk:
 	Stroke (X), double-click for the Color Picker	Goresan (X), klik ganda untuk pemilih warna
 	Stroke:	Goresan:
@@ -3749,7 +3774,9 @@ font-technology	Variable	Variabel
 	Mojikumi	Mojikumi
 	N pt per	N pt per
 	New Character Style	Gaya karakter baru
+	New Character Style…	Gaya karakter baru…
 	New Paragraph Style	Gaya paragraf baru
+	New Paragraph Style…	Gaya paragraf baru…
 	Paragraph Style Options	Opsi gaya paragraf
 	Redefine Character Style	Definisikan ulang gaya karakter
 	Redefine Paragraph Style	Definisikan ulang gaya paragraf
@@ -4086,6 +4113,7 @@ imageTrace	Outline	Kontur
 @msg	missing `id` (see plugin.list)	`id` tidak ada (lihat plugin.list)
 @msg	missing `name`	`name` tidak ada
 @msg	missing `tool`	`tool` tidak ada
+@msg	missing id	id tidak ada
 @msg	missing index	indeks tidak ada
 @msg	missing number `{key}`	angka `{key}` tidak ada
 @msg	missing integer `{key}`	bilangan bulat `{key}` tidak ada
@@ -4117,6 +4145,7 @@ imageTrace	Outline	Kontur
 @msg	no current layer	tidak ada lapisan saat ini
 @msg	no data	tidak ada data
 @msg	no dialog open	tidak ada dialog yang terbuka
+@msg	the open dialog has no Reset	dialog yang terbuka tidak memiliki tombol Atur ulang
 @msg	no document	tidak ada dokumen
 @msg	no document open	tidak ada dokumen yang terbuka
 @msg	no effect applied yet	belum ada efek yang diterapkan
@@ -4190,8 +4219,10 @@ imageTrace	Outline	Kontur
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
+@msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu
 @msg	nothing encoded	tidak ada yang dikodekan
 @msg	nothing selected	tidak ada yang dipilih
+@msg	nothing selected is in a group	tidak ada yang dipilih yang berada dalam grup
 @msg	nothing to align	tidak ada yang dapat disejajarkan
 @msg	nothing to distort	tidak ada yang dapat didistorsi
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	tidak ada yang dapat diekspor: dokumen tidak memiliki karya seni yang terlihat (atau aktifkan Gunakan Artboard)
@@ -4257,6 +4288,7 @@ imageTrace	Outline	Kontur
 @msg	select an object in perspective	pilih objek dalam perspektif
 @msg	select artwork (or a colour group) to recolor	pilih karya seni (atau grup warna) untuk diwarnai ulang
 @msg	select at least two objects	pilih setidaknya dua objek
+@msg	exit isolation mode first	keluar dari mode isolasi terlebih dahulu
 @msg	select objects, not layers	pilih objek, bukan lapisan
 @msg	select one path, or give its `id`	pilih satu jalur, atau berikan `id`-nya
 @msg	select paths to join	pilih jalur yang akan digabungkan
@@ -4307,10 +4339,14 @@ imageTrace	Outline	Kontur
 @msg	the layer or group is locked	lapisan atau grup terkunci
 @msg	the guide is on a hidden or locked layer	panduan berada di lapisan yang tersembunyi atau terkunci
 @msg	the target layer is locked or hidden	lapisan target terkunci atau tersembunyi
+@msg	the object is hidden or locked	objek tersembunyi atau terkunci
+@msg	the object is outside the isolated group	objek berada di luar grup yang diisolasi
+@msg	type objects can't be isolated	objek teks tidak dapat diisolasi
 @msg	the layer to flatten into is hidden	lapisan tujuan perataan tersembunyi
 @msg	the object already has an opacity mask	objek sudah memiliki masker opasitas
 @msg	the object has no geometry	objek tidak memiliki geometri
 @msg	the object has no opacity mask	objek tidak memiliki masker opasitas
+@msg	stop editing the opacity mask first	hentikan pengeditan masker opasitas terlebih dahulu
 @msg	the object has no stroke	objek tidak memiliki goresan
 @msg	the object is beyond the plane's horizon	objek berada di luar horizon bidang
 @msg	the object isn't in perspective	objek tidak dalam perspektif
@@ -5032,8 +5068,11 @@ mark-style	Japanese	Jepang
 	This system has no screen color sampler	Sistem ini tidak memiliki pengambil warna layar
 	Color blindness – Tritanopia-type	Buta warna – tipe Tritanopia
 	Panels Except Tools and Control	Semua panel kecuali Alat dan Kontrol
-	Reset Tracking and Kerning	Atur ulang pelacakan dan kerning
+	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
+	Highlight Font Name	Sorot nama font
+	Highlight Kerning	Sorot kerning
+	Highlight Tracking	Sorot tracking
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
@@ -5184,6 +5223,7 @@ swatch	Bright Violet	Violet cerah
 	Show Original Path	Tampilkan jalur asli
 	Open this dialog with these settings next time	Buka dialog ini dengan pengaturan ini lain kali
 	Auto-Simplify	Sederhanakan otomatis
+	Auto-Smooth	Haluskan otomatis
 @msg	check a layer to export	centang lapisan yang akan diekspor
 @msg	select the art to export first	pilih dulu karya yang akan diekspor
 @msg	no saved selection recalled	tidak ada seleksi tersimpan yang dipanggil
@@ -5369,7 +5409,7 @@ swatch	Bright Violet	Violet cerah
 	Word Spacing:	Spasi Kata:
 	Letter Spacing:	Spasi Huruf:
 	Glyph Scaling:	Penskalaan Glif:
-	Auto Leading:	Spasi Baris Otomatis:
+	Auto Leading:	Leading otomatis:
 	Single Word Justification:	Perataan Kata Tunggal:
 	Full Justify	Rata Penuh
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum.
@@ -5544,4 +5584,17 @@ axis	Y Axis	Sumbu Y
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Perluas tampilan terlebih dahulu (Objek › Perluas tampilan)
 	Live preview	Pratinjau langsung
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Teks titik
+	Area Text	Teks area
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
+	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif
+	Snap to Glyph Options	Opsi snap ke glif
+	x-height	Tinggi-x
+	Glyph Bounds	Batas glif
+	Proximity Guides	Panduan kedekatan
+	Angular Guides	Panduan sudut

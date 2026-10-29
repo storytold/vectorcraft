@@ -1,6 +1,6 @@
 use super::edit::{regenerate, spec_of, target};
 use super::series::{switch_xy, transpose};
-use super::*;
+use super::{Document, EngineError, GraphKind, GraphSpec, NodeId, Result, Session, Value, bad, bool_or, json, str_param};
 
 // ---------- data ----------
 

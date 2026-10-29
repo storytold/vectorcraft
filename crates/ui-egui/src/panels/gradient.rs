@@ -9,6 +9,8 @@
 //! recolours the stop it lands on; a global or spot colour (or a tint of one) stays linked, so
 //! editing the swatch recolours the stop. The thumbnail menu marks the gradient swatch the
 //! gradient was applied from. Hide Options leaves the thumbnail, the proxy and the slider.
+//! Cmd/Ctrl-click on the thumbnail (the Gradient Fill box) or on the Tools panel's Gradient
+//! button resets the active proxy's gradient to the linear White, Black gradient.
 //!
 //! With the Stroke proxy in front, the Stroke buttons lay a linear or radial gradient within the
 //! stroke (placed on the page like a fill's), along it or across it (angle and aspect ratio then
@@ -187,6 +189,16 @@ fn write_stops(app: &mut VectorcraftApp, params: Value, select: Option<usize>, p
     {
         select_stop(app, Some(i));
     }
+}
+
+/// Paint the active proxy with the linear White, Black gradient, as one undo step (a solid or no
+/// paint becomes that gradient). It runs `paint.setFill` or `paint.setStroke`, so characters
+/// selected with the Type tool take it alone and an unpainted stroke gets its 1 pt weight. With
+/// nothing selected it sets the default. Cmd/Ctrl-click on the Gradient Fill box or on the Tools
+/// panel's Gradient button runs it.
+pub(crate) fn reset_to_linear_white_black(app: &mut VectorcraftApp) {
+    let cmd = if app.session.fill_active { "paint.setFill" } else { "paint.setStroke" };
+    app.run(cmd, json!({ "gradient": { "kind": "linear", "stops": stops_json(&Gradient::default().stops) } })).ok();
 }
 
 /// Save the gradient as a swatch; its stops keep their color models.
@@ -444,8 +456,12 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     widgets::gradient_chip(ui, r, g);
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
     let resp = resp.on_hover_text(tl!("Gradient Fill: click to apply, drag onto art"));
-    if resp.clicked() && !is_grad {
-        edit(app, json!({}), Live::Released);
+    if resp.clicked() {
+        if ui.input(|i| i.modifiers.command) {
+            reset_to_linear_white_black(app);
+        } else if !is_grad {
+            edit(app, json!({}), Live::Released);
+        }
     }
     // The dragged copy carries no placement: it fits the art it lands on.
     widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::Gradient(Box::new(g.clone()))));
@@ -568,12 +584,8 @@ fn open_popover(app: &mut VectorcraftApp, i: usize, at: Pos2) {
     app.ui.dialog = Some(Dialog::new("gradientStop", json!({ "index": i, "screen": [at.x, at.y], "tab": "color" })));
 }
 
-/// The gradient slider: ramp, stops below, midpoint diamonds above.
-fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
-    let t = Tokens::get(ui.ctx());
-    let w = ui.available_width();
-    let (area, area_resp) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
-    let bar = Rect::from_min_size(area.min + vec2(8.0, 10.0), vec2(w - 16.0, 18.0));
+/// The ramp's colours over a checkerboard, which shows the opacity.
+fn paint_ramp(ui: &Ui, g: &Gradient, bar: Rect) {
     // Checkerboard under the ramp (opacity).
     let cell = 6.0;
     let mut y = bar.top();
@@ -599,6 +611,42 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
             Rect::from_min_size(pos2(bar.left() + i as f32 * bar.width() / n as f32, bar.top()), vec2(bar.width() / n as f32 + 0.5, bar.height()));
         ui.painter().rect_filled(rr, 0.0, Color32::from_rgba_unmultiplied(r, gg, b, a));
     }
+}
+
+/// A midpoint diamond centred at `c`.
+fn paint_diamond(ui: &Ui, t: &Tokens, c: Pos2, lit: bool) {
+    let pts = vec![c + vec2(0.0, -4.0), c + vec2(4.0, 0.0), c + vec2(0.0, 4.0), c + vec2(-4.0, 0.0)];
+    ui.painter().add(egui::Shape::convex_polygon(pts, if lit { Color32::WHITE } else { t.icon }, Stroke::new(1.0, t.border)));
+}
+
+/// A house-shaped stop marker at `(x, top)`, with a chip of the stop's colour.
+fn paint_stop(ui: &Ui, t: &Tokens, (x, top): (f32, f32), (selected, outline): (bool, Color32), color: &vectorcraft_color::Color) {
+    let body = vec![pos2(x, top), pos2(x + 6.0, top + 5.0), pos2(x + 6.0, top + 15.0), pos2(x - 6.0, top + 15.0), pos2(x - 6.0, top + 5.0)];
+    ui.painter().add(egui::Shape::convex_polygon(body, if selected { t.text_strong } else { t.icon }, Stroke::new(1.0, outline)));
+    let chip = Rect::from_min_size(pos2(x - 4.0, top + 6.0), vec2(8.0, 7.0));
+    ui.painter().rect_filled(chip, 0.0, super::c32(color));
+}
+
+/// The stops after a colour swatch was dropped on the ramp `bar`, and the stop to select.
+fn dropped_swatch(app: &VectorcraftApp, ui: &Ui, g: &Gradient, area_resp: &egui::Response, bar: Rect) -> Option<(Vec<GradientStop>, usize)> {
+    let marker = |o: f32| Rect::from_min_size(pos2(bar.left() + o * bar.width() - 6.0, bar.bottom() + 2.0), vec2(12.0, 16.0));
+    let d = area_resp.dnd_release_payload::<PanelDrag>()?;
+    let c = d.color()?;
+    let p = ui.input(|i| i.pointer.latest_pos())?;
+    let link = match &*d {
+        PanelDrag::Paint { params, .. } => dropped_link(app, params),
+        _ => None,
+    };
+    Some(drop_color(g, g.stops.iter().position(|s| marker(s.offset).contains(p)), x_to_offset(p.x, bar.left(), bar.width()), c, link))
+}
+
+/// The gradient slider: ramp, stops below, midpoint diamonds above.
+fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+    let t = Tokens::get(ui.ctx());
+    let w = ui.available_width();
+    let (area, area_resp) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
+    let bar = Rect::from_min_size(area.min + vec2(8.0, 10.0), vec2(w - 16.0, 18.0));
+    paint_ramp(ui, g, bar);
     // A colour swatch held over the ramp: outline it as a drop target.
     let droppable = is_grad && area_resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| d.color().is_some());
     let edge = if droppable { Stroke::new(2.0, t.accent) } else { Stroke::new(1.0, t.border) };
@@ -616,7 +664,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let origin = if origin.is_empty() { stops.clone() } else { origin };
     // The stop of `origin` other than `i` whose marker is under `p`.
     let stop_under = |p: Pos2, i: usize| origin.iter().enumerate().position(|(j, s)| j != i && marker(s.offset).contains(p));
-    let mut changed: Option<(Vec<GradientStop>, Live)> = None;
+    let mut changed: Option<StopEdit> = None;
     // The stop to select once `changed` is applied.
     let mut select: Option<usize> = None;
     let mut pick_mid: Option<usize> = None;
@@ -645,8 +693,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         let rect = Rect::from_center_size(c, vec2(10.0, 10.0));
         let resp = ui.interact(rect, ui.scope_id().with(("grad-mid", i)), Sense::click_and_drag());
         let lit = drag == Drag::Mid(i) || mid_sel == Some(i) || resp.hovered();
-        let pts = vec![c + vec2(0.0, -4.0), c + vec2(4.0, 0.0), c + vec2(0.0, 4.0), c + vec2(-4.0, 0.0)];
-        ui.painter().add(egui::Shape::convex_polygon(pts, if lit { Color32::WHITE } else { t.icon }, Stroke::new(1.0, t.border)));
+        paint_diamond(ui, &t, c, lit);
         if !is_grad {
             continue;
         }
@@ -683,11 +730,8 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         let off_ramp = |p: Pos2| !copy && p.y > bar.bottom() + REMOVE_DISTANCE && origin.len() > MIN_STOPS;
         let off = dragging_this && resp.interact_pointer_pos().is_some_and(off_ramp);
         let outline = if sel == Some(i) { t.accent } else { t.border };
-        let body = vec![pos2(x, top), pos2(x + 6.0, top + 5.0), pos2(x + 6.0, top + 15.0), pos2(x - 6.0, top + 15.0), pos2(x - 6.0, top + 5.0)];
         if !off {
-            ui.painter().add(egui::Shape::convex_polygon(body, if sel == Some(i) { t.text_strong } else { t.icon }, Stroke::new(1.0, outline)));
-            let chip = Rect::from_min_size(pos2(x - 4.0, top + 6.0), vec2(8.0, 7.0));
-            ui.painter().rect_filled(chip, 0.0, super::c32(&s.color));
+            paint_stop(ui, &t, (x, top), (sel == Some(i), outline), &s.color);
         }
         if !is_grad {
             continue;
@@ -727,20 +771,26 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         }
     }
     // A colour swatch dropped on the ramp.
-    if is_grad
-        && let Some(d) = area_resp.dnd_release_payload::<PanelDrag>()
-        && let Some(c) = d.color()
-        && let Some(p) = ui.input(|i| i.pointer.latest_pos())
-    {
-        let link = match &*d {
-            PanelDrag::Paint { params, .. } => dropped_link(app, params),
-            _ => None,
-        };
-        let (v, i) = drop_color(g, stops.iter().position(|s| marker(s.offset).contains(p)), offset_at(p), c, link);
+    if is_grad && let Some((v, i)) = dropped_swatch(app, ui, g, &area_resp, bar) {
         select = Some(i);
         changed = Some((v, Live::Released));
     }
     set_pstate(ui.ctx(), "grad-drag", drag);
+    apply_ramp_edit(app, ui, sel, (pick_mid, select), changed, popover);
+}
+
+/// New stops and how live the edit is.
+type StopEdit = (Vec<GradientStop>, Live);
+
+/// What the ramp's gestures this frame asked for: the midpoint or stop to select, the new stops, the stop popover.
+fn apply_ramp_edit(
+    app: &mut VectorcraftApp,
+    ui: &Ui,
+    sel: Option<usize>,
+    (pick_mid, select): (Option<usize>, Option<usize>),
+    changed: Option<StopEdit>,
+    popover: Option<(usize, Pos2)>,
+) {
     if let Some(i) = pick_mid {
         set_pstate(ui.ctx(), MID_SELECTED, Some((i, first_id(app))));
         if sel.is_some() {

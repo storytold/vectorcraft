@@ -1,5 +1,8 @@
 use super::raster::ViewCrop;
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, Channels, Cms, DefaultHasher, FillRule, Hash, Hasher, Node, NodeId, NodeKind, PathEl, Point, RasterFx,
+    Rect, Size, Weak, effects,
+};
 
 /// What [`Renderer::raster_fx`] paints effects around.
 pub(super) struct Content<'a> {

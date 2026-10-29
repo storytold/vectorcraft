@@ -169,6 +169,8 @@
 	Anchor Point	Ankarpunkt
 	Anchor Point Tool	Ankarpunktsverktyg
 	Anchor Points	Ankarpunkter
+	"In" Control Points	"In"-kontrollpunkter
+	"Out" Control Points	"Ut"-kontrollpunkter
 	Anchor Points, Handle, and Bounding Box Display	Visning av ankarpunkter, handtag och avgränsningsram
 	Anchor/Path Labels	Etiketter för ankare/banor
 	Anchors:	Ankare:
@@ -550,6 +552,7 @@ font-technology	Variable	Variabla
 	Complexity:	Komplexitet:
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Sammansatta färger konverteras till den; separationer separeras med den när den är en CMYK-profil.
 	Compound Path	Sammansatt bana
+	Compound Shape	Sammansatt form
 	Compress (RLE)	Komprimera (RLE)
 	Compress text and line art	Komprimera text och linjegrafik
 	Compression	Komprimering
@@ -974,7 +977,6 @@ font-technology	Variable	Variabla
 	Exit Isolation Mode	Avsluta isoleringsläge
 	Expand	Expandera
 	Expand Appearance	Expandera utseende
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Expandera gäller för sammansatta former (Alt-klicka på ett formläge) – planerat
 	Expand Brush Strokes	Expandera penseldrag
 	Expand Compound Shape	Expandera sammansatt form
 	Expand Gradient Mesh	Expandera gradientnät
@@ -1491,6 +1493,12 @@ font-technology	Variable	Variabla
 	Image Trace	Bildkalkering
 	Image Tracing	Bildkalkering
 	Tracing Presets	Förinställningar för vektorisering
+	Manage Presets	Hantera förinställningar
+	Save as New Preset…	Spara som ny förinställning…
+	Rename…	Byt namn…
+	Rename Preset	Byt namn på förinställning
+	Save Image Trace Preset	Spara förinställning för bildkalkering
+	Delete Image Trace Preset	Radera förinställning för bildkalkering
 	Image Trace Presets	Förinställningar för bildkalkering
 	Image:	Bild:
 	Images:	Bilder:
@@ -1903,6 +1911,10 @@ font-technology	Variable	Variabla
 	Outer Corner Tile	Yttre hörnplatta
 	Side Tile	Sidoruta
 	Inner Corner Tile	Innerhörnsruta
+	Auto-Centered	Auto-centrerad
+	Auto-Between	Auto-mellan
+	Auto-Sliced	Auto-skuren
+	Auto-Overlap	Auto-överlapp
 	Start Tile	Startruta
 	End Tile	Slutruta
 	Fit	Anpassa
@@ -1951,6 +1963,7 @@ font-technology	Variable	Variabla
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
 	New Character Style	Ny teckenstil
+	New Character Style…	Ny teckenstil…
 	New Color Group	Ny färggrupp
 	New Color Group…	Ny färggrupp…
 	New Document Presets	Förinställningar för nytt dokument
@@ -1966,6 +1979,7 @@ font-technology	Variable	Variabla
 	New Opacity Masks Are Clipping	Nya opacitetsmasker är klippande
 	New Opacity Masks Are Inverted	Nya opacitetsmasker är inverterade
 	New Paragraph Style	Ny styckestil
+	New Paragraph Style…	Ny styckestil…
 	New Pattern Brush from Selection	Ny mönsterpensel från markeringen
 	New PDF Preset	Ny PDF-förinställning
 	New Print Preset	Ny utskriftsförinställning
@@ -1979,6 +1993,8 @@ font-technology	Variable	Variabla
 	New View	Ny vy
 	New View…	Ny vy…
 	New Window	Nytt fönster
+	Next Document	Nästa dokument
+	Previous Document	Föregående dokument
 	New Without Dialog	Ny utan dialogruta
 	New Workspace	Ny arbetslayout
 	New Workspace…	Ny arbetslayout…
@@ -2888,6 +2904,7 @@ font-technology	Variable	Variabla
 	Shape Builder Regions	Formbyggarområden
 	Shape Builder Tool	Formbyggarverktyg
 	Shape Effects	Figureffekter
+	Shape Mode	Formläge
 	Shape Modes:	Formlägen:
 	Shape Properties:	Formegenskaper:
 	Shaper Tool	Formningsverktyg
@@ -2946,6 +2963,7 @@ font-technology	Variable	Variabla
 	Show Original Path	Visa ursprunglig bana
 	Open this dialog with these settings next time	Öppna den här dialogrutan med de här inställningarna nästa gång
 	Auto-Simplify	Förenkla automatiskt
+	Auto-Smooth	Jämna ut automatiskt
 	Show Package	Visa paket
 	Show Panel	Visa panel
 	Show Pattern Swatches	Visa mönsterprover
@@ -2980,6 +2998,7 @@ font-technology	Variable	Variabla
 	Simplify	Förenkla
 	Simplify:	Förenkla:
 	Simplify…	Förenkla…
+	Smooth…	Jämna ut…
 	Simulate Colored Paper	Simulera färgat papper
 	Simulate Paper	Simulera papper
 	Double Column	Dubbel kolumn
@@ -2987,6 +3006,7 @@ font-technology	Variable	Variabla
 	Single Quotes:	Enkla citattecken:
 	Single Right Quotation Mark	Enkelt höger citattecken
 	Single-line Composer	Enradssättare
+	Toggle Line Composer	Växla radsättare
 	Sixth Space	Sjättedelsblanksteg
 	Size	Storlek
 	Size Tile to Art	Anpassa rutans storlek efter grafiken
@@ -3100,6 +3120,11 @@ font-technology	Variable	Variabla
 	Stroke	Kontur
 	Stroke (X), double-click for the Color Picker	Kontur (X), dubbelklicka för färgväljaren
 	Stroke Color	Konturfärg
+	Fill Gradient	Fyllnadsgradient
+	Stroke Gradient	Konturgradient
+	Fill Pattern	Fyllnadsmönster
+	Stroke Pattern	Konturmönster
+	Patterns	Mönster
 	Stroke Options	Konturalternativ
 	Character:	Tecken:
 	Character options	Teckenalternativ
@@ -3156,6 +3181,7 @@ font-technology	Variable	Variabla
 	Swatch Options…	Färgrutealternativ…
 	Swatch Tiles	Rutvy för färgrutor
 	Swatches	Färgrutor
+	Switch Units	Byt enheter
 	Switch workspace	Byt arbetslayout
 	Add Content	Lägg till innehåll
 	Click to apply to the selected type	Klicka för att använda på den markerade texten
@@ -3389,6 +3415,7 @@ font-technology	Variable	Variabla
 	Unlock Guides	Lås upp stödlinjer
 	Unnamed Objects	Namnlösa objekt
 	Unprintable margin:	Ej utskrivbar marginal:
+	Unselected Artwork	Omarkerad grafik
 	Unshift	Utan förskjutning
 	Untitled	Namnlös
 	Update Link	Uppdatera länk
@@ -3716,6 +3743,13 @@ axis	Both	Båda
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
+@msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
+@msg	the selection has no gradient stroke	markeringen har ingen konturgradient
+@msg	the selection has no pattern fill	markeringen har inget fyllnadsmönster
+@msg	the selection has no pattern stroke	markeringen har inget konturmönster
+@msg	no gradient swatch `{name}`	ingen gradientfärgruta `{name}`
+@msg	no pattern swatch `{name}`	ingen mönsterfärgruta `{name}`
+@msg	the library item is damaged	biblioteksobjektet är skadat
 @msg	{_1} has no {_2} style	{_1} har ingen stil {_2}
 @msg	a layer couldn't be read	ett lager kunde inte läsas
 @msg	it has more than one artboard	den har mer än en rityta
@@ -3736,6 +3770,7 @@ axis	Both	Båda
 @msg	its type is to come in as outlines, which only its page has	dess text ska importeras som konturer, vilket bara dess sida har
 @msg	the art on them differs from the page's in {_1}% of it	grafiken på dem skiljer sig från sidans i {_1} % av ytan
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	grafiken på dem skiljer sig från sidans i {_1} % av ytan: de hämtas ändå från dess redigeringsdata
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` står för ändrade inställningar: spara förinställningen med ett annat namn
 @msg	`to` must be "corner" or "smooth"	`to` måste vara "corner" eller "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-filer är RGB eller gråskala: colorModel rgb eller gray
 @msg	Blend colors: select at least three objects with filled colours	Blanda färger: markera minst tre objekt med färgfyllning
@@ -3819,8 +3854,10 @@ axis	Both	Båda
 @msg	`freeform.points` must be an array	`freeform.points` måste vara en array
 @msg	`freeform.lines` must be an array	`freeform.lines` måste vara en array
 @msg	`gradient` must be an object	`gradient` måste vara ett objekt
+@msg	`groupColors` must be an array	`groupColors` måste vara en array
 @msg	`library` is a library id or name (see {list})	`library` är ett biblioteks-id eller biblioteksnamn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gäller för fria gradienter
+@msg	`preserve` must be an object	`preserve` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
@@ -3841,6 +3878,7 @@ axis	Both	Båda
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` måste vara mellan {min} och {max} (fick {x})
 @msg	`{key}` must be one of {_1}	`{key}` måste vara något av {_1}
 @msg	`{key}` must be true or false	`{key}` måste vara true eller false
+@msg	`top` and `below` can't both be true	`top` och `below` kan inte båda vara true
 @msg	`select` must be true or false	`select` måste vara true eller false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` och `maxAnchors` måste vara heltal
 @msg	`{key}` must be a number not below 0	`{key}` måste vara ett tal som inte är under 0
@@ -3853,6 +3891,7 @@ axis	Both	Båda
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` är en processfärg: nyanser gäller för globala färger och dekorfärger
 @msg	`{name}` is no recovery entry name	`{name}` är inget namn på en återställningspost
 @msg	`{name}` isn't a colour swatch	`{name}` är inte en färgruta
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	en processfärg kan inte färglägga en gråskalebild med genomskinlighet: använd en dekorfärg, svart eller vitt
 @msg	`{path}` must be a bool or an object of bools	`{path}` måste vara ett booleskt värde eller ett objekt med booleska värden
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` är inte en färg (#rrggbb eller namnet på en förinställning)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` är inte ett verktyg för Gör flytande
@@ -3898,6 +3937,10 @@ axis	Both	Båda
 @msg	a page tree node has no kids	en nod i sidträdet har inga barn
 @msg	a page's placement is not finite	en sidas placering är inte ändlig
 @msg	a preset named `{_1}` exists	det finns redan en förinställning med namnet `{_1}`
+@msg	`name` is empty	`name` är tomt
+@msg	`newName` is empty	`newName` är tomt
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` är en inbyggd förinställning och kan inte ändras: spara den med ett annat namn
+@msg	`{name}` is a built-in preset and stays	`{name}` är en inbyggd förinställning och kan inte tas bort
 @msg	a swatch or color group named `{n}` exists	det finns redan en färgruta eller färggrupp med namnet `{n}`
 @msg	a slice size must be a positive number of points	en skivstorlek måste vara ett positivt antal punkter
 @msg	a spine keeps at least two points	en ryggrad behåller minst två punkter
@@ -3985,6 +4028,7 @@ axis	Both	Båda
 @msg	missing `id` (see plugin.list)	`id` saknas (se plugin.list)
 @msg	missing `name`	`name` saknas
 @msg	missing `tool`	`tool` saknas
+@msg	missing id	id saknas
 @msg	missing index	index saknas
 @msg	missing number `{key}`	talet `{key}` saknas
 @msg	missing integer `{key}`	heltalet `{key}` saknas
@@ -4017,6 +4061,7 @@ axis	Both	Båda
 @msg	no current layer	inget aktuellt lager
 @msg	no data	inga data
 @msg	no dialog open	ingen dialogruta är öppen
+@msg	the open dialog has no Reset	den öppna dialogrutan har ingen Återställ-knapp
 @msg	no document	inget dokument
 @msg	no document open	inget dokument är öppet
 @msg	no effect applied yet	ingen effekt har använts än
@@ -4050,6 +4095,8 @@ axis	Both	Båda
 @msg	no print service	ingen utskriftstjänst
 @msg	no revert command	inget kommando för att återgå
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	ingen sparad PDF-förinställning med namnet `{name}` (inbyggda förinställningar är skrivskyddade: skapa en ny utifrån dem)
+@msg	no saved preset named `{name}`	ingen sparad förinställning med namnet `{name}`
+@msg	no saved preset named `{name}` to rename	ingen sparad förinställning med namnet `{name}` att byta namn på
 @msg	no saved presets	inga sparade förinställningar
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	ingen sparad utskriftsförinställning med namnet `{name}` ({DEFAULT_PRESET} är skyddad: skapa en ny utifrån den)
 @msg	no saved profiles	inga sparade profiler
@@ -4097,8 +4144,10 @@ axis	Both	Båda
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
+@msg	finish editing the pattern first	slutför redigeringen av mönstret först
 @msg	nothing encoded	inget kodat
 @msg	nothing selected	inget markerat
+@msg	nothing selected is in a group	inget av det markerade ligger i en grupp
 @msg	nothing to align	inget att justera
 @msg	nothing to distort	inget att förvränga
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	inget att exportera: dokumentet har ingen synlig grafik (eller aktivera Använd ritytor)
@@ -4166,6 +4215,7 @@ axis	Both	Båda
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	select at least two objects	markera minst två objekt
+@msg	exit isolation mode first	avsluta isoleringsläget först
 @msg	select objects, not layers	markera objekt, inte lager
 @msg	select one path, or give its `id`	markera en bana eller ange dess `id`
 @msg	select paths to join	markera banor att foga samman
@@ -4218,10 +4268,14 @@ axis	Both	Båda
 @msg	the layer or group is locked	lagret eller gruppen är låst
 @msg	the guide is on a hidden or locked layer	stödlinjen ligger på ett dolt eller låst lager
 @msg	the target layer is locked or hidden	mållagret är låst eller dolt
+@msg	the object is hidden or locked	objektet är dolt eller låst
+@msg	the object is outside the isolated group	objektet ligger utanför den isolerade gruppen
+@msg	type objects can't be isolated	textobjekt kan inte isoleras
 @msg	the layer to flatten into is hidden	lagret som ska plattas till i är dolt
 @msg	the object already has an opacity mask	objektet har redan en opacitetsmask
 @msg	the object has no geometry	objektet saknar geometri
 @msg	the object has no opacity mask	objektet har ingen opacitetsmask
+@msg	stop editing the opacity mask first	sluta redigera opacitetsmasken först
 @msg	the object has no stroke	objektet har ingen kontur
 @msg	the object is beyond the plane's horizon	objektet ligger bortom planets horisont
 @msg	the object isn't in perspective	objektet är inte i perspektiv
@@ -4267,6 +4321,7 @@ axis	Both	Båda
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	okänd förinställning `{name}` (high, medium, low eller en sparad: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	okänd förinställning `{name}` (se flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	okänd förinställning `{name}` (se webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	okänd förinställning `{name}`: varken inbyggd eller sparad (se imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	okänd sida `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	okänt verktyg `{tool}`
 @msg	unknown tool `{t}`	okänt verktyg `{t}`
@@ -4409,6 +4464,10 @@ axis	Both	Båda
 	Shaper	Formning
 	Expand Shaper Group	Expandera Shaper-grupp
 	Release Shaper Group	Släpp formgivargrupp
+	Remove from Shaper Group	Ta bort från formgivargrupp
+@msg	source must be the id of a Shaper Group's original shape	source måste vara id för en originalform i en formgivargrupp
+@msg	group must be the id of a Shaper Group	group måste vara id för en formgivargrupp
+@msg	the shape is not an editable original shape of that Shaper Group	formen är inte en redigerbar originalform i den formgivargruppen
 	Select Shaper Face	Markera Shaper-yta
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Dra hit grafik, färger och textstilar för att återanvända dem i andra dokument. Biblioteken lagras på den här datorn – inget konto krävs.
 	1 Color Job	1-färgsjobb
@@ -4453,6 +4512,9 @@ axis	Both	Båda
 @msg	not a PSD file	inte en PSD-fil
 @msg	the PSD file has an unknown colour mode ({m})	PSD-filen har ett okänt färgläge ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD-filens bilddata använder en okänd komprimering ({m})
+@msg	the PCX file is cut short	PCX-filen är avkortad
+@msg	the PCX file's header is damaged	PCX-filens huvud är skadat
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
@@ -5237,6 +5299,9 @@ theme	Appearance	Utseende
 	Registration:	Registreringspunkt:
 	Reset Horizontal Scale	Återställ horisontell skala
 	Reset Tracking and Kerning	Återställ spärrning och kerning
+	Highlight Font Name	Framhäv typsnittsnamn
+	Highlight Kerning	Framhäv kerning
+	Highlight Tracking	Framhäv spärrning
 	Sample Color from Screen	Hämta färg från skärmen
 	Set as Default	Ange som standard
 	Show Template	Visa mall
@@ -5291,6 +5356,7 @@ theme	Appearance	Utseende
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
+@msg	the Smooth slider is not open	Jämna ut-reglaget är inte öppet
 @msg	the action has no steps	åtgärden har inga steg
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lager lästes inte ({_1}): den hämtas in som en sida, i ett enda lager
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lager lästes inte från dess redigeringsdata ({_1}): de kommer från dess PDF-del
@@ -5637,4 +5703,17 @@ axis	Y Axis	Y-axel
 	Scale Presets	Skalningsförval
 @msg	a {width}×{height} screenshot's byte count overflows	byteantalet för en skärmbild på {width}×{height} överstiger gränsen
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	fönstrets {what} ({points} punkter × {scale} DPI) kan inte bestämma en skärmbilds storlek
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Expandera utseendet först (Objekt › Expandera utseende)
 	Live preview	Direkt förhandsgranskning
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Punkttext
+	Area Text	Områdestext
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
+	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
+	Snap to Glyph Options	Alternativ för fäst mot glyf
+	x-height	x-höjd
+	Glyph Bounds	Glyfgränser
+	Proximity Guides	Närhetsstödlinjer
+	Angular Guides	Vinkelstödlinjer

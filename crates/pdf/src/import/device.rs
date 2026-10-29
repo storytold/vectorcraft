@@ -2,7 +2,10 @@ use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED
 use super::state::{
     Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, line_width, mean_scale, resize_alpha, rgba_png, same_outline, stroke_layer,
 };
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, BlendMode, ClipPath, Device, FillLayer, FillRule, Glyph, GlyphDrawMode, Image, ImageBlob,
+    ImageData, Name, Node, NodeKind, PathData, PathDrawMode, Pattern, Shape, SoftMask, clipped, extend_clip, mesh_shading, tag_key,
+};
 
 impl<'a> Device<'a> for Builder<'_> {
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {

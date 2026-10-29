@@ -77,6 +77,148 @@ fn half_clipped(d: &mut Document) -> (Node, Node) {
     (mask, art)
 }
 
+/// The art a mask hides counts only for a selected object: there a click hits nothing, and the
+/// selection tools grab the selection by that art. Not where the art shows (the click hits it),
+/// beyond the art, for the clip group selected as a whole, nor for art a click can't hit (locked,
+/// hidden, outside the isolated container). A layer's clipping mask hides art as a clip group's
+/// does.
+#[test]
+fn a_selected_objects_art_hidden_by_a_mask_is_found_under_the_pointer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, shown, beyond) = (Point::new(150.0, 50.0), Point::new(50.0, 50.0), Point::new(250.0, 50.0));
+    let opt = HitOptions::default();
+    assert!(hit_test(&d, hidden, opt).is_none());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[]), None);
+    assert_eq!(selected_hidden_at(&d, shown, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, beyond, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(g), ..opt }, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(art_id), ..opt }, &[art_id]), Some(art_id));
+    let other = d.add_layer(Some("Other"));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(other), ..opt }, &[art_id]), None);
+    for change in [|n: &mut Node| n.locked = true, |n: &mut Node| n.visible = false] {
+        let mut d = d.clone();
+        change(d.node_mut(art_id).unwrap());
+        assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), None);
+    }
+    // A layer's clipping mask.
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let art_id = art.id;
+    d.insert(Some(l), 0, mask).unwrap();
+    d.insert(Some(l), 1, art).unwrap();
+    d.node_mut(l).unwrap().set_clips(true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+}
+
+/// A selected group's own art is what a click would hit in it: not a hidden or locked child, nor
+/// art its own clipping mask hides, all under the pointer where an outer mask hides them.
+#[test]
+fn a_selected_groups_hidden_art_counts_only_where_a_click_would_hit_it() {
+    // An outer clip group masking to the left half (0..100); the selected group inside it holds
+    // `child` (100..200 × 0..100, under the pointer at (150, 50)) and `shown` (inside the mask).
+    let build = |change: &dyn Fn(&mut Node, &mut Node)| {
+        let mut d = Document::new(300.0, 200.0);
+        let l = d.layers[0].id;
+        let outer_mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+        let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+        let (gid, cid) = (d.alloc_id(), d.alloc_id());
+        let mut group = Node::group(gid, vec![Arc::new(shown)]);
+        change(&mut group, &mut child);
+        if let NodeKind::Group { children, .. } = &mut group.kind {
+            children.push(Arc::new(child));
+        }
+        let mut clip = Node::group(cid, vec![Arc::new(outer_mask), Arc::new(group)]);
+        clip.set_clips(true);
+        d.insert(Some(l), 0, clip).unwrap();
+        (d, gid)
+    };
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    let (d, g) = build(&|_, _| {});
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), Some(g));
+    let (d, g) = build(&|_, child| child.visible = false);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a hidden child");
+    let (d, g) = build(&|_, child| child.locked = true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a locked child");
+    // The selected group is a clip group too, whose own mask (its first child, 10..40) leaves
+    // `child` out.
+    let (d, g) = build(&|group, _| group.set_clips(true));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "its own mask");
+}
+
+/// A selected guide path where a mask hides it counts only while guides can be clicked: not
+/// while they are locked or hidden (`skip_guides`), as a click on it then hits nothing.
+#[test]
+fn a_selected_guide_hidden_by_a_mask_counts_only_while_guides_can_be_clicked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, mut art) = half_clipped(&mut d);
+    if let NodeKind::Path { guide, .. } = &mut art.kind {
+        *guide = true;
+    }
+    let (g, guide_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[guide_id]), Some(guide_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { skip_guides: true, ..opt }, &[guide_id]), None);
+}
+
+/// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
+/// while those shapes can be clicked (Construction mode, with them isolated), however deep it
+/// lies in them.
+#[test]
+fn a_selected_path_in_a_shaper_groups_hidden_shapes_counts_only_in_construction_mode() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // The outer clip group masks to 0..100; the path, 100..200, lies in the Shaper group's
+    // original shapes (its first child), under (150, 50).
+    let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    let path = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+    let path_id = path.id;
+    let mut sources = Node::group(d.alloc_id(), vec![Arc::new(path)]);
+    sources.name = Some(crate::shaper::SOURCES.into());
+    let sources_id = sources.id;
+    let face = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+    let mut shaper = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+    shaper.extras_mut().shaper = Some(Box::default());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(shaper)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[path_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(sources_id), ..opt }, &[path_id]), Some(path_id));
+}
+
+/// On a layer whose Preview is off, a click hits art in outline: a selected object's hidden art
+/// counts on its outline, not inside its fill.
+#[test]
+fn a_selected_objects_hidden_art_on_a_preview_off_layer_counts_on_its_outline() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    if let NodeKind::Layer { preview, .. } = &mut d.node_mut(l).unwrap().kind {
+        *preview = false;
+    }
+    let opt = HitOptions::default();
+    assert_eq!(selected_hidden_at(&d, Point::new(150.0, 50.0), opt, &[art_id]), None, "inside the fill");
+    assert_eq!(selected_hidden_at(&d, Point::new(200.0, 50.0), opt, &[art_id]), Some(art_id), "on the outline");
+}
+
 /// #2345: a marquee touches a clip group only where its art shows. Over the clipped-away
 /// half alone it selects nothing, and around a rectangle drawn beside the group's mask it
 /// takes that rectangle alone; reaching into the mask takes the group. The same holds for

@@ -46,7 +46,7 @@ mod perf;
 #[path = "../../vectorcraft/src/prefs_dir.rs"]
 mod prefs_dir;
 /// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 #[path = "../../vectorcraft/src/system_fonts.rs"]
 mod system_fonts;
 
@@ -162,7 +162,7 @@ fn help() -> Result<(), String> {
 
 fn main() -> ExitCode {
     // Before any font lookup: the fonts font services load (#579).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();

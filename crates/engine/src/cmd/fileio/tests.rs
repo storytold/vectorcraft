@@ -386,8 +386,8 @@ fn open_exts_cover_every_readable_format() {
 
 #[test]
 fn library_open_filters_list_library_formats_first() {
-    let filters: Vec<_> = library_open_filters("Swatch libraries", super::swatchlib::LIBRARY_EXTS).collect();
-    assert_eq!(filters[0], ("Swatch libraries", super::swatchlib::LIBRARY_EXTS));
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS).collect();
+    assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
     assert!(filters[0].1.contains(&"ase"));
     assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
 }

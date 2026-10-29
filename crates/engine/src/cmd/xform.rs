@@ -8,7 +8,10 @@ use vectorcraft_doc::{Node, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::edit::{outermost, selected_roots};
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, checked_ids_param, cmd, color_value, f64_or,
+    find_command, finite_numbers, has_doc, index,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {

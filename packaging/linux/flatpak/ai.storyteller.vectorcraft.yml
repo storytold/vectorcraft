@@ -22,6 +22,8 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # Network for the update check against GitHub releases.
+  - --share=network
   # Cursor theme: without the cursor-shape protocol (e.g. GNOME 46) winit loads the theme itself.
   # The sandbox sets no XCURSOR_PATH and ships no cursor themes, so the pointer would turn invisible
   # over the window. The host's themes are mounted under /run/host (#2450).

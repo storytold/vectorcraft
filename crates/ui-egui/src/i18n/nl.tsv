@@ -57,6 +57,7 @@
 	Check Script	Script controleren
 	Other Script…	Ander script…
 	Document Setup…	Documentinstellingen…
+	Switch Units	Eenheden wisselen
 	Document Color Mode	Documentkleurmodus
 	CMYK Color	CMYK-kleur
 	RGB Color	RGB-kleur
@@ -189,6 +190,7 @@
 	Other Layers	Andere lagen
 	Unlock All	Alles ontgrendelen
 	Hide	Verbergen
+	Unselected Artwork	Niet-geselecteerde artwork
 	Show All	Alles tonen
 	Expand…	Uitbreiden…
 	Expand Appearance	Uiterlijk uitbreiden
@@ -221,6 +223,7 @@
 	Offset Path…	Pad verschuiven…
 	Reverse Path Direction	Padrichting omkeren
 	Simplify…	Vereenvoudigen…
+	Smooth…	Gladmaken…
 	Add Anchor Points	Ankerpunten toevoegen
 	Remove Anchor Points	Ankerpunten verwijderen
 	Divide Objects Below	Objecten eronder verdelen
@@ -270,6 +273,7 @@
 	Clipping Mask	Knipmasker
 	Edit Clipping Path	Knippad bewerken
 	Compound Path	Samengesteld pad
+	Compound Shape	Samengestelde vorm
 	Artboards	Tekengebieden
 	Convert to Artboards	Converteren naar tekengebieden
 	Rearrange All Artboards…	Alle tekengebieden herschikken…
@@ -387,6 +391,11 @@
 	Fill Color	Vulkleur
 	Opacity	Dekking
 	Stroke Color	Contourkleur
+	Fill Gradient	Vulverloop
+	Stroke Gradient	Contourverloop
+	Fill Pattern	Vulpatroon
+	Stroke Pattern	Contourpatroon
+	Patterns	Patronen
 	Stroke Weight	Contourdikte
 	Graphic Style	Grafische stijl
 	Symbol Instance	Symboolinstantie
@@ -584,6 +593,8 @@
 	Saved View 25	Opgeslagen weergave 25
 	Window	Venster
 	New Window	Nieuw venster
+	Next Document	Volgend document
+	Previous Document	Vorig document
 	Cascade	Trapsgewijs schikken
 	Tile	Naast elkaar schikken
 	Float in Window	In venster zweven
@@ -769,6 +780,7 @@
 	Shaper	Shaper
 	Expand Shaper Group	Shapergroep uitbreiden
 	Release Shaper Group	Shapergroep vrijgeven
+	Remove from Shaper Group	Verwijderen uit shapergroep
 	Select Shaper Face	Shapervlak selecteren
 	Constrain	Beperken
 	Free Transform	Vrij transformeren
@@ -1507,6 +1519,12 @@ lighting	Light	Licht
 	Document Library	Documentbibliotheek
 	Library:	Bibliotheek:
 	Tracing Presets	Traceervoorinstellingen
+	Manage Presets	Voorinstellingen beheren
+	Save as New Preset…	Opslaan als nieuwe voorinstelling…
+	Rename…	Hernoemen…
+	Rename Preset	Voorinstelling hernoemen
+	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
+	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
 	Method:	Methode:
 	Mode:	Modus:
 	Noise	Ruis
@@ -1523,7 +1541,7 @@ lighting	Light	Licht
 	Threshold	Drempel
 	Trace	Traceren
 	Trace the image with the Default preset	De afbeelding traceren met de standaardvoorinstelling
-	Size: {size}  Tracking: {tracking}	Grootte: {size}  Spatiëring: {tracking}
+	Size: {size}  Tracking: {tracking}	Grootte: {size}  Tracking: {tracking}
 	<Opacity Mask>	<Dekkingsmasker>
 	Create New Layer	Nieuwe laag maken
 	Create New Sublayer	Nieuwe sublaag maken
@@ -1634,13 +1652,13 @@ lighting	Light	Licht
 	Roman Hanging Punctuation	Romeinse hangende leestekens
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
 	Single-line Composer	Compositie per regel
+	Toggle Line Composer	Compositiemethode wisselen
 	Space After Paragraph	Ruimte na alinea
 	Space Before Paragraph	Ruimte voor alinea
 	Top-to-Top Leading	Regelafstand van boven naar boven
 	Bottom-to-Bottom Leading	Regelafstand van onder naar onder
 	Burasagari	Burasagari
 	Force	Forceren
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Uitvouwen is van toepassing op samengestelde vormen (Alt-klik op een vormmodus) — staat op de roadmap
 	Expand Compound Shape	Samengestelde vorm uitvouwen
 	Make Compound Shape	Samengestelde vorm maken
 	Pathfinder Options…	Pathfinder-opties…
@@ -1900,6 +1918,10 @@ lighting	Light	Licht
 	Outer Corner Tile	Tegel voor buitenhoek
 	Side Tile	Zijtegel
 	Inner Corner Tile	Tegel voor binnenhoek
+	Auto-Centered	Auto-gecentreerd
+	Auto-Between	Auto-tussen
+	Auto-Sliced	Auto-verstek
+	Auto-Overlap	Auto-overlap
 	Start Tile	Begintegel
 	End Tile	Eindtegel
 	Fit	Passen
@@ -2158,6 +2180,8 @@ lighting	Light	Licht
 	Locate Selected Objects	Geselecteerde objecten lokaliseren
 	Thumbnails:	Miniaturen:
 	Anchor Points	Ankerpunten
+	"In" Control Points	"In"-controlepunten
+	"Out" Control Points	"Uit"-controlepunten
 	Brush Affects:	Penseel beïnvloedt:
 	Complexity:	Complexiteit:
 	Detail:	Detail:
@@ -3715,6 +3739,7 @@ font-technology	Variable	Variabel
 	Default Fill and Stroke (D)	Standaard vulling en lijn (D)
 	Fill (X), double-click for the Color Picker	Vulling (X), dubbelklik voor de kleurenkiezer
 	Opacity:	Dekking:
+	Shape Mode	Vormmodus
 	Shape Modes:	Vormmodi:
 	Stroke (X), double-click for the Color Picker	Lijn (X), dubbelklik voor de kleurenkiezer
 	Stroke:	Lijn:
@@ -3763,7 +3788,9 @@ font-technology	Variable	Variabel
 	Mojikumi	Mojikumi
 	N pt per	N pt per
 	New Character Style	Nieuwe tekenstijl
+	New Character Style…	Nieuwe tekenstijl…
 	New Paragraph Style	Nieuwe alineastijl
+	New Paragraph Style…	Nieuwe alineastijl…
 	Paragraph Style Options	Alineastijlopties
 	Redefine Character Style	Tekenstijl opnieuw definiëren
 	Redefine Paragraph Style	Alineastijl opnieuw definiëren
@@ -4100,6 +4127,7 @@ imageTrace	Outline	Contour
 @msg	missing `id` (see plugin.list)	`id` ontbreekt (zie plugin.list)
 @msg	missing `name`	`name` ontbreekt
 @msg	missing `tool`	`tool` ontbreekt
+@msg	missing id	id ontbreekt
 @msg	missing index	index ontbreekt
 @msg	New Window isn't available yet: a document opens in one window	Nieuw venster is nog niet beschikbaar: een document opent in één venster
 @msg	name the file	geef het bestand een naam
@@ -4129,6 +4157,7 @@ imageTrace	Outline	Contour
 @msg	no current layer	geen huidige laag
 @msg	no data	geen gegevens
 @msg	no dialog open	geen dialoogvenster geopend
+@msg	the open dialog has no Reset	het geopende dialoogvenster heeft geen knop Opnieuw instellen
 @msg	no document	geen document
 @msg	no document open	geen document geopend
 @msg	no effect applied yet	nog geen effect toegepast
@@ -4202,8 +4231,10 @@ imageTrace	Outline	Contour
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
+@msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
 @msg	nothing encoded	niets gecodeerd
 @msg	nothing selected	niets geselecteerd
+@msg	nothing selected is in a group	niets van de selectie zit in een groep
 @msg	nothing to align	niets om uit te lijnen
 @msg	nothing to distort	niets om te vervormen
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	niets om te exporteren: het document heeft geen zichtbare illustratie (of schakel Tekengebieden gebruiken in)
@@ -4269,6 +4300,7 @@ imageTrace	Outline	Contour
 @msg	select an object in perspective	selecteer een object in perspectief
 @msg	select artwork (or a colour group) to recolor	selecteer een illustratie (of een kleurgroep) om te herkleuren
 @msg	select at least two objects	selecteer minstens twee objecten
+@msg	exit isolation mode first	verlaat eerst de isolatiemodus
 @msg	select objects, not layers	selecteer objecten, geen lagen
 @msg	select one path, or give its `id`	selecteer één pad, of geef het `id`
 @msg	select paths to join	selecteer paden om te verbinden
@@ -4319,10 +4351,14 @@ imageTrace	Outline	Contour
 @msg	the layer or group is locked	de laag of groep is vergrendeld
 @msg	the guide is on a hidden or locked layer	de hulplijn staat op een verborgen of vergrendelde laag
 @msg	the target layer is locked or hidden	de doellaag is vergrendeld of verborgen
+@msg	the object is hidden or locked	het object is verborgen of vergrendeld
+@msg	the object is outside the isolated group	het object ligt buiten de geïsoleerde groep
+@msg	type objects can't be isolated	tekstobjecten kunnen niet worden geïsoleerd
 @msg	the layer to flatten into is hidden	de laag om in af te vlakken is verborgen
 @msg	the object already has an opacity mask	het object heeft al een dekkingmasker
 @msg	the object has no geometry	het object heeft geen geometrie
 @msg	the object has no opacity mask	het object heeft geen dekkingmasker
+@msg	stop editing the opacity mask first	stop eerst met het bewerken van het dekkingmasker
 @msg	the object has no stroke	het object heeft geen lijn
 @msg	the object is beyond the plane's horizon	het object ligt voorbij de horizon van het vlak
 @msg	the object isn't in perspective	het object is niet in perspectief
@@ -5044,8 +5080,11 @@ mark-style	Japanese	Japans
 	This system has no screen color sampler	Dit systeem heeft geen schermkleurkiezer
 	Color blindness – Tritanopia-type	Kleurenblindheid – type tritanopie
 	Panels Except Tools and Control	Alle panelen behalve Gereedschap en Bediening
-	Reset Tracking and Kerning	Spatiëring en kerning herstellen
+	Reset Tracking and Kerning	Tracking en kerning herstellen
 	Reset Horizontal Scale	Horizontale schaal herstellen
+	Highlight Font Name	Lettertypenaam markeren
+	Highlight Kerning	Kerning markeren
+	Highlight Tracking	Tracking markeren
 @msg	span must be "object" or "selection", got {v}	span moet "object" of "selection" zijn, maar is {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" plaatst een `gradient`, geen staal
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" plaatst een verloop: geef `gradient`
@@ -5195,6 +5234,7 @@ swatch	Bright Violet	Felviolet
 	Show Original Path	Oorspronkelijk pad tonen
 	Open this dialog with these settings next time	Dit dialoogvenster de volgende keer met deze instellingen openen
 	Auto-Simplify	Automatisch vereenvoudigen
+	Auto-Smooth	Automatisch gladmaken
 @msg	check a layer to export	vink een laag aan om te exporteren
 @msg	select the art to export first	selecteer eerst de illustratie die je wilt exporteren
 @msg	no saved selection recalled	geen opgeslagen selectie opgeroepen
@@ -5588,4 +5628,17 @@ axis	Y Axis	Y-as
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Breid eerst het uiterlijk uit (Object › Uiterlijk uitbreiden)
 	Live preview	Live voorbeeld
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Punttekst
+	Area Text	Vlaktekst
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
+	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
+	Snap to Glyph Options	Opties voor uitlijnen op glyph
+	x-height	x-hoogte
+	Glyph Bounds	Glyphbegrenzing
+	Proximity Guides	Nabijheidshulplijnen
+	Angular Guides	Hoekhulplijnen

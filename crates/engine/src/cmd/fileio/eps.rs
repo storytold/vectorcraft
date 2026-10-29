@@ -13,13 +13,16 @@ use vectorcraft_eps::{EpsOptions, Level, Overprint, Preview, Raster};
 use vectorcraft_geom::{Point, Rect};
 
 use super::super::flatten::{FlattenOptions, flatten_document};
-use super::super::*;
+use super::super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, Encoded, FormatOption};
 
 const C: &str = "document.export";
 
 /// Most pixels along a side of a preview.
 const MAX_PREVIEW: f64 = 2048.0;
+/// Save needs a lightweight compatibility preview, not an uncompressed 16 MiB image beside
+/// a small vector. TIFF format choices are unchanged; there is no public resolution option.
+const SAVE_PREVIEW: f64 = 1024.0;
 /// Most pixels along a side of a thumbnail.
 const THUMBNAIL: f64 = 128.0;
 
@@ -260,7 +263,20 @@ fn native(doc: &Document, board: Option<usize>, include_linked: bool) -> Vec<u8>
 /// artboard (after a central file of the whole document when there are several and art shows).
 /// Transparency is flattened first (once for all of them); the previews show `doc` itself.
 pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
+    encode_document(doc, p, false)
+}
+
+/// Save keeps a single page's original frame and all native editing data, unlike Export's
+/// optional art-bound crop or separate file per artboard. Existing EPS loss warnings still apply.
+pub(super) fn encode_save(doc: &Document, p: &Value) -> Result<Encoded> {
+    encode_document(doc, p, true)
+}
+
+fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     let set = parse(p)?;
+    if saving && (set.use_artboards == Some(false) || bool_or(p, "selectedOnly", false)) {
+        return Err(bad(C, "EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS"));
+    }
     let original = doc;
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
     let doc = &*full;
@@ -272,7 +288,13 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     } else {
         Cow::Borrowed(original)
     };
-    let pages = pages(doc, &set)?;
+    let pages = if saving {
+        let board = set.boards.one(doc.artboards.len()).map_err(|e| bad(C, e))?;
+        let rect = doc.artboards.get(board).ok_or_else(|| bad(C, "the document has no artboard"))?.rect;
+        vec![(Some(board), rect, Point::new(rect.x0, rect.y1))]
+    } else {
+        pages(doc, &set)?
+    };
     if pages.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
@@ -284,13 +306,14 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     if transparent && flat.is_some() {
         enc.warnings.push("transparency is flattened into opaque art and images (EPS has none): see the flattener preset".into());
     }
+    let preview_limit = if saving { SAVE_PREVIEW } else { MAX_PREVIEW };
     let created = vectorcraft_doc::metadata::output_time();
     let mut renderer = vectorcraft_render::Renderer::new();
     for (board, region, origin) in pages {
         let rect = vectorcraft_eps::preview_rect(region, origin);
         let preview = match set.eps.preview {
             Preview::None => None,
-            kind => Some(render(&mut renderer, doc, rect, MAX_PREVIEW, set.eps.transparent_preview && kind == Preview::TiffColor)?),
+            kind => Some(render(&mut renderer, doc, rect, preview_limit, set.eps.transparent_preview && kind == Preview::TiffColor)?),
         };
         let thumbnail = set.thumbnails.then(|| render(&mut renderer, doc, rect, THUMBNAIL, false)).transpose()?;
         let o = EpsOptions {
@@ -298,7 +321,7 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
             origin,
             title: doc.title.clone(),
             created,
-            native: Some(native(&editing, board, set.include_linked)),
+            native: Some(native(&editing, if saving { None } else { board }, set.include_linked)),
             ..set.eps.clone()
         };
         let out = vectorcraft_eps::export(drawn, &o, preview.as_ref(), thumbnail.as_ref()).map_err(|e| bad(C, e))?;

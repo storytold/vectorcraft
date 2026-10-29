@@ -1,6 +1,6 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::*;
+use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, SymbolBoxes, TextObject, live};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -95,6 +95,10 @@ pub(crate) static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sy
 pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
+    /// How many times the frame's symbol boxes measured symbol art ([`SymbolBoxes::art_measured`]):
+    /// the art boxes of symbols and how far the effects in their art paint past it. Pattern tiles
+    /// and placed documents measure with symbol boxes of their own, which are not counted.
+    pub symbol_art: usize,
     /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
     /// their object moved, or made over such rasters ([`RenderOptions::interacting`]), and those it
     /// drew at a drag's lower resolution ([`Self::previewed`]).

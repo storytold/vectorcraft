@@ -123,6 +123,22 @@ fn alt_click_applies_the_selection_to_the_clicked_object() {
     assert!(s.execute("appearance.copyFrom", &json!({"source": src.0, "reverse": true})).is_err(), "nothing to copy from");
 }
 
+/// #4382: with nothing selected, a click picks up an object's attributes and an Alt-click puts
+/// them on the object clicked, as the reference app's Eyedropper does.
+#[test]
+fn alt_click_with_nothing_selected_applies_what_was_picked_up() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    s.execute("select.none", &json!({})).unwrap();
+    click(&mut s, 325.0, 35.0, Mods::default());
+    // The source changes afterwards: what was picked up stays as it was.
+    s.execute("paint.setFill", &json!({"ids": [src.0], "color": "#00ff00"})).unwrap();
+    click(&mut s, 35.0, 35.0, Mods { alt: true, ..Default::default() });
+    let n = node(&s, dst);
+    assert_eq!((n.appearance.fill_paint().color().unwrap().to_hex(), n.appearance.stroke_width(), n.opacity), ("#ff0000".into(), 5.0, 0.5));
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing gets selected");
+}
+
 #[test]
 fn shift_alt_click_appends_the_appearance() {
     let mut s = session();

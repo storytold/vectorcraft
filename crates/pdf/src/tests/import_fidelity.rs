@@ -616,6 +616,30 @@ fn function_based_shadings_share_one_budget_per_import() {
     assert!(r.warnings.iter().any(|w| w.contains("too many to read")), "{:?}", r.warnings);
 }
 
+/// A page drawing one small form over and over makes objects only up to the import's limit, then
+/// leaves the rest out with a warning, instead of taking memory for every drawing (#3569).
+#[test]
+fn a_form_drawn_over_and_over_stops_at_the_import_s_objects() {
+    let squares: String = (0..25).map(|i| format!("{} {} 2 2 re f ", i % 5 * 4, i / 5 * 4)).collect();
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 20 20]", &squares);
+    let bytes = one_page(&"/F Do ".repeat(200), &format!("/XObject << /F {} 0 R >>", first_extra(1)), &[&form]);
+    // With the import's objects lowered to `limit` (on this thread: the limit is this thread's).
+    let open_within = |limit: usize| {
+        let old = crate::import::TEST_MAX_OBJECTS.replace(limit);
+        let r = crate::import::read(&bytes, &ImportOptions::default());
+        crate::import::TEST_MAX_OBJECTS.set(old);
+        r.unwrap()
+    };
+    let paths = |r: &ImportReport| all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).count();
+    let left_out = |r: &ImportReport| r.warnings.iter().any(|w| w.contains("the rest were left out"));
+    let whole = open_within(10_000);
+    assert_eq!(paths(&whole), 5000);
+    assert!(!left_out(&whole), "{:?}", whole.warnings);
+    let cut = open_within(1000);
+    assert_eq!(paths(&cut), 1000);
+    assert!(left_out(&cut), "{:?}", cut.warnings);
+}
+
 /// A colour that changes in step with the sampling grid along y only (one colour at every grid
 /// point) is still read along y, not as a flat gradient along x.
 #[test]

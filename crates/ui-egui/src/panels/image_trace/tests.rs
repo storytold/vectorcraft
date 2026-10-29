@@ -767,6 +767,430 @@ fn create_strokes_traces_again_and_keeps_one_kind_on() {
     assert_eq!(create(&app), Some((json!(false), json!(true))), "Strokes alone stays on");
 }
 
+/// Click at `at`, then draw a frame.
+fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
+    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, vec![Event::PointerMoved(at), press(true)]);
+    frame(app, ctx, vec![press(false)]);
+    frame(app, ctx, vec![]);
+}
+
+/// Choose `item` from Manage Presets, next to the Preset dropdown. Whether it was enabled.
+fn manage(app: &mut VectorcraftApp, ctx: &egui::Context, item: &str) -> bool {
+    frame(app, ctx, vec![]);
+    let button = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-manage-presets"))).unwrap();
+    click_at(app, ctx, button.center());
+    let texts = frame(app, ctx, vec![]);
+    let at = texts.iter().find(|(t, _)| t.trim() == item).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{item}` in {texts:?}"));
+    let state = |app: &VectorcraftApp| (app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone())), app.session.prefs.trace_presets.clone());
+    let before = state(app);
+    click_at(app, ctx, at);
+    // Escape closes the menu when the item was disabled.
+    frame(app, ctx, vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    before != state(app)
+}
+
+/// The preset the panel shows.
+fn shown_preset(ctx: &egui::Context) -> String {
+    pstate::<TraceUi>(ctx, "image-trace").preset
+}
+
+#[test]
+fn manage_presets_saves_renames_and_deletes_a_preset_of_the_panel_settings() {
+    let mut app = traced_app_with_ink(100);
+    trace_and_open(&mut app, "Sketched Art");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // A built-in preset can't be renamed or deleted.
+    assert!(!manage(&mut app, &ctx, "Rename…"));
+    assert!(!manage(&mut app, &ctx, "Delete"));
+    // Save as New Preset… asks for a name, and the panel then shows the preset.
+    assert!(manage(&mut app, &ctx, "Save as New Preset…"));
+    let d = app.ui.dialog.clone().unwrap();
+    assert_eq!((d.kind.as_str(), d.str("name")), (crate::dialogs::trace_presets::KIND, "Tracing Preset 1".to_string()));
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Heavy Ink"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let texts = frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Heavy Ink");
+    assert!(texts.iter().any(|(t, _)| t == "Heavy Ink"), "{texts:?}");
+    let saved = &app.session.prefs.trace_presets;
+    assert_eq!((saved.len(), saved[0].name.as_str(), saved[0].params.threshold), (1, "Heavy Ink", 150));
+    // It follows the built-in presets in the preset list (the Preset dropdown, Control bar and
+    // Properties).
+    let list_ctx = egui::Context::default();
+    crate::theme::install_fonts(&list_ctx);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(300.0, 1200.0));
+    let mut out = list_ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+        preset_list(&mut app, ui, "Heavy Ink");
+    });
+    out.textures_delta.clear();
+    let shapes: Vec<_> = out.shapes.iter().map(|c| c.shape.clone()).collect();
+    let listed: Vec<String> = crate::tests_removeanchors::shapes_text(&shapes).into_iter().map(|(t, _)| t).collect();
+    assert_eq!(listed.iter().position(|t| t == "Heavy Ink"), Some(presets(&mut app, &list_ctx).len() - 1), "{listed:?}");
+    assert_eq!(listed.len(), presets(&mut app, &list_ctx).len(), "{listed:?}");
+    // Rename… starts from its name, and the panel follows the new one.
+    assert!(manage(&mut app, &ctx, "Rename…"));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "Heavy Ink");
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Dark Ink"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Dark Ink");
+    assert_eq!(app.session.prefs.trace_presets[0].name, "Dark Ink");
+    // Tracing with it gives the object its name.
+    click(&mut app, &ctx, "Trace");
+    assert_eq!(selected_trace(&app).unwrap().0, "Dark Ink");
+    // Delete: the settings stay, as Custom.
+    assert!(manage(&mut app, &ctx, "Delete"));
+    assert!(app.session.prefs.trace_presets.is_empty());
+    assert_eq!(shown_preset(&ctx), "Custom");
+    assert!(!manage(&mut app, &ctx, "Delete"));
+}
+
+#[test]
+fn renaming_another_saved_preset_with_the_same_settings_keeps_the_panel_preset() {
+    let mut app = traced_app_with_ink(100);
+    trace_and_open(&mut app, "Sketched Art");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    let save = |app: &mut VectorcraftApp, p: Value| {
+        app.session.execute("imageTrace.presets.save", &p).unwrap();
+        frame(app, &ctx, vec![]);
+        shown_preset(&ctx)
+    };
+    assert_eq!(save(&mut app, json!({ "name": "A", "preset": "Sketched Art" })), "A");
+    assert_eq!(save(&mut app, json!({ "name": "B", "preset": "Sketched Art" })), "B");
+    // A, with the same settings as B, is renamed: the panel still shows B.
+    assert_eq!(save(&mut app, json!({ "name": "A", "newName": "C" })), "B");
+    // B itself is renamed: the panel follows it.
+    assert_eq!(save(&mut app, json!({ "name": "B", "newName": "E" })), "E");
+}
+
+/// A saved preset renamed or deleted while the settings that wait for another object name it: that object, selected
+/// again, shows the preset's new name, or Custom.
+#[test]
+fn settings_that_wait_follow_a_renamed_or_deleted_preset() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art", "params": {"threshold": 40}})).unwrap();
+    trace_and_open(&mut app, "Sketched Art");
+    let a = first_selected(&app).unwrap().id;
+    app.run("edit.duplicate", json!({})).unwrap();
+    let b = first_selected(&app).unwrap().id;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, "Preview");
+    // Ink is chosen for A with Preview off, so it waits for A.
+    let ink = presets(&mut app, &ctx).iter().find(|p| p.0 == "Ink").unwrap().1.clone();
+    let mut st: TraceUi = pstate(&ctx, "image-trace");
+    st.preset = "Ink".into();
+    st.params = ink;
+    set_pstate(&ctx, "image-trace", st);
+    let select = |app: &mut VectorcraftApp, id: NodeId| {
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        frame(app, &ctx, vec![]);
+        shown_preset(&ctx)
+    };
+    assert_eq!(select(&mut app, b), "Sketched Art");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "newName": "Dark Ink"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(select(&mut app, a), "Dark Ink", "A's waiting settings follow the rename");
+    assert_eq!(select(&mut app, b), "Sketched Art");
+    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(select(&mut app, a), "Custom", "A's waiting settings name a deleted preset");
+    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["threshold"], json!(40), "and keep their settings");
+}
+
+#[test]
+fn a_refused_preset_name_keeps_the_dialog_open() {
+    let mut app = traced_app_with_ink(100);
+    for name in ["A", "B"] {
+        app.session.execute("imageTrace.presets.save", &json!({ "name": name })).unwrap();
+    }
+    crate::dialogs::trace_presets::open(&mut app, &json!({"rename": "A"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("b"));
+    assert!(crate::dialogs::confirm(&mut app).is_err());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("name")).as_deref(), Some("b"), "the name entered stays, to be changed");
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("C"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let names: Vec<String> = app.session.prefs.trace_presets.iter().map(|p| p.name.clone()).collect();
+    assert_eq!(names, ["C", "B"]);
+}
+
+#[test]
+fn selecting_an_object_traced_with_a_deleted_preset_shows_custom() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Keep", "preset": "Sketched Art"})).unwrap();
+    trace_and_open(&mut app, "Keep");
+    let a = first_selected(&app).unwrap().id;
+    app.run("edit.duplicate", json!({})).unwrap();
+    let b = first_selected(&app).unwrap().id;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Keep");
+    // A, traced again with a built-in preset, is shown while Keep is deleted.
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    app.run("imageTrace.make", json!({"preset": "Sketched Art"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("imageTrace.presets.delete", &json!({"name": "Keep"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Sketched Art");
+    // B still records Keep.
+    app.run("select.set", json!({"ids": [b.0]})).unwrap();
+    assert_eq!(selected_trace(&app).unwrap().0, "Keep");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Custom");
+    // A built-in preset named in another case or in brackets shows under its own name, and Trace
+    // with the settings unchanged keeps it.
+    app.run("imageTrace.make", json!({"preset": "[sketched art]"})).unwrap();
+    assert_eq!(selected_trace(&app).unwrap().0, "[sketched art]");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Sketched Art");
+    click(&mut app, &ctx, "Trace");
+    assert_eq!(selected_trace(&app).unwrap().0, "Sketched Art");
+}
+
+/// An object traced with a saved preset that was renamed since shows the new name when it is selected again, and
+/// when the panel opens again.
+#[test]
+fn selecting_an_object_traced_with_a_renamed_preset_shows_the_new_name() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
+    trace_and_open(&mut app, "Ink");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Ink");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "ink", "newName": "Dark Ink"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Dark Ink");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.run("select.all", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(selected_trace(&app).unwrap().0, "Ink", "the object still records the old name");
+    assert_eq!(shown_preset(&ctx), "Dark Ink");
+    let reopened = egui::Context::default();
+    crate::theme::install_fonts(&reopened);
+    frame(&mut app, &reopened, vec![]);
+    assert_eq!(shown_preset(&reopened), "Dark Ink");
+    // Dark Ink is deleted, and another preset with the same settings is made under that name: the object shows
+    // Custom, also after that preset is renamed.
+    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Sketched Art"})).unwrap();
+    let shown = |app: &mut VectorcraftApp| {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(app, &ctx, vec![]);
+        shown_preset(&ctx)
+    };
+    assert_eq!(shown(&mut app), "Custom");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "newName": "Other Ink"})).unwrap();
+    assert_eq!(shown(&mut app), "Custom");
+}
+
+/// The Control bar's and Properties' Preset dropdowns show an object traced with a saved preset under the name the
+/// panel shows: the new name after a rename, and Custom once the preset's settings changed or it was deleted.
+#[test]
+fn the_control_bar_and_properties_show_a_renamed_or_changed_preset_as_the_panel_does() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
+    trace_with(&mut app, "Ink");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = |app: &mut VectorcraftApp, properties: bool| {
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(900.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            if properties {
+                crate::panels::properties::show(app, ui);
+            } else {
+                ui.horizontal(|ui| control_bar(app, ui));
+            }
+        });
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    };
+    let shows = |app: &mut VectorcraftApp, name: &str| {
+        for properties in [false, true] {
+            let t = texts(app, properties);
+            assert!(t.iter().any(|(s, _)| s == name), "{} shows {name}: {t:?}", if properties { "Properties" } else { "Control bar" });
+        }
+    };
+    shows(&mut app, "Ink");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "newName": "Dark Ink"})).unwrap();
+    shows(&mut app, "Dark Ink");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Silhouettes"})).unwrap();
+    shows(&mut app, "Custom");
+    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
+    shows(&mut app, "Custom");
+}
+
+/// An object traced with a preset whose name another saved preset had earlier in the session, renamed since: the
+/// panel can't tell which of the two the object was traced with, and shows Custom.
+#[test]
+fn an_object_traced_with_a_reused_preset_name_that_was_renamed_shows_custom() {
+    let mut app = traced_app_with_ink(100);
+    let save = |app: &mut VectorcraftApp, p: Value| {
+        app.session.execute("imageTrace.presets.save", &p).unwrap();
+    };
+    save(&mut app, json!({"name": "A", "preset": "Sketched Art"}));
+    save(&mut app, json!({"name": "A", "newName": "B"}));
+    save(&mut app, json!({"name": "A", "preset": "Sketched Art"}));
+    trace_and_open(&mut app, "A");
+    save(&mut app, json!({"name": "A", "newName": "C"}));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(selected_trace(&app).unwrap().0, "A");
+    assert_eq!(shown_preset(&ctx), "Custom");
+}
+
+/// An object traced with a preset that got its name from a rename, renamed again since: the panel shows the new name.
+#[test]
+fn an_object_traced_between_two_renames_shows_the_last_name() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "preset": "Sketched Art"})).unwrap();
+    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "newName": "B"})).unwrap();
+    trace_and_open(&mut app, "B");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "C"})).unwrap();
+    let shown = |app: &mut VectorcraftApp| {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(app, &ctx, vec![]);
+        shown_preset(&ctx)
+    };
+    assert_eq!(selected_trace(&app).unwrap().0, "B");
+    assert_eq!(shown(&mut app), "C");
+    // Renamed back to B and on to D, it is still the same preset.
+    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "B"})).unwrap();
+    app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "D"})).unwrap();
+    assert_eq!(shown(&mut app), "D");
+}
+
+/// Presets renamed between two frames while the object is not selected: the object, selected again, shows its own
+/// preset's new name, not the name a rename of another preset gave.
+#[test]
+fn renames_between_frames_leave_a_reselected_object_on_its_own_preset() {
+    let mut app = traced_app_with_ink(100);
+    for name in ["A", "B"] {
+        app.session.execute("imageTrace.presets.save", &json!({"name": name, "preset": "Sketched Art"})).unwrap();
+    }
+    trace_and_open(&mut app, "A");
+    let a = first_selected(&app).unwrap().id;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "A");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "C"})).unwrap();
+    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "newName": "B"})).unwrap();
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "B");
+}
+
+/// Saved presets whose names differ only by brackets are different presets: an object traced with
+/// a deleted one shows Custom.
+#[test]
+fn a_saved_preset_in_brackets_is_not_another_saved_preset() {
+    let mut app = traced_app_with_ink(100);
+    for name in ["Ink", "[Ink]"] {
+        app.session.execute("imageTrace.presets.save", &json!({"name": name, "preset": "Sketched Art"})).unwrap();
+    }
+    trace_and_open(&mut app, "[Ink]");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "[Ink]");
+    app.session.execute("imageTrace.presets.delete", &json!({"name": "[Ink]"})).unwrap();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.run("select.all", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(selected_trace(&app).unwrap().0, "[Ink]");
+    assert_eq!(shown_preset(&ctx), "Custom");
+}
+
+/// A saved preset whose settings change outside the panel while the panel shows it with other
+/// settings: the panel shows Custom, and Trace records Custom with the panel's settings.
+#[test]
+fn a_saved_preset_changed_elsewhere_leaves_the_panel_settings_as_custom() {
+    let mut app = traced_app_with_ink(100);
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
+    trace_and_open(&mut app, "Ink");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Ink");
+    let before = pstate::<TraceUi>(&ctx, "image-trace").params;
+    // A save with the same settings keeps the name.
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Ink");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "params": {"threshold": 40}})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Custom");
+    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params, before, "the panel's settings stay");
+    // A rename that also changes the settings.
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink 2", "preset": "Sketched Art"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Ink 2");
+    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink 2", "newName": "Ink 3", "params": {"threshold": 40}})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(shown_preset(&ctx), "Custom");
+    // The object, traced with Ink before its settings changed, shows Custom when the panel opens
+    // again.
+    assert_eq!(selected_trace(&app).unwrap().0, "Ink");
+    let reopened = egui::Context::default();
+    crate::theme::install_fonts(&reopened);
+    frame(&mut app, &reopened, vec![]);
+    assert_eq!(shown_preset(&reopened), "Custom");
+}
+
+#[test]
+fn the_preset_list_is_read_once_for_each_change_of_the_saved_presets() {
+    let mut app = traced_app_with_ink(100);
+    trace_and_open(&mut app, "Sketched Art");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let reads = || PRESET_READS.with(std::cell::Cell::get);
+    frame(&mut app, &ctx, vec![]);
+    let start = reads();
+    for _ in 0..5 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    assert_eq!(reads(), start, "frames with the same saved presets read the list again");
+    // A preset saved outside the panel is read once, and the panel shows it.
+    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "preset": "Sketched Art"})).unwrap();
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    assert_eq!((reads(), shown_preset(&ctx)), (start + 1, "A".to_string()));
+    // The rename's reply names the old name, and the panel follows the new one.
+    let r = app.session.execute("imageTrace.presets.save", &json!({"name": "a", "newName": "B"})).unwrap();
+    assert_eq!(r["renamedFrom"], "A");
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!((reads(), shown_preset(&ctx)), (start + 2, "B".to_string()));
+    // Preferences that replace the saved presets are read again too.
+    let mut prefs = app.session.prefs.clone();
+    prefs.trace_presets.clear();
+    app.session.apply_prefs(prefs);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!((reads(), shown_preset(&ctx)), (start + 3, "Custom".to_string()));
+    // A preset saved with the panel's settings and renamed before the next frame is shown under
+    // its new name.
+    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "preset": "Sketched Art"})).unwrap();
+    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "D"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!((reads(), shown_preset(&ctx)), (start + 4, "D".to_string()));
+}
+
 #[test]
 fn panel_and_menu_draw_headless() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -781,4 +1205,50 @@ fn panel_and_menu_draw_headless() {
         });
         out.textures_delta.clear();
     }
+}
+
+#[test]
+fn ignore_color_rejects_signs_in_hex() {
+    assert_eq!(ignore_color(&json!({"ignoreColor": "#+f+f+f"})), [255; 3]);
+    assert_eq!(ignore_color(&json!({"ignoreColor": "+0+0+0"})), [255; 3]);
+    assert_eq!(ignore_color(&json!({"ignoreColor": "#ff00ff"})), [255, 0, 255]);
+}
+
+/// #3098: a trace the panel starts off the UI thread is the panel's own once it lands: its counts
+/// show, and nothing waits for the object it replaced, so Undo with Preview on shows that object's
+/// own settings and traces nothing.
+#[test]
+fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
+    let mut app = traced_app();
+    app.trace_runs.off_the_ui_thread = true;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.adopt_context(&ctx);
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let strokes = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["strokes"].clone());
+    let steps = undo(&app);
+    click(&mut app, &ctx, "Preview");
+    click(&mut app, &ctx, "Strokes");
+    click(&mut app, &ctx, "Trace");
+    assert_eq!(app.trace_runs.running.len(), 1);
+    assert_eq!(undo(&app), steps, "not traced yet");
+    let t0 = std::time::Instant::now();
+    while !app.trace_runs.running.is_empty() && t0.elapsed() < std::time::Duration::from_secs(30) {
+        crate::trace_runs::poll(&mut app);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(undo(&app), steps + 1, "one undo step");
+    assert_eq!(strokes(&app), Some(json!(true)));
+    let st: TraceUi = pstate(&ctx, "image-trace");
+    assert!(st.info.is_some(), "its counts show");
+    assert_eq!(st.object, target_key(&app));
+    assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
+    app.ui.image_trace_preview = true;
+    frame(&mut app, &ctx, vec![]);
+    app.run("edit.undo", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.trace_runs.running.is_empty(), "Undo traces nothing");
+    assert_eq!(strokes(&app), Some(json!(false)), "the object's own settings");
+    assert_eq!(undo(&app), steps);
 }

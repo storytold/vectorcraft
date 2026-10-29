@@ -10,6 +10,7 @@ mod text_fixture;
 mod affinity_features;
 mod affinity_local;
 mod artboard_click;
+mod beyond_canvas;
 mod clear_commands;
 mod compound_attributes;
 mod dimensions;

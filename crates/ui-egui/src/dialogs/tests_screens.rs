@@ -456,11 +456,7 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    let place = |app: &mut VectorcraftApp| {
-        app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [10, 10]})).unwrap()
-    };
+    let place = |app: &mut VectorcraftApp| vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
     let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}, {"format": "jpg", "scale": "2x", "suffix": "@2x"}]);
     let dir = temp_folder("undecoded");
     let folder = dir.to_string_lossy().replace('\\', "/");

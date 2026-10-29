@@ -1,4 +1,4 @@
-use super::*;
+use super::{NodeKind, Sense, Stroke, Tokens, Ui, VectorcraftApp, json, stroke_panel, theme, vec2, widgets};
 
 /// An anchor button: icon, tooltip, command and the convert command's `to`.
 type AnchorButton<'a> = (&'a str, &'a str, &'a str, Option<&'a str>);

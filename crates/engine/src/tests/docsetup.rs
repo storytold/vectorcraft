@@ -130,6 +130,28 @@ fn set_units_is_an_alias() {
     assert!(s.execute("document.setUnits", &json!({"units": "parsecs"})).is_err());
 }
 
+/// Switch Units (Cmd+Alt+Shift+U) steps the document's units through every unit in the order a
+/// right-click on a ruler lists them, Feet going back to Points, one undo step each.
+#[test]
+fn switch_units_steps_through_the_units_and_wraps() {
+    let spec = command_specs().iter().find(|c| c.id == "document.switchUnits").expect("registered");
+    assert_eq!((spec.label, spec.shortcut), ("Switch Units", Some("Cmd+Alt+Shift+U")));
+    assert!(Session::new().execute("document.switchUnits", &json!({})).is_err(), "no document");
+    let mut s = session();
+    assert_eq!(s.doc().unwrap().doc.units, Unit::Points);
+    let order = ["Picas", "Inches", "Millimeters", "Centimeters", "Pixels", "Feet & Inches", "Meters", "Yards", "Feet", "Points"];
+    for (i, label) in order.iter().enumerate() {
+        assert_eq!(s.execute("document.switchUnits", &json!({})).unwrap(), json!({"units": label}));
+        assert_eq!(s.doc().unwrap().doc.units.label(), *label);
+        assert_eq!(s.doc().unwrap().history.undo.len(), i + 1, "one undo step each");
+    }
+    s.execute("document.setUnits", &json!({"units": "Feet"})).unwrap();
+    s.execute("document.switchUnits", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.units, Unit::Points, "after Feet comes Points");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.units, Unit::Feet);
+}
+
 #[test]
 fn language_picks_its_quotes_unless_quotes_are_given() {
     let mut s = session();

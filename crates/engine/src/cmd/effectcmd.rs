@@ -15,7 +15,7 @@ use vectorcraft_render::effects;
 use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_target, item_target_at, shared_stack};
 use super::expand::has_seeded;
 use super::rasterfx;
-use super::*;
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -69,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -471,7 +471,7 @@ fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
 /// fills or strokes, effects, transparency of a fill or stroke, a brush), a group or layer with
 /// fills, strokes or effects of its own or such members, other objects with effects, or type with
 /// fills or strokes of its own?
-fn expandable(n: &Node) -> bool {
+pub(crate) fn expandable(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Path { clipping: true, .. } | NodeKind::Path { guide: true, .. } => false,
         NodeKind::Path { .. } | NodeKind::Compound { .. } => !n.appearance.is_basic() || vectorcraft_brush::has_brush(n),
@@ -582,8 +582,9 @@ fn fresh_ids_listed(d: &mut Document, c: &mut Node, seen: &mut std::collections:
 }
 
 /// Expand Appearance of `id` (and, recursively, of a group's or layer's members): every fill and
-/// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
-/// are baked, raster effects become an embedded image, and the object keeps its transparency.
+/// stroke becomes an object of its own (a stroke a path stroked by it alone, brushes as their art),
+/// geometry effects are baked, raster effects become an embedded image, and the object keeps its
+/// transparency.
 pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
     let Some(n) = d.node(id).cloned() else { return };
     let mut listed = vec![];

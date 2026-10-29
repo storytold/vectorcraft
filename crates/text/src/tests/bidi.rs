@@ -163,6 +163,7 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 image: None,
                 colour: None,
                 bend: None,
+                unturned: Affine::IDENTITY,
             });
             x += advance;
         }

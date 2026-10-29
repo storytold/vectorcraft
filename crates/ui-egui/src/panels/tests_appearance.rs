@@ -203,8 +203,8 @@ fn cmd_slash_adds_a_fill_and_cmd_alt_slash_a_stroke_as_the_panel_buttons_do() {
 }
 
 /// With nothing selected, Add New Fill and Add New Stroke are off in menus and the command palette
-/// as the Appearance panel's buttons are, and their keys run nothing (no error in the status bar).
-/// Given ids, they still add to those objects.
+/// as the Appearance panel's buttons are, and their keys run nothing (no error in the status bar);
+/// an empty `ids` list runs nothing either. Given ids, they still add to those objects.
 #[test]
 fn add_new_fill_and_stroke_are_off_without_a_selection() {
     let mut app = app_with_rect();
@@ -223,6 +223,8 @@ fn add_new_fill_and_stroke_are_off_without_a_selection() {
         out.textures_delta.clear();
         crate::menus::invoke(&mut app, id, json!({}));
         assert_eq!((items(&app), app.ui.status.as_str()), (before, ""), "{id} ran nothing");
+        crate::menus::invoke(&mut app, id, json!({"ids": []}));
+        assert_eq!((items(&app), app.ui.status.as_str()), (before, ""), "{id} with no ids ran nothing");
     }
     crate::menus::invoke(&mut app, "appearance.addFill", json!({"ids": [rect.0]}));
     assert_eq!((items(&app), app.ui.status.as_str()), (before + 1, ""), "given ids, it adds a fill");
