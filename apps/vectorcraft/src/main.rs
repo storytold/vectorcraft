@@ -24,6 +24,8 @@ mod cursor_theme;
 #[cfg(feature = "wgpu")]
 mod gpu;
 #[cfg(target_os = "linux")]
+mod linux_file_read;
+#[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
 #[cfg(target_os = "macos")]
@@ -43,6 +45,8 @@ mod open_documents;
 mod portal_save;
 mod prefs_dir;
 mod printing;
+#[cfg(target_os = "linux")]
+mod single_instance;
 #[cfg(windows)]
 mod system_fonts;
 mod tablet;
@@ -89,6 +93,8 @@ struct App {
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
     graphics_lost: bool,
+    #[cfg(target_os = "linux")]
+    instance: Option<single_instance::Instance>,
     /// Frames the UI has run (see [`end_before_teardown`]).
     frames: u64,
     /// Keeps the custom title bar's window borderless (Windows, #1758).
@@ -178,6 +184,25 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::FAILURE;
             }
         },
+    };
+    // Automation runs stay independent. Ordinary desktop launches share one window on Linux.
+    #[cfg(target_os = "linux")]
+    let instance = if control_port.is_some() || !prefs_enabled() {
+        None
+    } else {
+        match single_instance::start(&files) {
+            Ok(single_instance::Launch::Forwarded) => return std::process::ExitCode::SUCCESS,
+            Ok(single_instance::Launch::Primary(instance)) => Some(instance),
+            Err(single_instance::StartError::BusUnavailable(e)) => {
+                // Minimal desktop sessions may have no bus. Keep file opening available there.
+                eprintln!("vectorcraft: could not reuse the existing window: {e}");
+                None
+            }
+            Err(single_instance::StartError::ForwardingFailed(e)) => {
+                eprintln!("vectorcraft: could not forward to the existing window: {e}");
+                return std::process::ExitCode::FAILURE;
+            }
+        }
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
@@ -429,6 +454,10 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
+                #[cfg(target_os = "linux")]
+                if let Some(instance) = &instance {
+                    instance.set_ui(&cc.egui_ctx);
+                }
                 app.custom_titlebar = custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
@@ -463,6 +492,8 @@ fn main() -> std::process::ExitCode {
                     graphics_lost: false,
                     frames: 0,
                     window_frame,
+                    #[cfg(target_os = "linux")]
+                    instance,
                     winit_window,
                     pending_maximize,
                     maximize_tries: 8,

@@ -501,6 +501,10 @@ Scores and hour estimates are unchanged.
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
+| 2026-10-21 | minor | M4: Linux document-only window reuse; regular-file/512 MiB read safeguards; isolated transport and reader regressions; scores and estimates unchanged. |
+| 2026-10-21 | minor | M4 review: rejected forwarding cannot bypass the owner; per-file dialog/decoder deferral and shared 32-slot admission preserve request ownership and bound repeated handoff work; real-bus regressions; scores unchanged. |
+| 2026-10-22 | minor | M4 review: owner-side capacity refusals show a coalesced status message without disturbing dialogs or queued documents; connected-bus ownership refusals fail closed. Private D-Bus regressions; scores and estimates unchanged. |
+| 2026-10-22 | minor | M4 startup review: reserve primary file slots before publishing the D-Bus service; real-bus boundary regressions cover startup admission, activation and first-frame capacity reconciliation. Scores and estimates unchanged. |
 
 > **Tab-drag status (2026-10-22):** updated from upstream, including the Turkish catalog and all three tab-drag translations requested in #3479; Selection-tool reset regression-checked and clipboard evidence scoped to internal state; drag lifecycle, insertion and regression contracts documented; behavior, scores and estimates unchanged.
 
@@ -510,3 +514,50 @@ Scores and hour estimates are unchanged.
 | 2026-10-22 | minor | Merge current main and complete the Turkish tab-drag labels and validation messages requested by the maintainer; all 24 catalogs covered; scores and estimates unchanged. |
 | 2026-10-22 | minor | Tab-drag follow-up: reconcile upstream progress updates and document drag lifecycle, insertion behavior and regression contracts; behavior, scores and estimates unchanged. |
 | 2026-10-22 | minor | Artwork dragged with Selection switches visible document tabs after a 400 ms hover, then copies editable artwork on canvas release; source and clipboard stay intact; scores and hours unchanged |
+
+## Linux file-manager handoff (2026-10-21)
+
+Ordinary Linux launches share the session D-Bus name `ai.storyteller.vectorcraft.OpenDocuments`.
+Later launches queue absolute document paths and exit; the running app opens document tabs
+while preserving existing unsaved work. Activation remains subject to compositor focus policy.
+Automation (`--control`, `VECTORCRAFT_CONTROL_PORT`, `VECTORCRAFT_NO_PREFS`) stays independent.
+Only unavailable-bus startup errors permit standalone fallback. An existing owner's rejection,
+timeout or other forwarding failure exits unsuccessfully instead of starting a second window.
+
+Handoff shares a 32-slot admission budget with queued paths, decoding, modal work and open tabs
+(including tabs opened locally). Dispatch reserves a slot and starts at most one file; it waits
+for the decoder and any native or in-app dialog to finish before taking the next queued path.
+A completed tab retains its slot until closed. Capacity is refreshed by the UI; closing a tab
+or cancelling a dialog releases its slot. Overload is rejected atomically; close tabs and retry.
+An activation-only request still works at capacity. Local File Open is not capped by this IPC
+policy, but its tabs count against new forwarded work. Startup requests wait for the first UI
+frame, which checks actual occupancy before dispatching.
+
+Forwarded paths use `io::opens_as` to refuse plug-ins, presets, libraries, shortcut sets and
+scripts before reading; deliberate local File Open and plug-in installation stay available.
+Linux desktop reads accept regular files and ordinary symlinks, reject pipes/devices/directories,
+recheck the opened descriptor, and cap input at 512 MiB even for growing or zero-reported-length
+files. Nonblocking opens prevent FIFO replacement from hanging. Regular-file I/O remains
+synchronous and network filesystem latency is not bounded. The admission budget bounds work
+count, not decoded bytes; existing importer limits still apply.
+
+Tests: `single_instance::tests` covers isolated real D-Bus, rejected handoff classification,
+no-bus fallback, serialized decoding, retained dialog requests, slot retention and close/retry,
+Unicode/relative paths, ownership release, unsaved documents and document-only handling.
+`linux_file_read::tests` covers special descriptors, symlinks and byte limits. Native/Flatpak
+tab opening was manually verified before this review follow-up. Scores and estimates unchanged.
+
+Linux handoff review follow-up (2026-10-22): capacity refusals wake the owner and
+show a one-shot status message, including while a dialog defers opening. Repeated
+refusals coalesce without adding queued work. Once the session bus is connected,
+name-ownership errors fail closed rather than starting a second workspace. Private
+D-Bus tests cover denied ownership and visible, one-shot capacity feedback while
+preserving queued files, dialogs and unsaved artwork. Scores and estimates unchanged.
+
+Startup admission follow-up (2026-10-22): the primary reserves its startup file
+count before publishing the D-Bus service. Concurrent launches therefore count
+startup work toward the shared limit. The first UI dispatch replaces this temporary
+reservation with realized tabs, decoders and dialogs. Explicit primary startup files
+retain their existing behavior, including counts above the forwarded-work limit;
+additional forwarded files are refused until capacity becomes available. Real-bus
+regressions exercise the boundary before any UI frame and subsequent reconciliation.

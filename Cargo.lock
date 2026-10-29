@@ -6057,6 +6057,7 @@ dependencies = [
  "pollster 1.0.1",
  "raw-window-handle",
  "rfd",
+ "rustix 1.1.5",
  "serde_json",
  "socket2",
  "vectorcraft-engine",

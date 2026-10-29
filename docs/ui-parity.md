@@ -237,6 +237,12 @@ tools, never checked side by side) isn't captured row by row.
 | Eyedropper cursor; Use Precise Cursors | partial | original pipette at the sampling tip, distinct from the precise crosshair at five DPI scales (#1269); OS cursor display and Caps Lock unverified; a Precise Cursors command toggles the preference and can take a shortcut (#1663); cursors are painted into the window on Wayland (#1652, not run on Linux) |
 | Every tool's modifiers checked against the shortcut reference | missing | this is the fidelity pass |
 
+## Linux file-opening workflow
+
+| Behaviour | Status | Notes |
+|---|---|---|
+| File-manager opens become tabs in the existing window | done | Document-only session D-Bus; modal deferral and unsaved work preserved; special files refused and regular-file input capped at 512 MiB; automation independent; no-bus fallback; compositor focus policy applies. Transport and reader tests; native/Flatpak verification; review follow-up: one forwarded decode at a time, 32 shared slots, failed handoff never opens a second window |
+
 ## Keyboard shortcuts
 
 Cmd/Ctrl+/ (`appearance.addFill`) and Cmd/Ctrl+Alt+/ (`appearance.addStroke`) add a new fill and a new stroke to the
@@ -403,6 +409,10 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-21 | minor | 3D: original Standard, Diffuse, Top Left and Right lighting presets; command access, effective-setting recognition and preview/history; scores and estimates unchanged |
 | 2026-10-21 | minor | G1: one selected clip group's Properties panel has Edit Clipping Path and Edit Contents at its top (public doc cited in target-app-parity.md). Scores unchanged. |
 | 2026-10-19 | minor | Distribute Objects and Distribute Spacing space the selected ruler guides across the axis with the objects, as items with no size, and two or more guides selected alone (#1597 in part); with a key guide and a spacing, the guide stays put and the other items are spaced from it (key guide from #3165); the Distribute Spacing value is enabled for a key guide; scores unchanged |
+| 2026-10-21 | minor | M4: Linux document-only window reuse; regular-file/512 MiB read safeguards; isolated transport and reader regressions; scores and estimates unchanged. |
+| 2026-10-21 | minor | M4 review: rejected forwarding cannot bypass the owner; per-file dialog/decoder deferral and shared 32-slot admission preserve request ownership and bound repeated handoff work; real-bus regressions; scores unchanged. |
+| 2026-10-22 | minor | M4 review: owner-side capacity refusals show a coalesced status message without disturbing dialogs or queued documents; connected-bus ownership refusals fail closed. Private D-Bus regressions; scores and estimates unchanged. |
+| 2026-10-22 | minor | M4 startup review: reserve primary file slots before publishing the D-Bus service; real-bus boundary regressions cover startup admission, activation and first-frame capacity reconciliation. Scores and estimates unchanged. |
 | 2026-10-21 | minor | Snap to Glyph marked done (#3124); scores unchanged |
 | 2026-10-20 | minor | The selection tools (Selection, Direct Selection, Group Selection) take a clipping path on its outline, within the selection tolerance, before the art it clips, so its segments can be dragged where the art covers the mask's edge; Select Behind lists the same, and the eyedropper and the tools that act on what is drawn are unchanged. Doc and tool regression tests. Scores unchanged. |
 | 2026-10-20 | minor | Polygon and Star exact-size placement remembers the chosen count for later drags and dialog openings; Cancel preserves the previous count; existing opening gestures retained; scores and hours unchanged. |
@@ -492,3 +502,29 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-22 | minor | Merge current main and complete the Turkish tab-drag labels and validation messages requested by the maintainer; all 24 catalogs covered; scores and estimates unchanged. |
 | 2026-10-22 | minor | Tab-drag follow-up: reconcile upstream progress updates and document drag lifecycle, insertion behavior and regression contracts; behavior, scores and estimates unchanged. |
 | 2026-10-22 | minor | Artwork dragged with Selection switches visible document tabs after a 400 ms hover, then copies editable artwork on canvas release; source and clipboard stay intact; scores and hours unchanged |
+
+## Linux file-manager handoff (2026-10-21)
+
+Document-only session D-Bus requests open tabs in the existing window. Forwarding failures
+exit unsuccessfully; only an unavailable bus permits standalone fallback. Dispatch processes
+one file at a time, retaining later requests across dialogs and decoding. A shared 32-slot
+budget covers queued work, decoders, dialogs and open tabs; closing tabs releases capacity.
+Linux reads reject pipes/devices and cap regular-file input at 512 MiB. Automation remains
+independent; compositor focus policy applies. Real-bus and reader regressions cover these
+safeguards and unsaved work. Work count is bounded, not total decoded bytes or network latency.
+Scores and estimates unchanged. See [development.md](development.md#linux-file-manager-handoff-2026-10-21).
+
+Linux handoff review follow-up (2026-10-22): capacity refusals wake the owner and
+show a one-shot status message, including while a dialog defers opening. Repeated
+refusals coalesce without adding queued work. Once the session bus is connected,
+name-ownership errors fail closed rather than starting a second workspace. Private
+D-Bus tests cover denied ownership and visible, one-shot capacity feedback while
+preserving queued files, dialogs and unsaved artwork. Scores and estimates unchanged.
+
+Startup admission follow-up (2026-10-22): the primary reserves its startup file
+count before publishing the D-Bus service. Concurrent launches therefore count
+startup work toward the shared limit. The first UI dispatch replaces this temporary
+reservation with realized tabs, decoders and dialogs. Explicit primary startup files
+retain their existing behavior, including counts above the forwarded-work limit;
+additional forwarded files are refused until capacity becomes available. Real-bus
+regressions exercise the boundary before any UI frame and subsequent reconciliation.

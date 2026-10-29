@@ -105,6 +105,10 @@ impl App {
             }
             open_files(&mut self.app, files);
         }
+        #[cfg(target_os = "linux")]
+        if let Some(instance) = &self.instance {
+            instance.dispatch(&mut self.app, ctx);
+        }
         self.app.tick(ctx);
         if self.pending_maximize {
             if let Some(w) = &self.winit_window {

@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use super::linux_file_read;
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
 use super::portal_save;
 #[cfg(target_os = "linux")]
@@ -274,7 +276,16 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Windows reads it from the pen's pointer messages (`windows_stylus`).
         #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
-        read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
+        read: Some(Box::new(|p: &str| {
+            #[cfg(target_os = "linux")]
+            {
+                linux_file_read::read(p)
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                std::fs::read(p).map_err(|e| e.to_string())
+            }
+        })),
         write: Some(Box::new(write_file)),
         exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
