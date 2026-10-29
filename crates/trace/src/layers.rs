@@ -1,7 +1,7 @@
 use super::params::{Method, Mode, TraceParams};
+use super::pipeline::TracedPath;
 #[cfg(test)]
-use super::pipeline::bw_tones;
-use super::pipeline::{TracedPath, is_ignored};
+use super::pipeline::{bw_tones, left_out};
 use super::raster::Raster;
 use super::{
     AtomicUsize, Crack, Loop, Ordering, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, centerline, contour, fit, logo, shapes,
@@ -17,8 +17,8 @@ pub(crate) struct Layers<'a> {
     pub(crate) rank: &'a [usize],
     pub(crate) params: &'a TraceParams,
     pub(crate) img: &'a Raster,
-    /// The colour Ignore Color leaves out, if not white.
-    pub(crate) ignore: Option<[u8; 3]>,
+    /// For each palette entry, whether Ignore Color or Keep Colors leaves it out (see `pipeline::left_out`).
+    pub(crate) left_out: Vec<bool>,
     /// The box each palette entry's pixels lie in: `(x0, y0, x1, y1)`, the far sides excluded.
     pub(crate) boxes: Vec<Option<(usize, usize, usize, usize)>>,
     /// Gradients: the gradient each palette entry is, if it is one.
@@ -35,10 +35,11 @@ pub(crate) struct Layers<'a> {
 }
 
 impl Layers<'_> {
-    /// Ignore White: white is no part of any layer (stacked layers reach under the layers above
-    /// them, and must not reach under white that is left out).
+    /// Ignore White, and the colors Keep Colors does not list: such a color is no part of any
+    /// layer (stacked layers reach under the layers above them, and must not reach under a color
+    /// that is left out).
     fn ignored(&self, label: u16) -> bool {
-        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
+        self.left_out.get(label as usize).copied().unwrap_or(false)
     }
     /// The region across a crack, for cutting outlines at their junctions: the outside pixel's
     /// colour. Stacked layers end on many colours at once and share no edge: one neighbour.
@@ -427,7 +428,7 @@ pub(crate) fn shift_probe(img: &Raster, params: &TraceParams) -> Vec<[f64; 4]> {
         rank: &rank,
         params,
         img,
-        ignore: None,
+        left_out: left_out(&q.palette, params, None, &[]),
         boxes: vec![None; n],
         gradients: &gradients,
         bw_tones: bw_tones(img, &q),

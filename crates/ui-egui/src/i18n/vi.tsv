@@ -5035,6 +5035,11 @@ theme	Appearance	Giao diện
 	Snap to Perpendicular	Hút vào đường vuông góc
 @msg	unknown snap option `{key}` (use {options})	tùy chọn hút không hợp lệ `{key}` (dùng {options})
 	Gap Length:	Độ dài khoảng hở:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Chế độ Logo phẳng không dùng keepColors: chế độ này dò các màu được nêu trong logoColors hoặc các màu nó tìm thấy.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Không có gì được dò: không màu nào mà quá trình dò tìm thấy khớp với keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Không có gì được dò: Bỏ qua màu bỏ đi mọi vùng của các màu mà keepColors liệt kê.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Không có gì được dò: các màu khớp với keepColors không tạo ra đường dẫn nào.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: không màu nào mà quá trình dò tìm thấy khớp với {c}, nên không có gì của màu đó được dò.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` cần `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` cần `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` cần `mode: "color"`

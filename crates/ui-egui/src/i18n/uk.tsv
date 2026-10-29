@@ -5033,6 +5033,11 @@ lighting	Light	Світло
 	Snap to Perpendicular	Прив’язати до перпендикуляра
 @msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не використовує keepColors: він трасує кольори, вказані в logoColors, або знайдені ним кольори.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Нічого не трасовано: жоден із кольорів, знайдених під час трасування, не відповідає keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Нічого не трасовано: «Ігнорувати колір» пропускає всі області кольорів, перелічених у keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Нічого не трасовано: кольори, що відповідають keepColors, не дають жодного контуру.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: жоден із кольорів, знайдених під час трасування, не відповідає {c}, тому з нього нічого не трасується.
 @msg	`colorGroup` needs `library: "document"`	для `colorGroup` потрібен `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` потрібен `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	для `colorGroup` потрібен `mode: "color"`

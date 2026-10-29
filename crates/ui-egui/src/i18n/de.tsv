@@ -5019,6 +5019,11 @@ effect	Soft	Weich
 	Snap to Perpendicular	An Senkrechter ausrichten
 @msg	unknown snap option `{key}` (use {options})	unbekannte Einrastoption `{key}` (möglich: {options})
 	Gap Length:	Lückenlänge:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Der Modus „Flaches Logo“ verwendet keepColors nicht: Er zeichnet die in logoColors genannten Farben nach oder die Farben, die er findet.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nichts wurde nachgezeichnet: Keine der beim Nachzeichnen gefundenen Farben entspricht keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nichts wurde nachgezeichnet: „Farbe ignorieren“ lässt jeden Bereich der in keepColors aufgeführten Farben aus.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nichts wurde nachgezeichnet: Die Farben, die keepColors entsprechen, ergeben keine Pfade.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: Keine der beim Nachzeichnen gefundenen Farben entspricht {c}, daher wird davon nichts nachgezeichnet.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` erfordert `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` erfordert `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` erfordert `mode: "color"`

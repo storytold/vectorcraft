@@ -5382,6 +5382,11 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar a perpendicular
 @msg	unknown snap option `{key}` (use {options})	opción de ajuste desconocida `{key}` (use {options})
 	Gap Length:	Longitud del hueco:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	El modo Logotipo plano no usa keepColors: calca los colores indicados en logoColors o los colores que encuentra.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	No se calcó nada: ninguno de los colores que encontró el calco coincide con keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	No se calcó nada: Ignorar color omite todas las áreas de los colores que indica keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	No se calcó nada: los colores que coinciden con keepColors no producen ningún trazado.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ninguno de los colores que encontró el calco coincide con {c}, así que no se calca nada de él.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` requiere `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requiere `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` requiere `mode: "color"`

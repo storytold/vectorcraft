@@ -224,7 +224,8 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     let raster = tr::Raster::decode_to_fit(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     let library = trace_library(c, s, &mut params)?;
     let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
-    let warnings = trace_warnings((img.width, img.height), (raster.width, raster.height), res.worked_at);
+    let mut warnings = keep_warnings(&params, &res);
+    warnings.extend(trace_warnings((img.width, img.height), (raster.width, raster.height), res.worked_at));
     // Pixel space of the decoded raster → the image object's pixel space → document.
     let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
     let sy = img.height.max(1) as f64 / raster.height.max(1) as f64;
@@ -327,6 +328,30 @@ pub(crate) fn trace_warnings(size: (u32, u32), traced: (u32, u32), worked: Optio
     out
 }
 
+/// What a trace with Keep Colors tells the user: that nothing was traced because no color the
+/// trace found matches a listed one, because Ignore Color left out the ones that match, or because
+/// the ones that match produce no paths; each listed color that matches none of them; and that Flat
+/// Logo mode does not use the list.
+pub(crate) fn keep_warnings(params: &tr::TraceParams, res: &tr::TraceResult) -> Vec<String> {
+    if params.keep_colors.is_empty() {
+        return vec![];
+    }
+    if params.mode == tr::Mode::Logo {
+        return vec!["Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.".to_string()];
+    }
+    if res.paths.is_empty() && res.keep_unmatched.len() == params.keep_colors.len() {
+        return vec![format!("Nothing was traced: none of the colors the trace found matches keepColors ({}).", params.keep_colors.join(", "))];
+    }
+    let mut out = vec![];
+    if res.paths.is_empty() && res.keep_ignored {
+        out.push("Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.".to_string());
+    } else if res.paths.is_empty() {
+        out.push("Nothing was traced: the colors that match keepColors produce no paths.".to_string());
+    }
+    out.extend(res.keep_unmatched.iter().map(|c| format!("keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.")));
+    out
+}
+
 fn trace_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
     let v: Vec<NodeId> = root_ids(s, p)?.into_iter().filter(|i| d.node(*i).is_some_and(is_trace_group)).collect();
@@ -396,7 +421,25 @@ pub(super) fn trace_expand(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod trace_limit_tests {
-    use super::{MAX_TRACE_ANCHORS, trace_warnings};
+    use super::{MAX_TRACE_ANCHORS, keep_warnings, trace_warnings};
+    use vectorcraft_trace as tr;
+
+    #[test]
+    fn keep_warnings_name_matched_colors_that_produce_no_paths() {
+        let params = tr::TraceParams { keep_colors: vec!["#ff0000".into()], ..tr::TraceParams::default() };
+        // A listed color was traced, and produced no paths: the palette lists no color without paths.
+        let traced = tr::TraceResult::default();
+        let none = vec!["Nothing was traced: the colors that match keepColors produce no paths.".to_string()];
+        assert_eq!(keep_warnings(&params, &traced), none);
+        // With Ignore Color, too: Ignore Color did not leave that color out.
+        let ignoring = tr::TraceParams { ignore_white: true, ..params.clone() };
+        assert_eq!(keep_warnings(&ignoring, &traced), none);
+        // Ignore Color left out every color that matches: none was traced.
+        assert_eq!(
+            keep_warnings(&ignoring, &tr::TraceResult { keep_ignored: true, ..tr::TraceResult::default() }),
+            vec!["Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.".to_string()]
+        );
+    }
 
     #[test]
     fn trace_warnings_name_a_large_or_scaled_down_image() {

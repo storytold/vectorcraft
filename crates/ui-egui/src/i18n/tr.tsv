@@ -5434,6 +5434,11 @@ theme	Appearance	Görünüm
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
 	Gap Length:	Boşluk Uzunluğu:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Düz Logo modu keepColors kullanmaz: logoColors içinde adı verilen renkleri veya bulduğu renkleri izler.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Hiçbir şey izlenmedi: izlemenin bulduğu renklerin hiçbiri keepColors ({_1}) ile eşleşmiyor.
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Hiçbir şey izlenmedi: Rengi Yoksay, keepColors içinde listelenen renklerin tüm alanlarını dışarıda bırakıyor.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Hiçbir şey izlenmedi: keepColors ile eşleşen renkler hiçbir yol oluşturmuyor.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: izlemenin bulduğu renklerin hiçbiri {c} ile eşleşmiyor, bu yüzden bu renkten hiçbir şey izlenmiyor.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` için `mode: "color"` gerekir

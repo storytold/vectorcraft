@@ -1566,6 +1566,42 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
 }
 
+/// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
+/// doesn't read, are translated in each language of [`COMPLETE_MESSAGES`], with the colors kept.
+#[test]
+fn the_keep_colors_trace_warnings_are_translated() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    // A white field with a black square in it.
+    let img = image::RgbaImage::from_fn(40, 40, |x, y| {
+        image::Rgba(if (10..30).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255, 255, 255, 255] })
+    });
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    let mut warnings = vec![];
+    for (params, shown) in [
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#ff00ff", "#00ffff"]}), "#ff00ff, #00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000", "#00ffff"]}), "#00ffff"),
+        (json!({"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#000000"], "ignoreWhite": true, "ignoreColor": "#000000"}), ""),
+        (json!({"mode": "logo", "keepColors": ["#000000"]}), ""),
+    ] {
+        s.execute("file.place", &json!({"name": "square.png", "dataBase64": data, "link": false})).unwrap();
+        let r = s.execute("imageTrace.makeAndExpand", &json!({ "params": params })).unwrap();
+        let w = r["warnings"].as_array().and_then(|w| w.first()).and_then(|w| w.as_str()).unwrap_or_else(|| panic!("{params}: {r}"));
+        warnings.push((w.to_string(), shown));
+    }
+    // Listed colors that were traced and produced no paths (no square image gives that).
+    warnings.push(("Nothing was traced: the colors that match keepColors produce no paths.".to_string(), ""));
+    for (warning, shown) in &warnings {
+        for code in COMPLETE_MESSAGES {
+            let tr = message(Lang::from_code(code).unwrap(), warning);
+            assert!(tr != *warning && tr.contains(shown) && tr.contains("keepColors"), "{code}: {tr}");
+        }
+    }
+}
+
 /// The parameter errors of the blend spine commands (Move Spine Point, Reshape Spine Segment, Add
 /// Spine Point and Delete Spine Point, which Direct Selection, the Pen and the Anchor Point tool
 /// send) say what is wrong.

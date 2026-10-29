@@ -1373,6 +1373,115 @@ fn ignore_color_leaves_out_the_colour_picked() {
     assert_eq!(serde_json::to_value(&params).unwrap()["ignoreColor"], serde_json::Value::Null);
 }
 
+/// A navy field with a yellow disc, a green bar and a red square on it, hard-edged.
+fn four_color_art() -> Raster {
+    Raster::from_fn(160, 120, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        if Point::new(fx, fy).distance(Point::new(50.0, 45.0)) <= 30.0 {
+            [250, 200, 40, 255]
+        } else if (20.0..140.0).contains(&fx) && (90.0..108.0).contains(&fy) {
+            [40, 160, 90, 255]
+        } else if (100.0..140.0).contains(&fx) && (20.0..60.0).contains(&fy) {
+            [200, 40, 50, 255]
+        } else {
+            [20, 40, 90, 255]
+        }
+    })
+}
+
+#[test]
+fn keep_colors_traces_only_the_colors_listed() {
+    let near = |c: [u8; 3], want: [u8; 3]| (0..3).all(|k| c[k].abs_diff(want[k]) <= 3);
+    let (yellow, red, navy) = ([250, 200, 40], [200, 40, 50], [20, 40, 90]);
+    let img = four_color_art();
+    let pixels = |res: &TraceResult, c: [u8; 3]| res.paths.iter().filter(|p| near(p.color, c)).map(|p| p.pixels).sum::<usize>();
+    let abutting = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 4, ..TraceParams::default() };
+    let abutting_all = trace(&img, &abutting);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams { method, ..abutting.clone() };
+        let all = trace(&img, &params);
+        assert_eq!(all.palette.len(), 4, "{method:?}: {:?}", all.palette);
+        // The yellow and the red, each picked a little off.
+        let res = trace(&img, &TraceParams { keep_colors: vec!["#f0c832".into(), "#c8283c".into()], ..params.clone() });
+        assert_eq!(res.palette.len(), 2, "{method:?}: {:?}", res.palette);
+        if method == Method::Abutting {
+            // Their paths as the whole trace has them.
+            let want: Vec<TracedPath> = all.paths.iter().filter(|p| near(p.color, yellow) || near(p.color, red)).cloned().collect();
+            assert!(want.iter().any(|p| near(p.color, yellow)) && want.iter().any(|p| near(p.color, red)));
+            assert_eq!(res.paths, want);
+        } else {
+            // Stacked, each kept color covers what it covers in the trace of every color: the red
+            // square touches neither the yellow disc nor the green left out, so it covers only itself.
+            assert!(res.paths.iter().all(|p| near(p.color, yellow) || near(p.color, red)));
+            assert_eq!(pixels(&res, red), pixels(&all, red));
+            assert_eq!(pixels(&res, red), pixels(&abutting_all, red));
+            assert_eq!(pixels(&res, yellow), pixels(&abutting_all, yellow));
+            // The navy field alone, at the bottom of the stack: no part of the colors left out.
+            let field = trace(&img, &TraceParams { keep_colors: vec!["#14285a".into()], ..params.clone() });
+            assert!(!field.paths.is_empty());
+            assert_eq!(pixels(&field, navy), pixels(&abutting_all, navy));
+            assert!(pixels(&all, navy) > pixels(&abutting_all, navy));
+        }
+        // Every color listed: the trace of every color, as with none listed.
+        let every = vec!["#fac828".into(), "#28a05a".into(), "#c82832".into(), "#14285a".into()];
+        assert_eq!(trace(&img, &TraceParams { keep_colors: every, ..params.clone() }), all, "{method:?}");
+        // A color the image does not have: nothing is traced.
+        assert!(trace(&img, &TraceParams { keep_colors: vec!["#ff00ff".into()], ..params.clone() }).paths.is_empty(), "{method:?}");
+        // With Ignore Color as well, a kept color it matches is left out.
+        let both = TraceParams {
+            keep_colors: vec!["#fac828".into(), "#14285a".into()],
+            ignore_white: true,
+            ignore_color: Some("#14285a".into()),
+            ..params.clone()
+        };
+        let res = trace(&img, &both);
+        assert!(!res.paths.is_empty() && res.paths.iter().all(|p| near(p.color, yellow)), "{method:?}");
+    }
+    // A color that is none is refused, in Flat Logo mode too.
+    for mode in [Mode::Color, Mode::Logo] {
+        let bad = trace_within(&img, &TraceParams { mode, keep_colors: vec!["#c8283c".into(), "red".into()], ..TraceParams::default() }, usize::MAX);
+        assert!(matches!(&bad, Err(TraceError::BadPalette(name)) if name == "red"), "{mode:?}");
+    }
+    // Old documents have no such setting: every color.
+    let old: TraceParams = serde_json::from_str(r#"{"mode":"color"}"#).unwrap();
+    assert!(old.keep_colors.is_empty());
+    let on: TraceParams = serde_json::from_str(r##"{"keepColors":["#c8283c"]}"##).unwrap();
+    assert_eq!(on.keep_colors, ["#c8283c"]);
+}
+
+#[test]
+fn keep_colors_names_the_colors_nothing_matches() {
+    let img = four_color_art();
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 4, ..TraceParams::default() };
+    let unmatched = |keep: &[&str], params: &TraceParams| {
+        let res = trace(&img, &TraceParams { keep_colors: keep.iter().map(|k| k.to_string()).collect(), ..params.clone() });
+        (res.keep_unmatched, res.paths.len())
+    };
+    // Every color listed matches one the trace found.
+    assert_eq!(unmatched(&["#f0c832", "#c8283c"], &params).0, Vec::<String>::new());
+    // A color the image does not have is named, as written, beside the ones traced.
+    let (names, paths) = unmatched(&["#f0c832", "#FF00FF", "#c8283c"], &params);
+    assert_eq!(names, ["#FF00FF"]);
+    assert!(paths > 0);
+    // None matches: every one is named, and nothing is traced.
+    assert_eq!(unmatched(&["#ff00ff", "#00ffff"], &params), (vec!["#ff00ff".to_string(), "#00ffff".to_string()], 0));
+    // A color Ignore Color leaves out still matches one the trace found.
+    let ignoring = TraceParams { ignore_white: true, ignore_color: Some("#14285a".into()), ..params.clone() };
+    assert_eq!(unmatched(&["#14285a"], &ignoring), (Vec::new(), 0));
+    // The result says that Ignore Color left out every color that matches, and only then.
+    let keep = |keep: &[&str], params: &TraceParams| {
+        trace(&img, &TraceParams { keep_colors: keep.iter().map(|k| k.to_string()).collect(), ..params.clone() })
+    };
+    assert!(keep(&["#14285a"], &ignoring).keep_ignored);
+    assert!(!keep(&["#14285a", "#f0c832"], &ignoring).keep_ignored);
+    assert!(!keep(&["#14285a"], &params).keep_ignored);
+    assert!(!keep(&["#ff00ff"], &ignoring).keep_ignored);
+    // With none listed, none is named.
+    assert!(trace(&img, &params).keep_unmatched.is_empty());
+    // Flat Logo mode does not use the list.
+    assert!(trace(&img, &TraceParams { mode: Mode::Logo, keep_colors: vec!["#ff00ff".into()], ..params }).keep_unmatched.is_empty());
+}
+
 #[test]
 fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
     // 120 × 60, turned 1.5° about its centre.

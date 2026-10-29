@@ -5093,6 +5093,11 @@ lighting	Light	ライト
 	Snap to Perpendicular	垂線にスナップ
 @msg	unknown snap option `{key}` (use {options})	不明なスナップオプション `{key}` ({options} を使用してください)
 	Gap Length:	ギャップの長さ:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	フラットロゴモードは keepColors を使いません。logoColors で指定したカラー、または検出したカラーをトレースします。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	何もトレースされませんでした。トレースで検出したカラーのどれも keepColors ({_1}) に一致しません。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	何もトレースされませんでした。「カラーを無視」が keepColors に指定したカラーの領域をすべて除外します。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	何もトレースされませんでした。keepColors に一致するカラーからパスができません。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: トレースで検出したカラーのどれも {c} に一致しないため、このカラーは何もトレースされません。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` には `library: "document"` が必要です
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` には `palette: "documentLibrary"` が必要です
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` には `mode: "color"` が必要です

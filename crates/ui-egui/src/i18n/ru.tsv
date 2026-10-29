@@ -5049,6 +5049,11 @@ lighting	Light	Свет
 	Snap to Perpendicular	Привязать к перпендикуляру
 @msg	unknown snap option `{key}` (use {options})	неизвестный параметр привязки `{key}` (допустимо: {options})
 	Gap Length:	Длина зазора:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не использует keepColors: он трассирует цвета, указанные в logoColors, или найденные им цвета.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ничего не трассировано: ни один из найденных при трассировке цветов не соответствует keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ничего не трассировано: «Игнорировать цвет» исключает все области цветов, перечисленных в keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Ничего не трассировано: цвета, соответствующие keepColors, не дают ни одного контура.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ни один из найденных при трассировке цветов не соответствует {c}, поэтому из него ничего не трассируется.
 @msg	`colorGroup` needs `library: "document"`	для `colorGroup` нужен `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` нужен `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	для `colorGroup` нужен `mode: "color"`

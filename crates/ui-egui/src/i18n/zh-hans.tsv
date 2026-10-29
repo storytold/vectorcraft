@@ -5272,6 +5272,11 @@ lighting	Light	光源
 	Snap to Perpendicular	对齐垂线
 @msg	unknown snap option `{key}` (use {options})	未知的对齐选项 `{key}`（可用：{options}）
 	Gap Length:	间隙长度：
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	“扁平徽标”模式不使用 keepColors：它描摹 logoColors 中指定的颜色，或它找到的颜色。
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	未描摹任何内容：描摹找到的颜色中没有一种与 keepColors ({_1}) 匹配。
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	未描摹任何内容：“忽略颜色”排除了 keepColors 所列颜色的所有区域。
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	未描摹任何内容：与 keepColors 匹配的颜色未生成任何路径。
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors：描摹找到的颜色中没有一种与 {c} 匹配，因此该颜色未被描摹。
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` 需要 `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` 需要 `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
