@@ -11,7 +11,7 @@ use vectorcraft_color::cms::{self, Cms, ColorSettings, delta_e2000};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{ID, display_hsb, show, stored};
+use super::color_wheel::{ID, display_hsb, remembered_hsb, show, stored};
 use crate::VectorcraftApp;
 
 /// An app with a selected rectangle filled with `fill`.
@@ -306,6 +306,21 @@ fn the_remembered_hue_stays_with_its_object() {
     click(&mut h, in_square(sq, 0.995, 0.995), Modifiers::NONE);
     let hue = hsb(&fill(h.state()))[0];
     assert!(!(1.0..359.0).contains(&hue), "the white object's own hue is 0°, not 120°: {hue}");
+}
+
+/// The remembered HSB holds only while the color displays as it did when picked: in another
+/// working RGB space the wheel shows the color's own HSB there.
+#[test]
+fn the_remembered_hsb_follows_a_change_of_working_space() {
+    let srgb = Cms::default();
+    let p3 = Cms::new(&ColorSettings { rgb: cms::DISPLAY_P3.into(), ..ColorSettings::default() }).unwrap();
+    let c = Color::rgb(0.5, 0.3, 0.2);
+    let picked = [25.0, 0.6, 0.5];
+    let shown = srgb.display_rgb(&c);
+    assert_eq!(remembered_hsb(&srgb, &c, shown, picked), picked);
+    let own = display_hsb(&p3, &c);
+    assert_ne!(own, picked);
+    assert_eq!(remembered_hsb(&p3, &c, shown, picked), own);
 }
 
 /// A CMYK fill stays CMYK and keeps its look (ΔE 2000 under 2) when its marker is clicked; the

@@ -5,7 +5,7 @@
 //! proxy and Shift steps the ring by 45°. A pick is display sRGB, converted into the working RGB
 //! space: an RGB, CMYK or Lab color keeps its model, and a Gray color or a tint of a global swatch
 //! becomes a process color in the document's color mode. The HSB picked last stays while the
-//! objects, the proxy and the color are unchanged, so a gray keeps its hue.
+//! objects, the proxy, the color and the color settings are unchanged, so a gray keeps its hue.
 
 use egui::{Ui, UiBuilder};
 use vectorcraft_color::cms::{self, Cms};
@@ -20,7 +20,7 @@ use crate::widgets::{self, FieldAxis, Live};
 pub const ID: &str = "colorWheel";
 /// The widest the wheel is drawn.
 const MAX_WHEEL: f32 = 200.0;
-/// Panel state: the HSB picked last and its [`Owner`].
+/// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
 const MEMORY: &str = "color-wheel-hsb";
 
 /// What the HSB picked last belongs to: the document, the selected objects, the proxy, the
@@ -57,6 +57,13 @@ impl Owner {
 /// The HSB a color shows on the wheel: that of its display sRGB through `cms`.
 pub(crate) fn display_hsb(cms: &Cms, c: &Color) -> [f32; 3] {
     rgb_to_hsb(cms.display_rgb(c))
+}
+
+/// The HSB the wheel shows for `c` through `cms` when `hsb` was picked last and `c` then displayed
+/// as the sRGB `shown`: `hsb` while `c` still displays as `shown`, else `c`'s own display HSB (after
+/// a change of the color settings or the document's profile).
+pub(crate) fn remembered_hsb(cms: &Cms, c: &Color, shown: [f32; 3], hsb: [f32; 3]) -> [f32; 3] {
+    if cms.display_rgb(c) == shown { hsb } else { display_hsb(cms, c) }
 }
 
 /// The color a pick of display HSB `hsb` stores in place of `was`, through `cms`. The picked sRGB
@@ -104,8 +111,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cms = cms::active();
     // With None, a pattern or a "?" proxy the wheel shows the last solid color without markers,
     // and a click, an arrow key or a screen reader's action applies the picked color.
-    let hsb = match (color, pstate::<Option<(Owner, [f32; 3])>>(ui.ctx(), MEMORY)) {
-        (Some(c), Some((owner, hsb))) if owner == Owner::of(app, &tgt, c) => hsb,
+    let hsb = match (color, pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), MEMORY)) {
+        (Some(c), Some((owner, shown, hsb))) if owner == Owner::of(app, &tgt, c) => remembered_hsb(&cms, &c, shown, hsb),
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
     };
     let marked = color.is_some();
@@ -144,7 +151,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
     if !behind {
-        set_pstate(ui.ctx(), MEMORY, Some((Owner::of(app, &tgt, c), hsb)));
+        set_pstate(ui.ctx(), MEMORY, Some((Owner::of(app, &tgt, c), cms.display_rgb(&c), hsb)));
     }
     apply(app, &tgt, c, phase, behind);
 }
