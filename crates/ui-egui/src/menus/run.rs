@@ -70,6 +70,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     }
     if let Some(r) = crate::shortcut_editor::run_command(app, id, p)
         .or_else(|| crate::workspaces::run_command(app, id, p))
+        .or_else(|| crate::remote::command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
     {
         return Some(r);

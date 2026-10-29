@@ -13,6 +13,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
     ),
     (
+        "file.openRemote",
+        "Open Remote…",
+        "",
+        "{path?} (web, with remote storage configured) → no path: the dialog to pick a file on the server; with a path: fetch it and open it as a document that saves back to the server",
+    ),
+    (
+        "file.placeRemote",
+        "Place from Remote…",
+        "",
+        "{path?} (web, with remote storage configured) → no path: the dialog to pick a file on the server; with a path: fetch it and open the Place dialog for it (embedded, never linked)",
+    ),
+    (
+        "file.saveAsRemote",
+        "Save As Remote…",
+        "",
+        "{path?} (web, with remote storage configured) → no path: the dialog to pick a folder and a name on a writable mount; with a path: Save As to that path (a name without a save format's extension gets .vectorcraft)",
+    ),
+    (
         "file.save",
         "Save",
         "Cmd+S",

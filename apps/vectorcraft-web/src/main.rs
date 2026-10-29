@@ -8,7 +8,8 @@
 //! - no TCP control server (browsers can't listen on sockets);
 //! - File → Open uses the browser file picker; bytes arrive asynchronously through
 //!   `Services::inbox`;
-//! - Save / Export trigger a browser download;
+//! - Save / Export trigger a browser download, except for a document opened from or saved to a
+//!   server mount (`remote`, optional `./vectorcraft-config.json`), which saves back there;
 //! - dropped files are read asynchronously by `web::WebShell` and delivered through the inbox;
 //! - pen and finger input is read from Pointer Events by `pencil` (Apple Pencil pressure and
 //!   hover, palm rejection, fingers navigate once a pen has been seen, the pen's eraser end
@@ -29,6 +30,37 @@ mod keys;
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;
+// The pure remote-storage modules (config, WebDAV parsing, save protocol) also build natively for their tests.
+// They are shared as they are with other craft apps, so some items (ranged reads) go unused here.
+#[cfg(target_arch = "wasm32")]
+mod remote;
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(dead_code)]
+mod remote_config;
+#[cfg(test)]
+mod remote_config_tests;
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(dead_code)]
+mod remote_dav;
+#[cfg(test)]
+mod remote_dav_tests;
+#[cfg(target_arch = "wasm32")]
+mod remote_http;
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(dead_code)]
+mod remote_roots;
+#[cfg(target_arch = "wasm32")]
+mod remote_upload;
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(dead_code)]
+mod remote_util;
+#[cfg(test)]
+mod remote_util_tests;
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(dead_code)]
+mod remote_write;
+#[cfg(test)]
+mod remote_write_tests;
 #[cfg(any(target_arch = "wasm32", test))]
 mod saved_files;
 #[cfg(target_arch = "wasm32")]

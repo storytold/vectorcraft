@@ -26,10 +26,10 @@ pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_recent_reporting, open_reporting, opens_as, place_bytes, recent_files, report_open_error,
 };
-#[cfg(test)]
-pub(crate) use save::report_write_error;
 pub use save::{ask_format_options, ask_pdf_options, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
+pub(crate) use save::{
+    export_path, is_web, report_saved, report_write_error, target_path, with_save_extension, write_named, write_reporting, write_to,
+};
 
 #[cfg(test)]
 mod tests {

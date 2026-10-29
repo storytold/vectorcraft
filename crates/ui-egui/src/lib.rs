@@ -51,6 +51,7 @@ pub mod plugin_runs;
 pub mod prefs_dialog;
 pub mod print;
 pub mod recovery;
+pub mod remote;
 pub mod render_worker;
 pub mod screen_color;
 mod scrub;
@@ -115,6 +116,10 @@ pub struct VectorcraftApp {
     pub ui: UiState,
     pub views: Vec<View>,
     pub services: Services,
+    /// Remote paths opened by path whose fetch has not come back yet ([`remote::open_path`]).
+    pub(crate) remote_opening: Vec<String>,
+    /// Saves to a remote mount the server has not confirmed yet ([`remote::hold_unsaved`]).
+    pub(crate) remote_saving: Vec<remote::Unconfirmed>,
     pub canvas: CanvasCache,
     pub perf: Perf,
     /// Docking state that lives for the session only.

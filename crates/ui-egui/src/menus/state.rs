@@ -108,6 +108,10 @@ pub(super) fn hidden_when_disabled(id: &str) -> bool {
         || id.starts_with(crate::dialogs::perspective_presets::SLOT)
 }
 
+/// The File menu's remote entries: left out of the menus unless the host has remote storage
+/// ([`crate::remote`]), which then also names Open and Place as the local ones.
+const REMOTE_COMMANDS: [&str; 3] = ["file.openRemote", "file.placeRemote", "file.saveAsRemote"];
+
 /// Menu items another item stands in for right now: Envelope Distort's Reset with Warp and Reset
 /// with Mesh take the place of Make with Warp and Make with Mesh while an envelope is selected.
 fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
@@ -124,7 +128,7 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 /// another stands in for ([`swapped_out`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
     let en = enabled(app, id);
-    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || (REMOTE_COMMANDS.contains(&id) && !crate::remote::available(app)) {
         return None;
     }
     Some((en, checked(app, id, p)))
@@ -189,6 +193,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
+        "file.openRemote" => crate::remote::available(app),
+        "file.placeRemote" | "file.saveAsRemote" => crate::remote::available(app) && app.session.active().is_some(),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),

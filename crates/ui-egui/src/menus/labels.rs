@@ -17,6 +17,8 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
 fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
     let v = &app.ui.view;
     let text: String = match id {
+        "file.open" if crate::remote::available(app) => "Open Local…".into(),
+        "file.place" if crate::remote::available(app) => "Place Local…".into(),
         "view.outline" => if v.outline { "Preview" } else { "Outline" }.into(),
         "window.workspace.reset" => format!("Reset {}", app.ui.workspace),
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
@@ -243,6 +245,8 @@ pub const CONTEXT_LABELS: &[&str] = &[
 /// The labels [`dynamic_label`] can show in place of an item's own (Show/Hide pairs and the like),
 /// so the catalog tests can insist every one of them is translated.
 pub const DYNAMIC_LABELS: &[&str] = &[
+    "Open Local…",
+    "Place Local…",
     "Preview",
     "Outline",
     "Hide Edges",

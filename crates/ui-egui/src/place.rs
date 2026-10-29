@@ -59,6 +59,9 @@ pub fn is_document(name: &str) -> bool {
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
     picked: Vec<(String, Vec<u8>)>,
+    /// Picked files that arrived while a dialog was open: they wait for it to close, so a dialog the
+    /// user is filling in is never replaced.
+    deferred: Vec<PlaceArrival>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -507,14 +510,16 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
 }
 
 /// Files that arrived to be placed (web): drops go where they were dropped, picked files to the
-/// Place dialog.
+/// Place dialog, once no other dialog is open (they wait for it, so it keeps its fields and files).
 pub fn drain(app: &mut VectorcraftApp) {
-    let arrived: Vec<PlaceArrival> =
-        app.services.place_inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
+    let busy = app.ui.dialog.is_some();
+    let mut arrived: Vec<PlaceArrival> = if busy { vec![] } else { std::mem::take(&mut app.place.deferred) };
+    arrived.extend(app.services.place_inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default());
     let mut picked = vec![];
     for a in arrived {
         match a.drop {
             Some(d) => drop_files(app, vec![(DropTarget::Place(d), (a.name, None, a.bytes))]),
+            None if busy => app.place.deferred.push(a),
             None => {
                 picked.push(json!({ "name": a.name }));
                 app.place.picked.retain(|(n, _)| *n != a.name);

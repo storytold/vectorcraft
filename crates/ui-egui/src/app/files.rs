@@ -21,6 +21,7 @@ impl VectorcraftApp {
                 io::report_open_error(self, &name, &e);
             }
         }
+        crate::remote::drain(self);
         place::drain(self);
     }
 }

@@ -278,6 +278,11 @@ impl DocState {
     pub fn mark_saved(&mut self) {
         self.saved_doc = self.doc.clone();
     }
+    /// The document as the last save took it: what [`DocState::mark_saved_as`] records again once
+    /// a save that was only started (an upload) is confirmed.
+    pub fn saved_snapshot(&self) -> Arc<Document> {
+        self.saved_doc.clone()
+    }
     /// Record `snapshot` (the document as a background save took it) as saved: edits made since
     /// keep the document modified.
     pub fn mark_saved_as(&mut self, snapshot: &Arc<Document>) {

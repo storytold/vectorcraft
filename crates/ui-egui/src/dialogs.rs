@@ -83,6 +83,7 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
+pub mod remote;
 mod revolve;
 pub(crate) mod revolve_gizmo;
 pub mod saturate;
@@ -385,6 +386,7 @@ registry! {
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
+    Remote: [remote::KIND] => remote::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 

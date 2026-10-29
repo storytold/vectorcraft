@@ -276,6 +276,10 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A path on a remote mount (Open Recent, the Home screen, `file.open`, MCP) is fetched from the server.
+    if let Some(r) = crate::remote::open_path(app, path) {
+        return r;
+    }
     let mut bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
         // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.

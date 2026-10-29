@@ -6544,11 +6544,13 @@ dependencies = [
 name = "vectorcraft-web"
 version = "0.18.0"
 dependencies = [
+ "chrono",
  "eframe",
  "egui",
  "js-sys",
  "log",
  "rfd",
+ "roxmltree 0.21.1",
  "serde_json",
  "vectorcraft-engine",
  "vectorcraft-format",

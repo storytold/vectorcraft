@@ -91,6 +91,9 @@ pub struct Services {
     pub open_url: Option<OpenUrlFn>,
     /// Show an open dialog for several files (File → Place…); returns their paths (none: cancelled).
     pub pick_open_multi: Option<Box<dyn FnMut() -> Vec<String>>>,
+    /// Web: files on a server the page configures, opened, placed and saved from the File menu
+    /// ([`crate::remote`]). Without it the remote commands are off and the menus show none of them.
+    pub remote: Option<crate::remote::RemoteStorage>,
     /// Web: start an async pick of files to place (they arrive via `place_inbox`).
     pub place_async: Option<Box<dyn FnMut()>>,
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the

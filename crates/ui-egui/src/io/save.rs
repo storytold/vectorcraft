@@ -28,8 +28,14 @@ pub(crate) fn write_reporting(app: &mut VectorcraftApp, path: &str, bytes: &[u8]
     r
 }
 
-/// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.
+/// Web: download `bytes` under `path`'s file name, or save them to the server when `path` is on a
+/// remote mount ([`crate::remote`]); desktop: write them to `path`.
 pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
+    if let Some(remote) = services.remote.as_mut().filter(|r| (r.is_remote)(path)) {
+        // a Save As to a new name creates the file: the host refuses to replace one that is there
+        let new_file = remote.new_files.remove(path);
+        return (remote.write)(path, bytes, new_file);
+    }
     if let Some(dl) = services.download.as_mut() {
         return dl(&fileio::file_name(path), bytes);
     }
@@ -181,7 +187,7 @@ pub fn remember_view(app: &mut VectorcraftApp) {
 /// save format, or a template format for Save as Template, `mode`). An extension that names
 /// another format (`card.png`, or `card.ait` in Save As) is replaced with `f`'s, and `f`'s is
 /// added to any other path (`notes.v2` becomes `notes.v2.vectorcraft`).
-fn with_save_extension(path: &str, f: &Format, mode: SaveMode) -> String {
+pub(crate) fn with_save_extension(path: &str, f: &Format, mode: SaveMode) -> String {
     let formats = if mode == SaveMode::Template { TEMPLATE_FORMATS } else { SAVE_FORMATS };
     if fileio::format_for_name(path).is_some_and(|g| !formats.contains(&g.id)) {
         return std::path::Path::new(path).with_extension(f.extensions[0]).to_string_lossy().into_owned();
@@ -393,7 +399,8 @@ pub(super) fn saved_status(path: &str, r: &Value) -> String {
 /// (`warnings`: what the format loses, then the save's notes on its params, such as an option the format
 /// doesn't read), and the document takes the file (and counts as saved, as of the snapshot) once it is written.
 fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String> {
-    let uid = app.session.active().ok_or("no document")?.uid;
+    let st = app.session.active().ok_or("no document")?;
+    let (uid, was_at) = (st.uid, st.path.clone());
     // Saves of one document finish in order.
     if app.background.busy_with(uid) {
         background::wait_all(app);
@@ -405,6 +412,14 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
         Some(path) => format!("Saving {}", fileio::file_name(path)),
         None => "Saving".into(),
     };
+    // A save to a remote mount is only started when this returns; the server confirms it later.
+    let remote = target.as_deref().is_some_and(|p| app.services.remote.as_ref().is_some_and(|r| (r.is_remote)(p)));
+    // A Save As to another path than the document's own creates a file (never replaces one).
+    if let (true, Some(path)) = (remote && job.plan().mode == SaveMode::SaveAs && target != was_at, &target)
+        && let Some(r) = app.services.remote.as_mut()
+    {
+        r.new_files.insert(path.clone());
+    }
     // Without a path the bytes come back to the caller: nothing to do in the background.
     let enabled = app.session.prefs.background_save && target.is_some();
     // The work writes the file; the copy makes it the document's own afterwards.
@@ -421,9 +436,18 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let failed = target.clone().unwrap_or_default();
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         // Not written: the document keeps its file, format and modified state, and the user is told.
-        let r = r.inspect_err(|e| report_write_error(app, false, &failed, e))?;
+        let r = r.inspect_err(|e| {
+            if let Some(r) = app.services.remote.as_mut() {
+                r.new_files.remove(&failed);
+            }
+            report_write_error(app, false, &failed, e);
+        })?;
         // The document may have closed meanwhile: the file is written all the same.
         done.complete(&mut app.session, uid);
+        // Uploaded in the background: unsaved until the server says so.
+        if remote && retargets {
+            crate::remote::hold_unsaved(app, uid, &failed);
+        }
         let path = r["path"].as_str().unwrap_or_default().to_string();
         if retargets {
             note_recent(app, &path);

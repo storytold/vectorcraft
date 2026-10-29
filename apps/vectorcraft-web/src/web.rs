@@ -13,6 +13,7 @@ use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
+use vectorcraft_ui_egui::remote::RemoteInbox;
 use vectorcraft_ui_egui::stylus::StylusFeed;
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
@@ -47,6 +48,7 @@ struct Host {
     runner: eframe::WebRunner,
     inbox: Inbox,
     place_inbox: PlaceInbox,
+    remote_inbox: RemoteInbox,
     drag: DragPos,
     pasted: Rc<RefCell<Pasted>>,
     /// Pen and finger input read from the page's Pointer Events (`crate::pencil`).
@@ -71,10 +73,13 @@ pub fn start() {
         // Fallback fonts the first frame needs (Noto Sans Arabic), fetched while the loading text
         // shows; the rest load in the background once the app runs.
         crate::fonts::load_startup_fonts().await;
+        // Optional server mounts (`./vectorcraft-config.json`).
+        crate::remote::load_config().await;
         let host = Host {
             runner: eframe::WebRunner::new(),
             inbox: Arc::default(),
             place_inbox: Arc::default(),
+            remote_inbox: Arc::default(),
             drag: DragPos::default(),
             pasted: Rc::default(),
             pointers: SharedPointers::default(),
@@ -121,6 +126,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
                 let stylus = host.pointers.borrow().stylus();
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone(), stylus);
+                let services = Services { remote: crate::remote::storage(ctx, &host.remote_inbox), ..services };
                 let app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
