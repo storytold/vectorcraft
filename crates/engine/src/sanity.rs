@@ -55,6 +55,24 @@ fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
 
 /// Do the objects `ids` have finite geometry within [`MAX_COORD`] (the ones not there pass)?
 pub(crate) fn objects_in_range(d: &Document, ids: &[NodeId]) -> bool {
-    let paths = d.index_paths(ids.iter().copied());
-    ids.iter().all(|id| paths.get(id).and_then(|p| d.node_at(p)).and_then(|n| n.geometric_bounds()).is_none_or(rect_in_range))
+    if ids.is_empty() {
+        return true;
+    }
+    if d.has_lookup_cache() || ids.len() <= 16 {
+        return ids.iter().all(|id| d.node(*id).and_then(|n| n.geometric_bounds()).is_none_or(rect_in_range));
+    }
+    let want: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    let mut ok = true;
+    d.walk(|n| {
+        if !ok {
+            return;
+        }
+        if want.contains(&n.id)
+            && let Some(b) = n.geometric_bounds()
+            && !rect_in_range(b)
+        {
+            ok = false;
+        }
+    });
+    ok
 }
