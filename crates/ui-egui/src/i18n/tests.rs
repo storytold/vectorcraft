@@ -241,6 +241,12 @@ fn lookups_fall_back_to_english() {
 }
 
 #[test]
+fn turkish_open_button_uses_imperative_translation() {
+    let tr_lang = Lang::from_code("tr").expect("Turkish registered");
+    assert_eq!(tr(tr_lang, "Open"), "Aç");
+}
+
+#[test]
 fn catalog_kinds_are_parsed_and_looked_up() {
     let c = Catalog::parse("# c\n\tHello\t你好\n@id\tfile.save\t儲存\nmenu\tWindows\t視窗們\n@plural\t{n} file|{n} files\t{n} 個檔案\n\n");
     assert_eq!(c.plain("Hello"), Some("你好"));
