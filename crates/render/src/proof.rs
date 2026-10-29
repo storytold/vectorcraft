@@ -8,7 +8,8 @@
 //!   renders as greyscale ink coverage (black = 100%); with several, the visible inks are
 //!   composited through the proof profile, spots multiplied on top. Colours linked to the
 //!   Registration swatch print their tint on every plate, spot plates included.
-//!   Placed raster images are not separated (limitation).
+//!   Placed raster images show their pixels the same way ([`plate_image`]): RGB pixels are
+//!   separated into process inks, CMYK images show their own inks; they print on no spot plate.
 //! * **Overprint Preview** (and Separations Preview, which implies it): fills and strokes that
 //!   overprint ([`vectorcraft_doc::FillLayer::overprint`], characters' too) are drawn with
 //!   Darken, which approximates their inks printing over the inks below: a zero ink lets the
@@ -19,16 +20,20 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 
-use vectorcraft_color::cms::{self, Cms, PROCESS_PLATES};
+use vectorcraft_color::cms::{self, Cms, CmykLut, PROCESS_PLATES, ProofLut, lab};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
 use vectorcraft_color::{Color, Swatch, SwatchGroup};
 pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{Document, Node, NodeId, Shared};
+use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, Shared};
+use vello_cpu::Pixmap;
+use vello_cpu::color::PremulRgba8;
 
 use crate::RenderOptions;
+use crate::images::{self, ImageKey};
 
 /// Whether overprinting shows: Overprint Preview, or Separations Preview (which implies it).
 pub(crate) fn overprints(opts: &RenderOptions) -> bool {
@@ -40,13 +45,7 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
     let rgb = if visible.len() == 1 {
         [1.0 - ink.on_plate(&visible[0]); 3]
     } else {
-        let mut cmyk = ink.cmyk;
-        for (i, p) in PROCESS_PLATES.iter().enumerate() {
-            if !visible.iter().any(|v| v == p) {
-                cmyk[i] = 0.0;
-            }
-        }
-        let mut rgb = c.proof_cmyk_to_srgb(cmyk, proof);
+        let mut rgb = visible_process_srgb(c, proof, visible, ink.cmyk);
         for name in visible.iter().filter(|v| !PROCESS_PLATES.contains(&v.as_str())) {
             let t = ink.spot_tint(name);
             if t > 0.0
@@ -62,6 +61,153 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
     };
     let [r, g, b] = c.srgb_to_rgb(rgb);
     Color::Rgb { r, g, b }
+}
+
+/// The display sRGB of process inks `cmyk` with only the `visible` plates printing, through the
+/// proof's CMYK space.
+fn visible_process_srgb(c: &Cms, proof: &ProofSetup, visible: &[String], mut cmyk: [f32; 4]) -> [f32; 3] {
+    for (i, p) in PROCESS_PLATES.iter().enumerate() {
+        if !visible.iter().any(|v| v == p) {
+            cmyk[i] = 0.0;
+        }
+    }
+    c.proof_cmyk_to_srgb(cmyk, proof)
+}
+
+/// The tables Separations Preview shows placed images' pixels with ([`plate_image`]), for one
+/// proof setup and its visible plates.
+pub(crate) struct ImagePlates {
+    cms: Arc<Cms>,
+    /// [`cms::profiles_generation`].
+    profiles: u64,
+    proof: ProofSetup,
+    /// Images made with these tables are kept under it ([`ImageKey::plates`]); never reused.
+    generation: u64,
+    /// One plate visible: the process plate's index, `None` for a spot plate (no image prints on
+    /// it).
+    single: Option<Option<usize>>,
+    /// Display sRGB → the visible plates as they show (display sRGB).
+    rgb: ProofLut,
+    /// CMYK inks → the visible plates as they show (XYZ), made when a CMYK image is first shown
+    /// with several plates.
+    cmyk: OnceLock<CmykLut>,
+}
+
+impl ImagePlates {
+    fn build(cms: Arc<Cms>, profiles: u64, proof: ProofSetup, generation: u64) -> Self {
+        let visible = proof.separations.as_deref().unwrap_or_default();
+        let single = match visible {
+            [one] => Some(PROCESS_PLATES.iter().position(|p| p == one)),
+            _ => None,
+        };
+        let rgb = ProofLut::build(|rgb| {
+            let inks = cms.srgb_to_cmyk(rgb, proof.intent);
+            match single {
+                Some(i) => [1.0 - i.map_or(0.0, |i| inks[i]); 3],
+                None => visible_process_srgb(&cms, &proof, visible, inks),
+            }
+        });
+        Self { cms, profiles, proof, generation, single, rgb, cmyk: OnceLock::new() }
+    }
+
+    /// CMYK ink amounts `inks` (0 = no ink) as the visible plates show them.
+    fn show_inks(&self, inks: [u8; 4]) -> [u8; 3] {
+        match self.single {
+            Some(Some(i)) => [255 - inks.get(i).copied().unwrap_or(0); 3],
+            Some(None) => [255; 3],
+            None => {
+                let lut = self.cmyk.get_or_init(|| {
+                    let visible = self.proof.separations.as_deref().unwrap_or_default();
+                    CmykLut::build(|inks| {
+                        let [x, y, z] = lab::srgb_to_xyz(visible_process_srgb(&self.cms, &self.proof, visible, inks));
+                        [x, y, z, 0.0]
+                    })
+                });
+                let [x, y, z, _] = lut.apply(inks.map(|v| v as f32 / 255.0));
+                lab::xyz_to_srgb([x, y, z]).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+            }
+        }
+    }
+}
+
+static IMAGE_PLATES: Mutex<Option<Arc<ImagePlates>>> = Mutex::new(None);
+static IMAGE_PLATES_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// The tables placed images show with in Separations Preview, `None` when it's off.
+pub(crate) fn image_plates(opts: &RenderOptions) -> Option<Arc<ImagePlates>> {
+    let proof = opts.proof.as_ref().filter(|p| p.separations.is_some())?;
+    let c = cms::active();
+    let profiles = cms::profiles_generation();
+    let mut slot = IMAGE_PLATES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(p) = &*slot
+        && Arc::ptr_eq(&p.cms, &c)
+        && p.profiles == profiles
+        && p.proof == *proof
+    {
+        return Some(p.clone());
+    }
+    let generation = IMAGE_PLATES_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let p = Arc::new(ImagePlates::build(c, profiles, proof.clone(), generation));
+    *slot = Some(p.clone());
+    Some(p)
+}
+
+/// The key [`plate_image`] gives image pixels `key` shown with `plates`.
+pub(crate) fn plate_key(key: &ImageKey, plates: &ImagePlates) -> ImageKey {
+    ImageKey { plates: plates.generation, ..key.clone() }
+}
+
+/// Image pixels `pm` (cached as `key`, from `blob` when it is a document's image as it is) as the
+/// visible plates of `plates` print them, cached with the images, and their key. A CMYK image
+/// shows its own inks; other pixels are separated.
+pub(crate) fn plate_image(key: &ImageKey, pm: &Arc<Pixmap>, blob: Option<&ImageBlob>, plates: &ImagePlates, touch: bool) -> (ImageKey, Arc<Pixmap>) {
+    let want = plate_key(key, plates);
+    let hit = {
+        let mut s = images::store();
+        if touch { s.get(&want) } else { s.peek(&want) }
+    };
+    if let Some(p) = hit {
+        return (want, p);
+    }
+    let size = (pm.width() as u32, pm.height() as u32);
+    let cmyk = key.luts.0 != 0 && key.adjust.is_none() && !key.grey;
+    let inks = blob.filter(|_| cmyk).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+    let mut out = Pixmap::new(pm.width(), pm.height());
+    // Runs of one colour convert once.
+    if let Some(inks) = &inks {
+        let mut last: Option<([u8; 4], [u8; 3])> = None;
+        for (o, p) in out.data_mut().iter_mut().zip(inks.data.as_chunks::<4>().0) {
+            let [r, g, b] = match last {
+                Some((k, v)) if k == *p => v,
+                _ => {
+                    let v = plates.show_inks(*p);
+                    last = Some((*p, v));
+                    v
+                }
+            };
+            *o = PremulRgba8 { r, g, b, a: 255 };
+        }
+    } else {
+        let mut last: Option<(PremulRgba8, PremulRgba8)> = None;
+        for (o, s) in out.data_mut().iter_mut().zip(pm.data()) {
+            let a = s.a;
+            if a == 0 {
+                continue;
+            }
+            *o = match last {
+                Some((k, v)) if k == *s => v,
+                _ => {
+                    let un = |v: u8| (v as f32 / a as f32).min(1.0);
+                    let [r, g, b] = plates.rgb.apply([un(s.r), un(s.g), un(s.b)]).map(|v| (v.clamp(0.0, 1.0) * a as f32).round() as u8);
+                    let v = PremulRgba8 { r, g, b, a };
+                    last = Some((*s, v));
+                    v
+                }
+            };
+        }
+    }
+    let pm = images::store().insert(want.clone(), Arc::new(out));
+    (want, pm)
 }
 
 /// The art a renderer drew with Overprint Preview or Separations Preview, kept for its next frame

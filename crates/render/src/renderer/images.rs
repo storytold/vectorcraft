@@ -25,14 +25,20 @@ impl Renderer {
         // With mips the full pixels are only looked at (not marked used) until they're drawn, and
         // a mip the store holds is drawn without them: they may have been dropped (#2820).
         let mips = f.opts.image_mips;
+        // Separations Preview: the pixels show the visible plates.
+        let plates = if outline { None } else { proof::image_plates(f.opts) };
         let unit = f.view * im.xf * Affine::scale_non_uniform(im.width as f64, im.height as f64);
         let shown = if outline && !f.doc.setup.outline_images {
             None
-        } else if let Some(pm) = mips.then(|| self.kept_mip(f, &im.key, im.pixels.as_deref(), outline, unit)).flatten() {
+        } else if let Some(pm) = mips.then(|| self.kept_mip(f, &im.key, im.pixels.as_deref(), outline, plates.as_deref(), unit)).flatten() {
             Some(pm)
         } else {
             self.image_pixmap(f.doc, &im.key, im.pixels.as_deref(), outline, !mips).map(|(key, pm)| {
                 let (key, pm) = if outline { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.image_blob(im), !mips) };
+                let (key, pm) = match &plates {
+                    Some(p) => proof::plate_image(&key, &pm, f.doc.image_blob(im), p, !mips),
+                    None => (key, pm),
+                };
                 if mips { image_mip(&key, pm, unit) } else { pm }
             })
         };
@@ -194,11 +200,24 @@ impl Renderer {
     }
 
     /// The mip [`image_mip`] draws image `key` (or `own`) with through `m`, in greyscale with
-    /// `grey` (the outline view's), when the store holds it, marked used there; `None` when it
-    /// draws the full pixels or the mip is yet to be made.
-    fn kept_mip(&self, f: &Frame, key: &str, own: Option<&vectorcraft_doc::ImageBlob>, grey: bool, m: Affine) -> Option<Arc<Pixmap>> {
+    /// `grey` (the outline view's) or showing the visible `plates` of Separations Preview, when the
+    /// store holds it, marked used there; `None` when it draws the full pixels or the mip is yet
+    /// to be made.
+    fn kept_mip(
+        &self,
+        f: &Frame,
+        key: &str,
+        own: Option<&vectorcraft_doc::ImageBlob>,
+        grey: bool,
+        plates: Option<&proof::ImagePlates>,
+        m: Affine,
+    ) -> Option<Arc<Pixmap>> {
         let (key, (w, h)) = self.image_key(f.doc, key, own, grey)?;
         let key = if grey { key } else { ink::ink_key(&key, f.ink) };
+        let key = match plates {
+            Some(p) => proof::plate_key(&key, p),
+            None => key,
+        };
         let level = mip_level(m, w, h);
         if level == 0 {
             return None;

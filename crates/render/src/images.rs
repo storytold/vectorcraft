@@ -90,6 +90,9 @@ pub(crate) struct ImageKey {
     /// Generations of the colour tables the pixels were made with (0 = none): a CMYK image's
     /// display table, and the separation table of ink planes (see `ink`).
     pub luts: (u64, u64),
+    /// Generation of the Separations Preview tables the pixels show the visible plates with
+    /// (0 = none, see `proof::plate_image`).
+    pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
 }
@@ -337,7 +340,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
     }
 
     #[test]

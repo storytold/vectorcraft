@@ -24,6 +24,7 @@ mod memory;
 mod objectfx;
 mod placed_document;
 mod rasterize;
+mod separations;
 mod setup;
 mod strokegradient;
 mod tileedge;
