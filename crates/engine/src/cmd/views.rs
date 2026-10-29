@@ -1,11 +1,11 @@
 //! View → New View… / Edit Views…: saved views stored in the document; per-document view
-//! toggles (Show Transparency Grid).
+//! toggles (Show Transparency Grid); the Character panel's Snap to Glyph options.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
 use vectorcraft_geom::Point;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -37,7 +37,21 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             transparency_grid
         ),
+        cmd!(
+            query "view.snapToGlyph.options",
+            "Snap to Glyph Options",
+            [],
+            None,
+            "{baseline?: bool, xHeight?: bool, bounds?: bool, proximity?: bool, angular?: bool, anchors?: bool} the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives — the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them → the options",
+            always,
+            glyph_snap_options
+        ),
     ]
+}
+
+fn glyph_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.prefs.glyph_snap = s.prefs.glyph_snap.merged(p).map_err(|e| bad("view.snapToGlyph.options", e))?;
+    Ok(json!(s.prefs.glyph_snap))
 }
 
 fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {

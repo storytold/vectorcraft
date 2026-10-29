@@ -1,6 +1,8 @@
 use super::predicates::{has_fx, has_object_fx};
 use super::raster::doc_raster_ppi;
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, Document, Effect, FillRule, GeomContext, Node, NodeKind, Rect, Renderer, Shape, SymbolBoxes, effects,
+};
 
 fn node_bezpath(n: &Node) -> Option<BezPath> {
     match &n.kind {

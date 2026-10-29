@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, Arc, BezPath, Node, Rect, Shape, TextObject, lru};
 
 /// The whole text's glyph outlines as one path, and which of them each run draws.
 pub(crate) struct TextGeom {

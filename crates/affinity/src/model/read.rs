@@ -1,5 +1,8 @@
 use super::bounds::{describe, is_container, mask_extent, nodes_bounds, pages, rect, tree_bounds, union};
-use super::*;
+use super::{
+    Affine, Archive, BTreeMap, Blend, Document, Effect, Error, HashSet, Image, Kind, Limits, Node, ObjId, Paint, Path, Point, Rect, Spread, Stream,
+    Tag, paint, stream,
+};
 
 /// Largest embedded colour profile kept (real CMYK profiles are a few megabytes).
 const MAX_PROFILE_BYTES: usize = 32 << 20;
@@ -438,7 +441,33 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
                 _ => self.warn("layer effects of other kinds (left out)"),
             }
         }
+        for a in s.objs(id, b"AdCh") {
+            if let Some(effect) = self.attached_recolor(a) {
+                out.push(effect);
+            }
+        }
         out
+    }
+    fn attached_recolor(&mut self, a: ObjId) -> Option<Effect> {
+        let s = self.s;
+        if !s.is(a, b"RcRA") {
+            return None;
+        }
+        if s.bool(a, b"Visi") == Some(false) {
+            return None;
+        }
+        let adjp = s.obj(a, b"AdjP")?;
+        if !s.is(adjp, b"RecP") {
+            return None;
+        }
+        let h = s.f64(adjp, b"RecH").unwrap_or(0.0);
+        let sat = s.f64(adjp, b"RecS").unwrap_or(1.0);
+        let l = s.f64(adjp, b"RecL").unwrap_or(0.5);
+        let (r, g, b) = crate::paint::hsl(h, sat, l);
+        let color = crate::paint::Color::Rgb { r, g, b, a: 1.0 };
+        let opacity = s.f64(a, b"Opac").filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0);
+        let blend = self.effect_blend(a);
+        Some(Effect::ColorOverlay { color, opacity, blend })
     }
 
     /// A layer effect's blend mode (`BlnM`); unknown modes are Normal (warned).
@@ -476,6 +505,8 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
                     Some(_) => self.warn("several pixel masks on one layer (only the first is used)"),
                     None => {}
                 }
+            } else if class == Tag::of(b"RcRA") {
+                // Handled in `effects` as a colour overlay.
             } else {
                 self.warn(format!("{} layers attached to other layers (imported without them)", describe(class)));
             }

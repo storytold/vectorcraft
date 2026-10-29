@@ -16,7 +16,7 @@
 //! mouse message that Windows did not make from a pen or a touch
 //! (<https://learn.microsoft.com/en-us/windows/win32/tablet/system-events-and-mouse-messages>)
 //! clears the feed.
-#![cfg_attr(not(all(windows, not(target_vendor = "win7"))), allow(dead_code))]
+#![cfg_attr(not(windows), allow(dead_code))]
 
 use std::cell::RefCell;
 use std::sync::OnceLock;
@@ -68,7 +68,7 @@ pub fn start() -> StylusFeed {
 /// message it takes from the thread's queue, before dispatching it: notes each pointer contact's id
 /// and whether the barrel button was held, and writes the pen's pressure and end into the feed.
 /// It never consumes the message.
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 #[allow(unsafe_code)]
 pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
     use windows::Win32::UI::Input::Pointer::{GetPointerPenInfo, POINTER_FLAG_INCONTACT, POINTER_PEN_INFO};

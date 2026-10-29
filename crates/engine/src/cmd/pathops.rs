@@ -14,7 +14,10 @@ use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_multi, has_selection, number_or,
+    str_param, switch_or,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -153,6 +156,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             simplify
         ),
+        cmd!(
+            "object.path.smooth",
+            "Smooth…",
+            ["Object", "Path"],
+            None,
+            "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step → {ids, before, after} anchor counts, and the level used",
+            has_selection,
+            smooth
+        ),
         cmd!("object.path.addAnchorPoints", "Add Anchor Points", ["Object", "Path"], None, "{} → {ids}", has_selection, add_anchor_points),
         cmd!(
             "object.path.divideObjectsBelow",
@@ -214,7 +226,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 
 /// Paint identity carried through a Pathfinder operation.
 #[derive(Clone, Debug, PartialEq)]
-struct Style {
+pub(crate) struct Style {
     appearance: Appearance,
     opacity: f32,
     blend: BlendMode,
@@ -224,7 +236,7 @@ impl Style {
     fn of(n: &Node) -> Self {
         Style { appearance: (*n.appearance).clone(), opacity: n.opacity, blend: n.blend }
     }
-    fn apply(&self, n: &mut Node) {
+    pub(crate) fn apply(&self, n: &mut Node) {
         n.appearance = self.appearance.clone().into();
         n.opacity = self.opacity;
         n.blend = self.blend;
@@ -255,7 +267,7 @@ pub(crate) fn text_outline(t: &TextObject) -> PathData {
     PathData::from_bezpath(&lay.to_bezpath()).transformed(t.xf)
 }
 
-fn style_of(n: &Node) -> Style {
+pub(crate) fn style_of(n: &Node) -> Style {
     match &n.kind {
         NodeKind::Text(t) => Style { appearance: t.first_style().appearance(), opacity: n.opacity, blend: n.blend },
         _ => Style::of(n),
@@ -279,6 +291,20 @@ fn each_leaf(n: &Node, f: &mut impl FnMut(&Node)) {
             }
         }
         _ => {}
+    }
+}
+
+/// [`leaves`] as a Pathfinder operation takes them: a compound shape is one shape, the area it
+/// draws painted as it is (its members as they are past a live Pathfinder's budget).
+pub(crate) fn pf_leaves(n: &Node, out: &mut Vec<Node>) {
+    match &n.kind {
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            match vectorcraft_render::effects::compound_shape_art(n, vectorcraft_render::effects::text_outliner()) {
+                Some(art) => out.push(art),
+                None => children.iter().for_each(|c| pf_leaves(c, out)),
+            }
+        }
+        _ => leaves(n, out),
     }
 }
 
@@ -542,7 +568,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
         for id in &roots {
             let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
             let mut lv = vec![];
-            leaves(n, &mut lv);
+            pf_leaves(n, &mut lv);
             if lv.is_empty() {
                 continue;
             }
@@ -957,20 +983,20 @@ fn path_ids(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 /// selected segments when they were picked as segments). `None` selects the path whole.
 type PartSelection = Option<(BTreeSet<AnchorRef>, Option<BTreeSet<SegmentRef>>)>;
 
-/// Replace each path under the selection ([`path_ids`]) by what `f` makes of it, given its
+/// Replace each path under `roots` ([`path_ids`]) by what `f` makes of it, given its
 /// direct-selected anchors and picked segments (none when it is selected whole): → (their ids, how
 /// many anchors they have before and after). A path that `f` would empty or returns unchanged is
 /// left as it is, with its live shape and its direct selection; a replaced path loses its live
 /// shape and has the direct selection `f` gives it.
 fn edit_paths(
     s: &mut Session,
+    roots: &[NodeId],
     label: &str,
     f: impl Fn(&PathData, Option<&BTreeSet<AnchorRef>>, Option<&BTreeSet<SegmentRef>>) -> (PathData, PartSelection),
 ) -> Result<(Vec<NodeId>, usize, usize)> {
-    let roots = selected_roots(s)?;
     let st = s.doc()?;
     let (d, sel) = (&st.doc, &st.selection);
-    let ids = path_ids(d, &roots);
+    let ids = path_ids(d, roots);
     if ids.is_empty() {
         return Err(EngineError::Other(format!("{label}: select paths")));
     }
@@ -1064,7 +1090,8 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     let whole = bool_or(p, "wholePaths", false);
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
     // other anchors it had selected) direct-selected.
-    let (ids, before, after) = edit_paths(s, "Simplify", |path, anchors, segments| {
+    let roots = selected_roots(s)?;
+    let (ids, before, after) = edit_paths(s, &roots, "Simplify", |path, anchors, segments| {
         let Some(picked) = selected_segments(path, anchors, segments).filter(|_| !whole) else {
             return (po::simplify_with(path, &opts), None);
         };
@@ -1084,8 +1111,20 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// Object › Path › Smooth (`object.path.smooth`): [`po::smooth_level`] on each path under the
+/// objects given or selected, as one undo step; Auto-Smooth (`auto`) uses [`po::SMOOTH_AUTO_LEVEL`].
+fn smooth(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.path.smooth";
+    let level = number_or(p, "level", po::SMOOTH_AUTO_LEVEL, C)?.round().clamp(0.0, 100.0);
+    let level = if switch_or(p, "auto", false, C)? { po::SMOOTH_AUTO_LEVEL } else { level };
+    let roots = checked_ids_or_selection(s, p, C)?;
+    let (ids, before, after) = edit_paths(s, &roots, "Smooth", |path, _, _| (po::smooth_level(path, level), None))?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after, "level": level }))
+}
+
 fn add_anchor_points(s: &mut Session, _: &Value) -> Result<Value> {
-    let (ids, before, after) = edit_paths(s, "Add Anchor Points", |path, _, _| (po::add_anchor_points(path), None))?;
+    let roots = selected_roots(s)?;
+    let (ids, before, after) = edit_paths(s, &roots, "Add Anchor Points", |path, _, _| (po::add_anchor_points(path), None))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after }))
 }
 

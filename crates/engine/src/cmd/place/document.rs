@@ -25,7 +25,7 @@ use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::CropTo;
 
 use super::super::fileio;
-use super::super::*;
+use super::super::{EngineError, NodeId, Result, bad};
 
 /// The largest file placed (bytes).
 pub(crate) const MAX_FILE: usize = 256 << 20;

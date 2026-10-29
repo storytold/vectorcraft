@@ -393,6 +393,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.swatchOptions", json!({"name": "White"})),
         ("ui.colorPicker", json!({})),
         ("ui.graphicStyleOptions", json!({})),
+        ("ui.newCharStyle", json!({})),
         ("ui.newArtboard", json!({})),
         ("ui.brushOptions", json!({"name": "3 pt. Round"})),
         ("ui.brushOptions", json!({"name": "Bristle Round"})),
@@ -1413,6 +1414,45 @@ fn zig_zag_has_sliders_and_radio_buttons() {
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
 }
 
+/// #4488: Roughen's dialog has Size and Detail sliders laid out as Zig Zag's, Pucker & Bloat's its
+/// amount as a slider from Pucker to Bloat, and Tweak's Horizontal and Vertical sliders.
+#[test]
+fn roughen_pucker_bloat_and_tweak_have_sliders() {
+    use crate::widgets::accessibility_tests::{slider_value, tree};
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Size:", "Relative", "Absolute", "Detail:", "Points", "Smooth", "Corner"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Size:"), (Some(5.0), Some(0.0), Some(100.0), Some("5%".into())));
+    assert_eq!(slider_value(&shown, "Detail:"), (Some(10.0), Some(0.0), Some(100.0), None));
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.puckerBloat"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("amount".into(), json!(-60));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Amount:", "Pucker", "Bloat"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    let (value, min, max, _) = slider_value(&shown, "Amount:");
+    assert_eq!((value, min, max), (Some(-60.0), Some(-200.0), Some(200.0)));
+    // Tweak: Horizontal and Vertical sliders, Relative / Absolute, and the points it moves.
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.tweak"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Horizontal:", "Vertical:", "Relative", "Absolute", "Anchor Points", "\"In\" Control Points", "\"Out\" Control Points"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Horizontal:"), (Some(10.0), Some(0.0), Some(100.0), Some("10%".into())));
+}
+
 /// Screen readers get the number and text of the field beside each dialog slider, in the field's
 /// unit, with the rail's range (extended to a number past the rail's end): Transform Each's Scale
 /// and Move, Zig Zag's Size and Ridges, a form slider (Vector Halftone's Frequency), the Pencil's
@@ -1659,6 +1699,40 @@ fn free_distort_reset_puts_the_corners_back() {
     let s = app.session.active().unwrap();
     let effects = &s.doc.node(s.selection.objects[0]).unwrap().appearance.effects;
     assert_eq!((effects.len(), effects[0].params["corners"].clone()), (1, rest));
+}
+
+/// While Alt is held, the Flare Tool Options' Cancel button reads Reset; Reset puts every option
+/// back to the tool's default and leaves the dialog open, letting Alt go shows Cancel again, and OK
+/// keeps the defaults.
+#[test]
+fn flare_options_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "flare"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("diameter", json!(250)), ("rays", json!(4)), ("ringsOn", json!(false)), ("growth", json!(80))] {
+        d.fields.insert(k.into(), v);
+    }
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(
+        (d.f64("diameter", 0.0), d.f64("rays", 0.0), d.bool("ringsOn"), d.f64("growth", 0.0), d.f64("direction", 0.0)),
+        (100.0, 15.0, true, 20.0, 45.0)
+    );
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    f.button(&mut app, "Cancel");
+    confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("flare");
+    assert_eq!(
+        (o["diameter"].as_f64(), o["rays"].as_u64(), o["ringsOn"].as_bool(), o["growth"].as_f64()),
+        (Some(100.0), Some(15), Some(true), Some(20.0))
+    );
 }
 
 /// The slider that screen readers name `label` in `out`'s tree: its node id, number and text.

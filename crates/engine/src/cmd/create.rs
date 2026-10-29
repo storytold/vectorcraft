@@ -5,7 +5,10 @@ use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObje
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::newart::NewArt;
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, f64_req, finite_numbers, has_doc,
+    number_or, str_param, switch_or,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -26,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
             has_doc,
             flare
         ),
@@ -392,6 +395,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "rays",
         "longest",
         "rayFuzziness",
+        "rotation",
         "rings",
         "largest",
         "x2",
@@ -410,6 +414,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let rays = p.get("rays").and_then(Value::as_u64).unwrap_or(15).min(50) as usize;
     let longest = pct("longest", 300.0);
     let ray_fuzz = pct("rayFuzziness", 100.0).min(1.0);
+    let ray_turn = f64_or(p, "rotation", 0.0).to_radians();
     let rings = p.get("rings").and_then(Value::as_u64).unwrap_or(10).min(50) as usize;
     let largest = pct("largest", 50.0);
     let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
@@ -440,11 +445,12 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let inner = (1.0 - fuzz as f32 * 0.6).clamp(0.05, 0.95);
     parts.push(("Halo", circle(c, halo_r), radial(c, halo_r, vec![stop(0.0, 0.0), stop(inner * 0.75, 0.0), stop(inner, 0.5), stop(1.0, 0.0)]), 1.0));
     // Rays: thin spikes of random length (Longest = % of the centre radius), fading outwards.
+    // `rotation` turns them clockwise about the center.
     if rays > 0 {
         let mut bp = vectorcraft_geom::BezPath::new();
         let mut reach: f64 = 0.0;
         for i in 0..rays {
-            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64;
+            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64 + ray_turn;
             let len = r * longest * (1.0 - ray_fuzz * 0.75 * rnd()).max(0.1);
             reach = reach.max(len);
             let w = r * 0.035;
@@ -588,11 +594,12 @@ fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>,
 }
 
 /// A grid's divider count `count` (an error unless it is a number or null; 5 unless it is a JSON
-/// integer of 0 or more, so 4.0 and 2.5 give 5; at most 999) with its skew `key` in percent (0 when
+/// whole number of 0 or more, so 4.0 gives 4 and 2.5 gives 5; at most 999) with its skew `key` in percent (0 when
 /// absent, clamped to ±[`shapes::GRID_SKEW_MAX`]).
 fn dividers(p: &Value, count: &str, key: &str, cmd: &str) -> Result<(u32, f64)> {
     check_numbers(p, &[count], cmd)?;
-    let n = p.get(count).and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
+    let whole = |v: &Value| v.as_u64().or_else(|| v.as_f64().filter(|f| f.is_finite() && *f >= 0.0 && f.fract() == 0.0).map(|f| f as u64));
+    let n = p.get(count).and_then(whole).unwrap_or(5).min(999) as u32;
     let skew = match p.get(key) {
         None | Some(Value::Null) => 0.0,
         Some(v) => v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?,

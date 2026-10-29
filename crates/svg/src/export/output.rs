@@ -292,14 +292,18 @@ impl Writer<'_> {
         format!("matrix({} {} {} {} {} {})", self.num(c[0]), self.num(c[1]), self.num(c[2]), self.num(c[3]), self.num(c[4]), self.num(c[5]))
     }
 
+    /// How style properties are written: the styling option, but SVG Tiny has presentation
+    /// attributes alone.
+    pub(super) fn styling(&self) -> Styling {
+        if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling }
+    }
+
     /// Style properties as attributes, an inline style, or a CSS class, per the styling option.
     pub(super) fn attrs(&mut self, props: &Props) -> String {
         if props.is_empty() {
             return String::new();
         }
-        // SVG Tiny has presentation attributes alone.
-        let styling = if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling };
-        match styling {
+        match self.styling() {
             Styling::PresentationAttributes => {
                 // CSS-only properties go in a style attribute (SVG Tiny has none: left out).
                 let (style, attrs): (Vec<_>, Vec<_>) = props.iter().partition(|(k, _)| {

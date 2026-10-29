@@ -3,7 +3,7 @@ use super::char_style::CharStyle;
 use super::para_style::ParaStyle;
 use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
 use super::tabs_lists::ParaList;
-use super::*;
+use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
 impl TextObject {
     /// None for collapsed or unrepresentable transforms, whose type dimensions cannot

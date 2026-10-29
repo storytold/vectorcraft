@@ -1,5 +1,8 @@
 use super::entry::RgbInCmyk;
-use super::*;
+use super::{
+    Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
+    PathBuilder, PathEl, Rect, Shape, Standard, Surface, Transform, cmyk, krilla, luma, rgb,
+};
 
 /// How deep inline graphics nest before they are left out.
 pub(super) const MAX_INLINE_DEPTH: u32 = 4;

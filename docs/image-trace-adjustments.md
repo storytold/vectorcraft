@@ -46,6 +46,11 @@ most `colors` of its colors are used. A missing group and a group with no solid 
 mode, palette or library in the panel clears the group. A group the active document does not have shows as All
 and traces as All.
 
+**Document Library linked colors.** With Library › Document Swatches, with or without a color group,
+a traced fill or stroke whose color comes from a global or spot swatch is linked to that swatch, and
+one whose color comes from a tint swatch is linked to its base at the tint. Editing the swatch
+recolors the trace. Colors from process swatches and from swatch libraries are not linked.
+
 **Document Library** traces with the library's colors as they are. Each pixel takes the library
 color nearest to it in lightness and hue, with a difference in hue or chroma counted three times
 as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
@@ -76,6 +81,15 @@ most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps
 about 90 bytes an anchor; a 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million.
+**Tracing in the background.** On the desktop a trace runs on a thread of its own, so the window
+keeps answering while a photo or a large image is traced (#3098). Make, Make and Expand, the task
+bar's Image Trace and the panel's Trace and presets start it. The status bar says "Tracing the
+image…", and after 0.4 s a progress window shows how many of its colours are traced, with Cancel
+(also Esc, `imageTrace.cancelRuns`) and Continue in Background (`imageTrace.hideRuns`). The result is
+one undo step, as before. A new trace of the same object replaces one still running. A trace whose
+image or settings changed meanwhile changes nothing, and the status bar says to trace it again.
+`imageTrace.make` and `imageTrace.makeAndExpand` from MCP, scripts and the control channel trace at
+once and return their result, as every trace on the web does.
 These controls use VectorCraft's existing tracing algorithm. Parameter effects follow its
 implementation; they do not claim pixel-identical results with another application.
 The terminology and general control behavior are described in the
@@ -83,4 +97,5 @@ The terminology and general control behavior are described in the
 
 Regression coverage: `crates/ui-egui/src/panels/image_trace.rs` tests opening the panel,
 a quick trace leaving it as it was, repeated opening, floating ownership, slider commits, visible threshold
-changes, undo, and the Properties entry point. Tracer tests live in `crates/trace/src/tests.rs`.
+changes, undo, and the Properties entry point. Tracing in the background:
+`crates/ui-egui/src/tests/trace_runs.rs`. Tracer tests live in `crates/trace/src/tests.rs`.

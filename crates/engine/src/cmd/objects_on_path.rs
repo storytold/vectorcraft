@@ -26,7 +26,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
 use super::edit::{roots_of, selected_roots};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, check_numbers, checked_id, checked_ids_param, cmd, has_selection};
 
 /// The id of the Objects on Path tool.
 pub const TOOL: &str = "objectsOnPath";

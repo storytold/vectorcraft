@@ -55,7 +55,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PointerEvent, PointerKind, ToolKey};
 
@@ -217,6 +217,11 @@ pub trait Tool: Send {
     }
     /// Called when the user switches away (finish pending work).
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
+    /// The tool, already active, is chosen again (its toolbar button, its shortcut, `tool.select`).
+    /// Most tools keep their state; the Blend tool finishes the blend it is adding to.
+    fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
     /// A command from outside the tool ran (a menu, a panel, an agent): finish work it ended (the
@@ -458,6 +463,7 @@ pub(crate) mod testutil {
             snap_tangent: true,
             snap_perpendicular: true,
             snap_to_glyph: false,
+            glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
             fill_active: true,
             gradient_stop: None,

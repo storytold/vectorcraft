@@ -1,6 +1,9 @@
 use super::common::{fix_ids, ids_json, is_mesh, replace_with, roots_param, selected_of};
 use super::envelope::{outline_of, rows_cols};
-use super::*;
+use super::{
+    Color, Document, EngineError, EnvelopeKind, GradientMesh, MeshAppearance, Node, NodeKind, Paint, Point, Result, Session, Value, bad,
+    check_numbers, color_value, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
+};
 
 // ---------- Gradient mesh ----------
 

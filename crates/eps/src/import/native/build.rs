@@ -4,7 +4,7 @@ use super::slots::{
     ART_LEFT_OUT, Content, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots, extent, few, fill_slots,
     text_objects,
 };
-use super::*;
+use super::{Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, Vec2, ai};
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -44,8 +44,20 @@ pub(super) fn build(
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, restyled, warnings } =
-        ai::read(data, matches!(page, Page::Art))?;
+    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+}
+
+/// [`build`] from `structure`, the editing copy `data` already read.
+pub(super) fn build_from(
+    structure: Structure,
+    data: &[u8],
+    visible: Option<&Document>,
+    page: Page,
+    outlined: bool,
+    trust: bool,
+    unit: f64,
+) -> Result<(Document, Vec<String>), String> {
+    let Structure { mut doc, to_doc, bbox, artboard, template, hidden_unread, slot_names, restyled, warnings } = structure;
     // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
     // scaled down to those units, and the document read from it is scaled up by `unit`.
     let board = artboard.map(|a| to_doc.transform_rect_bbox(a));

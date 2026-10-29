@@ -266,6 +266,68 @@ fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_p
     assert!(read, "{warnings:?}");
 }
 
+/// A palette of `[None]` and White, and a color group `Inks` holding a spot color, Red ink.
+const PALETTE: &str =
+    "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n1 (Inks) 1 Pg\n0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\nPB\n%AI5_EndPalette\n";
+
+/// A `.ai` that comes in as its PDF part, whose layers can't be used, still gets the swatches and
+/// color groups of its editing data's palette in place of the defaults, and keeps the inks its PDF
+/// part's art paints with that the palette doesn't have.
+#[test]
+fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() {
+    let image = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] 6000 6000 0 Xh\n\
+         [ 1 0 0 1 0 100 ] 0 0 6000 6000 6000 6000 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN";
+    let art = native(&format!("{PALETTE}{}", layer("Texture", true, &format!("{}\n{image}", square(10, 10)))));
+    let mut part = pdf_part(10.0, 86.0);
+    let gold = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.2, 0.9, 0.1));
+    part.swatches.push(vectorcraft_color::swatch::Swatch { name: "Gold ink".into(), paint: gold, global: true, spot: true });
+    let (d, warnings, read) = crate::layered_ai(&private(&art), part, vec![], false, true, 1.0);
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White", "Gold ink"], "{warnings:?}");
+    let groups: Vec<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["Inks"]);
+    assert!(d.swatch("Red ink").is_some_and(|s| s.spot));
+}
+
+/// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
+/// pattern gets the patterns its editing data defines with the palette's pattern swatches.
+#[test]
+fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let palette =
+        "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\nPB\n%AI5_EndPalette\n";
+    let art = native(&format!("{dots}{palette}"));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White", "Dots"], "{warnings:?}");
+    assert!(matches!(&d.swatch("Dots").map(|s| &s.paint), Some(vectorcraft_color::Paint::Pattern { pattern, .. }) if pattern == "Dots"));
+    assert!(d.pattern("Dots").is_some_and(|p| !p.art.is_empty()));
+
+    // A pattern that shows an image brings the image's data with it.
+    let pic = "%AI3_BeginPattern: (Pic)\n(Pic) 0 0 4 4\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 4 0 0 4 0 4 ] 1 1 0 Xh\n\
+               [ 4 0 0 4 0 4 ] 0 0 1 1 1 1 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\nE\n%AI3_EndPattern\n";
+    let art = native(&format!("{pic}{}", palette.replace("(Dots)", "(Pic)")));
+    let (d, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    let mut keys = vec![];
+    d.visit_images(|_, im| keys.push(im.key.clone()));
+    assert_eq!(keys.len(), 1, "{warnings:?}");
+    assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
+}
+
+/// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its
+/// page with the swatches and color groups of that palette in place of the defaults.
+#[test]
+fn an_eps_that_comes_in_as_its_page_keeps_the_swatches_of_its_palette() {
+    let r = import(&eps(&page_square(10, 10), &native(PALETTE))).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    let swatches: Vec<&str> = r.document.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White"], "{:?}", r.warnings);
+    let groups: Vec<&str> = r.document.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["Inks"]);
+}
+
 #[test]
 fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     // A square on the artboard, and one above it (the artboard is y 0 to 100 here).
@@ -333,13 +395,42 @@ fn editing_data_for_a_page_of_another_size_names_both_sizes() {
     let art = native(&layer("Jig", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 600 400");
     let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap().replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 612 792");
     let r = import(file.as_bytes()).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
-    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 612 × 792 pt page): it comes in as its page, in one layer";
+    assert_eq!(names(&r.document), ["Jig", "Layer 1"], "{:?}", r.warnings);
+    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 612 × 792 pt page): it comes in as its page, on a layer above its layers, which come in empty";
     assert!(r.warnings.iter().any(|w| w == note), "{:?}", r.warnings);
     // A `.ai` whose PDF part has an A4 page.
     let (_, w, read) = crate::layered_ai(&private(&art), Document::new(595.2756, 841.8898), vec![], false, false, 1.0);
     let note = "the file's layers weren't read from its editing data (its editing data is for a 600 × 400 pt page, not the file's 595.276 × 841.89 pt page): they come from its PDF part";
     assert!(!read && w.iter().any(|w| w == note), "{w:?}");
+}
+
+/// #2033: an EPS whose layers can't be used (here its editing data is for another page) still
+/// keeps its layer tree: the layers come in empty, in their order and with their names and
+/// options (sublayers too), and the page comes in on a layer above them, under a name none of
+/// them has.
+#[test]
+fn an_eps_whose_layers_cant_be_used_keeps_its_layer_tree() {
+    // Unlocked 0 (locked), printing 0.
+    let locked = layer("Locked", true, &layer("Sub", true, &square(20, 20))).replacen("1 1 1 1 0 0 1 0", "1 1 0 0 0 0 1 0", 1);
+    let layers = [layer("Layer 1", true, ""), locked, layer("Hidden", false, &square(50, 50))].concat();
+    let art = native(&layers).replace(" 0 0 100 100", " 0 0 600 400");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Layer 1", "Locked", "Hidden", "Layer 6"], "{:?}", r.warnings);
+    let [back, locked, hidden, page] = &d.layers[..] else { panic!("{:?}", names(d)) };
+    let options = |l: &Node| (l.visible, l.locked, matches!(l.kind, NodeKind::Layer { printable: true, .. }));
+    assert_eq!(
+        [options(back), options(locked), options(hidden), options(page)],
+        [(true, false, true), (true, true, false), (false, false, true), (true, false, true)]
+    );
+    assert!(back.children().unwrap().is_empty() && hidden.children().unwrap().is_empty());
+    let [sub] = &locked.children().unwrap()[..] else { panic!("{locked:?}") };
+    assert!(sub.name.as_deref() == Some("Sub") && sub.children().unwrap().is_empty());
+    assert_eq!(page.children().unwrap().len(), 1, "the page's square");
+    let mut ids = std::collections::BTreeSet::new();
+    d.walk(|n| assert!(ids.insert(n.id), "{:?} twice", n.id));
+    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 100 × 100 pt page): it comes in as its page, on a layer above its layers, which come in empty";
+    assert!(r.warnings.iter().any(|w| w == note), "{:?}", r.warnings);
 }
 
 /// #2034: editing data whose page is the file's at another scale (a Large Canvas file without its
@@ -349,14 +440,14 @@ fn editing_data_for_the_page_at_another_scale_names_the_scale() {
     let art = native(&layer("Jig", true, &square(10, 10)));
     let note = |file: &str| {
         let r = import(file.as_bytes()).unwrap();
-        assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+        assert_eq!(names(&r.document), ["Jig", "Layer 1"], "{:?}", r.warnings);
         r.warnings.into_iter().find(|w| w.contains("its editing data is for")).unwrap_or_default()
     };
     let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap();
     let ten = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 1000 1000");
     assert_eq!(
         note(&ten),
-        "the file's layers weren't read (its editing data is for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10): it comes in as its page, in one layer"
+        "the file's layers weren't read (its editing data is for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10): it comes in as its page, on a layer above its layers, which come in empty"
     );
     let wide = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 250 250");
     assert!(note(&wide).contains("for a 100 × 100 pt page, the file's 250 × 250 pt page at 1:2.5)"));
@@ -404,7 +495,7 @@ fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
     // A declared scale the art doesn't fit still makes it another page's.
     let art = native_large_canvas(20.0, 10.0, &layer("Art", true, &square(10, 10)));
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Art", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("for a 200 × 200 pt page, the file's 100 × 100 pt page at 2:1")), "{:?}", r.warnings);
     // A `.ai` keeps its art space: its PDF part is read at the size it declares.
     let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
@@ -717,6 +808,25 @@ fn type_of_the_page_with_the_letters_of_made_type_where_it_lies_is_that_type() {
     }
 }
 
+/// A right-to-left paragraph's page type has its words in the order they show, not the order they
+/// are typed (a dimension's label " 120.5 mm " is drawn "mm 120.5"): it is still that text
+/// object's type as the page draws it, not a second copy of it with the nearest text object.
+#[test]
+fn type_of_the_page_with_the_words_of_made_type_in_another_order_is_that_type() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto (there Hi) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("with another's")), "{:?}", r.warnings);
+}
+
 /// Page type of no text object that lies where the made type of two text objects is, with the
 /// letters of one of them in each of its pieces, is the type of both as the page draws it.
 #[test]
@@ -963,7 +1073,7 @@ fn more_text_objects_than_are_matched_leave_the_page() {
     let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
     let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &many)), &doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Back", "Spare", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("too many text objects") && crate::is_loss(w)), "{:?}", r.warnings);
 }
 
@@ -1075,7 +1185,7 @@ fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
     let extra = "0 0 1 0 k\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
     let art = native(&layer("Back", true, &(square(10, 10) + "\n" + extra)));
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Back", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("differs from the page's")), "{:?}", r.warnings);
 }
 
@@ -1127,7 +1237,7 @@ fn art_the_layers_print_outside_an_eps_page_of_its_art_makes_it_come_in_as_its_p
     let file = |far: &str| eps_of_art([10, 10, 14, 14], &page_square(10, 10), &(layer("Art", true, &square(10, 10)) + far));
     // A square the layers print far from it: the page would have it.
     let r = import(&file(&layer("Far", true, &square(80, 80)))).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Art", "Far", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read")), "{:?}", r.warnings);
     // Hidden, or on a layer that doesn't print, the page doesn't have it.
     let r = import(&file(&layer("Far", false, &square(80, 80)))).unwrap();

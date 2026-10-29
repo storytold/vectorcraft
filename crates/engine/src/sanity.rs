@@ -1,4 +1,4 @@
-use super::*;
+use super::{Document, MAX_COORD, NodeId, NodeKind, Selection, cmd};
 
 /// Is `id` a path made into a guide (View → Guides → Make Guides)?
 pub(crate) fn is_guide_path(d: &Document, id: NodeId) -> bool {

@@ -1,6 +1,9 @@
 use super::spans::Spans;
 use super::transform::{TRANSFORM_SWITCHES, about, apply_transform, scaling_options, transforms_objects};
-use super::*;
+use super::{
+    Affine, Document, EngineError, NodeId, OrientedBox, Point, Rect, Result, Scaling, Session, Value, bool_or, check_numbers, check_switches,
+    effects, f64_or, json, selected_roots_to_transform,
+};
 
 pub(super) fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     match bounds_transform(s, p, selected_roots_to_transform(s)?, 0.0)? {

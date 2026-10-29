@@ -502,6 +502,138 @@ impl<'a> Interp<'a> {
         })
     }
 
+    fn arithmetic(&mut self, op: Op) -> Res {
+        let (b, a) = (self.pop()?, self.pop()?);
+        let integer = match (&a, &b) {
+            (Obj::Int(x), Obj::Int(y)) => match op {
+                Op::Add => x.checked_add(*y).map(Obj::Int),
+                Op::Sub => x.checked_sub(*y).map(Obj::Int),
+                _ => x.checked_mul(*y).map(Obj::Int),
+            },
+            _ => None,
+        };
+        let result = match integer {
+            Some(value) => value,
+            None => {
+                let (x, y) = (a.as_num().ok_or(PsError::Ps("typecheck", String::new()))?, b.as_num().ok_or(PsError::Ps("typecheck", String::new()))?);
+                let value = match op {
+                    Op::Add => x + y,
+                    Op::Sub => x - y,
+                    _ => x * y,
+                };
+                if !value.is_finite() {
+                    return ps_err("undefinedresult", "");
+                }
+                Obj::Real(value)
+            }
+        };
+        self.push(result)
+    }
+
+    fn math_function(&mut self, op: Op) -> Res {
+        let result = match op {
+            Op::Sqrt => self.pop_num()?.sqrt(),
+            Op::Sin => self.pop_num()?.to_radians().sin(),
+            Op::Cos => self.pop_num()?.to_radians().cos(),
+            Op::Ln => self.pop_num()?.ln(),
+            Op::Log => self.pop_num()?.log10(),
+            Op::Exp => {
+                let [base, exponent] = self.nums()?;
+                base.powf(exponent)
+            }
+            _ => {
+                let [num, den] = self.nums()?;
+                num.atan2(den).to_degrees().rem_euclid(360.0)
+            }
+        };
+        if !result.is_finite() {
+            return ps_err("undefinedresult", "");
+        }
+        self.push(Obj::Real(result))
+    }
+
+    fn logical_op(&mut self, op: Op) -> Res {
+        let (b, a) = (self.pop()?, self.pop()?);
+        let result = match (a, b) {
+            (Obj::Bool(x), Obj::Bool(y)) => Obj::Bool(match op {
+                Op::And => x && y,
+                Op::Or => x || y,
+                _ => x ^ y,
+            }),
+            (Obj::Int(x), Obj::Int(y)) => Obj::Int(match op {
+                Op::And => x & y,
+                Op::Or => x | y,
+                _ => x ^ y,
+            }),
+            _ => return ps_err("typecheck", ""),
+        };
+        self.push(result)
+    }
+
+    fn for_loop(&mut self) -> Res {
+        let p = self.pop_proc()?;
+        let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
+        match (&init, &inc, &limit) {
+            (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
+                let (mut i, d, l) = (*i0, *d, *l);
+                while (d >= 0 && i <= l) || (d < 0 && i >= l) {
+                    self.push(Obj::Int(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
+                    if d == 0 {
+                        self.tick()?;
+                    }
+                }
+            }
+            _ => {
+                let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
+                let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
+                let mut k = 0.0;
+                loop {
+                    let i = i0 + d * k;
+                    if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
+                        break;
+                    }
+                    self.push(Obj::Real(i))?;
+                    if !self.body(&p)? {
+                        break;
+                    }
+                    k += 1.0;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn search_string(&mut self, op: Op) -> Res {
+        let seek = self.pop_str()?.to_vec();
+        let s = self.pop_str()?;
+        let text = s.to_vec();
+        self.spend((text.len() / 64) as u64)?;
+        let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+        match at {
+            Some(i) => {
+                let o = Obj::Str(s);
+                if op == Op::Search {
+                    self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
+                    self.push_interval(o.clone(), i, seek.len())?;
+                    self.push_interval(o, 0, i)?;
+                } else {
+                    self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
+                    self.push_interval(o, 0, seek.len())?;
+                }
+                self.push(Obj::Bool(true))?;
+            }
+            None => {
+                self.push(Obj::Str(s))?;
+                self.push(Obj::Bool(false))?;
+            }
+        }
+        Ok(())
+    }
+
     fn op_inner(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
@@ -558,34 +690,7 @@ impl<'a> Interp<'a> {
                 let n = self.stack.iter().rev().position(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
                 self.push(Obj::Int(n as i64))?;
             }
-            Add | Sub | Mul => {
-                let (b, a) = (self.pop()?, self.pop()?);
-                let r = match (&a, &b) {
-                    (Obj::Int(x), Obj::Int(y)) => match op {
-                        Add => x.checked_add(*y).map(Obj::Int),
-                        Sub => x.checked_sub(*y).map(Obj::Int),
-                        _ => x.checked_mul(*y).map(Obj::Int),
-                    },
-                    _ => None,
-                };
-                let r = match r {
-                    Some(r) => r,
-                    None => {
-                        let (x, y) =
-                            (a.as_num().ok_or(PsError::Ps("typecheck", String::new()))?, b.as_num().ok_or(PsError::Ps("typecheck", String::new()))?);
-                        let r = match op {
-                            Add => x + y,
-                            Sub => x - y,
-                            _ => x * y,
-                        };
-                        if !r.is_finite() {
-                            return ps_err("undefinedresult", "");
-                        }
-                        Obj::Real(r)
-                    }
-                };
-                self.push(r)?;
-            }
+            Add | Sub | Mul => self.arithmetic(op)?,
             Div => {
                 let [a, b] = self.nums()?;
                 if b == 0.0 {
@@ -603,27 +708,7 @@ impl<'a> Interp<'a> {
                 Obj::Real(r) => self.push(Obj::Real(if op == Neg { -r } else { r.abs() }))?,
                 _ => return ps_err("typecheck", ""),
             },
-            Sqrt | Sin | Cos | Exp | Ln | Log | Atan => {
-                let r = match op {
-                    Sqrt => self.pop_num()?.sqrt(),
-                    Sin => self.pop_num()?.to_radians().sin(),
-                    Cos => self.pop_num()?.to_radians().cos(),
-                    Ln => self.pop_num()?.ln(),
-                    Log => self.pop_num()?.log10(),
-                    Exp => {
-                        let [b, e] = self.nums()?;
-                        b.powf(e)
-                    }
-                    _ => {
-                        let [num, den] = self.nums()?;
-                        num.atan2(den).to_degrees().rem_euclid(360.0)
-                    }
-                };
-                if !r.is_finite() {
-                    return ps_err("undefinedresult", "");
-                }
-                self.push(Obj::Real(r))?;
-            }
+            Sqrt | Sin | Cos | Exp | Ln | Log | Atan => self.math_function(op)?,
             Round | Floor | Ceiling | Truncate => match self.pop()? {
                 Obj::Int(i) => self.push(Obj::Int(i))?,
                 Obj::Real(r) => self.push(Obj::Real(match op {
@@ -678,23 +763,7 @@ impl<'a> Interp<'a> {
                 };
                 self.push(Obj::Bool(r))?;
             }
-            And | Or | Xor => {
-                let (b, a) = (self.pop()?, self.pop()?);
-                let r = match (a, b) {
-                    (Obj::Bool(x), Obj::Bool(y)) => Obj::Bool(match op {
-                        And => x && y,
-                        Or => x || y,
-                        _ => x ^ y,
-                    }),
-                    (Obj::Int(x), Obj::Int(y)) => Obj::Int(match op {
-                        And => x & y,
-                        Or => x | y,
-                        _ => x ^ y,
-                    }),
-                    _ => return ps_err("typecheck", ""),
-                };
-                self.push(r)?;
-            }
+            And | Or | Xor => self.logical_op(op)?,
             Not => match self.pop()? {
                 Obj::Bool(b) => self.push(Obj::Bool(!b))?,
                 Obj::Int(i) => self.push(Obj::Int(!i))?,
@@ -723,41 +792,7 @@ impl<'a> Interp<'a> {
                 let pick = if self.pop_bool()? { yes } else { no };
                 self.call(pick)?;
             }
-            For => {
-                let p = self.pop_proc()?;
-                let (limit, inc, init) = (self.pop()?, self.pop()?, self.pop()?);
-                match (&init, &inc, &limit) {
-                    (Obj::Int(i0), Obj::Int(d), Obj::Int(l)) => {
-                        let (mut i, d, l) = (*i0, *d, *l);
-                        while (d >= 0 && i <= l) || (d < 0 && i >= l) {
-                            self.push(Obj::Int(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            i = i.checked_add(d).ok_or(PsError::Ps("rangecheck", String::new()))?;
-                            if d == 0 {
-                                self.tick()?;
-                            }
-                        }
-                    }
-                    _ => {
-                        let n = |o: &Obj| o.as_num().filter(|v| v.is_finite()).ok_or(PsError::Ps("typecheck", String::new()));
-                        let (i0, d, l) = (n(&init)?, n(&inc)?, n(&limit)?);
-                        let mut k = 0.0;
-                        loop {
-                            let i = i0 + d * k;
-                            if !((d >= 0.0 && i <= l) || (d < 0.0 && i >= l)) {
-                                break;
-                            }
-                            self.push(Obj::Real(i))?;
-                            if !self.body(&p)? {
-                                break;
-                            }
-                            k += 1.0;
-                        }
-                    }
-                }
-            }
+            For => self.for_loop()?,
             Repeat => {
                 let p = self.pop_proc()?;
                 let n = self.pop_int()?;
@@ -955,31 +990,7 @@ impl<'a> Interp<'a> {
                 self.stack.truncate(at);
                 self.push(Obj::Array { items, exec: false })?;
             }
-            Search | AnchorSearch => {
-                let seek = self.pop_str()?.to_vec();
-                let s = self.pop_str()?;
-                let text = s.to_vec();
-                self.spend((text.len() / 64) as u64)?;
-                let at = if op == Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
-                match at {
-                    Some(i) => {
-                        let o = Obj::Str(s);
-                        if op == Search {
-                            self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
-                            self.push_interval(o.clone(), i, seek.len())?;
-                            self.push_interval(o, 0, i)?;
-                        } else {
-                            self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
-                            self.push_interval(o, 0, seek.len())?;
-                        }
-                        self.push(Obj::Bool(true))?;
-                    }
-                    None => {
-                        self.push(Obj::Str(s))?;
-                        self.push(Obj::Bool(false))?;
-                    }
-                }
-            }
+            Search | AnchorSearch => self.search_string(op)?,
             NewDict => {
                 self.pop_count()?;
                 self.push(Obj::dict(Default::default()))?;

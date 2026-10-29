@@ -3,7 +3,7 @@ use super::invoke::menu_dialog;
 use super::slots::{recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::state::{checked, selected_image};
 use super::ui_commands::UI_COMMANDS;
-use super::*;
+use super::{Brightness, Face, SaveMode, Value, VectorcraftApp, io, json, next_zoom};
 
 /// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
 /// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`), or a library panel's id
@@ -74,11 +74,24 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     {
         return Some(r);
     }
+    run_ui_part1(app, id, p)
+        .or_else(|| run_ui_part2(app, id, p))
+        .or_else(|| run_ui_part3(app, id, p))
+        .or_else(|| run_ui_part4(app, id, p))
+        .or_else(|| run_ui_part5(app, id, p))
+        .or_else(|| run_ui_part6(app, id, p))
+        .or_else(|| run_ui_part7(app, id, p))
+        .or_else(|| run_ui_part8(app, id, p))
+        .or_else(|| run_ui_part9(app, id, p))
+        .or_else(|| run_ui_part10(app, id, p))
+        .or_else(|| run_ui_part11(app, id, p))
+        .or_else(|| run_ui_part12(app, id, p))
+        .or_else(|| run_ui_part13(app, id, p))
+}
+
+/// UI commands, part 1.
+fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
-    let flag = |b: &mut bool| {
-        *b = !*b;
-        Ok(json!(*b))
-    };
     let r = match id {
         "file.newDialog" => {
             crate::dialogs::open_new_document(app);
@@ -116,6 +129,19 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::find_font::open(app);
             Ok(Value::Null)
         }
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 2.
+fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let flag = |b: &mut bool| {
+        *b = !*b;
+        Ok(json!(*b))
+    };
+    let r = match id {
         "ui.missingFontsDialog" => crate::dialogs::missing_fonts::open_command(app, s("folder")),
         "ui.findFontsInFolder" => crate::dialogs::missing_fonts::find_in_folder_command(app, s("folder")),
         "file.clearRecent" => {
@@ -149,13 +175,25 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::prefs_dialog::open(app, s("category").as_deref());
             Ok(Value::Null)
         }
-        // Edit → Color Settings… / Assign Profile… (no params): show the colour-management panel.
+        // Edit → Color Settings… / Assign Profile… (no params): show the colour-management panel
+        // wherever it is, as Window › Separations Preview does (it isn't in an icon column, so a
+        // flyout for it never opened: #4542).
         "edit.colorSettings" | "edit.assignProfile" if p.as_object().is_none_or(|o| o.is_empty()) => {
-            app.ui.open_panel = Some("separations".into());
-            app.ui.dock = true;
-            app.session.execute(id, p).map_err(|e| e.to_string())
+            crate::panel_docking::reveal_panel(app, "separations").and_then(|_| app.session.execute(id, p).map_err(|e| e.to_string()))
         }
         "view.outline" => flag(&mut app.ui.view.outline),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 3.
+fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let flag = |b: &mut bool| {
+        *b = !*b;
+        Ok(json!(*b))
+    };
+    let r = match id {
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
         "view.trimView" => flag(&mut app.ui.view.trim_view),
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
@@ -198,11 +236,29 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "type.hiddenCharacters" => flag(&mut app.ui.view.hidden_chars),
         "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
         "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
+        "type.highlightFontName" => crate::panels::character::highlight(app, crate::panels::character::Field::FontName),
+        "type.highlightKerning" => crate::panels::character::highlight(app, crate::panels::character::Field::Kerning),
+        "type.highlightTracking" => crate::panels::character::highlight(app, crate::panels::character::Field::Tracking),
+        "type.underline" => crate::panels::character::toggle_underline(app),
+        "type.lineComposer" => crate::panels::paragraph::toggle_composer(app),
+        "type.hyphenate" => crate::panels::paragraph::toggle_hyphenate(app),
         id if let Some((_, justify)) = crate::panels::paragraph::ALIGN_COMMANDS.iter().find(|c| c.0 == id) => {
             crate::panels::paragraph::align(app, justify)
         }
         "type.applyBullets" => crate::panels::paragraph::apply_bullets(app, p),
         "type.applyNumbers" => crate::panels::paragraph::apply_numbers(app, p),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 4.
+fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result<Value, String>> {
+    let flag = |b: &mut bool| {
+        *b = !*b;
+        Ok(json!(*b))
+    };
+    let r = match id {
         "type.convertListToText" => crate::panels::paragraph::convert_list_to_text(app),
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
@@ -259,6 +315,19 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
         "view.grid" => flag(&mut app.ui.view.grid),
         "view.snapToGrid" => flag(&mut app.ui.view.snap_to_grid),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 5.
+fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let flag = |b: &mut bool| {
+        *b = !*b;
+        Ok(json!(*b))
+    };
+    let r = match id {
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
@@ -370,6 +439,19 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let Some(tool) = s("tool") else { return Some(Err("tool (a tool id) is required".into())) };
             crate::toolbar::float_group(app, &tool, floating).map(Value::Bool)
         }
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 6.
+fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let flag = |b: &mut bool| {
+        *b = !*b;
+        Ok(json!(*b))
+    };
+    let r = match id {
         "window.taskBar" => flag(&mut app.ui.task_bar),
         "window.taskBar.pin" => {
             let place = &mut app.ui.task_bar_place;
@@ -432,6 +514,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
         "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.nextDocument" => crate::chrome::step_document(app, true),
+        "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
             Some(t) if vectorcraft_tools::tool_info(&t).is_some() => {
                 app.select_tool(&t);
@@ -462,6 +546,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "file.export.pdf" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::open_save_pdf(app, &json!({})),
         "file.export.pdf" => io::export_pdf(app, p.clone()),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 7.
+fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "help.about" => {
             app.ui.about = true;
             Ok(Value::Null)
@@ -494,6 +587,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.sampleScreenColor" => crate::screen_color::start(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
+        "ui.newCharStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Char),
+        "ui.newParaStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Para),
         "ui.symbolOptions" => {
             let name = s("name");
             let edit = p.get("edit").and_then(Value::as_bool).unwrap_or(false);
@@ -506,6 +601,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),
         "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 8.
+fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "ui.colorGuideOptions" => {
             crate::dialogs::color_guide_options::open(app);
             Ok(Value::Null)
@@ -543,10 +647,20 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
         }
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 9.
+fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "ui.flattenerPresetsDialog" => {
             crate::dialogs::flattener_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
         }
+        "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),
@@ -580,9 +694,20 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(l) => crate::panels::brushes::open_library(app, &json!({ "library": l.id })),
             None => Err("no such user library".into()),
         },
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 10.
+fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "ui.expandDialog" => crate::dialogs::expand::open(app),
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
+        "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
+        "ui.dialogReset" => crate::dialogs::reset(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
@@ -608,6 +733,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 11.
+fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "ui.fileInfoDialog" => crate::dialogs::file_info::open(app),
         "ui.rasterEffectsSettingsDialog" => crate::dialogs::raster_effects::open(app),
         "ui.effectGalleryDialog" => crate::dialogs::effect_gallery::open(app, p),
@@ -637,6 +771,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::action_batch::open(app, set, action)
         }
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 12.
+fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "file.showPackage" => crate::dialogs::package::show_package(app, p),
         "docInfo.save" => crate::panels::doc_info::save_report(app, p),
         // Slice Options… and Divide Slices…: their dialogs, on the selected slices.
@@ -673,6 +816,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 None => Err("printing isn't available here".into()),
             }
         }
+        _ => return None,
+    };
+    Some(r)
+}
+
+/// UI commands, part 13.
+fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let r = match id {
         "ui.printPresetsDialog" => {
             crate::dialogs::print_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
@@ -682,6 +834,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.installPlugin" => io::install_plugin(app, p),
         "plugin.cancelRuns" => Ok(crate::plugin_runs::cancel_all(app)),
         "plugin.hideRuns" => Ok(crate::plugin_runs::hide_all(app)),
+        "imageTrace.cancelRuns" => Ok(crate::trace_runs::cancel_all(app)),
+        "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         "ui.perspectivePresetsDialog" => {
@@ -696,6 +850,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
+
         _ => return None,
     };
     Some(r)

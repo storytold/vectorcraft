@@ -5,7 +5,9 @@
 //!
 //! - Clicking a row highlights it and makes its layer current (`layer.setCurrent`); Shift-click
 //!   highlights the range of rows down to it, Ctrl/Cmd-click toggles one (`layer.highlight`). Panel
-//!   commands (Duplicate, Delete, Merge, Options…) act on the highlighted rows.
+//!   commands (Duplicate, Delete, Merge, Options…) act on the highlighted rows. Alt-click on a
+//!   layer's or sublayer's name also selects its art (`layer.selectAll`), as its selection square
+//!   does.
 //! - The selection column selects a row's art (`layer.selectAll`, Shift adds or removes); a row
 //!   whose art is selected shows a square in its layer's colour, and dragging that square onto
 //!   another row moves the selected art there (Alt copies it).

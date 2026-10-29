@@ -1,5 +1,8 @@
 use super::region::Region;
-use super::*;
+use super::{
+    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, LeadingModel, SGlyph, hyphen_glyph,
+    hyphen_points_with, no_line_end, no_line_start, soft_line_start,
+};
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -166,7 +169,7 @@ impl Pen<'_> {
 pub(super) fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[SGlyph]) -> (f64, &'t str) {
     use vectorcraft_doc::TabAlign;
     let rel = x - origin;
-    let seg: Vec<&SGlyph> = rest.iter().take_while(|g| g.ch != '\t').collect();
+    let seg: Vec<&SGlyph> = rest.iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
     let width: f64 = seg.iter().map(|g| g.adv).sum();
     let target = |pos: f64, align: TabAlign, on: char| match align {
         TabAlign::Left => pos,
@@ -279,6 +282,9 @@ pub(super) fn break_line(
     kinsoku: Kinsoku,
 ) -> (usize, bool) {
     if !width.is_finite() {
+        if let Some(pos) = g[i..].iter().position(|gl| gl.ch == '\u{2028}') {
+            return (i + pos + 1, false);
+        }
         return (g.len(), false);
     }
     let mut x = 0.0;
@@ -294,9 +300,9 @@ pub(super) fn break_line(
             cluster_end += 1;
         }
         // No Break: the marked characters stay on one line, including across a space inside the run.
-        if gl.no_break {
+        if gl.no_break && gl.ch != '\u{2028}' {
             while let Some(n) = g.get(cluster_end) {
-                if !n.no_break {
+                if !n.no_break || n.ch == '\u{2028}' {
                     break;
                 }
                 let b = n.byte;
@@ -311,6 +317,9 @@ pub(super) fn break_line(
         } else {
             g[j..cluster_end].iter().map(|glyph| glyph.adv).sum()
         };
+        if gl.ch == '\u{2028}' {
+            return (cluster_end, false);
+        }
         if j > first && !gl.is_space() && x + cluster_width > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {

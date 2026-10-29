@@ -298,20 +298,18 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
 #[test]
 fn copy_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+    // A PNG whose header reads but whose pixel data is cut short.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
     for worker in [false, true] {
         let (mut app, board) = if worker { app_with_worker() } else { app() };
         app.status("Ready");
         copy_rect(&mut app);
         background::wait_all(&mut app);
         assert_eq!(app.ui.status, "Ready", "worker {worker}: no note");
-        run(&mut app, "file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
         app.status("Ready");
         run(&mut app, "edit.copy", json!({}));
         background::wait_all(&mut app);

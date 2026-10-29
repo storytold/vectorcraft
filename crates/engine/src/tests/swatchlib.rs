@@ -162,6 +162,59 @@ fn save_and_load_round_trip_keeps_cmyk_spot_and_groups() {
     assert!(s.execute("swatch.library.save", &json!({"user": true})).is_err(), "no user folder in a headless session");
 }
 
+/// The swatch library commands, and the graphic style library save and load that share their file
+/// handling, refuse a parameter of the wrong form, such as `user: "true"` or `names: "Grays"`, with
+/// an error that names it; the document keeps its swatches and no undo step is recorded. A null
+/// counts as a value left out.
+#[test]
+fn library_commands_refuse_params_of_the_wrong_form() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+    let swatches = |s: &Session| doc(s).swatches_iter().map(|w| w.name.clone()).collect::<Vec<_>>();
+    let (names, before) = (swatches(&s), undo_len(&s));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Grays"]}))["data"].clone();
+    for (cmd, p, msg) in [
+        ("swatch.library.get", json!({"library": 5}), "`library` must be a string"),
+        ("swatch.library.add", json!({"library": "earth-tones", "names": "Clay"}), "`names` must be a list of names"),
+        ("swatch.library.add", json!({"library": "earth-tones", "names": ["Clay", 3]}), "`names` must be a list of names"),
+        ("swatch.library.add", json!({"library": "earth-tones", "names": ["Clay"], "apply": 5}), "`apply` must be a string"),
+        ("swatch.library.add", json!({"library": "earth-tones", "apply": "fill", "focus": "true"}), "`focus` must be true or false"),
+        ("swatch.resetDefaults", json!({"replace": "true"}), "`replace` must be true or false"),
+        ("swatch.library.save", json!({"user": "true"}), "`user` must be true or false"),
+        ("swatch.library.save", json!({"path": 5}), "`path` must be a string"),
+        ("swatch.library.save", json!({"format": 5}), "`format` must be a string"),
+        ("swatch.library.save", json!({"name": 5}), "`name` must be a string"),
+        ("swatch.library.save", json!({"names": "Grays"}), "`names` must be a list of names"),
+        ("swatch.library.load", json!({"path": 5, "data": data}), "`path` must be a string"),
+        ("swatch.library.load", json!({"data": 5}), "`data` must be a string"),
+        ("swatch.library.load", json!({"dataBase64": 5}), "`dataBase64` must be a string"),
+        ("swatch.library.load", json!({"data": data, "name": 5}), "`name` must be a string"),
+        ("graphicStyle.saveLibrary", json!({"user": "true"}), "`user` must be true or false"),
+        ("graphicStyle.saveLibrary", json!({"names": "Halo"}), "`names` must be a list of names"),
+        ("graphicStyle.saveLibrary", json!({"name": 5}), "`name` must be a string"),
+        ("graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "names": "Halo"}), "`names` must be a list of names"),
+        ("graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "name": 5}), "`name` must be a string"),
+        ("graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "apply": "true"}), "`apply` must be true or false"),
+        ("graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "apply": true, "add": "true"}), "`add` must be true or false"),
+        ("graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "apply": true, "ids": "x"}), "ids must be an array"),
+        ("graphicStyle.loadLibrary", json!({"path": 5, "data": "{}"}), "`path` must be a string"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+    }
+    assert_eq!((swatches(&s), undo_len(&s)), (names.clone(), before), "nothing changed");
+    let r = run(&mut s, "swatch.library.save", json!({"path": null, "format": null, "name": null, "names": null, "user": null}));
+    assert_eq!(r["format"], "vcswatches");
+    let r = run(&mut s, "swatch.library.load", json!({"path": null, "data": data, "dataBase64": null, "name": null}));
+    assert_eq!(r["count"], 9);
+    run(&mut s, "swatch.resetDefaults", json!({"replace": null}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "earth-tones", "names": null, "apply": null, "focus": null}));
+    assert!(r["added"].as_array().is_some_and(|a| !a.is_empty()) && r.get("applied").is_none(), "{r}");
+    run(&mut s, "graphicStyle.saveLibrary", json!({"name": null, "names": null}));
+    let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "shadows-glows", "name": null, "names": null}));
+    assert!(r["added"].as_array().is_some_and(|a| !a.is_empty()), "{r}");
+}
+
 #[test]
 fn libraries_saved_in_the_user_folder_are_user_defined() {
     let dir = temp_dir("user");

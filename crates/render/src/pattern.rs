@@ -35,7 +35,7 @@ const MAX_TILE_PX: f64 = 2048.0;
 
 /// What a tile is kept under: the pattern's name and the bits of its raster scale
 /// ([`raster_scale`]).
-type TileKey = (String, u64);
+type TileKey = (String, u64, Ink);
 
 /// What a tile was drawn from besides its pattern's own art, for art that shows more than itself:
 /// the art of every pattern and symbol and the pixels of every image in the document, the
@@ -241,12 +241,12 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
     let (pw, ph) = def.period();
     let scale = raster_scale(s, (pw, ph));
     let params = (def.tile, def.tile_type, def.overlap);
-    let key = (name.to_string(), scale.to_bits());
+    let key = (name.to_string(), scale.to_bits(), ink);
     let cms = vectorcraft_color::cms::active();
     let hit = CACHE.with(|c| {
         let mut c = c.borrow_mut();
         c.check_plugins();
-        let tiles = &mut c.tiles[ink as usize];
+        let tiles = &mut c.tiles[ink.index()];
         let t = tiles.tick();
         tiles
             .get(&key, t)
@@ -281,7 +281,7 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
                     return;
                 }
                 let mut c = c.borrow_mut();
-                let tiles = &mut c.tiles[ink as usize];
+                let tiles = &mut c.tiles[ink.index()];
                 let (t, bytes) = (tiles.tick(), size_of::<TileEntry>() + w as usize * h as usize * 4);
                 let entry = TileEntry { art: def.art.clone(), deps, cms: Arc::downgrade(&cms), params, sx, sy, pixmap: pm.clone(), failed };
                 tiles.insert(key, entry, bytes, t);

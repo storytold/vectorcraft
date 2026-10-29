@@ -314,6 +314,102 @@ pub fn smooth(path: &PathData, amount: f64) -> PathData {
     out
 }
 
+/// The Smooth slider's level Auto-Smooth picks, halfway between minimum and maximum smoothing.
+/// VectorCraft's own rule: the help page says only that Auto-Smooth smooths the path automatically
+/// (https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/refine-path-segments-with-the-smooth-slider.html).
+/// [`smooth_level`] already scales with each path's size, so one level suits every path.
+pub const SMOOTH_AUTO_LEVEL: f64 = 50.0;
+
+/// Object › Path › Smooth at slider level `level`, from 0 (minimum smoothing: the path stays within
+/// 0.1 % of its longer side of where it was) to 100 (maximum). The help page names only the two
+/// ends; the rest is VectorCraft's own rule. Each subpath is refitted with curves as Simplify does,
+/// but keeping a corner only where the path turns back on itself (so jags and kinks become curves),
+/// within a tolerance from 0.1 % of the path's longer side at level 0 to 2.5 % at level 100. A refit
+/// never has more anchor points than the subpath had: a shape whose corners the tolerance can't
+/// round, such as a rectangle, stays as it is. Closed subpaths stay closed, with no kink left where
+/// they start unless rounding it would pass the tolerance, and open ones keep their end points. A level outside 0..=100 counts as the nearer end, and one that is not a number as
+/// [`SMOOTH_AUTO_LEVEL`].
+pub fn smooth_level(path: &PathData, level: f64) -> PathData {
+    let level = if level.is_finite() { level.clamp(0.0, 100.0) } else { SMOOTH_AUTO_LEVEL };
+    let size = path.bounds().map_or(0.0, |b| b.width().max(b.height()));
+    if !size.is_finite() {
+        return path.clone();
+    }
+    let opts = SimplifyOptions { tolerance: size * (0.001 + 0.024 * level / 100.0), corner_angle_deg: SMOOTH_CORNER_DEG, straight_lines: false };
+    let smoothed = |sp: &SubPath| {
+        let Some(mut fit) = simplify_subpath(sp, &opts).filter(|f| f != sp) else { return sp.clone() };
+        smooth_seam(&mut fit, sp, opts.tolerance);
+        fit
+    };
+    PathData::new(path.subpaths.iter().map(smoothed).collect())
+}
+
+/// [`smooth_level`] keeps a corner only where the path turns by more than this (turns back).
+const SMOOTH_CORNER_DEG: f64 = 179.0;
+
+/// A closed subpath's refit leaves its start anchor with the tangents of the original segments on
+/// either side of it, a kink when the path had one there: turn it into a smooth anchor with the same
+/// handle lengths, unless the path turns back there or the rounded path would stray from `original`
+/// by more than `tol` (or than the refit already does).
+fn smooth_seam(sp: &mut SubPath, original: &SubPath, tol: f64) {
+    if !sp.closed {
+        return;
+    }
+    let Some(a) = sp.anchors.first() else { return };
+    let (Some(i), Some(o)) = (crate::fit::unit(a.p - a.h_in), crate::fit::unit(a.h_out - a.p)) else { return };
+    if i.dot(o) < SMOOTH_CORNER_DEG.to_radians().cos() {
+        return;
+    }
+    let Some(dir) = crate::fit::unit(i + o) else { return };
+    let mut rounded = sp.clone();
+    if let Some(r) = rounded.anchors.first_mut() {
+        *r = Anchor::with_handles(a.p, a.p - dir * a.h_in.distance(a.p), a.p + dir * a.h_out.distance(a.p));
+    }
+    if seam_error(original, sp, &rounded, tol) <= tol.max(seam_error(original, sp, sp, tol)) {
+        *sp = rounded;
+    }
+}
+
+/// How far the segments on either side of the start anchor of `fit` (a refit of the closed
+/// `original` whose other segments match `before`) are from `original`, both ways: the largest
+/// distance from those segments to `original`, and from the parts of `original` that `before`'s
+/// segments there cover (within `tol`) to `fit`.
+fn seam_error(original: &SubPath, before: &SubPath, fit: &SubPath, tol: f64) -> f64 {
+    use kurbo::ParamCurveNearest;
+    let n = fit.segment_count();
+    if n == 0 || before.segment_count() != n || original.segment_count() == 0 {
+        return f64::INFINITY;
+    }
+    let is_seam = |j: usize| j == 0 || j + 1 == n;
+    let dist = |q: Point, sp: &SubPath, seam: bool| {
+        (0..sp.segment_count())
+            .filter(|&j| is_seam(j) == seam)
+            .map(|j| sp.segment(j).nearest(q, 1e-9).distance_sq)
+            .fold(f64::INFINITY, f64::min)
+            .sqrt()
+    };
+    let samples = |sp: &SubPath, seam_only: bool| {
+        let mut pts = Vec::new();
+        for j in (0..sp.segment_count()).filter(|&j| !seam_only || is_seam(j)) {
+            let c = sp.segment(j);
+            let m = ((c.arclen(1e-6) / (tol.max(1e-6) * 0.5)).ceil() as usize).clamp(4, 256);
+            sample(&c, m, &mut pts, true);
+        }
+        pts
+    };
+    let all = |q: Point| dist(q, original, true).min(dist(q, original, false));
+    let forward = samples(fit, true).into_iter().map(all).fold(0.0, f64::max);
+    let back = samples(original, false)
+        .into_iter()
+        .filter(|&q| dist(q, before, true) <= tol)
+        .map(|q| {
+            let d = dist(q, fit, true);
+            if d > tol { d.min(dist(q, fit, false)) } else { d }
+        })
+        .fold(0.0, f64::max);
+    forward.max(back)
+}
+
 /// Remove anchors that can be deleted without changing the shape by more than `tolerance`
 /// (collinear corner points, duplicate points, and curve joints that one cubic can replace).
 pub fn remove_redundant_points(path: &PathData, tolerance: f64) -> PathData {

@@ -1,7 +1,10 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{FLIP, IMAGE_TOO_LARGE, LINKED_PREVIEWS, MAX_PIXELS, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, Place};
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node, NodeKind,
+    Obj, OpacityMask, Paint, PathData, Point, Reader, Rect, StrokeLayer, V, ps,
+};
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.

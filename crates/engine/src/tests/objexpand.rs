@@ -254,7 +254,10 @@ fn a_pattern_fill_becomes_its_tiles_clipped_by_the_object() {
     let mut s = session();
     pattern_rect(&mut s, Rect::new(25.0, 25.0, 85.0, 65.0), false);
     // Fill expands the pattern; Expand Gradient To has no gradient fill to apply to.
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": true, "stroke": false, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": true, "stroke": false, "gradient": false, "appearance": false})
+    );
     let before = render(&s);
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "object.expand", json!({}));
@@ -276,7 +279,10 @@ fn a_pattern_fill_becomes_its_tiles_clipped_by_the_object() {
     assert_eq!(differing(&before, &render(&s), 2), 0, "looks the same");
     // The tiles are the pattern's art as it is (a stroked live rectangle that Object and Stroke can
     // expand).
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": false, "stroke": true, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": false, "stroke": true, "gradient": false, "appearance": false})
+    );
     run(&mut s, "edit.undo", json!({}));
     assert!(matches!(selected(&s).appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Dots"));
     // Fill off: the pattern stays live.
@@ -905,7 +911,10 @@ fn fill_off_leaves_the_fill_live_and_stroke_off_keeps_the_stroke() {
 fn defaults_match_the_dialog_and_info_tells_what_applies() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), true);
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": true, "fill": true, "stroke": true, "gradient": true}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": true, "fill": true, "stroke": true, "gradient": true, "appearance": false})
+    );
     let r = run(&mut s, "object.expand", json!({}));
     assert_eq!(r["ids"].as_array().unwrap().len(), 1);
     // Object, Fill and Stroke on; 255 objects: the live rectangle, its stroke and its gradient.
@@ -916,11 +925,101 @@ fn defaults_match_the_dialog_and_info_tells_what_applies() {
     assert_eq!(strips.len(), 255);
     assert!(children[1].appearance.stroke_paint().is_none(), "outlined stroke");
     assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Expand");
-    assert_eq!(run(&mut s, "object.expand.info", json!({})), json!({"object": false, "fill": false, "stroke": false, "gradient": false}));
+    assert_eq!(
+        run(&mut s, "object.expand.info", json!({})),
+        json!({"object": false, "fill": false, "stroke": false, "gradient": false, "appearance": false})
+    );
     assert!(s.execute("object.expand", &json!({})).is_err(), "nothing left to expand");
     // Bad options are refused before anything changes.
     run(&mut s, "edit.undo", json!({}));
     assert!(s.execute("object.expand", &json!({"gradient": "rings"})).is_err());
     assert!(s.execute("object.expand", &json!({"steps": 0})).is_err());
     assert!(matches!(selected(&s).kind, NodeKind::Path { live: Some(_), .. }));
+}
+
+/// A selected open line with a 2 pt black stroke, no fill and a Zig Zag effect (#3089).
+fn zig_zag_line(s: &mut Session) -> NodeId {
+    let id = NodeId(run(s, "path.create", json!({"d": "M 20 100 L 180 100"}))["id"].as_u64().unwrap());
+    run(s, "paint.setFill", json!({"none": true}));
+    run(s, "paint.setStroke", json!({"color": "#000000"}));
+    run(s, "stroke.set", json!({"weight": 2}));
+    run(s, "effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 10, "ridges": 6, "relative": false}}));
+    id
+}
+
+#[test]
+fn expand_info_says_when_expand_appearance_comes_first() {
+    let mut s = session();
+    zig_zag_line(&mut s);
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "Zig Zag is an appearance attribute");
+    // Expand Appearance bakes the zig-zag into the line, which keeps its stroke and gets no fill.
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let line = selected(&s);
+    assert!(matches!(line.kind, NodeKind::Path { .. }), "a path: {:?}", line.kind);
+    assert!(line.path_data().unwrap().anchors().count() > 6, "the zig-zag is baked");
+    assert!(line.appearance.effects.is_empty());
+    assert!(!line.appearance.stroke_paint().is_none(), "still a stroked line");
+    assert!(line.appearance.fill().is_none_or(|f| f.paint.is_none()), "no fill");
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(false));
+    // Then Expand outlines the stroke into a filled shape.
+    run(&mut s, "object.expand", json!({}));
+    let outline = selected(&s);
+    assert!(!outline.appearance.fill_paint().is_none(), "a filled outline");
+    assert!(outline.appearance.stroke_paint().is_none());
+}
+
+/// The paths under `n` (itself included): (how many have a stroke, how many are filled black).
+fn strokes_and_black_fills(n: &Node) -> (usize, usize) {
+    let (mut stroked, mut black) = (0, 0);
+    n.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+            stroked += usize::from(!c.appearance.stroke_paint().is_none());
+            black += usize::from(c.appearance.fill_paint() == Paint::solid(Color::BLACK));
+        }
+    });
+    (stroked, black)
+}
+
+#[test]
+fn object_expand_outlines_a_stroked_line_with_an_effect_in_one_step() {
+    let mut s = session();
+    zig_zag_line(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "object.expand", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let n = selected(&s);
+    assert!(n.appearance.effects.is_empty(), "the zig-zag is baked");
+    assert_eq!(strokes_and_black_fills(&n), (0, 1), "the stroke is outlined: {n:?}");
+}
+
+#[test]
+fn object_expand_outlines_the_stroke_a_groups_appearance_expands_to() {
+    // A group of two red squares without strokes; the group has a black stroke and a Transform
+    // effect of its own, so Stroke has nothing to outline until Expand Appearance has run.
+    let mut s = session();
+    let a = NodeId(run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    let b = NodeId(run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 40, "height": 40}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 2, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveV": 50}}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["stroke"], json!(false), "no stroked path yet");
+    run(&mut s, "object.expand", json!({}));
+    let g = selected(&s);
+    assert!(g.appearance.items.is_empty() && g.appearance.effects.is_empty(), "the appearance is expanded");
+    let (stroked, black) = strokes_and_black_fills(&g);
+    assert_eq!(stroked, 0, "no stroke is left: {g:?}");
+    assert_eq!(black, 2, "each square's copy of the group's stroke is outlined: {g:?}");
+}
+
+#[test]
+fn expand_info_counts_two_fills_but_not_a_plain_rectangle() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(false), "a basic appearance");
+    run(&mut s, "appearance.addFill", json!({}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "two fills");
 }

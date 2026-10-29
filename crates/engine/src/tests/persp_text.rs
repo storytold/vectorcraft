@@ -141,6 +141,67 @@ fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     assert!(s2.execute("perspective.editText", &json!({"id": rect.0})).is_err());
 }
 
+/// Edit Text, which shows the type in isolation mode, is off while an opacity mask is edited.
+#[test]
+fn edit_text_is_off_while_an_opacity_mask_is_edited() {
+    let (mut s, rect) = persp_session();
+    let id = persp_text(&mut s);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [rect.0]})).unwrap();
+    let layer = s.doc().unwrap().isolation;
+    assert!(layer.is_some(), "editing the new empty mask");
+    let err = s.execute("perspective.editText", &json!({"id": id.0})).unwrap_err();
+    assert!(matches!(&err, EngineError::Disabled(_, why) if why == "stop editing the opacity mask first"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, layer);
+    assert!(node(&s, id).projection().is_some(), "still projected");
+    s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+    s.execute("perspective.editText", &json!({"id": id.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(id));
+}
+
+#[test]
+fn isolating_ancestor_after_undo_clears_editing_from_redo_history() {
+    let (mut s, rect) = persp_session();
+    let id = persp_text(&mut s);
+    s.execute("select.set", &json!({"ids": [id.0, rect.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+
+    // Start editing text in perspective and make an edit so undo/redo has entries
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("perspective.editText", &json!({})).unwrap();
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 0, "insert": "Hello "})).unwrap();
+
+    // Undo the text edit so redo stack holds an entry while doc is not actively editing
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // Isolating the parent group must clear editing flag in redo entries too
+    s.execute("object.isolate", &json!({"id": g})).unwrap();
+    for e in &s.doc().unwrap().history.redo {
+        if let Some(p) = e.doc.node(id).and_then(|n| n.extras().perspective.as_deref()) {
+            assert!(!p.editing, "redo entry must not retain editing=true");
+        }
+    }
+}
+
+#[test]
+fn isolate_settles_pending_typing_interaction() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, rect) = persp_session();
+    let v = crate::ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 200.0, 200.0), v).unwrap();
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    assert!(s.in_interaction());
+
+    s.execute("object.isolate", &json!({"id": rect.0})).unwrap();
+    assert!(!s.in_interaction(), "isolating another object settles typing interaction");
+    let n = node(&s, id);
+    let NodeKind::Text(ref t) = n.kind else { panic!("not text") };
+    assert_eq!(t.plain_text(), "abc");
+}
+
 /// Edit Text ending while a background save writes the file leaves the document saved once the
 /// file is written: the flat view is never saved. Saved while editing and edited after: undoing
 /// the edit once Edit Text has ended is back at what the file holds.

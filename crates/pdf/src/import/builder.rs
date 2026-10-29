@@ -1,7 +1,15 @@
 use super::cid::{CidText, FontInfo, comparable, font_chars, identify_glyph, matching_face, replacement, unify_radical};
-use super::entry::{MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE};
+use super::entry::{
+    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
+    UNNAMED_CHARACTERS_NOTE, max_objects,
+};
 use super::state::{Builder, Frame, FrameKind, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
+    FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
+    PathData, PathDrawMode, Pattern, PatternDef, Placement, Rect, Scan, Shape, SoftMask, StrokeProps, TextAs, TextLine, TextOverprint, TilingPattern,
+    Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
+};
 
 impl<'p> Builder<'p> {
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
@@ -36,6 +44,7 @@ impl<'p> Builder<'p> {
             pattern_keys: HashMap::new(),
             function_paints: HashMap::new(),
             function_budget: FunctionBudget::new(),
+            objects_left: max_objects(),
             taken: vec![],
             scan: Scan::default(),
             tag_at: 0,
@@ -61,6 +70,9 @@ impl<'p> Builder<'p> {
 
     /// A deep copy of `node` with fresh ids.
     fn reid(&mut self, node: &Node) -> Node {
+        // Each copy counts against the import's objects: once they are spent nothing more is
+        // drawn through a mask, so the copying stops too.
+        self.objects_left = self.objects_left.saturating_sub(1);
         let mut n = node.clone();
         n.id = self.id();
         if let Some(ch) = n.children_mut() {
@@ -186,7 +198,15 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// Add `n`, drawn now, to the art: left out (with a warning) once the import's objects are
+    /// spent ([`TOO_MANY_OBJECTS`]).
     pub(super) fn push_node(&mut self, mut n: Node) {
+        let Some(left) = self.objects_left.checked_sub(1) else {
+            self.lines.remove(&n.id);
+            self.warn(TOO_MANY_OBJECTS);
+            return;
+        };
+        self.objects_left = left;
         if self.blend != BlendMode::Normal && !n.is_container() {
             n.blend = self.blend;
         }

@@ -297,3 +297,100 @@ fn svgz_opens_and_pastes_like_svg() {
     assert_eq!(r["count"], 2);
     assert!(s.execute("document.open", &json!({"name": "bad.svgz", "dataBase64": vectorcraft_format::base64_encode(&[0x1f, 0x8b, 1, 2])})).is_err());
 }
+
+#[test]
+fn svg_darkness_preserves_source_model_and_gradient_appearance() {
+    use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    use vectorcraft_doc::{ColorMode, Effect};
+    use vectorcraft_geom::Rect;
+    for kind in ["rgb", "cmykSource", "gradient", "cmykDocument"] {
+        let mut s = session(1);
+        s.edit("paint source", |d, _| {
+            if kind == "cmykDocument" {
+                d.color_mode = ColorMode::Cmyk;
+            }
+            let id = d.layers[0].children().unwrap()[0].id;
+            let n = d.node_mut(id).unwrap();
+            n.appearance.fill_mut().unwrap().paint = match kind {
+                "cmykSource" => Paint::solid(Color::cmyk(0.15, 0.3, 0.4, 0.2)),
+                "gradient" => Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+                    GradientKind::Linear,
+                    vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::rgb(0.8, 0.4, 0.2))],
+                )))),
+                _ => Paint::solid(Color::rgb(0.8, 0.4, 0.2)),
+            };
+            n.appearance.items.retain(|i| i.is_fill());
+            n.appearance.effects = vec![Effect {
+                id: "stylize.dropShadow".into(),
+                visible: true,
+                params: json!({"shade":"darkness","darkness":25,"x":60,"y":0,"blur":0,"opacity":100,"mode":"normal"}),
+            }];
+            Ok(())
+        })
+        .unwrap();
+        let native = s.doc().unwrap().doc.clone();
+        let text = svg(&mut s, json!({}));
+        if kind == "rgb" {
+            assert!(text.contains("feComponentTransfer") && !text.contains("<image"));
+        } else {
+            assert!(text.contains("<image"), "{kind}: the shadow must preserve rendered appearance");
+        }
+        let back = vectorcraft_svg::import(&text).unwrap();
+        let region = Rect::new(0.0, 0.0, 200.0, 100.0);
+        let expected = vectorcraft_render::Renderer::new().render_region(&native, region, 1.0, true);
+        let actual = vectorcraft_render::Renderer::new().render_region(&back, region, 1.0, true);
+        for x in 80..115 {
+            let (a, b) = (actual.pixel(x, 30), expected.pixel(x, 30));
+            assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 8), "{kind} at {x}: {a:?} vs {b:?}");
+        }
+    }
+}
+
+#[test]
+fn svg_darkness_uses_rendered_shadow_in_non_srgb_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_SHADOW_RGB_PROFILE";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "cmd::fileio::tests_svg::svg_darkness_uses_rendered_shadow_in_non_srgb_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::{Color, Paint, cms};
+    let settings = cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() };
+    cms::set_active(&settings).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let mut s = session(1);
+    s.edit("RGB source", |d, _| {
+        let id = d.layers[0].children().unwrap()[0].id;
+        let n = d.node_mut(id).unwrap();
+        n.appearance.fill_mut().unwrap().paint = Paint::solid(Color::rgb(0.8, 0.4, 0.2));
+        n.appearance.items.retain(|i| i.is_fill());
+        n.appearance.effects = vec![vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            visible: true,
+            params: json!({"shade":"darkness","darkness":25,"x":60,"y":0,"blur":0,"opacity":100,"mode":"normal"}),
+        }];
+        Ok(())
+    })
+    .unwrap();
+    let region = vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 100.0);
+    let expected = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, region, 1.0, true);
+    let text = svg(&mut s, json!({}));
+    assert!(text.contains("<image"), "a non-sRGB source must preserve its adjusted rendered colors");
+    cms::set_active(&cms::ColorSettings::default()).unwrap();
+    let back = vectorcraft_svg::import(&text).unwrap();
+    let actual = vectorcraft_render::Renderer::new().render_region(&back, region, 1.0, true);
+    for x in 80..115 {
+        let (a, b) = (actual.pixel(x, 30), expected.pixel(x, 30));
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 8), "at {x}: {a:?} vs {b:?}");
+    }
+}

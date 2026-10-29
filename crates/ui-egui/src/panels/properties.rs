@@ -24,13 +24,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let first = first_selected(app);
     // Edit Artboards (the Artboard tool): the active artboard, whatever is selected.
     let editing_artboards = app.session.tool_id() == "artboard";
-    let label = match (&first, n_sel) {
-        _ if editing_artboards => tl!("Artboard").to_string(),
-        (None, _) => tl!("Document").to_string(),
-        (_, n) if n > 1 => crate::i18n::tn(n as u64, "{n} Object", "{n} Objects"),
-        (Some(n), _) if crate::panels::image_trace::is_trace(n) => tl!("Image Tracing").to_string(),
-        (Some(n), _) => tl!(n.kind_label()).to_string(),
-    };
+    // Ruler guides selected on their own (a click on one): their position.
+    let guides = super::transform::selected_guides(app);
+    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
     ui.add_space(4.0);
     if editing_artboards {
@@ -38,7 +34,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if first.is_none() {
-        document_sections(app, ui);
+        match guides {
+            Some(guides) => guide_sections(app, ui, guides),
+            None => document_sections(app, ui),
+        }
         return;
     }
     if n_sel == 1
@@ -143,10 +142,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
     }
-    actions.push((tl!("Offset Path"), "object.path.offsetPath"));
-    actions.push((tl!("Simplify"), "object.path.simplify"));
+    // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
+    // live through the Appearance panel's Effect › Path › Offset Path (#2238).
+    let type_only = app.session.active().is_some_and(|st| {
+        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
+        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    });
+    if !type_only {
+        actions.push((tl!("Offset Path"), "object.path.offsetPath"));
+        actions.push((tl!("Simplify"), "object.path.simplify"));
+    }
     actions.push((tl!("Arrange: Bring to Front"), "object.arrange.bringToFront"));
     actions.push((tl!("Lock"), "object.lock"));
+    // Lock and Isolate Group are left out while their commands are off (in isolation mode, while
+    // an opacity mask is edited).
+    actions.retain(|(_, id)| !matches!(*id, "object.lock" | "object.isolate") || crate::menus::enabled(app, id));
     let w = (ui.available_width() - 6.0) / 2.0;
     for pair in actions.chunks(2) {
         ui.horizontal(|ui| {
@@ -587,6 +597,27 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
     if pick {
         app.run("ui.colorPicker", json!({"artboard": i})).ok();
     }
+}
+
+/// The panel's heading: what the sections are for (the artboards with the Artboard tool, the
+/// selected ruler guides, the document with nothing selected), else the selection's kind.
+fn heading(first: Option<&vectorcraft_doc::Node>, n_sel: usize, editing_artboards: bool, guides: bool) -> String {
+    match (first, n_sel) {
+        _ if editing_artboards => tl!("Artboard").to_string(),
+        (None, _) if guides => tl!("Guides").to_string(),
+        (None, _) => tl!("Document").to_string(),
+        (_, n) if n > 1 => crate::i18n::tn(n as u64, "{n} Object", "{n} Objects"),
+        (Some(n), _) if crate::panels::image_trace::is_trace(n) => tl!("Image Tracing").to_string(),
+        (Some(n), _) => tl!(n.kind_label()).to_string(),
+    }
+}
+
+/// Ruler guides selected on their own: a Transform section with the X of the vertical ones and
+/// the Y of the horizontal ones, which move them, as the Transform panel shows them (#1597).
+fn guide_sections(app: &mut VectorcraftApp, ui: &mut Ui, guides: (Option<f64>, Option<f64>)) {
+    section_header(ui, tl!("Transform"));
+    let fw = super::field_width(ui);
+    super::transform::guide_fields(app, ui, guides, fw);
 }
 
 fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {

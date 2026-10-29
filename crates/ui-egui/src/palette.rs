@@ -104,7 +104,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_width(520.0);
-            let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text(tl!("Search commands and tools…")).desired_width(500.0));
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut app.ui.palette_query)
+                    .align(egui::Align2::LEFT_CENTER)
+                    .hint_text(tl!("Search commands and tools…"))
+                    .desired_width(500.0),
+            );
             r.request_focus();
             ui.add_space(6.0);
             for (i, e) in matches.iter().enumerate() {

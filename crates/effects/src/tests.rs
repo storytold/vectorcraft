@@ -439,6 +439,93 @@ fn three_max_detail_roughens_stay_within_the_effect_budget() {
 }
 
 #[test]
+fn transform_copies_before_offset_path_evaluates_without_ram_spike() {
+    let effects = [
+        fx("distort.transform", json!({"moveH": -0.66, "moveV": 0.66, "copies": 30})),
+        fx("path.offsetPath", json!({"offset": 10.0, "joins": "round"})),
+    ];
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let start = std::time::Instant::now();
+    let out = apply_geometry(&effects, &path, path.bounds().unwrap());
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "elapsed: {:?}", elapsed);
+    assert_eq!(out.subpaths.len(), 31);
+}
+
+#[test]
+fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId};
+
+    let id = NodeId(10);
+    let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default()));
+    let mut art = Node::group(id, (0..5).map(|k| leaf(k as f64 * 30.0)).collect());
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 10}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let start = std::time::Instant::now();
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS);
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2));
+
+    let children = art.children().unwrap();
+    assert_eq!(children.len(), 5);
+    for c in children {
+        let (p, _) = crate::reshape::leaf_geometry(c).unwrap();
+        // Base rectangle offset once, then copied 10 times -> 11 subpaths
+        assert_eq!(p.subpaths.len(), 11);
+    }
+}
+
+#[test]
+fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+
+    let id = NodeId(11);
+    // 1. EvenOdd fill rule: preserving order causes Transform copies to union in Offset Path into 1 subpath.
+    let mut leaf = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default());
+    if let NodeKind::Path { rule, .. } = &mut leaf.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    let mut art_evenodd = Node::group(id, vec![Arc::new(leaf)]);
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 2}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0}));
+    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS);
+    let p = art_evenodd.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "EvenOdd does not swap; copies union into 1 outer subpath");
+
+    // 2. Non-terminal Offset Path: followed by Round Corners, must preserve order.
+    let leaf_round = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_round = Node::group(id, vec![leaf_round]);
+    let round_corners = fx("stylize.roundCorners", json!({"radius": 2.0}));
+    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS);
+    let p = art_round.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Non-terminal Offset Path does not swap; copies union into 1 outer subpath");
+
+    // 3. Non-round join (e.g. miter): preserving order is required as corners differ (#4145).
+    let leaf_miter = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_miter = Node::group(id, vec![leaf_miter]);
+    let offset_miter = fx("path.offsetPath", json!({"offset": 4.0, "joins": "miter"}));
+    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS);
+    let p = art_miter.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Miter join does not swap; copies union into 1 outer subpath");
+}
+
+#[test]
+fn consecutive_transforms_before_terminal_offset_path_all_move_after() {
+    let t1 = fx("distort.transform", json!({"moveH": 1.0, "moveV": 0.0, "copies": 2}));
+    let t2 = fx("distort.transform", json!({"moveH": 0.0, "moveV": 1.0, "copies": 3}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let opt = crate::geometry::optimize_geometry_effects(&[&t1, &t2, &offset], true);
+    assert_eq!(opt.len(), 3);
+    assert_eq!(opt[0].id, "path.offsetPath");
+    assert_eq!(opt[1].id, "distort.transform");
+    assert_eq!(opt[2].id, "distort.transform");
+}
+
+#[test]
 fn transform_copies_stop_before_they_overflow() {
     let out = run("distort.transform", json!({"scaleH": 100000, "scaleV": 100000, "copies": 1000}), &square());
     assert!(all_finite(&out) && out.subpaths.len() < 10, "{}", out.subpaths.len());

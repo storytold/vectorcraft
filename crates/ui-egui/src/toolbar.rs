@@ -496,7 +496,10 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
                     clicked = Some(cmd);
                 }
             }
-            if let Some(cmd) = clicked {
+            // Cmd/Ctrl-click on Gradient resets the gradient to White, Black.
+            if clicked == Some("paint.lastGradient") && ui.input(|i| i.modifiers.command) {
+                crate::panels::gradient::reset_to_linear_white_black(app);
+            } else if let Some(cmd) = clicked {
                 app.run(cmd, json!({})).ok();
             }
         });

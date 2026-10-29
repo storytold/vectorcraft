@@ -1,6 +1,10 @@
 use super::nodes::{MASK, doc_path};
 use super::output::sanitize_id;
-use super::*;
+use super::{
+    Affine, BezPath, BlendMode, Color, FillLayer, FillRule, GradientKind, GradientPaint, HashMap, ImageBlob, ImageMode, LineCap, LineJoin,
+    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, fmt_num,
+    stroke, xml_escape,
+};
 
 /// Image `b` as SVG viewers show it: PNG, JPEG, GIF, WebP and SVG as they are, other formats (a
 /// CMYK TIFF) as PNG.
@@ -364,7 +368,9 @@ impl Writer<'_> {
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
     /// per effect, the first effect innermost (the reference app's stacking order). A drop shadow
-    /// with Darkness darkens the screen colors, in a CMYK document too. Photoshop-style
+    /// with Darkness can use a live filter for a uniform RGB source. Other source colors and
+    /// gradients require rendered-effect preparation by the caller to preserve their appearance.
+    /// Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
     /// such objects into images first).
     pub(super) fn filtered(&mut self, n: &Node) {
@@ -399,6 +405,19 @@ impl Writer<'_> {
                 self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
             }
+            if matches!(f, RasterFx::DropShadow { darkness: Some(_), .. }) {
+                let mut paints = n.appearance.items.iter().filter(|i| vectorcraft_effects::paints(i));
+                let uniform = paints.next().is_some_and(|i| {
+                    matches!(i.paint(), vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, swatch: None, .. })
+                }) && paints.next().is_none();
+                if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk
+                    || !vectorcraft_color::cms::active().rgb_is_srgb()
+                    || !uniform
+                    || !matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. } | vectorcraft_doc::NodeKind::Compound { .. })
+                {
+                    self.warn("Some Darkness shadows require rendered images to preserve source colors, profiles and gradients");
+                }
+            }
             let fid = self.fresh_id("filter");
             let region_attr = match region {
                 Some(r) => format!(
@@ -415,14 +434,14 @@ impl Writer<'_> {
                 format!("<feFlood flood-color=\"{}\" flood-opacity=\"{}\"/>", c.to_hex(), fmt_num(o as f64, 3))
             };
             let body = match f {
-                // Darkness: the object blurred and moved, each color channel times 1 − darkness.
+                // Subtract in sRGB before blur, preserving coverage and separate opacity.
                 RasterFx::DropShadow { opacity, dx, dy, blur, darkness: Some(darkness), .. } => format!(
-                    "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\"/><feComponentTransfer result=\"paint\"><feFuncR type=\"linear\" slope=\"{keep}\"/><feFuncG type=\"linear\" slope=\"{keep}\"/><feFuncB type=\"linear\" slope=\"{keep}\"/><feFuncA type=\"linear\" slope=\"{}\"/></feComponentTransfer><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
+                    "<feComponentTransfer in=\"SourceGraphic\"><feFuncR type=\"linear\" slope=\"1\" intercept=\"{offset}\"/><feFuncG type=\"linear\" slope=\"1\" intercept=\"{offset}\"/><feFuncB type=\"linear\" slope=\"1\" intercept=\"{offset}\"/></feComponentTransfer><feGaussianBlur stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\"/><feComponentTransfer result=\"paint\"><feFuncA type=\"linear\" slope=\"{}\"/></feComponentTransfer><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",
                     sd(*blur),
                     self.num(*dx),
                     self.num(*dy),
                     fmt_num(*opacity as f64, 3),
-                    keep = fmt_num(1.0 - *darkness as f64, 3)
+                    offset = fmt_num(-f64::from(*darkness), 4)
                 ),
                 RasterFx::DropShadow { opacity, dx, dy, blur, color, .. } => format!(
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\"/><feOffset dx=\"{}\" dy=\"{}\" result=\"shadow\"/>{}<feComposite in2=\"shadow\" operator=\"in\" result=\"paint\"/><feMerge><feMergeNode in=\"paint\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>",

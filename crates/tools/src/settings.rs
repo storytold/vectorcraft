@@ -39,8 +39,8 @@ const ROWS: &[Row] = &[
     // Paintbrush has none of them).
     (&["pencil"], None, &["altSmooth", "livePreview", "liveFit"]),
     (&["smooth"], None, &["fidelity"]),
-    (&["blobBrush", "eraser"], None, &["size"]),
-    (&["blobBrush"], None, &["keepSelected", "mergeOnlySelection"]),
+    (&["blobBrush", "eraser"], None, &["size", "sizeMode", "sizeVariation"]),
+    (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
     // Eraser Tool Options' tip shape.
     (&["eraser"], None, &["angle", "roundness"]),
     // Live Paint Selection Tool Options (`builder::LivePaintSelectionTool`).

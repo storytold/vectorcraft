@@ -84,7 +84,7 @@ fn save_as_takes_on_path_format_and_options() {
     let svg = s.execute("file.formatOptions", &json!({"format": "svg"})).unwrap();
     assert_eq!(svg["options"]["outlineText"]["value"], false, "another format shows its defaults");
     let ids: Vec<&str> = o["saveFormats"].as_array().unwrap().iter().map(|f| f["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["vectorcraft", "template", "pdf", "svg", "svgz", "ai"]);
+    assert_eq!(ids, ["vectorcraft", "template", "pdf", "svg", "svgz", "ai", "eps"]);
     // SVGZ is gzip-compressed SVG and reopens as SVGZ.
     let svgz = path(&d, "doc.svgz");
     s.execute("file.saveAs", &json!({"path": svgz})).unwrap();
@@ -96,6 +96,25 @@ fn save_as_takes_on_path_format_and_options() {
     assert!(e.contains("document.export"), "{e}");
     assert!(s.execute("document.save", &json!({"format": "webp"})).is_err());
     assert!(s.execute("file.saveAs", &json!({"path": svgz, "options": 3})).is_err());
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// #4523: a new document's VectorCraft Options start as the last native save used them (not its
+/// artboard range, nor Use Compression, which its preference decides).
+#[test]
+fn a_new_document_offers_the_native_options_used_last() {
+    let d = dir("lastnative");
+    let mut s = session();
+    let opts = json!({"preview": true, "embedProfiles": false, "pdfCompatible": true, "separateArtboards": true, "range": "1"});
+    s.execute("file.saveAs", &json!({"path": path(&d, "a.vectorcraft"), "options": opts})).unwrap();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let o = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+    let value = |k: &str| o["options"][k]["value"].clone();
+    assert_eq!((value("preview"), value("embedProfiles"), value("pdfCompatible")), (json!(true), json!(false), json!(true)));
+    assert_eq!(
+        (value("separateArtboards"), value("range")),
+        (o["options"]["separateArtboards"]["default"].clone(), o["options"]["range"]["default"].clone())
+    );
     let _ = std::fs::remove_dir_all(d);
 }
 
@@ -404,4 +423,142 @@ fn transparency_grid_round_trips_without_dirtying() {
     s.execute("document.open", &json!({"path": old})).unwrap();
     assert!(!s.doc().unwrap().transparency_grid);
     let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins() {
+    let d = dir("eps-original-format");
+    let eps_path = path(&d, "Artwork.eps");
+    // Original, contributor-authored PostScript: the artwork occupies only part of the page.
+    let source = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 100\n0 0 1 setrgbcolor 30 20 40 30 rectfill\nshowpage\n%%EOF\n";
+    std::fs::write(&eps_path, source).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": eps_path})).unwrap();
+    assert_eq!(s.doc().unwrap().format, "eps");
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(eps_path.as_str()));
+    let board = s.doc().unwrap().doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (200.0, 100.0));
+    rect(&mut s);
+    let edited_layers = s.doc().unwrap().doc.layers.clone();
+    let r = s.execute("document.save", &json!({"options": {"previewFormat": "none", "thumbnails": false}})).unwrap();
+    assert_eq!((r["path"].as_str(), r["format"].as_str()), (Some(eps_path.as_str()), Some("eps")));
+    let bytes = std::fs::read(&eps_path).unwrap();
+    assert!(bytes.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    assert!(std::str::from_utf8(vectorcraft_eps::sections(&bytes).unwrap().0).unwrap().contains("%%BoundingBox: 0 0 200 100"));
+    let editing = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
+    assert_eq!(editing.artboards[0].rect, board);
+    assert_eq!(editing.layers, edited_layers);
+    assert!(!s.doc().unwrap().is_dirty());
+    let opened = s.execute("document.open", &json!({"path": eps_path})).unwrap();
+    assert_eq!(opened["restored"], true);
+    assert_eq!(s.doc().unwrap().doc.layers, edited_layers);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect, board);
+    rect(&mut s);
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(eps_path.as_str()));
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn eps_save_keeps_all_editing_artboards_while_printing_one_page() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let r = s.execute("document.save", &json!({"format": "eps", "artboard": 1, "previewFormat": "none", "thumbnails": false})).unwrap();
+    let bytes = b64(&r);
+    let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
+    assert_eq!(native.artboards.len(), 2);
+    assert_eq!(native.layers, s.doc().unwrap().doc.layers);
+    assert!(s.execute("document.save", &json!({"format": "eps", "range": "all"})).is_err(), "EPS is one printed page");
+    for options in [json!({"useArtboards": false}), json!({"selectedOnly": true})] {
+        assert!(s.execute("document.save", &json!({"format": "eps", "options": options})).is_err(), "cropping is Export's job");
+    }
+}
+
+#[test]
+fn eps_save_retains_lossy_import_overwrite_protection_and_transparency_warning() {
+    let d = dir("eps-import-warning");
+    let eps_path = path(&d, "Artwork.eps");
+    let mut s = session();
+    rect(&mut s);
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let r = s.execute("document.save", &json!({"path": eps_path, "previewFormat": "none", "thumbnails": false})).unwrap();
+    assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("flatten")), "{r}");
+    let original = std::fs::read(&eps_path).unwrap();
+    let st = s.doc_mut().unwrap();
+    st.imported_from = Some(eps_path.clone());
+    st.import_losses.push("test import omitted artwork".into());
+    rect(&mut s);
+    assert!(s.execute("document.save", &json!({})).unwrap_err().to_string().contains("acknowledgeLoss"));
+    assert_eq!(std::fs::read(&eps_path).unwrap(), original);
+    s.execute("document.save", &json!({"acknowledgeLoss": true})).unwrap();
+    assert_ne!(std::fs::read(&eps_path).unwrap(), original);
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn eps_save_supports_an_empty_artboard_without_cropping_its_page() {
+    let mut s = session();
+    let r = s.execute("document.save", &json!({"format": "eps", "previewFormat": "none", "thumbnails": false})).unwrap();
+    let bytes = b64(&r);
+    let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
+    assert_eq!(native.artboards[0].rect, s.doc().unwrap().doc.artboards[0].rect);
+    assert_eq!(native.node_count(), s.doc().unwrap().doc.node_count());
+    assert!(std::str::from_utf8(vectorcraft_eps::sections(&bytes).unwrap().0).unwrap().contains("%%BoundingBox: 0 0 200 100"));
+}
+
+#[test]
+fn partially_read_eps_requires_confirmation_before_save_back() {
+    let d = dir("eps-partial-import");
+    let eps_path = path(&d, "partial.eps");
+    let original = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 100\n0 0 1 setrgbcolor 30 20 40 30 rectfill\nunsupportedMockyOperator\n1 0 0 setrgbcolor 80 20 40 30 rectfill\nshowpage\n%%EOF\n";
+    std::fs::write(&eps_path, original).unwrap();
+    let mut s = Session::new();
+    let opened = s.execute("document.open", &json!({"path": eps_path})).unwrap();
+    assert!(opened["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with("the file was read up to an error")), "{opened}");
+    rect(&mut s);
+    assert!(s.execute("document.save", &json!({})).unwrap_err().to_string().contains("acknowledgeLoss"));
+    assert_eq!(std::fs::read(&eps_path).unwrap(), original);
+    s.execute("document.save", &json!({"acknowledgeLoss": true})).unwrap();
+    assert!(vectorcraft_eps::native(&std::fs::read(&eps_path).unwrap()).is_some());
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn eps_with_damaged_editing_data_requires_confirmation_before_save_back() {
+    let d = dir("eps-damaged-editing");
+    let eps_path = path(&d, "damaged.eps");
+    let mut s = session();
+    rect(&mut s);
+    let r = s.execute("document.exportEps", &json!({"previewFormat": "none", "thumbnails": false, "cmykPostScript": false})).unwrap();
+    let mut bytes = b64(&r);
+    let at = bytes.windows(9).position(|w| w == b"native\n% ").unwrap() + 12;
+    bytes[at] = b'z';
+    std::fs::write(&eps_path, &bytes).unwrap();
+    let opened = s.execute("document.open", &json!({"path": eps_path})).unwrap();
+    assert_eq!(opened["restored"], false);
+    assert!(opened["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("editing data can't be read")), "{opened}");
+    rect(&mut s);
+    assert!(s.execute("document.save", &json!({})).unwrap_err().to_string().contains("acknowledgeLoss"));
+    assert_eq!(std::fs::read(&eps_path).unwrap(), bytes);
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 4000, "height": 4000})).unwrap();
+    rect(&mut s);
+    // Explicit colour preview remains a colour preview; Save bounds its resolution, not the art.
+    let r = s.execute("document.save", &json!({"format": "eps", "previewFormat": "tiffColor"})).unwrap();
+    let bytes = b64(&r);
+    let (ps, tiff) = vectorcraft_eps::sections(&bytes).unwrap();
+    let tiff = tiff.unwrap();
+    assert!(tiff.len() < 4 * 1024 * 1024 + 64 * 1024, "compatibility preview grew to {} bytes", tiff.len());
+    let preview = image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).unwrap();
+    assert_eq!((preview.width(), preview.height()), (1024, 1024));
+    assert!(std::str::from_utf8(ps).unwrap().contains("%%BoundingBox: 0 0 4000 4000"));
+    let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
+    assert_eq!(native.artboards, s.doc().unwrap().doc.artboards);
+    assert_eq!(native.layers, s.doc().unwrap().doc.layers);
 }

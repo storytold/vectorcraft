@@ -19,7 +19,7 @@ use vectorcraft_doc::{DataSet, DataValue, NodeId, NodeKind, Variable, VariableKi
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
 use super::textedit::set_plain_text;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, links, str_param};
 
 mod csv;
 mod library;

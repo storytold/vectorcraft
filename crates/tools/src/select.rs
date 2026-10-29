@@ -17,6 +17,8 @@
 //! scaling its type: the text reflows at its size.
 //! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
 //! E pressed again makes it take the objects it touches.
+//! Escape during a drag (a move or an Alt-drag copy, a scale, a rotation, a marquee, a widget or
+//! bracket drag) cancels it: the art returns to its state at the press.
 //! Selected area type and type on a path show an in port and an out port. A click on the out port
 //! loads the pointer with the text ([`Cursor::LoadedText`]): the next click threads it into the
 //! closed path, area type or type on a path under the pointer, or into a new frame of the same
@@ -35,7 +37,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at};
+use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -118,6 +120,9 @@ pub struct SelectionTool {
     /// What a bounding-box handle being dragged snaps to.
     targets: Option<PointSnap>,
     moving: Option<MoveSnap>,
+    /// The params of the move's last preview: in Shaper's Construction mode the move ends with
+    /// them and `releaseOutside` ([`construction`]).
+    last_move: Option<Value>,
     /// The move snapped to a point or a guide at its last step: the arrow turns hollow.
     snapped: bool,
     guide: GuideEdit,
@@ -193,6 +198,12 @@ impl MoveSnap {
             copy_points: points(&[]),
             rulers: (guides && cx.snap_to_point).then(|| Targets::rulers(cx)),
         }
+    }
+
+    /// Snap to Grid and Snap to Pixel alone, for a move whose box is `bounds`: the grid lands an
+    /// edge of the box on a gridline, and pixels put its top-left on whole pixels.
+    pub(crate) fn grid_only(bounds: Option<Rect>) -> Self {
+        Self { bounds, targets: None, points: None, copy_targets: None, copy_points: None, rulers: None }
     }
 
     /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
@@ -460,6 +471,33 @@ pub(crate) fn hold_point(cx: &ToolContext, h: &Hit, p: Point) -> Point {
     cx.doc.node(h.leaf).and_then(|n| n.path_data()).and_then(|pd| hold_on_path(pd, p, reach)).unwrap_or(p)
 }
 
+/// While an opacity mask or a pattern is edited, a Shaper double-click selects a Shaper Group's
+/// original shape without isolating the group's original shapes. A press at `p` on a selected
+/// original shape holds it for a move: the hit inside its Shaper Group's original shapes, and that
+/// container. Each selected original shape's Shaper Group is checked, front to back, and an object
+/// in front of that group at `p` keeps the press. None otherwise.
+fn selected_source_hit(cx: &ToolContext, p: Point) -> Option<(Hit, NodeId)> {
+    if cx.doc.mask_edit.is_none() && cx.doc.pattern_edit.is_none() {
+        return None;
+    }
+    let is_sources = |g: &NodeId| cx.doc.node(*g).is_some_and(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES));
+    let mut containers = cx.doc.paint_order(cx.selection.objects.iter().filter_map(|id| cx.doc.parent_of(*id)).filter(is_sources));
+    containers.dedup();
+    let front = hit_test(cx.doc, p, cx.selection_hit_options());
+    containers.into_iter().rev().find_map(|sources| {
+        let group = cx.doc.parent_of(sources)?;
+        if let Some(f) = &front
+            && f.leaf != group
+            && !f.ancestry.contains(&group)
+            && cx.doc.paint_order([group, f.leaf]).last() == Some(&f.leaf)
+        {
+            return None;
+        }
+        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { scope: Some(sources), ..cx.selection_hit_options() })?;
+        cx.selection.contains(h.top_object(Some(sources))).then_some((h, sources))
+    })
+}
+
 impl SelectionTool {
     fn drag_threshold(cx: &ToolContext) -> f64 {
         cx.tol(3.0)
@@ -559,7 +597,11 @@ impl Tool for SelectionTool {
     }
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
-    /// objects inside it.
+    /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
+    /// rotation, a marquee, a corner widget, a pie widget, the brackets of type on a path, a mirror
+    /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
+    /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
+    /// drops the text.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key == ToolKey::Letter('e')
             && let State::Marquee { enclosed, .. } = &mut self.state
@@ -582,6 +624,13 @@ impl Tool for SelectionTool {
         if key == ToolKey::Escape && matches!(self.state, State::Loaded { .. }) {
             self.state = State::Idle;
             return vec![];
+        }
+        if key == ToolKey::Escape && !matches!(self.state, State::Idle) {
+            self.state = State::Idle;
+            self.measure = None;
+            self.guides.clear();
+            (self.targets, self.moving, self.snapped) = (None, None, false);
+            return vec![Action::Cancel];
         }
         if key == ToolKey::Escape { self.guide.cancel() } else { vec![] }
     }
@@ -628,51 +677,8 @@ impl Tool for SelectionTool {
         }
         // Mirror and grid repeat controls take precedence over art and ruler guides; the mirror
         // axis line and the grid's controls yield to the bounding-box handles they overlap.
-        if let State::Mirror(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(cx, ev.pos, ev.mods);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::Mirror(d);
-                    }
-                    return out;
-                }
-                _ => return vec![],
-            }
-        }
-        if let State::GridRepeat(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(ev.pos);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::GridRepeat(d);
-                    }
-                    return out;
-                }
-                _ => return vec![],
-            }
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::Mirror(d);
-            self.hover = None;
-            return vec![];
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::repeat_grid::GridDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::GridRepeat(d);
-            self.hover = None;
-            return vec![];
+        if let Some(out) = self.repeat_controls(cx, ev) {
+            return out;
         }
         if let Some(out) = self.guide.pointer(cx, ev) {
             return out;
@@ -687,99 +693,10 @@ impl Tool for SelectionTool {
             self.hover = Self::hover_point(cx, p);
         }
         match (ev.kind, self.state.clone()) {
-            (PointerKind::DoubleClick, _) => {
-                self.state = State::Idle;
-                // A threaded port: the thread breaks there. Any other port takes the double-click
-                // too, so it neither edits the type nor isolates.
-                if let Some((id, port)) = crate::text::port_at(cx, p) {
-                    let (input, output) = crate::text::port_states(cx.doc, id, false);
-                    let (state, name) = if port == crate::text::Port::In { (input, "in") } else { (output, "out") };
-                    if state == crate::text::PortState::Threaded {
-                        return vec![Action::Exec("text.thread.break".into(), json!({ "id": id.0, "port": name }))];
-                    }
-                    return vec![];
-                }
-                if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p))
-                {
-                    return vec![a];
-                }
-                // The Shaper Group's mode widget answers each click of a double-click on it.
-                if shaperwidget::over_widget(cx, p) {
-                    return vec![];
-                }
-                if let Some(a) = release_guide_at(cx, p, m) {
-                    return vec![a];
-                }
-                if crate::rulerguide::guide_at(cx, p).is_some() {
-                    return vec![];
-                }
-                // A double-click edits what is drawn: not a clipping path's outline.
-                if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
-                    let top = h.top_object(cx.isolation);
-                    if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
-                        return vec![Action::SwitchTool("type".into())];
-                    }
-                    // An object that [`isolates`], not the one already isolated.
-                    if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
-                        return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
-                    }
-                } else if cx.isolation.is_some() {
-                    return vec![Action::Exec("object.exitIsolation".into(), json!({}))];
-                }
-                vec![]
-            }
+            (PointerKind::DoubleClick, _) => self.double_click(cx, p, m),
             (PointerKind::Down, _) => {
-                // 0. A port of selected area type or type on a path: the pointer takes its text,
-                // to thread on from the out port or back from the in port.
-                if let Some((from, port)) = crate::text::port_at(cx, p) {
-                    self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
-                    return vec![];
-                }
-                // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
-                // bounding-box handles of the current selection.
-                if let Some(c) = CornerDrag::hit(cx, ev, false) {
-                    self.state = State::Corner(c);
-                    return vec![];
-                }
-                if let Some(d) = PieDrag::hit(cx, ev) {
-                    self.state = State::Pie(d);
-                    return vec![];
-                }
-                if let Some(b) = BracketDrag::hit(cx, ev) {
-                    self.state = State::Bracket(b);
-                    return vec![];
-                }
-                if let Some(a) = shaperwidget::click(cx, p) {
-                    self.state = State::Idle;
-                    return vec![a];
-                }
-                // The type widget answers a double-click only: its clicks neither drag nor deselect.
-                if typewidget::over_widget(cx, p) {
-                    self.state = State::Idle;
-                    return vec![];
-                }
-                if cx.show_bbox
-                    && let Some(bx) = selection_box(cx)
-                {
-                    match box_hit(cx, &bx, p) {
-                        Some(BoxHit::Handle(handle)) => {
-                            let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);
-                            let areas = cx.selection.objects.iter().any(is_area);
-                            // Only area type: the step resizes type areas; anything else scales.
-                            let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
-                            // What the handle moves snaps as a dragged point does: to pixels or the
-                            // grid, else with Smart Guides to the other objects, else with Snap to
-                            // Point to their anchors; the ruler guides with Snap to Point.
-                            self.targets = Some(PointSnap::new(cx, || Targets::for_scale(cx)));
-                            self.state = State::Scaling { handle, bx, areas };
-                            return vec![Action::Begin(label.into())];
-                        }
-                        Some(BoxHit::Rotate) => {
-                            self.state = State::Rotating { center: bx.center(), start: p };
-                            return vec![Action::Begin("Rotate".into())];
-                        }
-                        None => {}
-                    }
+                if let Some(out) = self.press_widgets(cx, ev, p) {
+                    return out;
                 }
                 // 2. Ruler guides (over the art, as they are drawn).
                 if let Some(out) = self.guide.press(cx, ev) {
@@ -794,9 +711,13 @@ impl Tool for SelectionTool {
                     self.state = State::Moving { start: p, press: p, hold: p, began: false, deselect: None, key: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
-                match hit_test(cx.doc, p, cx.selection_hit_options()) {
+                let (hit, scope) = match selected_source_hit(cx, p) {
+                    Some((h, sources)) => (Some(h), Some(sources)),
+                    None => (hit_test(cx.doc, p, cx.selection_hit_options()), cx.isolation),
+                };
+                match hit {
                     Some(h) => {
-                        let top = h.top_object(cx.isolation);
+                        let top = h.top_object(scope);
                         let mut out = vec![];
                         let (mut deselect, mut key) = (None, None);
                         if m.shift {
@@ -819,32 +740,12 @@ impl Tool for SelectionTool {
                         out
                     }
                     None => {
-                        self.state = State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false };
+                        self.press_nothing(cx, p, grab, m);
                         vec![]
                     }
                 }
             }
-            (PointerKind::Drag, State::Moving { start, press, hold, began, .. }) => {
-                let mut out = vec![];
-                if !began {
-                    if p.distance(press) < Self::drag_threshold(cx) {
-                        return out;
-                    }
-                    out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
-                    self.moving = Some(MoveSnap::new(cx));
-                }
-                let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
-                let unsnapped = d;
-                if let Some(snap) = &self.moving {
-                    (d, self.guides) = if m.shift { snap.snap_along(cx, hold, d, m.alt) } else { snap.snap(cx, hold, d, m.alt) };
-                }
-                // Shift has already constrained `d`: any change is a snap.
-                self.snapped = (d - unsnapped).hypot() > 1e-9;
-                self.state = State::Moving { start, press, hold, began: true, deselect: None, key: None };
-                self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
-                out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
-                out
-            }
+            (PointerKind::Drag, State::Moving { start, press, hold, began, .. }) => self.drag_moving(cx, p, m, (start, press, hold, began)),
             (PointerKind::Drag, State::Scaling { handle, bx, areas }) => {
                 // Scale in the box's own frame: along the objects' axes when it is rotated.
                 let mut a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
@@ -911,8 +812,17 @@ impl Tool for SelectionTool {
                 self.measure = None;
                 self.guides.clear();
                 self.moving = None;
+                let last = self.last_move.take();
                 match (began, deselect, key) {
-                    (true, ..) => vec![Action::Commit],
+                    // In Construction mode, an original shape dropped wholly outside the group's
+                    // bounds leaves the group, in the move's undo step (`releaseOutside`).
+                    (true, ..) => match last.filter(|p| construction(cx) && p["copy"] != json!(true)) {
+                        Some(mut params) => {
+                            params["releaseOutside"] = json!(true);
+                            vec![Action::Preview("object.transform".into(), params), Action::Commit]
+                        }
+                        None => vec![Action::Commit],
+                    },
                     (false, Some(id), _) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
                     // A click on the key object again: no key.
                     (false, None, Some(id)) if cx.selection.key == Some(id) => vec![Action::Exec("select.key".into(), json!({}))],
@@ -1035,6 +945,9 @@ impl Tool for SelectionTool {
         if cx.snap_to_point && matches!(Self::hover_point(cx, p), Some((_, "anchor"))) {
             return Cursor::ArrowHollow;
         }
+        if selected_source_hit(cx, p).is_some() {
+            return Cursor::Move;
+        }
         if let Some(h) = hit_test(cx.doc, p, cx.selection_hit_options()) {
             if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
                 return Cursor::Move;
@@ -1062,6 +975,11 @@ fn can_be_key(cx: &ToolContext, id: NodeId) -> bool {
     // `paint_owner` returns a compound-path member's compound path.
     let member = crate::xform::paint_owner(cx.doc, id) != id;
     cx.doc.node(id).is_some_and(|n| !n.is_layer()) && !inside_selected && !member
+}
+
+/// Shaper's Construction mode: a Shaper Group's original shapes are isolated.
+fn construction(cx: &ToolContext) -> bool {
+    cx.isolation.and_then(|id| cx.doc.node(id)).is_some_and(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES))
 }
 
 /// Is `n` area type (text in a frame) whose frame the tools reshape? Type in perspective isn't:
@@ -1122,3 +1040,189 @@ pub(crate) fn handle_cursor(h: Handle, angle: f64) -> Cursor {
 
 #[cfg(test)]
 mod tests;
+
+impl SelectionTool {
+    fn repeat_controls(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        if let State::Mirror(mut d) = self.state.clone() {
+            match ev.kind {
+                PointerKind::Drag | PointerKind::Up => {
+                    let mut out = d.drag(cx, ev.pos, ev.mods);
+                    if ev.kind == PointerKind::Up {
+                        out.extend(d.finish());
+                        self.state = State::Idle;
+                    } else {
+                        self.state = State::Mirror(d);
+                    }
+                    return Some(out);
+                }
+                _ => return Some(vec![]),
+            }
+        }
+        if let State::GridRepeat(mut d) = self.state.clone() {
+            match ev.kind {
+                PointerKind::Drag | PointerKind::Up => {
+                    let mut out = d.drag(ev.pos);
+                    if ev.kind == PointerKind::Up {
+                        out.extend(d.finish());
+                        self.state = State::Idle;
+                    } else {
+                        self.state = State::GridRepeat(d);
+                    }
+                    return Some(out);
+                }
+                _ => return Some(vec![]),
+            }
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
+            && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
+        {
+            self.state = State::Mirror(d);
+            self.hover = None;
+            return Some(vec![]);
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
+            && let Some(d) = crate::repeat_grid::GridDrag::hit(cx, ev.pos, ev.mods)
+        {
+            self.state = State::GridRepeat(d);
+            self.hover = None;
+            return Some(vec![]);
+        }
+        None
+    }
+
+    fn double_click(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Vec<Action> {
+        self.state = State::Idle;
+        // A threaded port: the thread breaks there. Any other port takes the double-click
+        // too, so it neither edits the type nor isolates.
+        if let Some((id, port)) = crate::text::port_at(cx, p) {
+            let (input, output) = crate::text::port_states(cx.doc, id, false);
+            let (state, name) = if port == crate::text::Port::In { (input, "in") } else { (output, "out") };
+            if state == crate::text::PortState::Threaded {
+                return vec![Action::Exec("text.thread.break".into(), json!({ "id": id.0, "port": name }))];
+            }
+            return vec![];
+        }
+        if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p)) {
+            return vec![a];
+        }
+        // The Shaper Group's mode widget answers each click of a double-click on it.
+        if shaperwidget::over_widget(cx, p) {
+            return vec![];
+        }
+        if let Some(a) = release_guide_at(cx, p, m) {
+            return vec![a];
+        }
+        if crate::rulerguide::guide_at(cx, p).is_some() {
+            return vec![];
+        }
+        // A double-click edits what is drawn: not a clipping path's outline.
+        if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
+            let top = h.top_object(cx.isolation);
+            if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
+                return vec![Action::SwitchTool("type".into())];
+            }
+            // An object that [`isolates`], not the one already isolated.
+            if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| isolates(&n.kind)) && cx.isolation != Some(top) {
+                return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
+            }
+        } else if cx.isolation.is_some() {
+            return vec![Action::Exec("object.exitIsolation".into(), json!({}))];
+        }
+        vec![]
+    }
+
+    fn press_widgets(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point) -> Option<Vec<Action>> {
+        // 0. A port of selected area type or type on a path: the pointer takes its text,
+        // to thread on from the out port or back from the in port.
+        if let Some((from, port)) = crate::text::port_at(cx, p) {
+            self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
+            return Some(vec![]);
+        }
+        // 1. Live Corners widgets, pie widgets and type on a path's brackets, then the
+        // bounding-box handles of the current selection.
+        if let Some(c) = CornerDrag::hit(cx, ev, false) {
+            self.state = State::Corner(c);
+            return Some(vec![]);
+        }
+        if let Some(d) = PieDrag::hit(cx, ev) {
+            self.state = State::Pie(d);
+            return Some(vec![]);
+        }
+        if let Some(b) = BracketDrag::hit(cx, ev) {
+            self.state = State::Bracket(b);
+            return Some(vec![]);
+        }
+        if let Some(a) = shaperwidget::click(cx, p) {
+            self.state = State::Idle;
+            return Some(vec![a]);
+        }
+        // The type widget answers a double-click only: its clicks neither drag nor deselect.
+        if typewidget::over_widget(cx, p) {
+            self.state = State::Idle;
+            return Some(vec![]);
+        }
+        if cx.show_bbox
+            && let Some(bx) = selection_box(cx)
+        {
+            match box_hit(cx, &bx, p) {
+                Some(BoxHit::Handle(handle)) => {
+                    let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);
+                    let areas = cx.selection.objects.iter().any(is_area);
+                    // Only area type: the step resizes type areas; anything else scales.
+                    let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
+                    // What the handle moves snaps as a dragged point does: to pixels or the
+                    // grid, else with Smart Guides to the other objects, else with Snap to
+                    // Point to their anchors; the ruler guides with Snap to Point.
+                    self.targets = Some(PointSnap::new(cx, || Targets::for_scale(cx)));
+                    self.state = State::Scaling { handle, bx, areas };
+                    return Some(vec![Action::Begin(label.into())]);
+                }
+                Some(BoxHit::Rotate) => {
+                    self.state = State::Rotating { center: bx.center(), start: p };
+                    return Some(vec![Action::Begin("Rotate".into())]);
+                }
+                None => {}
+            }
+        }
+        None
+    }
+}
+
+impl SelectionTool {
+    /// A press at `p` that hits no object starts a marquee, except where a clipping mask hides
+    /// the art of a selected object (picked in the Layers panel, say): there, without Shift, it
+    /// grabs the selection by that art (at `grab`), as a press on its visible part does.
+    fn press_nothing(&mut self, cx: &ToolContext, p: Point, grab: Point, m: Mods) {
+        self.state = if !m.shift && selected_hidden_at(cx.doc, p, cx.selection_hit_options(), &cx.selection.objects).is_some() {
+            State::Moving { start: grab, press: p, hold: grab, began: false, deselect: None, key: None }
+        } else {
+            State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false }
+        };
+    }
+
+    fn drag_moving(&mut self, cx: &ToolContext, p: Point, m: Mods, (start, press, hold, began): (Point, Point, Point, bool)) -> Vec<Action> {
+        let mut out = vec![];
+        if !began {
+            if p.distance(press) < Self::drag_threshold(cx) {
+                return out;
+            }
+            out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
+            self.moving = Some(MoveSnap::new(cx));
+        }
+        let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
+        let unsnapped = d;
+        if let Some(snap) = &self.moving {
+            (d, self.guides) = if m.shift { snap.snap_along(cx, hold, d, m.alt) } else { snap.snap(cx, hold, d, m.alt) };
+        }
+        // Shift has already constrained `d`: any change is a snap.
+        self.snapped = (d - unsnapped).hypot() > 1e-9;
+        self.state = State::Moving { start, press, hold, began: true, deselect: None, key: None };
+        self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
+        let params = json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt });
+        self.last_move = Some(params.clone());
+        out.push(Action::Preview("object.transform".into(), params));
+        out
+    }
+}

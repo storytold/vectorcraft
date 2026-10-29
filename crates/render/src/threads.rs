@@ -1,4 +1,4 @@
-use super::*;
+use super::{RenderContext, vello_cpu};
 
 /// A render context on the calling thread. vello_cpu's `RenderContext::new` defaults to a
 /// multithreaded dispatcher, which panics on filter effects (glows, shadows, blur).

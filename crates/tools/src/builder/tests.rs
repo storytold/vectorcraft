@@ -60,6 +60,40 @@ fn shape_builder_drag_emits_merge() {
     assert!(v["points"].as_array().unwrap().len() >= 2);
 }
 
+/// Escape during a merge drag, an Alt erase drag or a Shift marquee cancels it: the tool takes
+/// the key, nothing stays highlighted, and the release merges and deletes nothing. Enter leaves
+/// the drag alone, and with no drag Escape is not the tool's.
+#[test]
+fn escape_cancels_a_shape_builder_drag() {
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let shift = Mods { shift: true, ..Mods::default() };
+    for (what, mods) in [("merge", Mods::default()), ("erase", alt), ("marquee", shift)] {
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 25.0, 50.0).with_mods(mods));
+        t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 60.0).with_mods(mods));
+        assert!(!t.touched.is_empty(), "{what}");
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty(), "{what}: Enter leaves the drag alone");
+        assert!(t.busy(), "{what}");
+        assert!(t.claims_key(&cx, ToolKey::Escape), "{what}: Escape is the tool's during the drag");
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty(), "{what}: no interaction began, so none is canceled");
+        assert!(!t.busy(), "{what}");
+        assert!(t.overlays(&cx).is_empty(), "{what}: nothing stays highlighted");
+        assert!(t.pointer(&cx, &ev(PointerKind::Drag, 125.0, 70.0).with_mods(mods)).is_empty(), "{what}");
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 70.0).with_mods(mods)).is_empty(), "{what}: the release merges nothing");
+        assert!(!t.claims_key(&cx, ToolKey::Escape), "{what}: with no drag, Escape is not the tool's");
+        // The next drag merges as before.
+        t.pointer(&cx, &ev(PointerKind::Down, 25.0, 50.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 50.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{what}: {acts:?}");
+    }
+}
+
 #[test]
 fn shape_builder_rebuilds_its_map_for_a_new_revision_at_the_same_address() {
     let (mut d, a, b) = two_rects();
@@ -824,6 +858,13 @@ fn live_paint_selection_hover_builds_no_map_of_the_selection() {
     assert!(!t.waiting());
 }
 
+/// A Live Paint Selection click pressed with `down`: the press does nothing, and the release does
+/// what is returned.
+fn lp_click(t: &mut LivePaintSelectionTool, cx: &ToolContext, down: PointerEvent) -> Vec<Action> {
+    assert!(t.pointer(cx, &down).is_empty(), "the press changes nothing");
+    t.pointer(cx, &PointerEvent { kind: PointerKind::Up, ..down })
+}
+
 #[test]
 fn live_paint_selection_selects_faces() {
     let (d, _gid, f2, e) = live_group_doc();
@@ -831,12 +872,12 @@ fn live_paint_selection_selects_faces() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintSelectionTool::default();
-    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    let acts = lp_click(&mut t, &cx, ev(PointerKind::Down, 75.0, 25.0));
     assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({ "ids": [f2.0] }))]);
     let alt = Mods { alt: true, ..Default::default() };
-    let acts = t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(alt));
+    let acts = lp_click(&mut t, &cx, ev(PointerKind::Down, 51.0, 25.0).with_mods(alt));
     assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({ "ids": [e.0] }))]);
-    let acts = t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    let acts = lp_click(&mut t, &cx, ev(PointerKind::Down, 300.0, 300.0));
     assert_eq!(acts, vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
@@ -853,15 +894,15 @@ fn live_paint_selection_options_choose_what_a_click_selects() {
     assert_eq!(t.options(), json!({"selectFills": true, "selectStrokes": true, "color": "#ff2a2a", "width": 4.0}));
     // Select Fills off: a click inside a face selects nothing, and a click by an edge selects it.
     t.set_option("selectFills", &json!(false));
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0)), none);
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 75.0, 25.0)), none);
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
     assert!(t.overlays(&cx).is_empty());
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0)), set(&[e]));
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[e]));
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 51.0, 25.0)), set(&[e]));
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[e]));
     // Select Strokes off: Alt-click by an edge selects the face under the pointer.
     t.set_option("selectFills", &json!(true));
     t.set_option("selectStrokes", &json!(false));
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[f2]));
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 51.0, 25.0).with_mods(alt)), set(&[f2]));
     t.pointer(&cx, &ev(PointerKind::Move, 51.0, 25.0).with_mods(alt));
     let ov = t.overlays(&cx);
     let [Overlay::Path { path, .. }] = ov.as_slice() else { panic!("{ov:?}") };
@@ -869,12 +910,12 @@ fn live_paint_selection_options_choose_what_a_click_selects() {
     // Both off: nothing is selected or highlighted.
     t.set_option("selectFills", &json!(false));
     for m in [Mods::default(), alt] {
-        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(m)), none);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 51.0, 25.0).with_mods(m)), none);
         t.pointer(&cx, &ev(PointerKind::Move, 51.0, 25.0).with_mods(m));
         assert!(t.overlays(&cx).is_empty());
     }
     let shift = Mods { shift: true, ..Default::default() };
-    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(shift)).is_empty());
+    assert!(lp_click(&mut t, &cx, ev(PointerKind::Down, 75.0, 25.0).with_mods(shift)).is_empty());
 }
 
 #[test]
@@ -894,15 +935,156 @@ fn live_paint_selection_click_outside_the_faces_selects_the_edge_it_highlights()
         let ov = t.overlays(&cx);
         let [Overlay::Path { path, .. }] = ov.as_slice() else { panic!("{ov:?}") };
         assert_eq!(path.bounding_box(), Rect::new(100.0, 0.0, 100.0, 100.0));
-        let acts = t.pointer(&cx, &ev(PointerKind::Down, 102.0, 50.0).with_mods(m));
+        let acts = lp_click(&mut t, &cx, ev(PointerKind::Down, 102.0, 50.0).with_mods(m));
         assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({ "ids": [right.0] }))]);
-        let acts = t.pointer(&cx, &ev(PointerKind::Down, 102.0, 50.0).with_mods(Mods { shift: true, ..m }));
+        let acts = lp_click(&mut t, &cx, ev(PointerKind::Down, 102.0, 50.0).with_mods(Mods { shift: true, ..m }));
         assert_eq!(acts, vec![Action::Exec("select.toggle".into(), json!({ "id": right.0 }))]);
     }
     // Farther than 4 pixels from every edge: no highlight, and a click selects nothing.
     t.pointer(&cx, &ev(PointerKind::Move, 106.0, 50.0));
     assert!(t.overlays(&cx).is_empty());
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+}
+
+/// Presses at `from` with `m`, drags to `to` and releases there; returns what the release does
+/// (the press and the drag do nothing).
+fn lp_drag(t: &mut LivePaintSelectionTool, cx: &ToolContext, from: (f64, f64), to: (f64, f64), m: Mods) -> Vec<Action> {
+    assert!(t.pointer(cx, &ev(PointerKind::Down, from.0, from.1).with_mods(m)).is_empty());
+    assert!(t.pointer(cx, &ev(PointerKind::Drag, to.0, to.1).with_mods(m)).is_empty());
+    t.pointer(cx, &ev(PointerKind::Up, to.0, to.1).with_mods(m))
+}
+
+#[test]
+fn live_paint_selection_marquee_selects_the_faces_and_edges_it_touches() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [left, top, right, bottom]) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let face = faces(d.node(d.layers[0].children().unwrap()[0].id).unwrap())[0].id;
+    live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let mut t = LivePaintSelectionTool::default();
+    // While the drag is on, the tool is busy and draws the marquee.
+    t.pointer(&cx, &ev(PointerKind::Down, -10.0, -10.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+    assert!(t.busy());
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(-10.0, -10.0, 50.0, 50.0))]);
+    // Partly inside the marquee: the face and its left and top sides, not the other group.
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0)), set(&[face, left, top]));
+    assert!(!t.busy());
+    // A marquee inside the face takes the face.
+    assert_eq!(lp_drag(&mut t, &cx, (20.0, 20.0), (40.0, 40.0), Mods::default()), set(&[face]));
+    // Across the right side, which ends outside the marquee, and the bottom-right corner.
+    assert_eq!(lp_drag(&mut t, &cx, (90.0, 40.0), (110.0, 150.0), Mods::default()), set(&[face, right, bottom]));
+    // A marquee that touches nothing selects nothing.
+    assert_eq!(lp_drag(&mut t, &cx, (120.0, 120.0), (180.0, 180.0), Mods::default()), vec![Action::Exec("select.none".into(), json!({}))]);
+    // A drag shorter than 3 pixels is a click: the release selects the face under the press.
+    assert_eq!(lp_drag(&mut t, &cx, (50.0, 50.0), (52.0, 51.0), Mods::default()), set(&[face]));
+    // Select Fills off takes no faces, and Select Strokes off no edges.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(lp_drag(&mut t, &cx, (-10.0, -10.0), (50.0, 50.0), Mods::default()), set(&[left, top]));
+    t.set_option("selectFills", &json!(true));
+    t.set_option("selectStrokes", &json!(false));
+    assert_eq!(lp_drag(&mut t, &cx, (-10.0, -10.0), (50.0, 50.0), Mods::default()), set(&[face]));
+}
+
+#[test]
+fn live_paint_selection_shift_marquee_adds_and_removes() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [left, top, right, _]) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let face = faces(d.node(d.layers[0].children().unwrap()[0].id).unwrap())[0].id;
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    // Each face and edge the marquee touches leaves the selection or joins it.
+    assert_eq!(lp_drag(&mut t, &cx, (-10.0, -10.0), (50.0, 50.0), shift), toggle(&[face, left, top]));
+    // From a press on the face, the face is toggled once, with the rest of what the marquee touches.
+    assert_eq!(lp_drag(&mut t, &cx, (50.0, 50.0), (60.0, -10.0), shift), toggle(&[face, top]));
+    // From a press by the right side (which a Shift-click there toggles), a marquee that touches
+    // nothing changes nothing.
+    let alt_shift = Mods { alt: true, shift: true, ..Default::default() };
+    assert_eq!(lp_drag(&mut t, &cx, (102.0, 50.0), (102.0, 50.0), alt_shift), vec![Action::Exec("select.toggle".into(), json!({ "id": right.0 }))]);
+    assert!(lp_drag(&mut t, &cx, (102.0, 50.0), (150.0, 60.0), alt_shift).is_empty());
+}
+
+#[test]
+fn live_paint_selection_escape_cancels_the_marquee() {
+    let mut d = Document::new(500.0, 500.0);
+    live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    // Pressed outside the group and on its face, with and without Shift, and then dragged or not.
+    for (m, from, to) in [
+        (Mods::default(), (-10.0, -10.0), (50.0, 50.0)),
+        (Mods { shift: true, ..Default::default() }, (-10.0, -10.0), (50.0, 50.0)),
+        (Mods::default(), (50.0, 50.0), (80.0, 80.0)),
+        (Mods { shift: true, ..Default::default() }, (50.0, 50.0), (80.0, 80.0)),
+        (Mods::default(), (50.0, 50.0), (50.0, 50.0)),
+    ] {
+        let mut t = LivePaintSelectionTool::default();
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1).with_mods(m)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Drag, to.0, to.1).with_mods(m)).is_empty());
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        assert!(!t.busy());
+        assert!(t.overlays(&cx).is_empty(), "no marquee after Escape");
+        // The rest of the drag and the release select nothing.
+        t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 60.0).with_mods(m));
+        assert!(t.overlays(&cx).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 60.0, 60.0).with_mods(m)).is_empty(), "{m:?} {from:?}");
+    }
+}
+
+#[test]
+fn live_paint_selection_skips_locked_groups_and_art_outside_isolation() {
+    let mut d = Document::new(500.0, 500.0);
+    let (back, [_, _, back_right, back_bottom]) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let (front, _) = live_square(&mut d, Rect::new(50.0, 0.0, 150.0, 100.0));
+    let face = |d: &Document, g: NodeId| faces(d.node(g).unwrap())[0].id;
+    let back_face = face(&d, back);
+    d.node_mut(front).unwrap().locked = true;
+    let s = Selection::default();
+    let p = paint();
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let none = vec![Action::Exec("select.none".into(), json!({}))];
+    let part = |ov: &[Overlay]| match ov {
+        [] => None,
+        [Overlay::Path { path, .. }] => Some(path.bounding_box()),
+        _ => panic!("{ov:?}"),
+    };
+    let mut t = LivePaintSelectionTool::default();
+    {
+        let cx = cx(&d, &s, &p);
+        // Where the faces overlap, the back group's face under the locked one is highlighted and picked.
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+        assert_eq!(part(&t.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 75.0, 50.0)), set(&[back_face]));
+        // Over the locked group alone, nothing is highlighted or picked.
+        t.pointer(&cx, &ev(PointerKind::Move, 125.0, 50.0));
+        assert_eq!(part(&t.overlays(&cx)), None);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 125.0, 50.0)), none);
+        // A marquee across both groups takes only the back group's face and edges.
+        assert_eq!(lp_drag(&mut t, &cx, (90.0, 90.0), (140.0, 110.0), Mods::default()), set(&[back_face, back_right, back_bottom]));
+    }
+    // With the back group isolated, the front group is not picked either.
+    d.node_mut(front).unwrap().locked = false;
+    {
+        let cx = ToolContext { isolation: Some(back), ..cx(&d, &s, &p) };
+        t.pointer(&cx, &ev(PointerKind::Move, 125.0, 50.0));
+        assert_eq!(part(&t.overlays(&cx)), None);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 125.0, 50.0)), none);
+        assert_eq!(lp_drag(&mut t, &cx, (90.0, 90.0), (140.0, 110.0), Mods::default()), set(&[back_face, back_right, back_bottom]));
+    }
+    // On a locked layer, no group is picked.
+    let layer = d.layers[0].id;
+    d.node_mut(layer).unwrap().locked = true;
+    let cx = cx(&d, &s, &p);
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 75.0, 50.0)), none);
+    assert_eq!(lp_drag(&mut t, &cx, (-10.0, -10.0), (200.0, 200.0), Mods::default()), none);
 }
 
 #[test]
@@ -931,7 +1113,7 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
             Some((_, e, _)) => Action::Exec("select.set".into(), json!({ "ids": [e.0] })),
             None => Action::Exec("select.none".into(), json!({})),
         };
-        assert_eq!(sel.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(alt)), vec![picked]);
+        assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, y).with_mods(alt)), vec![picked]);
         let mut bucket = LivePaintBucketTool::default();
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
@@ -974,7 +1156,7 @@ fn live_paint_tools_skip_hidden_edges() {
             Some((_, e, _)) => Action::Exec("select.set".into(), json!({ "ids": [e.0] })),
             None => Action::Exec("select.none".into(), json!({})),
         };
-        assert_eq!(sel.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(alt)), vec![picked], "x {x}");
+        assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, 50.0).with_mods(alt)), vec![picked], "x {x}");
         let mut bucket = LivePaintBucketTool::default();
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
@@ -1010,19 +1192,19 @@ fn live_paint_tools_skip_hidden_faces() {
     let mut sel = LivePaintSelectionTool::default();
     sel.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&sel.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
-    assert_eq!(sel.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [back_face.0] }))]);
+    assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, 75.0, 50.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [back_face.0] }))]);
     // Over the hidden face alone, neither tool highlights or picks a face.
     bucket.pointer(&cx, &ev(PointerKind::Move, 125.0, 50.0));
     assert_eq!(part(&bucket.overlays(&cx)), None);
     assert!(bucket.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0)).is_empty());
     sel.pointer(&cx, &ev(PointerKind::Move, 125.0, 50.0));
     assert_eq!(part(&sel.overlays(&cx)), None);
-    assert_eq!(sel.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+    assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, 125.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
     // Inside the hidden face, 1.5 pt from the back group's right side, Alt-click takes that side
     // as it does outside every face.
     sel.pointer(&cx, &ev(PointerKind::Move, 101.5, 50.0).with_mods(alt));
     assert_eq!(part(&sel.overlays(&cx)), Some(Rect::new(100.0, 0.0, 100.0, 100.0)));
-    let picked = sel.pointer(&cx, &ev(PointerKind::Down, 101.5, 50.0).with_mods(alt));
+    let picked = lp_click(&mut sel, &cx, ev(PointerKind::Down, 101.5, 50.0).with_mods(alt));
     assert_eq!(picked, vec![Action::Exec("select.set".into(), json!({ "ids": [back_right.0] }))]);
 }
 

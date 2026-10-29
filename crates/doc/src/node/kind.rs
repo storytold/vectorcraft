@@ -1,6 +1,6 @@
 use super::ids::LayerColor;
 use super::live_shape::LiveShape;
-use super::*;
+use super::{Affine, Arc, BlendSpec, Deserialize, EnvelopeKind, FillRule, GradientMesh, Node, PathData, RepeatSpec, Serialize, TextObject, yes};
 
 /// Embedded or linked raster image.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -129,6 +129,8 @@ pub enum NodeKind {
 /// anywhere among its fields. Files have it first (it is written first): then the kind is read
 /// straight from the file. Otherwise (hand-written files, values whose keys are sorted) the
 /// fields before `type` are buffered, and only those.
+pub use kind_de::{MAX_BUFFERED_VALUES, with_buffered_value_budget};
+
 mod kind_de {
     use std::fmt;
     use std::sync::Arc;
@@ -237,9 +239,147 @@ mod kind_de {
                     let tag: String = map.next_value()?;
                     return KindDef::deserialize(Tagged { tag, map: Buffered { before: before.into_iter(), value: None, map } });
                 }
-                before.push((key, map.next_value::<serde_json::Value>()?));
+                before.push((key, map.next_value::<Counted>()?.0));
             }
             Err(de::Error::missing_field("type"))
+        }
+    }
+
+    /// Most JSON values (each number, string, array, object…) the fields read before an object's
+    /// `type` may hold together while [`with_buffered_value_budget`] runs: 32M (about 1 GB as
+    /// `serde_json::Value`s, some 32 bytes each), 4M in the web build. VectorCraft writes `type`
+    /// first, so its files buffer nothing; a reordered file buffers what comes before it, and
+    /// a crafted one could fill memory with values two bytes each in the file before any object in
+    /// them is counted (#3587).
+    pub const MAX_BUFFERED_VALUES: usize = if cfg!(target_arch = "wasm32") { 4 << 20 } else { 32 << 20 };
+
+    std::thread_local! {
+        /// Values the fields buffered on this thread may still hold, and the budget they come from.
+        static VALUES_LEFT: std::cell::Cell<Option<(usize, usize)>> = const { std::cell::Cell::new(None) };
+        /// Buffered fields being read back: what they hold was counted when it was buffered.
+        static REPLAYING: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Run `f` (which reads objects with serde) letting the fields it buffers before an object's
+    /// `type` hold at most `max` values together; buffering more fails.
+    pub fn with_buffered_value_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
+        struct Restore(Option<(usize, usize)>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                VALUES_LEFT.set(self.0);
+            }
+        }
+        let _restore = Restore(VALUES_LEFT.replace(Some((max, max))));
+        f()
+    }
+
+    /// While buffered fields are read back ([`REPLAYING`]).
+    struct Replaying;
+
+    impl Replaying {
+        fn enter() -> Self {
+            REPLAYING.set(REPLAYING.get().saturating_add(1));
+            Replaying
+        }
+    }
+
+    impl Drop for Replaying {
+        fn drop(&mut self) {
+            REPLAYING.set(REPLAYING.get().saturating_sub(1));
+        }
+    }
+
+    /// Count one buffered value against [`with_buffered_value_budget`].
+    fn count<E: de::Error>() -> Result<(), E> {
+        if REPLAYING.get() > 0 {
+            return Ok(());
+        }
+        if let Some((left, max)) = VALUES_LEFT.get() {
+            let left = left.checked_sub(1).ok_or_else(|| E::custom(format!("an object has more than {max} values before its type")))?;
+            VALUES_LEFT.set(Some((left, max)));
+        }
+        Ok(())
+    }
+
+    /// A field read before `type`, as a `serde_json::Value` counted value by value as it is read,
+    /// so the budget stops a large one before it is all in memory.
+    struct Counted(serde_json::Value);
+
+    impl<'de> Deserialize<'de> for Counted {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_any(CountedVisitor)
+        }
+    }
+
+    struct CountedVisitor;
+
+    impl<'de> Visitor<'de> for CountedVisitor {
+        type Value = Counted;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a JSON value")
+        }
+
+        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(serde_json::Value::Bool(v)))
+        }
+
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(v.into()))
+        }
+
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(v.into()))
+        }
+
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(serde_json::Number::from_f64(v).map_or(serde_json::Value::Null, serde_json::Value::Number)))
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(serde_json::Value::String(v.to_owned())))
+        }
+
+        fn visit_string<E: de::Error>(self, v: String) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(serde_json::Value::String(v)))
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Counted, E> {
+            self.visit_unit()
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Counted, E> {
+            count()?;
+            Ok(Counted(serde_json::Value::Null))
+        }
+
+        fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<Counted, D::Error> {
+            Counted::deserialize(d)
+        }
+
+        fn visit_seq<S: de::SeqAccess<'de>>(self, mut seq: S) -> Result<Counted, S::Error> {
+            count()?;
+            let mut out = Vec::new();
+            while let Some(Counted(v)) = seq.next_element()? {
+                out.push(v);
+            }
+            Ok(Counted(serde_json::Value::Array(out)))
+        }
+
+        fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Counted, M::Error> {
+            count()?;
+            let mut out = serde_json::Map::new();
+            while let Some(key) = map.next_key::<String>()? {
+                let Counted(v) = map.next_value()?;
+                out.insert(key, v);
+            }
+            Ok(Counted(serde_json::Value::Object(out)))
         }
     }
 
@@ -265,7 +405,11 @@ mod kind_de {
 
         fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, A::Error> {
             match self.value.take() {
-                Some(value) => seed.deserialize(value).map_err(de::Error::custom),
+                Some(value) => {
+                    // Counted when it was read: the objects it holds buffer it again as they read it.
+                    let _replaying = Replaying::enter();
+                    seed.deserialize(value).map_err(de::Error::custom)
+                }
                 None => self.map.next_value_seed(seed),
             }
         }

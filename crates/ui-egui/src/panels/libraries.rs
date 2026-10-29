@@ -1,9 +1,11 @@
-//! Libraries panel (Window › Libraries, #745): the current library's colours, character and
-//! paragraph styles and graphics, from the engine's `library.*` commands. Art dragged off the canvas
-//! onto the panel, and swatches dragged in, are added to it; the + button adds the selection's
-//! graphic, fill or stroke colour or text styles. A colour click paints the selection through the
-//! active Fill/Stroke proxy, a style click applies it to the selected type, and a graphic is
-//! dragged onto the canvas (or double-clicked) to place a copy. Libraries are kept on this machine.
+//! Libraries panel (Window › Libraries, #745): the current library's colors, gradients, patterns,
+//! character and paragraph styles and graphics, from the engine's `library.*` commands. Art
+//! dragged off the canvas onto the panel, and swatches dragged in (colors, gradients and
+//! patterns), are added to it; the + button adds the selection's graphic, fill or stroke color,
+//! pattern or gradient, or text styles. A click on a color, gradient or pattern paints the
+//! selection through the active Fill/Stroke proxy, a style click applies it to the selected type,
+//! and a graphic is dragged onto the canvas (or double-clicked) to place a copy. Libraries are
+//! kept on this machine.
 //!
 //! The search field filters the items by name; items can be moved into user-named groups, shown as
 //! collapsible sections after the ungrouped items; and the panel menu exports the library to a
@@ -112,6 +114,19 @@ fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
         PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
         PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
         PanelDrag::LibraryGroup { library: l, group } if l == library => Some(Grab::Group(group.clone())),
+        _ => None,
+    }
+}
+
+/// The `library.add` params that add what `drag` holds to library `library`: a color (not one of
+/// that library's own), or a gradient or pattern swatch, by its name.
+fn swatch_add(drag: &PanelDrag, library: &str) -> Option<Value> {
+    let PanelDrag::Paint { paint, params, library: from, .. } = drag else { return None };
+    let swatch = || params.get("swatch").and_then(Value::as_str);
+    match paint {
+        Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => Some(json!({ "kind": "fillColor", "color": color })),
+        Paint::Gradient(_) => swatch().map(|s| json!({ "kind": "fillGradient", "swatch": s })),
+        Paint::Pattern { .. } => swatch().map(|s| json!({ "kind": "fillPattern", "swatch": s })),
         _ => None,
     }
 }
@@ -291,13 +306,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         act = Some(Act::Run("library.add", json!({ "kind": "graphic", "ids": ids })));
     }
     if let Some(drag) = zone.dnd_hover_payload::<PanelDrag>()
-        && let PanelDrag::Paint { paint: Paint::Solid { color, .. }, library, .. } = &*drag
-        && library.as_ref().is_none_or(|(l, _)| *l != lib_id)
+        && let Some(add) = swatch_add(&drag, &lib_id)
     {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
-        let color = *color;
         if zone.dnd_release_payload::<PanelDrag>().is_some() {
-            act = Some(Act::Run("library.add", json!({ "kind": "fillColor", "color": color })));
+            act = Some(Act::Run("library.add", add));
         }
     }
     let bar_top = ui.cursor().top();
@@ -311,6 +324,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ("Graphic", "graphic"),
                 ("Fill Color", "fillColor"),
                 ("Stroke Color", "strokeColor"),
+                ("Fill Pattern", "fillPattern"),
+                ("Stroke Pattern", "strokePattern"),
+                ("Fill Gradient", "fillGradient"),
+                ("Stroke Gradient", "strokeGradient"),
                 ("Character Style", "charStyle"),
                 ("Paragraph Style", "paraStyle"),
             ] {
@@ -382,6 +399,33 @@ impl Items<'_> {
                         *act = Some(Act::Run("library.use", json!({ "kind": "fillColor", "item": c.name, "to": to })));
                     }
                     resp.context_menu(|ui| self.item_menu(ui, act, ItemKind::Color, &c.name));
+                }
+            });
+            ui.add_space(6.0);
+        }
+        let gradients: Vec<_> = lib.gradients.iter().filter(|g| keep(ItemKind::Gradient, &g.name, &g.name)).collect();
+        if !gradients.is_empty() {
+            heading(ui, tl!("Gradients"));
+            self.cells(ui, |ui| {
+                for g in gradients {
+                    let (r, resp) = self.cell(ui, CHIP, ROW);
+                    let chip = self.chip_rect(ui, r, &resp, &g.name);
+                    widgets::swatch_tile(ui, chip, &Paint::Gradient(Box::new(g.gradient.clone())), false, false);
+                    self.paint_item(ui, resp, ItemKind::Gradient, &g.name, act, over);
+                }
+            });
+            ui.add_space(6.0);
+        }
+        let patterns: Vec<_> = lib.patterns.iter().filter(|p| keep(ItemKind::Pattern, &p.name, &p.name)).collect();
+        if !patterns.is_empty() {
+            heading(ui, tl!("Patterns"));
+            self.cells(ui, |ui| {
+                for p in patterns {
+                    let (r, resp) = self.cell(ui, CHIP, ROW);
+                    let chip = self.chip_rect(ui, r, &resp, &p.name);
+                    png_tile(ui, chip, self.library, &format!("pattern:{}", p.name), &p.thumbnail);
+                    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+                    self.paint_item(ui, resp, ItemKind::Pattern, &p.name, act, over);
                 }
             });
             ui.add_space(6.0);
@@ -465,6 +509,31 @@ impl Items<'_> {
         ui.allocate_exact_size(size, Sense::click_and_drag())
     }
 
+    /// Where a gradient's or pattern's chip goes in its cell `r`: the whole cell in the icon view,
+    /// else a small chip at the left of its row, which shows `name`.
+    fn chip_rect(&self, ui: &Ui, r: Rect, resp: &egui::Response, name: &str) -> Rect {
+        if self.list {
+            list_row(ui, r, resp, name, None);
+            Rect::from_center_size(r.left_center() + vec2(10.0, 0.0), vec2(14.0, 14.0))
+        } else {
+            r
+        }
+    }
+
+    /// A gradient's or pattern's cell `resp`: it drags to another place in the list, says its name
+    /// when hovered in the icon view, paints the selection through the active Fill/Stroke proxy
+    /// when clicked, and has the item menu.
+    fn paint_item(&self, ui: &Ui, resp: egui::Response, kind: ItemKind, name: &str, act: &mut Option<Act>, over: &mut bool) {
+        widgets::drag_source(ui, &resp, || PanelDrag::LibraryItem { library: self.library.to_string(), kind, item: name.to_string() });
+        self.drop_next_to(ui, &resp, kind, name, self.list, act, over);
+        let resp = if self.list { resp } else { resp.on_hover_text(name) };
+        if resp.clicked() {
+            let to = if self.fill_active { "fill" } else { "stroke" };
+            *act = Some(Act::Run("library.use", json!({ "kind": kind_param(kind), "item": name, "to": to })));
+        }
+        resp.context_menu(|ui| self.item_menu(ui, act, kind, name));
+    }
+
     /// An item of `kind` dragged over item `key`'s cell `resp` lands just before or after it, by
     /// the pointer's half (`row`: rows stack downwards; else chips and tiles run across), in its
     /// group: an accent line shows where, and `over` is set. Dropped on itself it stays.
@@ -541,6 +610,8 @@ fn kind_param(kind: ItemKind) -> &'static str {
         ItemKind::Graphic => "graphic",
         ItemKind::CharStyle => "charStyle",
         ItemKind::ParaStyle => "paraStyle",
+        ItemKind::Gradient => "fillGradient",
+        ItemKind::Pattern => "fillPattern",
         ItemKind::Color | ItemKind::Unknown => "fillColor",
     }
 }
@@ -650,11 +721,16 @@ fn heading(ui: &mut Ui, text: &str) {
 
 /// Graphic `g`'s thumbnail on white in `r`.
 fn tile(ui: &Ui, r: Rect, library: &str, g: &LibraryGraphic) {
+    png_tile(ui, r, library, &format!("graphic:{}", g.id), &g.thumbnail);
+}
+
+/// The PNG thumbnail `png` (base64) of item `key` (its kind and key) of `library` on white in `r`.
+fn png_tile(ui: &Ui, r: Rect, library: &str, key: &str, png: &str) {
     ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
     // As many pixels as the tile shows (the art fits inside a 3-point margin).
     let px = (r.width().max(r.height()) - 6.0) * ui.ctx().pixels_per_point();
     let px = if px.is_finite() { px.ceil().clamp(8.0, 256.0) as u32 } else { 256 };
-    if let Some(tex) = thumbnail(ui.ctx(), library, g, px) {
+    if let Some(tex) = thumbnail(ui.ctx(), library, key, png, px) {
         let size = tex.size_vec2();
         let k = ((r.width() - 6.0) / size.x).min((r.height() - 6.0) / size.y).min(1.0);
         let fit = Rect::from_center_size(r.center(), size * k);
@@ -662,27 +738,27 @@ fn tile(ui: &Ui, r: Rect, library: &str, g: &LibraryGraphic) {
     }
 }
 
-/// A thumbnail texture's library, graphic id, thumbnail length (for a changed graphic) and size.
+/// A thumbnail texture's library, item (its kind and key), thumbnail length (for a changed item)
+/// and size.
 type ThumbKey = (String, String, usize, u32);
 
-/// The texture of graphic `g`'s PNG thumbnail at most `px` pixels a side, made once for each size.
-/// It is shrunk here, smoothly: the GPU draws it without mipmaps, so a texture much larger than its
-/// tile would break thin strokes up.
-fn thumbnail(ctx: &egui::Context, library: &str, g: &LibraryGraphic, px: u32) -> Option<egui::TextureHandle> {
+/// The texture of item `item`'s PNG thumbnail `png` (base64) at most `px` pixels a side, made once
+/// for each size. It is shrunk here, smoothly: the GPU draws it without mipmaps, so a texture much
+/// larger than its tile would break thin strokes up.
+fn thumbnail(ctx: &egui::Context, library: &str, item: &str, png: &str, px: u32) -> Option<egui::TextureHandle> {
     thread_local! {
         static CACHE: crate::graphics::TexCache<HashMap<ThumbKey, Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
     }
-    let key = (library.to_string(), g.id.clone(), g.thumbnail.len(), px);
+    let key = (library.to_string(), item.to_string(), png.len(), px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return t;
     }
-    let tex = vectorcraft_format::base64_decode(&g.thumbnail)
-        .and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok())
-        .map(|img| {
+    let tex =
+        vectorcraft_format::base64_decode(png).and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()).map(|img| {
             let img = if img.width().max(img.height()) > px { img.resize(px, px, image::imageops::FilterType::Triangle) } else { img };
             let rgba = img.to_rgba8();
             let image = egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw());
-            ctx.load_texture(format!("library-{library}-{}-{px}", g.id), image, egui::TextureOptions::LINEAR)
+            ctx.load_texture(format!("library-{library}-{item}-{px}"), image, egui::TextureOptions::LINEAR)
         });
     CACHE.with(|c| {
         let mut c = c.borrow_mut();

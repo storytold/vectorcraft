@@ -8,7 +8,7 @@ use super::envelope::{
     env_set_mesh_point,
 };
 use super::mesh::{mesh_add_line, mesh_create, mesh_delete_point, mesh_expand, mesh_move_point, mesh_set_color};
-use super::*;
+use super::{CommandSpec, always, cmd, has_doc, has_multi, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

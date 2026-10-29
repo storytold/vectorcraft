@@ -1,5 +1,8 @@
 use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, target_paths};
-use super::*;
+use super::{
+    Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Result, Session, SimplifyOptions, SubPath, Value, json,
+    number_or, po,
+};
 
 // ---------- Smooth ----------
 

@@ -20,7 +20,12 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
+pub use files::MAX_NESTED_SVG_IMAGES;
 pub(crate) use fx::BLEND;
+
+/// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
+/// expansion bombs (#3564).
+pub const MAX_NODES: usize = if cfg!(target_arch = "wasm32") { 500_000 } else { 2_000_000 };
 
 mod convert;
 mod importer;
@@ -58,7 +63,7 @@ fn parse(svg: &str) -> Result<roxmltree::Document<'_>, SvgError> {
 }
 
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
-pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
     // recursion.
     let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
@@ -116,6 +121,10 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
         screen: k,
+        converted_nodes: 1,
+        max_nodes,
+        error: None,
+        nested_svg_images: 0,
     };
     im.doc.svg_scripts = found.scripts;
     if im.files.nested_text() {
@@ -183,7 +192,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
                 }
                 None => false,
             };
-            let id = im.doc.alloc_id();
+            let Some(id) = im.alloc_id() else {
+                return Err(im.error.unwrap_or(SvgError::TooLarge(im.max_nodes)));
+            };
             let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
             let mut l = Node::layer(id, &name, LayerColor::Preset(preset));
             l.set_clips(clip);
@@ -197,10 +208,16 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
             im.keep_foreign(g.id(), &mut l);
             im.doc.layers.push(Arc::new(l));
         }
+        if let Some(err) = im.error.clone() {
+            return Err(err);
+        }
     } else {
         // An export of a one-layer document names the layer on the root element, its art (groups
         // among it) loose inside: the one layer takes that name.
         let children = im.children(top, base);
+        if let Some(err) = im.error.clone() {
+            return Err(err);
+        }
         if let Some(l) = im.doc.layers.first_mut() {
             let l = Arc::make_mut(l);
             if let Some(ch) = l.children_mut() {
@@ -210,6 +227,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
                 l.name = root_name;
             }
         }
+    }
+    if let Some(err) = im.error {
+        return Err(err);
     }
     if !im.sublayer_groups.is_empty() {
         for l in &mut im.doc.layers {
@@ -260,4 +280,12 @@ struct Importer {
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,
+    /// How many objects were converted so far.
+    converted_nodes: usize,
+    /// Most objects the document may expand to.
+    max_nodes: usize,
+    /// An error encountered while converting objects (e.g. [`SvgError::TooLarge`]).
+    error: Option<SvgError>,
+    /// How many nested SVG images were converted so far.
+    nested_svg_images: usize,
 }

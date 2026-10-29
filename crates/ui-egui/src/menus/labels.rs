@@ -2,12 +2,21 @@ use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_se
 use super::state::{hidden_when_disabled, shortcut_of};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
-use super::*;
+use super::{Item, Value, VectorcraftApp};
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
 pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
+    view_toggle_label(app, id)
+        .or_else(|| window_toggle_label(app, id))
+        .or_else(|| slot_label(app, id))
+        .or_else(|| command_label(app, id, label))
+        .unwrap_or_else(|| label.into())
+}
+
+/// The View menu items that flip between Hide and Show (edges, template, threads, …).
+fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
     let v = &app.ui.view;
-    match id {
+    let text: String = match id {
         "view.outline" => if v.outline { "Preview" } else { "Outline" }.into(),
         "window.workspace.reset" => format!("Reset {}", app.ui.workspace),
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
@@ -17,16 +26,15 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "type.hiddenCharacters" => if v.hidden_chars { "Hide Hidden Characters" } else { "Show Hidden Characters" }.into(),
         "view.gradientAnnotator" => if v.gradient_annotator { "Hide Gradient Annotator" } else { "Show Gradient Annotator" }.into(),
         "view.livePaintGaps" => if v.live_paint_gaps { "Hide Live Paint Gaps" } else { "Show Live Paint Gaps" }.into(),
-        "effect.last" => match &app.last_effect {
-            Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
-            None => label.into(),
-        },
-        id if id.starts_with("type.recentFont") => {
-            let n: usize = id["type.recentFont".len()..].parse().unwrap_or(0);
-            n.checked_sub(1).and_then(|i| app.recent_fonts().get(i)).cloned().unwrap_or_else(|| "—".into())
-        }
-        id if saved_view_slot(id).is_some() => saved_view(app, id).map(|v| v.name.clone()).unwrap_or_else(|| "—".into()),
-        id if saved_selection_slot(id).is_some() => saved_selection_name(app, id).unwrap_or_else(|| "—".into()),
+        _ => return None,
+    };
+    Some(text)
+}
+
+/// The rulers, guides, grid and print tiling items that flip between Hide and Show.
+fn window_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
+    let v = &app.ui.view;
+    let text: String = match id {
         "view.artboards" => if v.artboards { "Hide Artboards" } else { "Show Artboards" }.into(),
         "view.rulers" => if v.rulers { "Hide Rulers" } else { "Show Rulers" }.into(),
         "view.videoRulers" => if v.video_rulers && v.rulers { "Hide Video Rulers" } else { "Show Video Rulers" }.into(),
@@ -45,9 +53,50 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
         "view.slices.hide" => if app.session.slices_hidden() { "Show Slices" } else { "Hide Slices" }.into(),
         "view.printTiling" => if app.session.active().is_some_and(|d| d.print_tiling) { "Hide Print Tiling" } else { "Show Print Tiling" }.into(),
+        _ => return None,
+    };
+    Some(text)
+}
+
+/// The menu slots that show a name: recent fonts, saved views and selections, recent files, libraries and presets.
+fn slot_label(app: &VectorcraftApp, id: &str) -> Option<String> {
+    let text: String = match id {
+        id if id.starts_with("type.recentFont") => {
+            let n: usize = id["type.recentFont".len()..].parse().unwrap_or(0);
+            n.checked_sub(1).and_then(|i| app.recent_fonts().get(i)).cloned().unwrap_or_else(|| "—".into())
+        }
+        id if saved_view_slot(id).is_some() => saved_view(app, id).map(|v| v.name.clone()).unwrap_or_else(|| "—".into()),
+        id if saved_selection_slot(id).is_some() => saved_selection_name(app, id).unwrap_or_else(|| "—".into()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id)
             .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
             .unwrap_or_else(|| "—".into()),
+        id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
+            crate::panels::swatches::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
+        id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => {
+            crate::panels::graphic_styles::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
+        id if id.starts_with(crate::panels::symbols::USER_SLOT) => {
+            crate::panels::symbols::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
+        id if id.starts_with(crate::panels::brushes::USER_SLOT) => {
+            crate::panels::brushes::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
+            crate::dialogs::perspective_presets::slot_preset(app, id).unwrap_or_else(|| "—".into())
+        }
+        _ => return None,
+    };
+    Some(text)
+}
+
+/// The labels that follow the last effect, the envelope being edited, the history and the perspective grid.
+fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> {
+    let text: String = match id {
+        "effect.last" => match &app.last_effect {
+            Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
+            None => label.into(),
+        },
         // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
         "object.envelope.editContents" => {
             let editing = app.session.active().is_some_and(|st| {
@@ -64,26 +113,12 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         }
         "edit.undo" => app.session.active().and_then(|d| d.history.undo.last()).map(|h| format!("Undo {}", h.label)).unwrap_or_else(|| "Undo".into()),
         "edit.redo" => app.session.active().and_then(|d| d.history.redo.last()).map(|h| format!("Redo {}", h.label)).unwrap_or_else(|| "Redo".into()),
-        id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
-            crate::panels::swatches::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
-        }
-        id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => {
-            crate::panels::graphic_styles::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
-        }
-        id if id.starts_with(crate::panels::symbols::USER_SLOT) => {
-            crate::panels::symbols::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
-        }
-        id if id.starts_with(crate::panels::brushes::USER_SLOT) => {
-            crate::panels::brushes::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
-        }
-        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
-            crate::dialogs::perspective_presets::slot_preset(app, id).unwrap_or_else(|| "—".into())
-        }
         "perspective.grid.show" => if perspective_grid(app).is_some_and(|g| g.visible) { "Hide Grid" } else { "Show Grid" }.into(),
         "perspective.grid.rulers" => if perspective_grid(app).is_some_and(|g| g.rulers) { "Hide Rulers" } else { "Show Rulers" }.into(),
         "perspective.grid.lock" => if perspective_grid(app).is_some_and(|g| g.locked) { "Unlock Grid" } else { "Lock Grid" }.into(),
-        _ => label.into(),
-    }
+        _ => return None,
+    };
+    Some(text)
 }
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface

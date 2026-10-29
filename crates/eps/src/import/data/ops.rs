@@ -1,6 +1,9 @@
 use super::filters::{Filter, Predictor, Stream, decode, fax_settings, io};
 use super::pixels::{Pixels, Spec, by_rows, by_samples, masked, source};
-use super::*;
+use super::{
+    Affine, Color, DictRef, HashMap, ImageBlob, ImageObject, Inks, Interp, Key, Lexer, Node, NodeId, NodeKind, Obj, Op, OpacityMask, Paint, PsError,
+    Rc, RefCell, Res, Shared, Space, find, matrix_of, process, ps_err,
+};
 
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;

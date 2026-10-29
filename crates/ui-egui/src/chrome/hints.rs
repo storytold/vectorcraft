@@ -1,5 +1,5 @@
 use super::status_bar::ANIMATED_ZOOM_HINT;
-use super::*;
+use super::{Cow, Sense, Stroke, Tokens, Ui, VectorcraftApp, menus, theme, vec2, widgets};
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match tool {

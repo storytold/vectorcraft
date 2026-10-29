@@ -72,7 +72,7 @@ fn save_as_svg_opens_svg_options_then_writes_svg() {
     // The save panel offers every save format, the document's own first.
     let pick = &picks.borrow()[0];
     let labels: Vec<&str> = pick.filters.iter().map(|f| f.0.as_str()).collect();
-    assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai"]);
+    assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai", "EPS"]);
     assert_eq!(pick.name, "Untitled-1.vectorcraft");
     let d = dialog(&app);
     assert_eq!((d.kind.as_str(), d.str("path").as_str(), d.str("mode").as_str()), ("svgOptions", "art.svg", "save"));
@@ -331,4 +331,19 @@ fn save_as_pdf_asks_with_the_save_pdf_dialog_and_remembers_its_options() {
     app.run("file.saveCopy", json!({"format": "pdf"})).unwrap();
     assert_eq!(dialog(&app).str("compatibility"), "1.5");
     assert_eq!(dialog(&app).str("__save"), "file.saveCopy");
+}
+
+#[test]
+fn eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches() {
+    let (mut app, written, _) = desktop("art.eps");
+    app.run("file.saveAs", json!({})).unwrap();
+    let names: Vec<_> = shown(fileio::format("eps").unwrap()).map(|option| option.name).collect();
+    assert!(!names.contains(&"useArtboards") && !names.contains(&"selectedOnly"));
+    assert!(names.contains(&"previewFormat"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let saved = written.borrow();
+    assert_eq!(saved[0].0, "art.eps");
+    assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+    assert_eq!(app.session.active().unwrap().format, "eps");
 }

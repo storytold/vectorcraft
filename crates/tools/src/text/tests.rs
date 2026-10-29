@@ -30,6 +30,8 @@ fn key(tool: &mut TypeTool, d: &Document, k: ToolKey, mods: Mods) -> Vec<Action>
 
 const SHIFT: Mods = Mods { shift: true, alt: false, cmd: false, ctrl: false, space: false };
 const CMD: Mods = Mods { shift: false, alt: false, cmd: true, ctrl: false, space: false };
+const ALT: Mods = Mods { shift: false, alt: true, cmd: false, ctrl: false, space: false };
+const SHIFT_ALT: Mods = Mods { shift: true, alt: true, cmd: false, ctrl: false, space: false };
 
 /// Apply the tool's previews like the engine would (on top of the session snapshot).
 fn apply(d: &mut Document, snapshot: &Document, acts: &[Action]) {
@@ -107,6 +109,37 @@ fn type_arrows_keep_devanagari_clusters_with_an_rtl_suffix() {
     }
 }
 
+fn assert_unwrapped_hindi_glyphs(
+    db: &FontDb,
+    face: &vectorcraft_text::FontFace,
+    hindi_glyphs: &[&vectorcraft_text::PositionedGlyph],
+    hindi: &str,
+    text: &str,
+) {
+    for glyph in hindi_glyphs {
+        let used = db.face_by_id(glyph.font_id).expect("the Hindi glyph's loaded face");
+        assert!(used.file_data() == face.file_data(), "setup: Hindi uses the selected face bytes");
+        assert_eq!(used.face_index(), face.face_index(), "setup: Hindi uses the selected face index");
+        assert_ne!(glyph.gid, 0, "setup: Hindi glyph is present");
+        assert!(!glyph.rtl, "setup: Hindi prefix is LTR");
+        assert!(glyph.len > 0 && glyph.byte + glyph.len <= hindi.len(), "setup: Hindi glyph source range");
+        assert!(
+            text.is_char_boundary(glyph.byte) && text.is_char_boundary(glyph.byte + glyph.len),
+            "setup: glyph source ranges are UTF-8 boundaries"
+        );
+    }
+}
+
+fn assert_wrapped_hindi_glyphs(db: &FontDb, face: &vectorcraft_text::FontFace, lay: &vectorcraft_text::TextLayout, hindi: &str) {
+    for glyph in lay.glyphs.iter().filter(|g| g.byte < hindi.len()) {
+        let used = db.face_by_id(glyph.font_id).expect("the wrapped Hindi glyph's loaded face");
+        assert!(used.file_data() == face.file_data(), "setup: wrapped Hindi uses the selected face bytes");
+        assert_eq!(used.face_index(), face.face_index(), "setup: wrapped Hindi uses the selected face index");
+        assert_ne!(glyph.gid, 0, "setup: wrapped Hindi glyph is present");
+        assert!(!glyph.rtl, "setup: wrapped Hindi prefix stays LTR");
+    }
+}
+
 #[test]
 fn type_arrows_keep_devanagari_clusters_across_wrapped_lines() {
     use vectorcraft_doc::{Composer, Justify};
@@ -146,18 +179,7 @@ fn type_arrows_keep_devanagari_clusters_across_wrapped_lines() {
     assert!(!natural.vertical, "setup: horizontal text");
     let hindi_glyphs: Vec<_> = natural.glyphs.iter().filter(|g| g.byte < hindi.len()).collect();
     assert!(!hindi_glyphs.is_empty(), "setup: actual Hindi glyphs exist");
-    for glyph in &hindi_glyphs {
-        let used = db.face_by_id(glyph.font_id).expect("the Hindi glyph's loaded face");
-        assert!(used.file_data() == face.file_data(), "setup: Hindi uses the selected face bytes");
-        assert_eq!(used.face_index(), face.face_index(), "setup: Hindi uses the selected face index");
-        assert_ne!(glyph.gid, 0, "setup: Hindi glyph is present");
-        assert!(!glyph.rtl, "setup: Hindi prefix is LTR");
-        assert!(glyph.len > 0 && glyph.byte + glyph.len <= hindi.len(), "setup: Hindi glyph source range");
-        assert!(
-            text.is_char_boundary(glyph.byte) && text.is_char_boundary(glyph.byte + glyph.len),
-            "setup: glyph source ranges are UTF-8 boundaries"
-        );
-    }
+    assert_unwrapped_hindi_glyphs(db, &face, &hindi_glyphs, hindi, text);
     let prefix_width: f64 = hindi_glyphs.iter().filter(|g| g.byte < split).map(|g| g.advance).sum();
     let split_width: f64 = hindi_glyphs.iter().filter(|g| g.byte == split).map(|g| g.advance).sum();
     assert!(prefix_width.is_finite() && prefix_width > 0.0, "setup: prefix has positive finite advance");
@@ -179,13 +201,7 @@ fn type_arrows_keep_devanagari_clusters_across_wrapped_lines() {
     assert!(!lay.overflow, "setup: the full RTL suffix fits the tall frame");
     assert!(!lay.vertical, "setup: horizontal area text");
     assert!(lay.glyphs.iter().any(|g| g.rtl && g.byte > hindi.len()), "setup: actual RTL suffix selects Type's visual-arrow route");
-    for glyph in lay.glyphs.iter().filter(|g| g.byte < hindi.len()) {
-        let used = db.face_by_id(glyph.font_id).expect("the wrapped Hindi glyph's loaded face");
-        assert!(used.file_data() == face.file_data(), "setup: wrapped Hindi uses the selected face bytes");
-        assert_eq!(used.face_index(), face.face_index(), "setup: wrapped Hindi uses the selected face index");
-        assert_ne!(glyph.gid, 0, "setup: wrapped Hindi glyph is present");
-        assert!(!glyph.rtl, "setup: wrapped Hindi prefix stays LTR");
-    }
+    assert_wrapped_hindi_glyphs(db, &face, &lay, hindi);
     assert_eq!(edit::next_cluster(text, second), hindi.len(), "setup: logical cluster end is 18");
     assert_eq!(edit::prev_cluster(text, hindi.len()), second, "setup: logical cluster start is 6");
     assert_eq!(edit::prev_cluster(text, split), second, "setup: raw line endpoint 12 is inside the grapheme");
@@ -244,6 +260,219 @@ fn typing_is_one_coalesced_preview() {
     // A document change behind the tool's back (undo) starts a fresh session.
     let a4 = tool.text_input(&cx(&snap, &sel, &p), "!");
     assert!(a4.contains(&Action::Begin("Typing".into())));
+}
+
+/// What the engine does around Edit › Undo or Redo (`what`) that puts the document back to `to`:
+/// it ends the typing session, runs the step, tells the tool, then lets it finish the command.
+fn history_step(tool: &mut TypeTool, to: &Document, id: NodeId, what: &str) {
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    tool.set_option("endTyping", &json!(true));
+    tool.notify(&cx(to, &sel, &p), what);
+    assert_eq!(tool.after_command(&cx(to, &sel, &p)), vec![]);
+}
+
+fn type_in(tool: &mut TypeTool, d: &mut Document, s: &str) {
+    let (sel, p) = (Selection::default(), paint());
+    let snap = d.clone();
+    let acts = tool.text_input(&cx(d, &sel, &p), s);
+    apply(d, &snap, &acts);
+}
+
+fn plain_of(d: &Document, id: NodeId) -> String {
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    t.plain_text()
+}
+
+/// Undo of typing puts the caret where the typed text began, and Redo puts it after the text.
+#[test]
+fn undo_and_redo_of_typing_put_the_caret_where_the_text_changed() {
+    let (mut d, id, mut tool) = editing("XYZ");
+    let before = d.clone();
+    type_in(&mut tool, &mut d, "abc");
+    assert_eq!((plain_of(&d, id).as_str(), tool.caret), ("abcXYZ", 3));
+    let after = d.clone();
+    history_step(&mut tool, &before, id, "edit.undo");
+    assert_eq!((tool.caret, tool.anchor), (0, 0));
+    history_step(&mut tool, &after, id, "edit.redo");
+    assert_eq!((tool.caret, tool.anchor), (3, 3));
+    // Typing in the middle of the text: Undo goes back to where the typing began.
+    tool.caret = 4;
+    tool.anchor = 4;
+    type_in(&mut tool, &mut d, "-");
+    assert_eq!(plain_of(&d, id), "abcX-YZ");
+    history_step(&mut tool, &after, id, "edit.undo");
+    assert_eq!((tool.caret, tool.anchor), (4, 4));
+}
+
+/// Undo of a deletion puts the caret after the text it puts back, and Redo where it was taken out.
+#[test]
+fn undo_of_a_deletion_puts_the_caret_after_the_restored_text() {
+    let (mut d, id, mut tool) = editing("Hello big world");
+    let before = d.clone();
+    let snap = d.clone();
+    tool.caret = 10;
+    tool.anchor = 10;
+    let acts = key(&mut tool, &d, ToolKey::Backspace, Mods { alt: true, ..Default::default() });
+    apply(&mut d, &snap, &acts);
+    assert_eq!((plain_of(&d, id).as_str(), tool.caret), ("Hello world", 6));
+    let after = d.clone();
+    // The caret moved away before the Undo.
+    key(&mut tool, &d, ToolKey::End, Mods::default());
+    history_step(&mut tool, &before, id, "edit.undo");
+    assert_eq!((tool.caret, tool.anchor), (10, 10));
+    history_step(&mut tool, &after, id, "edit.redo");
+    assert_eq!((tool.caret, tool.anchor), (6, 6));
+}
+
+/// A step that changes no characters (a formatting change) leaves the caret and the selection, and
+/// the Undo of the typing before it still puts the caret where the typing began.
+#[test]
+fn undo_of_formatting_leaves_the_caret_and_selection() {
+    let (mut d, id, mut tool) = editing("Hello world");
+    let before = d.clone();
+    tool.caret = 5;
+    tool.anchor = 5;
+    type_in(&mut tool, &mut d, ",");
+    let typed = d.clone();
+    // A panel makes the typed text larger (a command from outside the tool).
+    let mut large = d.clone();
+    let NodeKind::Text(t) = &mut large.node_mut(id).unwrap().kind else { panic!("text") };
+    edit::style_range(&mut t.runs, 0, 6, |s| s.size = 30.0);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    tool.set_option("endTyping", &json!(true));
+    tool.after_command(&cx(&large, &sel, &p));
+    tool.anchor = 2;
+    tool.caret = 8;
+    history_step(&mut tool, &typed, id, "edit.undo");
+    assert_eq!((tool.anchor, tool.caret), (2, 8));
+    history_step(&mut tool, &before, id, "edit.undo");
+    assert_eq!((tool.anchor, tool.caret), (5, 5));
+}
+
+/// The caret lands on character boundaries in multi-byte text.
+#[test]
+fn undo_and_redo_keep_the_caret_on_character_boundaries() {
+    let (mut d, id, mut tool) = editing("café 🙂 ok");
+    let before = d.clone();
+    tool.caret = "café 🙂".len();
+    tool.anchor = tool.caret;
+    type_in(&mut tool, &mut d, "é🙂");
+    assert_eq!(plain_of(&d, id), "café 🙂é🙂 ok");
+    let after = d.clone();
+    history_step(&mut tool, &before, id, "edit.undo");
+    assert_eq!(tool.caret, "café 🙂".len());
+    history_step(&mut tool, &after, id, "edit.redo");
+    assert_eq!(tool.caret, "café 🙂é🙂".len());
+}
+
+/// Typing or deleting the same characters as the text next to it: Undo and Redo put the caret where
+/// the tool made the change, not at the other end of the repeated characters.
+#[test]
+fn undo_and_redo_of_repeated_characters_find_the_tools_own_edit() {
+    for (text, at, typed, undone, redone) in [("aaa", 0, "a", 0, 1), ("éé", 2, "é", 2, 4), ("ab ab", 3, "ab ", 3, 6)] {
+        let (mut d, id, mut tool) = editing(text);
+        let before = d.clone();
+        tool.caret = at;
+        tool.anchor = at;
+        type_in(&mut tool, &mut d, typed);
+        let after = d.clone();
+        history_step(&mut tool, &before, id, "edit.undo");
+        assert_eq!((tool.caret, tool.anchor), (undone, undone), "{text}: undo");
+        history_step(&mut tool, &after, id, "edit.redo");
+        assert_eq!((tool.caret, tool.anchor), (redone, redone), "{text}: redo");
+    }
+    // A deleted character next to the same character comes back with the caret after it.
+    let (mut d, id, mut tool) = editing("aaa");
+    let before = d.clone();
+    tool.caret = 1;
+    tool.anchor = 1;
+    let snap = d.clone();
+    let acts = key(&mut tool, &d, ToolKey::Backspace, Mods::default());
+    apply(&mut d, &snap, &acts);
+    assert_eq!(plain_of(&d, id), "aa");
+    history_step(&mut tool, &before, id, "edit.undo");
+    assert_eq!(tool.caret, 1);
+    // Two steps whose texts are each other's: each Undo and Redo finds its own step.
+    let (mut d, id, mut tool) = editing("aaa");
+    let first = d.clone();
+    type_in(&mut tool, &mut d, "a");
+    let second = d.clone();
+    key(&mut tool, &d, ToolKey::End, Mods::default());
+    let snap = d.clone();
+    let acts = key(&mut tool, &d, ToolKey::Backspace, Mods::default());
+    apply(&mut d, &snap, &acts);
+    let third = d.clone();
+    assert_eq!(plain_of(&third, id), "aaa");
+    for (to, what, at) in [(&second, "edit.undo", 4), (&first, "edit.undo", 0), (&second, "edit.redo", 1), (&third, "edit.redo", 3)] {
+        history_step(&mut tool, to, id, what);
+        assert_eq!(tool.caret, at, "{what} to {}", plain_of(to, id));
+    }
+    // A step from outside the tool after an Undo drops the undone step from Redo: Redo of the
+    // outside step does not take the dropped step's place.
+    let (mut d, id, mut tool) = editing("aaa");
+    let first = d.clone();
+    type_in(&mut tool, &mut d, "a");
+    history_step(&mut tool, &first, id, "edit.undo");
+    assert_eq!(tool.caret, 0);
+    let mut appended = first.clone();
+    let NodeKind::Text(t) = &mut appended.node_mut(id).unwrap().kind else { panic!("text") };
+    edit::replace_range(&mut t.runs, 3, 3, "a");
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    assert_eq!(tool.after_command(&cx(&appended, &sel, &p)), vec![]);
+    history_step(&mut tool, &first, id, "edit.undo");
+    history_step(&mut tool, &appended, id, "edit.redo");
+    assert_eq!(tool.caret, 4);
+    // A command from outside the tool that leaves the text as it is (a query) keeps the undone
+    // step for Redo.
+    let (mut d, id, mut tool) = editing("aaa");
+    let first = d.clone();
+    type_in(&mut tool, &mut d, "a");
+    let second = d.clone();
+    history_step(&mut tool, &first, id, "edit.undo");
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    assert_eq!(tool.after_command(&cx(&first, &sel, &p)), vec![]);
+    history_step(&mut tool, &second, id, "edit.redo");
+    assert_eq!(tool.caret, 1);
+    // Commands from outside the tool that repeat the change of a step the tool made are steps of
+    // their own: Undo of the last one does not take back the tool's step.
+    let (mut d, id, mut tool) = editing("aaa");
+    let first = d.clone();
+    type_in(&mut tool, &mut d, "a");
+    let typed = d.clone();
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    tool.set_option("endTyping", &json!(true));
+    let mut removed = typed.clone();
+    let NodeKind::Text(t) = &mut removed.node_mut(id).unwrap().kind else { panic!("text") };
+    edit::replace_range(&mut t.runs, 3, 4, "");
+    assert_eq!(tool.after_command(&cx(&removed, &sel, &p)), vec![]);
+    let mut appended = removed.clone();
+    let NodeKind::Text(t) = &mut appended.node_mut(id).unwrap().kind else { panic!("text") };
+    edit::replace_range(&mut t.runs, 3, 3, "a");
+    assert_eq!(tool.after_command(&cx(&appended, &sel, &p)), vec![]);
+    for (to, what, at) in [(&removed, "edit.undo", 3), (&typed, "edit.undo", 4), (&first, "edit.undo", 0), (&typed, "edit.redo", 1)] {
+        history_step(&mut tool, to, id, what);
+        assert_eq!(tool.caret, at, "{what} to {}", plain_of(to, id));
+    }
+    // A typing session that leaves the text as it was (a character typed and deleted again) does
+    // not stop Undo of the step before it from finding where that step typed.
+    let (mut d, id, mut tool) = editing("aaa");
+    let first = d.clone();
+    type_in(&mut tool, &mut d, "a");
+    key(&mut tool, &d, ToolKey::End, Mods::default());
+    // The session's previews each replace the text it started from.
+    let session = d.clone();
+    type_in(&mut tool, &mut d, "b");
+    let acts = key(&mut tool, &d, ToolKey::Backspace, Mods::default());
+    apply(&mut d, &session, &acts);
+    assert_eq!(plain_of(&d, id), "aaaa");
+    history_step(&mut tool, &d, id, "edit.undo");
+    history_step(&mut tool, &first, id, "edit.undo");
+    assert_eq!(tool.caret, 0);
 }
 
 #[test]
@@ -457,6 +686,147 @@ fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
         assert_eq!(tool.id(), id);
         assert!(tool.vertical);
     }
+}
+
+/// A press from `tool` at `from` with `down` held, dragged to `to` (none for a click) and released
+/// with `up` held → the actions of the release.
+fn gesture(tool: &mut TypeTool, c: &ToolContext, from: (f64, f64), to: Option<(f64, f64)>, down: Mods, up: Mods) -> Vec<Action> {
+    tool.pointer(c, &PointerEvent::new(PointerKind::Down, from.0, from.1).with_mods(down));
+    let end = to.unwrap_or(from);
+    if to.is_some() {
+        tool.pointer(c, &PointerEvent::new(PointerKind::Drag, end.0, end.1).with_mods(down));
+    }
+    tool.pointer(c, &PointerEvent::new(PointerKind::Up, end.0, end.1).with_mods(up))
+}
+
+/// The command that makes new type among `acts`, with its params.
+fn made(acts: &[Action]) -> Option<(&str, &Value)> {
+    acts.iter().find_map(|a| match a {
+        Action::Exec(cmd, p) if cmd == "text.create" || cmd == "text.createInPath" => Some((cmd.as_str(), p)),
+        _ => None,
+    })
+}
+
+/// [`crate::testutil::doc_with_rect`] plus an open path from (100, 400) to (400, 400).
+fn doc_with_rect_and_line() -> (Document, NodeId, NodeId) {
+    let (mut d, rect) = crate::testutil::doc_with_rect();
+    let l = d.layers[0].id;
+    let line = d.alloc_id();
+    let path = vectorcraft_geom::PathData::from_bezpath(&BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(100.0, 400.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 400.0)),
+    ]));
+    d.insert(Some(l), 1, Node::path(line, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    (d, rect, line)
+}
+
+/// Shift held at the press makes the new type as the horizontal or vertical counterpart of each
+/// Type tool would, for a click and for a drag; the keys at the release do not matter, and the
+/// next press without Shift acts as the tool chosen.
+#[test]
+fn shift_switches_between_the_horizontal_and_the_vertical_type_tool() {
+    let (d, rect) = crate::testutil::doc_with_rect();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    for (id, at, cmd) in [
+        ("type", (400.0, 400.0), "text.create"),
+        ("verticalType", (400.0, 400.0), "text.create"),
+        ("areaType", (100.0, 150.0), "text.createInPath"),
+        ("verticalAreaType", (100.0, 150.0), "text.createInPath"),
+        ("typeOnPath", (150.0, 100.0), "text.createInPath"),
+        ("verticalTypeOnPath", (150.0, 100.0), "text.createInPath"),
+    ] {
+        let vertical = id.starts_with("vertical");
+        let mut tool = TypeTool::new(id);
+        let acts = gesture(&mut tool, &c, at, None, SHIFT, Mods::default());
+        let (made_by, params) = made(&acts).unwrap_or_else(|| panic!("{id}: {acts:?}"));
+        assert_eq!(made_by, cmd, "{id}");
+        assert_eq!(params["vertical"], json!(!vertical), "{id} with Shift");
+        if cmd == "text.createInPath" {
+            assert_eq!(params["path"], json!(rect.0), "{id}");
+            assert_eq!(params["mode"], if id.contains("OnPath") { "onPath" } else { "area" }, "{id}");
+        }
+        assert_eq!(tool.id(), id, "the tool chosen stays");
+        let acts = gesture(&mut tool, &c, at, None, Mods::default(), SHIFT);
+        assert_eq!(made(&acts).map(|(_, p)| p["vertical"].clone()), Some(json!(vertical)), "{id} without Shift at the press");
+    }
+    // A frame dragged out with Shift held.
+    let mut tool = TypeTool::new("type");
+    let acts = gesture(&mut tool, &c, (300.0, 300.0), Some((400.0, 400.0)), SHIFT, Mods::default());
+    let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+    assert_eq!((cmd, &params["area"], &params["vertical"]), ("text.create", &json!({"width": 100.0, "height": 100.0}), &json!(true)));
+}
+
+/// Alt held at the press makes the new type as Type on a Path would with the Area Type tools and
+/// as Area Type would with the Type on a Path tools, keeping their writing direction; with Shift
+/// too, the direction switches as well. The Type tools have no counterpart for Alt.
+#[test]
+fn alt_switches_between_area_type_and_type_on_a_path() {
+    let (d, rect, line) = doc_with_rect_and_line();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let (on_line, on_rect) = ((250.0, 400.0), (100.0, 150.0));
+    for (id, at, mods, path, mode, vertical) in [
+        ("areaType", on_line, ALT, line, "onPath", false),
+        ("verticalAreaType", on_line, ALT, line, "onPath", true),
+        ("typeOnPath", on_rect, ALT, rect, "area", false),
+        ("verticalTypeOnPath", on_rect, ALT, rect, "area", true),
+        ("areaType", on_line, SHIFT_ALT, line, "onPath", true),
+        ("verticalTypeOnPath", on_rect, SHIFT_ALT, rect, "area", false),
+    ] {
+        let mut tool = TypeTool::new(id);
+        let acts = gesture(&mut tool, &c, at, None, mods, Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{id} {mods:?}: {acts:?}"));
+        assert_eq!(cmd, "text.createInPath", "{id} {mods:?}");
+        assert_eq!((&params["path"], &params["mode"], &params["vertical"]), (&json!(path.0), &json!(mode), &json!(vertical)), "{id} {mods:?}");
+        assert_eq!(tool.id(), id);
+    }
+    // An open path is no frame for the Area Type tool without Alt, and Type on a Path keeps the
+    // rectangle as a baseline.
+    let acts = gesture(&mut TypeTool::new("areaType"), &c, on_line, None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.create"), "{acts:?}");
+    let acts = gesture(&mut TypeTool::new("typeOnPath"), &c, on_rect, None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(_, p)| p["mode"].clone()), Some(json!("onPath")), "{acts:?}");
+    for id in ["type", "verticalType"] {
+        let acts = gesture(&mut TypeTool::new(id), &c, (450.0, 450.0), None, ALT, Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{id}: {acts:?}"));
+        assert_eq!((cmd, &params["vertical"]), ("text.create", &json!(id == "verticalType")), "{id} with Alt");
+    }
+}
+
+/// The pointer shows the Type tool that a press would act as with the keys held, and while a press
+/// is held, the one it acts as.
+#[test]
+fn the_pointer_shows_the_type_tool_shift_or_alt_switches_to() {
+    let (d, _, _) = doc_with_rect_and_line();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let (away, on_line) = (Point::new(450.0, 450.0), Point::new(250.0, 400.0));
+    let cursor = |id: &str, at: Point, mods: Mods| TypeTool::new(id).cursor(&c, at, mods);
+    assert_eq!(cursor("type", away, SHIFT), Cursor::TypeVertical);
+    assert_eq!(cursor("verticalType", away, SHIFT), Cursor::Text);
+    assert_eq!(cursor("verticalAreaType", away, SHIFT), Cursor::Text);
+    assert_eq!(cursor("areaType", on_line, Mods::default()), Cursor::Text, "no frame for area type");
+    assert_eq!(cursor("areaType", on_line, ALT), Cursor::Crosshair, "a baseline for type on a path");
+    assert_eq!(cursor("typeOnPath", on_line, ALT), Cursor::Text);
+    let mut tool = TypeTool::new("type");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y).with_mods(SHIFT));
+    assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::TypeVertical, "the press keeps the tool it acts as");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, away.x, away.y));
+    assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::Text);
+}
+
+/// While type is being edited, Shift and Alt switch no tool: a frame dragged out is the tool
+/// chosen's, and the pointer stays its own.
+#[test]
+fn shift_and_alt_switch_no_tool_while_type_is_edited() {
+    let (d, _, mut tool) = editing("Hello");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    assert_eq!(tool.cursor(&c, Point::new(400.0, 400.0), SHIFT), Cursor::Text);
+    let acts = gesture(&mut tool, &c, (300.0, 300.0), Some((400.0, 400.0)), SHIFT_ALT, SHIFT_ALT);
+    let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+    assert_eq!((cmd, &params["vertical"]), ("text.create", &json!(false)));
 }
 
 #[test]
@@ -1098,4 +1468,23 @@ fn ime_surrounding_reports_the_document_when_it_changed_under_the_session() {
     let stale = tool.ime_surrounding(&cx(&d, &sel, &p), 4000);
     assert_eq!(stale, ImeSurrounding::Available { text: "XYZ".into(), cursor: 3, anchor: 3 });
     assert!(!tool.ime_session_matches_document(&cx(&d, &sel, &p)), "the commit starts a fresh session");
+}
+
+#[test]
+fn shift_enter_inserts_soft_return() {
+    let (mut d, id, mut tool) = editing("Hello World");
+    let (sel, p) = (Selection::default(), paint());
+    tool.caret = 5;
+    tool.anchor = 5;
+    let snap = d.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    let acts = tool.key(&cx(&d, &sel, &p), ToolKey::Enter, shift);
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "Hello\u{2028} World");
+    // Plain Enter inserts standard newline
+    let acts = tool.key(&cx(&d, &sel, &p), ToolKey::Enter, Mods::default());
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "Hello\u{2028}\n World");
 }

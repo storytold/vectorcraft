@@ -17,7 +17,9 @@ use vectorcraft_pathops::{Cap, Join};
 use crate::{Action, Tool, ToolContext};
 
 pub use anchor::AnchorTool;
-pub use curvature::{CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_smooth};
+pub use curvature::{
+    CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_remove, curvature_smooth,
+};
 pub use family::FamilyTool;
 pub use gesture::GestureTool;
 
@@ -35,6 +37,16 @@ pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
 pub fn min_fidelity(id: &str) -> f64 {
     if id == "smooth" { SMOOTH_MIN_FIDELITY } else { MIN_FIDELITY }
 }
+
+/// The Blob Brush's or the Eraser's width at pen `pressure` (0..1) with Size set to Pressure: `size` −
+/// `variation` at the lightest pressure to `size` + `variation` at the heaviest, at least
+/// [`MIN_BRUSH_SIZE`].
+pub fn pressure_size(size: f64, variation: f64, pressure: f64) -> f64 {
+    (size + variation * (2.0 * pressure.clamp(0.0, 1.0) - 1.0)).max(MIN_BRUSH_SIZE)
+}
+
+/// The narrowest a Blob Brush or Eraser stroke gets, in points (their Size field's minimum).
+pub const MIN_BRUSH_SIZE: f64 = 0.1;
 
 /// Create a drawing tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {

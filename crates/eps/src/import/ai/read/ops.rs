@@ -1,10 +1,52 @@
 use super::containers::close;
 use super::document::slot_of;
 use super::types::{BLENDS, FLIP, Frame, IGNORED, Kind, MAX_DEPTH};
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, HashMap, HashSet, Instance, Knockout,
+    LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+};
 
 impl<'a> Reader<'a> {
     // ---- operators -------------------------------------------------------------------------
+
+    fn end_array(&mut self) -> Result<(), String> {
+        // The innermost `[` still on the stack (the stack is cut back by operators).
+        let mut at = self.stack.len();
+        while let Some(m) = self.marks.pop() {
+            if matches!(self.stack.get(m), Some(V::Mark)) {
+                at = m;
+                break;
+            }
+        }
+        let items: Vec<V> = self.stack.split_off(at).into_iter().skip(1).collect();
+        self.push(V::Arr(items))
+    }
+
+    fn add_object_entry(&mut self) {
+        if let Some(Frame { kind: Kind::Obj(o), base, .. }) = self.frames.last_mut() {
+            obj::add_entry(o, &mut self.stack, *base);
+            // Binary data in ASCII85 follows, up to its `~>`: a `/Binary` dictionary's
+            // (`/ASCII85Decode ,`) or a non-native art object's (`/ForeignObject`'s
+            // `/Data ,`, the PDF it keeps), in comment lines. ASCII85 has `_`, so a line
+            // of it may start with `%_` and read as hidden tokens: a `(` there would open
+            // a string that swallows the rest of the layer.
+            let key = o.entries.last().and_then(|(k, _)| k.as_deref());
+            if o.ty == "Binary" && key == Some("ASCII85Decode") {
+                self.lex.skip_past(b"~>");
+            } else if o.ty == "ForeignObject" && key == Some("Data") {
+                self.foreign_data = Some(self.lex.skip_past(b"~>").to_vec());
+            }
+        }
+    }
+
+    fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
+        if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
+            // `X=` also introduces legacy text frame art, read by `text_frames`.
+            return Ok(());
+        }
+        self.end_path_quietly();
+        self.open(Kind::Mask, hidden)
+    }
 
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         if self.blend_record.is_some() {
@@ -18,45 +60,14 @@ impl<'a> Reader<'a> {
                 self.marks.push(self.stack.len());
                 return self.push(V::Mark);
             }
-            "]" => {
-                // The innermost `[` still on the stack (the stack is cut back by operators).
-                let mut at = self.stack.len();
-                while let Some(m) = self.marks.pop() {
-                    if matches!(self.stack.get(m), Some(V::Mark)) {
-                        at = m;
-                        break;
-                    }
-                }
-                let items: Vec<V> = self.stack.split_off(at).into_iter().skip(1).collect();
-                return self.push(V::Arr(items));
-            }
+            "]" => return self.end_array(),
             ":" => return self.begin_obj(hidden),
             "," => {
-                if let Some(Frame { kind: Kind::Obj(o), base, .. }) = self.frames.last_mut() {
-                    obj::add_entry(o, &mut self.stack, *base);
-                    // Binary data in ASCII85 follows, up to its `~>`: a `/Binary` dictionary's
-                    // (`/ASCII85Decode ,`) or a non-native art object's (`/ForeignObject`'s
-                    // `/Data ,`, the PDF it keeps), in comment lines. ASCII85 has `_`, so a line
-                    // of it may start with `%_` and read as hidden tokens: a `(` there would open
-                    // a string that swallows the rest of the layer.
-                    let key = o.entries.last().and_then(|(k, _)| k.as_deref());
-                    if o.ty == "Binary" && key == Some("ASCII85Decode") {
-                        self.lex.skip_past(b"~>");
-                    } else if o.ty == "ForeignObject" && key == Some("Data") {
-                        self.foreign_data = Some(self.lex.skip_past(b"~>").to_vec());
-                    }
-                }
+                self.add_object_entry();
                 return Ok(());
             }
             ";" => return self.end_obj(),
-            "X=" => {
-                if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
-                    // `X=` also introduces legacy text frame art, read by `text_frames`.
-                    return Ok(());
-                }
-                self.end_path_quietly();
-                return self.open(Kind::Mask, hidden);
-            }
+            "X=" => return self.open_mask_object(hidden),
             "X+" if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) => return self.end_mask(),
             "X+" => return Ok(()),
             _ => {}

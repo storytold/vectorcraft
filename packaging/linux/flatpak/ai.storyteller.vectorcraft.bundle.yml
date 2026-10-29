@@ -24,6 +24,8 @@ finish-args:
   - --socket=fallback-x11
   # GPU access for the wgpu renderer (Vulkan, or GL as a fallback).
   - --device=dri
+  # Network for the update check against GitHub releases.
+  - --share=network
   # Cursor theme: without the cursor-shape protocol (e.g. GNOME 46) winit loads the theme itself.
   # The sandbox sets no XCURSOR_PATH and ships no cursor themes, so the pointer would turn invisible
   # over the window. The host's themes are mounted under /run/host (#2450).
@@ -36,9 +38,7 @@ finish-args:
   # to a sandbox: it exposes /usr/share/fonts and ~/.local/share/fonts, and nothing else. Without
   # this the font list holds none of the activated families, while native apps see them.
   - --filesystem=~/.fonts:ro
-  # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.vectorcraft` exposes it
-  # to host agents) and home/host filesystem access beyond the read-only folders above.
+  # Deliberately not granted: home/host filesystem access beyond the read-only folders above.
 modules:
   - name: vectorcraft
     buildsystem: simple

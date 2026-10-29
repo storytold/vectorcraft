@@ -29,7 +29,7 @@ pub use status_bar::status_bar;
 use status_bar::{StatusReadoutWidths, status_readouts};
 #[cfg(test)]
 use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
-pub use tabs::{doc_tabs, isolation_bar};
+pub use tabs::{doc_tabs, isolation_bar, step_document};
 
 /// The application bar's height, in points (compact, as in PhotoCraft).
 pub const APP_BAR_HEIGHT: f32 = 32.0;

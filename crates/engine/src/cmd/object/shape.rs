@@ -1,5 +1,8 @@
 use super::spans::Span;
-use super::*;
+use super::{
+    BTreeSet, CornerKind, EngineError, LiveCorners, LiveShape, NodeId, NodeKind, Result, Session, Value, bad, check_numbers, check_switches,
+    convert_radii_relative, ok, selected_roots, set_corners, targets,
+};
 
 /// The largest scale of 0 or more at which `spans`, with the margins that scale grown by `k`,
 /// reach across `size` together. Returns 1 when their geometric boxes reach 1e-9 or less across

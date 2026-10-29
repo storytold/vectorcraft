@@ -1,6 +1,6 @@
 use super::dnd::{group_of, selection};
 use super::libraries::SwatchLibraries;
-use super::*;
+use super::{Kind, LibraryKind, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate, widgets};
 
 /// The selected swatches and groups that can be deleted (all but None and Registration).
 pub(super) fn deletable(sel: &[String]) -> Vec<String> {

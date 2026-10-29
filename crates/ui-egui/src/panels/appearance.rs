@@ -219,12 +219,10 @@ fn text(ui: &Ui, pos: egui::Pos2, s: &str, strong: bool) {
     ui.painter().text(pos, egui::Align2::LEFT_CENTER, s, egui::FontId::proportional(12.5), if strong { t.text_strong } else { t.text });
 }
 
-fn chip(ui: &Ui, r: Rect, p: &Paint) {
-    let t = Tokens::get(ui.ctx());
+fn chip(ui: &Ui, r: Rect, p: &Paint, mixed: bool) {
     ui.painter().rect_filled(r.expand(1.0), 0.0, egui::Color32::BLACK);
-    widgets::paint_chip(ui, r, p);
+    widgets::proxy_chip(ui, r, p, mixed, None);
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, egui::Color32::WHITE), StrokeKind::Inside);
-    let _ = t;
 }
 
 /// A dotted-underline link drawn at `pos`; returns clicked.
@@ -271,13 +269,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         };
         if !hide_thumb {
             let th = Rect::from_min_size(r.left_center() + vec2(6.0, -12.0), vec2(24.0, 24.0));
-            // Objects whose fills differ show no one of them.
+            // Objects whose fills differ show "?", like the Properties panel's Fill chip.
             let fill = match &node {
-                Some(_) if mix.as_ref().is_some_and(|m| m.fills_differ) => Paint::None,
                 Some(n) => n.appearance.fill_paint(),
                 None => app.session.paint.fill.clone(),
             };
-            chip(ui, th, &fill);
+            chip(ui, th, &fill, mix.as_ref().is_some_and(|m| m.fills_differ));
             if let Some(n) = node.as_ref().filter(|_| !mixed) {
                 thumbnail_drag(ui, th, n.id);
             }
@@ -394,7 +391,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if link(ui, pos2(lx, r.center().y), ("ap-def-link", i), tl!("Stroke:")) {
             app.ui.open_panel = Some("stroke".into());
         }
-        chip(ui, Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0)), it.paint());
+        chip(ui, Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0)), it.paint(), false);
         if let AppearanceItem::Stroke(st) = it {
             let w = app.session.stroke_unit().format(st.width);
             text(ui, pos2(r.left() + EYE_W + 106.0, r.center().y), &w, false);
@@ -496,7 +493,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         // Swatch with a swatches popup that sets this item's paint; Shift-click opens the Color
         // panel's mixer on this row instead.
         let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0));
-        chip(ui, cr, paint);
+        chip(ui, cr, paint, false);
         let cresp = ui
             .interact(cr.expand(2.0), ui.scope_id().with(("ap-chip", i)), Sense::click())
             .on_hover_text(tl!("Click to choose a swatch, Shift-click to mix a colour"));
@@ -683,7 +680,7 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
     if characters {
         for (k, stroke) in [false, true].into_iter().enumerate() {
             let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
-            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p));
+            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p), false);
         }
     }
     // An image's row has no members to target.

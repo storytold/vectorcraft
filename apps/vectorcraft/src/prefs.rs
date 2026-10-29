@@ -1,4 +1,4 @@
-use super::*;
+use super::{VectorcraftApp, fileio, prefs_dir};
 
 /// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
 /// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).

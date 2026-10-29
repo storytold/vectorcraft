@@ -1,5 +1,5 @@
 use super::para_style::ParaDirection;
-use super::*;
+use super::{Appearance, AppearanceItem, Color, Dash, Deserialize, FillLayer, LineCap, LineJoin, Paint, Serialize, StrokeAlign, StrokeLayer};
 
 /// Character attributes (the Character panel).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

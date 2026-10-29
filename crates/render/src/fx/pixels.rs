@@ -6,7 +6,10 @@ use super::raster::{
     DRAG_PIXEL_BUDGET, PIXEL_BUDGET, PixelEntry, ViewCrop, content_changing, doc_raster_ppi, drag_scale, draw_placed, draw_scaled, filter_region,
     filter_region_within, hard_edged, image_size, linear_key, looks_around, pan_margin,
 };
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, Channels, DefaultHasher, Document, FillRule, Frame, GeomContext, Hash, Hasher, Ink, Node, PixelFx,
+    RasterFx, Rect, RenderContext, Renderer, Shape, blend_mode, effects, fill_rule, paint, peniko,
+};
 
 impl Renderer {
     /// Paint `content` through the content-changing effects of `rfx` (Gaussian Blur, Feather, the
@@ -91,11 +94,11 @@ impl Renderer {
         let whole = fits && k >= 1.0;
         let in_view = (!whole).then(|| ViewCrop::of(f.view, room));
         let stamp = self.stamp;
-        let channels = match f.ink {
+        let channels = match f.ink.base() {
             Ink::Cmy => effects::pixel::Channels::CmyPlane,
             Ink::K => effects::pixel::Channels::KPlane,
             Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
-            Ink::Display | Ink::RichBlack => effects::pixel::Channels::Rgb,
+            _ => effects::pixel::Channels::Rgb,
         };
         // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
         let ppi = doc_raster_ppi(f.doc);
@@ -364,11 +367,12 @@ impl Renderer {
     /// Rasterize or De-Interlace anywhere in the content follows), the knockout `n` inherits and,
     /// while `n` holds the isolated group, isolation mode; the pattern definitions, symbols and
     /// brush library it reads; for images and placed documents their pixels and files, the
-    /// layer's Dim Images and the options they are drawn with; for type the fonts, whether
-    /// overprinting shows ([`crate::proof::overprints`]) and Document Setup's substitution
-    /// highlights; and the plug-ins installed, when an object in it has a plug-in effect, and
-    /// when it shows symbol or pattern art and an object in the document's symbol or pattern art
-    /// has one.
+    /// layer's Dim Images and the options they are drawn with (with
+    /// [`crate::RenderOptions::kept_images_only`], also which pixels and undecodable notes the
+    /// image store holds); for type the fonts, whether overprinting shows
+    /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
+    /// plug-ins installed, when an object in it has a plug-in effect, and when it shows symbol or
+    /// pattern art and an object in the document's symbol or pattern art has one.
     pub(crate) fn raster_inputs(&mut self, f: &Frame, n: &Node, reads: Reads) -> Inputs {
         let doc = self.doc_inputs(f.doc);
         let mut h = DefaultHasher::new();
@@ -392,6 +396,9 @@ impl Renderer {
             (doc.images, self.dim_images.map(f32::to_bits), o.smooth_images, o.image_mips, o.trace_views, o.progressive_placed).hash(&mut h);
             o.trace_source.as_deref().hash(&mut h);
             o.mark_undecoded_images.hash(&mut h);
+            // With only kept pixels drawn, a raster is made again once the store holds more pixels
+            // or notes an image as undecodable.
+            o.kept_images_only.then(|| crate::images::store().added()).hash(&mut h);
         }
         if reads.brushes {
             self.brushes.library_key(f.doc, self.stamp).hash(&mut h);

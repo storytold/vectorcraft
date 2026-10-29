@@ -92,6 +92,11 @@ impl<'a> Lexer<'a> {
         self.pos
     }
 
+    /// Look for the next token at `pos` again (the end of the data at most).
+    pub fn seek(&mut self, pos: usize) {
+        self.pos = pos.min(self.src.len());
+    }
+
     /// The data from `from` to `to` (empty where that isn't in it).
     pub fn slice(&self, from: usize, to: usize) -> &'a [u8] {
         self.src.get(from..to).unwrap_or_default()

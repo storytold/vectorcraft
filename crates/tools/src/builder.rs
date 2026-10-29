@@ -38,9 +38,9 @@ use live_paint::LpHover;
 use live_paint::lp_color;
 pub use live_paint::{LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE, LivePaintBucketTool, LivePaintSelectionTool};
 pub use lookup::{
-    EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, drawn_outlines, edge_near, edges, face_at, faces, is_live_paint,
-    leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for, sources,
-    visible_edge_near, visible_face_at,
+    EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, builder_members, drawn_outlines, edge_near, edges, face_at, faces,
+    is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for,
+    sources, visible_edge_near, visible_face_at,
 };
 pub use map::{BuilderMap, HATCH, HIGHLIGHT_RED, Hit, Touched, hatch, maps_built, sample_polyline, sorted_roots};
 /// Small, Medium and Large gap lengths in points.
@@ -142,8 +142,8 @@ fn step_swatch(list: &[&Swatch], fill: &Paint, last: Option<usize>, forward: boo
 /// red, and the gesture deletes the regions it touches, the pieces of open paths and the edges
 /// (outline pieces between the points where paths meet) it passes over. With Shift held at the
 /// press, the drag draws a rectangular marquee and touches the regions it reaches (see
-/// [`BuilderMap::regions_in_marquee`]): they merge, or with Alt they are deleted. Its options are
-/// [`ShapeBuilderOptions`].
+/// [`BuilderMap::regions_in_marquee`]): they merge, or with Alt they are deleted. Escape during a
+/// drag cancels it. Its options are [`ShapeBuilderOptions`].
 #[derive(Default)]
 pub struct ShapeBuilderTool {
     cache: RegionCache,
@@ -461,13 +461,21 @@ impl Tool for ShapeBuilderTool {
     }
 
     /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch
-    /// before or after the current fill.
+    /// before or after the current fill. Escape during a drag cancels it: the release after it
+    /// merges and deletes nothing.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)
+        (self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)) || (self.dragging && key == ToolKey::Escape)
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if !self.claims_key(cx, key) {
+            return vec![];
+        }
+        if key == ToolKey::Escape {
+            self.dragging = false;
+            self.points.clear();
+            self.touched = Touched::default();
+            (self.marquee, self.hover, self.far) = (None, None, false);
             return vec![];
         }
         let list = color_swatches(cx.doc);

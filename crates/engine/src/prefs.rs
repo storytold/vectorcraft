@@ -1,4 +1,4 @@
-use super::*;
+use super::{Color, EyedropperOptions, PathfinderOptions, Value, cmd};
 
 /// Where new art goes (Illustrator's drawing modes, Shift+D cycles).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -27,6 +27,12 @@ pub struct Prefs {
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
     pub use_preview_bounds: bool,
+    /// Align panel menu › Align to Glyph Bounds › Point Text: Align and Distribute measure point
+    /// type by the ink of its glyphs instead of its em box.
+    pub align_glyph_bounds_point: bool,
+    /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
+    /// its frame.
+    pub align_glyph_bounds_area: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -197,11 +203,19 @@ pub struct Prefs {
     /// Pathfinder panel › Pathfinder Options (`object.pathfinder.options`; a preference group, see
     /// [`cmd::prefscmds::PREF_GROUPS`]).
     pub pathfinder: PathfinderOptions,
+    /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
+    /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub glyph_snap: vectorcraft_tools::GlyphSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flattener_presets: Vec<cmd::FlattenerPreset>,
+    /// Image Trace panel › Manage Presets: the user's tracing presets (the built-in ones aren't
+    /// stored). Not a `prefs.set` key or group (resetting the preferences keeps them):
+    /// `imageTrace.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub trace_presets: Vec<cmd::TracePreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -242,6 +256,12 @@ pub struct Prefs {
     /// Preferences dialog field: resetting the preferences keeps it; `webExport.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub web_export_presets: Vec<cmd::webexport::WebPreset>,
+    /// The VectorCraft Options a native Save or Save As used last (Preview, Embed ICC Profiles,
+    /// Create PDF-Compatible File…; not the artboards it picked, nor Use Compression, which its
+    /// preference decides): `file.formatOptions` offers them for a document not yet saved as a
+    /// native file. Not a Preferences dialog field.
+    #[serde(skip_serializing_if = "serde_json::Map::is_empty")]
+    pub native_save_options: serde_json::Map<String, serde_json::Value>,
     /// Save for Web: the settings the dialog opens on (`webExport.settings`); none until set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_export_settings: Option<cmd::webexport::WebSettings>,
@@ -306,6 +326,8 @@ impl Default for Prefs {
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
+            align_glyph_bounds_point: false,
+            align_glyph_bounds_area: false,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
@@ -423,7 +445,9 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             pathfinder: Default::default(),
+            glyph_snap: Default::default(),
             flattener_presets: vec![],
+            trace_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,
@@ -436,6 +460,7 @@ impl Default for Prefs {
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],
+            native_save_options: serde_json::Map::new(),
             web_export_settings: None,
             print_presets: vec![],
             constrain_proportions: false,

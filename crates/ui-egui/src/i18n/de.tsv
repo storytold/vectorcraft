@@ -156,6 +156,8 @@
 	Anchor Point	Ankerpunkt
 	Anchor Point Tool	Ankerpunkt-Werkzeug
 	Anchor Points	Ankerpunkte
+	"In" Control Points	„Eingehende“ Kontrollpunkte
+	"Out" Control Points	„Ausgehende“ Kontrollpunkte
 	Anchor Points, Handle, and Bounding Box Display	Anzeige von Ankerpunkten, Griffen und Begrenzungsrahmen
 	Anchor/Path Labels	Anker-/Pfadbeschriftungen
 	Anchors:	Ankerpunkte:
@@ -541,6 +543,7 @@ font-technology	Variable	Variabel
 	Complexity:	Komplexität:
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Composite-Farben werden in dieses Profil konvertiert; Separationen werden damit erzeugt, wenn es ein CMYK-Profil ist.
 	Compound Path	Zusammengesetzter Pfad
+	Compound Shape	Zusammengesetzte Form
 	Compress (RLE)	Komprimieren (RLE)
 	Compress text and line art	Text und Strichgrafiken komprimieren
 	Compression	Komprimierung
@@ -966,7 +969,6 @@ font-technology	Variable	Variabel
 	Exit Isolation Mode	Isolationsmodus beenden
 	Expand	Umwandeln
 	Expand Appearance	Aussehen umwandeln
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	„Umwandeln“ gilt für zusammengesetzte Formen (Alt-Klick auf einen Formmodus) – geplant
 	Expand Brush Strokes	Pinselkonturen umwandeln
 	Expand Compound Shape	Zusammengesetzte Form umwandeln
 	Expand Gradient Mesh	Verlaufsgitter umwandeln
@@ -1126,6 +1128,9 @@ font-technology	Variable	Variabel
 	Increase Font Size by Five Steps	Schriftgrad um fünf Schritte erhöhen
 	Reset Tracking and Kerning	Laufweite und Kerning zurücksetzen
 	Reset Horizontal Scale	Horizontale Skalierung zurücksetzen
+	Highlight Font Name	Schriftname hervorheben
+	Highlight Kerning	Kerning hervorheben
+	Highlight Tracking	Laufweite hervorheben
 	Spacing	Abstand
 	Step Type	Text schrittweise ändern
 	Fit in View	In Ansicht einpassen
@@ -1524,6 +1529,12 @@ file-filter	Templates	Vorlagen
 	Image Trace	Bildnachzeichner
 	Image Tracing	Bildnachzeichnung
 	Tracing Presets	Nachzeichnervorgaben
+	Manage Presets	Vorgaben verwalten
+	Save as New Preset…	Als neue Vorgabe speichern…
+	Rename…	Umbenennen…
+	Rename Preset	Vorgabe umbenennen
+	Save Image Trace Preset	Bildnachzeichner-Vorgabe speichern
+	Delete Image Trace Preset	Bildnachzeichner-Vorgabe löschen
 	Image Trace Presets	Bildnachzeichner-Vorgaben
 	Image:	Bild:
 	Images:	Bilder:
@@ -1965,6 +1976,7 @@ file-filter	Templates	Vorlagen
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel
 	New Character Style	Neues Zeichenformat
+	New Character Style…	Neues Zeichenformat…
 	New Color Group	Neue Farbgruppe
 	New Color Group…	Neue Farbgruppe…
 	New Document Presets	Vorgaben für neue Dokumente
@@ -1980,6 +1992,7 @@ file-filter	Templates	Vorlagen
 	New Opacity Masks Are Clipping	Neue Deckkraftmasken sind Schnittmasken
 	New Opacity Masks Are Inverted	Neue Deckkraftmasken sind invertiert
 	New Paragraph Style	Neues Absatzformat
+	New Paragraph Style…	Neues Absatzformat…
 	New Pattern Brush from Selection	Neuer Musterpinsel aus Auswahl
 	New PDF Preset	Neue PDF-Vorgabe
 	New Print Preset	Neue Druckvorgabe
@@ -1993,6 +2006,8 @@ file-filter	Templates	Vorlagen
 	New View	Neue Ansicht
 	New View…	Neue Ansicht…
 	New Window	Neues Fenster
+	Next Document	Nächstes Dokument
+	Previous Document	Vorheriges Dokument
 	New Without Dialog	Neu ohne Dialogfeld
 	New Workspace	Neuer Arbeitsbereich
 	New Workspace…	Neuer Arbeitsbereich…
@@ -2840,6 +2855,7 @@ mark-style	Japanese	Japanisch
 	Locked	Gesperrt
 	Hidden	Ausgeblendet
 	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` steht für geänderte Einstellungen: Speichern Sie die Vorgabe unter einem anderen Namen
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands and tools	Befehle und Werkzeuge suchen
 	Search commands and tools…	Befehle und Werkzeuge suchen…
@@ -2923,6 +2939,7 @@ mark-style	Japanese	Japanisch
 	Shape Builder Regions	Formerstellungsbereiche
 	Shape Builder Tool	Formerstellungs-Werkzeug
 	Shape Effects	Formeffekte
+	Shape Mode	Formmodus
 	Shape Modes:	Formmodi:
 	Shape Properties:	Formeigenschaften:
 	Shaper Tool	Shaper-Werkzeug
@@ -2981,6 +2998,7 @@ mark-style	Japanese	Japanisch
 	Show Original Path	Originalpfad einblenden
 	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
 	Auto-Simplify	Automatisch vereinfachen
+	Auto-Smooth	Automatisch glätten
 	Color Panel Options	Optionen für das Farbbedienfeld
 	Show Package	Paket anzeigen
 	Show Panel	Bedienfeld einblenden
@@ -3017,6 +3035,7 @@ mark-style	Japanese	Japanisch
 	Simplify	Vereinfachen
 	Simplify:	Vereinfachen:
 	Simplify…	Vereinfachen…
+	Smooth…	Glätten…
 	Simulate Colored Paper	Farbiges Papier simulieren
 	Simulate Paper	Papier simulieren
 	Double Column	Zweispaltig
@@ -3024,6 +3043,7 @@ mark-style	Japanese	Japanisch
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
 	Single-line Composer	Einzeilen-Setzer
+	Toggle Line Composer	Zeilensetzer umschalten
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
 	Size Tile to Art	Kachelgröße an Grafik anpassen
@@ -3138,6 +3158,11 @@ effect	Points	Punkte
 	Stroke	Kontur
 	Stroke (X), double-click for the Color Picker	Kontur (X), Doppelklick öffnet den Farbwähler
 	Stroke Color	Konturfarbe
+	Fill Gradient	Flächenverlauf
+	Stroke Gradient	Konturverlauf
+	Fill Pattern	Flächenmuster
+	Stroke Pattern	Konturmuster
+	Patterns	Muster
 	Stroke Options	Konturoptionen
 	Character:	Zeichen:
 	Character options	Zeichenoptionen
@@ -3194,6 +3219,7 @@ effect	Points	Punkte
 	Swatch Options…	Farbfeldoptionen…
 	Swatch Tiles	Farbfeldkacheln
 	Swatches	Farbfelder
+	Switch Units	Einheiten wechseln
 	Switch workspace	Arbeitsbereich wechseln
 	Add Content	Inhalt hinzufügen
 	Click to apply to the selected type	Klicken, um auf den ausgewählten Text anzuwenden
@@ -3411,6 +3437,7 @@ effect	Points	Punkte
 	Unlock Guides	Hilfslinien entsperren
 	Unnamed Objects	Unbenannte Objekte
 	Unprintable margin:	Nicht druckbarer Rand:
+	Unselected Artwork	Nicht ausgewählte Grafik
 	Unshift	Verschiebung aufheben
 	Untitled	Unbenannt
 	Update Link	Verknüpfung aktualisieren
@@ -3718,6 +3745,13 @@ theme	Appearance	Erscheinungsbild
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
 @msg	select some type first	wählen Sie zuerst Text aus
+@msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
+@msg	the selection has no gradient stroke	die Auswahl hat keinen Konturverlauf
+@msg	the selection has no pattern fill	die Auswahl hat kein Flächenmuster
+@msg	the selection has no pattern stroke	die Auswahl hat kein Konturmuster
+@msg	no gradient swatch `{name}`	kein Verlaufsfarbfeld `{name}`
+@msg	no pattern swatch `{name}`	kein Musterfarbfeld `{name}`
+@msg	the library item is damaged	das Bibliothekselement ist beschädigt
 @msg	{_1} has no {_2} style	{_1} hat keinen Schnitt „{_2}“
 @msg	a layer couldn't be read	eine Ebene konnte nicht gelesen werden
 @msg	it has more than one artboard	es enthält mehr als eine Zeichenfläche
@@ -3823,8 +3857,10 @@ theme	Appearance	Erscheinungsbild
 @msg	`freeform.points` must be an array	`freeform.points` muss ein Array sein
 @msg	`freeform.lines` must be an array	`freeform.lines` muss ein Array sein
 @msg	`gradient` must be an object	`gradient` muss ein Objekt sein
+@msg	`groupColors` must be an array	`groupColors` muss ein Array sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
+@msg	`preserve` must be an object	`preserve` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
@@ -3845,6 +3881,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
 @msg	`{key}` must be one of {_1}	`{key}` muss einer der folgenden Werte sein: {_1}
 @msg	`{key}` must be true or false	`{key}` muss true oder false sein
+@msg	`top` and `below` can't both be true	`top` und `below` können nicht beide true sein
 @msg	`select` must be true or false	`select` muss true oder false sein
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` und `maxAnchors` müssen ganze Zahlen sein
 @msg	`{key}` must be a number not below 0	`{key}` muss eine Zahl nicht kleiner als 0 sein
@@ -3858,6 +3895,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` ist eine Prozessfarbe: Tonwerte gelten für globale Farben und Volltonfarben
 @msg	`{name}` is no recovery entry name	`{name}` ist kein Name eines Wiederherstellungseintrags
 @msg	`{name}` isn't a colour swatch	`{name}` ist kein Farbfeld mit einer Farbe
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	eine Prozessfarbe kann ein Graustufenbild mit Transparenz nicht einfärben: Verwenden Sie eine Volltonfarbe, Schwarz oder Weiß
 @msg	`{path}` must be a bool or an object of bools	`{path}` muss ein boolescher Wert oder ein Objekt mit booleschen Werten sein
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` ist keine Farbe (#rrggbb oder ein Vorgabename)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` ist kein Verflüssigen-Werkzeug
@@ -3903,6 +3941,10 @@ theme	Appearance	Erscheinungsbild
 @msg	a page tree node has no kids	ein Knoten des Seitenbaums hat keine untergeordneten Einträge
 @msg	a page's placement is not finite	die Platzierung einer Seite ist nicht endlich
 @msg	a preset named `{_1}` exists	eine Vorgabe namens `{_1}` ist bereits vorhanden
+@msg	`name` is empty	`name` ist leer
+@msg	`newName` is empty	`newName` ist leer
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` ist eine integrierte Vorgabe und kann nicht geändert werden: Speichern Sie sie unter einem anderen Namen
+@msg	`{name}` is a built-in preset and stays	`{name}` ist eine integrierte Vorgabe und kann nicht gelöscht werden
 @msg	a swatch or color group named `{n}` exists	ein Farbfeld oder eine Farbgruppe namens `{n}` ist bereits vorhanden
 @msg	a slice size must be a positive number of points	eine Slice-Größe muss eine positive Anzahl von Punkt sein
 @msg	a spine keeps at least two points	eine Achse behält mindestens zwei Punkte
@@ -3922,6 +3964,7 @@ theme	Appearance	Erscheinungsbild
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio muss eine Zahl von 0,1 bis 10 sein
 @msg	the Color Picker is not open	der Farbwähler ist nicht geöffnet
 @msg	the Simplify slider is not open	der Regler „Vereinfachen“ ist nicht geöffnet
+@msg	the Smooth slider is not open	der Regler „Glätten“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
@@ -3994,6 +4037,7 @@ theme	Appearance	Erscheinungsbild
 @msg	missing `id` (see plugin.list)	`id` fehlt (siehe plugin.list)
 @msg	missing `name`	`name` fehlt
 @msg	missing `tool`	`tool` fehlt
+@msg	missing id	id fehlt
 @msg	missing index	der Index fehlt
 @msg	missing number `{key}`	die Zahl `{key}` fehlt
 @msg	missing integer `{key}`	die ganze Zahl `{key}` fehlt
@@ -4027,6 +4071,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no current layer	keine aktuelle Ebene
 @msg	no data	keine Daten
 @msg	no dialog open	kein Dialogfeld geöffnet
+@msg	the open dialog has no Reset	das geöffnete Dialogfeld hat keine Schaltfläche „Zurücksetzen“
 @msg	no document	kein Dokument
 @msg	no document open	kein Dokument geöffnet
 @msg	no effect applied yet	noch kein Effekt angewendet
@@ -4060,6 +4105,8 @@ theme	Appearance	Erscheinungsbild
 @msg	no print service	kein Druckdienst
 @msg	no revert command	kein Befehl zum Zurücksetzen auf die gespeicherte Version
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	keine gespeicherte PDF-Vorgabe namens `{name}` (integrierte Vorgaben sind schreibgeschützt: Erstellen Sie daraus eine neue)
+@msg	no saved preset named `{name}`	keine gespeicherte Vorgabe namens `{name}`
+@msg	no saved preset named `{name}` to rename	keine gespeicherte Vorgabe namens `{name}` zum Umbenennen
 @msg	no saved presets	keine gespeicherten Vorgaben
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	keine gespeicherte Druckvorgabe namens `{name}` ({DEFAULT_PRESET} ist geschützt: Erstellen Sie daraus eine neue)
 @msg	no saved profiles	keine gespeicherten Profile
@@ -4107,8 +4154,10 @@ theme	Appearance	Erscheinungsbild
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
+@msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
 @msg	nothing encoded	nichts kodiert
 @msg	nothing selected	nichts ausgewählt
+@msg	nothing selected is in a group	nichts Ausgewähltes befindet sich in einer Gruppe
 @msg	nothing to align	nichts auszurichten
 @msg	nothing to distort	nichts zu verzerren
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nichts zu exportieren: Das Dokument enthält keine sichtbare Grafik (oder aktivieren Sie „Zeichenflächen verwenden“)
@@ -4182,6 +4231,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	select at least two objects	wählen Sie mindestens zwei Objekte aus
+@msg	exit isolation mode first	beenden Sie zuerst den Isolationsmodus
 @msg	select objects, not layers	wählen Sie Objekte aus, keine Ebenen
 @msg	select one path, or give its `id`	wählen Sie einen Pfad aus oder geben Sie seine `id` an
 @msg	select paths to join	wählen Sie Pfade zum Zusammenfügen aus
@@ -4234,10 +4284,14 @@ theme	Appearance	Erscheinungsbild
 @msg	the layer or group is locked	die Ebene oder Gruppe ist gesperrt
 @msg	the guide is on a hidden or locked layer	die Hilfslinie liegt auf einer ausgeblendeten oder gesperrten Ebene
 @msg	the target layer is locked or hidden	die Zielebene ist gesperrt oder ausgeblendet
+@msg	the object is hidden or locked	das Objekt ist ausgeblendet oder gesperrt
+@msg	the object is outside the isolated group	das Objekt liegt außerhalb der isolierten Gruppe
+@msg	type objects can't be isolated	Textobjekte können nicht isoliert werden
 @msg	the layer to flatten into is hidden	die Ebene, auf die reduziert werden soll, ist ausgeblendet
 @msg	the object already has an opacity mask	das Objekt hat bereits eine Deckkraftmaske
 @msg	the object has no geometry	das Objekt hat keine Geometrie
 @msg	the object has no opacity mask	das Objekt hat keine Deckkraftmaske
+@msg	stop editing the opacity mask first	beenden Sie zuerst die Bearbeitung der Deckkraftmaske
 @msg	the object has no stroke	das Objekt hat keine Kontur
 @msg	the object is beyond the plane's horizon	das Objekt liegt jenseits des Horizonts der Perspektivebene
 @msg	the object isn't in perspective	das Objekt ist nicht in der Perspektive
@@ -4283,6 +4337,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	unbekannte Vorgabe `{name}` (high, medium, low oder eine gespeicherte: siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	unbekannte Vorgabe `{name}` (siehe flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	unbekannte Vorgabe `{name}` (siehe webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	unbekannte Vorgabe `{name}`: weder integriert noch gespeichert (siehe imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	unbekannte Seite `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	unbekanntes Werkzeug `{tool}`
 @msg	unknown tool `{t}`	unbekanntes Werkzeug `{t}`
@@ -4426,6 +4481,10 @@ theme	Appearance	Erscheinungsbild
 	Shaper	Shaper
 	Expand Shaper Group	Shaper-Gruppe umwandeln
 	Release Shaper Group	Shaper-Gruppe zurückwandeln
+	Remove from Shaper Group	Aus Shaper-Gruppe entfernen
+@msg	source must be the id of a Shaper Group's original shape	source muss die ID einer Originalform einer Shaper-Gruppe sein
+@msg	group must be the id of a Shaper Group	group muss die ID einer Shaper-Gruppe sein
+@msg	the shape is not an editable original shape of that Shaper Group	die Form ist keine bearbeitbare Originalform dieser Shaper-Gruppe
 	Select Shaper Face	Shaper-Teilfläche auswählen
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Ziehen Sie Grafiken, Farben und Textformate hierher, um sie in mehreren Dokumenten wiederzuverwenden. Bibliotheken werden auf diesem Computer gespeichert – kein Konto erforderlich.
 	1 Color Job	1-Farben-Auftrag
@@ -4523,6 +4582,10 @@ theme	Appearance	Erscheinungsbild
 	Side Tile	Seitenkachel
 	Outer Corner Tile	Äußere Eckkachel
 	Inner Corner Tile	Innere Eckkachel
+	Auto-Centered	Auto-zentriert
+	Auto-Between	Auto-dazwischen
+	Auto-Sliced	Auto-geschnitten
+	Auto-Overlap	Auto-überlappend
 	Start Tile	Anfangskachel
 	End Tile	Endkachel
 	Fit	Einpassen
@@ -4551,6 +4614,9 @@ theme	Appearance	Erscheinungsbild
 @msg	the PSD file's header is damaged	der Header der PSD-Datei ist beschädigt
 @msg	the PSD file's image data can't be read: {e}	die Bilddaten der PSD-Datei können nicht gelesen werden: {e}
 @msg	the PSD file's image data uses an unknown compression ({m})	die Bilddaten der PSD-Datei verwenden eine unbekannte Komprimierung ({m})
+@msg	the PCX file is cut short	die PCX-Datei ist unvollständig
+@msg	the PCX file's header is damaged	der Dateikopf der PCX-Datei ist beschädigt
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-Dateien mit {bits}-Bit-Pixeln in {planes} Ebenen können nicht gelesen werden
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
@@ -5195,4 +5261,17 @@ axis	Y Axis	Y-Achse
 	Scale Presets	Skalierungsvorgaben
 @msg	a {width}×{height} screenshot's byte count overflows	die Byteanzahl eines {width}×{height}-Screenshots läuft über
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	die {what} des Fensters ({points} Punkte × {scale} DPI) kann keinen Screenshot bemessen
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Wandeln Sie zuerst das Aussehen um (Objekt › Aussehen umwandeln)
 	Live preview	Live-Vorschau
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Punkttext
+	Area Text	Flächentext
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
+	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden
+	Snap to Glyph Options	Optionen für „An Glyphe ausrichten“
+	x-height	x-Höhe
+	Glyph Bounds	Glyphenbegrenzung
+	Proximity Guides	Näherungshilfslinien
+	Angular Guides	Winkelhilfslinien

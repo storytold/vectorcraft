@@ -1,4 +1,6 @@
-use super::*;
+#[cfg(test)]
+use super::PathData;
+use super::{BezPath, LayoutOptions, PathEl, Point, Rect, Shape};
 
 /// A flattened text wrap shape: (polygons, offset, invert).
 pub(super) type FlatWrap = (Vec<Vec<Point>>, f64, bool);

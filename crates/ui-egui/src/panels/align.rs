@@ -337,7 +337,21 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Cancel Key Object"), align_to(app) == AlignTo::Key, false) {
         app.run("select.key", json!({})).ok();
     }
-    menu_item(ui, tl!("Align to Glyph Bounds"), false, false);
+    // Indented like the items beside it (their check column).
+    ui.menu_button(format!("   {}", tl!("Align to Glyph Bounds")), |ui| glyph_bounds_items(app, ui));
+}
+
+/// The Align to Glyph Bounds submenu: Point Text and Area Text, each checked while Align and
+/// Distribute measure that kind of type by the ink of its glyphs.
+fn glyph_bounds_items(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (label, key, on) in [
+        (tl!("Point Text"), "alignGlyphBoundsPoint", app.session.prefs.align_glyph_bounds_point),
+        (tl!("Area Text"), "alignGlyphBoundsArea", app.session.prefs.align_glyph_bounds_area),
+    ] {
+        if menu_item(ui, label, true, on) {
+            super::transform::set_pref(app, key, !on);
+        }
+    }
 }
 
 #[cfg(test)]

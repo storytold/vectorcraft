@@ -1,20 +1,24 @@
-//! A store-only (uncompressed) ZIP archive: several exported files as one download. The files are
-//! already compressed (PNG, JPEG, PDF…), so storing them keeps the archive fast to write and read.
+//! ZIP archives: several exported files as one download. [`store`] writes them uncompressed, and
+//! [`deflate`] deflates each file that gets smaller and stores the others.
 //!
 //! [`Archive`] reads the files of a ZIP archive, stored or deflated, as PKWARE's APPNOTE.TXT
 //! describes the format (<https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT>).
 
-use std::io::Read as _;
+use std::io::{Read as _, Write as _};
 
 use flate2::Crc;
 
 /// The DOS date of every entry: 1980-01-01, the earliest a ZIP date can say (no clock on the web,
 /// and a fixed date keeps archives of the same files identical).
 const DOS_DATE: u16 = (1 << 5) | 1;
+/// The MS-DOS time and date [`store`] gives every entry: midnight on [`DOS_DATE`].
+pub const FIXED_TIME: (u16, u16) = (0, DOS_DATE);
 /// General purpose flag: file names are UTF-8.
 const UTF8_NAMES: u16 = 1 << 11;
 /// Version needed to extract: 2.0.
 const VERSION: u16 = 20;
+/// How many bytes of a file [`deflate`] compresses between two calls of its `stop`: 1 MiB.
+pub const DEFLATE_CHUNK: usize = 1 << 20;
 
 /// The archive of `files` (`(name, bytes)`; `/` separates folders in a name), stored without
 /// compression. Fails past the limits of a ZIP without its 64-bit extension (65535 files, 4 GB).
@@ -67,6 +71,63 @@ pub fn store<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)]) -> Result<Vec<u8>,
     out.extend_from_slice(&central_len.to_le_bytes());
     out.extend_from_slice(&start.to_le_bytes());
     out.extend_from_slice(&0u16.to_le_bytes()); // comment length
+    Ok(out)
+}
+
+/// The archive of `files` (`(name, bytes)`; `/` separates folders in a name), each deflated, or
+/// stored when deflating doesn't make it smaller, every entry dated `(time, date)` (MS-DOS format).
+/// Fails past the same limits as [`store`]. `stop` is asked before each [`DEFLATE_CHUNK`] bytes are
+/// deflated; when it answers true, the archive is dropped and an error returned.
+pub fn deflate<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)], (time, date): (u16, u16), stop: impl Fn() -> bool) -> Result<Vec<u8>, String> {
+    let too_big = || "too much to zip: at most 65535 files and 4 GB".to_string();
+    let (mut out, mut central) = (Vec::new(), Vec::new());
+    for (name, bytes) in files {
+        let (name, bytes) = (name.as_ref(), bytes.as_ref());
+        let mut crc = Crc::new();
+        crc.update(bytes);
+        let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        for chunk in bytes.chunks(DEFLATE_CHUNK) {
+            if stop() {
+                return Err("stopped before the archive was finished".into());
+            }
+            enc.write_all(chunk).map_err(|e| e.to_string())?;
+        }
+        let deflated = enc.finish().map_err(|e| e.to_string())?;
+        let (method, data): (u16, &[u8]) = if deflated.len() < bytes.len() { (8, &deflated) } else { (0, bytes) };
+        let offset = u32::try_from(out.len()).map_err(|_| too_big())?;
+        let (packed, size) = (u32::try_from(data.len()).map_err(|_| too_big())?, u32::try_from(bytes.len()).map_err(|_| too_big())?);
+        let name_len = u16::try_from(name.len()).map_err(|_| format!("file name too long to zip: {name}"))?;
+        // Version 2.0, UTF-8 names, method, time, date, CRC-32, sizes, name length, no extra field.
+        let common =
+            [&VERSION.to_le_bytes()[..], &UTF8_NAMES.to_le_bytes(), &method.to_le_bytes(), &time.to_le_bytes(), &date.to_le_bytes()].concat();
+        let sums = [crc.sum().to_le_bytes(), packed.to_le_bytes(), size.to_le_bytes()].concat();
+        out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+        out.extend_from_slice(&common);
+        out.extend_from_slice(&sums);
+        out.extend_from_slice(&name_len.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(data);
+        central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+        central.extend_from_slice(&VERSION.to_le_bytes());
+        central.extend_from_slice(&common);
+        central.extend_from_slice(&sums);
+        central.extend_from_slice(&name_len.to_le_bytes());
+        // No extra field or comment, disk 0, no attributes.
+        central.extend_from_slice(&[0; 12]);
+        central.extend_from_slice(&offset.to_le_bytes());
+        central.extend_from_slice(name.as_bytes());
+    }
+    let count = u16::try_from(files.len()).map_err(|_| too_big())?;
+    let (start, len) = (u32::try_from(out.len()).map_err(|_| too_big())?, u32::try_from(central.len()).map_err(|_| too_big())?);
+    out.extend_from_slice(&central);
+    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+    out.extend_from_slice(&[0; 4]);
+    out.extend_from_slice(&count.to_le_bytes());
+    out.extend_from_slice(&count.to_le_bytes());
+    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(&start.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
     Ok(out)
 }
 
@@ -209,8 +270,8 @@ impl<'a> Archive<'a> {
     }
 }
 
-/// The entries of a store-only archive written by [`store`] (read through its central directory,
-/// checking every CRC) → `(name, bytes)`.
+/// The entries of an archive written by [`store`] or [`deflate`] (read through its central
+/// directory, checking every CRC and size) → `(name, bytes)`.
 #[cfg(test)]
 pub fn entries(zip: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
     let u16_at = |at: usize| zip.get(at..at + 2).map(|b| u16::from_le_bytes([b[0], b[1]])).ok_or("truncated");
@@ -223,10 +284,12 @@ pub fn entries(zip: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut at = u32_at(end + 16)? as usize;
     let mut out = vec![];
     for _ in 0..count {
-        if u32_at(at)? != 0x0201_4b50 || u16_at(at + 10)? != 0 {
-            return Err("not a stored central record".into());
+        let method = u16_at(at + 10)?;
+        if u32_at(at)? != 0x0201_4b50 || (method != 0 && method != 8) {
+            return Err("not a stored or deflated central record".into());
         }
-        let (crc, size, name_len) = (u32_at(at + 16)?, u32_at(at + 20)? as usize, u16_at(at + 28)? as usize);
+        let (crc, packed, name_len) = (u32_at(at + 16)?, u32_at(at + 20)? as usize, u16_at(at + 28)? as usize);
+        let size = u32_at(at + 24)? as usize;
         let extra = u16_at(at + 30)? as usize + u16_at(at + 32)? as usize;
         let local = u32_at(at + 42)? as usize;
         let name = String::from_utf8(zip.get(at + 46..at + 46 + name_len).ok_or("truncated")?.to_vec()).map_err(|e| e.to_string())?;
@@ -234,11 +297,18 @@ pub fn entries(zip: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
             return Err(format!("{name}: no local header"));
         }
         let data = local + 30 + u16_at(local + 26)? as usize + u16_at(local + 28)? as usize;
-        let bytes = zip.get(data..data + size).ok_or("truncated")?.to_vec();
+        let data = zip.get(data..data + packed).ok_or("truncated")?;
+        let bytes = if method == 8 {
+            let mut inflated = Vec::new();
+            flate2::read::DeflateDecoder::new(data).read_to_end(&mut inflated).map_err(|e| format!("{name}: {e}"))?;
+            inflated
+        } else {
+            data.to_vec()
+        };
         let mut c = Crc::new();
         c.update(&bytes);
-        if c.sum() != crc {
-            return Err(format!("{name}: CRC mismatch"));
+        if c.sum() != crc || bytes.len() != size {
+            return Err(format!("{name}: CRC or size mismatch"));
         }
         out.push((name, bytes));
         at += 46 + name_len + extra;

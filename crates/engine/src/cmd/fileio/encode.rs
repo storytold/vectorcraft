@@ -14,9 +14,10 @@ use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp, psd, tga};
 
-use super::super::*;
+use super::super::{EngineError, Result, bad, color_value, parse_range};
 use super::Format;
 use super::imagemap::{self, MapKind};
+use super::screens::ScreenSize;
 
 const C: &str = "document.export";
 
@@ -147,6 +148,10 @@ struct RasterOptions {
     scale: Option<f64>,
     /// Pixels per inch (wins over `scale`).
     ppi: Option<f64>,
+    /// The width of each file in pixels (wins over `height`, `ppi` and `scale`).
+    width: Option<f64>,
+    /// The height of each file in pixels (wins over `ppi` and `scale`).
+    height: Option<f64>,
     quality: Option<u8>,
     background: Option<Value>,
     anti_alias: Option<String>,
@@ -179,7 +184,24 @@ struct RasterOptions {
     rich_black: Option<bool>,
 }
 
+/// `ppi` with its scale kept within 0.01–64 pixels per point.
+fn clamped_ppi(ppi: f64) -> f64 {
+    (ppi / 72.0).clamp(0.01, 64.0) * 72.0
+}
+
 impl RasterOptions {
+    /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
+    fn pixel_size(&self) -> Result<Option<ScreenSize>> {
+        let checked = |key: &str, n: f64| {
+            if n.is_finite() && n > 0.0 { Ok(n) } else { Err(bad(C, format!("{key} must be a positive number, not {n}"))) }
+        };
+        match (self.width, self.height) {
+            (Some(w), _) => checked("width", w).map(|w| Some(ScreenSize::Width(w))),
+            (None, Some(h)) => checked("height", h).map(|h| Some(ScreenSize::Height(h))),
+            (None, None) => Ok(None),
+        }
+    }
+
     /// The render and encoder settings: `ppi`, else 72 × `scale`, within 0.01–64 pixels per point;
     /// `background`, else `page` (the document's background).
     fn settings(&self, page: Option<[u8; 3]>) -> Result<RasterExportOptions> {
@@ -190,7 +212,7 @@ impl RasterOptions {
         let color_model = parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?;
         let embed_icc = self.embed_icc.unwrap_or(true);
         Ok(RasterExportOptions {
-            ppi: (ppi / 72.0).clamp(0.01, 64.0) * 72.0,
+            ppi: clamped_ppi(ppi),
             background: match &self.background {
                 Some(v) => background(v).map_err(|e| bad(C, e))?,
                 None => page,
@@ -519,8 +541,8 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
             let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 3]);
-            let settings = o.settings(page)?;
-            let scale = settings.scale();
+            let mut settings = o.settings(page)?;
+            let size = o.pixel_size()?;
             let format = match f.id {
                 "png" => RasterFormat::Png,
                 "jpg" => RasterFormat::Jpeg,
@@ -550,6 +572,11 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 vectorcraft_doc::cancel::check()?;
                 vectorcraft_doc::cancel::progress(done as u64, total, &format!("Rendering artboard {} of {total}", done + 1));
                 let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
+                // `width` or `height`: each file gets the scale that makes its region that size.
+                if let Some(size) = size {
+                    settings.ppi = clamped_ppi(72.0 * size.scale_for(C, region)?);
+                }
+                let scale = settings.scale();
                 check_format_size(f, region.width() * scale, region.height() * scale)?;
                 vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
                 enc.maps.extend(imagemap::build(doc, region, scale, map, enc.files.len()));

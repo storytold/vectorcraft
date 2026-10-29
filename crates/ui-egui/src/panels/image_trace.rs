@@ -9,9 +9,12 @@
 //! The public documentation of the panel describes Preview as showing the result of the current
 //! settings (<https://web.archive.org/web/20250831090623/https://helpx.adobe.com/illustrator/using/image-trace.html>).
 
+use std::sync::Arc;
+
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
+use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
 use super::{first_selected, library_panel, pstate, set_pstate, swatches};
@@ -29,7 +32,7 @@ fn ignore_color(params: &Value) -> [u8; 3] {
     let hex = params["ignoreColor"].as_str().unwrap_or("").trim_start_matches('#');
     let channel = |i: usize| hex.get(i * 2..i * 2 + 2).and_then(|h| u8::from_str_radix(h, 16).ok());
     match (hex.len(), channel(0), channel(1), channel(2)) {
-        (6, Some(r), Some(g), Some(b)) => [r, g, b],
+        (6, Some(r), Some(g), Some(b)) if hex.bytes().all(|b| b.is_ascii_hexdigit()) => [r, g, b],
         _ => [255; 3],
     }
 }
@@ -93,6 +96,9 @@ struct TraceUi {
     params: Value,
     view: TraceView,
     info: Option<(u64, u64, u64)>,
+    /// The revision of the saved presets at the panel's last frame
+    /// ([`vectorcraft_engine::Session::trace_presets_revision`]).
+    revision: Option<u64>,
     /// The selected Image Trace object's stored settings last adopted (so edits in progress
     /// aren't overwritten until the object changes).
     synced: Value,
@@ -105,13 +111,54 @@ struct TraceUi {
     drafts: std::collections::HashMap<(u64, NodeId), (String, Value, Value)>,
 }
 
-/// Each preset: its name, its parameters, and those of its enhanced version (null if it has none).
-fn presets(app: &mut VectorcraftApp) -> Vec<(String, Value, Value)> {
+/// A preset: its name, its parameters, those of its enhanced version (null if it has none), and
+/// whether it is built in (else the user saved it).
+type Preset = (String, Value, Value, bool);
+
+/// The presets as `imageTrace.presets` listed them at a revision of the saved presets.
+#[derive(Clone)]
+struct PresetList {
+    revision: u64,
+    presets: Arc<Vec<Preset>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`presets`] ran `imageTrace.presets` on this thread.
+    static PRESET_READS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Every preset, built-in then saved. `imageTrace.presets` runs once for each revision of the saved
+/// presets ([`vectorcraft_engine::Session::trace_presets_revision`]); the list is kept in `ctx`'s
+/// memory, which the panel, the Control bar and Properties share.
+fn presets(app: &mut VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Preset>> {
+    let id = egui::Id::unique("trace-presets");
+    let revision = app.session.trace_presets_revision();
+    if let Some(list) = ctx.data(|d| d.get_temp::<PresetList>(id)).filter(|l| l.revision == revision) {
+        return list.presets;
+    }
+    #[cfg(test)]
+    PRESET_READS.with(|n| n.set(n.get() + 1));
     let v = app.session.execute("imageTrace.presets", &json!({})).unwrap_or_default();
-    v["presets"]
+    let presets: Vec<Preset> = v["presets"]
         .as_array()
-        .map(|a| a.iter().map(|p| (p["name"].as_str().unwrap_or("").to_string(), p["params"].clone(), p["enhanced"].clone())).collect())
-        .unwrap_or_default()
+        .map(|a| {
+            a.iter()
+                .map(|p| (p["name"].as_str().unwrap_or("").to_string(), p["params"].clone(), p["enhanced"].clone(), p["builtIn"] != false))
+                .collect()
+        })
+        .unwrap_or_default();
+    let presets = Arc::new(presets);
+    ctx.data_mut(|d| d.insert_temp(id, PresetList { revision, presets: presets.clone() }));
+    presets
+}
+
+/// The listed preset that `name` finds, as the engine finds presets: a built-in one by its name in
+/// any case, also in brackets (`[Default]`), else a saved one by its exact name in any case.
+fn find_preset<'a>(all: &'a [Preset], name: &str) -> Option<&'a Preset> {
+    let name = name.trim();
+    let key = name.trim_start_matches('[').trim_end_matches(']');
+    all.iter().find(|p| p.3 && p.0.eq_ignore_ascii_case(key)).or_else(|| all.iter().find(|p| !p.3 && p.0.eq_ignore_ascii_case(name)))
 }
 
 /// Whether `n` is an Image Trace object: a group so named whose first child is the traced image.
@@ -151,6 +198,13 @@ pub(crate) fn selected_trace(app: &VectorcraftApp) -> Option<(String, TraceView)
     let [id] = st.selection.objects[..] else { return None };
     let n = st.doc.node(id).filter(|n| is_trace(n))?;
     Some((n.extras().trace.as_ref().and_then(|t| t["preset"].as_str()).unwrap_or("Custom").to_string(), n.trace_view()))
+}
+
+/// The trace parameters the one selected Image Trace object records (null without one).
+fn selected_trace_params(app: &VectorcraftApp) -> Value {
+    let Some(st) = app.session.active() else { return Value::Null };
+    let [id] = st.selection.objects[..] else { return Value::Null };
+    st.doc.node(id).filter(|n| is_trace(n)).and_then(|n| n.extras().trace.as_ref()).map_or(Value::Null, |t| t["params"].clone())
 }
 
 /// Image Trace › View, in the UI language.
@@ -205,11 +259,13 @@ pub(crate) fn view_row(app: &mut VectorcraftApp, ui: &mut Ui, current: TraceView
     }
 }
 
-/// Trace the selected image, or trace the selected Image Trace object again, with built-in `preset`.
+/// Trace the selected image, or trace the selected Image Trace object again, with `preset`.
 fn trace_with(app: &mut VectorcraftApp, preset: &str) {
     // A failure is reported in the status bar. The panel stays as it was: the Image Trace
     // button (Properties, Control bar) opens it.
-    let _ = app.run("imageTrace.make", json!({ "preset": preset }));
+    if let Err(e) = crate::trace_runs::start(app, "imageTrace.make", json!({ "preset": preset }), false) {
+        app.status(e);
+    }
 }
 
 /// Reveal the editable tracing controls, including fidelity, in the panel's current location.
@@ -224,7 +280,7 @@ pub(crate) fn open_settings(app: &mut VectorcraftApp) {
     app.ui.image_trace_advanced = true;
 }
 
-/// The built-in presets to choose from (`current` highlighted) → the one chosen. Listed only
+/// The presets to choose from, built-in then saved (`current` highlighted) → the one chosen. Listed only
 /// while the menu is open.
 /// A preset's name as shown: translated as a preset's name where the catalog has it so (the
 /// Outline preset is not the Outline view), as any other string else.
@@ -234,12 +290,36 @@ fn preset_label(name: &str) -> &str {
 
 fn preset_list(app: &mut VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
     let mut chosen = None;
-    for (name, ..) in presets(app) {
-        if ui.add(egui::Button::selectable(name == current, preset_label(&name))).clicked() {
-            chosen = Some(name);
+    let list = presets(app, ui.ctx());
+    for (name, _, _, built_in) in list.iter() {
+        // A saved preset's name is the user's, shown as it is.
+        let label = if *built_in { preset_label(name) } else { name.as_str() };
+        if ui.add(egui::Button::selectable(name == current, label)).clicked() {
+            chosen = Some(name.clone());
         }
     }
     chosen
+}
+
+/// Manage Presets, next to the Image Trace panel's Preset dropdown: Save as New Preset… names the
+/// panel's settings; Rename… and Delete act on the saved preset the dropdown shows (`saved`).
+/// Built-in presets don't change. From the public documentation of saving tracing presets
+/// (<https://web.archive.org/web/20260902004121/https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/save-image-trace-presets.html>).
+fn manage_presets(app: &mut VectorcraftApp, ui: &mut Ui, st: &TraceUi, saved: bool) {
+    let run = if menu_item(ui, tl!("Save as New Preset…"), true, false) {
+        Some(("ui.imageTracePresetDialog", json!({ "params": st.params })))
+    } else if menu_item(ui, tl!("Rename…"), saved, false) {
+        Some(("ui.imageTracePresetDialog", json!({ "rename": st.preset })))
+    } else if menu_item(ui, tl!("Delete"), saved, false) {
+        Some(("imageTrace.presets.delete", json!({ "name": st.preset })))
+    } else {
+        None
+    };
+    if let Some((id, p)) = run
+        && let Err(e) = app.run(id, p)
+    {
+        app.ui.status = e;
+    }
 }
 
 /// Width of the Control bar's Image Trace button.
@@ -257,10 +337,16 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     }
 }
 
-/// The selected Image Trace object's preset (Control bar, Properties): choosing another traces it
-/// again with that preset.
-pub(crate) fn preset_dropdown(app: &mut VectorcraftApp, ui: &mut Ui, current: &str, width: f32) {
-    if let Some(p) = widgets::combo(ui, "trace-preset", tl!(current), width, |ui| preset_list(app, ui, current)) {
+/// The selected Image Trace object's preset (Control bar, Properties), traced with the preset
+/// `traced_with`, shown as the panel shows it: choosing another traces it again with that preset.
+pub(crate) fn preset_dropdown(app: &mut VectorcraftApp, ui: &mut Ui, traced_with: &str, width: f32) {
+    let all = presets(app, ui.ctx());
+    let params = selected_trace_params(app);
+    let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
+    let current = listed_preset(traced_with, &params, &all, &changes);
+    // A saved preset's name is the user's, shown as it is.
+    let shown = if app.session.trace_preset(&current).is_some() { current.as_str() } else { tl!(current.as_str()) };
+    if let Some(p) = widgets::combo(ui, "trace-preset", shown, width, |ui| preset_list(app, ui, &current)) {
         trace_with(app, &p);
     }
 }
@@ -282,24 +368,42 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     true
 }
 
-fn trace(app: &mut VectorcraftApp, st: &mut TraceUi) {
+fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
     // A group the active document does not have traces with All, as the panel shows.
     if color_group(app, &st.params).is_none() && !st.params["colorGroup"].is_null() {
         st.params["colorGroup"] = Value::Null;
     }
-    let preset = if st.preset == "Custom" { "Default" } else { st.preset.as_str() };
-    match app.run("imageTrace.make", json!({ "preset": preset, "params": st.params, "view": st.view.id() })) {
-        Ok(r) => {
-            st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
-            // Adopt the committed state immediately: Undo before the next panel frame must
-            // still be recognized as a change, even when it returns to the previous settings.
-            if let Some(stored) = target(app).2 {
-                st.synced = stored;
-                st.object = target_key(app);
-            }
-        }
+    // The settings are complete, so with a preset that no longer exists (a deleted saved one) they
+    // are traced over Default, and the object shows Custom.
+    let all = presets(app, ctx);
+    let known = find_preset(&all, &st.preset).map(|p| p.0.as_str());
+    let preset = known.filter(|_| st.preset != "Custom").unwrap_or("Default");
+    let p = json!({ "preset": preset, "params": st.params, "view": st.view.id() });
+    match crate::trace_runs::start(app, "imageTrace.make", p, true) {
+        // Traced off the UI thread: the result comes to [`traced`].
+        Ok(r) if r["background"] == true => {}
+        Ok(r) => adopt(app, st, &r),
         Err(e) => app.ui.status = e,
     }
+}
+
+/// The panel takes trace `r`'s counts and the traced object's stored settings at once: Undo before
+/// the next panel frame must still be recognized as a change, even when it returns to the previous
+/// settings.
+fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
+    st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
+    if let Some(stored) = target(app).2 {
+        st.synced = stored;
+        st.object = target_key(app);
+    }
+}
+
+/// A trace the panel started off the UI thread was applied with result `r` ([`crate::trace_runs`]).
+pub(crate) fn traced(app: &VectorcraftApp, r: &Value) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    let mut st: TraceUi = pstate(&ctx, "image-trace");
+    adopt(app, &mut st, r);
+    set_pstate(&ctx, "image-trace", st);
 }
 
 fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive<f64>, suffix: &str) -> (bool, bool) {
@@ -319,16 +423,51 @@ fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive
     out
 }
 
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let all = presets(app);
-    let mut st: TraceUi = pstate(ui.ctx(), "image-trace");
-    if st.params.is_null() {
-        st.preset = "Default".into();
-        st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
+/// The preset `name` an object was traced with, or, when no preset in `all` has that name, the name that the saved
+/// preset renames in `changes` (oldest first) gave it since. None when the preset was deleted, or when more than one
+/// preset had the name in this session (a preset made or renamed to it after the first one was renamed or deleted),
+/// since the object may have been traced with any of them.
+fn renamed_preset(name: &str, all: &[Preset], changes: &[&TracePresetChange]) -> Option<String> {
+    let name = name.trim();
+    if find_preset(all, name).is_some() {
+        return Some(name.to_string());
     }
-    let (is_trace, is_image, stored) = target(app);
-    let any_trace = any_trace(app);
-    let object = target_key(app);
+    // Each preset that had the name: its name now, or None once deleted.
+    let mut had: Vec<Option<String>> = vec![Some(name.to_string())];
+    let named = |had: &[Option<String>], n: &str| had.iter().flatten().any(|h| h.eq_ignore_ascii_case(n));
+    for c in changes {
+        if c.deleted {
+            had.iter_mut().filter(|h| h.as_deref().is_some_and(|h| h.eq_ignore_ascii_case(&c.name))).for_each(|h| *h = None);
+        } else if let Some(from) = c.renamed_from.as_deref() {
+            if c.name.eq_ignore_ascii_case(name) && !named(&had, name) && !named(&had, from) {
+                had.push(Some(c.name.clone()));
+            }
+            had.iter_mut().flatten().filter(|h| h.eq_ignore_ascii_case(from)).for_each(|h| h.clone_from(&c.name));
+        } else if c.name.eq_ignore_ascii_case(name) && !named(&had, name) {
+            had.push(Some(c.name.clone()));
+        }
+    }
+    match had.as_slice() {
+        [only] => only.clone(),
+        _ => None,
+    }
+}
+
+/// The name the preset `name` an object was traced with `params` shows under, with the presets `all` and the saved
+/// preset changes `changes` of this session (oldest first): its listed name (`[sketched art]` is Sketched Art), the
+/// new name of a saved preset renamed since, or Custom when that preset was deleted or its settings changed since.
+fn listed_preset(name: &str, params: &Value, all: &[Preset], changes: &[&TracePresetChange]) -> String {
+    if name == "Custom" {
+        return name.to_string();
+    }
+    let found = renamed_preset(name, all, changes).and_then(|n| find_preset(all, &n)).filter(|p| p.3 || p.1 == *params);
+    found.map_or_else(|| "Custom".into(), |p| p.0.clone())
+}
+
+/// Bring the panel's settings `st` in line with the selected object `object`, whose trace settings are `stored`,
+/// with the presets `all` and the saved preset changes `changes` of this session (oldest first); whether the object
+/// came back with the settings that waited for it.
+fn sync_with_object(st: &mut TraceUi, stored: Option<Value>, object: Option<(u64, NodeId)>, all: &[Preset], changes: &[&TracePresetChange]) -> bool {
     let same = |a: &Value, b: &Value| a["preset"] == b["preset"] && a["params"] == b["params"];
     let mut restored = false;
     // Another object: the settings that wait for the one left are kept until it is selected again,
@@ -351,6 +490,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if object != st.object || !same(&t, &st.synced) {
             st.preset = t["preset"].as_str().unwrap_or("Custom").to_string();
             st.params = t["params"].clone();
+            // The preset shows under its listed name (`[sketched art]` is Sketched Art). An object
+            // traced with a saved preset that was renamed since shows the new name; one traced with a
+            // saved preset that was deleted since, or whose settings changed since, shows Custom.
+            st.preset = listed_preset(&st.preset, &st.params, all, changes);
         }
         // The object selected again shows the settings that wait for it, unless its own settings
         // changed since (Undo, or a trace from elsewhere).
@@ -366,19 +509,96 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.synced = t;
         st.object = object;
     }
+    restored
+}
+
+/// Bring the panel's preset in `st`, and the preset of each setting that waits for an object no longer selected, in
+/// line with the saved presets made, changed, renamed or deleted since the last frame (Manage Presets, or
+/// imageTrace.presets.save and .delete), as the commands recorded them, with the presets `all`.
+fn follow_preset_changes(app: &VectorcraftApp, st: &mut TraceUi, all: &[Preset]) {
+    let revision = app.session.trace_presets_revision();
+    if let Some(seen) = st.revision.filter(|seen| *seen != revision) {
+        let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(seen).collect();
+        follow_preset(&mut st.preset, &st.params, &changes, all);
+        for (preset, params, _) in st.drafts.values_mut() {
+            follow_preset(preset, params, &changes, all);
+        }
+    }
+    st.revision = Some(revision);
+}
+
+/// Bring `preset`, shown with the settings `params`, in line with the saved preset changes `changes`, with the
+/// presets `all`: it follows its own preset's new name, becomes a preset saved with its settings, and becomes Custom
+/// when its preset no longer exists or its preset's settings changed away from `params`.
+fn follow_preset(preset: &mut String, params: &Value, changes: &[&TracePresetChange], all: &[Preset]) {
+    // The presets saved meanwhile, under the names later renames gave them.
+    let mut saved: Vec<String> = vec![];
+    let mut followed = false;
+    for c in changes {
+        match c.renamed_from.as_deref() {
+            Some(from) => {
+                if *preset == from {
+                    *preset = c.name.clone();
+                    followed = true;
+                }
+                for n in saved.iter_mut().filter(|n| n.as_str() == from) {
+                    *n = c.name.clone();
+                }
+            }
+            None if !c.deleted => saved.push(c.name.clone()),
+            None => {}
+        }
+    }
+    let as_shown = saved.iter().rev().find(|n| all.iter().any(|p| !p.3 && p.0 == **n && p.1 == *params));
+    if let Some(name) = as_shown.filter(|_| !followed) {
+        *preset = name.clone();
+    }
+    // A save or rename of the preset can also change its settings.
+    let changed_away = (followed || saved.contains(preset)) && all.iter().any(|p| !p.3 && p.0 == *preset && p.1 != *params);
+    if changed_away || !all.iter().any(|p| p.0 == *preset) {
+        *preset = "Custom".into();
+    }
+}
+
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let all = presets(app, ui.ctx());
+    let mut st: TraceUi = pstate(ui.ctx(), "image-trace");
+    if st.params.is_null() {
+        st.preset = "Default".into();
+        st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
+    }
+    let (is_trace, is_image, stored) = target(app);
+    let any_trace = any_trace(app);
+    let object = target_key(app);
+    // The saved preset changes since the last frame apply to the panel's settings before the selected object's
+    // settings, which `sync_with_object` resolves against every change, are adopted.
+    follow_preset_changes(app, &mut st, &all);
+    let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
+    let restored = sync_with_object(&mut st, stored, object, &all, &changes);
     let mut retrace = false;
 
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Preset:"));
-        let names: Vec<&str> = all.iter().map(|p| p.0.as_str()).collect();
-        if let Some(i) = widgets::dropdown(ui, "it-preset", &st.preset, &names, 170.0) {
-            st.preset = all[i].0.clone();
-            st.params = all[i].1.clone();
+        let manage = 24.0;
+        let width = (ui.available_width() - manage - ui.spacing().item_spacing.x).min(170.0);
+        let is_saved = all.iter().any(|p| !p.3 && p.0 == st.preset);
+        let shown = if is_saved { st.preset.as_str() } else { preset_label(&st.preset) };
+        let current = st.preset.clone();
+        if let Some(name) = widgets::combo(ui, "it-preset", shown, width, |ui| preset_list(app, ui, &current))
+            && let Some(p) = all.iter().find(|p| p.0 == name)
+        {
+            st.preset = name;
+            st.params = p.1.clone();
             retrace = true;
         }
+        let r = widgets::icon_button(ui, "ellipsis", tl!("Manage Presets"), false, manage);
+        if cfg!(test) {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("trace-manage-presets"), r.rect));
+        }
+        egui::Popup::menu(&r).show(|ui| manage_presets(app, ui, &st, is_saved));
     });
     // The preset's enhanced version (with Shapes and Auto Grouping) or its legacy one.
-    if let Some((_, legacy, better)) = all.iter().find(|p| p.0 == st.preset && !p.2.is_null()) {
+    if let Some((_, legacy, better, _)) = all.iter().find(|p| p.0 == st.preset && !p.2.is_null()) {
         let on = *better == st.params;
         if widgets::check(ui, tl!("Enhanced"), on, true) {
             st.params = if on { legacy.clone() } else { better.clone() };
@@ -598,7 +818,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         let r = ui.add_enabled_ui(is_trace || is_image, |ui| widgets::flat_button(ui, tl!("Trace"), 80.0)).inner;
         if r.on_disabled_hover_text(tl!("Select an image to trace")).clicked() {
-            trace(app, &mut st);
+            trace(app, ui.ctx(), &mut st);
         }
         if ui.add_enabled_ui(any_trace, |ui| widgets::flat_button(ui, tl!("Expand"), 80.0)).inner.clicked() {
             app.run("imageTrace.expand", json!({})).ok();
@@ -614,7 +834,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.preview_off = !preview;
     }
     if retrace && is_trace && preview {
-        trace(app, &mut st);
+        trace(app, ui.ctx(), &mut st);
     }
     set_pstate(ui.ctx(), "image-trace", st);
 }

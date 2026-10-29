@@ -14,9 +14,8 @@ use vectorcraft_doc::style_libs::{self, STYLE_LIBRARIES, STYLES_EXT, builtin_sty
 use vectorcraft_doc::{Document, GraphicStyle, PatternDef, StyleLibrary};
 
 use super::menucmds::squash;
-use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
-use super::*;
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, names_param, stem};
+use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param, switch_or, text_param, unique_name};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -154,8 +153,12 @@ fn adopt(d: &mut Document, lib: &StyleLibrary, g: &GraphicStyle, renamed: &mut H
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.addFromLibrary";
     let (info, lib) = library_param(s, p, C)?;
-    let mut names = str_list(p, "names");
-    names.extend(str_param(p, "name").map(str::to_string));
+    let (apply, add) = (switch_or(p, "apply", false, C)?, switch_or(p, "add", false, C)?);
+    if p.get("ids").is_some_and(|v| !v.is_null()) {
+        checked_ids_param(s, p, "ids", C)?;
+    }
+    let mut names = names_param(p, C)?;
+    names.extend(text_param(p, "name", C)?.map(str::to_string));
     if let Some(n) = names.iter().find(|n| lib.style(n).is_none()) {
         return Err(bad(C, format!("no graphic style `{n}` in `{}`", lib.name)));
     }
@@ -192,8 +195,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     });
     let first = picked.first().map(|g| doc_name(&g.name));
     let targets = p.get("ids").is_some() || !super::appearance::appearance_targets(s, &json!({}))?.is_empty();
-    if let Some(name) = first.filter(|_| bool_or(p, "apply", false) && targets) {
-        let mut params = json!({"name": name, "add": bool_or(p, "add", false)});
+    if let Some(name) = first.filter(|_| apply && targets) {
+        let mut params = json!({"name": name, "add": add});
         if let Some(ids) = p.get("ids") {
             params["ids"] = ids.clone();
         }
@@ -208,8 +211,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.saveLibrary";
     let st = s.doc()?;
-    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
-    let lib = StyleLibrary::from_document(&st.doc, &str_list(p, "names"), name).map_err(|e| bad(C, e))?;
+    let name = text_param(p, "name", C)?.map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
+    let names = names_param(p, C)?;
+    let lib = StyleLibrary::from_document(&st.doc, &names, name).map_err(|e| bad(C, e))?;
     let mut out = json!({ "count": lib.len() });
     s.style_libraries.write(p, &lib.name, STYLES_EXT, FileData::Text(style_libs::write(&lib)), &mut out, C)?;
     Ok(out)

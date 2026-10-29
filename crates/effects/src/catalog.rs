@@ -1,4 +1,4 @@
-use super::*;
+use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
 
 /// Catalogue entry for one effect.
 #[derive(Clone, Debug, PartialEq)]
@@ -264,7 +264,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.dropShadow",
             "Drop Shadow…",
             STYLIZE,
-            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": the shadow is the object's own colors with `darkness` percent of black added instead of `color`: in a CMYK document their cyan, magenta and yellow stay and their black K becomes K + darkness × (1 − K); in an RGB document each channel is multiplied by 1 − darkness)",
+            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
             json!({"mode": "multiply", "opacity": 75.0, "x": 7.0, "y": 7.0, "blur": 5.0, "shade": "color", "color": "#000000", "darkness": 100.0}),
         ),
         r(

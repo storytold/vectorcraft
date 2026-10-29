@@ -33,7 +33,7 @@ use super::lex::find;
 use crate::ps;
 
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, Structure, artboards, read, variables};
+pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
 pub(crate) use read::{slot_frame, slot_of};
 
 #[cfg(test)]

@@ -3,12 +3,14 @@
 //! preferences. OK sets them with `tool.setOption {tool, values}`. The Pencil also has `liveFit`
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush and Smooth), `fill` (Pencil and
+//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush, Smooth and Blob Brush), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Eraser), `livePreview` (Pencil: the stroke shows
-//! with its fill and stroke while it is drawn, or as a thin line until the release) and `size`
-//! (points; Blob Brush and Eraser).
+//! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
+//! (points; Blob Brush and Eraser), and `sizeMode` (`fixed` or `pressure`) and `sizeVariation`
+//! (points; Blob Brush and Eraser: with Pressure the tip is Size − Variation wide at the lightest
+//! pen pressure and Size + Variation at the heaviest).
 
 use serde_json::{Map, Value, json};
 
@@ -27,11 +29,13 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 12] = [
+const KEYS: [&str; 14] = [
     "fidelity",
     "angle",
     "roundness",
     "size",
+    "sizeMode",
+    "sizeVariation",
     "fill",
     "altSmooth",
     "keepSelected",
@@ -134,6 +138,28 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, (key, label): (&str, &str), suffix:
     });
 }
 
+/// Width of the Blob Brush's and the Eraser's Size mode menu.
+const MODE_W: f32 = 96.0;
+
+/// The Blob Brush's and the Eraser's Size rows: Size with its Fixed or Pressure menu before the
+/// field, then the Variation that Pressure adds and takes (greyed while Size is Fixed).
+fn blob_size(ui: &mut egui::Ui, d: &mut Dialog) {
+    const MODES: [&str; 2] = ["fixed", "pressure"];
+    let pressure = d.str("sizeMode") == "pressure";
+    let labels = ["Fixed", "Pressure"];
+    let label_w = label_w(ui) - MODE_W - ui.spacing().item_spacing.x;
+    let size = d.f64("size", 10.0);
+    widgets::label_row(ui, tl!("Size:"), label_w, |ui| {
+        if let Some(m) = widgets::dropdown(ui, "freehand-size-mode", labels[usize::from(pressure)], &labels, MODE_W).and_then(|i| MODES.get(i)) {
+            d.fields.insert("sizeMode".into(), json!(m));
+        }
+        if let Some(x) = widgets::range_field(ui, ("freehand-field", "size"), size, 0.1..=1000.0, "pt", 1, FIELD_W) {
+            d.fields.insert("size".into(), json!(x));
+        }
+    });
+    ui.add_enabled_ui(pressure, |ui| number(ui, d, ("sizeVariation", tl!("Variation:")), "pt", 1, (0.0, 1000.0)));
+}
+
 /// The Fidelity rows: the label on a line of its own, then a logarithmic slider from the tool's
 /// lowest Fidelity to [`FIDELITY_MAX`] across the row with the field at its end, both to two
 /// decimals, and Accurate and Smooth under the slider's ends.
@@ -182,7 +208,9 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("roundness") {
         number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (1.0, 100.0));
     }
-    if d.fields.contains_key("size") {
+    if d.fields.contains_key("sizeMode") {
+        blob_size(ui, d);
+    } else if d.fields.contains_key("size") {
         number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
     }
     if d.fields.contains_key("fill") {

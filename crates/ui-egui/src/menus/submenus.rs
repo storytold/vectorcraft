@@ -1,4 +1,4 @@
-use super::*;
+use super::{Item, Sep, c, cp, json, sub, todo};
 
 /// Type → Size presets.
 pub(super) const TYPE_SIZES: [(&str, u32); 14] = [

@@ -22,7 +22,7 @@ use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
 use super::pathops::{assemble, node_path, outline_strokes, replace_leaves, styled_copy, with_transparency};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_selection, str_param};
 
 const C: &str = "object.expand";
 /// Expand Gradient To → Specify … Objects: the default and the most.
@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -49,14 +49,23 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Options",
             [],
             None,
-            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to)",
+            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus)",
             has_selection,
             |s, _| {
                 let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-                Ok(json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient}))
+                Ok(json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)}))
             }
         ),
     ]
+}
+
+/// Has the selection appearance attributes that Expand Appearance expands (effects, several fills
+/// or strokes, a fill or stroke with its own opacity, blend mode or effects, a brush)? Object ›
+/// Expand… is dimmed in the menus for them until Expand Appearance has turned them into plain art
+/// (#3089); `object.expand` itself still bakes them.
+pub fn has_appearance(s: &Session) -> bool {
+    let (Ok(st), Ok(roots)) = (s.doc(), selected_roots(s)) else { return false };
+    roots.iter().filter_map(|r| st.doc.node(*r)).any(super::effectcmd::expandable)
 }
 
 /// Every placed document in `roots` of `d` (at any depth) replaced by an editable copy of the art it
@@ -131,7 +140,11 @@ impl Expandable {
                 e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
                 e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
                 e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
-                e.stroke |= shape && !c.appearance.stroke_paint().is_none();
+                e.stroke |= match &c.kind {
+                    // Type's outlines take its characters' stroke (see `type.createOutlines`).
+                    NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
+                    _ => shape && !c.appearance.stroke_paint().is_none(),
+                };
                 e.gradient |= match &c.kind {
                     NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
                     _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
@@ -182,7 +195,7 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
     let rev0 = s.doc()?.revision;
-    let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     // Placed documents first: their art (type, strokes, gradients) expands below.
     if object && e.placed {
         let roots = selected_roots(s)?;
@@ -206,6 +219,9 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if object && e.effects {
         let _ = run_raw(s, "effect.expandAppearance", &json!({}));
+        // What is left to expand is in the baked art: Expand Appearance leaves strokes strokes
+        // (#3089), a group's own as stroked paths among its members, which Stroke outlines below.
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     }
     if object && e.envelope {
         let roots = selected_roots(s)?;

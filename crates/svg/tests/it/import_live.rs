@@ -248,12 +248,10 @@ fn drop_shadow_chains_become_drop_shadows() {
     }
 }
 
-/// The object blurred, moved and its colors scaled under it is a drop shadow with Darkness when
-/// the blur and the scale work on sRGB values, or when the scale is 0; otherwise, on linear RGB
-/// values (the SVG default), it is reported. A blur on linear values whose result goes unused
-/// does not count.
+/// A proportional RGB filter is not additive Darkness. A fully black shadow remains
+/// recognizable, while other proportional transforms are reported rather than misrepresented.
 #[test]
-fn a_darkened_copy_of_the_object_becomes_a_drop_shadow_with_darkness() {
+fn proportional_filters_are_not_misread_as_additive_darkness() {
     let chain = |space: &str, transfer: &str, slope: f64| {
         format!(
             r##"<defs><filter id="s"{space}><feGaussianBlur in="SourceGraphic" stdDeviation="3" color-interpolation-filters="linearRGB" result="unused"/><feGaussianBlur in="SourceGraphic" stdDeviation="2"/><feOffset dx="4" dy="5"/><feComponentTransfer result="p"{transfer}><feFuncR type="linear" slope="{slope}"/><feFuncG type="linear" slope="{slope}"/><feFuncB type="linear" slope="{slope}"/><feFuncA type="linear" slope="0.6"/></feComponentTransfer><feMerge><feMergeNode in="p"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="50" y="30" width="60" height="40" fill="#f00" filter="url(#s)"/>"##
@@ -261,7 +259,7 @@ fn a_darkened_copy_of_the_object_becomes_a_drop_shadow_with_darkness() {
     };
     let srgb = r#" color-interpolation-filters="sRGB""#;
     // The scale 0 makes black whatever values it works on.
-    for (space, slope, darkness) in [(srgb, 0.5, 50.0), ("", 0.0, 100.0)] {
+    for (space, slope, darkness) in [(srgb, 0.0, 100.0), ("", 0.0, 100.0)] {
         let (d, w) = open(&chain(space, "", slope));
         assert!(w.is_empty(), "{w:?}");
         let fx = effects(&d);
@@ -273,7 +271,7 @@ fn a_darkened_copy_of_the_object_becomes_a_drop_shadow_with_darkness() {
         assert_eq!((&p["x"], &p["y"], &p["blur"]), (&json!(4.0), &json!(5.0), &json!(4.0)));
     }
     // Scaled on linear values, or blurred on them before an sRGB scale.
-    for (space, transfer) in [("", ""), ("", srgb)] {
+    for (space, transfer) in [(srgb, ""), ("", ""), ("", srgb)] {
         let (d, w) = open(&chain(space, transfer, 0.5));
         assert!(w.iter().any(|w| w.contains("filter")), "{transfer}: {w:?}");
         assert!(effects(&d).is_empty());
@@ -332,18 +330,18 @@ fn a_drop_shadow_with_darkness_exports_as_the_canvas_draws_it() {
     let mut n = Node::path(
         d.alloc_id(),
         shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
-        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0),
+        Appearance::basic(Paint::solid(Color::rgb(0.8, 0.4, 0.2)), Paint::None, 0.0),
     );
-    let shadow = json!({"x": 30.0, "y": 30.0, "blur": 0.0, "opacity": 100.0, "mode": "normal", "shade": "darkness", "darkness": 50.0});
+    let shadow = json!({"x": 30.0, "y": 30.0, "blur": 0.0, "opacity": 100.0, "mode": "normal", "shade": "darkness", "darkness": 25.0});
     n.appearance.effects = vec![Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true }];
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     let svg = export(&d, &ExportOptions::default());
     let (canvas, exported) = (render_artboard(&d), resvg_render(&svg, 200, 120));
-    // Where only the shadow lies: the red at half its value.
+    // An intermediate color distinguishes subtraction from proportional darkening.
     for img in [&canvas, &exported] {
         let [r, g, b] = img.over_white(115, 90);
-        assert!(r.abs_diff(128) <= 2 && g <= 2 && b <= 2, "{:?}", [r, g, b]);
+        assert!(r.abs_diff(140) <= 2 && g.abs_diff(38) <= 2 && b <= 2, "{:?}", [r, g, b]);
     }
     assert_similar(&canvas, &exported, 40.0, 0.02);
 }

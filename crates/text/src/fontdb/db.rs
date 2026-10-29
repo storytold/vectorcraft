@@ -17,7 +17,9 @@ use super::scan::{file_face_names, is_font_file};
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
 use super::traits::{Alias, FaceStyle};
-use super::*;
+use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
+#[cfg(not(target_arch = "wasm32"))]
+use super::{ScanStamp, modified};
 
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,

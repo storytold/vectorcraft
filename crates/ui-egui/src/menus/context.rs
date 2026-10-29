@@ -1,7 +1,7 @@
 use super::bar::render_items;
 use super::state::enabled;
 use super::tree::{arrange_items, transform_items};
-use super::*;
+use super::{Item, Sep, Value, VectorcraftApp, c, cp, json, sub, widgets};
 
 /// The canvas context menu (right-click): what applies to the selection, or to the view when
 /// nothing is selected. Commands that can't run now are left out rather than greyed out.

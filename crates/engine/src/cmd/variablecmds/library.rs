@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, absolute_path, bad, json, named,
+    read_file_head, str_param, variables_unlocked,
+};
 
 /// Caps on a variable library (paths and MCP payloads are untrusted): its size, its XML nodes, how
 /// deep its elements nest, and the entities, variables and data sets it declares.

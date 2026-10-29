@@ -1,5 +1,8 @@
 use super::cid::{CidText, FontInfo};
-use super::*;
+use super::{
+    Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
+};
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
 pub(super) type Decoded = (Vec<u8>, u32, u32, (f32, f32));
@@ -119,6 +122,8 @@ pub(super) struct Builder<'p> {
     pub(super) function_paints: HashMap<(u128, Option<Vec<String>>), Paint>,
     /// What is left of the import's function evaluations for those shadings.
     pub(super) function_budget: FunctionBudget,
+    /// What is left of the import's objects ([`super::entry::max_objects`]).
+    pub(super) objects_left: usize,
     /// Swatch names in use.
     pub(super) taken: Vec<String>,
     /// The page as walked by [`scan_page`], and how far the interpreter is through it.

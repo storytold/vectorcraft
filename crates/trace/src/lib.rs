@@ -79,7 +79,7 @@ use layers::parallel_map_at_most;
 #[cfg(test)]
 pub(crate) use layers::shift_probe;
 pub use params::{Method, Mode, PRESET_NAMES, Palette, TraceParams, enhanced_preset, preset, presets};
-pub use pipeline::{TraceResult, TracedPath, trace, trace_within};
+pub use pipeline::{TraceResult, TracedPath, trace, trace_watched, trace_within};
 #[cfg(test)]
 use raster::fit_size;
 pub use raster::{MAX_PIXELS, MAX_SOURCE_PIXELS, Raster, TraceError};

@@ -55,6 +55,11 @@ fn open(app: &mut VectorcraftApp, path: &Path) {
     crate::io::open_path(app, &path.to_string_lossy()).unwrap();
 }
 
+/// How long a test waits for the dialog's search to end. The wait only ends a test whose search
+/// never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
 fn kind(app: &VectorcraftApp) -> Option<&str> {
     app.ui.dialog.as_ref().map(|d| d.kind.as_str())
 }
@@ -101,7 +106,7 @@ fn the_documents_fonts_folder_is_offered_and_searched_off_the_ui_thread() {
     let r = super::super::confirm(&mut app).unwrap();
     assert!(matches!(r["state"].as_str(), Some("searching" | "done")), "{r}");
     assert_eq!(kind(&app), Some(KIND), "the dialog stays open while it searches");
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while app.ui.dialog.as_ref().is_some_and(|d| d.str("state") == "searching") && Instant::now() < until {
         frame(&mut app);
         std::thread::sleep(Duration::from_millis(5));
