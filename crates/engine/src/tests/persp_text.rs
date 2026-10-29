@@ -132,7 +132,7 @@ fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     assert!(n.projection().is_some(), "projected again");
     // Nothing left flat anywhere in the history.
     for e in &s.doc().unwrap().history.undo {
-        if let Some(p) = e.doc.node(id).and_then(|n| n.extras().perspective.as_deref()) {
+        if let Some(p) = e.doc().and_then(|d| d.node(id)).and_then(|n| n.extras().perspective.as_deref()) {
             assert!(!p.editing);
         }
     }

@@ -600,11 +600,13 @@ pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
     };
     st.change_unsaved(clear);
     for e in st.history.undo.iter_mut().chain(st.history.redo.iter_mut()) {
-        let saved = Arc::ptr_eq(&e.doc, &st.saved_doc);
-        clear(&mut e.doc);
-        e.doc.drop_lookup_cache();
-        if saved {
-            st.saved_doc = e.doc.clone();
+        if let Some(doc) = e.doc_mut() {
+            let saved = Arc::ptr_eq(doc, &st.saved_doc);
+            clear(doc);
+            doc.drop_lookup_cache();
+            if saved {
+                st.saved_doc = doc.clone();
+            }
         }
     }
     if let Some(it) = &mut st.interaction {

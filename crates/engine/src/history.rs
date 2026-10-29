@@ -1,16 +1,44 @@
 use super::{Arc, Document, Selection};
+use vectorcraft_doc::NodeId;
+use vectorcraft_geom::{Affine, Vec2};
+
+/// A compact delta representation of an affine transformation edit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransformDelta {
+    /// The inverse affine transform that restores the pre-edit geometry.
+    pub inverse: Affine,
+    /// The root IDs that were transformed.
+    pub targets: Arc<Vec<NodeId>>,
+    /// If guides were moved, the inverse translation for them and the guide indices.
+    pub guides: Option<(Vec2, Arc<Vec<usize>>)>,
+}
+
+impl TransformDelta {
+    pub fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.targets.len() * std::mem::size_of::<NodeId>()
+            + self.guides.as_ref().map_or(0, |(_, g)| g.len() * std::mem::size_of::<usize>())
+    }
+}
+
+/// The state representation kept by a history entry.
+#[derive(Clone, Debug)]
+pub enum HistoryEntryKind {
+    /// Full immutable document snapshot.
+    Full(Arc<Document>),
+    /// Compact inverse affine transformation for pure object moves/nudges.
+    TransformDelta(TransformDelta),
+}
 
 /// One undo step.
 #[derive(Clone, Debug)]
 pub struct HistoryEntry {
     pub label: String,
-    /// The document as it was. It keeps no lookup cache ([`Document::drop_lookup_cache`]): a
-    /// table per step would add up, and undoing builds it again once.
-    pub doc: Arc<Document>,
+    pub kind: HistoryEntryKind,
     /// The selection as it was, shared with the neighbouring steps that have the same one.
     pub selection: Arc<Selection>,
     /// Roughly the memory this step keeps of its own: what of `doc` the step after it (or the
-    /// document now) doesn't share ([`Document::retained_bytes`]).
+    /// document now) doesn't share ([`Document::retained_bytes`]), or the size of a transform delta.
     pub bytes: usize,
     /// The same the other way round: what that next state keeps that `doc` doesn't share. Undoing
     /// (redoing) this step makes a step that keeps the next state: this is its `bytes`.
@@ -41,11 +69,46 @@ impl NamedStep {
 }
 
 impl HistoryEntry {
+    /// The document snapshot, if this step retains a full tree snapshot.
+    pub fn doc(&self) -> Option<&Arc<Document>> {
+        match &self.kind {
+            HistoryEntryKind::Full(doc) => Some(doc),
+            HistoryEntryKind::TransformDelta(_) => None,
+        }
+    }
+
+    /// Mutable access to the document snapshot, if this step retains a full tree snapshot.
+    pub fn doc_mut(&mut self) -> Option<&mut Arc<Document>> {
+        match &mut self.kind {
+            HistoryEntryKind::Full(doc) => Some(doc),
+            HistoryEntryKind::TransformDelta(_) => None,
+        }
+    }
+
+    /// Whether this step is a compact transform delta.
+    pub fn is_delta(&self) -> bool {
+        matches!(self.kind, HistoryEntryKind::TransformDelta(_))
+    }
+
     /// A step keeping `doc` and `selection`, as they were before the edit that made `next`.
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
         let (bytes, next_bytes) = doc.retained_bytes_each(next);
-        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+        HistoryEntry { label, kind: HistoryEntryKind::Full(doc), selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+    }
+
+    /// A step keeping an inverse affine transform delta.
+    pub(crate) fn delta(label: String, delta: TransformDelta, selection: Arc<Selection>, next: &Document) -> Self {
+        let bytes = delta.retained_bytes();
+        HistoryEntry {
+            label,
+            kind: HistoryEntryKind::TransformDelta(delta),
+            selection,
+            bytes,
+            next_bytes: bytes,
+            next: std::ptr::from_ref(next) as usize,
+            named: None,
+        }
     }
 
     /// The template and name the step's label was made from, while the label is still the one
@@ -66,7 +129,28 @@ impl HistoryEntry {
             return Self::kept(label, doc, selection, now);
         }
         doc.drop_lookup_cache();
-        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize, named: None }
+        HistoryEntry {
+            label,
+            kind: HistoryEntryKind::Full(doc),
+            selection,
+            bytes: costs.next_bytes,
+            next_bytes: costs.bytes,
+            next: Arc::as_ptr(now) as usize,
+            named: None,
+        }
+    }
+
+    pub(crate) fn turned_delta(label: String, delta: TransformDelta, selection: Arc<Selection>, now: &Arc<Document>) -> Self {
+        let bytes = delta.retained_bytes();
+        HistoryEntry {
+            label,
+            kind: HistoryEntryKind::TransformDelta(delta),
+            selection,
+            bytes,
+            next_bytes: bytes,
+            next: Arc::as_ptr(now) as usize,
+            named: None,
+        }
     }
 
     /// The figures [`HistoryEntry::turned`] reuses.
@@ -140,8 +224,17 @@ impl History {
     /// merged into it, or an undo group extended it).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
-            (e.bytes, e.next_bytes) = e.doc.retained_bytes_each(now);
-            e.next = std::ptr::from_ref(now) as usize;
+            match &e.kind {
+                HistoryEntryKind::Full(doc) => {
+                    (e.bytes, e.next_bytes) = doc.retained_bytes_each(now);
+                    e.next = std::ptr::from_ref(now) as usize;
+                }
+                HistoryEntryKind::TransformDelta(delta) => {
+                    e.bytes = delta.retained_bytes();
+                    e.next_bytes = e.bytes;
+                    e.next = std::ptr::from_ref(now) as usize;
+                }
+            }
         }
     }
 }

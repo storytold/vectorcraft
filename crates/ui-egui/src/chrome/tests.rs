@@ -1295,14 +1295,15 @@ fn artboard_document_tab_roundtrip_preserves_other_tools() {
 }
 
 /// One history entry: its label, document and selection.
-type HistoryRow = (String, Arc<vectorcraft_doc::Document>, Arc<vectorcraft_doc::Selection>);
+type HistoryRow = (String, Option<Arc<vectorcraft_doc::Document>>, Arc<vectorcraft_doc::Selection>);
 
 /// The undo and redo entries of a document.
 type HistoryDump = (Vec<HistoryRow>, Vec<HistoryRow>);
 
 fn history_of(st: &vectorcraft_engine::DocState) -> HistoryDump {
-    let entries =
-        |items: &[vectorcraft_engine::HistoryEntry]| items.iter().map(|e| (e.label.clone(), e.doc.clone(), e.selection.clone())).collect::<Vec<_>>();
+    let entries = |items: &[vectorcraft_engine::HistoryEntry]| {
+        items.iter().map(|e| (e.label.clone(), e.doc().cloned(), e.selection.clone())).collect::<Vec<_>>()
+    };
     (entries(&st.history.undo), entries(&st.history.redo))
 }
 
@@ -1425,7 +1426,7 @@ fn undo_and_redo_the_deletion(app: &mut crate::VectorcraftApp, base: &Baseline) 
     let history_after = history_of(st);
     assert_eq!(&history_after.0[..history_before.0.len()], history_before.0.as_slice());
     let entry = history_after.0.last().unwrap();
-    assert_eq!(entry.1.as_ref(), before.as_ref());
+    assert_eq!(entry.1.as_ref(), Some(before));
     assert_eq!(entry.2.as_ref(), selection);
     assert!(history_after.1.is_empty());
     assert!(st.is_dirty());
@@ -1438,7 +1439,7 @@ fn undo_and_redo_the_deletion(app: &mut crate::VectorcraftApp, base: &Baseline) 
     assert_eq!(history_of(st).0, history_before.0);
     assert_eq!(st.history.redo.len(), 1);
     assert_eq!(st.history.redo[0].label, "Delete Artboard");
-    assert_eq!(st.history.redo[0].doc.as_ref(), deleted.as_ref());
+    assert_eq!(st.history.redo[0].doc().map(|d| d.as_ref()), Some(deleted.as_ref()));
     assert_eq!(st.history.redo[0].selection.as_ref(), selection);
     assert!(!st.is_dirty());
     app.run("edit.redo", json!({})).unwrap();

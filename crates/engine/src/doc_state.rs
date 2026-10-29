@@ -1,5 +1,5 @@
 use super::error::{EngineError, Result};
-use super::history::{History, HistoryEntry};
+use super::history::{History, HistoryEntry, HistoryEntryKind, StepCosts, TransformDelta};
 use super::interaction::{Interaction, LastTransform, UndoGroup};
 use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access};
 
@@ -207,6 +207,9 @@ struct SameContent {
 }
 
 impl SameContent {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.before.is_empty()
+    }
     /// Note that `now` replaced `before` without a change to its content.
     fn replaced(&mut self, before: std::sync::Weak<Document>, now: &Arc<Document>) {
         if !self.now.ptr_eq(&before) {
@@ -274,6 +277,9 @@ impl DocState {
     pub fn is_dirty(&self) -> bool {
         !self.same_content(&self.saved_doc)
     }
+    pub(crate) fn has_unsaved_changes(&self) -> bool {
+        !self.unsaved_changes.is_empty()
+    }
     /// Record the current document as saved.
     pub fn mark_saved(&mut self) {
         self.saved_doc = self.doc.clone();
@@ -286,7 +292,7 @@ impl DocState {
     /// Whether `doc` counts as having the content of the document now: it is the document, or one
     /// that changes that are not edits to save replaced since ([`DocState::change_unsaved`]).
     pub fn same_content(&self, doc: &Arc<Document>) -> bool {
-        Arc::ptr_eq(&self.doc, doc) || self.unsaved_changes.holds(&self.doc, doc)
+        Arc::ptr_eq(&self.doc, doc) || *self.doc == **doc || self.unsaved_changes.holds(&self.doc, doc)
     }
     /// Make a change that is not an edit to save with `f`, without an undo step: editing state that
     /// is never saved, or type laid out again after a font scan (which can also refit the frame of
@@ -319,7 +325,7 @@ impl DocState {
     /// after it extend that step.
     pub(crate) fn push_undo(&mut self, mut label: String, doc: Arc<Document>, selection: Arc<Selection>) {
         if let Some(g) = &mut self.undo_group {
-            let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| Arc::ptr_eq(&l.doc, first));
+            let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| l.doc().is_some_and(|d| Arc::ptr_eq(d, first)));
             if g.first.as_ref().is_some_and(recorded) {
                 self.history.recost_last(&self.doc);
                 self.history.trim();
@@ -334,6 +340,56 @@ impl DocState {
         self.history.undo.push(e);
         self.history.redo.clear();
         self.history.trim();
+    }
+    pub(crate) fn push_undo_delta(&mut self, label: String, delta: TransformDelta, selection: Arc<Selection>) {
+        if self.undo_group.is_some() {
+            return;
+        }
+        let e = HistoryEntry::delta(label, delta, selection, &self.doc);
+        self.history.undo.push(e);
+        self.history.redo.clear();
+        self.history.trim();
+    }
+    pub(crate) fn apply_history_step(&mut self, e: HistoryEntry, costs: StepCosts, like: Option<&HistoryEntry>) -> HistoryEntry {
+        let label = e.label.clone();
+        let named = e.named.clone();
+        let mut turned = match e.kind {
+            HistoryEntryKind::Full(doc) => {
+                let old_doc = std::mem::replace(&mut self.doc, doc);
+                let selection = std::mem::replace(&mut self.selection, Arc::unwrap_or_clone(e.selection));
+                let selection = cmd::edit::shared_selection(selection, like);
+                HistoryEntry::turned(label, old_doc, selection, &self.doc, costs)
+            }
+            HistoryEntryKind::TransformDelta(delta) => {
+                let d = Arc::make_mut(&mut self.doc);
+                let paths = d.index_paths(delta.targets.iter().copied());
+                for id in delta.targets.as_ref() {
+                    if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p)) {
+                        cmd::object::transform_node(n, delta.inverse, vectorcraft_doc::Scaling::default(), true);
+                    }
+                }
+                if let Some((guide_delta, guides)) = &delta.guides {
+                    for &i in guides.as_ref() {
+                        if let Some(g) = d.guides.get_mut(i) {
+                            *g = g.moved(*guide_delta);
+                        }
+                    }
+                }
+                let selection = std::mem::replace(&mut self.selection, Arc::unwrap_or_clone(e.selection));
+                let selection = cmd::edit::shared_selection(selection, like);
+                if *self.doc == *self.saved_doc {
+                    self.doc = self.saved_doc.clone();
+                }
+                let redo_delta = TransformDelta {
+                    inverse: delta.inverse.inverse(),
+                    targets: delta.targets.clone(),
+                    guides: delta.guides.as_ref().map(|(v, g)| (-*v, g.clone())),
+                };
+                HistoryEntry::turned_delta(label, redo_delta, selection, &self.doc)
+            }
+        };
+        turned.named = named;
+        turned
     }
     /// End the interaction in progress, undoing what it changed.
     pub(crate) fn undo_interaction(&mut self) {

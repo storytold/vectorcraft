@@ -911,7 +911,7 @@ fn layer_delete_rejects_invalid_explicit_targets() {
 fn layer_target_snapshot(s: &Session) -> Value {
     let st = s.doc().unwrap();
     let history =
-        |entries: &[HistoryEntry]| entries.iter().map(|e| json!({"label": e.label, "doc": e.doc, "selection": e.selection})).collect::<Vec<_>>();
+        |entries: &[HistoryEntry]| entries.iter().map(|e| json!({"label": e.label, "doc": e.doc(), "selection": e.selection})).collect::<Vec<_>>();
     json!({"doc": st.doc, "selection": st.selection, "revision": st.revision, "activeLayer": st.active_layer,
         "rows": st.layer_rows, "undo": history(&st.history.undo), "redo": history(&st.history.redo)})
 }

@@ -7,6 +7,17 @@ impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        self.edit_delta(label, None, f)
+    }
+
+    /// [`Session::edit`], with an optional compact inverse affine transform delta for pure
+    /// whole-object moves/nudges.
+    pub fn edit_delta<T>(
+        &mut self,
+        label: &str,
+        delta: Option<crate::history::TransformDelta>,
+        f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>,
+    ) -> Result<T> {
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
         if !self.previewing && cmd::typing_in_progress(self) {
@@ -88,7 +99,18 @@ impl Session {
                         Some(l) if *l.selection == before_sel => l.selection.clone(),
                         _ => Arc::new(before_sel),
                     };
-                    st.push_undo(label.to_string(), before, selection);
+                    let can_delta = st.undo_group.is_none()
+                        && st.global_edit.is_none()
+                        && spread.is_empty()
+                        && !before.dimensions
+                        && st.doc.mask_edit.is_none()
+                        && st.doc.text_threads.is_empty()
+                        && !st.has_unsaved_changes();
+                    if let (true, Some(d)) = (can_delta, delta) {
+                        st.push_undo_delta(label.to_string(), d, selection);
+                    } else {
+                        st.push_undo(label.to_string(), before, selection);
+                    }
                 }
                 Ok(v)
             }
@@ -120,7 +142,7 @@ impl Session {
         let v = self.edit(&step, f)?;
         if let Ok(st) = self.doc_mut()
             && let Some(e) = st.history.undo.last_mut()
-            && Arc::as_ptr(&e.doc) == now
+            && e.doc().is_some_and(|d| Arc::as_ptr(d) == now)
             && e.label == step
         {
             e.named = Some(named);

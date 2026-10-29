@@ -302,7 +302,7 @@ fn width_point_finite_scaling_preserves_small_results() {
 fn width_point_nonrepresentable_widths_reject_atomically() {
     let history = |s: &Session| {
         let h = &s.doc().unwrap().history;
-        let entries = |es: &[HistoryEntry]| es.iter().map(|e| (e.label.clone(), e.doc.clone(), e.selection.clone(), e.bytes)).collect::<Vec<_>>();
+        let entries = |es: &[HistoryEntry]| es.iter().map(|e| (e.label.clone(), e.doc().cloned(), e.selection.clone(), e.bytes)).collect::<Vec<_>>();
         (entries(&h.undo), entries(&h.redo), h.limit, h.byte_budget)
     };
     for (case, weight, ends, middle, left) in [

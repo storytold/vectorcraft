@@ -257,7 +257,7 @@ use command_sets::given_ids;
 pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
 pub use error::{EngineError, Result};
-pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
+pub use history::{History, HistoryEntry, HistoryEntryKind, NamedStep, TransformDelta, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
 pub use prefs::{DrawMode, Prefs};

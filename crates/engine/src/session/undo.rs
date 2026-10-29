@@ -94,10 +94,12 @@ impl Session {
             // Only while the group's step is still the newest one.
             if cancel
                 && let Some(first) = g.first
-                && st.history.undo.last().is_some_and(|e| Arc::ptr_eq(&e.doc, &first))
+                && st.history.undo.last().is_some_and(|e| e.doc().is_some_and(|d| Arc::ptr_eq(d, &first)))
                 && let Some(e) = st.history.undo.pop()
             {
-                st.doc = e.doc;
+                if let Some(doc) = e.doc().cloned() {
+                    st.doc = doc;
+                }
                 st.selection = Arc::unwrap_or_clone(e.selection);
                 deselect_hidden(&self.menu, &st.doc, &mut st.selection);
                 st.sync_new_art();
@@ -214,7 +216,7 @@ impl Session {
         let menu = self.menu.clone();
         let Some(st) = self.document_mut(scope.uid) else { return };
         let Some(g) = &mut st.undo_group else { return };
-        let newest = g.first.as_ref().is_some_and(|f| st.history.undo.last().is_some_and(|e| Arc::ptr_eq(&e.doc, f)));
+        let newest = g.first.as_ref().is_some_and(|f| st.history.undo.last().is_some_and(|e| e.doc().is_some_and(|d| Arc::ptr_eq(d, f))));
         if !cancel || !newest {
             return;
         }

@@ -1261,14 +1261,14 @@ fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     // plus the text (and its id), roll back to it without a trace.
     let st = s.doc_mut()?;
     if st.interaction.is_none()
-        && let Some(k) = st.history.undo.iter().rposition(|e| e.doc.node_uncached(id).is_none())
-        && let Some(created) = st.history.undo.get(k)
+        && let Some(k) = st.history.undo.iter().rposition(|e| e.doc().is_some_and(|d| d.node_uncached(id).is_none()))
+        && let Some(created_doc) = st.history.undo.get(k).and_then(|e| e.doc().cloned())
     {
         let mut now = (*st.doc).clone();
-        let mut before = (*created.doc).clone();
+        let mut before = (*created_doc).clone();
         before.alloc_id();
         if now.remove(id).is_ok() && now == before {
-            st.doc = created.doc.clone();
+            st.doc = created_doc;
             st.history.undo.truncate(k);
             st.selection.prune(&st.doc);
             super::globaledit::follow_history(st);

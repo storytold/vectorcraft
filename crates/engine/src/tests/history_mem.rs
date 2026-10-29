@@ -36,9 +36,11 @@ fn past_the_budget_the_oldest_steps_go_but_the_last_few_stay() {
     let n = 500;
     let mut s = session_with_rects(n);
     s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
-    let step = s.doc().unwrap().history.undo.last().unwrap().bytes;
-    // Each move keeps every rectangle's old node: about 700 bytes each (measured: ~775).
-    assert!((300 * n..1500 * n).contains(&step), "{step} bytes for moving {n} rectangles");
+    let last = s.doc().unwrap().history.undo.last().unwrap();
+    assert!(last.is_delta(), "pure move uses compact transform delta");
+    let step = last.bytes;
+    // Compact transform delta retains minimal memory (~8 bytes per target node).
+    assert!(step < 20 * n, "{step} bytes for moving {n} rectangles with delta");
     // A budget of about three moves.
     s.active_mut().unwrap().history.byte_budget = 3 * step;
     for _ in 0..20 {
@@ -89,7 +91,9 @@ fn undo_steps_keep_no_lookup_tables() {
     let st = s.doc().unwrap();
     assert!(!st.history.undo.is_empty() && !st.history.redo.is_empty());
     for e in st.history.undo.iter().chain(&st.history.redo) {
-        assert!(!e.doc.has_lookup_cache(), "step {} keeps a lookup table", e.label);
+        if let Some(doc) = e.doc() {
+            assert!(!doc.has_lookup_cache(), "step {} keeps a lookup table", e.label);
+        }
     }
     // The document undone to builds its table again on its first lookup.
     first_x(&s);
@@ -99,7 +103,7 @@ fn undo_steps_keep_no_lookup_tables() {
     s.preview("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
     first_x(&s);
     s.commit_interaction().unwrap();
-    assert!(!s.doc().unwrap().history.undo.last().unwrap().doc.has_lookup_cache());
+    assert!(!s.doc().unwrap().history.undo.last().unwrap().doc().map_or(false, |d| d.has_lookup_cache()));
 }
 
 #[test]
@@ -133,7 +137,7 @@ fn undo_and_redo_reuse_the_estimates() {
     s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
     // A deletion is lopsided: the step before it keeps the objects, the one after keeps nothing.
     s.execute("edit.clear", &json!({})).unwrap();
-    let fresh = |e: &HistoryEntry, now: &Document| e.doc.retained_bytes(now);
+    let fresh = |e: &HistoryEntry, now: &Document| e.doc().map_or(e.bytes, |d| d.retained_bytes(now));
     let st = s.doc().unwrap();
     let delete = st.history.undo.last().unwrap();
     assert!(delete.bytes > 200 * 300, "the deleted objects: {}", delete.bytes);
@@ -178,4 +182,30 @@ fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
     assert_eq!(first_x(&s), start + 3.0);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(first_x(&s), start);
+}
+
+#[test]
+fn repeated_nudges_of_many_objects_retain_minimal_memory() {
+    let n = 2000;
+    let mut s = session_with_rects(n);
+    let initial_x = first_x(&s);
+    for _ in 0..45 {
+        s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
+    }
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), 46);
+    for e in &st.history.undo[1..] {
+        assert!(e.is_delta(), "nudge recorded compact transform delta");
+        assert!(e.bytes < 20 * n, "step bytes: {}", e.bytes);
+    }
+    // Undo all 45 nudges and verify bit-for-bit identical geometry
+    for _ in 0..45 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(first_x(&s), initial_x);
+    // Redo all 45 nudges
+    for _ in 0..45 {
+        s.execute("edit.redo", &json!({})).unwrap();
+    }
+    assert_eq!(first_x(&s), initial_x + 45.0);
 }

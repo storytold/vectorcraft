@@ -564,7 +564,7 @@ fn warp_options_style_keyboard_enter_does_not_accept_dialog() {
         let before = app.session.doc().unwrap().doc.clone();
         let selection = app.session.doc().unwrap().selection.clone();
         let entries = |items: &[vectorcraft_engine::HistoryEntry]| {
-            items.iter().map(|entry| (entry.label.clone(), entry.doc.clone(), entry.selection.clone())).collect::<Vec<_>>()
+            items.iter().map(|entry| (entry.label.clone(), entry.doc().cloned(), entry.selection.clone())).collect::<Vec<_>>()
         };
         let undo = entries(&app.session.doc().unwrap().history.undo);
         let redo = entries(&app.session.doc().unwrap().history.redo);

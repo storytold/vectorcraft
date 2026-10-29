@@ -128,7 +128,26 @@ fn apply_transform_moving_guides(
         if copy { vec![] } else { ids }
     } else {
         let kept = if copy { preview_copies(s, &ids, with_guides)? } else { None };
-        s.edit(label, |d, sel| {
+        let has_type_area = areas
+            && ids.iter().any(|&id| s.doc().is_ok_and(|st| st.doc.node(id).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)))));
+        let scales_geometry_only = Scaling::factor(xf).is_none() || (!sc.strokes && sc.keep_corners);
+        let delta_record = if !copy
+            && is_translation
+            && s.doc()?.selection.anchors.is_empty()
+            && !sc.patterns
+            && !has_type_area
+            && scales_geometry_only
+            && xf.determinant().abs() > 1e-12
+            && s.doc()?.undo_group.is_none()
+        {
+            let inv = xf.inverse();
+            let guide_inv = has_guides.then(|| -delta);
+            let guide_indices = if has_guides { Some(Arc::new(s.doc()?.selection.guides.clone())) } else { None };
+            Some(crate::history::TransformDelta { inverse: inv, targets: Arc::new(ids.clone()), guides: guide_inv.zip(guide_indices) })
+        } else {
+            None
+        };
+        s.edit_delta(label, delta_record, |d, sel| {
             let targets = match &kept {
                 // The document becomes the snapshot with the kept copies, untransformed, and the
                 // loop below transforms only the copies.

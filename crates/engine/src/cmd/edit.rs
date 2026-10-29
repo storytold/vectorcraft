@@ -481,11 +481,8 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
-    let doc = std::mem::replace(&mut st.doc, e.doc);
-    let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
-    let selection = shared_selection(selection, st.history.redo.last());
-    let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
-    turned.named = e.named;
+    let like = st.history.redo.last().cloned();
+    let turned = st.apply_history_step(e, costs, like.as_ref());
     st.history.redo.push(turned);
     st.history.trim();
     st.revision += 1;
@@ -507,11 +504,8 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let label = e.label.clone();
     let costs = e.costs();
     let editing = st.doc.mask_edit.map(|m| m.layer);
-    let doc = std::mem::replace(&mut st.doc, e.doc);
-    let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
-    let selection = shared_selection(selection, st.history.undo.last());
-    let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
-    turned.named = e.named;
+    let like = st.history.undo.last().cloned();
+    let turned = st.apply_history_step(e, costs, like.as_ref());
     st.history.undo.push(turned);
     st.history.trim();
     st.revision += 1;
@@ -547,7 +541,7 @@ fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// `selection` for an undo (redo) step, sharing that of `like`, the step beside it, when the same.
-fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::HistoryEntry>) -> Arc<vectorcraft_doc::Selection> {
+pub(crate) fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::HistoryEntry>) -> Arc<vectorcraft_doc::Selection> {
     match like {
         Some(l) if *l.selection == selection => l.selection.clone(),
         _ => Arc::new(selection),
