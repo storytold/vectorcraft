@@ -1,37 +1,5 @@
 # Development
 
-> **Linux integration update:** 2026-10-30 — reconciled with upstream baseline `e256c4c43`; all 12 CI gates and separate Plasma Wayland/XWayland menu smoke tests passed. See [KDE validation](KDE.md) for boundaries.
-
-## KDE appearance and scaling
-
-Preferences › User Interface › Brightness › Automatic (`prefs.set` with `uiBrightness: "system"`)
-follows the desktop light/dark preference. On Linux, a lazy shared portal watcher reads
-`org.freedesktop.appearance/color-scheme` off the UI thread and requests a repaint on changes;
-its bounded polling also recovers after a portal restart. On other platforms egui supplies the
-system appearance. With no preference available, Automatic uses Medium Dark. Existing saved
-brightness, color scheme and accent choices are not replaced; selecting any fixed brightness
-stops applying system changes. System accent adoption is deliberately not enabled.
-
-UI Scaling remains a multiplier of the compositor's scale, not a replacement for it. Leave it
-at 1× to follow 100%, 125%, 150%, 175% and 200% desktop scales. Tests inject each native scale
-and transitions back to 100%; this is not proof of physical multi-monitor operation. For a
-manual check, move the native Wayland window between differently scaled monitors, resize it,
-open Preferences and a long menu, and check text, cursor alignment and clipping. Test both
-Automatic appearance transitions and a fixed custom palette while the desktop theme changes.
-Do not change global desktop settings programmatically for this check.
-
-Linux decorations already follow `craft-window`: KDE/server-side decoration support keeps
-the native frame, while compositors requiring client controls keep the app frame. Existing
-titlebar overrides and the System Title Bar preference are retained. Tablet and file-drop
-behavior on the updated native Wayland backend needs separate acceptance; menu tests do not
-establish it. See the Linux section below.
-
-### Global Menu manual acceptance
-
-See [KDE validation](KDE.md) for isolated launch commands, regression tests and the native
-Global Menu/appearance/DPI checklist. Registrar permissions and model tests do not establish
-Plasma or Flatpak runtime acceptance; never overwrite real settings or documents for QA.
-
 > **Last updated:** 2026-10-25 · **Change:** Linux Wayland drag-and-drop note names eframe 0.37 (still on winit 0.30).
 > **Last updated:** 2026-10-23 · **Change:** Tests: cargo xtask test, one integration-test binary per crate, the dev profile's debug info.
 > **Last updated:** 2026-10-21 · **Change:** the interface faces as vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels itself.
@@ -524,8 +492,6 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-30 | minor | Reconcile KDE integration with upstream baseline e256c4c43; all 12 CI gates pass, including 10,966 workspace tests (14 ignored), plus separate Plasma Wayland/XWayland action/checkmark/screenshot/cleanup checks. Physical DND, monitor/theme transitions and packaged acceptance remain unverified; parity scores unchanged. |
-| 2026-10-21 | minor | Opt-in Automatic appearance through the shared portal watcher, stable fixed theme styles and fractional-monitor regression matrix. Physical multi-monitor and native theme acceptance remain manual checks. |
 | 2026-10-28 | minor | Localisation: Catalan (`ca`) catalog and registry entry (every `ca-*` locale); complete under the catalog tests. |
 | 2026-10-25 | minor | Linux Wayland drag-and-drop note names eframe 0.37 (still on winit 0.30); behavior unchanged. |
 | 2026-10-23 | minor | Tests: `cargo xtask test` (nextest, then doctests), one integration-test binary per crate and the files that keep their own, the dev profile's debug info. |
@@ -544,3 +510,42 @@ Scores and hour estimates are unchanged.
 | 2026-10-22 | minor | Merge current main and complete the Turkish tab-drag labels and validation messages requested by the maintainer; all 24 catalogs covered; scores and estimates unchanged. |
 | 2026-10-22 | minor | Tab-drag follow-up: reconcile upstream progress updates and document drag lifecycle, insertion behavior and regression contracts; behavior, scores and estimates unchanged. |
 | 2026-10-22 | minor | Artwork dragged with Selection switches visible document tabs after a 400 ms hover, then copies editable artwork on canvas release; source and clipboard stay intact; scores and hours unchanged |
+
+> **Linux integration update:** 2026-10-30 — reconciled with upstream baseline `e256c4c43`; all 12 CI gates and separate Plasma Wayland/XWayland menu smoke tests passed. See [KDE validation](KDE.md) for boundaries.
+
+## KDE appearance and scaling
+
+Preferences › User Interface › Brightness › Automatic (`prefs.set` with `uiBrightness: "system"`)
+follows the desktop light/dark preference. On Linux, a lazy shared portal watcher reads
+`org.freedesktop.appearance/color-scheme` off the UI thread and requests a repaint on changes;
+its bounded polling also recovers after a portal restart. On other platforms egui supplies the
+system appearance. With no preference available, Automatic uses Medium Dark. Existing saved
+brightness, color scheme and accent choices are not replaced; selecting any fixed brightness
+stops applying system changes. System accent adoption is deliberately not enabled.
+
+UI Scaling remains a multiplier of the compositor's scale, not a replacement for it. Leave it
+at 1× to follow 100%, 125%, 150%, 175% and 200% desktop scales. Tests inject each native scale
+and transitions back to 100%; this is not proof of physical multi-monitor operation. For a
+manual check, move the native Wayland window between differently scaled monitors, resize it,
+open Preferences and a long menu, and check text, cursor alignment and clipping. Test both
+Automatic appearance transitions and a fixed custom palette while the desktop theme changes.
+Do not change global desktop settings programmatically for this check.
+
+Linux decorations already follow `craft-window`: KDE/server-side decoration support keeps
+the native frame, while compositors requiring client controls keep the app frame. Existing
+titlebar overrides and the System Title Bar preference are retained. Tablet and file-drop
+behavior on the updated native Wayland backend needs separate acceptance; menu tests do not
+establish it. See the Linux section below.
+
+### Global Menu manual acceptance
+
+See [KDE validation](KDE.md) for isolated launch commands, regression tests and the native
+Global Menu/appearance/DPI checklist. Registrar permissions and model tests do not establish
+Plasma or Flatpak runtime acceptance; never overwrite real settings or documents for QA.
+
+### KDE integration revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-30 | minor | Reconcile KDE integration with upstream baseline e256c4c43; all 12 CI gates pass, including 10,966 workspace tests (14 ignored), plus separate Plasma Wayland/XWayland action/checkmark/screenshot/cleanup checks. Physical DND, monitor/theme transitions and packaged acceptance remain unverified; parity scores unchanged. |
+| 2026-10-21 | minor | Opt-in Automatic appearance through the shared portal watcher, stable fixed theme styles and fractional-monitor regression matrix. Physical multi-monitor and native theme acceptance remain manual checks. |
