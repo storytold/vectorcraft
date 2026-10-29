@@ -277,3 +277,42 @@ fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
 }
+
+/// Type on a path made by clicking a path with the plain Type tool (an open path, or a closed one
+/// with Alt held) shows its brackets as soon as the Selection or Direct Selection tool is chosen,
+/// and its centre bracket, dragged across the path, flips it.
+#[test]
+fn type_on_a_path_made_with_the_type_tool_has_brackets_at_once() {
+    let v = ViewInfo::default();
+    let alt = Mods { alt: true, ..Mods::default() };
+    for (tool, d, mods) in [
+        ("selection", "M100 300 L500 300", Mods::default()),
+        ("directSelection", "M100 300 L500 300", Mods::default()),
+        ("selection", "M100 300 L500 300 L500 500 L100 500 Z", alt),
+    ] {
+        let mut s = session();
+        s.execute("path.create", &json!({ "d": d })).unwrap();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 300.0, 300.0).with_mods(mods), v).unwrap();
+        }
+        let id = *s.doc().unwrap().selection.whole().first().expect("the new type is selected");
+        assert!(matches!(text(&s, id).kind, TextKind::OnPath { .. }), "{tool} {d}");
+        s.execute("text.setText", &json!({"ids": [id.0], "text": "Slide"})).unwrap();
+        s.select_tool(tool, v).unwrap();
+        let lines = s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Line { .. })).count();
+        assert!(lines >= 5, "{tool} {d}: the brackets are drawn at once ({lines} lines)");
+        if d.ends_with('Z') {
+            continue;
+        }
+        // The centre bracket stands midway between the start (300) and the end of the path (500).
+        let (start, end) = brackets(&s, id);
+        assert!(near(start, 0.5) && end.is_none(), "{start} {end:?}");
+        let centre = Point::new(400.0, 295.0);
+        assert_eq!(s.cursor(centre, Mods::default(), v), vectorcraft_tools::Cursor::PathBracket, "{tool}");
+        drag(&mut s, tool, centre, Point::new(400.0, 330.0), Mods::default());
+        let (start, end) = brackets(&s, id);
+        assert!(near(start, 0.0) && end.is_some_and(|e| near(e, 0.5)), "{tool}: flipped, {start} {end:?}");
+        assert!(ink(&s, id).y0 > 299.0, "{tool}: below the path");
+    }
+}
