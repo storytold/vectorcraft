@@ -45,6 +45,16 @@ fn the_fidelity_keys_step_finely_at_the_low_end() {
 }
 
 #[test]
+fn paintbrush_size_field_shows_multiplier_and_ok_converts_back() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "paintbrush"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("size", 0.0), 1.0);
+    app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!(2.0));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options_of("paintbrush")["size"].as_f64(), Some(20.0));
+}
+
+#[test]
 fn the_fidelity_field_takes_a_hundredth_for_the_pencil() {
     let mut app = app();
     app.run("tool.options", json!({"tool": "pencil"})).unwrap();
@@ -94,7 +104,7 @@ fn each_tool_shows_its_options_and_ok_sets_them() {
     // The Paintbrush keeps its own: the Pencil's change left it alone.
     app.run("tool.options", json!({"tool": "paintbrush"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.f64("fidelity", 0.0), d.bool("fill")), (1.5, false));
+    assert_eq!((d.f64("fidelity", 0.0), d.bool("fill"), d.f64("size", 0.0)), (1.5, false, 1.0));
     let pb_text = painted(&mut app);
     assert!(pb_text.contains("Paintbrush Tool Options"));
     assert!(!pb_text.contains("Alt key toggles to Smooth Tool") && !pb_text.contains("Live preview"), "{pb_text}");

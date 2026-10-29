@@ -328,7 +328,10 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     // A pencil path with a fill keeps a stroke of None (#1679); only one that would show nothing
     // gets black. A brush is its stroke.
     let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
-    let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
+    // The Paintbrush's own size scales the stroke it draws, not the weight new art takes.
+    let scale = f64_or(p, "scale", 1.0);
+    let scale = if scale.is_finite() { scale.clamp(0.1, 100.0) } else { 1.0 };
+    let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1) * scale);
     if let Some(st) = look.appearance.stroke_mut() {
         st.pressure = pressure;
     }

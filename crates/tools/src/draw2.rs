@@ -21,7 +21,7 @@ pub use curvature::{
     CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_remove, curvature_smooth,
 };
 pub use family::FamilyTool;
-pub use gesture::GestureTool;
+pub use gesture::{GestureTool, PAINTBRUSH_SIZE};
 
 /// Colour of tool feedback (Illustrator's selection blue).
 pub const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];

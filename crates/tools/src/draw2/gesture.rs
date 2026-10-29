@@ -49,8 +49,12 @@ pub struct GestureTool {
     redraw: Option<(NodeId, f64)>,
     /// Fit tolerance in points (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity").
     pub fidelity: f64,
-    /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
+    /// Brush / eraser diameter in points; the Paintbrush's `size` is relative to
+    /// [`PAINTBRUSH_SIZE`] (10 = 1× the stroke weight); the Eraser's is across its tip's long axis.
     pub size: f64,
+    /// Paintbrush scale captured at pointer-down for the stroke in progress (`[` / `]` still
+    /// update `size` for the next stroke).
+    stroke_scale: Option<f64>,
     /// The angle of the Eraser tip's long axis, in degrees counter-clockwise from horizontal.
     pub angle: f64,
     /// The Eraser tip's short axis in percent of its long one (100: round).
@@ -111,6 +115,11 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
     }
 }
 
+/// The Paintbrush's starting size, as the Blob Brush's: strokes at the stroke weight. `[` and `]`
+/// take a point off or add one, so each press draws the next stroke a tenth of the weight thinner
+/// or thicker (our own step; the public references give none).
+pub const PAINTBRUSH_SIZE: f64 = 10.0;
+
 impl GestureTool {
     pub fn new(id: &str) -> Self {
         let id: &'static str = match id {
@@ -136,7 +145,8 @@ impl GestureTool {
             connect_to: vec![],
             redraw: None,
             fidelity,
-            size: 10.0,
+            size: if id == "paintbrush" { PAINTBRUSH_SIZE } else { 10.0 },
+            stroke_scale: None,
             angle: 0.0,
             roundness: 100.0,
             fill: false,
@@ -320,6 +330,21 @@ impl GestureTool {
         })
     }
 
+    /// The Paintbrush scale for `size` (1 = stroke weight unchanged).
+    fn paintbrush_scale_from_size(size: f64) -> f64 {
+        let scale = size / PAINTBRUSH_SIZE;
+        if scale.is_finite() { scale.clamp(0.1, 100.0) } else { 1.0 }
+    }
+
+    /// `scale` sent with `path.freehand` for a new Paintbrush stroke (omitted at 1×).
+    fn freehand_paintbrush_scale(&self) -> Option<f64> {
+        if self.id != "paintbrush" {
+            return None;
+        }
+        let scale = self.stroke_scale.unwrap_or_else(|| Self::paintbrush_scale_from_size(self.size));
+        ((scale - 1.0).abs() >= 1e-9).then_some(scale)
+    }
+
     /// Does a stroke that ends at `end` end near its start (Close Paths When Ends Are Within, off
     /// at 0 pixels)?
     fn ends_near_start(&self, cx: &ToolContext, end: Point) -> bool {
@@ -347,6 +372,11 @@ impl GestureTool {
             v["extend"] = json!({"id": id.0, "end": if start { "start" } else { "end" }});
         } else if let Some((id, within)) = self.redraw {
             v["redraw"] = json!({"id": id.0, "within": within});
+            if let Some(scale) = self.freehand_paintbrush_scale() {
+                v["scale"] = json!(scale);
+            }
+        } else if let Some(scale) = self.freehand_paintbrush_scale() {
+            v["scale"] = json!(scale);
         }
         v
     }
@@ -441,6 +471,7 @@ impl Tool for GestureTool {
                     _ => vec![],
                 };
                 self.redraw = if self.draws_path() && !self.smoothing && self.extend.is_none() { self.find_redraw(cx, p) } else { None };
+                self.stroke_scale = if self.id == "paintbrush" { Some(Self::paintbrush_scale_from_size(self.size)) } else { None };
                 // A path continued starts at its end, one redrawn on it; a new one where it snaps.
                 // A straight line is constrained from the end it continues, so it starts there.
                 let start = if let Some((_, _, end)) = extend.filter(|_| self.straight) {
@@ -558,6 +589,7 @@ impl Tool for GestureTool {
                 self.extend = None;
                 self.connect_to.clear();
                 self.redraw = None;
+                self.stroke_scale = None;
                 out
             }
             _ => vec![],
@@ -568,9 +600,9 @@ impl Tool for GestureTool {
     fn wants_samples(&self) -> bool {
         matches!(self.id, "pencil" | "paintbrush" | "blobBrush" | "eraser" | "knife" | "smooth" | "pathEraser")
     }
-    /// `[` and `]` are the Blob Brush's and the Eraser's: their size (#1661).
+    /// `[` and `]` are the Blob Brush's, the Eraser's and the Paintbrush's size (#1661, #2882).
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::BracketLeft | ToolKey::BracketRight) && matches!(self.id, "blobBrush" | "eraser")
+        matches!(key, ToolKey::BracketLeft | ToolKey::BracketRight) && matches!(self.id, "paintbrush" | "blobBrush" | "eraser")
     }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {
@@ -584,13 +616,18 @@ impl Tool for GestureTool {
                 self.straight = false;
                 self.unconstrained = false;
                 self.clear();
+                self.extend = None;
+                self.redraw = None;
+                self.stroke_scale = None;
                 if began { vec![Action::Cancel] } else { vec![] }
             }
-            ToolKey::BracketLeft if matches!(self.id, "blobBrush" | "eraser") => {
+            // The Paintbrush's size is its own: the stroke weight and the selection stay as they
+            // are, and the next stroke is drawn thinner or thicker.
+            ToolKey::BracketLeft if matches!(self.id, "blobBrush" | "eraser" | "paintbrush") => {
                 self.size = (self.size - 1.0).max(1.0);
                 vec![]
             }
-            ToolKey::BracketRight if matches!(self.id, "blobBrush" | "eraser") => {
+            ToolKey::BracketRight if matches!(self.id, "blobBrush" | "eraser" | "paintbrush") => {
                 self.size = (self.size + 1.0).min(1000.0);
                 vec![]
             }
@@ -611,6 +648,9 @@ impl Tool for GestureTool {
         self.straight = false;
         self.unconstrained = false;
         self.clear();
+        self.extend = None;
+        self.redraw = None;
+        self.stroke_scale = None;
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -695,7 +735,8 @@ impl Tool for GestureTool {
                     "fill": self.fill,
                     "keepSelected": self.keep_selected,
                     "editWithin": self.edit_within,
-                    "closeWithin": self.close_within
+                    "closeWithin": self.close_within,
+                    "size": self.size
                 })
             }
             "smooth" => json!({"fidelity": self.fidelity}),
@@ -709,7 +750,10 @@ impl Tool for GestureTool {
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
             "fidelity" => self.fidelity = v.as_f64().unwrap_or(self.fidelity).clamp(super::min_fidelity(self.id), 100.0),
-            "size" => self.size = v.as_f64().unwrap_or(self.size).clamp(0.1, 1000.0),
+            "size" => {
+                let min = if self.id == "paintbrush" { 1.0 } else { 0.1 };
+                self.size = v.as_f64().unwrap_or(self.size).clamp(min, 1000.0);
+            }
             "angle" => self.angle = v.as_f64().unwrap_or(self.angle).clamp(-180.0, 180.0),
             "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(1.0, 100.0),
             "fill" => self.fill = v.as_bool().unwrap_or(self.fill),

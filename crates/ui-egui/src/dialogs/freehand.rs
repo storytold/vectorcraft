@@ -8,7 +8,7 @@
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release) and `size`
-//! (points; Blob Brush and Eraser).
+//! (relative to 1× stroke weight for the Paintbrush; points for the Blob Brush and Eraser).
 
 use serde_json::{Map, Value, json};
 
@@ -17,6 +17,7 @@ use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
+use vectorcraft_tools::draw2::PAINTBRUSH_SIZE;
 
 /// The dialog kind of the freehand tools' Tool Options.
 pub const KIND: &str = "freehandOptions";
@@ -118,6 +119,11 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
     }
     let o = app.session.tool_options_of(tool);
     let mut fields: Map<String, Value> = KEYS.iter().filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
+    if tool == "paintbrush"
+        && let Some(size) = fields.get("size").and_then(Value::as_f64)
+    {
+        fields.insert("size".into(), json!(size / PAINTBRUSH_SIZE));
+    }
     fields.insert("tool".into(), json!(tool));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(json!({ "dialog": KIND }))
@@ -183,7 +189,10 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (1.0, 100.0));
     }
     if d.fields.contains_key("size") {
-        number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
+        let paintbrush = d.str("tool") == "paintbrush";
+        let suffix = if paintbrush { "×" } else { "pt" };
+        let range = if paintbrush { (0.1, 100.0) } else { (0.1, 1000.0) };
+        number(ui, d, ("size", tl!("Size:")), suffix, 1, range);
     }
     if d.fields.contains_key("fill") {
         check(ui, d, "fill", tl!("Fill new strokes"));
@@ -219,7 +228,12 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// OK: set the tool's options.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
+    let mut values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
+    if d.str("tool") == "paintbrush"
+        && let Some(scale) = values.get("size").and_then(Value::as_f64)
+    {
+        values.insert("size".into(), json!(scale * PAINTBRUSH_SIZE));
+    }
     run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
 }
 

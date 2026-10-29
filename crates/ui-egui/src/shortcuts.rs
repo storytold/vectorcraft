@@ -598,7 +598,8 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
             }
         }
     }
-    // `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism
+    // `[` and `]` the active tool takes (the Blob Brush's, the Eraser's and the Paintbrush's size,
+    // the Symbolism
     // tools' diameter, with Shift their intensity). Read as typed, so
     // layouts where a bracket takes Option or AltGr count too; `{` and `}` are Shift's.
     if !(m.command || m.ctrl) {

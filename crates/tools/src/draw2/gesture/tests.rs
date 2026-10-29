@@ -1121,6 +1121,64 @@ fn smooth_needs_selection_and_brackets_resize() {
     assert_eq!(b.options()["size"], 11.0);
 }
 
+/// #2882: `[` and `]` size the Paintbrush itself, a tenth of its starting size a press:
+/// the next stroke is drawn that much thinner or thicker; continuing a path keeps its weight.
+#[test]
+fn paintbrush_brackets_size_its_next_stroke() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("paintbrush");
+    assert!(t.claims_key(&cx, ToolKey::BracketRight) && t.freehand_params(false).get("scale").is_none());
+    for _ in 0..10 {
+        assert!(t.key(&cx, ToolKey::BracketRight, Mods::default()).is_empty(), "no command: the weight stays");
+    }
+    assert_eq!(t.options()["size"], 20.0);
+    assert_eq!(t.freehand_params(false)["scale"], json!(2.0));
+    for _ in 0..40 {
+        t.key(&cx, ToolKey::BracketLeft, Mods::default());
+    }
+    assert_eq!(t.options()["size"], 1.0);
+    t.set_option("size", &json!(0.5));
+    assert_eq!(t.options()["size"], 1.0);
+    assert_eq!(t.freehand_params(false)["scale"], json!(0.1));
+    t.extend = Some((NodeId(1), false));
+    assert!(t.freehand_params(false).get("scale").is_none());
+    t.extend = None;
+    t.redraw = Some((NodeId(1), 12.0));
+    assert_eq!(t.freehand_params(false)["scale"], json!(0.1));
+    assert!(!GestureTool::new("pencil").claims_key(&cx, ToolKey::BracketRight));
+}
+
+/// #2882: bracket keys during a stroke update `size` for the next stroke only.
+#[test]
+fn paintbrush_brackets_during_stroke_keep_the_current_scale() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("paintbrush");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0, 50.0));
+    assert!(t.freehand_params(false).get("scale").is_none());
+    t.key(&cx, ToolKey::BracketRight, Mods::default());
+    assert_eq!(t.options()["size"], 11.0);
+    assert!(t.freehand_params(false).get("scale").is_none());
+    for _ in 0..9 {
+        t.key(&cx, ToolKey::BracketRight, Mods::default());
+    }
+    assert_eq!(t.options()["size"], 20.0);
+    assert!(t.freehand_params(false).get("scale").is_none());
+    t.set_option("size", &json!(20.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 40.0, 40.0));
+    assert_eq!(t.freehand_params(false)["scale"], json!(2.0));
+    t.key(&cx, ToolKey::BracketLeft, Mods::default());
+    assert_eq!(t.options()["size"], 19.0);
+    assert_eq!(t.freehand_params(false)["scale"], json!(2.0));
+}
+
 #[test]
 fn pencil_alt_toggles_to_smooth_when_enabled_and_closes_when_disabled() {
     let (d, id) = doc_with_rect();
