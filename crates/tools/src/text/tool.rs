@@ -55,6 +55,7 @@ impl Tool for TypeTool {
                 }
                 self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
                 self.held = Some(self.acting(ev.mods));
+                self.held_alt = ev.mods.alt && self.editing.is_none();
                 self.drag = None;
                 vec![]
             }
@@ -632,13 +633,19 @@ impl Tool for TypeTool {
     /// The pointer of the Type tool that a press would act as with the keys held, or, while a
     /// press is held, of the one it acts as ([`TypeTool::acting`]).
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        let (mode, vertical) = match (self.press, self.held) {
-            (Some(_), Some(held)) => held,
-            _ => self.acting(m),
+        let ((mode, vertical), alt) = match (self.press, self.held) {
+            (Some(_), Some(held)) => (held, self.held_alt),
+            _ => (self.acting(m), m.alt && self.editing.is_none()),
         };
-        if mode != Mode::Type && Self::path_at(cx, p, mode == Mode::Area).is_some() {
-            return Cursor::Crosshair;
+        // While type is being edited a click on a path only ends the editing.
+        let in_path = if self.editing.is_some() { None } else { Self::in_path(cx, p, mode, alt) };
+        match (in_path, vertical) {
+            (Some((_, false)), false) => Cursor::TypeArea,
+            (Some((_, false)), true) => Cursor::TypeAreaVertical,
+            (Some((_, true)), false) => Cursor::TypeOnPath,
+            (Some((_, true)), true) => Cursor::TypeOnPathVertical,
+            (None, false) => Cursor::Text,
+            (None, true) => Cursor::TypeVertical,
         }
-        if vertical { Cursor::TypeVertical } else { Cursor::Text }
     }
 }

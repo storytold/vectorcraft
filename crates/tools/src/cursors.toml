@@ -241,7 +241,7 @@ look = "The Pen nib with a curve badge."
 id = "Text"
 group = "Type"
 shown_when = [
-    "Every horizontal type tool: Type, Area Type and Type on a Path (the Area and Path ones show the crosshair over a suitable path).",
+    "Every horizontal type tool: Type, Area Type and Type on a Path, away from a path a click would set type in or along (TypeArea, TypeOnPath).",
     "Stands in for TypeVertical until it's drawn.",
 ]
 hotspot = "The I-beam's centre."
@@ -250,9 +250,37 @@ look = "An I-beam with a short crossbar marking the baseline."
 [[cursor]]
 id = "TypeVertical"
 group = "Type"
-shown_when = ["The vertical type tools: Vertical Type, Vertical Area Type and Vertical Type on a Path (the Area and Path ones show the crosshair over a suitable path)."]
+shown_when = ["The vertical type tools: Vertical Type, Vertical Area Type and Vertical Type on a Path, away from a path a click would set type in or along (TypeAreaVertical, TypeOnPathVertical)."]
 hotspot = "The I-beam's centre."
 look = "The Text I-beam turned a quarter turn."
+
+[[cursor]]
+id = "TypeArea"
+group = "Type"
+shown_when = ["Type and Area Type over a closed path's outline, Alt up for Type: a click sets area type inside the path."]
+hotspot = "The I-beam's centre."
+look = "The I-beam between two arcs, like a pair of parentheses around it: the type goes inside the shape."
+
+[[cursor]]
+id = "TypeAreaVertical"
+group = "Type"
+shown_when = ["Vertical Type and Vertical Area Type over a closed path's outline, Alt up for Vertical Type: a click sets vertical area type inside the path."]
+hotspot = "The I-beam's centre."
+look = "TypeArea turned a quarter turn."
+
+[[cursor]]
+id = "TypeOnPath"
+group = "Type"
+shown_when = ["Type over an open path's outline, or a closed one with Alt held; Type on a Path over any path's outline; Area Type over an open path with Alt held: a click sets type along the path."]
+hotspot = "The I-beam's centre."
+look = "The I-beam crossing a wavy line below its centre: the type runs along the line."
+
+[[cursor]]
+id = "TypeOnPathVertical"
+group = "Type"
+shown_when = ["The vertical type tools where TypeOnPath shows: a click sets vertical type along the path."]
+hotspot = "The I-beam's centre."
+look = "TypeOnPath turned a quarter turn."
 
 # ── Transform and resize ──────────────────────────────────────────────────────────────────────────
 
@@ -262,7 +290,6 @@ group = "Transform and resize"
 shown_when = [
     "The generic drawing cursor: all shape, line, grid, flare, cut, graph and liquify tools, and Place.",
     "The Rotate, Reflect, Scale and Shear tools with a selection (Reflect, Scale and Shear even mid-drag).",
-    "The Area Type and Type on a Path tools over a suitable path.",
     "The Artboard tool outside every artboard; the Gradient tool away from the annotator; Free Transform corners in Distort or Perspective mode.",
     "With Use Precise Cursors on, it replaces the Pen, Eyedropper, Slice, Blend and Shape Builder cursors.",
     "Stands in for every drawing tool cursor not drawn yet.",

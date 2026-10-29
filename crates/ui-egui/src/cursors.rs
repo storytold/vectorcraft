@@ -366,6 +366,28 @@ fn ibeam(p: &mut Ink, o: Pos2) {
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
 }
 
+/// A type tool over a path: the I-beam (turned a quarter turn for vertical type, without its
+/// baseline mark) between two arcs for area type inside a closed path, or crossing a wavy line for
+/// type along a path.
+fn type_in_path(p: &mut Ink, o: Pos2, vertical: bool, on_path: bool) {
+    let at = |x: f32, y: f32| if vertical { o + vec2(y, x) } else { o + vec2(x, y) };
+    line(p, at(0.0, -8.0), at(0.0, 8.0));
+    line(p, at(-3.0, -8.0), at(3.0, -8.0));
+    line(p, at(-3.0, 8.0), at(3.0, 8.0));
+    if on_path {
+        let wave = (0..=12).map(|i| {
+            let x = -9.0 + 1.5 * i as f32;
+            at(x, 4.0 + 2.0 * (x * 0.55).sin())
+        });
+        strokes(p, &[wave.collect()]);
+    } else {
+        strokes(
+            p,
+            &[vec![at(-6.0, -8.0), at(-8.5, -4.0), at(-8.5, 4.0), at(-6.0, 8.0)], vec![at(6.0, -8.0), at(8.5, -4.0), at(8.5, 4.0), at(6.0, 8.0)]],
+        );
+    }
+}
+
 /// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
 /// filled over an object; over an anchor point a ringed dot (the blend starts there).
 fn blend(p: &mut Ink, o: Pos2, badge: Cursor) {
@@ -519,6 +541,10 @@ const GLYPHS: [Cursor; 89] = [
     Cursor::SymbolScreener,
     Cursor::SymbolStyler,
     Cursor::TypeVertical,
+    Cursor::TypeArea,
+    Cursor::TypeAreaVertical,
+    Cursor::TypeOnPath,
+    Cursor::TypeOnPathVertical,
     Cursor::Scissors,
     Cursor::MeshAdd,
     Cursor::PuppetPin,
@@ -605,6 +631,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenJoin => pen(ink, p, "j"),
         Cursor::PenConvert => pen(ink, p, "^"),
         Cursor::Text => ibeam(ink, p),
+        Cursor::TypeArea => type_in_path(ink, p, false, false),
+        Cursor::TypeAreaVertical => type_in_path(ink, p, true, false),
+        Cursor::TypeOnPath => type_in_path(ink, p, false, true),
+        Cursor::TypeOnPathVertical => type_in_path(ink, p, true, true),
         Cursor::AddStop => stop_badge(ink, p, true),
         Cursor::RemoveStop => stop_badge(ink, p, false),
         Cursor::Slice => slice(ink, p),

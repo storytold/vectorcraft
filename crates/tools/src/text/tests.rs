@@ -807,13 +807,71 @@ fn the_pointer_shows_the_type_tool_shift_or_alt_switches_to() {
     assert_eq!(cursor("verticalType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("verticalAreaType", away, SHIFT), Cursor::Text);
     assert_eq!(cursor("areaType", on_line, Mods::default()), Cursor::Text, "no frame for area type");
-    assert_eq!(cursor("areaType", on_line, ALT), Cursor::Crosshair, "a baseline for type on a path");
+    assert_eq!(cursor("areaType", on_line, ALT), Cursor::TypeOnPath, "a baseline for type on a path");
     assert_eq!(cursor("typeOnPath", on_line, ALT), Cursor::Text);
     let mut tool = TypeTool::new("type");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y).with_mods(SHIFT));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::TypeVertical, "the press keeps the tool it acts as");
     tool.pointer(&c, &PointerEvent::new(PointerKind::Up, away.x, away.y));
     assert_eq!(tool.cursor(&c, away, Mods::default()), Cursor::Text);
+}
+
+/// The plain Type tools make type in or along a path clicked on its outline: area type inside a
+/// closed path, type on a path along an open one or, with Alt held, along a closed one. A click away
+/// from paths still makes point type, a drag still draws a frame (even from a path's outline), and
+/// a click on existing type edits it. The pointer says which.
+#[test]
+fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
+    let (mut d, rect, line) = doc_with_rect_and_line();
+    let (sel, p) = (Selection::default(), paint());
+    let (on_line, on_rect, away) = ((250.0, 400.0), (100.0, 150.0), (450.0, 450.0));
+    for id in ["type", "verticalType"] {
+        let vertical = id == "verticalType";
+        let c = cx(&d, &sel, &p);
+        for (at, mods, path, mode, cursor) in [
+            (on_rect, Mods::default(), rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
+            (on_line, Mods::default(), line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+            (on_rect, ALT, rect, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+            (on_line, ALT, line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+        ] {
+            assert_eq!(TypeTool::new(id).cursor(&c, Point::new(at.0, at.1), mods), cursor, "{id} {at:?} {mods:?}");
+            let mut tool = TypeTool::new(id);
+            let acts = gesture(&mut tool, &c, at, None, mods, Mods::default());
+            let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{id} {at:?} {mods:?}: {acts:?}"));
+            assert_eq!(cmd, "text.createInPath", "{id} {at:?} {mods:?}");
+            assert_eq!(
+                (&params["path"], &params["mode"], &params["vertical"]),
+                (&json!(path.0), &json!(mode), &json!(vertical)),
+                "{id} {at:?} {mods:?}"
+            );
+            assert_eq!(tool.id(), id, "the tool chosen stays");
+        }
+        // Shift switches the direction over a path too.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, None, SHIFT, Mods::default());
+        assert_eq!(made(&acts).map(|(_, p)| (p["mode"].clone(), p["vertical"].clone())), Some((json!("area"), json!(!vertical))));
+        // Away from paths: point type.
+        assert_eq!(
+            TypeTool::new(id).cursor(&c, Point::new(away.0, away.1), Mods::default()),
+            if vertical { Cursor::TypeVertical } else { Cursor::Text }
+        );
+        let acts = gesture(&mut TypeTool::new(id), &c, away, None, Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, params.get("area")), ("text.create", None), "{id}: point type");
+        // A drag from the rectangle's outline draws a frame.
+        let acts = gesture(&mut TypeTool::new(id), &c, on_rect, Some((200.0, 250.0)), Mods::default(), Mods::default());
+        let (cmd, params) = made(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+        assert_eq!((cmd, &params["area"]), ("text.create", &json!({"width": 100.0, "height": 100.0})), "{id}: drag");
+    }
+    // A click on existing type over the rectangle's outline edits the type.
+    let l = d.layers[0].id;
+    let tid = d.alloc_id();
+    let t = TextObject::point(Point::new(95.0, 155.0), "Hello", Default::default());
+    d.insert(Some(l), 2, Node::new(tid, NodeKind::Text(Box::new(t)))).unwrap();
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("type");
+    let acts = gesture(&mut tool, &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert!(made(&acts).is_none(), "{acts:?}");
+    assert_eq!(tool.editing, Some(tid));
 }
 
 /// While type is being edited, Shift and Alt switch no tool: a frame dragged out is the tool

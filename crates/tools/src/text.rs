@@ -1,8 +1,16 @@
 //! The Type tools: Type (T), Area Type and Type on a Path.
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
-//! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`). While type is being edited, a click that lands on no type only
+//! places the caret, and a click on a path's outline makes type in or along it: area type inside a
+//! closed path and type on a path along an open one, as the reference app's Type tool does ("Select
+//! the Type tool […] and click anywhere on the object's path", [Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html);
+//! "To create horizontal text along a path, select the Type tool or the Type On A Path tool […] If
+//! the path is closed, rather than open, you must use the Type On A Path tool", [Create type on a
+//! path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html)).
+//! Alt (Option) held over a closed path sets type along it instead: our own shortcut, so the Type
+//! tool reaches both without switching tools.
+//! Area Type / Type on a Path: click a path to turn it into a text frame or a baseline
+//! (`text.createInPath`). While type is being edited, a click that lands on no type only
 //! ends the editing, and the next click makes new type. Point type placed by a click and left
 //! empty is discarded when editing ends (`text.discardEmpty`); frames keep their shape. Where new
 //! type goes (the click, the frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
@@ -178,6 +186,8 @@ pub struct TypeTool {
     drag: Option<Point>,
     /// The Type tool the press acts as, with the keys held at the press ([`Self::acting`]).
     held: Option<(Mode, bool)>,
+    /// Alt (Option) was held at the press: the Type tool sets type along a closed path, not in it.
+    held_alt: bool,
     /// Smart Guides for where new type goes.
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
@@ -609,12 +619,25 @@ impl TypeTool {
         self.caret = r.end;
     }
 
-    /// Path under `p` for the Area Type / Type on a Path tools.
-    fn path_at(cx: &ToolContext, p: Point, closed: bool) -> Option<NodeId> {
+    /// The path whose outline is under `p`, and whether it is closed.
+    fn path_at(cx: &ToolContext, p: Point) -> Option<(NodeId, bool)> {
         let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..Default::default() })?;
         match &cx.doc.node(h.leaf)?.kind {
-            NodeKind::Path { path, .. } if !closed || path.is_closed() => Some(h.leaf),
+            NodeKind::Path { path, .. } => Some((h.leaf, path.is_closed())),
             _ => None,
+        }
+    }
+
+    /// What a click at `p` with the tool acting as `mode` makes of the path there: the path, and
+    /// whether the type goes along it (else inside it); None when it makes no type in a path. The
+    /// Type tools set type inside a closed path and along an open one, or along a closed one with
+    /// `alt`; Area Type needs a closed path and Type on a Path takes either.
+    fn in_path(cx: &ToolContext, p: Point, mode: Mode, alt: bool) -> Option<(NodeId, bool)> {
+        let (id, closed) = Self::path_at(cx, p)?;
+        match mode {
+            Mode::Type => Some((id, alt || !closed)),
+            Mode::Area => closed.then_some((id, false)),
+            Mode::OnPath => Some((id, true)),
         }
     }
 
@@ -639,6 +662,7 @@ impl TypeTool {
     /// (#2871). A drag that draws an area-type frame makes it either way.
     fn on_up(&mut self, cx: &ToolContext, start: Point, at: Point) -> Vec<Action> {
         let (mode, vertical) = self.held.take().unwrap_or((self.mode, self.vertical));
+        let alt = std::mem::take(&mut self.held_alt);
         // Click into existing text: place the caret.
         if let Some(out) = self.edit_at(cx, start) {
             return out;
@@ -660,18 +684,17 @@ impl TypeTool {
         if was_editing && area.is_none() {
             return out;
         }
-        // Area Type / Type on a Path: click a path.
-        if mode != Mode::Type && drag.is_none() {
-            let on_path = mode == Mode::OnPath;
-            if let Some(pid) = Self::path_at(cx, start, !on_path) {
-                let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec(
-                    "text.createInPath".into(),
-                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
-                ));
-                out.push(Action::Notify("text.editNew".into()));
-                return out;
-            }
+        // A click on a path: type in it or along it.
+        if drag.is_none()
+            && let Some((pid, on_path)) = Self::in_path(cx, start, mode, alt)
+        {
+            let mode = if on_path { "onPath" } else { "area" };
+            out.push(Action::Exec(
+                "text.createInPath".into(),
+                json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
+            ));
+            out.push(Action::Notify("text.editNew".into()));
+            return out;
         }
         let mut params = match area {
             Some(r) => {
