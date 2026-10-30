@@ -19,6 +19,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | trivial | Preserve control-session window isolation through upstream periodic preference saves and multi-window merging; retain the latest interactive window geometry while saving other settings. Regression covers absent and existing legacy geometry. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
@@ -377,6 +378,8 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-30 | minor | Blob Brush Tool Options: Size follows the pen pressure, Fixed or Pressure with a Variation (#4590); scores and estimates unchanged |
 | 2026-10-29 | minor | Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores and estimates unchanged |
 | 2026-10-29 | minor | Object › Path › Smooth… with its slider and Auto-Smooth (#4115); scores and estimates unchanged |
+| 2026-10-26 | trivial | Native window restoration on Linux X11 moves disconnected-monitor positions onto a connected monitor without replacing the native size or maximized state. Control-channel runs also skip legacy window restore and preserve the user's saved geometry when saving other preferences. Scores and estimates unchanged. |
+| 2026-10-26 | trivial | Window size and maximized state survive restarts at any interface size; caption buttons on the GNOME Wayland system frame, Preferences › User Interface › System Title Bar, or `VECTORCRAFT_TITLEBAR=system` (storytold/egui#3) |
 | 2026-10-25 | minor | Selection tool: a double-click on a threaded port breaks the thread there (`text.thread.break`); scores and estimates unchanged |
 | 2026-10-25 | minor | A selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); headless canvas and tool regressions; scores and estimates unchanged. |
 | 2026-10-25 | minor | Floating panels open in OS windows of their own on the desktop (inside the window on the web and on Wayland); saved layouts from earlier versions convert to the shared docking layout (#4135); scores and estimates unchanged (estimated) |

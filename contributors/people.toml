@@ -22,6 +22,9 @@ real_name = "Fabian Althaus"
 display_name = "faff (el-j)"
 sync_github_name = false
 
+[people.abdallah-shehawey]
+sync_github_name = true
+
 [people.lollinoo]
 sync_github_name = true
 

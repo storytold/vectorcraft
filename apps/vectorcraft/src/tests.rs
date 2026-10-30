@@ -4,6 +4,54 @@ fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::
     vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
 }
 
+/// eframe's storage with only a `"window"` value.
+struct WindowStorage(&'static str);
+
+impl eframe::Storage for WindowStorage {
+    fn get_string(&self, key: &str) -> Option<String> {
+        (key == "window").then(|| self.0.to_owned())
+    }
+    fn set_string(&mut self, _: &str, _: String) {}
+    fn remove_string(&mut self, _: &str) {}
+    fn flush(&mut self) {}
+}
+
+/// The legacy preferences' place applies unless eframe really restored a window: not from a
+/// corrupt value, and not in a run that doesn't persist the window (no preferences, control).
+#[test]
+fn only_a_readable_window_eframe_restores_counts_as_native_state() {
+    let saved = WindowStorage(
+        "(normal_geometry:(outer_position_pixels:Some((x:10.0,y:20.0)),scale_factor:1.0,\
+         inner_size_points:(x:800.0,y:600.0),zoom_factor:Some(1.0)),fullscreen:false,maximized:true)",
+    );
+    assert!(has_native_window(true, Some(&saved)));
+    assert!(!has_native_window(false, Some(&saved)));
+    assert!(!has_native_window(true, Some(&WindowStorage("(normal_geometry:"))));
+    assert!(!has_native_window(true, None));
+}
+
+#[test]
+fn control_runs_neither_restore_nor_replace_legacy_window_geometry() {
+    use vectorcraft_ui_egui::state::WindowGeometry;
+    let previous = WindowGeometry { pos: Some([200, 80]), size: [1100.0, 700.0], maximized: true };
+    let runtime = WindowGeometry { pos: Some([10, 20]), size: [1500.0, 900.0], maximized: false };
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui.window = Some(runtime);
+    app.ui.image_trace_preview = false;
+    for old in [None, Some(previous)] {
+        let control = WindowPrefs { persist: false, previous: old };
+        assert_eq!(control.restored(), None);
+        let saved = prefs_bytes(&app, control).unwrap();
+        let reloaded = decode_saved_prefs(&saved).unwrap();
+        assert_eq!(reloaded.window, old);
+        assert!(!reloaded.image_trace_preview);
+        let normal = WindowPrefs { persist: true, previous: old };
+        assert_eq!(normal.restored(), old);
+        let saved = prefs_bytes(&app, normal).unwrap();
+        assert_eq!(decode_saved_prefs(&saved).unwrap().window, Some(runtime));
+    }
+}
+
 /// Shortcut overrides an earlier version saved still load: its spellings, `panel:` keys, an
 /// override that can't fire (#487), an entry for a command this version lacks, and an old set
 /// name.
@@ -121,7 +169,7 @@ fn the_image_trace_preview_setting_is_kept_across_a_restart() {
     for preview in [false, true] {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.ui.image_trace_preview = preview;
-        let saved = prefs_bytes(&app).unwrap();
+        let saved = prefs_bytes(&app, WindowPrefs { persist: true, previous: None }).unwrap();
         let loaded = decode_saved_prefs(&saved).unwrap().sanitized();
         assert_eq!(loaded.image_trace_preview, preview, "Preview {preview} after a restart");
     }

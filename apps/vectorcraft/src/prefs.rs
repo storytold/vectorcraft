@@ -85,19 +85,38 @@ pub(crate) fn load_prefs(app: &mut VectorcraftApp, saved: Option<vectorcraft_ui_
     }
     vectorcraft_ui_egui::prefs_dialog::restore(app);
     // What this window started from: only what changes after it is this window's to save.
-    set_saved_base(prefs_value(app).ok());
+    set_saved_base(prefs_value(app, None).ok());
+}
+
+/// Whether eframe can restore this run's stored native window.
+pub(crate) fn has_native_window(persist_window: bool, storage: Option<&dyn eframe::Storage>) -> bool {
+    persist_window && storage.and_then(|s| eframe::get_value::<egui_winit::WindowSettings>(s, "window")).is_some()
+}
+
+/// Which window geometry can cross the preferences boundary for this run.
+#[derive(Clone, Copy)]
+pub(crate) struct WindowPrefs {
+    pub persist: bool,
+    pub previous: Option<vectorcraft_ui_egui::state::WindowGeometry>,
+}
+
+impl WindowPrefs {
+    /// Automation never seeds its viewport from the user's legacy window geometry.
+    pub fn restored(self) -> Option<vectorcraft_ui_egui::state::WindowGeometry> {
+        self.previous.filter(|_| self.persist)
+    }
 }
 
 /// Save what this window changed since it last read or saved the preferences, merged into the
 /// file as it is now ([`merge_changes`]): another VectorCraft window open at the same time, which
 /// read the file before this one saved, then keeps this window's changes when it saves or quits
 /// (#4625). Nothing is written when nothing changed.
-pub(crate) fn save_prefs(app: &VectorcraftApp) {
+pub(crate) fn save_prefs(app: &VectorcraftApp, window: WindowPrefs) {
     if !prefs_enabled() || KEEP_UI_PREFS.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
     let Some(p) = prefs_path() else { return };
-    let Ok(mine) = prefs_value(app) else { return };
+    let Ok(mine) = prefs_value(app, Some(window)) else { return };
     let base = saved_base();
     if base.as_ref().is_some_and(|b| same_lasting(b, &mine)) {
         return;
@@ -124,7 +143,7 @@ const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
 /// the workspace, panels, toolbars and the other UI settings kept only in the UI state were saved
 /// only on quitting, so a session ended any other way (the window closed by the system, the
 /// process ended or crashing) started the next one from the settings before it (#4625).
-pub(crate) fn save_prefs_soon(app: &VectorcraftApp) {
+pub(crate) fn save_prefs_soon(app: &VectorcraftApp, window: WindowPrefs) {
     static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
     let Ok(mut last) = LAST.lock() else { return };
     if last.is_some_and(|t| t.elapsed() < SAVE_EVERY) {
@@ -132,7 +151,7 @@ pub(crate) fn save_prefs_soon(app: &VectorcraftApp) {
     }
     *last = Some(std::time::Instant::now());
     drop(last);
-    save_prefs(app);
+    save_prefs(app, window);
 }
 
 /// The preferences as this window last read or saved them (`None`: not read yet).
@@ -214,13 +233,18 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
 
 /// The preferences file's contents: the UI state with the engine preferences.
 #[cfg(test)]
-pub(crate) fn prefs_bytes(app: &VectorcraftApp) -> serde_json::Result<Vec<u8>> {
-    serde_json::to_vec_pretty(&prefs_value(app)?)
+pub(crate) fn prefs_bytes(app: &VectorcraftApp, window: WindowPrefs) -> serde_json::Result<Vec<u8>> {
+    serde_json::to_vec_pretty(&prefs_value(app, Some(window))?)
 }
 
-/// [`prefs_bytes`] as JSON.
-fn prefs_value(app: &VectorcraftApp) -> serde_json::Result<serde_json::Value> {
+/// The UI and engine preferences as JSON, applying this run's window policy when saving.
+fn prefs_value(app: &VectorcraftApp, window: Option<WindowPrefs>) -> serde_json::Result<serde_json::Value> {
     let mut ui = app.ui.clone();
+    if let Some(window) = window
+        && !window.persist
+    {
+        ui.window = window.previous;
+    }
     ui.engine_prefs = app.session.prefs.to_json();
     serde_json::to_value(&ui)
 }
@@ -230,6 +254,31 @@ mod tests {
     use serde_json::json;
 
     use super::{merge_changes, same_lasting};
+
+    /// A periodic control-session save keeps geometry written by an interactive window
+    /// since this session loaded its preferences, while still saving its other changes.
+    #[test]
+    fn control_save_merges_settings_without_replacing_another_windows_geometry() {
+        use super::{WindowPrefs, prefs_value};
+        use crate::VectorcraftApp;
+        use vectorcraft_ui_egui::state::WindowGeometry;
+
+        let old = WindowGeometry { pos: Some([100, 80]), size: [1100.0, 700.0], maximized: true };
+        let new = WindowGeometry { pos: Some([200, 160]), size: [1200.0, 800.0], maximized: false };
+        for previous in [None, Some(old)] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.ui.window = previous;
+            let base = prefs_value(&app, None).unwrap();
+            app.ui.window = Some(new);
+            let on_disk = prefs_value(&app, None).unwrap();
+            app.ui.window = Some(WindowGeometry { pos: Some([0, 0]), size: [800.0, 600.0], maximized: false });
+            app.ui.image_trace_preview = !app.ui.image_trace_preview;
+            let mine = prefs_value(&app, Some(WindowPrefs { persist: false, previous })).unwrap();
+            let merged = merge_changes(&base, &mine, on_disk.clone());
+            assert_eq!(merged.get("window"), on_disk.get("window"));
+            assert_eq!(merged.get("image_trace_preview"), mine.get("image_trace_preview"));
+        }
+    }
 
     /// Two windows open at once (#4625): the one that saves last keeps the other's changes and
     /// adds its own, instead of putting back the preferences it started from.

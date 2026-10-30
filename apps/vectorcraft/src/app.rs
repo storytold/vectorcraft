@@ -27,6 +27,11 @@ pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egu
 }
 
 impl eframe::App for App {
+    // Preferences have their own store; eframe persists only the native window.
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
+
     // Each frame runs unconfined: it is the person at the keyboard's. The app confines what the
     // control channel asks for, and the frames carrying input it injected, to the automation roots
     // (`VectorcraftApp::with_automation_roots`), which are in force elsewhere in the process.
@@ -70,10 +75,10 @@ impl eframe::App for App {
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         if self.app.take_prefs_changed() {
-            file_access::unconfined(|| save_prefs(&self.app));
+            file_access::unconfined(|| save_prefs(&self.app, self.window_prefs));
         } else {
             // The workspace, panels and other UI settings change without the dialog (#4625).
-            file_access::unconfined(|| save_prefs_soon(&self.app));
+            file_access::unconfined(|| save_prefs_soon(&self.app, self.window_prefs));
         }
         // Not while a file dialog's sheet has the keyboard: its name field's composition would go.
         #[cfg(target_os = "macos")]
@@ -82,7 +87,7 @@ impl eframe::App for App {
         }
     }
     fn on_exit(&mut self) {
-        file_access::unconfined(|| save_prefs(&self.app));
+        file_access::unconfined(|| save_prefs(&self.app, self.window_prefs));
         end_before_teardown(self.frames);
     }
 }

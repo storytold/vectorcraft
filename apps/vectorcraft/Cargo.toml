@@ -21,7 +21,7 @@ vectorcraft-text = { workspace = true }
 # Shared across the Craft suite: decides who draws the window frame per desktop (compositor vs app)
 # so VectorCraft matches the rest on Linux. `egui` adds `craft_window::decorate`. See #217.
 craft-window = { workspace = true }
-eframe = { workspace = true, features = ["clipboard", "default_fonts", "wayland", "x11"] }
+eframe = { workspace = true, features = ["persistence", "clipboard", "default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
@@ -35,6 +35,8 @@ image = { workspace = true }
 webbrowser = { workspace = true }
 # The window's monitors, size and position (the same winit eframe runs on).
 winit = { version = "0.30", default-features = false }
+# The native window eframe saved, read as eframe reads it (the same egui-winit eframe runs on).
+egui-winit = { version = "0.37", default-features = false, features = ["serde"] }
 craft-print = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

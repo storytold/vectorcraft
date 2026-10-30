@@ -72,7 +72,7 @@ use app::open_files;
 use host_services::services;
 #[cfg(all(test, feature = "wgpu"))]
 use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
-use prefs::{load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
+use prefs::{WindowPrefs, has_native_window, load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
 #[cfg(all(test, feature = "wgpu", any(target_os = "macos", target_os = "windows")))]
 use titlebar::CUSTOM_TITLEBAR;
 #[cfg(feature = "wgpu")]
@@ -87,6 +87,8 @@ use titlebar::{custom_titlebar, native_options};
 
 struct App {
     app: VectorcraftApp,
+    /// Control sessions keep their runtime geometry out of the user's preferences.
+    window_prefs: WindowPrefs,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
@@ -225,7 +227,8 @@ fn main() -> std::process::ExitCode {
         }
     };
     let saved = read_prefs();
-    let saved_window = saved.as_ref().and_then(|ui| ui.window);
+    let window_prefs = WindowPrefs { persist: prefs_enabled() && control_port.is_none(), previous: saved.as_ref().and_then(|ui| ui.window) };
+    let saved_window = window_prefs.restored();
     #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
     #[cfg(feature = "wgpu")]
@@ -262,7 +265,11 @@ fn main() -> std::process::ExitCode {
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
     let custom_titlebar = custom_titlebar(saved.as_ref());
-    let options = native_options(custom_titlebar);
+    let mut options = native_options(custom_titlebar);
+    // Control and no-preferences runs neither restore nor save native window geometry.
+    let persist_window = window_prefs.persist;
+    options.persist_window = persist_window;
+    options.viewport = window::start_viewport(options.viewport, saved_window);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and X11 (XWayland) When a Pen Is Attached does so when a pen is attached, where the pen draws (#2028).
@@ -370,15 +377,19 @@ fn main() -> std::process::ExitCode {
                 // which takes over from the copy the preferences file used to hold.
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
+                let has_native_state = has_native_window(persist_window, cc.storage);
                 let winit_window = cc.winit_window().cloned();
                 if let Some(w) = &winit_window {
-                    let g = window::restore(w, saved_window);
-                    app.ui.window = Some(g);
+                    if !has_native_state {
+                        app.ui.window = Some(window::restore(w, saved_window));
+                    } else {
+                        window::fit_native_position(w);
+                    }
                     #[cfg(windows)]
                     set_taskbar_icon(w);
                 }
                 // Linux may not map the window before the first frames, so a saved maximize is retried then (#3635).
-                let pending_maximize = cfg!(target_os = "linux") && app.ui.window.as_ref().is_some_and(|g| g.maximized);
+                let pending_maximize = !has_native_state && cfg!(target_os = "linux") && app.ui.window.as_ref().is_some_and(|g| g.maximized);
                 // User Defined swatch, graphic style, symbol and brush libraries live next to the preferences.
                 let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
                 app.session.swatch_libraries.set_user_dir(swatches);
@@ -462,6 +473,7 @@ fn main() -> std::process::ExitCode {
                 let window_frame = window_frame::service(cc, custom_titlebar);
                 Ok(Box::new(App {
                     app,
+                    window_prefs,
                     graphics_loss,
                     graphics_lost: false,
                     frames: 0,
