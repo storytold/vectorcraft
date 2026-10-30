@@ -1713,6 +1713,7 @@ font-technology	Variable	バリアブル
 	Delete Guides	ガイドを削除
 	Delete Slice	スライスを削除
 	Delete Style	スタイルを削除
+	Delete Styles	スタイルを削除
 	Delete Variables	変数を削除
 	Delete View	表示を削除
 	Done Editing Pattern	パターン編集を完了
@@ -5483,6 +5484,34 @@ anchor	Points:	ポイント:
 @msg	select open paths to close	閉じるオープンパスを選択してください
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	パスが多すぎるか複雑すぎて交差点を見つけられません（最大 10000 セグメント）
 @msg	the paths have too many anchors to edit at once	パスのアンカーポイントが多すぎて一度に編集できません
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	パラメトリックシェイプツール
+	Parametric Shape	パラメトリックシェイプ
+	Edit Parametric Shape	パラメトリックシェイプを編集
+	Convert to Parametric Shape	パラメトリックシェイプに変換
+	Ring	リング
+	Arrow	矢印
+	Cross	十字
+	Heart	ハート
+	Gear	歯車
+	Speech Bubble	吹き出し
+	Count:	数:
+	Thickness:	太さ:
+	Inner Radius:	内側の半径:
+	Head:	矢じり:
+	Shaft:	軸:
+	Point:	先端:
+	Tooth Height:	歯の高さ:
+	Tail:	しっぽ:
+	Tip:	先端:
+	Open a document to draw parametric shapes.	パラメトリックシェイプを描くにはドキュメントを開いてください。
+	Select a parametric shape to edit it. With none selected, these set the next shape.	編集するパラメトリックシェイプを選択してください。選択がないときは、次に描くシェイプの値になります。
+@msg	the object is not an editable parametric shape	オブジェクトは編集可能なパラメトリックシェイプではありません
+@msg	select plain rectangles, ellipses or regular polygons to convert	変換する通常の長方形、楕円または正多角形を選択してください
+@msg	the shape's numbers are out of range	シェイプの値が範囲外です
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` には次のいずれかを指定してください:rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` には 3 から 1000 の整数を指定してください
+@msg	`{key}` must be from {lo} to {hi}	`{key}` には {lo} から {hi} を指定してください
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	スマートペン
 	Smart Pen Tool	スマートペンツール

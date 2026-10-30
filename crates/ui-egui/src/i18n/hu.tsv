@@ -1806,6 +1806,7 @@ file-filter	Templates	Sablonok
 	Delete Guides	Segédvonalak törlése
 	Delete Slice	Szelet törlése
 	Delete Style	Stílus törlése
+	Delete Styles	Stílusok törlése
 	Delete Variables	Változók törlése
 	Delete View	Nézet törlése
 	Done Editing Pattern	Mintázatszerkesztés befejezése
@@ -5784,6 +5785,32 @@ anchor	Points:	Pontok:
 @msg	select open paths to close	jelöljön ki lezárandó nyitott útvonalakat
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	túl sok vagy túl összegabalyodott útvonal a kereszteződések megtalálásához (legfeljebb 10000 szakasz)
 @msg	the paths have too many anchors to edit at once	az útvonalaknak túl sok horgonypontjuk van az egyszerre szerkesztéshez
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Paraméteres alakzat eszköz
+	Parametric Shape	Paraméteres alakzat
+	Edit Parametric Shape	Paraméteres alakzat szerkesztése
+	Convert to Parametric Shape	Átalakítás paraméteres alakzattá
+	Ring	Gyűrű
+	Heart	Szív
+	Gear	Fogaskerék
+	Speech Bubble	Szövegbuborék
+	Count:	Darabszám:
+	Thickness:	Vastagság:
+	Inner Radius:	Belső sugár:
+	Head:	Fej:
+	Shaft:	Szár:
+	Point:	Csúcs:
+	Tooth Height:	Fogmagasság:
+	Tail:	Csóva:
+	Tip:	Csúcs:
+	Open a document to draw parametric shapes.	Nyisson meg egy dokumentumot paraméteres alakzatok rajzolásához.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	A szerkesztéshez jelöljön ki egy paraméteres alakzatot. Kijelölés nélkül ezek az értékek a következő alakzatra vonatkoznak.
+@msg	the object is not an editable parametric shape	az objektum nem szerkeszthető paraméteres alakzat
+@msg	select plain rectangles, ellipses or regular polygons to convert	jelöljön ki átalakítandó egyszerű téglalapokat, ellipsziseket vagy szabályos sokszögeket
+@msg	the shape's numbers are out of range	az alakzat értékei a megengedett tartományon kívül esnek
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind`: ezek egyike kell: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count`: 3 és 1000 közötti egész szám kell
+@msg	`{key}` must be from {lo} to {hi}	`{key}`: {lo} és {hi} között kell
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Okostoll
 	Smart Pen Tool	Okostoll eszköz

@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Selection tool: Shift and Alt take effect mid-drag on bounding-box handles (#4711); previously: Libraries panel: art dragged off the canvas and swatches dragged in are added where they are dropped; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Selection tool: Shift and Alt take effect mid-drag on bounding-box handles (#4711); previously: Path Precision Tools add-on: the Parametric Shape Tool; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -948,6 +948,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
     Type inside a group, layer, symbol instance, blend or repeat keeps its opacity, blend mode, opacity mask, Opacity & Mask Define Knockout Shape, own effects, perspective and visibility when the effects on the container outline it. Hidden type with a geometry effect of its own is left out of exports.
   - **Graphic styles:** styles keep opacity and blend mode, capture groups and type, apply on top with Alt, and link to the objects using them; Redefine, Break Link, Graphic Style Options, Select All Unused, Sort by Name, and Select > Same Graphic Style / Appearance Attribute. The panel has list and thumbnail views with rendered previews, merge, reorder and drag and drop, plus a Control bar Style picker; six generated style libraries save and load as `.vcstyles`.
     In the Graphic Styles panel, Shift-click selects a range of styles and Ctrl/Cmd-click adds or removes one.
+  - **Several text styles at once:** in the Character Styles and Paragraph Styles panels, Shift-click highlights a range of styles and Ctrl/Cmd-click adds or removes one, without applying them; the panel menu's Select All Unused (`charStyle.unused`, `paraStyle.unused`) highlights the styles no type uses (in the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes), never the Normal style; Delete, the button or the menu item, deletes every highlighted style but Normal in one undo step (`charStyle.delete {names}`, `paraStyle.delete {names}`). The menu's Duplicate copies every highlighted style in one undo step and highlights the copies. A highlighted row dragged onto Create New Style or Delete carries every highlighted style: dropped on Create New Style it copies them all and highlights the copies, and dropped on Delete it deletes them all but Normal and clears the highlight; a row from outside the highlight carries only its own style. Public reference: [Character and paragraph styles](https://web.archive.org/web/20261015081534/https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html).
   - **Neutral wording:** labels, MCP tool text, docs and packaging use neutral names, and `cargo xtask brands` (part of `cargo xtask ci`) fails on vendor names.
 - **Colour, type and file workflows:** Recolor Artwork (dialog with harmonies), Edit Colors, Find & Replace, Change Case, Smart Punctuation, Guides, Lock/Hide Above, Transform Each, Rasterize.
   The Libraries panel holds gradients and patterns: its + button adds the selection's fill or stroke gradient or pattern, a gradient or pattern swatch dragged from the Swatches panel is added, and a click paints the selection through the active Fill/Stroke proxy, a pattern bringing its definition and swatch into the document.
@@ -1229,6 +1230,19 @@ Kernels in `vectorcraft_pathops::addons::pathtools`. Tests: `addons::pathtools` 
 undo step, bad params refused, the brush's stroke one step) and `edit_toolbar::tests::addon_tools_are_in_the_drawer_not_the_toolbars`.
 Commands: `docs/mcp.md` › Path Precision Tools add-on.
 
+The add-on's Parametric Shape Tool (2026-10-30) draws ten kinds of shape that stay editable as numbers (rectangle,
+ellipse, polygon and star with 3 to 1,000 sides or points, ring, arrow, cross, heart, gear, speech bubble; corner radius
+limited to the middle of a side): a drag from the centre sizes and turns one, the arrow keys change its count and values
+while dragging, handles edit a selected one, a double-click places one with the last settings, and its panel edits the
+numbers. A shape is a plain path whose numbers and outline fingerprint sit in one object-data entry that SVG export
+leaves out; moving, rotating or scaling it keeps it editable, editing its anchors makes it a plain path. Convert to
+Parametric Shape recognises plain rectangles, ellipses and regular polygons. Geometry in
+`vectorcraft_pathops::addons::pathtools::shapes`. Tests: `shapes` in `vectorcraft-pathops` (each kind, ranges,
+recovery after transforms, recognition), `addons::parametric_shape` in `vectorcraft-tools` (drag, keys, handles,
+stored data), `cmd::addons::pathtools::tests` in `vectorcraft-engine` (each command one undo step, bad params refused,
+anchor edits and transforms, the SVG export filter, the tool's gestures), `addons::pathtools::tests` in
+`vectorcraft-ui-egui` (submenu and panel) and `command_sweep`.
+
 ## Smart Pen add-on (2026-10-30)
 
 A VectorCraft addition, not an Illustrator feature, so no area score moves. Object › Plug-ins › Smart Pen selects the
@@ -1261,6 +1275,7 @@ spot colours, carry a colour adjustment, or are RGB, CMYK or grayscale images
 | Date | Change | Summary |
 |---|---|---|
 | 2026-10-30 | minor | Selection tool: Shift and Alt pressed or let go during a bounding-box handle drag take effect without a move (#4711); scores and estimates unchanged |
+| 2026-10-30 | minor | Path Precision Tools add-on: the Parametric Shape Tool; evidence added; scores unchanged. |
 | 2026-10-30 | minor | Presentation Mode fits the active artboard and hides selections, guides, grids and artboard edges; scores and estimates unchanged |
 | 2026-10-30 | minor | Color Effects add-on: Select by Color Kind; scores and estimates unchanged |
 | 2026-10-30 | minor | Gradient stop popover: an eyedropper samples the stop's colour from the art (#4681); scores and estimates unchanged |

@@ -1406,6 +1406,7 @@ file-filter	Templates	Vorlagen
 	Delete Guides	Hilfslinien löschen
 	Delete Slice	Slice löschen
 	Delete Style	Format löschen
+	Delete Styles	Formate löschen
 	Delete Variables	Variablen löschen
 	Delete View	Ansicht löschen
 	Done Editing Pattern	Musterbearbeitung beenden
@@ -5380,6 +5381,34 @@ anchor	Points:	Punkte:
 @msg	select open paths to close	offene Pfade zum Schließen auswählen
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	zu viele oder zu verschlungene Pfade, um ihre Kreuzungen zu finden (höchstens 10000 Segmente)
 @msg	the paths have too many anchors to edit at once	die Pfade haben zu viele Ankerpunkte, um sie auf einmal zu bearbeiten
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrische-Form-Werkzeug
+	Parametric Shape	Parametrische Form
+	Edit Parametric Shape	Parametrische Form bearbeiten
+	Convert to Parametric Shape	In parametrische Form umwandeln
+	Ring	Ring
+	Arrow	Pfeil
+	Cross	Kreuz
+	Heart	Herz
+	Gear	Zahnrad
+	Speech Bubble	Sprechblase
+	Count:	Anzahl:
+	Thickness:	Stärke:
+	Inner Radius:	Innenradius:
+	Head:	Kopf:
+	Shaft:	Schaft:
+	Point:	Spitze:
+	Tooth Height:	Zahnhöhe:
+	Tail:	Zipfel:
+	Tip:	Spitze:
+	Open a document to draw parametric shapes.	Öffnen Sie ein Dokument, um parametrische Formen zu zeichnen.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Wählen Sie eine parametrische Form aus, um sie zu bearbeiten. Ohne Auswahl gelten diese Werte für die nächste Form.
+@msg	the object is not an editable parametric shape	das Objekt ist keine bearbeitbare parametrische Form
+@msg	select plain rectangles, ellipses or regular polygons to convert	einfache Rechtecke, Ellipsen oder regelmäßige Polygone zum Umwandeln auswählen
+@msg	the shape's numbers are out of range	die Werte der Form liegen außerhalb des zulässigen Bereichs
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` muss eines der folgenden sein: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` muss eine ganze Zahl von 3 bis 1000 sein
+@msg	`{key}` must be from {lo} to {hi}	`{key}` muss zwischen {lo} und {hi} liegen
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Intelligenter Zeichenstift
 	Smart Pen Tool	Intelligenter-Zeichenstift-Werkzeug

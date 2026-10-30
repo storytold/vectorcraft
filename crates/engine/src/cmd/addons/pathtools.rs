@@ -1,8 +1,10 @@
 //! Path Precision Tools (`addon.pathtools.*`), a built-in add-on: the Anchor Eraser Brush's stroke,
 //! the Extend Path tool's extension, the Measure & Inspect tool's readouts, the Anchor Inspector's
-//! anchor edits and Split / Add Points at Crossings. Its tools, panel and submenu (Object ›
-//! Plug-ins › Path Precision Tools) are the tools crate's and the UI's.
+//! anchor edits, Split / Add Points at Crossings and the Parametric Shape Tool's shapes ([`shape`]).
+//! Its tools, panels and submenu (Object › Plug-ins › Path Precision Tools) are the tools crate's
+//! and the UI's.
 
+mod shape;
 #[cfg(test)]
 mod tests;
 
@@ -37,7 +39,7 @@ const MAX_EXTEND: f64 = 1e6;
 const MAX_ADD: u64 = pt::MAX_ADDED_PER_SEGMENT as u64;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![
+    let mut v = vec![
         cmd!(
             "addon.pathtools.erase",
             "Anchor Eraser Brush",
@@ -137,7 +139,9 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             crossings
         ),
-    ]
+    ];
+    v.extend(shape::specs());
+    v
 }
 
 /// The editable paths (not guides) under `roots`, compound path members included.

@@ -1224,6 +1224,7 @@
 	Delete Guides	Excluir Guias
 	Delete Slice	Excluir Fatia
 	Delete Style	Excluir Estilo
+	Delete Styles	Excluir Estilos
 	Delete Variables	Excluir Variáveis
 	Delete View	Excluir Exibição
 	Done Editing Pattern	Concluir Edição de Padrão
@@ -5715,6 +5716,32 @@ anchor	Points:	Pontos:
 @msg	select open paths to close	selecione caminhos abertos para fechar
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	caminhos demais, ou emaranhados demais, para encontrar seus cruzamentos (no máximo 10000 segmentos)
 @msg	the paths have too many anchors to edit at once	os caminhos têm pontos de ancoragem demais para editar de uma vez
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Ferramenta Forma Paramétrica
+	Parametric Shape	Forma Paramétrica
+	Edit Parametric Shape	Editar Forma Paramétrica
+	Convert to Parametric Shape	Converter em Forma Paramétrica
+	Ring	Anel
+	Heart	Coração
+	Gear	Engrenagem
+	Speech Bubble	Balão de Fala
+	Count:	Quantidade:
+	Thickness:	Espessura:
+	Inner Radius:	Raio Interno:
+	Head:	Ponta:
+	Shaft:	Haste:
+	Point:	Bico:
+	Tooth Height:	Altura do Dente:
+	Tail:	Rabicho:
+	Tip:	Ponta:
+	Open a document to draw parametric shapes.	Abra um documento para desenhar formas paramétricas.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Selecione uma forma paramétrica para editá-la. Sem seleção, estes valores valem para a próxima forma.
+@msg	the object is not an editable parametric shape	o objeto não é uma forma paramétrica editável
+@msg	select plain rectangles, ellipses or regular polygons to convert	selecione retângulos, elipses ou polígonos regulares simples para converter
+@msg	the shape's numbers are out of range	os valores da forma estão fora do intervalo
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` deve ser um destes: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` deve ser um número inteiro de 3 a 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` deve estar entre {lo} e {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Caneta Inteligente
 	Smart Pen Tool	Ferramenta Caneta Inteligente

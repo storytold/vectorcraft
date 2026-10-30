@@ -1382,6 +1382,7 @@ font-technology	Variable	Variabla
 	Delete Guides	Radera stödlinjer
 	Delete Slice	Radera skiva
 	Delete Style	Radera stil
+	Delete Styles	Radera stilar
 	Delete Variables	Radera variabler
 	Delete View	Radera vy
 	Done Editing Pattern	Avsluta mönsterredigering
@@ -5821,6 +5822,32 @@ anchor	Points:	Punkter:
 @msg	select open paths to close	markera öppna banor att stänga
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	för många eller för trassliga banor för att hitta deras korsningar (högst 10000 segment)
 @msg	the paths have too many anchors to edit at once	banorna har för många ankarpunkter för att redigeras på en gång
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrisk form-verktyget
+	Parametric Shape	Parametrisk form
+	Edit Parametric Shape	Redigera parametrisk form
+	Convert to Parametric Shape	Konvertera till parametrisk form
+	Ring	Ring
+	Heart	Hjärta
+	Gear	Kugghjul
+	Speech Bubble	Pratbubbla
+	Count:	Antal:
+	Thickness:	Tjocklek:
+	Inner Radius:	Inre radie:
+	Head:	Huvud:
+	Shaft:	Skaft:
+	Point:	Spets:
+	Tooth Height:	Tandhöjd:
+	Tail:	Svans:
+	Tip:	Spets:
+	Open a document to draw parametric shapes.	Öppna ett dokument för att rita parametriska former.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Markera en parametrisk form för att redigera den. Utan markering gäller värdena nästa form.
+@msg	the object is not an editable parametric shape	objektet är inte en redigerbar parametrisk form
+@msg	select plain rectangles, ellipses or regular polygons to convert	markera vanliga rektanglar, ellipser eller regelbundna polygoner att konvertera
+@msg	the shape's numbers are out of range	formens värden ligger utanför intervallet
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` måste vara något av: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` måste vara ett heltal från 3 till 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` måste vara från {lo} till {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Smart penna
 	Smart Pen Tool	Smart penna-verktyget

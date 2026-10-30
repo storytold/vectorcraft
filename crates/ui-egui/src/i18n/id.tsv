@@ -5330,6 +5330,7 @@ swatch	Bright Violet	Violet cerah
 	Delete Guides	Hapus semua panduan
 	Delete Slice	Hapus slice
 	Delete Style	Hapus gaya
+	Delete Styles	Hapus gaya
 	Delete Variables	Hapus variabel
 	Delete View	Hapus tampilan
 	Done Editing Pattern	Selesai mengedit pola
@@ -5702,6 +5703,32 @@ anchor	Points:	Titik:
 @msg	select open paths to close	pilih jalur terbuka untuk ditutup
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	jalur terlalu banyak atau terlalu kusut untuk menemukan persilangannya (paling banyak 10000 segmen)
 @msg	the paths have too many anchors to edit at once	jalur memiliki terlalu banyak titik jangkar untuk disunting sekaligus
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Alat bentuk parametrik
+	Parametric Shape	Bentuk parametrik
+	Edit Parametric Shape	Sunting bentuk parametrik
+	Convert to Parametric Shape	Ubah menjadi bentuk parametrik
+	Ring	Cincin
+	Heart	Hati
+	Gear	Roda gigi
+	Speech Bubble	Balon ucapan
+	Count:	Jumlah:
+	Thickness:	Ketebalan:
+	Inner Radius:	Jari-jari dalam:
+	Head:	Kepala:
+	Shaft:	Batang:
+	Point:	Ujung:
+	Tooth Height:	Tinggi gigi:
+	Tail:	Ekor:
+	Tip:	Ujung:
+	Open a document to draw parametric shapes.	Buka dokumen untuk menggambar bentuk parametrik.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Pilih bentuk parametrik untuk menyuntingnya. Tanpa pilihan, nilai ini berlaku untuk bentuk berikutnya.
+@msg	the object is not an editable parametric shape	objek bukan bentuk parametrik yang dapat disunting
+@msg	select plain rectangles, ellipses or regular polygons to convert	pilih persegi panjang, elips, atau poligon beraturan biasa untuk diubah
+@msg	the shape's numbers are out of range	nilai bentuk berada di luar rentang
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` harus salah satu dari: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` harus bilangan bulat dari 3 sampai 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` harus antara {lo} dan {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Pena pintar
 	Smart Pen Tool	Alat pena pintar

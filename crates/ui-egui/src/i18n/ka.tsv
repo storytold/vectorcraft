@@ -5185,6 +5185,7 @@ imageTrace	Outline	კონტური
 	Delete Light	სინათლის წაშლა
 	Delete Slice	ნაჭრის წაშლა
 	Delete Style	სტილის წაშლა
+	Delete Styles	სტილების წაშლა
 	Delete Variables	ცვლადების წაშლა
 	Delete View	ხედის წაშლა
 	Done Editing Pattern	პატერნის რედაქტირების დასრულება
@@ -5787,6 +5788,32 @@ anchor	Points:	წერტილები:
 @msg	select open paths to close	მონიშნეთ შესაკრავი ღია ტრაექტორიები
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	ტრაექტორიები ზედმეტად ბევრი ან ჩახლართულია გადაკვეთების საპოვნელად (მაქსიმუმ 10000 სეგმენტი)
 @msg	the paths have too many anchors to edit at once	ტრაექტორიებს ზედმეტად ბევრი საყრდენი წერტილი აქვს ერთბაშად დასარედაქტირებლად
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	პარამეტრული ფიგურის ხელსაწყო
+	Parametric Shape	პარამეტრული ფიგურა
+	Edit Parametric Shape	პარამეტრული ფიგურის რედაქტირება
+	Convert to Parametric Shape	პარამეტრულ ფიგურად გარდაქმნა
+	Ring	რგოლი
+	Heart	გული
+	Gear	კბილანა
+	Speech Bubble	ტექსტის ბუშტი
+	Count:	რაოდენობა:
+	Thickness:	სისქე:
+	Inner Radius:	შიდა რადიუსი:
+	Head:	თავი:
+	Shaft:	ღერო:
+	Point:	წვერი:
+	Tooth Height:	კბილის სიმაღლე:
+	Tail:	კუდი:
+	Tip:	წვერი:
+	Open a document to draw parametric shapes.	გახსენით დოკუმენტი პარამეტრული ფიგურების დასახატად.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	მონიშნეთ პარამეტრული ფიგურა მის დასარედაქტირებლად. მონიშვნის გარეშე ეს მნიშვნელობები შემდეგ ფიგურას ეხება.
+@msg	the object is not an editable parametric shape	ობიექტი არ არის რედაქტირებადი პარამეტრული ფიგურა
+@msg	select plain rectangles, ellipses or regular polygons to convert	მონიშნეთ გარდასაქმნელი ჩვეულებრივი მართკუთხედები, ელიფსები ან წესიერი მრავალკუთხედები
+@msg	the shape's numbers are out of range	ფიგურის მნიშვნელობები დასაშვებ დიაპაზონს სცდება
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` უნდა იყოს ერთ-ერთი: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` უნდა იყოს მთელი რიცხვი 3-დან 1000-მდე
+@msg	`{key}` must be from {lo} to {hi}	`{key}` უნდა იყოს {lo}-დან {hi}-მდე
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	ჭკვიანი კალამი
 	Smart Pen Tool	ჭკვიანი კალმის ხელსაწყო

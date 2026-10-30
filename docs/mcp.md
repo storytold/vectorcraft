@@ -5020,7 +5020,11 @@ spaceBefore, spaceAfter, hyphenate, mojikumi, burasagari, direction, leadingMode
 touches (a caret, `start == end`, touches its paragraph). Without a range they change every paragraph of the
 targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
 that range of characters. `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
-paragraph at `start`; `paraStyle.list` counts paragraphs as uses. A Return the Type tool types (or `text.editRange`
+paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
+the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes. `charStyle.unused` and
+`paraStyle.unused` (Select All Unused in the Character Styles and Paragraph Styles panel menus) list the styles with no
+uses, in panel order and never the Normal style, and the panel highlights them; `charStyle.delete` and
+`paraStyle.delete` take `{names}` to delete several styles in one undo step. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
 the story re-flows (a paragraph split between frames has them in both).
@@ -5716,9 +5720,10 @@ topmost piece.
 
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
-(`window.panel {panel: "anchorInspector"}`) and in three tools that the toolbars don't show until they are added from the
-All Tools drawer (or chosen with `tool.select`): `anchorEraserBrush`, `extendPath` and `measureInspect`. Each edit is one
-undo step, and an edit that changes nothing makes no step.
+(`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
+and in four tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
+`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect` and `parametricShape`. None has a shortcut. Each edit
+is one undo step, and an edit that changes nothing makes no step.
 
 Tools:
 
@@ -5732,6 +5737,15 @@ Tools:
 - **Measure & Inspect tool** (`measureInspect`): a drag measures distance, angle and offsets, as the Measure tool does
   (`tool.options` reports the last one); hovering a path reads it, as `addon.pathtools.inspect` does. Nothing goes into
   the document.
+- **Parametric Shape Tool** (`parametricShape`): draws shapes that stay editable as numbers. A drag from the centre runs
+  `addon.pathtools.shape.create`: the drag's length is the shape's size (height 2 × the distance, width in the last
+  shape's proportions), its direction the rotation (Shift: 45° steps). While dragging, ↑/↓ change the kind's count or
+  first value and ←/→ its second value or corner radius. A click selects a parametric shape and shows its handles:
+  centre (move), the box's lower right corner (size; Shift keeps the proportions), a handle above the top (rotation;
+  Shift: 45° steps), a dot on the top edge (corner radius) and one of the kind's own (a star's or ring's inner radius, a
+  gear's tooth height, an arrow's head, a cross's bar, a heart's notch, a bubble's tail tip); each drag runs
+  `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. Options
+  (`tool.setOption`, or the panel with no shape selected) are the next shape's numbers, as the commands take them.
 
 Commands:
 
@@ -5764,11 +5778,35 @@ Commands:
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
   path per piece. Paths that meet at a shared anchor don't cross there; at most 10,000 segments at once.
+- `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?}` draws a parametric
+  shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon` (default), `star`, `ring`, `arrow`,
+  `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height` are 0.01 to 16,384 pt (100);
+  `rotation` is in degrees clockwise (0: upright, a polygon's first corner up); `count` is a polygon's sides, a star's
+  points or a gear's teeth (3 to 1,000); `radius` rounds the corners (0 to 16,384 pt; no corner passes the middle of a
+  side). `a` and `b` are the kind's own values, fractions of its size: star, inner radius (0.01 to 1, 0.5); ring, the
+  hole (0.01 to 0.99, 0.5); arrow, head length and shaft width (0.05 to 0.95, 0.4 each); cross, the bar's offset (−0.9
+  to 0.9, 0; negative is up) and the arms' thickness (0.05 to 0.95, 1/3); heart, the notch's depth and the point's
+  roundness (0 to 1; 0.4 and 0); gear, tooth height (0.01 to 0.9, 0.2); bubble, the tail's height (0.05 to 0.9, 0.25)
+  and where its tip is across (−1 to 1, −0.4). → `{id, shape}`.
+- `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
+  defaults for the values not given) and redraws it in place. With no change it makes no step. → `{id, shape}` (its
+  numbers now, so `{id}` alone reads them).
+- `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
+  polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
+  outline. → `{ids}` (those converted).
+
+A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
+entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
+copies and duplicates keep it. Moved, rotated or scaled with any tool it stays editable: its centre, size and rotation
+follow (a shape with rounded corners only when scaled evenly). Skewed, mirrored, or with its anchors edited, it is a
+plain path from then on.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.pathtools.extend","params":{"id":12,"end":"end","length":40,"mode":"arc"}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.erase","params":{"points":[[100,40],[100,160]],"diameter":30}}}
 {"name":"run_command","arguments":{"command":"addon.pathtools.crossings","params":{"cut":true}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.shape.create","params":{"kind":"star","center":[200,150],"width":120,"height":120,"count":7,"a":0.4}}}
+{"name":"run_command","arguments":{"command":"addon.pathtools.shape.set","params":{"id":14,"kind":"gear","count":16,"radius":2}}}
 ```
 
 ## Smart Pen add-on

@@ -1,10 +1,11 @@
 //! Path Precision Tools' geometry: anchor edits for the Anchor Inspector (smooth by the auto-smooth
 //! rule, equalise handles, add evenly spaced anchors, close), the readouts the Measure & Inspect
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]) and the places
-//! where paths cross ([`crossings`]).
+//! where paths cross ([`crossings`]), and the Parametric Shape Tool's shapes ([`shapes`]).
 
 mod crossings;
 mod extend;
+pub mod shapes;
 #[cfg(test)]
 mod tests;
 

@@ -1508,6 +1508,7 @@ lighting	Light	Światło
 	Delete Guides	Usuń linie pomocnicze
 	Delete Slice	Usuń plasterek
 	Delete Style	Usuń styl
+	Delete Styles	Usuń style
 	Delete Variables	Usuń zmienne
 	Delete View	Usuń widok
 	Done Editing Pattern	Zakończ edycję wzorka
@@ -5652,6 +5653,32 @@ anchor	Points:	Punkty:
 @msg	select open paths to close	zaznacz otwarte ścieżki do zamknięcia
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	za dużo ścieżek lub są zbyt splątane, by znaleźć ich skrzyżowania (najwyżej 10000 segmentów)
 @msg	the paths have too many anchors to edit at once	ścieżki mają za dużo punktów kontrolnych, by edytować je naraz
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Narzędzie Kształt parametryczny
+	Parametric Shape	Kształt parametryczny
+	Edit Parametric Shape	Edytuj kształt parametryczny
+	Convert to Parametric Shape	Konwertuj na kształt parametryczny
+	Ring	Pierścień
+	Heart	Serce
+	Gear	Koło zębate
+	Speech Bubble	Dymek
+	Count:	Liczba:
+	Thickness:	Grubość:
+	Inner Radius:	Promień wewnętrzny:
+	Head:	Grot:
+	Shaft:	Trzon:
+	Point:	Czubek:
+	Tooth Height:	Wysokość zęba:
+	Tail:	Ogonek:
+	Tip:	Czubek:
+	Open a document to draw parametric shapes.	Otwórz dokument, aby rysować kształty parametryczne.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Zaznacz kształt parametryczny, aby go edytować. Bez zaznaczenia te wartości dotyczą następnego kształtu.
+@msg	the object is not an editable parametric shape	obiekt nie jest edytowalnym kształtem parametrycznym
+@msg	select plain rectangles, ellipses or regular polygons to convert	zaznacz zwykłe prostokąty, elipsy lub wielokąty foremne do konwersji
+@msg	the shape's numbers are out of range	wartości kształtu są poza zakresem
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` musi mieć jedną z wartości: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` musi być liczbą całkowitą od 3 do 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` musi mieć wartość od {lo} do {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Inteligentne pióro
 	Smart Pen Tool	Narzędzie Inteligentne pióro

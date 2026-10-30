@@ -1428,6 +1428,7 @@ file-filter	Templates	Шаблоны
 	Delete Guides	Удалить направляющие
 	Delete Slice	Удалить фрагмент
 	Delete Style	Удалить стиль
+	Delete Styles	Удалить стили
 	Delete Variables	Удалить переменные
 	Delete View	Удалить вид
 	Done Editing Pattern	Завершить редактирование узора
@@ -5775,6 +5776,32 @@ anchor	Points:	Точки:
 @msg	select open paths to close	выделите незамкнутые контуры, чтобы замкнуть их
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	контуров слишком много или они слишком запутаны, чтобы найти их пересечения (не более 10000 сегментов)
 @msg	the paths have too many anchors to edit at once	у контуров слишком много опорных точек, чтобы править их за раз
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Инструмент «Параметрическая фигура»
+	Parametric Shape	Параметрическая фигура
+	Edit Parametric Shape	Изменить параметрическую фигуру
+	Convert to Parametric Shape	Преобразовать в параметрическую фигуру
+	Ring	Кольцо
+	Heart	Сердце
+	Gear	Шестерёнка
+	Speech Bubble	Речевой пузырь
+	Count:	Количество:
+	Thickness:	Толщина:
+	Inner Radius:	Внутренний радиус:
+	Head:	Наконечник:
+	Shaft:	Древко:
+	Point:	Острие:
+	Tooth Height:	Высота зуба:
+	Tail:	Хвостик:
+	Tip:	Кончик:
+	Open a document to draw parametric shapes.	Откройте документ, чтобы рисовать параметрические фигуры.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Выделите параметрическую фигуру, чтобы править её. Без выделения эти значения применяются к следующей фигуре.
+@msg	the object is not an editable parametric shape	объект не является редактируемой параметрической фигурой
+@msg	select plain rectangles, ellipses or regular polygons to convert	выделите обычные прямоугольники, эллипсы или правильные многоугольники для преобразования
+@msg	the shape's numbers are out of range	значения фигуры вне допустимого диапазона
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` должно быть одним из: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` должно быть целым числом от 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` должно быть от {lo} до {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Умное перо
 	Smart Pen Tool	Инструмент «Умное перо»

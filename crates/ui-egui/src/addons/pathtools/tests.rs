@@ -16,9 +16,12 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
     let mut app = app();
     let entries = menus::menu_entries(&app);
     let under = |label: &str| entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label);
-    for (label, tool) in
-        [("Anchor Eraser Brush", "anchorEraserBrush"), ("Extend Path Tool", "extendPath"), ("Measure & Inspect Tool", "measureInspect")]
-    {
+    for (label, tool) in [
+        ("Anchor Eraser Brush", "anchorEraserBrush"),
+        ("Extend Path Tool", "extendPath"),
+        ("Measure & Inspect Tool", "measureInspect"),
+        ("Parametric Shape Tool", "parametricShape"),
+    ] {
         let e = under(label).expect(label);
         assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));
         menus::invoke(&mut app, "tool.select", e.params.clone());
@@ -83,4 +86,30 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
+}
+
+#[test]
+fn the_parametric_shape_panel_opens_from_the_submenu_and_shows_the_shape() {
+    let mut app = app();
+    let entries = menus::menu_entries(&app);
+    let under = |label: &str| {
+        let e = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label);
+        (e.command.clone(), e.params.clone())
+    };
+    assert_eq!(under("Convert to Parametric Shape").0.as_deref(), Some("addon.pathtools.shape.convert"));
+    let (command, params) = under("Parametric Shape");
+    assert_eq!(command.as_deref(), Some("window.panel"));
+    menus::invoke(&mut app, "window.panel", params);
+    assert!(crate::panel_docking::showing(&app.ui, super::shape::ID), "the panel opens");
+    // Nothing selected: the fields set the tool's next shape.
+    let text = painted_text(&mut app, super::shape::show);
+    assert!(text.contains("With none selected") && text.contains("Polygon") && text.contains("Count:") && text.contains("Corner Radius:"), "{text}");
+    app.run("tool.setOption", json!({"tool": "parametricShape", "values": {"kind": "gear"}})).unwrap();
+    let text = painted_text(&mut app, super::shape::show);
+    assert!(text.contains("Gear") && text.contains("Tooth Height:"), "{text}");
+    // A shape selected: its own numbers.
+    app.run("addon.pathtools.shape.create", json!({"kind": "bubble", "center": [150, 150]})).unwrap();
+    let text = painted_text(&mut app, super::shape::show);
+    assert!(text.contains("Speech Bubble") && text.contains("Tail:") && text.contains("Tip:") && !text.contains("With none selected"), "{text}");
+    assert!(!text.contains("Count:"), "a speech bubble has no count: {text}");
 }

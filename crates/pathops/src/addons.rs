@@ -4,8 +4,8 @@
 //!   its shape within a tolerance (shared by every add-on that takes anchors away).
 //! - [`cleanup`]: Artwork Cleanup's path repairs (collinear, duplicate and near anchors, tiny
 //!   handles, nearly closed paths) and Rejoin Path Pieces.
-//! - [`pathtools`]: Path Precision Tools' anchor edits, path readouts, extending open paths and
-//!   finding where paths cross.
+//! - [`pathtools`]: Path Precision Tools' anchor edits, path readouts, extending open paths,
+//!   finding where paths cross and the Parametric Shape Tool's re-editable shapes.
 //! - [`segment_reshape`]: bending a segment by dragging a point on it (shared by the tools that
 //!   reshape segments directly).
 //! - [`pen`]: the Smart Pen's straight and curved segments and its point edits.

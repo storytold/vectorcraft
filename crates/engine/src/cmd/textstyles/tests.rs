@@ -122,6 +122,100 @@ fn new_styles_trim_their_names_as_a_rename_does() {
     assert_eq!(s.execute("charStyle.duplicate", &json!({"name": " Old "})).unwrap()["name"], "Old copy 2");
 }
 
+fn unused(s: &mut Session, p: &str) -> Vec<String> {
+    serde_json::from_value(s.execute(&format!("{p}.unused"), &json!({})).unwrap()["names"].clone()).unwrap()
+}
+
+fn listed(s: &mut Session, p: &str) -> Vec<String> {
+    let list = s.execute(&format!("{p}.list"), &json!({})).unwrap();
+    list["styles"].as_array().unwrap().iter().filter_map(|x| x["name"].as_str()).map(str::to_string).collect()
+}
+
+/// Select All Unused: `charStyle.unused` and `paraStyle.unused` list, in panel order and without an
+/// undo step, the styles no text uses, never the Normal style. Type in a symbol, an opacity mask, a
+/// graph design, a pattern tile or a brush's art counts, as type in the layers does.
+#[test]
+fn unused_styles_are_those_no_text_uses_wherever_the_text_is() {
+    let (mut s, id) = session_with_text("Used");
+    let names = ["Spare", "Used", "Symbol", "Mask", "Design", "Pattern", "Brush", "Also spare"];
+    for p in ["charStyle", "paraStyle"] {
+        for n in names {
+            s.execute(&format!("{p}.new"), &json!({"name": n, "attrs": {}})).unwrap();
+        }
+        s.execute(&format!("{p}.apply"), &json!({"name": "Used", "id": id})).unwrap();
+    }
+    // Type in style `name`, selected.
+    let styled = |s: &mut Session, name: &str| {
+        let t = s.execute("text.create", &json!({"x": 10, "y": 150, "text": name})).unwrap()["id"].as_u64().unwrap();
+        for p in ["charStyle", "paraStyle"] {
+            s.execute(&format!("{p}.apply"), &json!({"name": name, "id": t})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        NodeId(t)
+    };
+    let clear = |s: &mut Session, id: NodeId| {
+        s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    };
+    styled(&mut s, "Symbol");
+    let sym = s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+    clear(&mut s, NodeId(sym["id"].as_u64().unwrap()));
+    let masked = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let mask = styled(&mut s, "Mask");
+    s.execute("select.set", &json!({"ids": [masked, mask.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let design = styled(&mut s, "Design");
+    s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+    clear(&mut s, design);
+    let tile = styled(&mut s, "Pattern");
+    s.execute("object.pattern.make", &json!({"edit": false})).unwrap();
+    if s.doc().unwrap().doc.node(tile).is_some() {
+        clear(&mut s, tile);
+    }
+    let art = styled(&mut s, "Brush");
+    s.execute("brush.new", &json!({"type": "art", "name": "Lettering"})).unwrap();
+    clear(&mut s, art);
+    let undo = s.doc().unwrap().history.undo.len();
+    for p in ["charStyle", "paraStyle"] {
+        assert_eq!(unused(&mut s, p), ["Spare", "Also spare"], "{p}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    let list = s.execute("charStyle.list", &json!({})).unwrap();
+    let uses = |name: &str| list["styles"].as_array().unwrap().iter().find(|x| x["name"] == name).unwrap()["uses"].as_u64();
+    for name in ["Symbol", "Mask", "Design", "Pattern", "Brush"] {
+        assert_eq!(uses(name), Some(1), "{name}");
+    }
+}
+
+/// `charStyle.delete` and `paraStyle.delete` take `names` and delete them in one undo step; text
+/// that used them keeps its look. A name that is not a style, the Normal style, or `names` that is
+/// not an array of strings deletes none.
+#[test]
+fn several_styles_are_deleted_in_one_step() {
+    let (mut s, id) = session_with_text("Title");
+    s.execute("text.setStyle", &json!({"size": 40})).unwrap();
+    for p in ["charStyle", "paraStyle"] {
+        for n in ["A", "B", "C"] {
+            s.execute(&format!("{p}.new"), &json!({"name": n})).unwrap();
+        }
+        s.execute(&format!("{p}.apply"), &json!({"name": "B", "id": id})).unwrap();
+        let before = listed(&mut s, p);
+        let undo = s.doc().unwrap().history.undo.len();
+        let normal = before[0].clone();
+        for bad in [json!(["A", "Nope"]), json!(["A", normal]), json!([]), json!(["A", 7]), json!("A")] {
+            assert!(s.execute(&format!("{p}.delete"), &json!({"names": bad})).is_err(), "{p} {bad}");
+        }
+        assert_eq!((listed(&mut s, p), s.doc().unwrap().history.undo.len()), (before.clone(), undo), "{p}");
+        s.execute(&format!("{p}.delete"), &json!({"names": ["A", "B"]})).unwrap();
+        assert_eq!(listed(&mut s, p), [normal.as_str(), "C"], "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        assert_eq!(s.execute("edit.undo", &json!({})).unwrap()["undone"], "Delete Styles", "{p}");
+        assert_eq!(listed(&mut s, p), before, "{p}");
+    }
+    s.execute("charStyle.delete", &json!({"names": ["B"]})).unwrap();
+    assert_eq!((runs(&s, id)[0].style.style_name.as_deref(), runs(&s, id)[0].style.size), (None, 40.0));
+    assert_eq!(s.execute("edit.undo", &json!({})).unwrap()["undone"], "Delete Style");
+}
+
 /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no
 /// mojikumi) are still attributes a style can set, and a style captured with one applies to
 /// text at the default, is duplicated and comes back out of a library.

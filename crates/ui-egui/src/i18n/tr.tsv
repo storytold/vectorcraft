@@ -5147,6 +5147,7 @@ theme	Appearance	Görünüm
 	Delete Guides	Kılavuzları Sil
 	Delete Slice	Dilimi Sil
 	Delete Style	Stili Sil
+	Delete Styles	Stilleri Sil
 	Delete Variables	Değişkenleri Sil
 	Delete View	Görünümü Sil
 	Done Editing Pattern	Desen Düzenlemeyi Bitir
@@ -5755,6 +5756,32 @@ anchor	Points:	Noktalar:
 @msg	select open paths to close	kapatılacak açık yolları seçin
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	kesişimlerini bulmak için yollar çok fazla veya çok karışık (en fazla 10000 bölüm)
 @msg	the paths have too many anchors to edit at once	yolların aynı anda düzenlenemeyecek kadar çok bağlantı noktası var
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrik Şekil Aracı
+	Parametric Shape	Parametrik Şekil
+	Edit Parametric Shape	Parametrik Şekli Düzenle
+	Convert to Parametric Shape	Parametrik Şekle Dönüştür
+	Ring	Halka
+	Heart	Kalp
+	Gear	Dişli
+	Speech Bubble	Konuşma Balonu
+	Count:	Sayı:
+	Thickness:	Kalınlık:
+	Inner Radius:	İç Yarıçap:
+	Head:	Uç:
+	Shaft:	Gövde:
+	Point:	Sivri Uç:
+	Tooth Height:	Diş Yüksekliği:
+	Tail:	Kuyruk:
+	Tip:	Uç:
+	Open a document to draw parametric shapes.	Parametrik şekiller çizmek için bir belge açın.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Düzenlemek için bir parametrik şekil seçin. Seçim yokken bu değerler bir sonraki şekle uygulanır.
+@msg	the object is not an editable parametric shape	nesne düzenlenebilir bir parametrik şekil değil
+@msg	select plain rectangles, ellipses or regular polygons to convert	dönüştürülecek düz dikdörtgenleri, elipsleri veya düzgün çokgenleri seçin
+@msg	the shape's numbers are out of range	şeklin değerleri aralığın dışında
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` şunlardan biri olmalıdır: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` 3 ile 1000 arasında bir tam sayı olmalıdır
+@msg	`{key}` must be from {lo} to {hi}	`{key}` {lo} ile {hi} arasında olmalıdır
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Akıllı Kalem
 	Smart Pen Tool	Akıllı Kalem Aracı

@@ -273,3 +273,186 @@ fn crossings_add_anchors_or_cut_in_one_step() {
     assert_eq!(steps(&s), n + 1);
     refuses(&mut s, "addon.pathtools.crossings", &[json!({"cut": "yes"}), json!({"ids": [123456]})]);
 }
+
+// ---------- Parametric Shape Tool ----------
+
+/// The parametric shape object `id` is now, as the tool reads it.
+fn shape_of(s: &Session, id: NodeId) -> Option<vectorcraft_pathops::addons::pathtools::shapes::ParametricShape> {
+    vectorcraft_tools::addons::parametric_shape::read(s.doc().unwrap().doc.node(id).unwrap())
+}
+
+fn star(s: &mut Session) -> NodeId {
+    let r = s.execute("addon.pathtools.shape.create", &json!({"kind": "star", "center": [200, 150], "width": 100, "height": 100})).unwrap();
+    id_of(&r)
+}
+
+#[test]
+fn create_draws_a_selected_parametric_shape_in_one_step() {
+    let mut s = session();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.shape.create", &json!({"kind": "gear", "center": [200, 150], "count": 10, "a": 0.3, "radius": 2})).unwrap();
+    let id = id_of(&r);
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert_eq!((r["shape"]["kind"].clone(), r["shape"]["count"].clone(), r["shape"]["width"].clone()), (json!("gear"), json!(10), json!(100.0)));
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    let g = shape_of(&s, id).unwrap();
+    assert_eq!((g.count, g.a, g.radius), (10, 0.3, 2.0));
+    assert!(path(&s, id).anchor_count() > 40, "40 tooth corners, rounded");
+    // Every kind, with its defaults.
+    for kind in ["rectangle", "ellipse", "polygon", "star", "ring", "arrow", "cross", "heart", "gear", "bubble"] {
+        let id = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": kind, "center": [50, 50]})).unwrap());
+        assert_eq!(shape_of(&s, id).map(|s| s.kind.id()), Some(kind));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 10);
+}
+
+#[test]
+fn set_changes_the_numbers_in_one_step_and_nothing_without_a_change() {
+    let mut s = session();
+    let id = star(&mut s);
+    assert_eq!(path(&s, id).anchor_count(), 10);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 8, "a": 0.3, "rotation": 15})).unwrap();
+    assert_eq!((r["shape"]["count"].clone(), r["shape"]["rotation"].clone()), (json!(8), json!(15.0)));
+    assert_eq!(path(&s, id).anchor_count(), 16);
+    assert_eq!(steps(&s), n + 1);
+    // The same numbers again, or none: no step.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 8})).unwrap();
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    // Another kind takes its own defaults.
+    let r = s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "kind": "arrow"})).unwrap();
+    assert_eq!((r["shape"]["a"].clone(), r["shape"]["rotation"].clone()), (json!(0.4), json!(15.0)));
+    assert_eq!(path(&s, id).anchor_count(), 7);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).anchor_count(), 16);
+}
+
+#[test]
+fn bad_shape_params_are_refused() {
+    let mut s = session();
+    let id = star(&mut s);
+    let rect = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+    let c = json!([10, 10]);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.create",
+        &[
+            json!({}),
+            json!({"center": null}),
+            json!({"center": [1]}),
+            json!({"center": "here"}),
+            json!({"center": [1e300, 0]}),
+            json!({"center": c, "kind": "cloud"}),
+            json!({"center": c, "kind": 3}),
+            json!({"center": c, "count": 2}),
+            json!({"center": c, "count": 1001}),
+            json!({"center": c, "count": 4.5}),
+            json!({"center": c, "width": 0}),
+            json!({"center": c, "height": 16385}),
+            json!({"center": c, "width": "40"}),
+            json!({"center": c, "kind": "star", "a": 2}),
+            json!({"center": c, "kind": "bubble", "b": -1.5}),
+            json!({"center": c, "radius": -1}),
+            json!({"center": c, "rotation": "up"}),
+        ],
+    );
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({}), json!({"id": rect.0, "count": 6}), json!({"id": 999_999}), json!({"id": id.0, "count": 0}), json!({"id": id.0, "width": -5})],
+    );
+    s.execute("object.setProps", &json!({"ids": [id.0], "locked": true})).unwrap();
+    refuses(&mut s, "addon.pathtools.shape.set", &[json!({"id": id.0, "count": 6})]);
+}
+
+#[test]
+fn an_anchor_edit_makes_it_a_plain_path_and_transforms_keep_it_editable() {
+    let mut s = session();
+    let id = star(&mut s);
+    // Moved, turned and scaled with the ordinary commands: still the shape, at its new place.
+    s.execute("object.move", &json!({"dx": 20, "dy": -10})).unwrap();
+    assert!(shape_of(&s, id).is_some_and(|s| s.center.distance(Point::new(220.0, 140.0)) < 1e-6));
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.rotation + 30.0).abs() < 1e-6, "30° counter-clockwise is −30 here: {r:?}");
+    s.execute("object.scale", &json!({"sx": 200, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.width - 200.0).abs() < 1e-6 && r.center.distance(Point::new(220.0, 140.0)) < 1e-6, "{r:?}");
+    let n = steps(&s);
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 6})).unwrap();
+    assert_eq!((path(&s, id).anchor_count(), steps(&s)), (12, n + 1));
+    assert!((shape_of(&s, id).unwrap().rotation + 30.0).abs() < 1e-6, "the turn stays");
+    // Stretched across its own axes (it is turned): skewed, so no longer.
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140]})).unwrap();
+    assert_eq!(shape_of(&s, id), None);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(shape_of(&s, id).is_some(), "undo brings it back");
+    // An anchor moved by hand: a plain path, which `set` refuses.
+    select_anchors(&mut s, id, &[2]);
+    s.execute("addon.pathtools.setAnchor", &json!({"x": 0})).unwrap();
+    assert_eq!(shape_of(&s, id), None);
+    refuses(&mut s, "addon.pathtools.shape.set", &[json!({"id": id.0, "count": 7})]);
+}
+
+#[test]
+fn convert_makes_plain_shapes_parametric_in_one_step() {
+    let mut s = session();
+    let r = id_of(&s.execute("shape.rectangle", &json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap());
+    let p = id_of(&s.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 40, "sides": 7})).unwrap());
+    let st = id_of(&s.execute("shape.star", &json!({"cx": 300, "cy": 150, "radius1": 40, "radius2": 15})).unwrap());
+    select(&mut s, &[r, p, st]);
+    let n = steps(&s);
+    let out = s.execute("addon.pathtools.shape.convert", &json!({})).unwrap();
+    assert_eq!(out["ids"], json!([r.0, p.0]));
+    assert_eq!(steps(&s), n + 1);
+    assert_eq!(shape_of(&s, r).map(|s| s.kind.id()), Some("rectangle"));
+    assert_eq!(shape_of(&s, p).map(|s| (s.kind.id(), s.count)), Some(("polygon", 7)));
+    assert_eq!(shape_of(&s, st), None);
+    assert_eq!(path(&s, r).bounds().map(|b| b.center()), Some(Point::new(60.0, 45.0)));
+    // Nothing left to convert.
+    select(&mut s, &[r, st]);
+    refuses(&mut s, "addon.pathtools.shape.convert", &[json!({}), json!({"ids": [st.0]}), json!({"ids": [123456]})]);
+}
+
+#[test]
+fn the_shape_data_stays_out_of_svg_export() {
+    let mut s = session();
+    let id = star(&mut s);
+    s.execute("object.setProps", &json!({"ids": [id.0], "data": {"pivot": "1,2"}})).unwrap();
+    let key = vectorcraft_tools::addons::parametric_shape::KEY;
+    let node = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(node.extras().attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, _)| k == key)), "kept with the object");
+    assert!(shape_of(&s, id).is_some(), "setting other data keeps it a shape");
+    let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    assert!(svg.contains("data-pivot=\"1,2\""), "the object's own data still goes out: {svg}");
+    assert!(!svg.contains(key) && !svg.contains("fp&quot;") && !svg.contains("\"fp\""), "{svg}");
+}
+
+#[test]
+fn the_tool_draws_one_step_per_drag_and_arrows_change_the_count() {
+    let mut s = session();
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("parametricShape", view).unwrap();
+    s.set_tool_option("kind", &json!("star"));
+    let n = steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 100.0), view).unwrap();
+    s.tool_key(vectorcraft_tools::ToolKey::Up, vectorcraft_tools::Mods::default(), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 90.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 90.0), view).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    let shape = shape_of(&s, id).unwrap();
+    assert_eq!((shape.kind.id(), shape.count, shape.height, shape.rotation), ("star", 6, 120.0, 0.0));
+    // Its size handle (lower right of its box) drags into one more step.
+    let corner = shape.frame() * Point::new(shape.width / 2.0, shape.height / 2.0);
+    for (k, x) in [(PointerKind::Down, corner.x), (PointerKind::Drag, corner.x + 30.0), (PointerKind::Up, corner.x + 30.0)] {
+        s.pointer(&PointerEvent::new(k, x, corner.y), view).unwrap();
+    }
+    assert_eq!(steps(&s), n + 2);
+    assert!((shape_of(&s, id).unwrap().width - 180.0).abs() < 1e-9);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(shape_of(&s, id).map(|s| s.width), Some(120.0));
+}

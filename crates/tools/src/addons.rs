@@ -5,6 +5,7 @@
 pub mod anchor_eraser;
 pub mod extend_path;
 pub mod measure_inspect;
+pub mod parametric_shape;
 pub mod smart_pen;
 
 use crate::{Tool, ToolInfo};
@@ -14,6 +15,7 @@ pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: anchor_eraser::ID, label: "Anchor Eraser Brush", shortcut: None, icon: "dc-remove-brush" },
     ToolInfo { id: extend_path::ID, label: "Extend Path Tool", shortcut: None, icon: "dc-arrow-extend" },
     ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "ruler" },
+    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "hexagon" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
@@ -37,6 +39,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         anchor_eraser::ID => Box::new(anchor_eraser::AnchorEraserTool::default()),
         extend_path::ID => Box::new(extend_path::ExtendPathTool::default()),
         measure_inspect::ID => Box::new(measure_inspect::MeasureInspectTool::default()),
+        parametric_shape::ID => Box::new(parametric_shape::ParametricShapeTool::default()),
         smart_pen::ID => Box::new(smart_pen::SmartPenTool::default()),
         _ => return None,
     })

@@ -1395,6 +1395,7 @@ file-filter	Templates	範本
 	Delete Guides	刪除參考線
 	Delete Slice	刪除切片
 	Delete Style	刪除樣式
+	Delete Styles	刪除樣式
 	Delete Variables	刪除變數
 	Delete View	刪除檢視
 	Done Editing Pattern	完成圖樣編輯
@@ -5433,6 +5434,34 @@ anchor	Points:	點：
 @msg	select open paths to close	請選取要封閉的開放路徑
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	路徑太多或太複雜，無法找到交叉處（最多 10000 段）
 @msg	the paths have too many anchors to edit at once	路徑的錨點太多，無法一次編輯
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	參數化形狀工具
+	Parametric Shape	參數化形狀
+	Edit Parametric Shape	編輯參數化形狀
+	Convert to Parametric Shape	轉換為參數化形狀
+	Ring	圓環
+	Arrow	箭頭
+	Cross	十字
+	Heart	心形
+	Gear	齒輪
+	Speech Bubble	對話氣泡
+	Count:	數量：
+	Thickness:	粗細：
+	Inner Radius:	內半徑：
+	Head:	箭頭頭部：
+	Shaft:	箭桿：
+	Point:	尖端：
+	Tooth Height:	齒高：
+	Tail:	尾巴：
+	Tip:	尖端：
+	Open a document to draw parametric shapes.	開啟文件以繪製參數化形狀。
+	Select a parametric shape to edit it. With none selected, these set the next shape.	選取一個參數化形狀以編輯它。未選取時，這些值用於下一個形狀。
+@msg	the object is not an editable parametric shape	該物件不是可編輯的參數化形狀
+@msg	select plain rectangles, ellipses or regular polygons to convert	請選取要轉換的一般矩形、橢圓或正多邊形
+@msg	the shape's numbers are out of range	形狀的數值超出範圍
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` 必須是下列其中之一：rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` 必須是介於 3 到 1000 的整數
+@msg	`{key}` must be from {lo} to {hi}	`{key}` 必須介於 {lo} 到 {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	智慧筆型
 	Smart Pen Tool	智慧筆型工具

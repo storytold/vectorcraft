@@ -1424,6 +1424,7 @@ file-filter	Templates	Шаблони
 	Delete Guides	Видалити напрямні
 	Delete Slice	Видалити фрагмент
 	Delete Style	Видалити стиль
+	Delete Styles	Видалити стилі
 	Delete Variables	Видалити змінні
 	Delete View	Видалити вигляд
 	Done Editing Pattern	Завершити редагування візерунка
@@ -5394,6 +5395,34 @@ anchor	Points:	Точки:
 @msg	select open paths to close	виділіть незамкнені контури, щоб замкнути їх
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	контурів забагато або вони надто заплутані, щоб знайти їхні перетини (не більше 10000 сегментів)
 @msg	the paths have too many anchors to edit at once	у контурів забагато опорних точок, щоб редагувати їх за раз
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Інструмент «Параметрична фігура»
+	Parametric Shape	Параметрична фігура
+	Edit Parametric Shape	Редагувати параметричну фігуру
+	Convert to Parametric Shape	Перетворити на параметричну фігуру
+	Ring	Кільце
+	Arrow	Стрілка
+	Cross	Хрест
+	Heart	Серце
+	Gear	Зубчасте колесо
+	Speech Bubble	Мовна бульбашка
+	Count:	Кількість:
+	Thickness:	Товщина:
+	Inner Radius:	Внутрішній радіус:
+	Head:	Наконечник:
+	Shaft:	Держак:
+	Point:	Вістря:
+	Tooth Height:	Висота зуба:
+	Tail:	Хвостик:
+	Tip:	Кінчик:
+	Open a document to draw parametric shapes.	Відкрийте документ, щоб малювати параметричні фігури.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Виділіть параметричну фігуру, щоб редагувати її. Без виділення ці значення стосуються наступної фігури.
+@msg	the object is not an editable parametric shape	об’єкт не є редагованою параметричною фігурою
+@msg	select plain rectangles, ellipses or regular polygons to convert	виділіть звичайні прямокутники, еліпси або правильні багатокутники для перетворення
+@msg	the shape's numbers are out of range	значення фігури поза допустимим діапазоном
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` має бути одним із: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` має бути цілим числом від 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` має бути від {lo} до {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Розумне перо
 	Smart Pen Tool	Інструмент «Розумне перо»

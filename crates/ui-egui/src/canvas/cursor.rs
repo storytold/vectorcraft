@@ -151,6 +151,7 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::AnchorEraser
         | Cursor::ExtendPath
         | Cursor::MeasureInspect
+        | Cursor::ParametricShape
         | Cursor::SmartPen => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
     }
 }

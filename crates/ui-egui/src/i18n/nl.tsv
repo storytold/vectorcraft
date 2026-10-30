@@ -5341,6 +5341,7 @@ swatch	Bright Violet	Felviolet
 	Delete Guides	Hulplijnen verwijderen
 	Delete Slice	Slice verwijderen
 	Delete Style	Stijl verwijderen
+	Delete Styles	Stijlen verwijderen
 	Delete Variables	Variabelen verwijderen
 	Delete View	Weergave verwijderen
 	Done Editing Pattern	Patroon bewerken voltooid
@@ -5746,6 +5747,32 @@ anchor	Points:	Punten:
 @msg	select open paths to close	selecteer open paden om te sluiten
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	te veel of te verwarde paden om hun kruisingen te vinden (hoogstens 10000 segmenten)
 @msg	the paths have too many anchors to edit at once	de paden hebben te veel ankerpunten om in één keer te bewerken
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrische vorm-gereedschap
+	Parametric Shape	Parametrische vorm
+	Edit Parametric Shape	Parametrische vorm bewerken
+	Convert to Parametric Shape	Omzetten in parametrische vorm
+	Ring	Ring
+	Heart	Hart
+	Gear	Tandwiel
+	Speech Bubble	Tekstballon
+	Count:	Aantal:
+	Thickness:	Dikte:
+	Inner Radius:	Binnenstraal:
+	Head:	Kop:
+	Shaft:	Schacht:
+	Point:	Punt:
+	Tooth Height:	Tandhoogte:
+	Tail:	Staart:
+	Tip:	Punt:
+	Open a document to draw parametric shapes.	Open een document om parametrische vormen te tekenen.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Selecteer een parametrische vorm om die te bewerken. Zonder selectie gelden deze waarden voor de volgende vorm.
+@msg	the object is not an editable parametric shape	het object is geen bewerkbare parametrische vorm
+@msg	select plain rectangles, ellipses or regular polygons to convert	selecteer gewone rechthoeken, ellipsen of regelmatige polygonen om om te zetten
+@msg	the shape's numbers are out of range	de waarden van de vorm liggen buiten het bereik
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` moet een van deze zijn: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` moet een geheel getal van 3 tot 1000 zijn
+@msg	`{key}` must be from {lo} to {hi}	`{key}` moet tussen {lo} en {hi} liggen
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Slimme pen
 	Smart Pen Tool	Slimme pen-gereedschap

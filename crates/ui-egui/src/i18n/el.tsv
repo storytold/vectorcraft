@@ -1344,6 +1344,7 @@ font-technology	Variable	Μεταβλητές
 	Delete Guides	Διαγραφή οδηγών
 	Delete Slice	Διαγραφή τομής
 	Delete Style	Διαγραφή στυλ
+	Delete Styles	Διαγραφή στυλ
 	Delete Variables	Διαγραφή μεταβλητών
 	Delete View	Διαγραφή προβολής
 	Done Editing Pattern	Ολοκλήρωση επεξεργασίας μοτίβου
@@ -5749,6 +5750,32 @@ anchor	Points:	Σημεία:
 @msg	select open paths to close	επιλέξτε ανοιχτές διαδρομές για κλείσιμο
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	οι διαδρομές είναι πάρα πολλές ή πολύ μπλεγμένες για να βρεθούν οι διασταυρώσεις τους (έως 10000 τμήματα)
 @msg	the paths have too many anchors to edit at once	οι διαδρομές έχουν πάρα πολλά σημεία αγκύρωσης για επεξεργασία με μία φορά
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Εργαλείο παραμετρικού σχήματος
+	Parametric Shape	Παραμετρικό σχήμα
+	Edit Parametric Shape	Επεξεργασία παραμετρικού σχήματος
+	Convert to Parametric Shape	Μετατροπή σε παραμετρικό σχήμα
+	Ring	Δακτύλιος
+	Heart	Καρδιά
+	Gear	Γρανάζι
+	Speech Bubble	Συννεφάκι ομιλίας
+	Count:	Πλήθος:
+	Thickness:	Πάχος:
+	Inner Radius:	Εσωτερική ακτίνα:
+	Head:	Κεφαλή:
+	Shaft:	Στέλεχος:
+	Point:	Μύτη:
+	Tooth Height:	Ύψος δοντιού:
+	Tail:	Ουρά:
+	Tip:	Άκρη:
+	Open a document to draw parametric shapes.	Ανοίξτε ένα έγγραφο για να σχεδιάσετε παραμετρικά σχήματα.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Επιλέξτε ένα παραμετρικό σχήμα για να το επεξεργαστείτε. Χωρίς επιλογή, αυτές οι τιμές ισχύουν για το επόμενο σχήμα.
+@msg	the object is not an editable parametric shape	το αντικείμενο δεν είναι επεξεργάσιμο παραμετρικό σχήμα
+@msg	select plain rectangles, ellipses or regular polygons to convert	επιλέξτε απλά ορθογώνια, ελλείψεις ή κανονικά πολύγωνα για μετατροπή
+@msg	the shape's numbers are out of range	οι τιμές του σχήματος είναι εκτός εύρους
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	Το `kind` πρέπει να είναι ένα από: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	Το `count` πρέπει να είναι ακέραιος από 3 έως 1000
+@msg	`{key}` must be from {lo} to {hi}	Το `{key}` πρέπει να είναι από {lo} έως {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Έξυπνη πένα
 	Smart Pen Tool	Έξυπνη πένα (Smart Pen Tool)

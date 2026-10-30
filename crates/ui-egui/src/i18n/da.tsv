@@ -5330,6 +5330,7 @@ swatch	Bright Violet	Kraftig violet
 	Delete Guides	Slet hjælpelinjer
 	Delete Slice	Slet udsnit
 	Delete Style	Slet typografi
+	Delete Styles	Slet typografier
 	Delete Variables	Slet variabler
 	Delete View	Slet visning
 	Done Editing Pattern	Redigering af mønster udført
@@ -5702,6 +5703,32 @@ anchor	Points:	Punkter:
 @msg	select open paths to close	vælg åbne stier at lukke
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	for mange eller for sammenfiltrede stier til at finde deres krydsninger (højst 10000 segmenter)
 @msg	the paths have too many anchors to edit at once	stierne har for mange ankerpunkter til at blive redigeret på én gang
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrisk form-værktøj
+	Parametric Shape	Parametrisk form
+	Edit Parametric Shape	Rediger parametrisk form
+	Convert to Parametric Shape	Konverter til parametrisk form
+	Ring	Ring
+	Heart	Hjerte
+	Gear	Tandhjul
+	Speech Bubble	Taleboble
+	Count:	Antal:
+	Thickness:	Tykkelse:
+	Inner Radius:	Indre radius:
+	Head:	Hoved:
+	Shaft:	Skaft:
+	Point:	Spids:
+	Tooth Height:	Tandhøjde:
+	Tail:	Hale:
+	Tip:	Spids:
+	Open a document to draw parametric shapes.	Åbn et dokument for at tegne parametriske former.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Vælg en parametrisk form for at redigere den. Uden valg gælder disse værdier for den næste form.
+@msg	the object is not an editable parametric shape	objektet er ikke en redigerbar parametrisk form
+@msg	select plain rectangles, ellipses or regular polygons to convert	vælg almindelige rektangler, ellipser eller regulære polygoner at konvertere
+@msg	the shape's numbers are out of range	formens værdier er uden for området
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` skal være en af: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` skal være et heltal fra 3 til 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` skal være fra {lo} til {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Smart pen
 	Smart Pen Tool	Smart pen-værktøj

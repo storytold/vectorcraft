@@ -1701,6 +1701,7 @@ font-technology	Variable	가변
 	Delete Guides	안내선 삭제
 	Delete Slice	분할 삭제
 	Delete Style	스타일 삭제
+	Delete Styles	스타일 삭제
 	Delete Variables	변수 삭제
 	Delete View	보기 삭제
 	Done Editing Pattern	패턴 편집 완료
@@ -5377,6 +5378,34 @@ anchor	Points:	포인트:
 @msg	select open paths to close	닫을 열린 패스를 선택하세요
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	패스가 너무 많거나 너무 얽혀 교차점을 찾을 수 없습니다(최대 10000개 세그먼트)
 @msg	the paths have too many anchors to edit at once	패스의 앵커 포인트가 너무 많아 한 번에 편집할 수 없습니다
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	파라메트릭 모양 도구
+	Parametric Shape	파라메트릭 모양
+	Edit Parametric Shape	파라메트릭 모양 편집
+	Convert to Parametric Shape	파라메트릭 모양으로 변환
+	Ring	고리
+	Arrow	화살표
+	Cross	십자
+	Heart	하트
+	Gear	톱니바퀴
+	Speech Bubble	말풍선
+	Count:	개수:
+	Thickness:	두께:
+	Inner Radius:	안쪽 반지름:
+	Head:	머리:
+	Shaft:	몸통:
+	Point:	끝:
+	Tooth Height:	톱니 높이:
+	Tail:	꼬리:
+	Tip:	끝:
+	Open a document to draw parametric shapes.	파라메트릭 모양을 그리려면 문서를 여세요.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	편집할 파라메트릭 모양을 선택하세요. 선택하지 않으면 이 값은 다음 모양에 적용됩니다.
+@msg	the object is not an editable parametric shape	개체가 편집 가능한 파라메트릭 모양이 아닙니다
+@msg	select plain rectangles, ellipses or regular polygons to convert	변환할 일반 사각형, 타원 또는 정다각형을 선택하세요
+@msg	the shape's numbers are out of range	모양의 값이 범위를 벗어났습니다
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind`은(는) 다음 중 하나여야 합니다: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count`는 3에서 1000 사이의 정수여야 합니다
+@msg	`{key}` must be from {lo} to {hi}	`{key}`은(는) {lo}에서 {hi} 사이여야 합니다
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	스마트 펜
 	Smart Pen Tool	스마트 펜 도구

@@ -1042,6 +1042,7 @@
 	Delete Spine Point	Suprimeix el punt de l’espina
 	Delete Stop	Suprimeix la parada
 	Delete Style	Suprimeix l’estil
+	Delete Styles	Suprimeix els estils
 	Delete Swatch	Suprimeix la mostra
 	Delete Symbol	Suprimeix el símbol
 	Delete Tab	Suprimeix la tabulació
@@ -5788,6 +5789,32 @@ anchor	Points:	Punts:
 @msg	select open paths to close	seleccioneu traçats oberts per tancar-los
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	massa traçats, o massa enredats, per trobar-ne els encreuaments (10000 segments com a màxim)
 @msg	the paths have too many anchors to edit at once	els traçats tenen massa punts d’ancoratge per editar-los alhora
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Eina de forma paramètrica
+	Parametric Shape	Forma paramètrica
+	Edit Parametric Shape	Edita la forma paramètrica
+	Convert to Parametric Shape	Converteix en forma paramètrica
+	Ring	Anell
+	Heart	Cor
+	Gear	Engranatge
+	Speech Bubble	Bafarada
+	Count:	Nombre:
+	Thickness:	Gruix:
+	Inner Radius:	Radi interior:
+	Head:	Cap:
+	Shaft:	Tija:
+	Point:	Punta:
+	Tooth Height:	Alçada de la dent:
+	Tail:	Cua:
+	Tip:	Punta:
+	Open a document to draw parametric shapes.	Obriu un document per dibuixar formes paramètriques.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Seleccioneu una forma paramètrica per editar-la. Sense cap selecció, aquests valors s’apliquen a la forma següent.
+@msg	the object is not an editable parametric shape	l’objecte no és una forma paramètrica editable
+@msg	select plain rectangles, ellipses or regular polygons to convert	seleccioneu rectangles, el·lipses o polígons regulars simples per convertir-los
+@msg	the shape's numbers are out of range	els valors de la forma són fora de l’interval
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` ha de ser un de: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` ha de ser un nombre enter de 3 a 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` ha de ser de {lo} a {hi}
 # Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
 	Smart Pen	Ploma intel·ligent
 	Smart Pen Tool	Eina de ploma intel·ligent
