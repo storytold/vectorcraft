@@ -110,9 +110,11 @@ fn paths() -> [vectorcraft_geom::PathData; 2] {
     [vectorcraft_geom::PathData::from_bezpath(&curve), circle(150.0)]
 }
 
-/// `text` in `style` set as point type, and on `path` with `effect`.
+/// `text` in `style` set as point type, and on `path` with `effect`, aligned as new type is (to the
+/// start of its paragraph's direction).
 fn point_and_on_path(text: &str, style: CharStyle, path: &vectorcraft_geom::PathData, effect: PathEffect) -> (TextLayout, TextLayout) {
     let mut t = TextObject::point(Point::ZERO, text, style);
+    t.para.justify = vectorcraft_doc::Justify::Auto;
     t.para.direction = text.chars().any(|c| ('\u{600}'..='\u{6ff}').contains(&c)).then_some(ParaDirection::RightToLeft);
     let point = layout(FontDb::global(), &t);
     t.kind = TextKind::OnPath { path: path.clone(), start: 0.05, end: None };
