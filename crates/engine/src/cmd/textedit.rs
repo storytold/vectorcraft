@@ -9,7 +9,10 @@ use vectorcraft_text::edit;
 
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, id_param,
+    index, number_or, point_param, str_param, switch_or, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

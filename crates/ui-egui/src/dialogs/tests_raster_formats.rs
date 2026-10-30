@@ -140,14 +140,12 @@ fn save_for_office_and_export_selection_say_when_an_image_could_not_be_decoded()
     let (mut app, written) = app(1);
     app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(app.ui.status, "Saved /x/o.png");
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+    // A PNG whose header reads but whose pixel data is cut short.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [10, 10]})).unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
     app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(app.ui.status, format!("Saved /x/o.png {NOTE}"));
     // Export Selection of the placed image, which stays selected.

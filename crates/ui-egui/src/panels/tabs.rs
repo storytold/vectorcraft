@@ -158,7 +158,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
     egui::Grid::new("tabs-grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        ui.label(egui::RichText::new(if vertical { "Y:" } else { "X:" }).color(t.text));
+        ui.label(egui::RichText::new(if vertical { tl!("Y:") } else { tl!("X:") }).color(t.text));
         let x = stops.get(sel).map(|s| s.position);
         if let Some(v) = widgets::spin_field(ui, "tabs-x", x, app.session.general_unit(), 90.0, 1.0, 0.0, &[])
             && let Some(i) = apply_moved(app, ui.ctx(), &mut stops, sel, v.max(0.0))

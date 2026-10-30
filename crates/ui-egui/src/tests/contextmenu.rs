@@ -168,6 +168,38 @@ fn right_clicking_a_ruler_swaps_the_document_units() {
     assert!(texts.iter().any(|(t, _)| t == "✓  Millimeters"), "the left ruler reflects the current unit: {texts:?}");
 }
 
+/// Cmd+Alt+Shift+U is Switch Units by default (Ctrl+Alt+Shift+U on Windows and Linux,
+/// Option+Shift+Command+U on macOS): pressed, the document goes to the unit after its own in the
+/// ruler's menu, and Smart Guides (Cmd+U) stay as they are. No other default has the key.
+#[test]
+fn cmd_alt_shift_u_switches_to_the_next_unit() {
+    use crate::shortcut_editor as ed;
+    use vectorcraft_doc::Unit;
+    assert_eq!(ed::default_command_shortcut("document.switchUnits"), Some("Cmd+Alt+Shift+U"));
+    assert_eq!(ed::command_for_key("Cmd+Alt+Shift+U"), Some("document.switchUnits"));
+    let shown = menus::pretty_shortcut("Cmd+Alt+Shift+U");
+    assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⇧⌘U" } else { "Ctrl+Alt+Shift+U" });
+    let mut app = app();
+    let listed = app.run("shortcuts.list", json!({"query": "document.switchUnits"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
+    assert_eq!(rows, [(json!("Switch Units"), json!("Document"), json!("Cmd+Alt+Shift+U"))], "Keyboard Shortcuts lists it under Document");
+    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
+    fn press(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
+        let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let guides = app.ui.view.smart_guides;
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Picas, "Points → Picas");
+    assert_eq!(app.ui.view.smart_guides, guides, "Smart Guides stay as they are");
+    app.run("document.setUnits", json!({"units": "Feet"})).unwrap();
+    press(&mut app);
+    assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
+}
+
 fn labels(items: &[Item]) -> Vec<&'static str> {
     items
         .iter()

@@ -1,4 +1,4 @@
-use super::*;
+use super::NodeId;
 
 /// Coordinates beyond this many points exceed the supported document range.
 pub const MAX_COORD: f64 = 4.0e6;

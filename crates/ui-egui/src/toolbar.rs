@@ -389,6 +389,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::menus::invoke(app, id, json!({}));
             Ok(json!({ "dialog": "command" }))
         }
+        // The add-ons' tools.
+        _ if crate::addons::pathtools::has_options(tool) => crate::addons::pathtools::open_options(app, tool),
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }
@@ -496,7 +498,10 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
                     clicked = Some(cmd);
                 }
             }
-            if let Some(cmd) = clicked {
+            // Cmd/Ctrl-click on Gradient resets the gradient to White, Black.
+            if clicked == Some("paint.lastGradient") && ui.input(|i| i.modifiers.command) {
+                crate::panels::gradient::reset_to_linear_white_black(app);
+            } else if let Some(cmd) = clicked {
                 app.run(cmd, json!({})).ok();
             }
         });

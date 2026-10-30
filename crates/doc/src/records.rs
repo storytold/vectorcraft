@@ -1,4 +1,4 @@
-use super::*;
+use super::{Arc, Deserialize, Node, NodeId, Point, Serialize};
 
 /// New art on a locked artboard ([`Document::new_art`]). Setting it changes the document in
 /// place, so a selection change that sets it doesn't replace the document.

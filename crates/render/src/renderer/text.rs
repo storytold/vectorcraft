@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, FillRule, Frame, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, Node, NodeKind, PlacedEntry,
+    PlacedKey, Rect, RenderContext, Renderer, SUBSTITUTED, Shape, TextGeom, TextObject, blend_mode, blob_pixmap, depends_on_document, fx, holds_type,
+    image_mip, ink, kurbo, lru, peniko, place, proof, stain_bits, text_geom, text_geom_snapped, vello_cpu,
+};
 use crate::paint;
 
 impl Renderer {
@@ -242,6 +246,10 @@ impl Renderer {
     fn draw_glyph_image(&mut self, ctx: &mut RenderContext, f: &Frame, image: &vectorcraft_text::GlyphImage, xf: Affine) {
         let Some((key, pm)) = blob_pixmap(&image.blob, true) else { return };
         let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
+        let (key, pm) = match f.plates {
+            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true),
+            None => (key, pm),
+        };
         let unit = f.view * xf * Affine::scale_non_uniform(image.width as f64, image.height as f64);
         let pm = image_mip(&key, pm, unit);
         let sx = image.width as f64 / pm.width().max(1) as f64;

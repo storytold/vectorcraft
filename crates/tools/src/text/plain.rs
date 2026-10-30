@@ -1,4 +1,4 @@
-use super::*;
+use super::{ImeSurrounding, Range, ToolKey};
 
 /// Byte range in `s` of the characters `r` (IME ranges count characters; carets count bytes).
 /// `None` when `r` runs past the end of `s` or backwards.

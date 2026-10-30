@@ -2,6 +2,40 @@ use super::*;
 use crate::testutil::*;
 use vectorcraft_doc::Selection;
 
+/// Direct Selection and Group Selection grab a selected clipped object (picked in the Layers
+/// panel) where its mask hides it, as on its visible part: a drag moves it. With nothing of it
+/// selected there, a press starts a marquee.
+#[test]
+fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
+    let (d, _, _, art) = doc_with_masked_square();
+    let p = paint();
+    let mut picked = Selection::default();
+    picked.add(art);
+    let none = Selection::default();
+    // (370, 450): on the art, outside the mask (400..500).
+    for group in [false, true] {
+        let c = cx(&d, &picked, &p);
+        let mut t = DirectSelectionTool::new(group);
+        let down = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 370.0, 450.0));
+        assert!(!down.iter().any(|a| matches!(a, Action::Exec(c, _) if c.starts_with("select."))), "{down:?} (group: {group})");
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 390.0, 470.0));
+        assert!(a.iter().any(|a| matches!(a, Action::Begin(n) if n == "Move")), "{a:?} (group: {group})");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 390.0, 470.0));
+        // With Shift, a marquee.
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = DirectSelectionTool::new(group);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 370.0, 450.0).with_mods(shift));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 390.0, 470.0).with_mods(shift));
+        assert!(!a.iter().any(|a| matches!(a, Action::Begin(_))), "{a:?} (group: {group})");
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Marquee(_))), "a marquee (group: {group})");
+        let c = cx(&d, &none, &p);
+        let mut t = DirectSelectionTool::new(group);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 370.0, 450.0));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 390.0, 470.0));
+        assert!(!a.iter().any(|a| matches!(a, Action::Begin(_))), "{a:?} (group: {group})");
+    }
+}
+
 /// #414: a ruler guide is picked over the art, but an anchor on it is picked first.
 #[test]
 fn direct_and_group_selection_pick_ruler_guides() {
@@ -250,13 +284,13 @@ fn dragging_a_frame_corner_or_edge_reshapes_area_type() {
     // The bottom-right corner of the 120 × 40 frame at (300, 300) selects the text...
     assert_eq!(
         t.pointer(&cx1, &PointerEvent::new(PointerKind::Down, 421.0, 339.0)),
-        vec![Action::Exec("select.set".into(), json!({"ids": [text.0]}))]
+        vec![Action::Exec("select.set".into(), json!({"ids": [text.0]})), Action::Notify(FRAME_PICKED.into())]
     );
     // ...and drags that corner.
     let a = t.pointer(&cx1, &PointerEvent::new(PointerKind::Drag, 461.0, 399.0));
     assert_eq!(a[0], Action::Begin("Reshape Type Area".into()));
     assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 2]], "dx": 40.0, "dy": 60.0})));
-    assert_eq!(t.pointer(&cx1, &PointerEvent::new(PointerKind::Up, 461.0, 399.0)), vec![Action::Commit]);
+    assert_eq!(t.pointer(&cx1, &PointerEvent::new(PointerKind::Up, 461.0, 399.0)), vec![Action::Commit, Action::Notify(FRAME_PICKED.into())]);
     // The top edge drags both its ends; a click alone changes nothing.
     let mut s = Selection::default();
     s.add(text);
@@ -265,10 +299,146 @@ fn dragging_a_frame_corner_or_edge_reshapes_area_type() {
     let a = t.pointer(&cx2, &PointerEvent::new(PointerKind::Drag, 350.0, 281.0));
     assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 0], [0, 1]], "dx": 0.0, "dy": -20.0})));
     t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 350.0, 281.0));
-    assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 300.0, 340.0)).is_empty());
+    assert_eq!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 300.0, 340.0)), vec![Action::Notify(FRAME_PICKED.into())]);
     assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 300.0, 340.0)).is_empty());
-    // The selected frame's corners show.
-    assert_eq!(t.overlays(&cx2).iter().filter(|o| matches!(o, Overlay::Anchor { filled: false, .. })).count(), 4);
+    // The selected frame's corners show, the one clicked filled.
+    assert_eq!(t.overlays(&cx2).iter().filter(|o| matches!(o, Overlay::Anchor { filled: false, .. })).count(), 3);
+    assert_eq!(t.overlays(&cx2).iter().filter(|o| matches!(o, Overlay::Anchor { p, filled: true, .. } if *p == Point::new(300.0, 340.0))).count(), 1);
+}
+
+/// The frame anchor squares of the selected area type that `t` draws: (filled, hollow).
+fn frame_squares(t: &DirectSelectionTool, c: &ToolContext) -> (Vec<Point>, Vec<Point>) {
+    let mut out = (vec![], vec![]);
+    for o in t.overlays(c) {
+        if let Overlay::Anchor { p, filled, size: 5.0, .. } = o {
+            if filled { out.0.push(p) } else { out.1.push(p) }
+        }
+    }
+    out
+}
+
+/// A Direct Selection marquee selects the frame anchors of area type inside it, which show
+/// filled: a drag of one moves them all, the arrow keys nudge them, and Shift toggles them.
+#[test]
+fn a_marquee_selects_frame_anchors_of_area_type() {
+    let (d, text) = doc_with_area_type();
+    let p = paint();
+    let none = Selection::default();
+    let cx1 = cx(&d, &none, &p);
+    let mut t = DirectSelectionTool::new(false);
+    let ev = |k, x, y| PointerEvent::new(k, x, y);
+    let shift = |k, x, y| PointerEvent::new(k, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+    // A marquee round the 120 × 40 frame's right-hand corners, (420, 300) and (420, 340).
+    assert!(t.pointer(&cx1, &ev(PointerKind::Down, 400.0, 280.0)).is_empty());
+    t.pointer(&cx1, &ev(PointerKind::Drag, 440.0, 360.0));
+    assert_eq!(
+        t.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)),
+        vec![
+            Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": text.0, "anchors": []}], "mode": "set"})),
+            Action::Notify(FRAME_PICKED.into()),
+        ]
+    );
+    let mut s = Selection::default();
+    s.add(text);
+    let cx2 = cx(&d, &s, &p);
+    t.notify(&cx2, FRAME_PICKED);
+    let (filled, hollow) = frame_squares(&t, &cx2);
+    assert_eq!(filled, vec![Point::new(420.0, 300.0), Point::new(420.0, 340.0)]);
+    assert_eq!(hollow, vec![Point::new(300.0, 300.0), Point::new(300.0, 340.0)]);
+    // A drag of one of them moves both.
+    assert_eq!(t.pointer(&cx2, &ev(PointerKind::Down, 420.0, 340.0)), vec![Action::Notify(FRAME_PICKED.into())]);
+    let a = t.pointer(&cx2, &ev(PointerKind::Drag, 440.0, 360.0));
+    assert_eq!(a[0], Action::Begin("Reshape Type Area".into()));
+    assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 1], [0, 2]], "dx": 20.0, "dy": 20.0})));
+    assert_eq!(t.pointer(&cx2, &ev(PointerKind::Up, 440.0, 360.0)), vec![Action::Commit, Action::Notify(FRAME_PICKED.into())]);
+    // The arrow keys nudge them by the keyboard increment, ten times that with Shift.
+    let nudged = |anchors: Value, dx: f64, dy: f64| {
+        vec![
+            Action::Exec("text.reshapeArea".into(), json!({"id": text.0, "anchors": anchors, "dx": dx, "dy": dy})),
+            Action::Notify(FRAME_PICKED.into()),
+        ]
+    };
+    assert!(t.claims_key(&cx2, ToolKey::Right) && !t.claims_key(&cx2, ToolKey::Enter));
+    assert_eq!(t.key(&cx2, ToolKey::Right, Mods::default()), nudged(json!([[0, 1], [0, 2]]), 1.0, 0.0));
+    assert_eq!(t.key(&cx2, ToolKey::Up, Mods { shift: true, ..Mods::default() }), nudged(json!([[0, 1], [0, 2]]), 0.0, -10.0));
+    // Any other change of the document or the selection (Deselect, then the same type selected
+    // again) leaves the type selected whole: the arrow keys are no longer the tool's.
+    let mut later = cx(&d, &s, &p);
+    later.revision = (0, 1);
+    assert!(frame_squares(&t, &later).0.is_empty());
+    assert!(!t.claims_key(&later, ToolKey::Right));
+    // Shift-click takes one out; the other still nudges.
+    assert_eq!(t.pointer(&cx2, &shift(PointerKind::Down, 420.0, 300.0)), vec![Action::Notify(FRAME_PICKED.into())]);
+    assert!(t.pointer(&cx2, &shift(PointerKind::Up, 420.0, 300.0)).is_empty());
+    assert_eq!(frame_squares(&t, &cx2).0, vec![Point::new(420.0, 340.0)]);
+    assert_eq!(t.key(&cx2, ToolKey::Down, Mods::default()), nudged(json!([[0, 2]]), 0.0, 1.0));
+    // A Shift-marquee round the bottom corners toggles them: (300, 340) joins, (420, 340) leaves.
+    t.pointer(&cx2, &shift(PointerKind::Down, 280.0, 330.0));
+    t.pointer(&cx2, &shift(PointerKind::Drag, 440.0, 360.0));
+    let a = t.pointer(&cx2, &shift(PointerKind::Up, 440.0, 360.0));
+    assert_eq!(a[0], Action::Exec("select.anchorsMany".into(), json!({"items": [], "mode": "toggle"})), "the type stays selected");
+    assert_eq!(frame_squares(&t, &cx2).0, vec![Point::new(300.0, 340.0)]);
+    // When the selection changes, the frame anchors are no longer selected.
+    assert!(frame_squares(&t, &cx1).0.is_empty());
+    assert!(!t.claims_key(&cx1, ToolKey::Right) && t.key(&cx1, ToolKey::Right, Mods::default()).is_empty());
+    // A marquee that also reaches a path's anchor (the rectangle's corner at (200, 200)) selects
+    // the type whole, as before: the arrow keys move the path's anchor and the type alike.
+    let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    t.pointer(&cx1, &ev(PointerKind::Down, 440.0, 360.0));
+    t.pointer(&cx1, &ev(PointerKind::Drag, 190.0, 190.0));
+    let a = t.pointer(&cx1, &ev(PointerKind::Up, 190.0, 190.0));
+    let items = json!([{"id": rect.0, "anchors": [[0, 2]]}, {"id": text.0, "anchors": []}]);
+    assert_eq!(a[0], Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"})));
+    let mut mixed = Selection::default();
+    mixed.add(rect);
+    mixed.anchors.insert(rect, [(0, 2)].into());
+    mixed.add(text);
+    let cx3 = cx(&d, &mixed, &p);
+    t.notify(&cx3, FRAME_PICKED);
+    assert!(frame_squares(&t, &cx3).0.is_empty());
+    assert!(!t.claims_key(&cx3, ToolKey::Right));
+    // Group Selection's marquee selects the type whole, without its frame anchors.
+    let mut g = DirectSelectionTool::new(true);
+    g.pointer(&cx1, &ev(PointerKind::Down, 400.0, 280.0));
+    g.pointer(&cx1, &ev(PointerKind::Drag, 440.0, 360.0));
+    assert_eq!(
+        g.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)),
+        vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": text.0, "anchors": []}], "mode": "set"}))]
+    );
+}
+
+/// A click without a drag on one of several selected frame anchors selects it alone, as a click on
+/// a selected path anchor does; a drag of it still moves them all.
+#[test]
+fn a_click_on_a_selected_frame_anchor_selects_it_alone() {
+    let (d, text) = doc_with_area_type();
+    let p = paint();
+    let none = Selection::default();
+    let cx1 = cx(&d, &none, &p);
+    let mut t = DirectSelectionTool::new(false);
+    let ev = |k, x, y| PointerEvent::new(k, x, y);
+    // A marquee round the right-hand corners, (420, 300) and (420, 340).
+    t.pointer(&cx1, &ev(PointerKind::Down, 400.0, 280.0));
+    t.pointer(&cx1, &ev(PointerKind::Drag, 440.0, 360.0));
+    t.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0));
+    let mut s = Selection::default();
+    s.add(text);
+    let cx2 = cx(&d, &s, &p);
+    t.notify(&cx2, FRAME_PICKED);
+    assert_eq!(frame_squares(&t, &cx2).0, vec![Point::new(420.0, 300.0), Point::new(420.0, 340.0)]);
+    // A click on (420, 340) keeps both until the release, then selects it alone.
+    assert_eq!(t.pointer(&cx2, &ev(PointerKind::Down, 420.0, 340.0)), vec![Action::Notify(FRAME_PICKED.into())]);
+    assert_eq!(frame_squares(&t, &cx2).0.len(), 2, "both, for a drag");
+    assert_eq!(t.pointer(&cx2, &ev(PointerKind::Up, 420.0, 340.0)), vec![Action::Notify(FRAME_PICKED.into())]);
+    t.notify(&cx2, FRAME_PICKED);
+    assert_eq!(frame_squares(&t, &cx2).0, vec![Point::new(420.0, 340.0)]);
+    assert_eq!(
+        t.key(&cx2, ToolKey::Right, Mods::default()),
+        vec![
+            Action::Exec("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 2]], "dx": 1.0, "dy": 0.0})),
+            Action::Notify(FRAME_PICKED.into()),
+        ]
+    );
 }
 
 /// #3980: type on a path shows its path's anchors and a drag of one reshapes the path, the last
@@ -393,6 +563,28 @@ fn marquee_selects_anchors() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
     assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
+}
+
+/// #4654: a marquee over part of a segment, with neither of its anchors inside, selects that
+/// segment as a click on it does; with Shift it toggles it. Group Selection selects objects.
+#[test]
+fn a_marquee_over_part_of_a_segment_selects_it() {
+    let (d, id) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    // Across the middle of the square's top edge, (100, 100)–(200, 100).
+    let drag = |t: &mut DirectSelectionTool, m: Mods| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 140.0, 80.0).with_mods(m));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 120.0).with_mods(m));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 120.0).with_mods(m))
+    };
+    let segment = |mode: &str| Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[0, 0]], "mode": mode}));
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, Mods::default()), vec![Action::Exec("select.anchorsMany".into(), json!({"items": [], "mode": "set"})), segment("add")]);
+    let shift = Mods { shift: true, ..Mods::default() };
+    assert_eq!(drag(&mut t, shift).get(1), Some(&segment("toggle")));
+    let mut g = DirectSelectionTool::new(true);
+    assert!(!drag(&mut g, Mods::default()).iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.segments")));
 }
 
 #[test]
@@ -526,6 +718,141 @@ fn isolation_mode_leaves_art_outside_the_isolated_group() {
     assert!(a.is_empty(), "does not add the group outside isolation ({outer:?}): {a:?}");
 }
 
+/// #4466: in isolation mode a Direct Selection double-click outside the isolated art (on the
+/// object beside it, or on nothing) leaves isolation mode, as the Selection tool's does; on the
+/// isolated art it doesn't.
+#[test]
+fn a_double_click_outside_isolation_leaves_it() {
+    let (d, _, _, inner, _) = nested_group_doc();
+    let p = paint();
+    let none = Selection::default();
+    let isolated = ToolContext { isolation: Some(inner), ..cx(&d, &none, &p) };
+    let double = |x: f64, y: f64| DirectSelectionTool::new(false).pointer(&isolated, &PointerEvent::new(PointerKind::DoubleClick, x, y));
+    let exit = vec![Action::Exec("object.exitIsolation".into(), json!({}))];
+    assert_eq!(double(350.0, 350.0), exit, "on the object beside the isolated group");
+    assert_eq!(double(700.0, 700.0), exit, "on nothing");
+    assert!(double(150.0, 150.0).is_empty(), "on the isolated art");
+    assert!(DirectSelectionTool::new(false).pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::DoubleClick, 700.0, 700.0)).is_empty());
+}
+
+/// With Direct Selection, an Alt-click on a path selected whole adds its group on release, and
+/// each further Alt-click adds the next group up, as Group Selection's clicks do, on an anchor,
+/// a segment and the fill alike. The climb stops below the layer and at the isolated group.
+#[test]
+fn alt_clicks_on_a_path_selected_whole_add_its_groups() {
+    let (d, inside, _, inner, outer) = nested_group_doc();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let add = |id: NodeId| vec![Action::Exec("select.add".into(), json!({"ids": [id.0]}))];
+    let click = |cx: &ToolContext, x: f64, y: f64| {
+        let mut t = DirectSelectionTool::new(false);
+        let down = t.pointer(cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(alt));
+        assert!(down.is_empty(), "({x}, {y}): {down:?}");
+        t.pointer(cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(alt))
+    };
+    for (x, y) in [(100.0, 100.0), (150.0, 100.0), (150.0, 150.0)] {
+        let mut s = Selection::default();
+        s.set([inside]);
+        assert_eq!(click(&cx(&d, &s, &p), x, y), add(inner), "({x}, {y}): the path's group");
+        s.set([inside, inner]);
+        assert_eq!(click(&cx(&d, &s, &p), x, y), add(outer), "({x}, {y}): the group around it");
+        s.set([inside, inner, outer]);
+        assert!(click(&cx(&d, &s, &p), x, y).is_empty(), "({x}, {y}): the layer is not added");
+        s.set([inside, inner]);
+        let isolated = ToolContext { isolation: Some(inner), ..cx(&d, &s, &p) };
+        assert!(click(&isolated, x, y).is_empty(), "({x}, {y}): not the group outside isolation");
+    }
+}
+
+/// In a sublayer, a Group Selection click and a Direct Selection Alt-click climb to the group
+/// and stop there: the sublayer is not added.
+#[test]
+fn group_clicks_in_a_sublayer_stop_below_the_sublayer() {
+    use vectorcraft_doc::{Appearance, Document, LayerColor, Node};
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (sub, g, a) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    d.insert(Some(l), 0, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+    d.insert(Some(sub), 0, Node::group(g, vec![])).unwrap();
+    d.insert(Some(g), 0, Node::path(a, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Appearance::default_art()))
+        .unwrap();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let click = |s: &Selection, group: bool, mods: Mods| {
+        let c = cx(&d, s, &p);
+        let mut t = DirectSelectionTool::new(group);
+        let down = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(mods));
+        let up = t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 150.0).with_mods(mods));
+        [down, up].concat()
+    };
+    let add = |id: NodeId| vec![Action::Exec("select.add".into(), json!({"ids": [id.0]}))];
+    let mut s = Selection::default();
+    s.set([a]);
+    assert_eq!(click(&s, true, Mods::default()), add(g), "Group Selection adds the group");
+    assert_eq!(click(&s, false, alt), add(g), "an Alt-click adds the group");
+    s.set([a, g]);
+    assert!(click(&s, true, Mods::default()).is_empty(), "Group Selection does not add the sublayer");
+    assert!(click(&s, false, alt).is_empty(), "an Alt-click does not add the sublayer");
+}
+
+/// When a group holds a sublayer, the climb stops at the sublayer: it adds neither the sublayer
+/// nor the group above it.
+#[test]
+fn group_clicks_stop_at_a_sublayer_inside_a_group() {
+    use vectorcraft_doc::{Appearance, Document, LayerColor, Node};
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (outer, sub, g, a) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    d.insert(Some(l), 0, Node::group(outer, vec![])).unwrap();
+    d.insert(Some(outer), 0, Node::layer(sub, "Sub", LayerColor::Preset(1))).unwrap();
+    d.insert(Some(sub), 0, Node::group(g, vec![])).unwrap();
+    d.insert(Some(g), 0, Node::path(a, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Appearance::default_art()))
+        .unwrap();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let click = |s: &Selection, group: bool, mods: Mods| {
+        let c = cx(&d, s, &p);
+        let mut t = DirectSelectionTool::new(group);
+        let down = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(mods));
+        let up = t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 150.0).with_mods(mods));
+        [down, up].concat()
+    };
+    let add = |id: NodeId| vec![Action::Exec("select.add".into(), json!({"ids": [id.0]}))];
+    let mut s = Selection::default();
+    s.set([a]);
+    assert_eq!(click(&s, true, Mods::default()), add(g), "Group Selection adds the group");
+    assert_eq!(click(&s, false, alt), add(g), "an Alt-click adds the group");
+    s.set([a, g]);
+    assert!(click(&s, true, Mods::default()).is_empty(), "Group Selection does not add the sublayer");
+    assert!(click(&s, false, alt).is_empty(), "an Alt-click does not add the sublayer");
+}
+
+/// An Alt-drag from a path selected whole inside a group copies the path and adds no group, and
+/// Alt+Shift-click on a segment or the fill still toggles the path, adding no group either.
+#[test]
+fn alt_drags_and_alt_shift_clicks_on_a_path_in_a_group_add_no_group() {
+    let (d, inside, ..) = nested_group_doc();
+    let p = paint();
+    let mut s = Selection::default();
+    s.set([inside]);
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    for (x, y) in [(100.0, 100.0), (150.0, 100.0), (150.0, 150.0)] {
+        let mut t = DirectSelectionTool::new(false);
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(alt)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 20.0, y).with_mods(alt));
+        assert!(matches!(a.as_slice(), [Action::Begin(_), Action::Preview(c, v)] if c == "object.transform" && v["copy"] == true), "{a:?}");
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x + 20.0, y).with_mods(alt)), vec![Action::Commit]);
+    }
+    let alt_shift = Mods { alt: true, shift: true, ..Default::default() };
+    for (x, y) in [(150.0, 100.0), (150.0, 150.0)] {
+        let mut t = DirectSelectionTool::new(false);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(alt_shift));
+        assert_eq!(a, vec![Action::Exec("select.toggle".into(), json!({"id": inside.0}))], "({x}, {y})");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(alt_shift)).is_empty(), "({x}, {y})");
+    }
+}
+
 /// #927: a marquee across type selects the type object whole, beside the anchors it holds.
 #[test]
 fn marquee_selects_type_it_touches() {
@@ -541,7 +868,8 @@ fn marquee_selects_type_it_touches() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
     let items = json!([{"id": rect.0, "anchors": [[0, 2]]}, {"id": text.0, "anchors": []}]);
-    assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))]);
+    // The frame's corners are inside too: they are selected with the type.
+    assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"})), Action::Notify(FRAME_PICKED.into())]);
     // Away from the type, only anchors.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
@@ -659,6 +987,41 @@ fn escape_cancels_a_drag() {
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 220.0)), vec![]);
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 220.0)), vec![]);
     assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![], "nothing to cancel");
+}
+
+/// Escape also cancels a corner widget drag and a drag of the brackets of type on a path, and
+/// the release after it does nothing. After a press on a widget that has not moved, Escape drops
+/// the press, so its release selects no corner.
+#[test]
+fn escape_cancels_a_corner_widget_or_bracket_drag() {
+    let p = paint();
+    let (d, rect) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([rect]);
+    let corners = cx(&d, &s, &p);
+    let (d2, text) = doc_with_path_type();
+    let mut s2 = Selection::default();
+    s2.add(text);
+    let brackets = cx(&d2, &s2, &p);
+    // (what, its context, the press, the drag's first step)
+    for (what, c, from, to) in [
+        ("corner widget", &corners, Point::new(110.0, 110.0), Point::new(120.0, 120.0)),
+        ("bracket", &brackets, Point::new(400.0, 290.0), Point::new(340.0, 290.0)),
+    ] {
+        let mut t = DirectSelectionTool::new(false);
+        assert!(t.pointer(c, &PointerEvent::new(PointerKind::Down, from.x, from.y)).is_empty(), "{what}");
+        let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert!(matches!(a.first(), Some(Action::Begin(_))), "{what}: {a:?}");
+        assert!(t.busy(), "{what}");
+        assert_eq!(t.key(c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+        assert!(!t.busy(), "{what}");
+        assert!(t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.x - 5.0, to.y)).is_empty(), "{what}: the drag is over");
+        assert!(t.pointer(c, &PointerEvent::new(PointerKind::Up, to.x - 5.0, to.y)).is_empty(), "{what}: the release does nothing");
+    }
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&corners, &PointerEvent::new(PointerKind::Down, 110.0, 110.0));
+    assert_eq!(t.key(&corners, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&corners, &PointerEvent::new(PointerKind::Up, 110.0, 110.0)).is_empty(), "the click selects no corner");
 }
 
 #[test]
@@ -961,6 +1324,92 @@ fn alt_during_a_drag_by_an_anchor_toggles_the_copy() {
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 260.0).with_mods(alt));
     assert!(matches!(a.last(), Some(Action::Preview(c, _)) if c == "path.moveAnchors"), "{a:?}");
+}
+
+/// A drag from the fill of a path selected whole, while another path has some anchors selected,
+/// moves the selected anchors and the paths selected whole (`path.moveAnchors`), as a drag of
+/// an anchor does, with Direct Selection and Group Selection alike. Alt, pressed or released at
+/// any time during the drag, turns the copy of the selected objects on and off, and a selection
+/// of whole paths only still moves as objects.
+#[test]
+fn a_drag_from_a_fill_with_anchors_selected_moves_the_anchors() {
+    let (d, a, b) = two_squares();
+    let p = paint();
+    let mut mixed = anchors_of(b, &[(0, 0)]);
+    mixed.objects.insert(0, a);
+    let mut whole = Selection::default();
+    whole.set([a, b]);
+    let alt = Mods { alt: true, ..Default::default() };
+    for group in [false, true] {
+        let c = cx(&d, &mixed, &p);
+        let mut t = DirectSelectionTool::new(group);
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty(), "group: {group}");
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 171.0, 153.0));
+        assert_eq!(
+            out,
+            vec![Action::Begin("Move".into()), Action::Preview("path.moveAnchors".into(), json!({"dx": 21.0, "dy": 3.0}))],
+            "group: {group}"
+        );
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 171.0, 153.0)), vec![Action::Commit]);
+        // Alt held at the start, released and pressed again: a copy, a move, a copy.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(alt));
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 171.0, 153.0).with_mods(alt));
+        assert!(matches!(out.last(), Some(Action::Preview(c, v)) if c == "object.transform" && v["copy"] == true), "group: {group} {out:?}");
+        assert_eq!(out.first(), Some(&Action::Begin("Move".into())), "the history names it by the last preview");
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 172.0, 153.0));
+        assert_eq!(out, vec![Action::Preview("path.moveAnchors".into(), json!({"dx": 22.0, "dy": 3.0}))], "group: {group}");
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 173.0, 153.0).with_mods(alt));
+        assert!(matches!(out.as_slice(), [Action::Preview(c, v)] if c == "object.transform" && v["copy"] == true), "group: {group} {out:?}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 173.0, 153.0).with_mods(alt));
+        let c = cx(&d, &whole, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 171.0, 153.0));
+        assert!(matches!(out.last(), Some(Action::Preview(c, _)) if c == "object.transform"), "group: {group} {out:?}");
+    }
+}
+
+/// A drag from the fill of A, selected whole, while B's top-left anchor is selected snaps the
+/// point it holds as a dragged anchor does: near an anchor of B that stays put, it lands on it.
+/// With Snap to Grid on, the box around A and B's selected anchor, (100, 100)–(300, 300), lands an
+/// edge on the 9 pt grid instead: moved by (21, 3), its right side and bottom (321, 303) are
+/// nearest the gridlines 324 and 306, and with Shift the level move by 13 lands the right side on
+/// 315.
+#[test]
+fn a_drag_from_a_fill_with_anchors_selected_snaps() {
+    let (d, a, b) = two_squares();
+    let p = paint();
+    let mut mixed = anchors_of(b, &[(0, 0)]);
+    mixed.objects.insert(0, a);
+    let none = Mods::default();
+    for group in [false, true] {
+        let mut t = DirectSelectionTool::new(group);
+        let c = cx(&d, &mixed, &p);
+        let (v, labels) = drag(&mut t, &c, (150.0, 150.0), (298.0, 401.0), none);
+        assert_eq!((v, labels), (json!({"dx": 150.0, "dy": 250.0}), vec!["anchor".to_string()]), "group: {group}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 298.0, 401.0));
+        let c = ToolContext { snap_to_grid: true, ..cx(&d, &mixed, &p) };
+        assert_eq!(drag(&mut t, &c, (150.0, 150.0), (171.0, 153.0), none).0, json!({"dx": 24.0, "dy": 6.0}), "group: {group}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 171.0, 153.0));
+        let (v, _) = drag(&mut t, &c, (150.0, 150.0), (163.0, 151.0), Mods { shift: true, ..none });
+        let (x, y) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+        assert!((x - 15.0).abs() < 1e-9 && y.abs() < 1e-9, "group: {group}: {v}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 163.0, 151.0));
+    }
+}
+
+/// A path inside a selected group moves whole with the group, even with some of its anchors
+/// direct-selected, so a drag from a fill does not snap to its other anchors: here to the
+/// bottom-right corner (400, 400) of the path at (300, 300)–(400, 400).
+#[test]
+fn a_drag_from_a_fill_skips_the_anchors_of_a_path_in_a_selected_group() {
+    let (d, _, outside, _, outer) = nested_group_doc();
+    let p = paint();
+    let mut sel = anchors_of(outside, &[(0, 0)]);
+    sel.objects.insert(0, outer);
+    let c = cx(&d, &sel, &p);
+    let mut t = DirectSelectionTool::new(true);
+    let (v, labels) = drag(&mut t, &c, (150.0, 150.0), (398.0, 401.0), Mods::default());
+    assert_eq!((v, labels), (json!({"dx": 248.0, "dy": 251.0}), Vec::<String>::new()));
 }
 
 /// A dragged anchor lands on another path's anchor or segment, lines up with the other anchors

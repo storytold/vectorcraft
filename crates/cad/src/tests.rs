@@ -247,6 +247,52 @@ fn closed_circular_arc_with_a_closing_chord_is_not_a_circle() {
 }
 
 #[test]
+fn a_closed_sliver_along_a_circle_is_not_a_circle() {
+    let d = doc_with(|d| {
+        let (cx, cy, r) = (60.0, 250.0, 200.0);
+        let at = |deg: f64| {
+            let rad = deg.to_radians();
+            Point::new(cx + r * rad.cos(), cy + r * rad.sin())
+        };
+        let along = |sliver: &mut vectorcraft_geom::BezPath, deg0: f64, deg1: f64| {
+            let p0 = at(deg0);
+            let p3 = at(deg1);
+            let step = (deg1 - deg0).to_radians();
+            let k = 4.0 / 3.0 * (step / 4.0).tan();
+            let r0 = deg0.to_radians();
+            let r1 = deg1.to_radians();
+            let p1 = Point::new(p0.x - r * r0.sin() * k, p0.y + r * r0.cos() * k);
+            let p2 = Point::new(p3.x + r * r1.sin() * k, p3.y - r * r1.cos() * k);
+            sliver.curve_to(p1, p2, p3);
+        };
+        let mut sliver = vectorcraft_geom::BezPath::new();
+        sliver.move_to(at(-110.0));
+        along(&mut sliver, -110.0, -90.0);
+        along(&mut sliver, -90.0, -70.0);
+        along(&mut sliver, -70.0, -110.0);
+        sliver.close_path();
+        vec![path(d, PathData::from_bezpath(&sliver), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+
+    let modern = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&modern), ["CIRCLE"]);
+    assert_eq!(kinds(&modern), ["SPLINE"]);
+}
+
+#[test]
+fn cubic_with_hidden_angular_reversal_is_not_promoted_to_arc() {
+    let d = doc_with(|d| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(Point::new(-8.404028665134, 62.061475842818));
+        b.curve_to(Point::new(-13.285253116737, 62.103123153545), Point::new(52.811163576591, 52.471253544459), Point::new(60.0, 50.0));
+        vec![path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+    let dxf = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&dxf), ["ARC"]);
+    assert_eq!(kinds(&dxf), ["SPLINE"]);
+}
+
+#[test]
 fn spline_closed_flags_follow_path_intent_across_versions_without_changing_geometry() {
     let cases = [(true, true), (true, false), (false, false), (false, true)];
     let make_doc = |keep_closure: bool| {

@@ -1,8 +1,12 @@
 use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
     Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, line_width, mean_scale, resize_alpha, rgba_png, same_outline, stroke_layer,
+    stroke_outline,
 };
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, BlendMode, ClipPath, Device, FillLayer, FillRule, Glyph, GlyphDrawMode, Image, ImageBlob,
+    ImageData, Name, Node, NodeKind, PathData, PathDrawMode, Pattern, Shape, SoftMask, clipped, extend_clip, mesh_shading, tag_key,
+};
 
 impl<'a> Device<'a> for Builder<'_> {
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {
@@ -49,12 +53,23 @@ impl<'a> Device<'a> for Builder<'_> {
             },
             craft_pdf::interpret::Paint::Color(_) => None,
         };
-        // Patch and triangle meshes are gradient meshes.
-        if let (PathDrawMode::Fill(_), Some(sp)) = (draw_mode, shading)
-            && let Some(meshes) = mesh_shading(sp, &mut self.colors, walked.and_then(|w| self.scan.ink(w, false, true)))
-        {
-            self.draw_meshes(meshes, &bp, sp.opacity);
-            return;
+        // Patch and triangle meshes are gradient meshes; a stroke's, clipped to the stroke's outline
+        // (as Illustrator writes a freeform gradient on a stroke).
+        if let Some(sp) = shading {
+            let stroke = match draw_mode {
+                PathDrawMode::Stroke(p) => Some(p),
+                PathDrawMode::Fill(_) => None,
+            };
+            if let Some(meshes) = mesh_shading(sp, &mut self.colors, walked.and_then(|w| self.scan.ink(w, stroke.is_some(), true))) {
+                match stroke {
+                    None => return self.draw_meshes(meshes, &bp, sp.opacity, false),
+                    Some(p) => {
+                        if let Some(outline) = stroke_outline(path, transform, p) {
+                            return self.draw_meshes(meshes, &outline, sp.opacity, true);
+                        }
+                    }
+                }
+            }
         }
         let pd = PathData::from_bezpath(&bp);
         let stroke = matches!(draw_mode, PathDrawMode::Stroke(_));

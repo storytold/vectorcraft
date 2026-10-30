@@ -395,10 +395,12 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("") + ">"
 }
 
-#[test]
-fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
-    // One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1),
-    // white (1, 0) in u/v.
+/// A Coons patch mesh shading's dictionary for [`coons_patch`] data.
+const COONS_MESH: &str = "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode";
+
+/// One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1), white
+/// (1, 0) in u/v.
+fn coons_patch() -> Vec<u8> {
     let pts: [(u8, u8); 12] =
         [(10, 10), (10, 37), (10, 63), (10, 90), (37, 90), (63, 90), (90, 90), (90, 63), (90, 37), (90, 10), (63, 10), (37, 10)];
     let mut data = vec![0u8];
@@ -406,11 +408,13 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
         data.extend([x, y]);
     }
     data.extend([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+    data
+}
+
+#[test]
+fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     let s = first_extra(1);
-    let sh = stream(
-        "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode",
-        &hex(&data),
-    );
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
     let d = open(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]));
     let meshes: Vec<vectorcraft_doc::live::GradientMesh> =
         all(&d).into_iter().filter_map(|n| if let NodeKind::Mesh(m) = n.kind { Some(m) } else { None }).collect();
@@ -425,6 +429,48 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     assert_eq!(at(1, 1).color.to_rgb(), [0.0, 0.0, 1.0]);
     assert_eq!(at(0, 1).color.to_rgb(), [1.0, 1.0, 1.0]);
     assert!(!all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })), "the mesh lies inside the page");
+}
+
+/// Illustrator writes meshes of many thousands of patches (14,355 in one of a user's files): one
+/// of 5,000 comes in as gradient meshes, not a flat grey.
+#[test]
+fn a_mesh_shading_of_thousands_of_patches_becomes_gradient_meshes() {
+    let data: Vec<u8> = std::iter::repeat_n(coons_patch(), 5000).flatten().collect();
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&data));
+    let r = open_with(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]), |_| {});
+    assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+    assert_eq!(all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 5000);
+}
+
+/// A stroke painted with a mesh shading (how Illustrator writes a freeform gradient on a stroke)
+/// is the mesh clipped to the area the stroke paints, dashes included, not a flat grey.
+#[test]
+fn a_stroke_painted_with_a_mesh_shading_is_the_mesh_clipped_to_the_stroke() {
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
+    let resources = format!("/Pattern << /P0 << /PatternType 2 /Shading {s} 0 R >> >>");
+    // A 10 pt line from (20, 50) to (80, 50) with butt caps: page y 45 to 55. Dashed 10 on, 10
+    // off: pieces at 20–30, 40–50 and 60–70.
+    for (dash, pieces, end) in [("[] 0 d", 1, 80.0), ("[10 10] 0 d", 3, 70.0)] {
+        let content = format!("/Pattern CS /P0 SCN 10 w {dash} 20 50 m 80 50 l S");
+        let r = open_with(&one_page(&content, &resources, &[&sh]), |_| {});
+        assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+        let nodes = all(&r.document);
+        assert_eq!(nodes.iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 1, "{dash}");
+        let clip = nodes
+            .iter()
+            .find_map(|n| match &n.kind {
+                NodeKind::Group { children, clip: true } => children.first().cloned(),
+                _ => None,
+            })
+            .expect("a clip group");
+        let NodeKind::Path { path, .. } = &clip.kind else { panic!("{:?}", clip.kind) };
+        let b = path.bounds().unwrap();
+        assert!((b.x0 - 20.0).abs() < 0.01 && (b.x1 - end).abs() < 0.01 && (b.y0 - 45.0).abs() < 0.01 && (b.y1 - 55.0).abs() < 0.01, "{dash}: {b:?}");
+        let subpaths = path.to_bezpath().elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+        assert_eq!(subpaths, pieces, "{dash}");
+    }
 }
 
 #[test]
@@ -614,6 +660,30 @@ fn function_based_shadings_share_one_budget_per_import() {
     let gradients = all(&r.document).iter().filter(|n| matches!(n.appearance.fill().map(|f| &f.paint), Some(Paint::Gradient(_)))).count();
     assert!(gradients > 0 && gradients < n, "{gradients} of {n} read as gradients");
     assert!(r.warnings.iter().any(|w| w.contains("too many to read")), "{:?}", r.warnings);
+}
+
+/// A page drawing one small form over and over makes objects only up to the import's limit, then
+/// leaves the rest out with a warning, instead of taking memory for every drawing (#3569).
+#[test]
+fn a_form_drawn_over_and_over_stops_at_the_import_s_objects() {
+    let squares: String = (0..25).map(|i| format!("{} {} 2 2 re f ", i % 5 * 4, i / 5 * 4)).collect();
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 20 20]", &squares);
+    let bytes = one_page(&"/F Do ".repeat(200), &format!("/XObject << /F {} 0 R >>", first_extra(1)), &[&form]);
+    // With the import's objects lowered to `limit` (on this thread: the limit is this thread's).
+    let open_within = |limit: usize| {
+        let old = crate::import::TEST_MAX_OBJECTS.replace(limit);
+        let r = crate::import::read(&bytes, &ImportOptions::default());
+        crate::import::TEST_MAX_OBJECTS.set(old);
+        r.unwrap()
+    };
+    let paths = |r: &ImportReport| all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).count();
+    let left_out = |r: &ImportReport| r.warnings.iter().any(|w| w.contains("the rest were left out"));
+    let whole = open_within(10_000);
+    assert_eq!(paths(&whole), 5000);
+    assert!(!left_out(&whole), "{:?}", whole.warnings);
+    let cut = open_within(1000);
+    assert_eq!(paths(&cut), 1000);
+    assert!(left_out(&cut), "{:?}", cut.warnings);
 }
 
 /// A colour that changes in step with the sampling grid along y only (one colour at every grid

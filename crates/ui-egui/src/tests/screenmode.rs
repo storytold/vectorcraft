@@ -273,3 +273,37 @@ fn the_screen_mode_is_not_saved() {
     let old: crate::state::UiState = serde_json::from_value(json!({ "screen_mode": 3 })).unwrap();
     assert_eq!(old.screen_mode, 0);
 }
+
+/// Presentation Mode shows the active artboard fitted to the canvas, again when the canvas changes
+/// size (the window going full screen), and none of the selection's handles or the artboard edges.
+#[test]
+fn presentation_mode_fits_the_artboard_and_hides_the_selection() {
+    let ctx = egui::Context::default();
+    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 90, "y": 40, "width": 20, "height": 20})).unwrap();
+    app.select_tool("selection");
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 0.5;
+    let selection = crate::theme::Tokens::get(&ctx).selection;
+    let handles = |out: &egui::FullOutput| {
+        out.shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.stroke.color == selection || r.fill == selection)).count()
+    };
+    let before = frame(&mut app, &ctx, vec![]);
+    assert!(handles(&before) > 0, "the selection's handles show");
+    app.run("view.presentation", json!({})).unwrap();
+    let out = frame(&mut app, &ctx, vec![]);
+    let canvas = app.canvas_rect.unwrap();
+    let zoom = app.view().unwrap().zoom;
+    // 200 × 100 pt fitted to the canvas: one side reaches across most of it.
+    assert!(200.0 * zoom >= f64::from(canvas.width()) * 0.8 || 100.0 * zoom >= f64::from(canvas.height()) * 0.8, "fitted: {zoom} in {canvas:?}");
+    assert_eq!(handles(&out), 0, "no selection shows");
+    // A bigger canvas (the window gone full screen) fits it again.
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1200.0))), ..Default::default() };
+    let mut big = ctx.run_ui(raw, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    big.textures_delta.clear();
+    assert!(app.view().unwrap().zoom > zoom * 1.5, "fitted again to the larger canvas");
+}

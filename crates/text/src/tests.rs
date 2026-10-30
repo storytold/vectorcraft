@@ -25,6 +25,7 @@ mod typo;
 mod variable;
 mod versions;
 mod vertical;
+mod vietnamese;
 
 /// The bundled fonts only: what these tests measure doesn't change with the fonts installed.
 fn db() -> &'static FontDb {

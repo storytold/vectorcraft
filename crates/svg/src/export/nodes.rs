@@ -1,7 +1,10 @@
 use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
-use super::*;
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeLayer, Writer, Written,
+    WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+};
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
 pub(super) struct SymbolDef {
@@ -128,8 +131,10 @@ pub(crate) const MASK_FLAGS: &str = "data-vectorcraft-mask";
 
 impl Writer<'_> {
     /// Paint a shape (`d`) with a node's appearance stack. `paths` is the same shape in document
-    /// space, for strokes that aren't plain (it may be empty when all are).
-    pub(super) fn shape(&mut self, n: &Node, d: &str, paths: &[&PathData], rule: FillRule, bounds: Option<Rect>) {
+    /// space, for strokes that aren't plain (it may be empty when all are). `basic` is the shape
+    /// as an SVG basic shape element ([`Writer::basic_shape`]) to paint instead of `<path>`.
+    pub(super) fn shape(&mut self, n: &Node, d: &str, basic: Option<(&str, String)>, paths: &[&PathData], rule: FillRule, bounds: Option<Rect>) {
+        let (tag, geom) = basic.unwrap_or_else(|| ("path", format!(" d=\"{d}\"")));
         let id = self.id_attr(n);
         let items: Vec<&AppearanceItem> = n
             .appearance
@@ -177,7 +182,7 @@ impl Writer<'_> {
             }
             p.extend(css::transparency(n));
             let a = self.attrs(&p);
-            self.line(&format!("<path{id} d=\"{d}\"{a}/>"));
+            self.line(&format!("<{tag}{id}{geom}{a}/>"));
             return;
         }
         let a = self.attrs(&css::transparency(n));
@@ -198,7 +203,7 @@ impl Writer<'_> {
                         self.fill_props(f, rule, bounds, &mut p);
                         p.extend(blend);
                         let a = self.attrs(&p);
-                        self.line(&format!("<path d=\"{d}\"{a}/>"));
+                        self.line(&format!("<{tag}{geom}{a}/>"));
                     }
                 }
                 (AppearanceItem::Stroke(s), Some(StrokePlan::Brush(art))) => {
@@ -243,7 +248,7 @@ impl Writer<'_> {
                             self.stroke_props(s, *width, paint_bounds(s), &mut p);
                             p.extend(blend);
                             let a = self.attrs(&p);
-                            self.line(&format!("<path d=\"{d}\"{a}{side}/>"));
+                            self.line(&format!("<{tag}{geom}{a}{side}/>"));
                         }
                         (WrittenShape::Fill(outlines), _) if s.path_gradient().is_some() => {
                             // A gradient along or across the stroke: slices clipped to its outlines.
@@ -545,7 +550,10 @@ impl Writer<'_> {
                     return;
                 }
                 let d = self.path_d(path, self.xf);
-                self.shape(n, &d, &[path], *rule, n.geometric_bounds());
+                let dashed =
+                    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.is_dashed())));
+                let basic = self.basic_shape(path, self.xf, dashed);
+                self.shape(n, &d, basic, &[path], *rule, n.geometric_bounds());
             }
             NodeKind::Compound { children, rule } => {
                 let paths: Vec<&PathData> = children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).filter(|p| !p.is_empty()).collect();
@@ -553,13 +561,17 @@ impl Writer<'_> {
                     return;
                 }
                 let d: Vec<String> = paths.iter().map(|p| self.path_d(p, self.xf)).collect();
-                self.shape(n, &d.join(" "), &paths, *rule, n.geometric_bounds());
+                self.shape(n, &d.join(" "), None, &paths, *rule, n.geometric_bounds());
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
-                let a = self.attrs(&css::transparency(n));
+                let mut props = css::transparency(n);
+                if n.extras().pixelated {
+                    props.push(("image-rendering", "pixelated".into()));
+                }
+                let a = self.attrs(&props);
                 if let Some(shared) = self.shared_images.get(&(im.key.clone(), im.width, im.height)) {
                     let shared = shared.clone();
                     self.line(&format!("<use{id} transform=\"{m}\"{a} xlink:href=\"#{shared}\"/>"));

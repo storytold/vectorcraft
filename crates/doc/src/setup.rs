@@ -145,6 +145,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("French", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
     ("Italian", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Spanish", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Catalan", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Portuguese", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Dutch", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Danish", Quotes { double: ['»', '«'], single: ['›', '‹'] }),

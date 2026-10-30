@@ -61,6 +61,7 @@
 	Scripts	სკრიპტები
 	Other Script…	სხვა სკრიპტი…
 	Document Setup…	დოკუმენტის პარამეტრები…
+	Switch Units	ერთეულების გადართვა
 	Document Color Mode	დოკუმენტის ფერის რეჟიმი
 	CMYK Color	CMYK ფერი
 	RGB Color	RGB ფერი
@@ -141,6 +142,7 @@
 	Other Layers	სხვა შრეები
 	Unlock All	ყველაფრის განბლოკვა
 	Hide	დამალვა
+	Unselected Artwork	მოუნიშნავი ნახატი
 	Show All	ყველას ჩვენება
 	Expand…	გაშლა…
 	Expand Appearance	იერსახის გაშლა
@@ -172,6 +174,7 @@
 	Offset Path…	ტრაექტორიის წანაცვლება…
 	Reverse Path Direction	ტრაექტორიის მიმართულების შებრუნება
 	Simplify…	გამარტივება…
+	Smooth…	გაგლუვება…
 	Add Anchor Points	საყრდენი წერტილების დამატება
 	Remove Anchor Points	საყრდენი წერტილების მოცილება
 	Divide Objects Below	ქვედა ობიექტების დაყოფა
@@ -217,6 +220,7 @@
 	Clipping Mask	მომჭრელი ნიღაბი
 	Edit Clipping Path	მომჭრელი ტრაექტორიის რედაქტირება
 	Compound Path	შედგენილი ტრაექტორია
+	Compound Shape	შედგენილი ფიგურა
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
@@ -244,7 +248,7 @@
 	Insert Special Character	სპეციალური სიმბოლოს ჩასმა
 	Bullet	ბურთულა
 	Bullets	ბურთულები
-	Bullets and Numbering	ბურთულები და დანომრვა
+	Bullets and Numbering	ბურთულები და დანომვრა
 	Apply Bullets	ბურთულების გამოყენება
 	Numbered List	დანომრილი სია
 	Apply Numbers	დანომრვის გამოყენება
@@ -331,6 +335,11 @@
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
 	Stroke Color	კონტურის ფერი
+	Fill Gradient	შევსების გრადიენტი
+	Stroke Gradient	კონტურის გრადიენტი
+	Fill Pattern	შევსების პატერნი
+	Stroke Pattern	კონტურის პატერნი
+	Patterns	პატერნები
 	Stroke Weight	კონტურის სისქე
 	Graphic Style	გრაფიკული სტილი
 	Symbol Instance	სიმბოლოს ეგზემპლარი
@@ -522,6 +531,8 @@
 	Saved View 25	შენახული ხედი 25
 	Window	ფანჯარა
 	New Window	ახალი ფანჯარა
+	Next Document	შემდეგი დოკუმენტი
+	Previous Document	წინა დოკუმენტი
 	Cascade	კასკადად
 	Tile	ფილებად
 	Float in Window	ცალკე ფანჯარაში გამოტანა
@@ -696,6 +707,10 @@
 	Shaper	ფორმირება
 	Expand Shaper Group	ფორმირების ჯგუფის გაშლა
 	Release Shaper Group	ფორმირების ჯგუფის მოხსნა
+	Remove from Shaper Group	ფორმირების ჯგუფიდან ამოღება
+@msg	source must be the id of a Shaper Group's original shape	source უნდა იყოს ფორმირების ჯგუფის საწყისი ფიგურის იდენტიფიკატორი
+@msg	group must be the id of a Shaper Group	group უნდა იყოს ფორმირების ჯგუფის იდენტიფიკატორი
+@msg	the shape is not an editable original shape of that Shaper Group	ფიგურა არ არის ამ ფორმირების ჯგუფის რედაქტირებადი საწყისი ფიგურა
 	Select Shaper Face	ფორმირების არის მონიშვნა
 	Constrain	შეზღუდვა
 	Free Transform	თავისუფალი გარდაქმნა
@@ -1400,6 +1415,12 @@ lighting	Light	სინათლე
 	Document Library	დოკუმენტის ბიბლიოთეკა
 	Library:	ბიბლიოთეკა:
 	Tracing Presets	ვექტორიზაციის პრესეტები
+	Manage Presets	პრესეტების მართვა
+	Save as New Preset…	ახალ პრესეტად შენახვა…
+	Rename…	სახელის შეცვლა…
+	Rename Preset	პრესეტის სახელის შეცვლა
+	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
+	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
 	Method:	მეთოდი:
 	Mode:	რეჟიმი:
 	Noise	ხმაური
@@ -1520,13 +1541,13 @@ lighting	Light	სინათლე
 	Roman Hanging Punctuation	ლათინური გამოწეული პუნქტუაცია
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Single-line Composer	სტრიქონის მიხედვით აწყობა
+	Toggle Line Composer	აწყობის რეჟიმის გადართვა
 	Space After Paragraph	ინტერვალი აბზაცის შემდეგ
 	Space Before Paragraph	ინტერვალი აბზაცის წინ
 	Top-to-Top Leading	სტრიქონთა დაშორება ზედა კიდიდან ზედა კიდემდე
 	Bottom-to-Bottom Leading	სტრიქონთა დაშორება ქვედა კიდიდან ქვედა კიდემდე
 	Burasagari	Burasagari
 	Force	იძულებით
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	გაშლა შედგენილ ფიგურებზე მოქმედებს (Alt-დაწკაპუნება ფიგურის რეჟიმზე) — სამომავლო გეგმაშია
 	Expand Compound Shape	შედგენილი ფიგურის გაშლა
 	Make Compound Shape	შედგენილი ფიგურის შექმნა
 	Pathfinder Options…	ტრაექტორიების ოპერაციების პარამეტრები…
@@ -1537,7 +1558,7 @@ lighting	Light	სინათლე
 	Trap…	ტრეპინგი…
 	Trap	ტრეპინგი
 	Height/Width	სიმაღლე/სიგანე
-	Tint Reduction	ტონის შემცირება
+	Tint Reduction	ტონირების შემცირება
 	Traps with Process Color	ტრეპინგი პროცესული ფერებით
 	Reverse Traps	შებრუნებული ტრეპინგი
 	Precision	სიზუსტე
@@ -1784,6 +1805,10 @@ lighting	Light	სინათლე
 	Outer Corner Tile	გარე კუთხე
 	Side Tile	გვერდითი
 	Inner Corner Tile	შიდა კუთხე
+	Auto-Centered	ავტო-ცენტრირებული
+	Auto-Between	ავტო-შორის
+	Auto-Sliced	ავტო-დაჭრილი
+	Auto-Overlap	ავტო-გადაფარვა
 	Start Tile	საწყისი
 	End Tile	ბოლო ფილა
 	Fit	მორგება
@@ -2038,6 +2063,8 @@ lighting	Light	სინათლე
 	Locate Selected Objects	მონიშნული ობიექტების მოძებნა
 	Thumbnails:	ესკიზები:
 	Anchor Points	საყრდენი წერტილები
+	"In" Control Points	„შემავალი“ საკონტროლო წერტილები
+	"Out" Control Points	„გამავალი“ საკონტროლო წერტილები
 	Brush Affects:	ფუნჯი მოქმედებს:
 	Complexity:	სირთულე:
 	Detail:	დეტალიზაცია:
@@ -2858,6 +2885,7 @@ theme	Appearance	იერსახე
 	Make Envelope	გარსის შექმნა
 	Move Envelope Mesh Point	გარსის ბადის წერტილის გადაადგილება
 	Move Mesh Point	ბადის წერტილის გადაადგილება
+	Move Mesh Points	ბადის წერტილების გადაადგილება
 	Move Spine Point	ხერხემლის წერტილის გადაადგილება
 	Reshape Spine Segment	ხერხემლის სეგმენტის ფორმის შეცვლა
 	Reset with Mesh	ბადით ჩამოყრა
@@ -3294,6 +3322,7 @@ axis	Both	ორივე
 	Set Text	ტექსტის დაყენება
 	Insert Character	სიმბოლოს ჩასმა
 	Replace	ჩანაცვლება
+	Replace:	ჩანაცვლება:
 	Type on a Path Options	ტრაექტორიაზე ტექსტის პარამეტრები
 	Highlight Variable	ცვლადის გამოკვეთა
 	New Variable	ახალი ცვლადი
@@ -3480,6 +3509,7 @@ font-technology	Variable	ცვლადი
 	Default Fill and Stroke (D)	ნაგულისხმევი შევსება და კონტური (D)
 	Fill (X), double-click for the Color Picker	შევსება (X), ორმაგი დაწკაპუნება — ფერის ამრჩევი
 	Opacity:	გაუმჭვირვალობა:
+	Shape Mode	ფიგურის რეჟიმი
 	Shape Modes:	ფიგურის რეჟიმები:
 	Stroke (X), double-click for the Color Picker	კონტური (X), ორმაგი დაწკაპუნება — ფერის ამრჩევი
 	Stroke:	კონტური:
@@ -3527,7 +3557,9 @@ font-technology	Variable	ცვლადი
 	Mojikumi	Mojikumi
 	N pt per	N pt თითოზე
 	New Character Style	სიმბოლოს ახალი სტილი
+	New Character Style…	სიმბოლოს ახალი სტილი…
 	New Paragraph Style	აბზაცის ახალი სტილი
+	New Paragraph Style…	აბზაცის ახალი სტილი…
 	Paragraph Style Options	აბზაცის სტილის პარამეტრები
 	Redefine Character Style	სიმბოლოს სტილის ხელახლა განსაზღვრა
 	Redefine Paragraph Style	აბზაცის სტილის ხელახლა განსაზღვრა
@@ -3600,6 +3632,13 @@ font-technology	Variable	ცვლადი
 @plural	{n} stroke|{n} strokes	კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
+@msg	the selection has no gradient fill	მონიშნულს შევსების გრადიენტი არ აქვს
+@msg	the selection has no gradient stroke	მონიშნულს კონტურის გრადიენტი არ აქვს
+@msg	the selection has no pattern fill	მონიშნულს შევსების პატერნი არ აქვს
+@msg	the selection has no pattern stroke	მონიშნულს კონტურის პატერნი არ აქვს
+@msg	no gradient swatch `{name}`	გრადიენტის ფერის ნიმუში `{name}` არ არის
+@msg	no pattern swatch `{name}`	პატერნის ფერის ნიმუში `{name}` არ არის
+@msg	the library item is damaged	ბიბლიოთეკის ელემენტი დაზიანებულია
 @msg	{_1} has no {_2} style	{_1}-ს არ აქვს სტილი {_2}
 @msg	a layer couldn't be read	შრის წაკითხვა ვერ მოხერხდა
 @msg	it has more than one artboard	მას ერთზე მეტი სამუშაო დაფა აქვს
@@ -3614,6 +3653,7 @@ font-technology	Variable	ცვლადი
 @msg	its page has text, and its layers have no text objects to put it in	მის გვერდზე ტექსტია, შრეებში კი არ არის ტექსტური ობიექტები, სადაც ის ჩაჯდებოდა
 @msg	its type is to come in as outlines, which only its page has	მისი ტექსტი კონტურებად უნდა შემოვიდეს, ასეთი კი მხოლოდ მის გვერდზეა
 @msg	the art on them differs from the page's in {_1}% of it	მათზე არსებული ნახატი გვერდისას {_1}%-ით განსხვავდება
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` შეცვლილ პარამეტრებს ნიშნავს: შეინახეთ პრესეტი სხვა სახელით
 @msg	`to` must be "corner" or "smooth"	`to` უნდა იყოს "corner" ან "smooth"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები RGB-ა ან ნაცრისფერი: colorModel rgb ან gray
 @msg	Blend colors: select at least three objects with filled colours	ფერების შერევა: მონიშნეთ მინიმუმ სამი ობიექტი ფერადი შევსებით
@@ -3692,8 +3732,10 @@ font-technology	Variable	ცვლადი
 @msg	`freeform.points` must be an array	`freeform.points` უნდა იყოს მასივი
 @msg	`freeform.lines` must be an array	`freeform.lines` უნდა იყოს მასივი
 @msg	`gradient` must be an object	`gradient` უნდა იყოს ობიექტი
+@msg	`groupColors` must be an array	`groupColors` უნდა იყოს მასივი
 @msg	`library` is a library id or name (see {list})	`library` არის ბიბლიოთეკის id ან სახელი (იხ. {list})
 @msg	`mode` applies to freeform gradients	`mode` ეხება თავისუფალი ფორმის გრადიენტებს
+@msg	`preserve` must be an object	`preserve` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
 @msg	`stops` must be an array	`stops` უნდა იყოს მასივი
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` უნდა იყოს SVG-ის პარამეტრების ობიექტი (იხ. document.formats)
@@ -3713,6 +3755,7 @@ font-technology	Variable	ცვლადი
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` უნდა იყოს {min}-სა და {max}-ს შორის (მიღებულია {x})
 @msg	`{key}` must be one of {_1}	`{key}` უნდა იყოს ერთ-ერთი: {_1}
 @msg	`{key}` must be true or false	`{key}` უნდა იყოს true ან false
+@msg	`top` and `below` can't both be true	`top` და `below` ერთდროულად ვერ იქნება true
 @msg	`select` must be true or false	`select` უნდა იყოს true ან false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` და `maxAnchors` უნდა იყოს მთელი რიცხვები
 @msg	`{key}` must be a number not below 0	`{key}` უნდა იყოს რიცხვი, არანაკლებ 0
@@ -3725,6 +3768,7 @@ font-technology	Variable	ცვლადი
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` პროცესული ფერია: ტონირება გამოიყენება გლობალურ და სპოტ-ფერებზე
 @msg	`{name}` is no recovery entry name	`{name}` აღდგენის ჩანაწერის სახელი არ არის
 @msg	`{name}` isn't a colour swatch	`{name}` ფერის ნიმუში არ არის
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	პროცესული ფერი ვერ გააფერადებს გამჭვირვალობის მქონე ნაცრისფერ გამოსახულებას: გამოიყენეთ სპოტ-ფერი, შავი ან თეთრი
 @msg	`{path}` must be a bool or an object of bools	`{path}` უნდა იყოს bool ან bool-ების ობიექტი
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` ფერი არ არის (#rrggbb ან პრესეტის სახელი)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` გათხევადების ხელსაწყო არ არის
@@ -3769,6 +3813,10 @@ font-technology	Variable	ცვლადი
 @msg	a page tree node has no kids	გვერდების ხის კვანძს შვილობილები არ აქვს
 @msg	a page's placement is not finite	გვერდის განლაგება სასრული არ არის
 @msg	a preset named `{_1}` exists	პრესეტი სახელით `{_1}` არსებობს
+@msg	`name` is empty	`name` ცარიელია
+@msg	`newName` is empty	`newName` ცარიელია
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` ჩაშენებული პრესეტია და მისი შეცვლა შეუძლებელია: შეინახეთ სხვა სახელით
+@msg	`{name}` is a built-in preset and stays	`{name}` ჩაშენებული პრესეტია და მისი წაშლა შეუძლებელია
 @msg	a swatch or color group named `{n}` exists	ფერის ნიმუში ან ფერების ჯგუფი სახელით `{n}` არსებობს
 @msg	a slice size must be a positive number of points	ნაჭრის ზომა წერტილების დადებითი რიცხვი უნდა იყოს
 @msg	a stream runs past the end	ნაკადი ბოლოს სცილდება
@@ -3851,6 +3899,7 @@ font-technology	Variable	ცვლადი
 @msg	missing `id` (see plugin.list)	აკლია `id` (იხ. plugin.list)
 @msg	missing `name`	აკლია `name`
 @msg	missing `tool`	აკლია `tool`
+@msg	missing id	აკლია id
 @msg	missing index	ინდექსი აკლია
 @msg	New Window isn't available yet: a document opens in one window	ახალი ფანჯარა ჯერ მიუწვდომელია: დოკუმენტი ერთ ფანჯარაში იხსნება
 @msg	name the file	მიუთითეთ ფაილის სახელი
@@ -3881,6 +3930,7 @@ font-technology	Variable	ცვლადი
 @msg	no current layer	მიმდინარე შრე არ არის
 @msg	no data	მონაცემები არ არის
 @msg	no dialog open	დიალოგი გახსნილი არ არის
+@msg	the open dialog has no Reset	გახსნილ დიალოგში ღილაკი ჩამოყრა არ არის
 @msg	no document	დოკუმენტი არ არის
 @msg	no document open	გახსნილი დოკუმენტი არ არის
 @msg	no effect applied yet	ეფექტი ჯერ არ გამოყენებულა
@@ -3914,6 +3964,8 @@ font-technology	Variable	ცვლადი
 @msg	no print service	ბეჭდვის სერვისი არ არის
 @msg	no revert command	დაბრუნების ბრძანება არ არის
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	შენახული PDF პრესეტი სახელით `{name}` არ არის (ჩაშენებული პრესეტები მხოლოდ წასაკითხია: მათგან ახალი შექმენით)
+@msg	no saved preset named `{name}`	შენახული პრესეტი სახელით `{name}` არ არის
+@msg	no saved preset named `{name}` to rename	გადასარქმევი შენახული პრესეტი სახელით `{name}` არ არის
 @msg	no saved presets	შენახული პრესეტები არ არის
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	შენახული ბეჭდვის პრესეტი სახელით `{name}` არ არის ({DEFAULT_PRESET} დაცულია: მისგან ახალი შექმენით)
 @msg	no saved profiles	შენახული პროფილები არ არის
@@ -3956,8 +4008,10 @@ font-technology	Variable	ცვლადი
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
+@msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
 @msg	nothing encoded	არაფერია კოდირებული
 @msg	nothing selected	არაფერია მონიშნული
+@msg	nothing selected is in a group	მონიშნულთაგან არაფერია ჯგუფში
 @msg	nothing to align	გასასწორებელი არაფერია
 @msg	nothing to distort	დასადეფორმირებელი არაფერია
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	ექსპორტისთვის არაფერია: დოკუმენტს ხილული ნახატი არ აქვს (ან ჩართეთ სამუშაო დაფების გამოყენება)
@@ -4020,6 +4074,7 @@ font-technology	Variable	ცვლადი
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	select at least two objects	მონიშნეთ ორი ობიექტი მაინც
+@msg	exit isolation mode first	ჯერ გამოდით იზოლაციის რეჟიმიდან
 @msg	select objects, not layers	მონიშნეთ ობიექტები და არა შრეები
 @msg	select one path, or give its `id`	მონიშნეთ ერთი ტრაექტორია ან მიუთითეთ მისი `id`
 @msg	select paths to join	მონიშნეთ შესაერთებელი ტრაექტორიები
@@ -4070,10 +4125,14 @@ font-technology	Variable	ცვლადი
 @msg	the layer or group is locked	შრე ან ჯგუფი ჩაკეტილია
 @msg	the guide is on a hidden or locked layer	დამხმარე ხაზი დამალულ ან ჩაკეტილ შრეზეა
 @msg	the target layer is locked or hidden	სამიზნე შრე ჩაკეტილი ან დამალულია
+@msg	the object is hidden or locked	ობიექტი დამალული ან ჩაკეტილია
+@msg	the object is outside the isolated group	ობიექტი იზოლირებული ჯგუფის გარეთაა
+@msg	type objects can't be isolated	ტექსტური ობიექტების იზოლირება შეუძლებელია
 @msg	the layer to flatten into is hidden	შრე, რომელშიც უნდა გაბრტყელდეს, დამალულია
 @msg	the object already has an opacity mask	ობიექტს უკვე აქვს გაუმჭვირვალობის ნიღაბი
 @msg	the object has no geometry	ობიექტს გეომეტრია არ აქვს
 @msg	the object has no opacity mask	ობიექტს გაუმჭვირვალობის ნიღაბი არ აქვს
+@msg	stop editing the opacity mask first	ჯერ დაასრულეთ გაუმჭვირვალობის ნიღბის რედაქტირება
 @msg	the object has no stroke	ობიექტს კონტური არ აქვს
 @msg	the object is beyond the plane's horizon	ობიექტი სიბრტყის ჰორიზონტს მიღმაა
 @msg	the object isn't in perspective	ობიექტი პერსპექტივაში არ არის
@@ -4118,6 +4177,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	უცნობი პრესეტი `{name}` (high, medium, low ან შენახული: იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	უცნობი პრესეტი `{name}` (იხ. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	უცნობი პრესეტი `{name}` (იხ. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	უცნობი პრესეტი `{name}`: არც ჩაშენებულია და არც შენახული (იხ. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	უცნობი მხარე `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	უცნობი ხელსაწყო `{tool}`
 @msg	unknown tool `{t}`	უცნობი ხელსაწყო `{t}`
@@ -4257,6 +4317,9 @@ font-technology	Variable	ცვლადი
 @msg	not a PSD file	PSD ფაილი არ არის
 @msg	the PSD file has an unknown colour mode ({m})	PSD ფაილს უცნობი ფერის რეჟიმი აქვს ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD ფაილის გამოსახულების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
+@msg	the PCX file is cut short	PCX ფაილი შეკვეცილია
+@msg	the PCX file's header is damaged	PCX ფაილის სათაური დაზიანებულია
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} სიბრტყეში {bits}-ბიტიანი პიქსელების მქონე PCX ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
@@ -4877,6 +4940,9 @@ imageTrace	Outline	კონტური
 	The active document changed while the screen color sampler was open	აქტიური დოკუმენტი შეიცვალა, სანამ ეკრანიდან ფერის აღება ღია იყო
 	Keep selected	მონიშნულად დატოვება
 	Reset Tracking and Kerning	ტრეკინგისა და კერნინგის ჩამოყრა
+	Highlight Font Name	შრიფტის სახელის გამოკვეთა
+	Highlight Kerning	კერნინგის გამოკვეთა
+	Highlight Tracking	ტრეკინგის გამოკვეთა
 	Legacy (version 7)	ძველი (ვერსია 7)
 	Transparent Images:	გამჭვირვალე გამოსახულებები:
 	Flatten	გაბრტყელება
@@ -4897,6 +4963,7 @@ imageTrace	Outline	კონტური
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	ფაილის შრეები რედაქტირების მონაცემებიდან ვერ წაიკითხა ({_1}): ისინი მისი PDF ნაწილიდან აიღება
 @msg	the Color Picker is not open	ფერის ამრჩევი გახსნილი არ არის
 @msg	the Simplify slider is not open	გამარტივების სლაიდერი გახსნილი არ არის
+@msg	the Smooth slider is not open	გაგლუვების სლაიდერი გახსნილი არ არის
 @msg	the screen color sampler is already open	ეკრანიდან ფერის აღება უკვე გახსნილია
 @msg	this system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს
 # Dimension tool and Object › Dimensions. A drafting dimension is ზომა (ზომის დასმა), like a dimension on a technical drawing.
@@ -5057,6 +5124,7 @@ imageTrace	Outline	კონტური
 	Show Original Path	საწყისი ტრაექტორიის ჩვენება
 	Open this dialog with these settings next time	შემდეგ ჯერზე ამ დიალოგის ამ პარამეტრებით გახსნა
 	Auto-Simplify	ავტომატური გამარტივება
+	Auto-Smooth	ავტომატური გაგლუვება
 	Texture Image	ტექსტურის გამოსახულება
 @msg	check a layer to export	მონიშნეთ საექსპორტო შრე
 @msg	select the art to export first	ჯერ მონიშნეთ საექსპორტო ნახატი
@@ -5453,10 +5521,10 @@ axis	Y Axis	Y ღერძი
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
-	Include Objects On Canvas	ტილოზე არსებული ობიექტების ჩართვა
-	Result(s): {count}	შედეგ(ებ)ი: {count}
-@msg	select one object	აირჩიეთ ერთი ობიექტი
-@msg	Global Edit works on paths, compound paths and symbol instances	გლობალური რედაქტირება მუშაობს კონტურებზე, შედგენილ კონტურებსა და სიმბოლოს ეგზემპლარებზე
+	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
+	Result(s): {count}	შედეგი: {count}
+@msg	select one object	მონიშნეთ ერთი ობიექტი
+@msg	Global Edit works on paths, compound paths and symbol instances	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებსა და სიმბოლოს ეგზემპლარებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
@@ -5485,8 +5553,8 @@ axis	Y Axis	Y ღერძი
 @msg	no symbol `{n}` in `{_1}`	`{_1}`-ში სიმბოლო `{n}` არ არის
 @msg	no symbol library `{key}` (see symbol.libraries)	სიმბოლოების ბიბლიოთეკა `{key}` არ არის (იხ. symbol.libraries)
 @msg	the document has no symbols to save	დოკუმენტში შესანახი სიმბოლოები არ არის
-@msg	Trap: select two or more objects filled with solid colours	ტრეპინგი: აირჩიეთ ორი ან მეტი ობიექტი, შევსებული ერთგვაროვანი ფერით
-@msg	Trap: no edges of different colours meet among the selected objects	ტრეპინგი: არჩეულ ობიექტებს შორის განსხვავებული ფერის კიდეები არ ეხება ერთმანეთს
+@msg	Trap: select two or more objects filled with solid colours	ტრეპინგი: მონიშნეთ მყარი ფერით შევსებული ორი ან მეტი ობიექტი
+@msg	Trap: no edges of different colours meet among the selected objects	ტრეპინგი: მონიშნულ ობიექტებს შორის განსხვავებული ფერის კიდეები ერთმანეთს არ ეხება
 @msg	thickness must be from 0.01 to 5000 pt	thickness უნდა იყოს 0,01-დან 5000 pt-მდე
 @msg	heightWidth must be from 1 to 1000 %	heightWidth უნდა იყოს 1-დან 1000 %-მდე
 @msg	tintReduction must be from 0 to 100 %	tintReduction უნდა იყოს 0-დან 100 %-მდე
@@ -5527,6 +5595,226 @@ axis	Y Axis	Y ღერძი
 @msg	the document has no brushes to save	დოკუმენტში შესანახი ფუნჯები არ არის
 @msg	no empty artboards to delete	წასაშლელი ცარიელი სამუშაო დაფები არ არის
 	Scale Presets	მასშტაბის წინასწარ დაყენებული მნიშვნელობები
-@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} ეკრანის სურათის ბაიტების რაოდენობა გადაივსო
-@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	ფანჯრის {what} ({points} პუნქტი × {scale} DPI) ეკრანის სურათის ზომას ვერ განსაზღვრავს
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	ჯერ გაშალეთ იერსახე (ობიექტი › იერსახის გაშლა)
+@msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} ეკრანის ანაბეჭდის ბაიტების რაოდენობა გადაივსო
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	ფანჯრის {what} ({points} პუნქტი × {scale} DPI) ეკრანის ანაბეჭდის ზომას ვერ განსაზღვრავს
 	Live preview	ცოცხალი წინასწარი ნახვა
+# Batch dialog, PDF presets, Dimension Tool Options and the built-in swatch names (swatches.rs: t_name("swatch", …)).
+	Gutter	შუალედი
+	Gutter:	შუალედი:
+	Play:	შესრულება:
+	Override Action "Open" Commands	მოქმედების „გახსნის“ ბრძანებების უგულებელყოფა
+	Override Action "Save" Commands	მოქმედების „შენახვის“ ბრძანებების უგულებელყოფა
+	Override Action "Export" Commands	მოქმედების „ექსპორტის“ ბრძანებების უგულებელყოფა
+	Stop on Errors	შეცდომისას შეჩერება
+	▾ Default Actions	▾ ნაგულისხმევი მოქმედებები
+	High Quality Print	მაღალი ხარისხის ბეჭდვა
+	[High Quality Print]	[მაღალი ხარისხის ბეჭდვა]
+	Press Quality	სასტამბო ხარისხი
+	[Press Quality]	[სასტამბო ხარისხი]
+	Smallest File Size	ფაილის უმცირესი ზომა
+	[Smallest File Size]	[ფაილის უმცირესი ზომა]
+swatch	[None]	[არცერთი]
+swatch	[Registration]	[რეგისტრაცია]
+swatch	White	თეთრი
+swatch	Black	შავი
+swatch	Red	წითელი
+swatch	Orange Red	ნარინჯისფერ-წითელი
+swatch	Orange	ნარინჯისფერი
+swatch	Amber	ქარვისფერი
+swatch	Yellow	ყვითელი
+swatch	Yellow Green	ყვითელ-მწვანე
+swatch	Lime	ლაიმისფერი
+swatch	Green	მწვანე
+swatch	Emerald	ზურმუხტისფერი
+swatch	Teal	ზღვისფერი
+swatch	Aqua	ფირუზისფერი
+swatch	Cyan Green	ცისფერ-მწვანე
+swatch	Cyan	ცისფერი
+swatch	Azure	ლაჟვარდისფერი
+swatch	Blue	ლურჯი
+swatch	Indigo	ინდიგო
+swatch	Violet	იისფერი
+swatch	Purple	მუქი იისფერი
+swatch	Magenta	მეწამული
+swatch	Rose	ვარდისფერი
+swatch	Pink	ღია ვარდისფერი
+swatch	Brown	ყავისფერი
+swatch	Tan	ღია ყავისფერი
+swatch	Coffee	ყავა
+swatch	Chocolate	შოკოლადისფერი
+swatch	Sand	ქვიშისფერი
+swatch	Copper	სპილენძისფერი
+swatch	Rust	ჟანგისფერი
+swatch	Walnut	კაკლისფერი
+swatch	Espresso	ესპრესო
+swatch	White, Black	თეთრი, შავი
+swatch	Radial White, Black	რადიალური თეთრი, შავი
+swatch	Sunset	მზის ჩასვლა
+swatch	Ocean	ოკეანე
+swatch	Grays	ნაცრისფრები
+swatch	Brights	კაშკაშა ფერები
+swatch	Bright Red	კაშკაშა წითელი
+swatch	Bright Yellow	კაშკაშა ყვითელი
+swatch	Bright Green	კაშკაშა მწვანე
+swatch	Bright Blue	კაშკაშა ლურჯი
+swatch	Bright Violet	კაშკაშა იისფერი
+	Units & Scale	ერთეულები და მასშტაბი
+	Dimension Lines	ზომის ხაზები
+	Extension Lines	გამოსატანი ხაზები
+	Dimension Text	ზომის ტექსტი
+	Arrow Scale:	ისრის მასშტაბი:
+	Arrow Style:	ისრის სტილი:
+	Extension:	გამოტანა:
+	Hide Extension Lines	გამოსატანი ხაზების დამალვა
+	Hide Units	ერთეულების დამალვა
+	Line Type:	ხაზის ტიპი:
+	Line Weight:	ხაზის სისქე:
+	Position:	პოზიცია:
+	Font Size:	შრიფტის ზომა:
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	წერტილოვანი ტექსტი
+	Area Text	არის ტექსტი
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
+	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა
+	Snap to Glyph Options	გლიფზე მიბმის პარამეტრები
+	x-height	x სიმაღლე
+	Glyph Bounds	გლიფის საზღვრები
+	Proximity Guides	სიახლოვის დამხმარე ხაზები
+	Angular Guides	კუთხური დამხმარე ხაზები
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	საშუალო და შეერთება…
+	Average & Join	საშუალო და შეერთება
+anchor	Points:	წერტილები:
+@msg	select two open path ends, or two open paths, to average and join	მონიშნეთ ღია ტრაექტორიების ორი ბოლო ან ორი ღია ტრაექტორია საშუალოსა და შეერთებისთვის
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	გრაფიკის გასუფთავება
+	Simplify Anchors (Keep Shape)…	საყრდენი წერტილების გამარტივება (ფორმის შენარჩუნებით)…
+	Health Check	მდგომარეობის შემოწმება
+	Show Issue	პრობლემის ჩვენება
+	Fix All Issues	ყველა პრობლემის გამოსწორება
+	Fix Issues	პრობლემების გამოსწორება
+	Deep Ungroup…	დაჯგუფების მოხსნა ყველა დონეზე…
+	Rejoin Path Pieces…	ტრაექტორიის ნაწილების ხელახლა შეერთება…
+	Document Health Check	დოკუმენტის მდგომარეობის შემოწმება
+	Check Selection	მონიშნულის შემოწმება
+	Check Document	დოკუმენტის შემოწმება
+	No issues found.	პრობლემები ვერ მოიძებნა.
+	Changed since the last check.	შეიცვალა ბოლო შემოწმების შემდეგ.
+	Fix Selected	მონიშნულის გამოსწორება
+	Fix All	ყველას გამოსწორება
+	Issues fixed: {count}	გამოსწორებული პრობლემები: {count}
+	Open a document to check it for issues.	გახსენით დოკუმენტი, რომ პრობლემებზე შეამოწმოთ.
+	Empty Text	ცარიელი ტექსტი
+	Unpainted Objects	შეუღებავი ობიექტები
+	Zero-Opacity Objects	ნულოვანი გაუმჭვირვალობის ობიექტები
+	Duplicate Objects	დუბლირებული ობიექტები
+	Off-Artboard Art	სამუშაო დაფებს გარეთ მყოფი გრაფიკა
+	Duplicate Anchors	დუბლირებული საყრდენი წერტილები
+	Tiny Handles	პაწაწინა სახელურები
+	Collinear Anchors	კოლინეარული საყრდენი წერტილები
+	Nearly Coincident Anchors	თითქმის დამთხვეული საყრდენი წერტილები
+	Nearly Closed Paths	თითქმის შეკრული ტრაექტორიები
+	Filled Open Paths	შევსებული ღია ტრაექტორიები
+	Needless Clipping Groups	ზედმეტი მომჭრელი ჯგუფები
+	Needless Compound Paths	ზედმეტი შედგენილი ტრაექტორიები
+	Needless Groups	ზედმეტი ჯგუფები
+	Empty Artboards	ცარიელი სამუშაო დაფები
+	Protect Corners	კუთხეების დაცვა
+	Gap	ღრეჩო
+	Include Clip Groups	მომჭრელი ჯგუფების ჩართვა
+@msg	`tolerance` must be from 1 to 100	`tolerance` უნდა იყოს 1-დან 100-მდე
+@msg	`gap` must be from 0 to 6 pt	`gap` უნდა იყოს 0-დან 6 pt-მდე
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	საყრდენი წერტილების გამარტივება: ტრაექტორიებს ძალიან ბევრი საყრდენი წერტილი აქვს ერთბაშად გასამარტივებლად
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	ტრაექტორიის ნაწილების ხელახლა შეერთება: ძალიან ბევრი ტრაექტორიაა ერთბაშად შესაერთებლად
+@msg	None of these issues are left: check again	ამ პრობლემებიდან აღარცერთი დარჩა: შეამოწმეთ ხელახლა
+@msg	`kinds` must be a list of issue kinds	`kinds` უნდა იყოს პრობლემის სახეების სია
+@msg	missing `kind`	`kind` აკლია
+	Simplify Anchors (Keep Shape)	საყრდენი წერტილების გამარტივება (ფორმის შენარჩუნებით)
+	Deep Ungroup	დაჯგუფების მოხსნა ყველა დონეზე
+	Rejoin Path Pieces	ტრაექტორიის ნაწილების ხელახლა შეერთება
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	ფერის ეფექტები
+	Color Effects Panel	ფერის ეფექტების პანელი
+	Exposure	ექსპოზიცია
+	Exposure…	ექსპოზიცია…
+	Desaturate	გაუფერულება
+	Adjustment	კორექცია
+	Add as Effect	ეფექტად დამატება
+	Apply as Filter	ფილტრად გამოყენება
+	Select objects to adjust their colors.	აირჩიეთ ობიექტები მათი ფერების დასარეგულირებლად.
+	Brightness/Contrast	სიკაშკაშე/კონტრასტი
+	Hue/Saturation	ფერის ტონი/გაჯერება
+	Temperature/Tint	ტემპერატურა/ტონირება
+@msg	`{id}` is not a colour adjustment	`{id}` ფერის კორექცია არ არის
+@msg	missing `effect`	აკლია `effect`
+@msg	`params` must be an object	`params` უნდა იყოს ობიექტი
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	ტრაექტორიების ზუსტი ხელსაწყოები
+	Anchor Eraser Brush	საყრდენი წერტილების საშლელი ფუნჯი
+	Extend Path Tool	ტრაექტორიის გაგრძელების ხელსაწყო
+	Measure & Inspect Tool	გაზომვისა და შემოწმების ხელსაწყო
+	Anchor Inspector	საყრდენი წერტილების ინსპექტორი
+	Add Points at Crossings	წერტილების დამატება გადაკვეთებზე
+	Split at Crossings	დაყოფა გადაკვეთებზე
+	Extend Path	ტრაექტორიის გაგრძელება
+	Measure & Inspect	გაზომვა და შემოწმება
+	Set Anchor	საყრდენი წერტილის დაყენება
+	Make Smooth	გლუვად ქცევა
+	Make Corner	კუთხოვნად ქცევა
+	Equalize Handles	სახელურების გათანაბრება
+	Remove Points, Keep Shape	წერტილების მოცილება ფორმის შენარჩუნებით
+	Add Points to Segments…	წერტილების დამატება სეგმენტებში…
+	Add Points to Segments	წერტილების დამატება სეგმენტებში
+	Open a document to edit its anchor points.	გახსენით დოკუმენტი მისი საყრდენი წერტილების დასარედაქტირებლად.
+	Anchors selected: {count}	მონიშნული საყრდენი წერტილები: {count}
+	Direct-select anchor points to edit them.	დასარედაქტირებლად საყრდენი წერტილები პირდაპირ მონიშნეთ.
+	Length	სიგრძე
+	In:	შესასვლელი:
+	Out:	გამოსასვლელი:
+	Add Points	წერტილების დამატება
+	Points per segment	წერტილები სეგმენტზე
+	Close Path:	ტრაექტორიის შეკვრა:
+	Keep Handles	სახელურების შენარჩუნება
+	Straight	სწორი
+	Stretch Curve	მრუდის გაჭიმვა
+@msg	direct-select the anchor points to remove	პირდაპირ მონიშნეთ მოსაცილებელი საყრდენი წერტილები
+@msg	select segments, or paths, to add points to	მონიშნეთ სეგმენტები ან ტრაექტორიები წერტილების დასამატებლად
+@msg	select open paths to close	მონიშნეთ შესაკრავი ღია ტრაექტორიები
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	ტრაექტორიები ზედმეტად ბევრი ან ჩახლართულია გადაკვეთების საპოვნელად (მაქსიმუმ 10000 სეგმენტი)
+@msg	the paths have too many anchors to edit at once	ტრაექტორიებს ზედმეტად ბევრი საყრდენი წერტილი აქვს ერთბაშად დასარედაქტირებლად
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	ჭკვიანი კალამი
+	Smart Pen Tool	ჭკვიანი კალმის ხელსაწყო
+	Smart Pen Panel	ჭკვიანი კალმის პანელი
+	Next Segment	შემდეგი სეგმენტი
+	Curved	მრუდი
+	Retract Handles	სახელურების შეკეცვა
+	Close or Join	შეკვრა ან შეერთება
+	Open a document to draw with the Smart Pen.	გახსენით დოკუმენტი ჭკვიანი კალმით სახატავად.
+	Straight or Curved Segment	სწორი ან მრუდი სეგმენტი
+@msg	the path is locked or hidden	ტრაექტორია ჩაკეტილი ან დამალულია
+@msg	`id` is not a path	`id` არ არის ტრაექტორია
+@msg	the path has no open subpath	ტრაექტორიას არ აქვს ღია ქვეტრაექტორია
+@msg	the subpath is closed	ქვეტრაექტორია შეკრულია
+@msg	the subpath is closed or too short to close	ქვეტრაექტორია შეკრულია ან შესაკრავად ძალიან მოკლეა
+@msg	the path is too short to remove a point from	ტრაექტორია წერტილის მოსაშორებლად ძალიან მოკლეა
+@msg	the segment can't be bent that far	სეგმენტის ამდენად მოხრა შეუძლებელია
+@msg	give `{a}` and `{b}`	მიუთითეთ `{a}` და `{b}`
+@msg	`t` must be from 0 to 1	`t` უნდა იყოს 0-დან 1-მდე
+@msg	`segment` must be "straight" or "curved"	`segment` უნდა იყოს "straight" ან "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` უნდა იყოს "free", "keepAngles" ან "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` უნდა იყოს [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	ფერის სახეობით არჩევა
+	Objects with Spot Colors	ობიექტები სპოტ-ფერებით
+	Objects with Color Effects	ობიექტები ფერის ეფექტებით
+	RGB Images	RGB გამოსახულებები
+	CMYK Images	CMYK გამოსახულებები
+	Grayscale Images	ნაცრისფერის გრადაციის გამოსახულებები
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` უნდა იყოს spotColors, colorEffects, rgbImages, cmykImages ან grayImages

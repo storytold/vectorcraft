@@ -40,6 +40,8 @@ pub(super) struct Token<'a> {
 
 /// A placed file's preview (binary): (begin, end) markers.
 const PREVIEW: (&[u8], &[u8]) = (b"%AI26_BeginPlacedObjectPreview", b"%AI26_EndPlacedObjectPreview");
+/// A placed file's markers, which a hidden one has on `%_` lines.
+const PLACE: [&[u8]; 2] = [b"%AI5_BeginPlace", b"%AI5_EndPlace"];
 /// A binary section skipped whole: (begin, end) markers.
 const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
@@ -92,6 +94,11 @@ impl<'a> Lexer<'a> {
         self.pos
     }
 
+    /// Look for the next token at `pos` again (the end of the data at most).
+    pub fn seek(&mut self, pos: usize) {
+        self.pos = pos.min(self.src.len());
+    }
+
     /// The data from `from` to `to` (empty where that isn't in it).
     pub fn slice(&self, from: usize, to: usize) -> &'a [u8] {
         self.src.get(from..to).unwrap_or_default()
@@ -136,6 +143,10 @@ impl<'a> Lexer<'a> {
                 }
                 if start {
                     return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: false });
+                }
+                // So does a hidden placed file: its `~` ends what `%_%AI5_BeginPlace` begins.
+                if prefixed && PLACE.iter().any(|m| line.starts_with(m)) {
+                    return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: true });
                 }
                 // A comment later in a line.
                 continue;

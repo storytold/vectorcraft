@@ -68,7 +68,7 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
         let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
         let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
-        assert!(svg.matches("<path").count() >= 2, "{effect}: exported as vector faces");
+        assert!(vectorcraft_testkit::svg_shapes(&svg) >= 2, "{effect}: exported as vector faces");
         s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
         assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }), "{effect}");
         assert!(!effects::has_solid(&node(&s, id)));

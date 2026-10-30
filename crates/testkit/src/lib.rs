@@ -64,6 +64,12 @@ pub fn temp_dir(tag: &str) -> std::path::PathBuf {
     dir
 }
 
+/// How many shapes an SVG draws: its `<path>` elements and the basic shapes SVG export writes
+/// simple shapes as (`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`).
+pub fn svg_shapes(svg: &str) -> usize {
+    ["<path", "<rect", "<circle", "<ellipse", "<line ", "<polyline", "<polygon"].iter().map(|t| svg.matches(t).count()).sum()
+}
+
 thread_local! {
     static QUIET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }

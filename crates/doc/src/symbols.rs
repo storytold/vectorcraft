@@ -71,6 +71,8 @@ pub struct SymbolBoxes<'a> {
     /// The effect reach of each symbol's art with no transform, measured past [`MAX_REACHES`]
     /// ([`Self::unplaced_reach`]).
     unplaced: RefCell<HashMap<String, f64>>,
+    /// How many times [`Self::measure_art`] has run a measure on symbol art ([`Self::art_measured`]).
+    runs: Cell<usize>,
 }
 
 impl Document {
@@ -87,6 +89,7 @@ impl Document {
             holders: Cell::new(0),
             farthest: RefCell::default(),
             unplaced: RefCell::default(),
+            runs: Cell::new(0),
         }
     }
 }
@@ -146,7 +149,14 @@ impl<'a> SymbolBoxes<'a> {
     pub fn measure_art<R>(&self, name: &str, measure: impl FnOnce(&Arc<Node>) -> R) -> Option<R> {
         self.depth(name)?;
         let sym = self.doc.symbols.iter().find(|s| s.name == name)?;
+        self.runs.set(self.runs.get() + 1);
         Some(measure(&sym.art))
+    }
+
+    /// How many times [`Self::measure_art`] has run a measure on symbol art for these boxes, the
+    /// measures behind the cached art boxes and placed visual boxes included.
+    pub fn art_measured(&self) -> usize {
+        self.runs.get()
     }
 
     /// The geometric box of the art of the symbol named `name` in symbol space, with the instances
@@ -458,6 +468,26 @@ mod tests {
         symbol(&mut d, "Pair", vec![right, below]);
         let pair = instance(&mut d, "Pair", Affine::translate((100.0, 100.0)));
         assert_eq!(pair.geometric_bounds_with(&d.symbol_boxes()), Some(Rect::new(100.0, 100.0, 154.0, 154.0)));
+    }
+
+    #[test]
+    fn each_symbols_art_box_is_measured_once() {
+        // `Pair` holds two instances of `Dot`; three instances of `Pair` are measured twice each.
+        let mut d = Document::new(200.0, 200.0);
+        let dot = rect(&mut d, Rect::new(0.0, 0.0, 4.0, 4.0), 0.0);
+        symbol(&mut d, "Dot", vec![dot]);
+        let right = instance(&mut d, "Dot", Affine::translate((50.0, 0.0)));
+        let below = instance(&mut d, "Dot", Affine::translate((0.0, 50.0)));
+        symbol(&mut d, "Pair", vec![right, below]);
+        let pairs: Vec<Node> = (0..3).map(|i| instance(&mut d, "Pair", Affine::translate((f64::from(i) * 10.0, 0.0)))).collect();
+        let s = d.symbol_boxes().quick();
+        assert_eq!(s.art_measured(), 0);
+        for _ in 0..2 {
+            for p in &pairs {
+                p.geometric_bounds_with(&s);
+            }
+        }
+        assert_eq!(s.art_measured(), 2, "the art of Pair and of Dot");
     }
 
     #[test]

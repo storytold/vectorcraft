@@ -17,8 +17,8 @@ use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatc
 use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
-use super::swatch::{map_default_paints, str_list, swatch_json};
-use super::*;
+use super::swatch::{map_default_paints, map_swatch_links, str_list, swatch_json};
+use super::{Color, CommandSpec, Result, Session, always, bad, cmd, has_doc, switch_or, text_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -201,7 +201,8 @@ impl<L: LibraryFile> Libraries<L> {
             FileData::Text(text) => text.as_bytes(),
             FileData::Binary(bytes) => bytes.as_slice(),
         };
-        if bool_or(p, "user", false) {
+        let path = text_param(p, "path", cmd)?;
+        if switch_or(p, "user", false, cmd)? {
             let dir = self
                 .user_dir()
                 .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
@@ -213,7 +214,7 @@ impl<L: LibraryFile> Libraries<L> {
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
-        } else if let Some(path) = str_param(p, "path") {
+        } else if let Some(path) = path {
             write_file(path, bytes)?;
             out["path"] = json!(path);
         } else {
@@ -230,14 +231,14 @@ impl<L: LibraryFile> Libraries<L> {
     /// or a file with the same extension and bytes as one there, is that User Defined library;
     /// others are listed as loaded until the app quits.
     pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
-        let path = str_param(p, "path");
-        let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        let path = text_param(p, "path", cmd)?;
+        let bytes = match (path, text_param(p, "data", cmd)?, text_param(p, "dataBase64", cmd)?) {
             (Some(path), ..) => read_file(path)?,
             (None, Some(text), _) => text.as_bytes().to_vec(),
             (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
             _ => return Err(bad(cmd, "give `path`, `data` or `dataBase64`")),
         };
-        let file = str_param(p, "name").map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
+        let file = text_param(p, "name", cmd)?.map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
         let lib = parse(&bytes, &file)?;
         self.rescan();
         let user =
@@ -428,19 +429,36 @@ pub fn library_swatches(s: &Session, key: &str) -> Option<Vec<Swatch>> {
     Some(library(s, key)?.1.iter().filter(own).cloned().collect())
 }
 
-/// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "").
+/// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "" or null).
+/// A `limitTo` that is not a string, such as `5`, names no library.
 pub(crate) fn limit_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Palette>> {
-    let Some(key) = str_param(p, "limitTo").filter(|k| !k.is_empty()) else { return Ok(None) };
-    let palette = limit_palette(s, key)
-        .ok_or_else(|| bad(cmd, format!("no swatch library `{key}` (see swatch.library.list; \"{DOCUMENT_SWATCHES}\": the document's swatches)")))?;
+    let no_library =
+        |key: &str| bad(cmd, format!("no swatch library `{key}` (see swatch.library.list; \"{DOCUMENT_SWATCHES}\": the document's swatches)"));
+    let key = match p.get("limitTo") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::String(k)) if k.is_empty() => return Ok(None),
+        Some(Value::String(k)) => k.as_str(),
+        Some(v) => return Err(no_library(&v.to_string())),
+    };
+    let palette = limit_palette(s, key).ok_or_else(|| no_library(key))?;
     if palette.is_empty() {
         return Err(bad(cmd, format!("`{key}` has no colours")));
     }
     Ok(Some(palette))
 }
 
+/// The `names` parameter ([`str_list`]): empty when it is left out or null; anything but a list of
+/// strings is an error.
+pub(super) fn names_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
+    match p.get("names") {
+        None | Some(Value::Null) => Ok(vec![]),
+        Some(Value::Array(a)) if a.iter().all(Value::is_string) => Ok(str_list(p, "names")),
+        Some(_) => Err(bad(cmd, "`names` must be a list of names")),
+    }
+}
+
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<SwatchLibrary>)> {
-    let key = str_param(p, "library").ok_or_else(|| bad(cmd, "missing `library` (see swatch.library.list)"))?;
+    let key = text_param(p, "library", cmd)?.ok_or_else(|| bad(cmd, "missing `library` (see swatch.library.list)"))?;
     library(s, key).ok_or_else(|| bad(cmd, format!("no swatch library `{key}` (see swatch.library.list)")))
 }
 
@@ -479,14 +497,15 @@ fn document_library(d: &vectorcraft_doc::Document, names: &[String], name: Strin
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.save";
-    let path = str_param(p, "path");
-    let format = match str_param(p, "format").or_else(|| path.map(|p| p.rsplit_once('.').map_or("", |(_, e)| e))).filter(|f| !f.is_empty()) {
+    let path = text_param(p, "path", C)?;
+    let format = match text_param(p, "format", C)?.or_else(|| path.map(|p| p.rsplit_once('.').map_or("", |(_, e)| e))).filter(|f| !f.is_empty()) {
         Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl, ase or css)")))?,
         None => PaletteFormat::Native,
     };
+    let names = names_param(p, C)?;
     let st = s.doc()?;
-    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
-    let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
+    let name = text_param(p, "name", C)?.map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
+    let lib = document_library(&st.doc, &names, name, C)?;
     let bytes = palette_io::write(&lib, format).map_err(|e| bad(C, e))?;
     let data = if format.binary() { FileData::Binary(bytes) } else { FileData::Text(String::from_utf8_lossy(&bytes).into_owned()) };
     let mut out = json!({"format": format.id(), "count": lib.iter().filter(|w| format.holds(&w.paint)).count()});
@@ -571,13 +590,14 @@ fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.add";
     let (info, lib) = library_param(s, p, C)?;
-    let apply = match str_param(p, "apply") {
+    let apply = match text_param(p, "apply", C)? {
         None => None,
         Some("fill") => Some("paint.setFill"),
         Some("stroke") => Some("paint.setStroke"),
         Some(other) => return Err(bad(C, format!("apply is \"fill\" or \"stroke\", not `{other}`"))),
     };
-    let picked = picked(&lib, &str_list(p, "names"), C)?;
+    let focus = switch_or(p, "focus", true, C)?;
+    let picked = picked(&lib, &names_param(p, C)?, C)?;
     // Swatches the document already has (same name and paint) are reused, not added again.
     let d = &s.doc()?.doc;
     let (existing, fresh): (Vec<_>, Vec<_>) = picked.iter().partition(|(_, w)| d.swatch(&w.name).is_some_and(|x| x.paint == w.paint));
@@ -622,7 +642,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({"library": info.id, "added": added.iter().map(|(_, n)| n).collect::<Vec<_>>(), "existing": existing});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
-        s.execute(cmd, &json!({"swatch": name, "focus": bool_or(p, "focus", true)}))?;
+        s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");
         out["applied"] = json!(name);
@@ -631,12 +651,13 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
-    let replace = bool_or(p, "replace", false);
+    let replace = switch_or(p, "replace", false, "swatch.resetDefaults")?;
     let model = s.doc()?.doc.color_mode.model();
     let (defaults, groups) = default_swatches(model);
     // With replace, links to swatches that are no longer global ones are dropped (the art keeps
     // its colour); filled in by the edit.
     let mut live: Vec<String> = vec![];
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let added = s.edit("Default Swatches", |d, _| {
         let mut added = vec![];
         if replace {
@@ -644,7 +665,8 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
             (d.swatches, d.swatch_groups) = (defaults.into(), groups.into());
             added.extend(d.swatches_iter().filter(|w| !before.contains(&w.name)).map(|w| w.name.clone()));
             live.extend(d.swatches_iter().filter(|w| w.global).map(|w| w.name.clone()));
-            d.map_solid_paints(&mut |_, l, _| unlink_dead(&live, l));
+            map_swatch_links(d, &mut |_, l, _| unlink_dead(&live, l));
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad("swatch.resetDefaults", e))?;
             return Ok(added);
         }
         for (i, w) in defaults.into_iter().enumerate() {

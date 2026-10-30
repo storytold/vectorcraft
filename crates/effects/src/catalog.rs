@@ -1,4 +1,4 @@
-use super::*;
+use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
 
 /// Catalogue entry for one effect.
 #[derive(Clone, Debug, PartialEq)]
@@ -40,6 +40,20 @@ impl Lengths {
 /// `relative`?
 pub fn is_length(id: &str, key: &str, relative: bool) -> bool {
     catalog_index().get(id).is_some_and(|info| info.lengths.keys(relative).any(|k| k == key))
+}
+
+/// The range in points that distance parameter `key` of effect `id` is kept within, as its
+/// parameter documentation gives it (`{maxRadius: pt 4..127 (8), …}`); `None` when it gives none.
+pub fn length_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    let doc = catalog_index().get(id)?.params;
+    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        rest.strip_prefix(": pt ").or_else(|| rest.strip_prefix("?: pt "))
+    })?;
+    let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
+    let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
+    (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi)
 }
 
 /// The distance parameters of effect `id` (none for unknown effects).
@@ -264,7 +278,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.dropShadow",
             "Drop Shadow…",
             STYLIZE,
-            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": the shadow is the object's own colors with `darkness` percent of black added instead of `color`: in a CMYK document their cyan, magenta and yellow stay and their black K becomes K + darkness × (1 − K); in an RGB document each channel is multiplied by 1 − darkness)",
+            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
             json!({"mode": "multiply", "opacity": 75.0, "x": 7.0, "y": 7.0, "blur": 5.0, "shade": "color", "color": "#000000", "darkness": 100.0}),
         ),
         r(
@@ -777,6 +791,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
         }
     }
+    v.extend(crate::addons::color::catalog());
     v.push(g(TRAP, "Trap…", PATHFINDER, trap::EFFECT_PARAMS_DOC, trap::effect_defaults()));
     v.push(g(
         CROP_MARKS,

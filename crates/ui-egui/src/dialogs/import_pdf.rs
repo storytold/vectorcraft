@@ -297,7 +297,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn password_row(ui: &mut egui::Ui, d: &mut Dialog) {
     widgets::label_row(ui, tl!("Password"), LABEL_WIDTH, |ui| {
         let mut s = d.str("password");
-        let r = ui.add(egui::TextEdit::singleline(&mut s).password(true).desired_width(180.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut s).password(true).align(egui::Align2::LEFT_CENTER).desired_width(180.0));
         if r.changed() {
             d.fields.insert("password".into(), json!(s));
         }

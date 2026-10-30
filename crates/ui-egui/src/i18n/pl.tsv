@@ -74,6 +74,7 @@
 	Check Script	Sprawdź skrypt
 	Other Script…	Inny skrypt…
 	Document Setup…	Ustawienia dokumentu…
+	Switch Units	Przełącz jednostki
 	Document Color Mode	Tryb koloru dokumentu
 	CMYK Color	Kolor CMYK
 	RGB Color	Kolor RGB
@@ -155,6 +156,7 @@
 	Other Layers	Pozostałe warstwy
 	Unlock All	Odblokuj wszystko
 	Hide	Ukryj
+	Unselected Artwork	Niezaznaczoną kompozycję
 	Show All	Pokaż wszystko
 	Expand…	Rozszerz…
 	Expand Appearance	Rozszerz wygląd
@@ -188,6 +190,7 @@
 	Offset Path…	Odsuń ścieżkę…
 	Reverse Path Direction	Odwróć kierunek ścieżki
 	Simplify…	Uprość…
+	Smooth…	Wygładź…
 	Add Anchor Points	Dodaj punkty kontrolne
 	Remove Anchor Points	Usuń punkty kontrolne
 	Divide Objects Below	Podziel obiekty poniżej
@@ -245,6 +248,7 @@
 	Clipping Mask	Maska przycinająca
 	Edit Clipping Path	Edytuj ścieżkę przycinającą
 	Compound Path	Ścieżka złożona
+	Compound Shape	Kształt złożony
 	Artboards	Obszary kompozycji
 	Convert to Artboards	Konwertuj na obszary kompozycji
 	Rearrange All Artboards…	Przestaw wszystkie obszary kompozycji…
@@ -371,6 +375,11 @@
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
 	Stroke Color	Kolor obrysu
+	Fill Gradient	Gradient wypełnienia
+	Stroke Gradient	Gradient obrysu
+	Fill Pattern	Wzorek wypełnienia
+	Stroke Pattern	Wzorek obrysu
+	Patterns	Wzorki
 	Stroke Weight	Grubość obrysu
 	Graphic Style	Styl graficzny
 	Symbol Instance	Wystąpienie symbolu
@@ -575,6 +584,8 @@
 	Saved View 25	Zapisany widok 25
 	Window	Okno
 	New Window	Nowe okno
+	Next Document	Następny dokument
+	Previous Document	Poprzedni dokument
 	Cascade	Kaskadowo
 	Tile	Sąsiadująco
 	Float in Window	Pływające w oknie
@@ -764,6 +775,10 @@
 	Shaper	Kształtowanie
 	Expand Shaper Group	Rozszerz grupę kształtowania
 	Release Shaper Group	Uwolnij grupę kształtowania
+	Remove from Shaper Group	Usuń z grupy kształtowania
+@msg	source must be the id of a Shaper Group's original shape	source musi być identyfikatorem oryginalnego kształtu grupy kształtowania
+@msg	group must be the id of a Shaper Group	group musi być identyfikatorem grupy kształtowania
+@msg	the shape is not an editable original shape of that Shaper Group	kształt nie jest edytowalnym oryginalnym kształtem tej grupy kształtowania
 	Select Shaper Face	Zaznacz ścianę kształtowania
 	Constrain	Ogranicz
 	Free Transform	Swobodne przekształcanie
@@ -1572,6 +1587,12 @@ lighting	Light	Światło
 	Document Library	Biblioteka dokumentu
 	Library:	Biblioteka:
 	Tracing Presets	Ustawienia obrysu
+	Manage Presets	Zarządzaj ustawieniami
+	Save as New Preset…	Zapisz jako nowe ustawienie…
+	Rename…	Zmień nazwę…
+	Rename Preset	Zmień nazwę ustawienia
+	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
+	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
 	Method:	Metoda:
 	Mode:	Tryb:
 	Noise	Szum
@@ -1603,6 +1624,7 @@ lighting	Light	Światło
 	Locked	Zablokowane
 	Hidden	Ukryte
 	Filter Layers Panel Rows	Filtruj wiersze panelu Warstwy
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` oznacza zmienione ustawienia: zapisz ustawienie pod inną nazwą
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musi być tablicą tych nazw: {_1}
 	Graphics	Grafiki
 	Local Libraries	Biblioteki lokalne
@@ -1674,6 +1696,7 @@ lighting	Light	Światło
 	Show Original Path	Pokaż oryginalną ścieżkę
 	Open this dialog with these settings next time	Następnym razem otwórz to okno dialogowe z tymi ustawieniami
 	Auto-Simplify	Uprość automatycznie
+	Auto-Smooth	Wygładź automatycznie
 	Transparency Options	Opcje przezroczystości
 	Color Mixer (Shift-click the chip)	Mikser kolorów (kliknij próbkę z Shift)
 	Fill: click for swatches, Shift-click for the color mixer	Wypełnienie: kliknij, aby wybrać próbkę, z Shift — mikser kolorów
@@ -1723,13 +1746,13 @@ lighting	Light	Światło
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
 	Single-line Composer	Kompozytor jednowierszowy
+	Toggle Line Composer	Przełącz kompozytor wierszy
 	Space After Paragraph	Odstęp po akapicie
 	Space Before Paragraph	Odstęp przed akapitem
 	Top-to-Top Leading	Interlinia od góry do góry
 	Bottom-to-Bottom Leading	Interlinia od dołu do dołu
 	Burasagari	Burasagari
 	Force	Wymuś
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Rozszerzanie dotyczy kształtów złożonych (kliknij tryb kształtu z Alt) — w planach
 	Expand Compound Shape	Rozszerz kształt złożony
 	Make Compound Shape	Utwórz kształt złożony
 	Pathfinder Options…	Opcje odnajdywania ścieżek…
@@ -1884,6 +1907,8 @@ lighting	Light	Światło
 	Repeat Tab	Powtórz tabulator
 	Right-Justified Tab	Tabulator prawy
 	Top-Justified Tab	Tabulator górny
+	X:	X:
+	Y:	Y:
 	Select a text object to set its tab stops.	Zaznacz obiekt tekstowy, aby ustawić jego tabulatory.
 	Select text	Zaznacz tekst
 	Snap to Unit	Przyciągaj do jednostek
@@ -1987,6 +2012,10 @@ lighting	Light	Światło
 	Outer Corner Tile	Kafelek narożnika zewnętrznego
 	Side Tile	Kafelek boczny
 	Inner Corner Tile	Kafelek narożnika wewnętrznego
+	Auto-Centered	Auto-wyśrodkowany
+	Auto-Between	Auto-pomiędzy
+	Auto-Sliced	Auto-cięty
+	Auto-Overlap	Auto-nakładanie
 	Start Tile	Kafelek początkowy
 	End Tile	Kafelek końcowy
 	Fit	Dopasowanie
@@ -2259,6 +2288,8 @@ lighting	Light	Światło
 	Locate Selected Objects	Znajdź zaznaczone obiekty
 	Thumbnails:	Miniatury:
 	Anchor Points	Punkty kontrolne
+	"In" Control Points	Punkty sterujące „wejściowe”
+	"Out" Control Points	Punkty sterujące „wyjściowe”
 	Brush Affects:	Pędzel wpływa na:
 	Complexity:	Złożoność:
 	Detail:	Szczegółowość:
@@ -3163,6 +3194,7 @@ theme	Appearance	Wygląd
 	Make Envelope	Utwórz kopertę
 	Move Envelope Mesh Point	Przesuń punkt siatki koperty
 	Move Mesh Point	Przesuń punkt siatki
+	Move Mesh Points	Przesuń punkty siatki
 	Move Spine Point	Przesuń punkt grzbietu
 	Reshape Spine Segment	Zmień kształt segmentu grzbietu
 	Reset with Mesh	Resetuj z siatką
@@ -3597,6 +3629,9 @@ axis	Both	Obie
 	Increase Font Size by Five Steps	Zwiększ rozmiar czcionki o pięć kroków
 	Reset Tracking and Kerning	Resetuj światło i kerning
 	Reset Horizontal Scale	Resetuj skalę poziomą
+	Highlight Font Name	Wyróżnij nazwę czcionki
+	Highlight Kerning	Wyróżnij kerning
+	Highlight Tracking	Wyróżnij światło
 	Step Type	Krok tekstu
 	Get Text Range	Pobierz zakres tekstu
 	Punctuation	Interpunkcja
@@ -3607,6 +3642,7 @@ axis	Both	Obie
 	Set Text	Ustaw tekst
 	Insert Character	Wstaw znak
 	Replace	Zastąp
+	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
 	New Variable	Nowa zmienna
@@ -3797,6 +3833,7 @@ font-technology	Variable	Zmienne
 	Default Fill and Stroke (D)	Domyślne wypełnienie i obrys (D)
 	Fill (X), double-click for the Color Picker	Wypełnienie (X), kliknij dwukrotnie, aby otworzyć próbnik kolorów
 	Opacity:	Krycie:
+	Shape Mode	Tryb kształtu
 	Shape Modes:	Tryby kształtu:
 	Stroke (X), double-click for the Color Picker	Obrys (X), kliknij dwukrotnie, aby otworzyć próbnik kolorów
 	Stroke:	Obrys:
@@ -3845,7 +3882,9 @@ font-technology	Variable	Zmienne
 	Mojikumi	Mojikumi
 	N pt per	N pt na
 	New Character Style	Nowy styl znakowy
+	New Character Style…	Nowy styl znakowy…
 	New Paragraph Style	Nowy styl akapitowy
+	New Paragraph Style…	Nowy styl akapitowy…
 	Paragraph Style Options	Opcje stylu akapitowego
 	Redefine Character Style	Zdefiniuj ponownie styl znakowy
 	Redefine Paragraph Style	Zdefiniuj ponownie styl akapitowy
@@ -3920,6 +3959,13 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} obrys|{n} obrysy|{n} obrysów
 @msg	no library `{id}`	brak biblioteki `{id}`
 @msg	select some type first	najpierw zaznacz tekst
+@msg	the selection has no gradient fill	zaznaczenie nie ma gradientu wypełnienia
+@msg	the selection has no gradient stroke	zaznaczenie nie ma gradientu obrysu
+@msg	the selection has no pattern fill	zaznaczenie nie ma wzorka wypełnienia
+@msg	the selection has no pattern stroke	zaznaczenie nie ma wzorka obrysu
+@msg	no gradient swatch `{name}`	brak próbki gradientu `{name}`
+@msg	no pattern swatch `{name}`	brak próbki wzorka `{name}`
+@msg	the library item is damaged	element biblioteki jest uszkodzony
 @msg	{_1} has no {_2} style	{_1} nie ma stylu {_2}
 @msg	a layer couldn't be read	nie udało się odczytać warstwy
 @msg	it has more than one artboard	ma więcej niż jeden obszar kompozycji
@@ -4024,8 +4070,10 @@ imageTrace	Outline	Kontur
 @msg	`freeform.points` must be an array	`freeform.points` musi być tablicą
 @msg	`freeform.lines` must be an array	`freeform.lines` musi być tablicą
 @msg	`gradient` must be an object	`gradient` musi być obiektem
+@msg	`groupColors` must be an array	`groupColors` musi być tablicą
 @msg	`library` is a library id or name (see {list})	`library` to identyfikator lub nazwa biblioteki (patrz {list})
 @msg	`mode` applies to freeform gradients	`mode` dotyczy gradientów dowolnych
+@msg	`preserve` must be an object	`preserve` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)
@@ -4046,6 +4094,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
 @msg	`{key}` must be one of {_1}	`{key}` musi mieć jedną z wartości: {_1}
 @msg	`{key}` must be true or false	`{key}` musi mieć wartość true lub false
+@msg	`top` and `below` can't both be true	`top` i `below` nie mogą mieć jednocześnie wartości true
 @msg	`select` must be true or false	`select` musi mieć wartość true lub false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` muszą być liczbami całkowitymi
 @msg	`{key}` must be a number not below 0	`{key}` musi być liczbą nie mniejszą niż 0
@@ -4059,6 +4108,7 @@ imageTrace	Outline	Kontur
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` to kolor triadowy: tinty dotyczą kolorów globalnych i dodatkowych
 @msg	`{name}` is no recovery entry name	`{name}` nie jest nazwą wpisu odzyskiwania
 @msg	`{name}` isn't a colour swatch	`{name}` nie jest próbką koloru
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	kolor triadowy nie może zabarwić obrazu w skali szarości z przezroczystością: użyj koloru dodatkowego, czarnego lub białego
 @msg	`{path}` must be a bool or an object of bools	`{path}` musi być wartością logiczną lub obiektem wartości logicznych
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` nie jest kolorem (#rrggbb lub nazwa ustawienia)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` nie jest narzędziem upłynniania
@@ -4104,6 +4154,10 @@ imageTrace	Outline	Kontur
 @msg	a page tree node has no kids	węzeł drzewa stron nie ma elementów potomnych
 @msg	a page's placement is not finite	położenie strony nie jest skończone
 @msg	a preset named `{_1}` exists	ustawienie o nazwie `{_1}` już istnieje
+@msg	`name` is empty	`name` jest puste
+@msg	`newName` is empty	`newName` jest puste
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` to wbudowane ustawienie i nie można go zmienić: zapisz je pod inną nazwą
+@msg	`{name}` is a built-in preset and stays	`{name}` to wbudowane ustawienie i nie można go usunąć
 @msg	a swatch or color group named `{n}` exists	próbka lub grupa kolorów o nazwie `{n}` już istnieje
 @msg	a slice size must be a positive number of points	rozmiar plasterka musi być dodatnią liczbą punktów
 @msg	a spine keeps at least two points	grzbiet musi mieć co najmniej dwa punkty
@@ -4123,6 +4177,7 @@ imageTrace	Outline	Kontur
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
 @msg	the Color Picker is not open	Próbnik kolorów nie jest otwarty
 @msg	the Simplify slider is not open	Suwak Uprość nie jest otwarty
+@msg	the Smooth slider is not open	Suwak Wygładź nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
@@ -4195,6 +4250,7 @@ imageTrace	Outline	Kontur
 @msg	missing `id` (see plugin.list)	brak `id` (patrz plugin.list)
 @msg	missing `name`	brak `name`
 @msg	missing `tool`	brak `tool`
+@msg	missing id	brak id
 @msg	missing index	brak indeksu
 @msg	missing number `{key}`	brak liczby `{key}`
 @msg	missing integer `{key}`	brak liczby całkowitej `{key}`
@@ -4227,6 +4283,7 @@ imageTrace	Outline	Kontur
 @msg	no current layer	brak bieżącej warstwy
 @msg	no data	brak danych
 @msg	no dialog open	brak otwartego okna dialogowego
+@msg	the open dialog has no Reset	otwarte okno dialogowe nie ma przycisku Resetuj
 @msg	no document	brak dokumentu
 @msg	no document open	brak otwartego dokumentu
 @msg	no effect applied yet	nie zastosowano jeszcze żadnego efektu
@@ -4260,6 +4317,8 @@ imageTrace	Outline	Kontur
 @msg	no print service	brak usługi drukowania
 @msg	no revert command	brak polecenia przywracania
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	brak zapisanego ustawienia PDF o nazwie `{name}` (wbudowane ustawienia są tylko do odczytu: utwórz na ich podstawie nowe)
+@msg	no saved preset named `{name}`	brak zapisanego ustawienia o nazwie `{name}`
+@msg	no saved preset named `{name}` to rename	brak zapisanego ustawienia o nazwie `{name}` do zmiany nazwy
 @msg	no saved presets	brak zapisanych ustawień
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	brak zapisanego ustawienia drukowania o nazwie `{name}` ({DEFAULT_PRESET} jest chronione: utwórz na jego podstawie nowe)
 @msg	no saved profiles	brak zapisanych profili
@@ -4308,8 +4367,10 @@ imageTrace	Outline	Kontur
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
+@msg	finish editing the pattern first	najpierw zakończ edycję wzorka
 @msg	nothing encoded	nic nie zakodowano
 @msg	nothing selected	nic nie zaznaczono
+@msg	nothing selected is in a group	nic z zaznaczenia nie należy do grupy
 @msg	nothing to align	nie ma czego wyrównać
 @msg	nothing to distort	nie ma czego zniekształcić
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	nie ma czego eksportować: dokument nie ma widocznej kompozycji (lub włącz Użyj obszarów kompozycji)
@@ -4384,6 +4445,7 @@ imageTrace	Outline	Kontur
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
 @msg	select at least two objects	zaznacz co najmniej dwa obiekty
+@msg	exit isolation mode first	najpierw wyjdź z trybu izolacji
 @msg	select objects, not layers	zaznacz obiekty, nie warstwy
 @msg	select one path, or give its `id`	zaznacz jedną ścieżkę lub podaj jej `id`
 @msg	select paths to join	zaznacz ścieżki do połączenia
@@ -4436,10 +4498,14 @@ imageTrace	Outline	Kontur
 @msg	the layer or group is locked	warstwa lub grupa jest zablokowana
 @msg	the guide is on a hidden or locked layer	linia pomocnicza jest na ukrytej lub zablokowanej warstwie
 @msg	the target layer is locked or hidden	warstwa docelowa jest zablokowana lub ukryta
+@msg	the object is hidden or locked	obiekt jest ukryty lub zablokowany
+@msg	the object is outside the isolated group	obiekt znajduje się poza izolowaną grupą
+@msg	type objects can't be isolated	obiektów tekstowych nie można izolować
 @msg	the layer to flatten into is hidden	warstwa, na którą ma nastąpić spłaszczenie, jest ukryta
 @msg	the object already has an opacity mask	obiekt ma już maskę krycia
 @msg	the object has no geometry	obiekt nie ma geometrii
 @msg	the object has no opacity mask	obiekt nie ma maski krycia
+@msg	stop editing the opacity mask first	najpierw zakończ edycję maski krycia
 @msg	the object has no stroke	obiekt nie ma obrysu
 @msg	the object is beyond the plane's horizon	obiekt jest za horyzontem płaszczyzny
 @msg	the object isn't in perspective	obiekt nie jest w perspektywie
@@ -4485,6 +4551,7 @@ imageTrace	Outline	Kontur
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	nieznane ustawienie `{name}` (high, medium, low lub zapisane: patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	nieznane ustawienie `{name}` (patrz flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	nieznane ustawienie `{name}` (patrz webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	nieznane ustawienie `{name}`: ani wbudowane, ani zapisane (patrz imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	nieznana strona `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	nieznane narzędzie `{tool}`
 @msg	unknown tool `{t}`	nieznane narzędzie `{t}`
@@ -4636,6 +4703,9 @@ imageTrace	Outline	Kontur
 @msg	not a PSD file	to nie jest plik PSD
 @msg	the PSD file has an unknown colour mode ({m})	plik PSD ma nieznany tryb koloru ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	dane obrazu pliku PSD używają nieznanej kompresji ({m})
+@msg	the PCX file is cut short	plik PCX jest ucięty
+@msg	the PCX file's header is damaged	nagłówek pliku PCX jest uszkodzony
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	nie można odczytać plików PCX z {bits}-bitowymi pikselami w {planes} płaszczyznach
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
 @msg	zipped 32-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 32-bitowych danych obrazu PSD z predykcją
 @msg	{depth}-bit PSD files in this colour mode can't be read	nie można odczytać {depth}-bitowych plików PSD w tym trybie koloru
@@ -5465,4 +5535,151 @@ axis	Y Axis	Oś Y
 	Scale Presets	Ustawienia wstępne skali
 @msg	a {width}×{height} screenshot's byte count overflows	liczba bajtów zrzutu ekranu {width}×{height} przekracza limit
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} okna ({points} punktów × {scale} DPI) nie pozwala ustalić rozmiaru zrzutu ekranu
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Najpierw rozszerz wygląd (Obiekt › Rozszerz wygląd)
 	Live preview	Podgląd na żywo
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Tekst punktowy
+	Area Text	Tekst akapitowy
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
+	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów
+	Snap to Glyph Options	Opcje przyciągania do glifów
+	x-height	Wysokość x
+	Glyph Bounds	Granice glifów
+	Proximity Guides	Linie bliskości
+	Angular Guides	Linie kątowe
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Uśrednij i połącz…
+	Average & Join	Uśrednij i połącz
+anchor	Points:	Punkty:
+@msg	select two open path ends, or two open paths, to average and join	zaznacz dwa końce otwartych ścieżek lub dwie otwarte ścieżki do uśrednienia i połączenia
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Porządkowanie grafiki
+	Simplify Anchors (Keep Shape)…	Uprość punkty kontrolne (zachowaj kształt)…
+	Health Check	Kontrola stanu
+	Show Issue	Pokaż problem
+	Fix All Issues	Napraw wszystkie problemy
+	Fix Issues	Napraw problemy
+	Deep Ungroup…	Rozgrupuj wszystkie poziomy…
+	Rejoin Path Pieces…	Ponownie połącz fragmenty ścieżek…
+	Document Health Check	Kontrola stanu dokumentu
+	Check Selection	Sprawdź zaznaczenie
+	Check Document	Sprawdź dokument
+	No issues found.	Nie znaleziono problemów.
+	Changed since the last check.	Zmieniono od ostatniego sprawdzenia.
+	Fix Selected	Napraw zaznaczone
+	Fix All	Napraw wszystko
+	Issues fixed: {count}	Naprawione problemy: {count}
+	Open a document to check it for issues.	Otwórz dokument, aby sprawdzić go pod kątem problemów.
+	Empty Text	Pusty tekst
+	Unpainted Objects	Obiekty bez koloru
+	Zero-Opacity Objects	Obiekty o zerowym kryciu
+	Duplicate Objects	Zduplikowane obiekty
+	Off-Artboard Art	Grafika poza obszarami kompozycji
+	Duplicate Anchors	Zduplikowane punkty kontrolne
+	Tiny Handles	Bardzo krótkie uchwyty
+	Collinear Anchors	Współliniowe punkty kontrolne
+	Nearly Coincident Anchors	Prawie pokrywające się punkty kontrolne
+	Nearly Closed Paths	Prawie zamknięte ścieżki
+	Filled Open Paths	Wypełnione otwarte ścieżki
+	Needless Clipping Groups	Zbędne grupy przycinające
+	Needless Compound Paths	Zbędne ścieżki złożone
+	Needless Groups	Zbędne grupy
+	Empty Artboards	Puste obszary kompozycji
+	Protect Corners	Chroń narożniki
+	Gap	Odstęp
+	Include Clip Groups	Uwzględnij grupy przycinające
+@msg	`tolerance` must be from 1 to 100	`tolerance` musi mieścić się w zakresie od 1 do 100
+@msg	`gap` must be from 0 to 6 pt	`gap` musi mieścić się w zakresie od 0 do 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Uprość punkty kontrolne: ścieżki mają zbyt wiele punktów kontrolnych, aby uprościć je naraz
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Ponownie połącz fragmenty ścieżek: zbyt wiele ścieżek do połączenia naraz
+@msg	None of these issues are left: check again	Żaden z tych problemów już nie występuje: sprawdź ponownie
+@msg	`kinds` must be a list of issue kinds	`kinds` musi być listą rodzajów problemów
+@msg	missing `kind`	brak `kind`
+	Simplify Anchors (Keep Shape)	Uprość punkty kontrolne (zachowaj kształt)
+	Deep Ungroup	Rozgrupuj wszystkie poziomy
+	Rejoin Path Pieces	Ponownie połącz fragmenty ścieżek
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Efekty koloru
+	Color Effects Panel	Panel Efekty koloru
+	Exposure	Ekspozycja
+	Exposure…	Ekspozycja…
+	Desaturate	Usuń nasycenie
+	Adjustment	Korekta
+	Add as Effect	Dodaj jako efekt
+	Apply as Filter	Zastosuj jako filtr
+	Select objects to adjust their colors.	Zaznacz obiekty, aby skorygować ich kolory.
+	Brightness/Contrast	Jasność/kontrast
+	Hue/Saturation	Barwa/nasycenie
+	Temperature/Tint	Temperatura/odcień
+@msg	`{id}` is not a colour adjustment	`{id}` nie jest korektą koloru
+@msg	missing `effect`	brak `effect`
+@msg	`params` must be an object	`params` musi być obiektem
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Precyzyjne narzędzia ścieżek
+	Anchor Eraser Brush	Pędzel gumki punktów kontrolnych
+	Extend Path Tool	Narzędzie Przedłuż ścieżkę
+	Measure & Inspect Tool	Narzędzie Mierz i badaj
+	Anchor Inspector	Inspektor punktów kontrolnych
+	Add Points at Crossings	Dodaj punkty na skrzyżowaniach
+	Split at Crossings	Podziel na skrzyżowaniach
+	Extend Path	Przedłuż ścieżkę
+	Measure & Inspect	Mierz i badaj
+	Set Anchor	Ustaw punkt kontrolny
+	Make Smooth	Zmień na gładki
+	Make Corner	Zmień na narożny
+	Equalize Handles	Wyrównaj uchwyty
+	Remove Points, Keep Shape	Usuń punkty, zachowaj kształt
+	Add Points to Segments…	Dodaj punkty do segmentów…
+	Add Points to Segments	Dodaj punkty do segmentów
+	Open a document to edit its anchor points.	Otwórz dokument, aby edytować jego punkty kontrolne.
+	Anchors selected: {count}	Zaznaczone punkty kontrolne: {count}
+	Direct-select anchor points to edit them.	Zaznacz bezpośrednio punkty kontrolne, aby je edytować.
+	Length	Długość
+	In:	Wejście:
+	Out:	Wyjście:
+	Add Points	Dodaj punkty
+	Points per segment	Punkty na segment
+	Close Path:	Zamknij ścieżkę:
+	Keep Handles	Zachowaj uchwyty
+	Straight	Prosty
+	Stretch Curve	Rozciągnij krzywą
+@msg	direct-select the anchor points to remove	zaznacz bezpośrednio punkty kontrolne do usunięcia
+@msg	select segments, or paths, to add points to	zaznacz segmenty lub ścieżki, do których dodać punkty
+@msg	select open paths to close	zaznacz otwarte ścieżki do zamknięcia
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	za dużo ścieżek lub są zbyt splątane, by znaleźć ich skrzyżowania (najwyżej 10000 segmentów)
+@msg	the paths have too many anchors to edit at once	ścieżki mają za dużo punktów kontrolnych, by edytować je naraz
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Inteligentne pióro
+	Smart Pen Tool	Narzędzie Inteligentne pióro
+	Smart Pen Panel	Panel Inteligentne pióro
+	Next Segment	Następny segment
+	Curved	Zakrzywiony
+	Retract Handles	Schowaj uchwyty
+	Close or Join	Zamknij lub połącz
+	Open a document to draw with the Smart Pen.	Otwórz dokument, aby rysować inteligentnym piórem.
+	Straight or Curved Segment	Segment prosty lub zakrzywiony
+@msg	the path is locked or hidden	ścieżka jest zablokowana lub ukryta
+@msg	`id` is not a path	`id` nie jest ścieżką
+@msg	the path has no open subpath	ścieżka nie ma otwartej ścieżki podrzędnej
+@msg	the subpath is closed	ścieżka podrzędna jest zamknięta
+@msg	the subpath is closed or too short to close	ścieżka podrzędna jest zamknięta lub za krótka, by ją zamknąć
+@msg	the path is too short to remove a point from	ścieżka jest za krótka, by usunąć z niej punkt
+@msg	the segment can't be bent that far	segmentu nie da się tak bardzo wygiąć
+@msg	give `{a}` and `{b}`	podaj `{a}` i `{b}`
+@msg	`t` must be from 0 to 1	`t` musi mieć wartość od 0 do 1
+@msg	`segment` must be "straight" or "curved"	`segment` musi mieć wartość "straight" lub "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musi mieć wartość "free", "keepAngles" lub "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` musi mieć postać [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Zaznacz według rodzaju koloru
+	Objects with Spot Colors	Obiekty z kolorami dodatkowymi
+	Objects with Color Effects	Obiekty z efektami koloru
+	RGB Images	Obrazy RGB
+	CMYK Images	Obrazy CMYK
+	Grayscale Images	Obrazy w skali szarości
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` musi mieć wartość spotColors, colorEffects, rgbImages, cmykImages lub grayImages

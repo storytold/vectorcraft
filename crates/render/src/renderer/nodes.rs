@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    Affine, Arc, BezPath, ClipEntry, ClipPaintEntry, Compose, Composite, Document, FillRule, Frame, GeomEntry, ISOLATION_DIM, Ink, MAX_GUIDE_DASHES,
+    Node, NodeId, NodeKind, Rect, RenderContext, RenderOptions, Renderer, Shape, SymbolBoxes, TraceView, blend_mode, brush_fx, effects, fx, group,
+    holds_instance, holds_plugin_effect, images, kurbo, lru, mask_value, painted_items, plain_image, polygon_length, rects_overlap,
+    shape_masked_image, single_plain_fill, text_geom_snapped, white_shape_mask,
+};
 
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
@@ -135,6 +140,21 @@ impl Renderer {
 
     pub(crate) fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
         if self.skipped(f, a) {
+            return;
+        }
+        // An image masked by one white shape painted straight into the shape, as an image in a
+        // clip group is (envelopes with Preserve Shape Using Transparency cut distorted images into
+        // many such pieces).
+        if let Some(m) = a.extras().mask.as_deref()
+            && !f.opts.outline
+            && !self.is_shape(a)
+            && let NodeKind::Image(im) = &a.kind
+            && white_shape_mask(m)
+            && let Some(region) = self.clip_of(&m.art)
+            && shape_masked_image(a, im, &region.0)
+        {
+            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(a, f.ink), a.extras().pixelated);
+            self.stats.drawn += 1;
             return;
         }
         if let Some(m) = a.extras().mask.as_deref()
@@ -368,7 +388,7 @@ impl Renderer {
                         && let NodeKind::Image(im) = &image.kind
                         && plain_image(image, im, &region.0)
                     {
-                        self.draw_image_in(ctx, f, im, Some(&region));
+                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(image, f.ink), image.extras().pixelated);
                         self.stats.drawn += 1;
                         return;
                     }
@@ -422,7 +442,7 @@ impl Renderer {
                 self.draw_shape(ctx, f, n, &bp, *rule);
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
-            NodeKind::Image(im) => self.draw_image(ctx, f, im),
+            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.charge_symbol(&sym.art)

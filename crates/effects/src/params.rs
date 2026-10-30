@@ -1,5 +1,5 @@
 use super::catalog::{catalog_index, plugin_info};
-use super::*;
+use super::{CROP_MARKS, Effect, Map, Node, PIXEL_EFFECTS, RASTERIZE, Value, is_adjustment, is_pathfinder, is_three_d, json, util};
 
 /// Dialog defaults for `id` (`None` for unknown effects).
 pub fn default_params(id: &str) -> Option<Value> {

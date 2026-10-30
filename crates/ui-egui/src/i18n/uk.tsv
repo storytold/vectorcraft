@@ -175,6 +175,8 @@
 	Anchor Point	Опорна точка
 	Anchor Point Tool	Інструмент «Опорна точка»
 	Anchor Points	Опорні точки
+	"In" Control Points	«Вхідні» контрольні точки
+	"Out" Control Points	«Вихідні» контрольні точки
 	Anchor Points, Handle, and Bounding Box Display	Відображення опорних точок, маркерів та обмежувальної рамки
 	Anchor/Path Labels	Мітки опорних точок/контурів
 	Anchors:	Опорні точки:
@@ -557,6 +559,7 @@ font-technology	Variable	Варіативні
 	Complexity:	Складність:
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Складові кольори перетворюються за цим профілем; кольороподіл також виконується за ним, якщо це профіль CMYK.
 	Compound Path	Складений контур
+	Compound Shape	Складена фігура
 	Compress (RLE)	Стиснути (RLE)
 	Compress text and line art	Стискати текст та штриховий малюнок
 	Compression	Стиснення
@@ -983,7 +986,6 @@ font-technology	Variable	Варіативні
 	Exit Isolation Mode	Вийти з режиму ізоляції
 	Expand	Розібрати
 	Expand Appearance	Розібрати оформлення
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	«Розібрати» застосовується до складених фігур (Alt+клацання за режимом фігури) — у плані розвитку
 	Expand Brush Strokes	Розібрати мазки пензля
 	Expand Compound Shape	Розібрати складену фігуру
 	Expand Gradient Mesh	Розібрати градієнтну сітку
@@ -1143,6 +1145,9 @@ font-technology	Variable	Варіативні
 	Increase Font Size by Five Steps	Збільшити розмір шрифту на п’ять кроків
 	Reset Tracking and Kerning	Скинути трекінг і кернінг
 	Reset Horizontal Scale	Скинути масштаб по горизонталі
+	Highlight Font Name	Виділити назву шрифту
+	Highlight Kerning	Виділити кернінг
+	Highlight Tracking	Виділити трекінг
 	Spacing	Інтервал
 	Step Type	Підганяти текст кроками
 	Fit in View	Вписати у вигляд
@@ -1542,6 +1547,12 @@ file-filter	Templates	Шаблони
 	Image Trace	Трасування зображення
 	Image Tracing	Об’єкт трасування зображення
 	Tracing Presets	Набори трасування
+	Manage Presets	Керування наборами
+	Save as New Preset…	Зберегти як новий набір…
+	Rename…	Перейменувати…
+	Rename Preset	Перейменувати набір
+	Save Image Trace Preset	Зберегти набір трасування зображення
+	Delete Image Trace Preset	Видалити набір трасування зображення
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -1923,6 +1934,7 @@ file-filter	Templates	Шаблони
 	Move in Perspective	Перемістити у перспективі
 	Move Locked and Hidden Artwork with Artboard	Переміщати заблокований та прихований малюнок разом із монтажною областю
 	Move Mesh Point	Перемістити точку сітки
+	Move Mesh Points	Перемістити точки сітки
 	Move Plane	Перемістити площину
 	Move Plane to Match Object	Перемістити площину об’єктом
 	Move Rows	Перемістити рядки
@@ -1974,6 +1986,10 @@ file-filter	Templates	Шаблони
 	Outer Corner Tile	Фрагмент зовнішнього кута
 	Side Tile	Бічний фрагмент
 	Inner Corner Tile	Фрагмент внутрішнього кута
+	Auto-Centered	Авто: по центру
+	Auto-Between	Авто: між
+	Auto-Sliced	Авто: зріз
+	Auto-Overlap	Авто: перекриття
 	Start Tile	Початковий фрагмент
 	End Tile	Кінцевий фрагмент
 	Fit	Припасування
@@ -2022,6 +2038,7 @@ file-filter	Templates	Шаблони
 	Brush Art	Малюнок пензля
 	New Calligraphic Brush	Новий каліграфічний пензель
 	New Character Style	Новий стиль символу
+	New Character Style…	Новий стиль символу…
 	New Color Group	Нова колірна група
 	New Color Group…	Нова колірна група…
 	New Document Presets	Набір нових документів
@@ -2037,6 +2054,7 @@ file-filter	Templates	Шаблони
 	New Opacity Masks Are Clipping	Нові маски непрозорості відсікають
 	New Opacity Masks Are Inverted	Нові маски непрозорості інвертуються
 	New Paragraph Style	Новий стиль абзацу
+	New Paragraph Style…	Новий стиль абзацу…
 	New Pattern Brush from Selection	Новий візерунковий пензель з виділеного
 	New PDF Preset	Новий набір PDF
 	New Print Preset	Новий набір друку
@@ -2050,6 +2068,8 @@ file-filter	Templates	Шаблони
 	New View	Новий вигляд
 	New View…	Новий вигляд…
 	New Window	Нове вікно
+	Next Document	Наступний документ
+	Previous Document	Попередній документ
 	New Without Dialog	Створити без діалогового вікна
 	New Workspace	Нове робоче середовище
 	New Workspace…	Нове робоче середовище…
@@ -2644,6 +2664,7 @@ mark-style	Japanese	Японський
 	Repeat Tab	Повторити табуляцію
 	Repeat {name}	Повторити {name}
 	Replace	Замінити
+	Replace:	Замінити:
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
 	Replace Spine	Замінити вісь
@@ -2897,6 +2918,7 @@ mark-style	Japanese	Японський
 	Locked	Заблоковані
 	Hidden	Приховані
 	Filter Layers Panel Rows	Фільтрувати рядки панелі «Шари»
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` позначає змінені параметри: збережіть набір під іншим ім’ям
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands and tools	Пошук команд та інструментів
 	Search commands and tools…	Пошук команд та інструментів…
@@ -2980,6 +3002,7 @@ mark-style	Japanese	Японський
 	Shape Builder Regions	Області створення фігур
 	Shape Builder Tool	Інструмент «Створення фігур»
 	Shape Effects	Ефекти форми
+	Shape Mode	Режим фігури
 	Shape Modes:	Режими фігур:
 	Shape Properties:	Властивості фігури:
 	Shaper Tool	Інструмент «Формоутворення»
@@ -3038,6 +3061,7 @@ mark-style	Japanese	Японський
 	Show Original Path	Показати початковий контур
 	Open this dialog with these settings next time	Наступного разу відкривати це діалогове вікно з цими параметрами
 	Auto-Simplify	Автоматичне спрощення
+	Auto-Smooth	Автоматичне згладжування
 	Color Panel Options	Параметри панелі «Колір»
 	Show Package	Показати пакет
 	Show Panel	Показати панель
@@ -3074,6 +3098,7 @@ mark-style	Japanese	Японський
 	Simplify	Спростити
 	Simplify:	Спростити:
 	Simplify…	Спростити…
+	Smooth…	Згладити…
 	Simulate Colored Paper	Імітувати кольоровий папір
 	Simulate Paper	Імітувати папір
 	Double Column	Подвійний стовпець
@@ -3081,6 +3106,7 @@ mark-style	Japanese	Японський
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
 	Single-line Composer	Однорядковий компонувальник
+	Toggle Line Composer	Переключити компонувальник рядків
 	Sixth Space	Шоста шпація
 	Size	Розмір
 	Size Tile to Art	Підігнати плитку за малюнком
@@ -3195,6 +3221,11 @@ effect	Points	Точки
 	Stroke	Обведення
 	Stroke (X), double-click for the Color Picker	Обведення (X), двічі клацніть на палітрі кольорів
 	Stroke Color	Колір обведення
+	Fill Gradient	Градієнт заливки
+	Stroke Gradient	Градієнт обведення
+	Fill Pattern	Візерунок заливки
+	Stroke Pattern	Візерунок обведення
+	Patterns	Візерунки
 	Stroke Options	Параметри обведення
 	Character:	Символ:
 	Character options	Параметри символу
@@ -3251,6 +3282,7 @@ effect	Points	Точки
 	Swatch Options…	Параметри зразка…
 	Swatch Tiles	Плитки зразків
 	Swatches	Зразки
+	Switch Units	Переключити одиниці
 	Switch workspace	Переключити робоче середовище
 	Add Content	Додати вміст
 	Click to apply to the selected type	Клацніть, щоб застосувати до виділеного тексту
@@ -3485,6 +3517,7 @@ effect	Points	Точки
 	Unlock Guides	Розблокувати напрямні
 	Unnamed Objects	Об’єкти без імені
 	Unprintable margin:	Недруковане поле:
+	Unselected Artwork	Невиділений малюнок
 	Unshift	Скасувати зсув
 	Untitled	Без назви
 	Update Link	Оновити зв’язок
@@ -3818,6 +3851,13 @@ axis	Both	Обидві
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
+@msg	the selection has no gradient fill	виділення не має градієнтної заливки
+@msg	the selection has no gradient stroke	виділення не має градієнтного обведення
+@msg	the selection has no pattern fill	виділення не має візерункової заливки
+@msg	the selection has no pattern stroke	виділення не має візерункового обведення
+@msg	no gradient swatch `{name}`	немає градієнтного зразка `{name}`
+@msg	no pattern swatch `{name}`	немає зразка візерунка `{name}`
+@msg	the library item is damaged	елемент бібліотеки пошкоджено
 @msg	{_1} has no {_2} style	{_1} не має накреслення {_2}
 @msg	a layer couldn't be read	не вдалося прочитати шар
 @msg	it has more than one artboard	у ньому кілька монтажних областей
@@ -3923,8 +3963,10 @@ axis	Both	Обидві
 @msg	`freeform.points` must be an array	`freeform.points` має бути масивом
 @msg	`freeform.lines` must be an array	`freeform.lines` має бути масивом
 @msg	`gradient` must be an object	`gradient` має бути об’єктом
+@msg	`groupColors` must be an array	`groupColors` має бути масивом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
+@msg	`preserve` must be an object	`preserve` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
 @msg	`stops` must be an array	`stops` має бути масивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` має бути об’єктом параметрів SVG (див. document.formats)
@@ -3945,6 +3987,7 @@ axis	Both	Обидві
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
 @msg	`{key}` must be one of {_1}	`{key}` має бути одним з: {_1}
 @msg	`{key}` must be true or false	`{key}` має бути true або false
+@msg	`top` and `below` can't both be true	`top` і `below` не можуть одночасно бути true
 @msg	`select` must be true or false	`select` має бути true або false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` і `maxAnchors` мають бути цілими числами
 @msg	`{key}` must be a number not below 0	`{key}` має бути числом, не меншим за 0
@@ -3958,6 +4001,7 @@ axis	Both	Обидві
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` — складовий колір: відтінки застосовуються до глобальних та плашкових кольорів.
 @msg	`{name}` is no recovery entry name	`{name}` не є ім’ям запису відновлення
 @msg	`{name}` isn't a colour swatch	`{name}` не є колірним зразком
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	складовий колір не може розфарбувати зображення у відтінках сірого з прозорістю: використайте плашковий колір, чорний або білий
 @msg	`{path}` must be a bool or an object of bools	`{path}` має бути логічним значенням чи об’єктом логічних значень
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` не є кольором (#rrggbb або ім’ям набору)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` не є інструментом пластики
@@ -4003,6 +4047,10 @@ axis	Both	Обидві
 @msg	a page tree node has no kids	вузол дерева сторінок не має нащадків
 @msg	a page's placement is not finite	розміщення сторінки не звісно
 @msg	a preset named `{_1}` exists	набір з іменем `{_1}` вже існує
+@msg	`name` is empty	параметр `name` порожній
+@msg	`newName` is empty	параметр `newName` порожній
+@msg	`{name}` is a built-in preset and can't change: save it under another name	вбудований набір `{name}` не можна змінити: збережіть його під іншим ім’ям
+@msg	`{name}` is a built-in preset and stays	вбудований набір `{name}` не можна видалити
 @msg	a swatch or color group named `{n}` exists	зразок або колірна група з ім’ям `{n}` вже існує
 @msg	a slice size must be a positive number of points	розмір фрагмента має бути позитивним числом пунктів
 @msg	a spine keeps at least two points	вісь зберігає як мінімум дві точки
@@ -4022,6 +4070,7 @@ axis	Both	Обидві
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio має бути числом від 0,1 до 10
 @msg	the Color Picker is not open	палітра кольорів не відкрита
 @msg	the Simplify slider is not open	повзунок «Спростити» не відкрито
+@msg	the Smooth slider is not open	повзунок «Згладити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
 @msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
@@ -4094,6 +4143,7 @@ axis	Both	Обидві
 @msg	missing `id` (see plugin.list)	відсутня `id` (див. plugin.list)
 @msg	missing `name`	відсутня `name`
 @msg	missing `tool`	відсутня `tool`
+@msg	missing id	відсутній id
 @msg	missing index	відсутня index
 @msg	missing number `{key}`	відсутнє число `{key}`
 @msg	missing integer `{key}`	відсутнє ціле число `{key}`
@@ -4126,6 +4176,7 @@ axis	Both	Обидві
 @msg	no current layer	немає поточного шару
 @msg	no data	немає даних
 @msg	no dialog open	немає відкритого діалогового вікна
+@msg	the open dialog has no Reset	у відкритому діалоговому вікні немає кнопки «Скинути»
 @msg	no document	немає документа
 @msg	no document open	немає відкритого документа
 @msg	no effect applied yet	ефект ще не застосований
@@ -4159,6 +4210,8 @@ axis	Both	Обидві
 @msg	no print service	немає служби друку
 @msg	no revert command	немає команди повернення
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	немає збереженого набору PDF з ім’ям `{name}` (вбудовані набори доступні лише для читання: створіть новий на їх основі)
+@msg	no saved preset named `{name}`	немає збереженого набору з ім’ям `{name}`
+@msg	no saved preset named `{name}` to rename	немає збереженого набору з ім’ям `{name}` для перейменування
 @msg	no saved presets	немає збережених наборів
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	немає збереженого набору друку з іменем `{name}` ({DEFAULT_PRESET} захищений: створіть новий на його основі)
 @msg	no saved profiles	немає збережених профілів
@@ -4206,8 +4259,10 @@ axis	Both	Обидві
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
+@msg	finish editing the pattern first	спочатку завершіть редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	нема чого експортувати: у документі немає видимого малюнка (або увімкніть «Використовувати монтажні області»)
@@ -4281,6 +4336,7 @@ axis	Both	Обидві
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	select at least two objects	виділіть як мінімум два об’єкти
+@msg	exit isolation mode first	спочатку вийдіть з режиму ізоляції
 @msg	select objects, not layers	виділіть об’єкти, а не шари
 @msg	select one path, or give its `id`	виділіть один контур або вкажіть його `id`
 @msg	select paths to join	виділіть контури для з’єднання
@@ -4333,10 +4389,14 @@ axis	Both	Обидві
 @msg	the layer or group is locked	шар чи група заблоковані
 @msg	the guide is on a hidden or locked layer	напрямна розташована на прихованому або заблокованому шарі
 @msg	the target layer is locked or hidden	цільовий шар заблокований або прихований
+@msg	the object is hidden or locked	об’єкт прихований або заблокований
+@msg	the object is outside the isolated group	об’єкт поза ізольованою групою
+@msg	type objects can't be isolated	текстові об’єкти не можна ізолювати
 @msg	the layer to flatten into is hidden	шар для об’єднання прихований
 @msg	the object already has an opacity mask	об’єкт вже має маску непрозорості.
 @msg	the object has no geometry	об’єкт не має геометрії
 @msg	the object has no opacity mask	об’єкт не має маски непрозорості
+@msg	stop editing the opacity mask first	спочатку припиніть редагування маски непрозорості
 @msg	the object has no stroke	об’єкт не має обведення
 @msg	the object is beyond the plane's horizon	об’єкт знаходиться за горизонтом площини
 @msg	the object isn't in perspective	об’єкт не в перспективі
@@ -4382,6 +4442,7 @@ axis	Both	Обидві
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	невідомий набір `{name}` (high, medium, low або збережений: див. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	невідомий набір `{name}` (див. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	невідомий набір `{name}` (див. webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	невідомий набір `{name}`: не вбудований і не збережений (див. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	невідома сторона `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	невідомий інструмент `{tool}`
 @msg	unknown tool `{t}`	невідомий інструмент `{t}`
@@ -4524,6 +4585,10 @@ axis	Both	Обидві
 	Shaper	Формоутворення
 	Expand Shaper Group	Розібрати групу формоутворення
 	Release Shaper Group	Звільнити групу формоутворення
+	Remove from Shaper Group	Вилучити з групи формоутворення
+@msg	source must be the id of a Shaper Group's original shape	source має бути ідентифікатором вихідної фігури групи формоутворення
+@msg	group must be the id of a Shaper Group	group має бути ідентифікатором групи формоутворення
+@msg	the shape is not an editable original shape of that Shaper Group	фігура не є редагованою вихідною фігурою цієї групи формоутворення
 	Select Shaper Face	Виділити область формоутворення
 	Constrain	Обмежити
 	Free Transform	Вільне трансформування
@@ -4556,6 +4621,9 @@ axis	Both	Обидві
 @msg	not a PSD file	це не документ PSD
 @msg	the PSD file has an unknown colour mode ({m})	файл PSD має невідомий колірний режим ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	дані зображення файлу PSD використовують невідоме стиснення ({m})
+@msg	the PCX file is cut short	файл PCX обрізаний
+@msg	the PCX file's header is damaged	заголовок файлу PCX пошкоджений
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файли PCX з {bits}-бітними пікселями в {planes} площинах не читаються
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
@@ -5209,4 +5277,151 @@ axis	Y Axis	Вісь Y
 	Scale Presets	Набори масштабу
 @msg	a {width}×{height} screenshot's byte count overflows	кількість байтів знімка {width}×{height} переповнюється
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} вікна ({points} пунктів × {scale} DPI) не дозволяє задати розмір знімка
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Спочатку розберіть оформлення (Об’єкт › Розібрати оформлення)
 	Live preview	Перегляд у реальному часі
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Точковий текст
+	Area Text	Текст в області
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
+	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа
+	Snap to Glyph Options	Параметри прив’язки до гліфа
+	x-height	Висота x
+	Glyph Bounds	Межі гліфа
+	Proximity Guides	Напрямні близькості
+	Angular Guides	Кутові напрямні
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Усереднити і з’єднати…
+	Average & Join	Усереднити і з’єднати
+anchor	Points:	Точки:
+@msg	select two open path ends, or two open paths, to average and join	виділіть два кінці відкритих контурів або два відкриті контури для усереднення і з’єднання
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Очищення графіки
+	Simplify Anchors (Keep Shape)…	Спростити опорні точки (зберегти форму)…
+	Health Check	Перевірка стану
+	Show Issue	Показати проблему
+	Fix All Issues	Виправити всі проблеми
+	Fix Issues	Виправити проблеми
+	Deep Ungroup…	Розгрупувати всі рівні…
+	Rejoin Path Pieces…	З’єднати частини контурів…
+	Document Health Check	Перевірка стану документа
+	Check Selection	Перевірити виділення
+	Check Document	Перевірити документ
+	No issues found.	Проблем не знайдено.
+	Changed since the last check.	Змінено після останньої перевірки.
+	Fix Selected	Виправити вибрані
+	Fix All	Виправити все
+	Issues fixed: {count}	Виправлено проблем: {count}
+	Open a document to check it for issues.	Відкрийте документ, щоб перевірити його на проблеми.
+	Empty Text	Порожній текст
+	Unpainted Objects	Об’єкти без заливки й обведення
+	Zero-Opacity Objects	Об’єкти з нульовою непрозорістю
+	Duplicate Objects	Дублікати об’єктів
+	Off-Artboard Art	Графіка поза монтажними областями
+	Duplicate Anchors	Дублікати опорних точок
+	Tiny Handles	Крихітні маркери
+	Collinear Anchors	Колінеарні опорні точки
+	Nearly Coincident Anchors	Майже збіжні опорні точки
+	Nearly Closed Paths	Майже замкнені контури
+	Filled Open Paths	Відкриті контури із заливкою
+	Needless Clipping Groups	Зайві групи відсікання
+	Needless Compound Paths	Зайві складені контури
+	Needless Groups	Зайві групи
+	Empty Artboards	Порожні монтажні області
+	Protect Corners	Захищати кути
+	Gap	Проміжок
+	Include Clip Groups	Включити групи відсікання
+@msg	`tolerance` must be from 1 to 100	`tolerance` має бути від 1 до 100
+@msg	`gap` must be from 0 to 6 pt	`gap` має бути від 0 до 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Спростити опорні точки: контури мають забагато опорних точок, щоб спростити їх за один раз
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	З’єднати частини контурів: забагато контурів, щоб з’єднати їх за один раз
+@msg	None of these issues are left: check again	Жодної з цих проблем більше немає: перевірте знову
+@msg	`kinds` must be a list of issue kinds	`kinds` має бути списком видів проблем
+@msg	missing `kind`	не вказано `kind`
+	Simplify Anchors (Keep Shape)	Спростити опорні точки (зберегти форму)
+	Deep Ungroup	Розгрупувати всі рівні
+	Rejoin Path Pieces	З’єднати частини контурів
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Колірні ефекти
+	Color Effects Panel	Панель «Колірні ефекти»
+	Exposure	Експозиція
+	Exposure…	Експозиція…
+	Desaturate	Знебарвити
+	Adjustment	Корекція
+	Add as Effect	Додати як ефект
+	Apply as Filter	Застосувати як фільтр
+	Select objects to adjust their colors.	Виділіть об’єкти, щоб налаштувати їхні кольори.
+	Brightness/Contrast	Яскравість/контраст
+	Hue/Saturation	Відтінок/насиченість
+	Temperature/Tint	Температура/відтінок
+@msg	`{id}` is not a colour adjustment	`{id}` не є корекцією кольору
+@msg	missing `effect`	відсутня `effect`
+@msg	`params` must be an object	`params` має бути об’єктом
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Інструменти точного редагування контурів
+	Anchor Eraser Brush	Пензель-гумка опорних точок
+	Extend Path Tool	Інструмент «Подовження контуру»
+	Measure & Inspect Tool	Інструмент «Вимірювання й аналіз»
+	Anchor Inspector	Інспектор опорних точок
+	Add Points at Crossings	Додати точки на перетинах
+	Split at Crossings	Розрізати на перетинах
+	Extend Path	Подовжити контур
+	Measure & Inspect	Вимірювання й аналіз
+	Set Anchor	Задати опорну точку
+	Make Smooth	Зробити гладкою
+	Make Corner	Зробити кутовою
+	Equalize Handles	Вирівняти довжину маркерів
+	Remove Points, Keep Shape	Забрати точки, зберегти форму
+	Add Points to Segments…	Додати точки до сегментів…
+	Add Points to Segments	Додати точки до сегментів
+	Open a document to edit its anchor points.	Відкрийте документ, щоб редагувати його опорні точки.
+	Anchors selected: {count}	Вибрано опорних точок: {count}
+	Direct-select anchor points to edit them.	Виділіть опорні точки напряму, щоб редагувати їх.
+	Length	Довжина
+	In:	Вхід:
+	Out:	Вихід:
+	Add Points	Додати точки
+	Points per segment	Точок на сегмент
+	Close Path:	Замкнути контур:
+	Keep Handles	Зберегти маркери
+	Straight	Прямий
+	Stretch Curve	Розтягнути криву
+@msg	direct-select the anchor points to remove	виділіть напряму опорні точки, які треба забрати
+@msg	select segments, or paths, to add points to	виділіть сегменти або контури, до яких треба додати точки
+@msg	select open paths to close	виділіть незамкнені контури, щоб замкнути їх
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	контурів забагато або вони надто заплутані, щоб знайти їхні перетини (не більше 10000 сегментів)
+@msg	the paths have too many anchors to edit at once	у контурів забагато опорних точок, щоб редагувати їх за раз
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Розумне перо
+	Smart Pen Tool	Інструмент «Розумне перо»
+	Smart Pen Panel	Панель «Розумне перо»
+	Next Segment	Наступний сегмент
+	Curved	Кривий
+	Retract Handles	Прибрати маркери
+	Close or Join	Замкнути або з’єднати
+	Open a document to draw with the Smart Pen.	Відкрийте документ, щоб малювати розумним пером.
+	Straight or Curved Segment	Прямий або кривий сегмент
+@msg	the path is locked or hidden	контур заблоковано або приховано
+@msg	`id` is not a path	`id` не є контуром
+@msg	the path has no open subpath	контур не має незамкненого вкладеного контуру
+@msg	the subpath is closed	вкладений контур замкнено
+@msg	the subpath is closed or too short to close	вкладений контур замкнено або він закороткий, щоб його замкнути
+@msg	the path is too short to remove a point from	контур закороткий, щоб видалити з нього точку
+@msg	the segment can't be bent that far	сегмент не можна вигнути настільки
+@msg	give `{a}` and `{b}`	укажіть `{a}` і `{b}`
+@msg	`t` must be from 0 to 1	`t` має бути від 0 до 1
+@msg	`segment` must be "straight" or "curved"	`segment` має бути "straight" або "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` має бути "free", "keepAngles" або "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` має бути [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Виділити за типом кольору
+	Objects with Spot Colors	Об’єкти з плашковими кольорами
+	Objects with Color Effects	Об’єкти з колірними ефектами
+	RGB Images	Зображення RGB
+	CMYK Images	Зображення CMYK
+	Grayscale Images	Зображення у відтінках сірого
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` має бути spotColors, colorEffects, rgbImages, cmykImages або grayImages

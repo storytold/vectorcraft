@@ -12,6 +12,7 @@ mod blend;
 mod charstroke;
 mod cmykblend;
 mod cmykimages;
+mod colorize;
 mod compression;
 mod dashalign;
 mod editing;
@@ -28,6 +29,7 @@ mod import_overprint;
 mod layers;
 pub(super) mod live_text;
 mod marks;
+mod mesh_export;
 mod output;
 mod pdf13;
 mod pdfx;
@@ -615,6 +617,31 @@ fn image_roundtrip() {
     let decoded = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
     assert_eq!(decoded.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
+}
+
+/// Images are written with /Interpolate true, so viewers may smooth them; a pixelated image (an
+/// envelope's with Anti-Alias off) is written without it.
+#[test]
+fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
+    for pixelated in [false, true] {
+        let mut d = doc(200.0, 200.0);
+        d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+        let im = ImageObject {
+            key: "img1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(0), NodeKind::Image(Box::new(im)));
+        n.extras_mut().pixelated = pixelated;
+        add(&mut d, n);
+        let pdf = uncompressed(&d);
+        assert_eq!(pdf.matches("/Width 4").count(), 1, "the image is written");
+        assert_eq!(pdf.matches("/Interpolate").count(), usize::from(!pixelated), "pixelated: {pixelated}");
+    }
 }
 
 /// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its

@@ -101,7 +101,7 @@ fn selected_only_exports_the_selection_in_its_layers() {
     // Other formats take it too.
     s.execute("select.set", &json!({"ids": [line]})).unwrap();
     let svg = s.execute("document.serialize", &json!({"format": "svg", "selectedOnly": true})).unwrap()["text"].as_str().unwrap().to_string();
-    assert_eq!((svg.matches("<path").count(), svg.matches("<rect").count()), (1, 0), "{svg}");
+    assert_eq!((vectorcraft_testkit::svg_shapes(&svg), svg.matches("<line ").count()), (1, 1), "{svg}");
     assert!(svg.contains("id=\"Top\"") && !svg.contains("Layer"), "{svg}");
 }
 

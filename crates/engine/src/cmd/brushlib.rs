@@ -22,7 +22,7 @@ use super::clipboard::resources::SwatchChoices;
 use super::patterncmds::add_pattern;
 use super::swatch::str_list;
 use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 /// The extension of saved brush libraries: native documents.
 pub const BRUSHES_EXT: &str = vectorcraft_format::EXTENSION;

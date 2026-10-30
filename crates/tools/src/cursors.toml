@@ -163,7 +163,7 @@ id = "PenAdd"
 group = "Pen"
 shown_when = [
     "The Pen over a segment of a selected path with Auto Add/Delete on (Shift off), or over a selected blend's spine.",
-    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool with Alt).",
+    "The Add Anchor Point tool everywhere (and the Delete Anchor Point tool and the Scissors tool with Alt).",
     "The Curvature tool over a segment.",
     "Stands in for MeshAdd and PuppetPin until they're drawn.",
 ]
@@ -622,14 +622,14 @@ hotspot = "The blade's point."
 [[cursor]]
 id = "Scissors"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool over a path segment: a click splits the path there."]
+shown_when = ["The Scissors tool over a path segment, Alt up: a click splits the path there."]
 hotspot = "Where the blades cross, exact enough to cut where aimed."
 look = "Scissors. ScissorsNotAllowed is this drawing with a badge."
 
 [[cursor]]
 id = "ScissorsNotAllowed"
 group = "Drawing and editing tools"
-shown_when = ["The Scissors tool away from every path segment: a click does nothing."]
+shown_when = ["The Scissors tool away from every path segment, Alt up: a click does nothing."]
 hotspot = "The same point as Scissors."
 look = "The Scissors with a small not-allowed badge, so the cursor keeps its size and shape and only the badge says a click won't cut."
 
@@ -667,10 +667,34 @@ shown_when = ["The Measure tool: drag to measure distance and angle."]
 hotspot = "Exact, because precision matters here (an open centre suits it)."
 
 [[cursor]]
+id = "SmartPen"
+group = "Drawing and editing tools"
+shown_when = ["The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path. Over a path, or while a path is drawn, the tool shows the Pen's and Direct Selection's cursors for what a click there does."]
+hotspot = "The nib's tip."
+
+[[cursor]]
 id = "PrintTiling"
 group = "Drawing and editing tools"
 shown_when = ["The Print Tiling tool: a drag moves the printable page area over the artboard (it snaps to the artboard's edges)."]
 hotspot = "The page corner being placed."
+
+[[cursor]]
+id = "AnchorEraser"
+group = "Drawing and editing tools"
+shown_when = ["The Anchor Eraser Brush (Path Precision Tools add-on): a drag over selected paths removes the anchors under the brush that the outline can do without. The app draws the brush's size as a circle around the cursor."]
+hotspot = "The brush centre."
+
+[[cursor]]
+id = "ExtendPath"
+group = "Drawing and editing tools"
+shown_when = ["The Extend Path tool (Path Precision Tools add-on): a drag from an end of an open path lengthens or shortens the path there."]
+hotspot = "Exact: the end being dragged follows it."
+
+[[cursor]]
+id = "MeasureInspect"
+group = "Drawing and editing tools"
+shown_when = ["The Measure & Inspect tool (Path Precision Tools add-on): drag to measure distance and angle; hover a path to read its lengths, area, curvature and angles."]
+hotspot = "Exact, because precision matters here (an open centre suits it)."
 
 # ── Symbolism tools ───────────────────────────────────────────────────────────────────────────────
 # The brush size is drawn by the app as a circle around the cursor.

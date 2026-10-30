@@ -1,6 +1,6 @@
 use super::build::Frame;
 use super::slots::OUTLINE_REACH;
-use super::*;
+use super::{Arc, Document, Node, NodeKind, Rect};
 
 /// `doc` with its layers that don't print hidden, when it has any.
 fn as_printed(doc: &Document) -> Option<Document> {

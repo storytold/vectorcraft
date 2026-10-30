@@ -1,5 +1,8 @@
 use super::params::{is_geometry, merged_params};
-use super::*;
+use super::{
+    Appearance, AppearanceItem, BezPath, Effect, FillRule, Node, NodeKind, PathData, Rect, StrokeLayer, Value, WarpStyle, distort, stroke, stylize,
+    util, warp,
+};
 
 /// Context the geometry effects may need from the object's appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -111,16 +114,67 @@ pub fn apply_geometry_with(effects: &[Effect], path: &PathData, bounds: Rect, ct
     apply_geometry_within(effects, path, bounds, ctx, Budget::EFFECTS)
 }
 
+/// Does effect `e` safely commute with pure translation when it is terminal?
+/// Only positive offsets with round joins commute exactly with pure translations for non-zero fills (#4145).
+fn is_terminal_offset_eligible(e: &Effect) -> bool {
+    if e.id != "path.offsetPath" {
+        return false;
+    }
+    let p = merged_params(&e.id, &e.params);
+    util::join(&p, "joins") == vectorcraft_pathops::Join::Round && util::num(&p, "offset", 10.0) >= 0.0
+}
+
+/// Optimize a list of visible geometry effects: move pure-translation Transform effects with
+/// copies after a terminal Offset Path effect when the effective style is safe (NonZero fill and
+/// no stroke), so that the offset path is evaluated once on the base path rather than on dozens
+/// of overlapping copies, avoiding combinatorial explosions in the planar sweep (#4145).
+pub(crate) fn optimize_geometry_effects<'a>(effects: &[&'a Effect], style_safe: bool) -> Vec<&'a Effect> {
+    let mut out: Vec<&'a Effect> = effects.to_vec();
+    if !style_safe || out.len() < 2 {
+        return out;
+    }
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for i in 0..out.len().saturating_sub(1) {
+            let e1 = out[i];
+            if e1.id == "distort.transform" {
+                let p1 = merged_params(&e1.id, &e1.params);
+                if let Some((_, copies)) = crate::distort::transform_move(&p1)
+                    && copies > 0
+                    && is_terminal_offset_eligible(out[i + 1])
+                    && out.get(i + 2..).is_some_and(|tail| tail.iter().all(|e| e.id == "distort.transform"))
+                {
+                    out.swap(i, i + 1);
+                    changed = true;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// [`apply_geometry_with`] whose effects keep to `budget`, raised to what `path` costs where that
 /// is more.
 pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext, budget: Budget) -> PathData {
     // `budget` raised to what `path` costs, measured once, and only for a path that has geometry
     // effects.
+    let has_stroke = match (ctx.item, ctx.appearance) {
+        (Some(idx), Some(app)) => match app.items.get(idx) {
+            Some(AppearanceItem::Stroke(s)) => !s.paint.is_none() && s.width > 0.0,
+            Some(AppearanceItem::Fill(_)) => false,
+            None => ctx.stroke.is_some_and(|s| !s.paint.is_none() && s.width > 0.0),
+        },
+        _ => ctx.stroke.is_some_and(|s| !s.paint.is_none() && s.width > 0.0),
+    };
+    let style_safe = ctx.rule == FillRule::NonZero && !has_stroke;
+    let visible_fx: Vec<&Effect> = effects.iter().filter(|e| e.visible && is_geometry(&e.id)).collect();
+    let fx = optimize_geometry_effects(&visible_fx, style_safe);
     let mut limit = None;
     let mut cur = path.clone();
     let mut b = bounds;
     let mut first = true;
-    for e in effects.iter().filter(|e| e.visible && is_geometry(&e.id)) {
+    for e in fx {
         if !first {
             b = cur.bounds().unwrap_or(b);
         }
@@ -167,7 +221,7 @@ fn builds_within(id: &str) -> bool {
 
 /// [`apply_one`] whose result may pass `max` when the effect doesn't build within it.
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
-    use util::*;
+    use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
         let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
         return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints).unwrap_or_else(|| path.clone());

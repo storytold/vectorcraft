@@ -2,6 +2,64 @@ use super::*;
 use crate::testutil::*;
 use vectorcraft_doc::Selection;
 
+/// While an opacity mask is edited, a press on a selected Shaper original shape moves it, over the
+/// art the group shows and over a part of the shape the group does not show. A press on an original
+/// shape that is not selected selects the Shaper Group or starts a marquee, as before.
+#[test]
+fn a_press_on_a_selected_shaper_source_moves_it_while_a_mask_is_edited() {
+    let (mut d, g, sources, _) = doc_with_shaper_group();
+    let rect = d.layers[0].children().unwrap()[0].id;
+    let layer = d.layers[0].id;
+    d.mask_edit = Some(vectorcraft_doc::MaskEdit { object: rect, layer });
+    let ids: Vec<NodeId> = d.node(sources).unwrap().children().unwrap().iter().map(|n| n.id).collect();
+    let (mut s, p) = (Selection::default(), paint());
+    s.set([ids[1]]);
+    let c = ToolContext { isolation: Some(layer), ..cx(&d, &s, &p) };
+    for x in [75.0, 125.0] {
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&c, Point::new(x, 350.0), Mods::default()), Cursor::Move, "at {x}");
+        let down = t.pointer(&c, &ev(PointerKind::Down, x, 350.0));
+        assert!(!down.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "at {x}: {down:?}");
+        let drag = t.pointer(&c, &ev(PointerKind::Drag, x + 20.0, 350.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "at {x}: {drag:?}");
+    }
+    s.set([ids[0]]);
+    let c = ToolContext { isolation: Some(layer), ..cx(&d, &s, &p) };
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 350.0));
+    assert!(down.is_empty(), "{down:?}");
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 75.0, 350.0));
+    assert!(down.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([g.0]))), "{down:?}");
+}
+
+/// While an opacity mask is edited, a selected Shaper original shape that is not the first selected
+/// object still moves on a press, and an object in front of the Shaper Group keeps the press.
+#[test]
+fn a_selected_shaper_source_moves_after_other_objects_and_behind_front_art() {
+    use vectorcraft_doc::{Appearance, Node};
+    let (mut d, _, sources, _) = doc_with_shaper_group();
+    let rect = d.layers[0].children().unwrap()[0].id;
+    let layer = d.layers[0].id;
+    d.mask_edit = Some(vectorcraft_doc::MaskEdit { object: rect, layer });
+    let ids: Vec<NodeId> = d.node(sources).unwrap().children().unwrap().iter().map(|n| n.id).collect();
+    let (mut s, p) = (Selection::default(), paint());
+    s.set([rect, ids[1]]);
+    let c = ToolContext { isolation: Some(layer), ..cx(&d, &s, &p) };
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(125.0, 350.0), Mods::default()), Cursor::Move);
+    let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 350.0));
+    assert!(!down.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "{down:?}");
+    let drag = t.pointer(&c, &ev(PointerKind::Drag, 145.0, 350.0));
+    assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{drag:?}");
+    let front = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(110.0, 340.0, 140.0, 360.0));
+    d.insert(Some(layer), 2, Node::path(front, square, Appearance::default_art())).unwrap();
+    s.set([ids[1]]);
+    let c = ToolContext { isolation: Some(layer), ..cx(&d, &s, &p) };
+    assert_ne!(SelectionTool::default().cursor(&c, Point::new(125.0, 350.0), Mods::default()), Cursor::Move);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 350.0));
+    assert!(down.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([front.0]))), "{down:?}");
+}
+
 fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
     PointerEvent::new(kind, x, y)
 }
@@ -19,6 +77,53 @@ fn a_press_on_a_masks_edge_selects_its_clip_group() {
     // Just outside the mask, beyond the tolerance, the clipped-away art isn't there.
     let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 520.0, 450.0));
     assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.set")), "{a:?}");
+}
+
+/// The art of a selected clipped object (picked in the Layers panel), pressed where its mask
+/// hides it, is grabbed: a drag moves the selection (the art, not its clip group) and a click
+/// keeps it selected. With nothing of it selected, or with Shift, a press there starts a marquee.
+#[test]
+fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
+    let (d, _, _, art) = doc_with_masked_square();
+    let p = paint();
+    let mut picked = Selection::default();
+    picked.add(art);
+    let shift = |kind, x, y| {
+        let mut e = ev(kind, x, y);
+        e.mods.shift = true;
+        e
+    };
+    let changes_selection = |a: &[Action]| a.iter().any(|a| matches!(a, Action::Exec(c, _) if c.starts_with("select.")));
+    // (370, 450): on the art, outside the mask (400..500).
+    let mut t = SelectionTool::default();
+    let c = cx(&d, &picked, &p);
+    assert!(t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 390.0, 470.0));
+    assert!(a.iter().any(|a| matches!(a, Action::Begin(n) if n == "Move")), "{a:?}");
+    assert!(a.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{a:?}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 390.0, 470.0)), vec![Action::Commit]);
+    // A click there keeps the selection.
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(!changes_selection(&t.pointer(&c, &ev(PointerKind::Up, 370.0, 450.0))));
+    // Nothing selected: a marquee, and a click deselects.
+    let none = Selection::default();
+    let c = cx(&d, &none, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(!t.pointer(&c, &ev(PointerKind::Drag, 390.0, 470.0)).iter().any(|a| matches!(a, Action::Begin(_))));
+    // Shift: a marquee that adds to the selection.
+    let c = cx(&d, &picked, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &shift(PointerKind::Down, 370.0, 450.0));
+    assert!(!t.pointer(&c, &shift(PointerKind::Drag, 390.0, 470.0)).iter().any(|a| matches!(a, Action::Begin(_))));
+    // An object a click hits there wins: a press on a square over that point selects it.
+    let mut d = d;
+    let (front, l) = (d.alloc_id(), d.layers[0].id);
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(350.0, 430.0, 390.0, 470.0));
+    d.insert(Some(l), 2, vectorcraft_doc::Node::path(front, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let a = SelectionTool::default().pointer(&cx(&d, &picked, &p), &ev(PointerKind::Down, 370.0, 450.0));
+    assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([front.0]))), "{a:?}");
 }
 
 /// #955: grabbed by an anchor and dropped near another object's anchor, the anchor lands
@@ -102,6 +207,44 @@ fn a_corner_drag_counts_as_transforming_once_it_moves() {
     assert!(t.transforming());
 }
 
+/// Escape during a corner widget drag cancels it, and the release after it commits nothing.
+/// After an Alt-press on a widget, Escape drops the press, so its release cycles no corner kind.
+#[test]
+fn escape_cancels_a_corner_widget_drag() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = LiveShape::Rectangle {
+        w: 100.0,
+        h: 100.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+    };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let id = d.alloc_id();
+    let mut n = Node::path(id, live.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(live));
+    }
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 190.0, 191.0)).is_empty());
+    let a = t.pointer(&cx, &ev(PointerKind::Drag, 175.0, 176.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Corner Radius".into())), "{a:?}");
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "Escape cancels the drag");
+    assert!(!t.busy() && !t.transforming());
+    assert!(t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 171.0)).is_empty(), "the drag is over");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 171.0)).is_empty(), "the release commits nothing");
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &ev(PointerKind::Down, 190.0, 191.0).with_mods(alt));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 190.0, 191.0).with_mods(alt)).is_empty(), "the Alt-click cycles no corner kind");
+}
+
 /// A type-on-path bracket drag is a transform, so the sharp selection box hides while the span moves.
 #[test]
 fn a_bracket_drag_counts_as_transforming_once_it_moves() {
@@ -116,6 +259,25 @@ fn a_bracket_drag_counts_as_transforming_once_it_moves() {
     assert!(!t.transforming(), "a press is still a click");
     t.pointer(&cx, &ev(PointerKind::Drag, 320.0, 290.0));
     assert!(t.transforming());
+}
+
+/// Escape during a drag of the brackets of type on a path cancels it, and the release after it
+/// commits nothing.
+#[test]
+fn escape_cancels_a_bracket_drag() {
+    let (d, id) = crate::testutil::doc_with_path_type();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 280.0, 290.0)).is_empty());
+    let a = t.pointer(&cx, &ev(PointerKind::Drag, 320.0, 290.0));
+    assert!(matches!(a.first(), Some(Action::Begin(_))), "{a:?}");
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "Escape cancels the drag");
+    assert!(!t.busy() && !t.transforming());
+    assert!(t.pointer(&cx, &ev(PointerKind::Drag, 330.0, 290.0)).is_empty(), "the drag is over");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 330.0, 290.0)).is_empty(), "the release commits nothing");
 }
 
 /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
@@ -458,6 +620,30 @@ fn drag_moves_with_single_undo() {
     assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
     let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
     assert_eq!(a, vec![Action::Commit]);
+}
+
+/// Escape during a move, or an Alt-drag copy, cancels it: the release after it commits nothing,
+/// and the next drag is a new one. Escape with nothing to cancel sends nothing.
+#[test]
+fn escape_cancels_a_move_or_an_alt_drag_copy() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    for (what, m) in [("move", Mods::default()), ("copy", Mods { alt: true, ..Default::default() })] {
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0).with_mods(m));
+        assert!(matches!(&a[1], Action::Preview(_, v) if v["copy"] == m.alt), "{what}: {a:?}");
+        assert!(t.transforming(), "{what}");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+        assert!(!t.busy() && !t.transforming(), "{what}");
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
+        assert!(t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the drag is over");
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the release commits nothing");
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty(), "{what}: nothing to cancel");
+    }
 }
 
 /// #1534: with Smart Guides on (the default), the point a selection is dragged by still snaps
@@ -907,6 +1093,22 @@ fn marquee_selects() {
     assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
 }
 
+/// Escape during a marquee drag ends it: the marquee is removed, and its release selects nothing.
+#[test]
+fn escape_cancels_a_marquee() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 120.0, 120.0));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "Escape cancels the marquee");
+    assert!(!t.busy());
+    assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))), "the marquee is removed");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 120.0)).is_empty(), "the release selects nothing");
+}
+
 /// Shift-drag a marquee: the objects it reaches toggle (#483), so selected ones can be
 /// taken out of the selection; a Shift-click on empty canvas leaves the selection alone.
 #[test]
@@ -1097,6 +1299,28 @@ fn handle_drag_scales() {
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
     assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+}
+
+/// Escape during a bounding-box scale or rotation cancels it, and the release after it commits
+/// nothing.
+#[test]
+fn escape_cancels_a_scale_or_a_rotation() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    // (what, the press, its Begin, the drag)
+    for (what, from, begin, to) in [("scale", (200.0, 200.0), "Scale", (300.0, 300.0)), ("rotate", (210.0, 210.0), "Rotate", (150.0, 230.0))] {
+        let mut t = SelectionTool::default();
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1)), vec![Action::Begin(begin.into())], "{what}");
+        assert!(matches!(t.pointer(&cx, &ev(PointerKind::Drag, to.0, to.1)).as_slice(), [Action::Preview(..)]), "{what}");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+        assert!(!t.busy() && !t.transforming(), "{what}");
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
+        assert!(t.pointer(&cx, &ev(PointerKind::Drag, to.0 + 5.0, to.1)).is_empty(), "{what}: the drag is over");
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, to.0 + 5.0, to.1)).is_empty(), "{what}: the release commits nothing");
+    }
 }
 
 #[test]

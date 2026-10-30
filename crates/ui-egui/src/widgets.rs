@@ -38,25 +38,28 @@ pub use color::{
     color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture,
 };
 pub use drag::{PanelDrag, SwatchRows, art_drop, doc_preview, drag_source};
-pub(crate) use dropdowns::combo;
 #[cfg(test)]
 use dropdowns::combo_button_id;
+pub(crate) use dropdowns::{combo, combo_menu};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, opt_field, opt_field_named, range_field, range_field_named,
-    range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_plain,
-    spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, num_field_within, opt_field, opt_field_named, range_field,
+    range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named,
+    spin_field_named, spin_field_stops_named, spin_plain, spin_plain_named,
 };
 #[cfg(test)]
-use numeric::{decimal_point, share_of, spinner_step, step_to_multiple};
-pub(crate) use numeric::{round_to, set_bare_numbers_are_points, typed_unit};
+use numeric::{decimal_point, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
-pub(crate) use text::{dialog_focus_flag, enter_modifiers, focus_field, own_field_shift_enter, set_dialog_open, take_dialog_focus};
+pub(crate) use text::{
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
+    reject_dialog_commit, set_dialog_open, take_dialog_focus,
+};
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
@@ -85,7 +88,7 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 }
 
 /// `parent.with(salt)` for a salt that needs only `Hash`.
-fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
+pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
 }
 
@@ -227,7 +230,7 @@ pub(crate) mod accessibility_tests {
             angle_dial(ui, "angle", 45.0, 28.0);
             channel_slider_named(ui, "channel", "H", 0.5, vec2(22.0, 80.0), &|_| Color32::GRAY);
             harmony_wheel(ui, "wheel", 120.0, &[red], Some(0));
-            combo(ui, "font", "Regular", 120.0, true, |_| None::<usize>);
+            combo_menu(ui, "font", "Regular", 120.0, |_| None::<usize>);
         });
         let slider = |label| {
             let n = named(&tree, label);
@@ -276,17 +279,110 @@ pub(crate) mod accessibility_tests {
 mod spinner_modifier_tests {
     use super::*;
 
+    fn pt(v: f64) -> String {
+        Unit::Points.format(v)
+    }
+
     #[test]
     fn shift_steps_stroke_weight_by_ten_points() {
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT), 24.0);
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 4.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::SHIFT, &[], &pt), 24.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &[], &pt), 4.0);
     }
 
     #[test]
     fn unmodified_and_command_steps_keep_existing_behavior() {
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE), 15.0);
-        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND), 13.9);
-        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT), 0.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, egui::Modifiers::NONE, &[], &pt), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::COMMAND, &[], &pt), 13.9);
+        assert_eq!(spinner_step(0.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &[], &pt), 0.0);
+    }
+
+    #[test]
+    fn plain_and_command_steps_go_to_the_next_multiple_as_arrow_keys_do() {
+        // As ↑/↓ in the field (#2881): a plain step goes to the next whole number, Ctrl/Cmd to the
+        // next tenth, rounded to the places fields keep; Shift adds or takes ten.
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::NONE, &[], &pt), 2.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 1.0);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::COMMAND, &[], &pt), 1.4);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, false, egui::Modifiers::COMMAND, &[], &pt), 1.3);
+        assert_eq!(spinner_step(1.37, 1.0, 0.0, true, egui::Modifiers::SHIFT, &[], &pt), 11.37);
+        assert_eq!(spinner_step(0.37, 1.0, 0.0, false, egui::Modifiers::NONE, &[], &pt), 0.0);
+    }
+
+    /// A plain click on the spinner stops at each stop; Shift and Ctrl/Cmd steps do not.
+    #[test]
+    fn a_plain_spinner_step_stops_at_the_stops() {
+        let stops = [0.25, 0.5, 0.75, 1.0, 2.0, 10.0, 20.0];
+        let plain = egui::Modifiers::NONE;
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, false, plain, &stops, &pt), 0.5);
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, true, plain, &stops, &pt), 0.75);
+        assert_eq!(spinner_step(0.1, 1.0, 0.0, false, plain, &stops, &pt), 0.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, true, plain, &stops, &pt), 15.0);
+        assert_eq!(spinner_step(14.0, 1.0, 0.0, false, egui::Modifiers::SHIFT, &stops, &pt), 4.0);
+        assert_eq!(spinner_step(0.52, 1.0, 0.0, true, egui::Modifiers::COMMAND, &stops, &pt), 0.6);
+    }
+
+    /// A stop the spinner's text shows as the value counts as reached: 2.004 pt and the 2 pt stop
+    /// both show as `0.167 p`, so a click down goes on to 1 pt.
+    #[test]
+    fn a_spinner_stop_shown_as_the_value_is_passed() {
+        let pc = |v: f64| Unit::Picas.format(v);
+        assert_eq!(spinner_step(2.004, 1.0, 0.0, false, egui::Modifiers::NONE, &[1.0, 2.0, 3.0], &pc), 1.0);
+        assert_eq!(spinner_step(2.004, 1.0, 0.0, true, egui::Modifiers::NONE, &[1.0, 2.0, 3.0], &pc), 3.0);
+    }
+}
+
+#[cfg(test)]
+mod step_through_tests {
+    use super::*;
+
+    /// Each step goes to the nearer of the next whole step and the next stop in its direction.
+    #[test]
+    fn a_step_goes_to_the_nearer_of_the_next_multiple_and_the_next_stop() {
+        let stops = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 10.0, 20.0, 100.0];
+        for (v, n, want) in [
+            (0.52, -1.0, 0.5),
+            (0.51, -1.0, 0.5),
+            (0.4, -1.0, 0.25),
+            (0.52, 1.0, 0.75),
+            (0.1, 1.0, 0.25),
+            (0.1, -1.0, 0.0),
+            (0.25, -1.0, 0.0),
+            (0.75, -1.0, 0.5),
+            (1.0, -1.0, 0.75),
+            (1.0, 1.0, 2.0),
+            (1.5, -1.0, 1.0),
+            (14.0, 1.0, 15.0),
+            (14.0, -1.0, 13.0),
+            (14.5, 1.0, 15.0),
+            (0.4, -2.0, 0.0),
+            (0.4, 3.0, 1.0),
+            (100.0, 1.0, 101.0),
+            (0.52, 0.0, 0.52),
+        ] {
+            let got = step_through(v, 1.0, n, &stops, within_a_millionth(1.0));
+            assert!((got - want).abs() < 1e-9, "{v} × {n}: {got}");
+        }
+    }
+
+    /// A value a float error away from a stop moves on to the next one.
+    #[test]
+    fn a_value_next_to_a_stop_moves_past_it() {
+        assert_eq!(step_through(0.5 + 1e-9, 1.0, -1.0, &[0.25, 0.5], within_a_millionth(1.0)), 0.25);
+        assert_eq!(step_through(0.5 - 1e-9, 1.0, 1.0, &[0.5, 0.75], within_a_millionth(1.0)), 0.75);
+    }
+
+    /// A stop shown with the same text as the value moves on to the next one: 2 pt shows as
+    /// `0.167 p`. A stop shown differently is still reached: `0.016 in` goes down to `0.0156 in`.
+    #[test]
+    fn a_stop_shown_as_the_value_moves_past_it() {
+        let shown = |unit: Unit| move |a: f64, b: f64| unit.number(unit.to_pt(a)) == unit.number(unit.to_pt(b));
+        let picas = [1.0 / 12.0, 2.0 / 12.0, 3.0 / 12.0];
+        assert_eq!(step_through(0.167, 1.0, -1.0, &picas, shown(Unit::Picas)), 1.0 / 12.0);
+        assert_eq!(step_through(0.083, 1.0, 1.0, &picas, shown(Unit::Picas)), 2.0 / 12.0);
+        assert_eq!(step_through(0.016, 1.0, -1.0, &[0.0078, 0.0156], shown(Unit::Inches)), 0.0156);
+        // The next whole step shown as the value is passed too: 2.0004 pt shows as `2 pt`.
+        assert_eq!(step_through(2.0004, 1.0, -1.0, &[1.0, 2.0], shown(Unit::Points)), 1.0);
+        assert_eq!(step_through(2.0004, 1.0, -1.0, &[], shown(Unit::Points)), 1.0);
     }
 }
 

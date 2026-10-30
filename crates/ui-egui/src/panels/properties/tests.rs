@@ -1,4 +1,5 @@
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
+use serde_json::Value;
 use vectorcraft_engine::Session;
 
 use super::*;
@@ -828,6 +829,20 @@ fn artboard_history_key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui
     }
 }
 
+/// Duplicate the artboards, or add a new one, the way the test's history step needs.
+fn add_board(app: &mut crate::VectorcraftApp, ctx: &egui::Context, duplicate: bool) {
+    if duplicate {
+        let commands = app.run_count;
+        artboard_deletion_click(app, ctx, super::super::artboards::menu, Some("Duplicate Artboards"), egui::Modifiers::NONE);
+        assert_eq!(app.run_count, commands.wrapping_add(1));
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 3);
+        assert_eq!(app.session.tool_options()["active"], json!(2));
+        assert_eq!(app.view().unwrap().artboard, 2);
+    } else {
+        artboard_history_new(app, ctx);
+    }
+}
+
 fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
     let mut app = artboard_deletion_app(2);
     app.session.set_tool_option("moveArt", &json!(false));
@@ -839,16 +854,7 @@ fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
     assert!(!selection.is_empty(), "selected artwork catches a Clear fallthrough");
     let undo = st.history.undo.len();
     let ctx = egui::Context::default();
-    if duplicate {
-        let commands = app.run_count;
-        artboard_deletion_click(&mut app, &ctx, super::super::artboards::menu, Some("Duplicate Artboards"), egui::Modifiers::NONE);
-        assert_eq!(app.run_count, commands.wrapping_add(1));
-        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 3);
-        assert_eq!(app.session.tool_options()["active"], json!(2));
-        assert_eq!(app.view().unwrap().artboard, 2);
-    } else {
-        artboard_history_new(&mut app, &ctx);
-    }
+    add_board(&mut app, &ctx, duplicate);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
     artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
     let st = app.session.doc().unwrap();
@@ -856,20 +862,32 @@ fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
     assert_eq!(st.selection, selection);
     assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
     assert!(!st.is_dirty());
+    delete_again_after_undo(&mut app, &ctx, key, &before, &selection, undo);
+}
+
+/// Delete the normalized shown board after Undo, then verify its own Undo and Redo.
+fn delete_again_after_undo(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    key: Option<egui::Key>,
+    before: &std::sync::Arc<vectorcraft_doc::Document>,
+    selection: &vectorcraft_doc::Selection,
+    undo: usize,
+) {
     // Capture the state before another panel or pointer can repair it. Still exercise deletion
     // on RED: keyboard deletion used to do nothing; Properties already clamped its own target.
     let after_undo = (app.view().unwrap().artboard, app.session.tool_options());
     if let Some(key) = key {
-        artboard_history_key(&mut app, &ctx, key, egui::Modifiers::NONE);
+        artboard_history_key(app, ctx, key, egui::Modifiers::NONE);
     } else {
-        let texts = panel_frame(&mut app, &ctx, vec![], show);
+        let texts = panel_frame(app, ctx, vec![], show);
         assert!(texts.iter().any(|(label, _)| label == &before.artboards[1].name));
-        artboard_deletion_click(&mut app, &ctx, show, Some("Delete Artboard"), egui::Modifiers::NONE);
+        artboard_deletion_click(app, ctx, show, Some("Delete Artboard"), egui::Modifiers::NONE);
     }
     let st = app.session.doc().unwrap();
     assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "deletion after Undo removes the shown second board");
     assert_eq!(st.doc.layers, before.layers, "ordinary artwork survives without geometry or style changes");
-    assert_eq!(st.selection, selection, "deletion never falls through to Clear");
+    assert_eq!(&st.selection, selection, "deletion never falls through to Clear");
     assert_eq!(after_undo.0, 1, "Undo normalizes the navigator before another gesture");
     assert_eq!(after_undo.1, json!({"active": 1, "selected": [1], "moveArt": false, "scaleArt": true}));
     assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
@@ -879,18 +897,18 @@ fn artboard_history_delete_after_undo(key: Option<egui::Key>, duplicate: bool) {
     assert_eq!(app.session.tool_options(), json!({"active": 0, "selected": [0], "moveArt": false, "scaleArt": true}));
     let deleted = st.doc.clone();
 
-    artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND);
+    artboard_history_key(app, ctx, egui::Key::Z, egui::Modifiers::COMMAND);
     let st = app.session.doc().unwrap();
-    assert_eq!(st.doc, before);
-    assert_eq!(st.selection, selection);
+    assert_eq!(st.doc.as_ref(), before.as_ref());
+    assert_eq!(&st.selection, selection);
     assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, 1));
     assert!(!st.is_dirty());
     // Valid current selection stays put; history does not restore an earlier artboard selection.
     assert_eq!(app.session.tool_options()["selected"], json!([0]));
-    artboard_history_key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    artboard_history_key(app, ctx, egui::Key::Z, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
     let st = app.session.doc().unwrap();
-    assert_eq!(st.doc, deleted);
-    assert_eq!(st.selection, selection);
+    assert_eq!(st.doc.as_ref(), deleted.as_ref());
+    assert_eq!(&st.selection, selection);
     assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 1, 0));
     assert!(st.is_dirty());
 }
@@ -1268,6 +1286,27 @@ fn blend_options_is_a_quick_action_for_one_blend_with_the_blend_tool() {
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a rectangle");
 }
 
+/// Quick Actions have no Lock in isolation mode, where Object › Lock › Selection is off. Outside
+/// isolation mode Lock is there and locks the selection.
+#[test]
+fn lock_is_a_quick_action_outside_isolation_mode_only() {
+    let mut app = new_app();
+    let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 200.0, 20.0, 40.0, 40.0));
+    app.run("select.set", json!({"ids": [a.clone(), b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("object.isolate", json!({"id": g.clone()})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && !shows(&texts, "Lock"), "no Lock in isolation mode: {texts:?}");
+    app.run("object.exitIsolation", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [g.clone()]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Lock").center());
+    let locked = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(g.as_u64().unwrap())).unwrap().locked;
+    assert!(locked, "Lock locks the group");
+}
+
 /// A Live Paint group selected with a path has Merge Live Paint in Quick Actions, which adds
 /// the path to the group in one undo step. Not for the group alone, nor for plain paths, nor
 /// with type selected, which Live Paint refuses.
@@ -1301,6 +1340,28 @@ fn merge_live_paint_is_a_quick_action_for_a_live_paint_group_and_more() {
     assert!(st.doc.node(c_id).is_none() || st.doc.parent_of(c_id) != parent, "the path is merged into the group");
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(app.session.active().unwrap().doc.parent_of(c_id), parent, "Undo takes it out again");
+}
+
+/// A selected group has Ungroup and Isolate Group in Quick Actions. While an opacity mask is
+/// edited, when Enter Isolation Mode is off, a group in the mask art has Ungroup only.
+#[test]
+fn isolate_group_is_not_a_quick_action_while_an_opacity_mask_is_edited() {
+    let mut app = new_app();
+    let group = |app: &mut VectorcraftApp, x: f64| {
+        let (a, b) = (rect(app, x, 20.0, 40.0, 40.0), rect(app, x + 50.0, 20.0, 40.0, 40.0));
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+    };
+    let ctx = egui::Context::default();
+    group(&mut app, 20.0);
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Ungroup") && shows(&texts, "Isolate Group"), "{texts:?}");
+    let (obj, m) = (rect(&mut app, 200.0, 100.0, 80.0, 80.0), rect(&mut app, 200.0, 100.0, 40.0, 80.0));
+    app.run("transparency.makeOpacityMask", json!({"ids": [obj, m]})).unwrap();
+    app.run("transparency.editOpacityMask", json!({"id": obj})).unwrap();
+    group(&mut app, 200.0);
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Ungroup") && !shows(&texts, "Isolate Group"), "{texts:?}");
 }
 
 /// A stroke with a variable width shows its Width Profile in the Appearance section, as every
@@ -1427,4 +1488,178 @@ fn one_effect_has_a_delete_icon_in_appearance() {
     app.run("effect.apply", json!({"effect": "stylize.dropShadow"})).unwrap();
     app.run("select.set", json!({"ids": [id, other]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), &name), "two objects");
+}
+
+/// A rectangle at 100, 100, 100 × 60 pt, selected, with `then` run on it, and a context that
+/// builds the accessibility tree (to find the locator's squares).
+fn reference_setup(then: &[(&str, Value)]) -> (VectorcraftApp, egui::Context) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap();
+    for (id, p) in then {
+        app.run(id, p.clone()).unwrap();
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    (app, ctx)
+}
+
+/// Clicks the topmost control of `draw` that screen readers call `name`.
+fn click_named(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut VectorcraftApp, &mut Ui), name: &str) {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| draw(app, ui));
+    out.textures_delta.clear();
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let b = nodes
+        .iter()
+        .filter(|(_, n)| n.label() == Some(name))
+        .filter_map(|(_, n)| n.bounds())
+        .min_by(|a, b| a.y0.total_cmp(&b.y0))
+        .unwrap_or_else(|| panic!("no {name:?}"));
+    let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+    crate::panels::tests_appearance::click(ctx, app, at, draw);
+}
+
+/// Types `value` over the topmost field of `draw` that shows `shown`, and presses Enter.
+fn type_over(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut VectorcraftApp, &mut Ui), shown: &str, value: &str) {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let texts = frame_events(ctx, app, vec![], draw);
+    click(ctx, app, text_rect(&texts, shown).center(), draw);
+    let key = |key, modifiers| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(ctx, app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], draw);
+    frame_events(ctx, app, vec![Event::Text(value.into())], draw);
+    frame_events(ctx, app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], draw);
+    frame_events(ctx, app, vec![], draw);
+}
+
+/// The Properties panel with the Transform panel below it, as when both are open.
+fn properties_and_transform(app: &mut VectorcraftApp, ui: &mut Ui) {
+    show(app, ui);
+    ui.separator();
+    crate::panels::transform::show(app, ui);
+}
+
+/// A panel (or panels) drawn in a test frame.
+type Draw = fn(&mut VectorcraftApp, &mut Ui);
+
+fn near(a: vectorcraft_geom::Point, b: vectorcraft_geom::Point) -> bool {
+    (a - b).hypot() < 1e-6
+}
+
+/// #4285: with the locator's top-left square chosen, a rotation typed in the Properties panel's
+/// Transform section turns the selection about the box's top-left corner, as the Transform panel
+/// does: on a plain rectangle, on one already turned 30°, and with the Transform panel open too.
+#[test]
+fn a_typed_rotation_turns_about_the_reference_point() {
+    // (case, the angle the rectangle starts at, the panels, the angle typed)
+    let cases: [(&str, f64, Draw, &str); 4] = [
+        ("section", 0.0, transform_section, "45"),
+        ("panel", 0.0, show, "45"),
+        ("turned 30°", 30.0, transform_section, "60"),
+        ("with the Transform panel", 0.0, properties_and_transform, "45"),
+    ];
+    for (case, start, draw, value) in cases {
+        let (mut app, ctx) = reference_setup(&[("object.rotate", json!({"angle": start}))]);
+        let shown = format!("{start}°");
+        click_named(&mut app, &ctx, draw, "Top Left");
+        assert_eq!(ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt"))), Some(0), "{case}: the locator's choice");
+        let corner = app.selection_box().unwrap().reference_point(0);
+        type_over(&mut app, &ctx, draw, &shown, value);
+        let bx = app.selection_box().unwrap();
+        assert!((bx.angle - value.parse::<f64>().unwrap()).abs() < 1e-6, "{case}: turned to {}", bx.angle);
+        assert!(near(bx.reference_point(0), corner), "{case}: the top-left corner {corner:?} moved to {:?}", bx.reference_point(0));
+    }
+}
+
+/// #4285: the flip buttons mirror the selection about the chosen reference point: with the
+/// top-left square, across the box's left edge (left-right) or top edge (top-bottom).
+#[test]
+fn the_flip_buttons_mirror_about_the_reference_point() {
+    for (button, want) in [("Flip Along Horizontal Axis", (0.0, 100.0, 100.0, 160.0)), ("Flip Along Vertical Axis", (100.0, 40.0, 200.0, 100.0))] {
+        let (mut app, ctx) = reference_setup(&[]);
+        click_named(&mut app, &ctx, transform_section, "Top Left");
+        click_named(&mut app, &ctx, transform_section, button);
+        let r = app.selection_box().unwrap().rect;
+        let got = (r.x0, r.y0, r.x1, r.y1);
+        assert!([got.0 - want.0, got.1 - want.1, got.2 - want.2, got.3 - want.3].iter().all(|d| d.abs() < 1e-6), "{button}: {got:?}, want {want:?}");
+    }
+}
+
+/// With Use Registration Point for Symbol on, one symbol instance turns about its symbol's
+/// registration point (here the bottom-right one) whatever the locator shows: the locator
+/// follows the registration point.
+#[test]
+fn a_symbol_instance_turns_about_its_registration_point() {
+    let (mut app, ctx) = reference_setup(&[]);
+    let id = app.run("symbol.new", json!({"name": "Corner", "registration": 8})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.session.prefs.use_registration_point_for_symbol = true;
+    click_named(&mut app, &ctx, transform_section, "Top Left");
+    type_over(&mut app, &ctx, transform_section, "0°", "45");
+    let bx = app.selection_box().unwrap();
+    assert!((bx.angle - 45.0).abs() < 1e-6, "turned to {}", bx.angle);
+    assert!(near(bx.reference_point(8), vectorcraft_geom::Point::new(200.0, 160.0)), "the registration point moved to {:?}", bx.reference_point(8));
+}
+
+/// Ruler guides selected on their own (a click on one) show a Guides heading and a Transform
+/// section, where X moves the vertical ones and Y the horizontal ones; with art selected too, the
+/// panel shows the art's sections.
+#[test]
+fn selected_guides_show_their_position_in_a_transform_section() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let v = app.run("guide.add", json!({"vertical": true, "pos": 30})).unwrap()["index"].as_u64().unwrap();
+    let h = app.run("guide.add", json!({"vertical": false, "pos": 20})).unwrap()["index"].as_u64().unwrap();
+    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.guides[i as usize].pos;
+    let ctx = egui::Context::default();
+    // Steps the field labelled `label` up by one with ↑.
+    let step = |app: &mut VectorcraftApp, label: &str| {
+        let texts = frame(app, &ctx, vec![]);
+        let r = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {texts:?}")).1;
+        let at = egui::pos2(r.right() + 40.0, r.center().y);
+        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, &ctx, vec![Event::PointerMoved(at), press(true)]);
+        frame(app, &ctx, vec![press(false)]);
+        let up = Event::Key { key: egui::Key::ArrowUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![up]);
+        frame(
+            app,
+            &ctx,
+            vec![Event::PointerButton { pos: egui::pos2(5.0, 690.0), button: PointerButton::Primary, pressed: true, modifiers: Default::default() }],
+        );
+    };
+    for (index, label, before) in [(v, "X:", 30.0), (h, "Y:", 20.0)] {
+        app.run("guide.select", json!({"indexes": [index]})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        for shown in ["Guides", "Transform", "X:", "Y:"] {
+            assert!(texts.iter().any(|t| t == shown), "{shown:?} in {texts:?}");
+        }
+        assert!(!texts.iter().any(|t| t == "Document"), "{texts:?}");
+        step(&mut app, label);
+        assert_eq!((pos(&app, index) - before).abs(), 1.0, "{label} moves the selected guide");
+    }
+    // A guide and a rectangle: the rectangle's sections.
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("guide.select", json!({"indexes": [v], "toggle": true})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+    assert!(!texts.iter().any(|t| t == "Guides") && texts.iter().any(|t| t == "W:"), "{texts:?}");
+}
+
+/// #2238: Object › Path's Offset Path and Simplify take paths, so they aren't Quick Actions for
+/// type alone, where they could only fail ("select paths"); live type offsets through the
+/// Appearance panel's Effect › Path › Offset Path. A path, also with type, still has them.
+#[test]
+fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(!shows(&texts, "Offset Path") && !shows(&texts, "Simplify") && shows(&texts, "Lock"), "type: {texts:?}");
+    let r = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [t, r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
 }

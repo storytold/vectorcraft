@@ -139,6 +139,8 @@
 	Anchor Point	錨點
 	Anchor Point Tool	錨點工具
 	Anchor Points	錨點
+	"In" Control Points	「入」控制點
+	"Out" Control Points	「出」控制點
 	Anchor Points, Handle, and Bounding Box Display	錨點、控制把手與邊框顯示
 	Anchor/Path Labels	錨點/路徑標籤
 	Anchors:	錨點：
@@ -525,6 +527,7 @@ font-technology	Variable	可變
 	Complexity:	複雜度：
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	複合顏色會轉換為此描述檔；其為 CMYK 描述檔時，分色也會使用它。
 	Compound Path	複合路徑
+	Compound Shape	複合形狀
 	Compress (RLE)	壓縮 (RLE)
 	Compress text and line art	壓縮文字與線條圖
 	Compression	壓縮
@@ -953,7 +956,6 @@ font-technology	Variable	可變
 	Exit Isolation Mode	結束隔離模式
 	Expand	展開
 	Expand Appearance	展開外觀
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	展開適用於複合形狀 (按住 Alt 按一下形狀模式)，已列入開發計畫
 	Expand Brush Strokes	展開筆刷筆畫
 	Expand Compound Shape	展開複合形狀
 	Expand Gradient Mesh	展開漸層網格
@@ -1114,6 +1116,9 @@ font-technology	Variable	可變
 	Increase Font Size by Five Steps	按五個增量放大字體大小
 	Reset Tracking and Kerning	重設字距與字距微調
 	Reset Horizontal Scale	重設水平縮放
+	Highlight Font Name	反白顯示字體名稱
+	Highlight Kerning	反白顯示字距微調
+	Highlight Tracking	反白顯示字距
 	Spacing	間距
 	Step Type	依增量調整文字
 	Fit in View	符合檢視
@@ -1513,6 +1518,12 @@ file-filter	Templates	範本
 	Image Trace	影像描圖
 	Image Tracing	影像描圖物件
 	Tracing Presets	描圖預設集
+	Manage Presets	管理預設集
+	Save as New Preset…	儲存為新預設集…
+	Rename…	重新命名…
+	Rename Preset	重新命名預設集
+	Save Image Trace Preset	儲存影像描圖預設集
+	Delete Image Trace Preset	刪除影像描圖預設集
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -1602,6 +1613,7 @@ file-filter	Templates	範本
 # Traditional Chinese: no final 。 unless the English ends with a period; a space between Chinese text and
 # an adjacent Latin word, number or {placeholder}; 、 between the items of a list; 「」 around the name of
 # a panel, menu item or setting.
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` 代表已變更的設定：請以其他名稱儲存預設集
 @msg	`{key}` must be an array of these names: {_1}	`{key}` 必須是由下列名稱組成的陣列：{_1}
 @msg	Reset {_1}	重設 {_1}
 @msg	Saving	正在儲存
@@ -1751,7 +1763,9 @@ file-filter	Templates	範本
 @msg	unknown freeform mode `{m}` (points, lines)	未知的任意形狀模式 `{m}` (points、lines)
 @msg	`aspect` must be a number (%)	`aspect` 必須是數字 (%)
 @msg	`gradient` must be an object	`gradient` 必須是物件
+@msg	`groupColors` must be an array	`groupColors` 必須是陣列
 @msg	`mode` applies to freeform gradients	`mode` 只適用於任意形狀漸層
+@msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標
@@ -1773,6 +1787,9 @@ file-filter	Templates	範本
 @msg	the layer or group is locked	圖層或群組已鎖定
 @msg	the guide is on a hidden or locked layer	參考線位於隱藏或鎖定的圖層上
 @msg	the target layer is locked or hidden	目標圖層已鎖定或隱藏
+@msg	the object is hidden or locked	物件已隱藏或鎖定
+@msg	the object is outside the isolated group	物件位於隔離的群組之外
+@msg	type objects can't be isolated	無法隔離文字物件
 @msg	the layer to flatten into is hidden	要平面化到的圖層已隱藏
 @msg	there are no objects to release	沒有可釋放的物件
 @msg	no library `{id}`	沒有資料庫 `{id}`
@@ -1784,12 +1801,14 @@ file-filter	Templates	範本
 @msg	select a blend	請選取漸變物件
 @msg	select a gradient mesh	請選取漸層網格
 @msg	the object has no opacity mask	物件沒有不透明度遮色片
+@msg	stop editing the opacity mask first	請先停止編輯不透明度遮色片
 @msg	Convert to Artboards: selection has no area	轉換為工作區域：選取範圍沒有面積
 @msg	Convert to Shape: no rectangles or ellipses selected	轉換為形狀：未選取矩形或橢圓形
 @msg	image would be too large; lower the resolution	影像會過大；請降低解析度
 @msg	clipboard is empty	剪貼簿是空的
 @msg	no anchor points selected	未選取錨點
 @msg	select at least two objects	請選取至少兩個物件
+@msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
 @msg	compound paths can only contain paths	複合路徑只能包含路徑
 @msg	no bounds	沒有邊界
@@ -1807,6 +1826,7 @@ file-filter	Templates	範本
 @msg	the object already has an opacity mask	物件已有不透明度遮色片
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` 是印刷色：色調只適用於全域色和特別色
 @msg	`{name}` isn't a colour swatch	`{name}` 不是顏色色票
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	印刷色無法為帶有透明度的灰階影像上色：請使用特別色、黑色或白色
 @msg	a document needs at least one artboard	文件至少需要一個工作區域
 @msg	empty path	路徑是空的
 @msg	join needs open paths	連接需要開放路徑
@@ -1829,6 +1849,7 @@ file-filter	Templates	範本
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
 @msg	not in pattern editing mode	不在圖樣編輯模式中
+@msg	finish editing the pattern first	請先完成圖樣編輯
 @msg	pattern missing	找不到圖樣
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
@@ -2050,6 +2071,7 @@ file-filter	Templates	範本
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio 必須是 0.1 到 10 之間的數字
 @msg	the Color Picker is not open	「顏色選擇器」未開啟
 @msg	the Simplify slider is not open	「簡化」滑桿未開啟
+@msg	the Smooth slider is not open	「平滑」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
@@ -2093,6 +2115,10 @@ file-filter	Templates	範本
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} 是匯出增效模組 (檔案 › 匯出 › 匯出為…)
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` 為 {size} 位元組（上限 {MAX_DOCUMENT_DATA}）
 @msg	a preset named `{_1}` exists	名為 `{_1}` 的預設集已存在
+@msg	`name` is empty	`name` 為空
+@msg	`newName` is empty	`newName` 為空
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` 是內建預設集，無法變更：請以其他名稱儲存
+@msg	`{name}` is a built-in preset and stays	`{name}` 是內建預設集，無法刪除
 @msg	a swatch or color group named `{n}` exists	名為 `{n}` 的色票或顏色群組已存在
 @msg	no print preset named `{base}`	沒有名為 `{base}` 的列印預設集
 @msg	no print preset named `{name}`	沒有名為 `{name}` 的列印預設集
@@ -2111,6 +2137,8 @@ file-filter	Templates	範本
 @msg	PDF settings are not an object	PDF 設定不是物件
 @msg	PDF security settings are not an object	PDF 安全性設定不是物件
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	沒有名為 `{name}` 的已儲存 PDF 預設集 (內建預設集為唯讀：請以它們為基礎新增一個)
+@msg	no saved preset named `{name}`	沒有名為 `{name}` 的已儲存預設集
+@msg	no saved preset named `{name}` to rename	沒有名為 `{name}` 的已儲存預設集可供重新命名
 @msg	Saved to User Defined: {_1}	已儲存至「使用者定義」：{_1}
 @msg	choose a direction to divide in	請選擇分割方向
 @msg	choice must be "merge" or "add", not `{choice}`	choice 必須是 "merge" 或 "add"，而非 `{choice}`
@@ -2150,6 +2178,7 @@ file-filter	Templates	範本
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必須是選單項目會開啟對話框的指令 (請參閱 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
+@msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必須是整數
 @msg	`{key}` must be a number not below 0	`{key}` 必須是不小於 0 的數字
@@ -2162,6 +2191,7 @@ file-filter	Templates	範本
 @msg	lang must be one of {_1}	lang 必須是 {_1} 其中之一
 @msg	missing `name`	未提供 `name`
 @msg	missing `tool`	未提供 `tool`
+@msg	missing id	未提供 id
 @msg	missing index	未提供 index
 @msg	New Window isn't available yet: a document opens in one window	新增視窗尚無法使用：文件會在一個視窗中開啟
 @msg	no PNG encoder	沒有 PNG 編碼器
@@ -2182,6 +2212,13 @@ file-filter	Templates	範本
 @msg	choose a folder to export to	請選擇要匯出至的資料夾
 @msg	the selection has no URL (or they differ)	選取範圍沒有 URL (或其 URL 各不相同)
 @msg	select some type first	請先選取一些文字
+@msg	the selection has no gradient fill	選取範圍沒有漸層填色
+@msg	the selection has no gradient stroke	選取範圍沒有漸層筆畫
+@msg	the selection has no pattern fill	選取範圍沒有圖樣填色
+@msg	the selection has no pattern stroke	選取範圍沒有圖樣筆畫
+@msg	no gradient swatch `{name}`	沒有漸層色票 `{name}`
+@msg	no pattern swatch `{name}`	沒有圖樣色票 `{name}`
+@msg	the library item is damaged	資料庫項目已損毀
 @msg	{_1} font families available	有 {_1} 個可用的字體家族
 @msg	{_1} has no {_2} style	{_1} 沒有 {_2} 樣式
 @msg	Copied the CSS of {rules} object(s)	已複製 {rules} 個物件的 CSS
@@ -2191,6 +2228,7 @@ file-filter	Templates	範本
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	未知的疊印方式 `{o}` (preserve、simulate 或 discard)
 @msg	unknown preset `{name}` (see flattener.presets.list)	未知的預設集 `{name}` (請參閱 flattener.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	未知的預設集 `{name}`：既不是內建預設集，也不是已儲存的預設集 (請參閱 imageTrace.presets)
 @msg	Select text or click into text with the Type tool to insert glyphs	請選取文字，或使用文字工具在文字中按一下，以插入字符
 @msg	`library` is a library id or name (see {list})	`library` 是資料庫 id 或名稱 (請參閱 {list})
 @msg	no library `{key}` (see {list})	沒有資料庫 `{key}` (請參閱 {list})
@@ -2224,6 +2262,7 @@ file-filter	Templates	範本
 @msg	can't parse shortcut `{c}`	無法剖析快速鍵 `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	無法剖析 `{k}` 的快速鍵 `{s}`
 @msg	no dialog open	沒有開啟的對話框
+@msg	the open dialog has no Reset	開啟的對話框沒有「重設」按鈕
 @msg	no file reader	沒有檔案讀取器
 @msg	no file writer	沒有檔案寫入器
 @msg	not a VectorCraft shortcut set (missing `overrides`)	不是 VectorCraft 快速鍵組 (沒有 `overrides`)
@@ -2237,6 +2276,7 @@ file-filter	Templates	範本
 @msg	Couldn't copy to the system clipboard: {e}	無法複製到系統剪貼簿：{e}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	nothing selected	未選取任何物件
+@msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多個工具的工具列群組中
@@ -2289,6 +2329,9 @@ file-filter	Templates	範本
 @msg	not a PSD file	不是 PSD 檔案
 @msg	the PSD file has an unknown colour mode ({m})	PSD 檔案的色彩模式不明 ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD 檔案的影像資料使用了不明的壓縮方式 ({m})
+@msg	the PCX file is cut short	PCX 檔案不完整
+@msg	the PCX file's header is damaged	PCX 檔案標頭已損毀
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	無法讀取 {planes} 個平面中含 {bits} 位元像素的 PCX 檔案
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 32 位元 PSD 影像資料
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
@@ -2686,6 +2729,7 @@ file-filter	Templates	範本
 	Move in Perspective	在透視中移動
 	Move Locked and Hidden Artwork with Artboard	移動工作區域時一併移動鎖定與隱藏的圖稿
 	Move Mesh Point	移動網格點
+	Move Mesh Points	移動網格點
 	Move Plane	移動平面
 	Move Plane to Match Object	移動平面以符合物件
 	Move Rows	移動列
@@ -2752,6 +2796,10 @@ file-filter	Templates	範本
 	Outer Corner Tile	外角拼貼
 	Side Tile	邊線拼貼
 	Inner Corner Tile	內角拼貼
+	Auto-Centered	自動置中
+	Auto-Between	自動居間
+	Auto-Sliced	自動切片
+	Auto-Overlap	自動重疊
 	Start Tile	起點拼貼
 	End Tile	終點拼貼
 	Fit	符合
@@ -2800,6 +2848,7 @@ file-filter	Templates	範本
 	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
 	New Character Style	新增字元樣式
+	New Character Style…	新增字元樣式…
 	New Color Group	新增顏色群組
 	New Color Group…	新增顏色群組…
 	New Document Presets	新增文件預設集
@@ -2815,6 +2864,7 @@ file-filter	Templates	範本
 	New Opacity Masks Are Clipping	新的不透明度遮色片為剪裁
 	New Opacity Masks Are Inverted	新的不透明度遮色片為反轉
 	New Paragraph Style	新增段落樣式
+	New Paragraph Style…	新增段落樣式…
 	New Pattern Brush from Selection	從選取範圍新增圖樣筆刷
 	New PDF Preset	新增 PDF 預設集
 	New Print Preset	新增列印預設集
@@ -2828,6 +2878,8 @@ file-filter	Templates	範本
 	New View	新增檢視
 	New View…	新增檢視…
 	New Window	新增視窗
+	Next Document	下一個文件
+	Previous Document	上一個文件
 	New Without Dialog	新增但不開啟對話方塊
 	New Workspace	新增工作區
 	New Workspace…	新增工作區…
@@ -3426,6 +3478,7 @@ font-script	Japanese	漢字
 	Repeat Tab	重複定位點
 	Repeat {name}	重複 {name}
 	Replace	取代
+	Replace:	取代：
 	Replace Font	取代字體
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
 	Replace Spine	取代脊線
@@ -3761,6 +3814,7 @@ font-script	Japanese	漢字
 	Shape Builder Regions	形狀建立區域
 	Shape Builder Tool	形狀建立工具
 	Shape Effects	形狀效果
+	Shape Mode	形狀模式
 	Shape Modes:	形狀模式：
 	Shape Properties:	形狀內容：
 	Shaper Tool	Shaper 工具
@@ -3819,6 +3873,7 @@ font-script	Japanese	漢字
 	Show Original Path	顯示原始路徑
 	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
 	Auto-Simplify	自動簡化
+	Auto-Smooth	自動平滑
 	Color Panel Options	顏色面板選項
 	Show Package	顯示封裝
 	Show Panel	顯示面板
@@ -3855,6 +3910,7 @@ font-script	Japanese	漢字
 	Simplify	簡化
 	Simplify:	簡化：
 	Simplify…	簡化…
+	Smooth…	平滑…
 	Simulate Colored Paper	模擬有色紙張
 	Simulate Paper	模擬紙張
 	Double Column	雙欄
@@ -3862,6 +3918,7 @@ font-script	Japanese	漢字
 	Single Quotes:	單引號：
 	Single Right Quotation Mark	右單引號
 	Single-line Composer	單行排版程式
+	Toggle Line Composer	切換行排版程式
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	拼貼符合圖稿大小
@@ -3975,6 +4032,11 @@ font-script	Japanese	漢字
 	Stroke	筆畫
 	Stroke (X), double-click for the Color Picker	筆畫 (X)，按兩下開啟檢色器
 	Stroke Color	筆畫顏色
+	Fill Gradient	填色漸層
+	Stroke Gradient	筆畫漸層
+	Fill Pattern	填色圖樣
+	Stroke Pattern	筆畫圖樣
+	Patterns	圖樣
 	Stroke Options	筆畫選項
 	Character:	字元：
 	Character options	字元選項
@@ -4031,6 +4093,7 @@ font-script	Japanese	漢字
 	Swatch Options…	色票選項…
 	Swatch Tiles	色票拼貼
 	Swatches	色票
+	Switch Units	切換單位
 	Switch workspace	切換工作區
 	Add Content	新增內容
 	Click to apply to the selected type	按一下以套用到所選文字
@@ -4269,6 +4332,7 @@ font-script	Japanese	漢字
 	Unlock Guides	解除鎖定參考線
 	Unnamed Objects	未命名物件
 	Unprintable margin:	不可列印邊界：
+	Unselected Artwork	未選取的圖稿
 	Unshift	取消位移
 	Untitled	未命名
 	Update Link	更新連結
@@ -4623,6 +4687,10 @@ axis	Both	兩者
 	Shaper	Shaper
 	Expand Shaper Group	展開 Shaper 群組
 	Release Shaper Group	釋放 Shaper 群組
+	Remove from Shaper Group	從 Shaper 群組中移除
+@msg	source must be the id of a Shaper Group's original shape	source 必須是 Shaper 群組中原始形狀的 ID
+@msg	group must be the id of a Shaper Group	group 必須是 Shaper 群組的 ID
+@msg	the shape is not an editable original shape of that Shaper Group	該形狀不是該 Shaper 群組中可編輯的原始形狀
 	Select Shaper Face	選取 Shaper 區域
 	Constrain	強制
 	Free Transform	任意變形
@@ -5248,4 +5316,151 @@ axis	Y Axis	Y 軸
 	Scale Presets	縮放預設集
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} 螢幕擷取畫面的位元組數溢出
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	視窗的{what}（{points} 點 × {scale} DPI）無法決定螢幕擷取畫面的大小
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	請先展開外觀（物件 › 展開外觀）
 	Live preview	即時預覽
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	點狀文字
+	Area Text	區域文字
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	顯示靠齊字符選項
+	Hide Snap to Glyph Options	隱藏靠齊字符選項
+	Snap to Glyph Options	靠齊字符選項
+	x-height	x 高度
+	Glyph Bounds	字符邊界
+	Proximity Guides	鄰近參考線
+	Angular Guides	角度參考線
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	平均並連接…
+	Average & Join	平均並連接
+anchor	Points:	點：
+@msg	select two open path ends, or two open paths, to average and join	請選取兩個開放路徑的端點或兩條開放路徑以進行平均並連接
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	圖稿清理
+	Simplify Anchors (Keep Shape)…	簡化錨點（保持形狀）…
+	Health Check	健康檢查
+	Show Issue	顯示問題
+	Fix All Issues	修正所有問題
+	Fix Issues	修正問題
+	Deep Ungroup…	解散所有層級群組…
+	Rejoin Path Pieces…	重新連接路徑片段…
+	Document Health Check	文件健康檢查
+	Check Selection	檢查選取範圍
+	Check Document	檢查文件
+	No issues found.	未發現問題。
+	Changed since the last check.	自上次檢查後已變更。
+	Fix Selected	修正選取項目
+	Fix All	全部修正
+	Issues fixed: {count}	已修正的問題：{count}
+	Open a document to check it for issues.	開啟文件以檢查其中的問題。
+	Empty Text	空白文字
+	Unpainted Objects	未上色物件
+	Zero-Opacity Objects	不透明度為零的物件
+	Duplicate Objects	重複物件
+	Off-Artboard Art	工作區域外的圖稿
+	Duplicate Anchors	重複錨點
+	Tiny Handles	極短控制把手
+	Collinear Anchors	共線錨點
+	Nearly Coincident Anchors	幾乎重合的錨點
+	Nearly Closed Paths	幾乎封閉的路徑
+	Filled Open Paths	有填色的開放路徑
+	Needless Clipping Groups	多餘的剪裁群組
+	Needless Compound Paths	多餘的複合路徑
+	Needless Groups	多餘的群組
+	Empty Artboards	空白工作區域
+	Protect Corners	保護尖角
+	Gap	間隙
+	Include Clip Groups	包含剪裁群組
+@msg	`tolerance` must be from 1 to 100	`tolerance` 必須介於 1 到 100 之間
+@msg	`gap` must be from 0 to 6 pt	`gap` 必須介於 0 到 6 pt 之間
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	簡化錨點：路徑的錨點太多，無法一次簡化
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	重新連接路徑片段：路徑太多，無法一次連接
+@msg	None of these issues are left: check again	這些問題都已不存在：請重新檢查
+@msg	`kinds` must be a list of issue kinds	`kinds` 必須是問題類型的清單
+@msg	missing `kind`	未指定 `kind`
+	Simplify Anchors (Keep Shape)	簡化錨點（保持形狀）
+	Deep Ungroup	解散所有層級群組
+	Rejoin Path Pieces	重新連接路徑片段
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	顏色效果
+	Color Effects Panel	顏色效果面板
+	Exposure	曝光度
+	Exposure…	曝光度…
+	Desaturate	去除飽和度
+	Adjustment	調整
+	Add as Effect	加入為效果
+	Apply as Filter	套用為濾鏡
+	Select objects to adjust their colors.	選取物件以調整其顏色。
+	Brightness/Contrast	亮度/對比
+	Hue/Saturation	色相/飽和度
+	Temperature/Tint	色溫/色調
+@msg	`{id}` is not a colour adjustment	`{id}` 不是顏色調整
+@msg	missing `effect`	未提供 `effect`
+@msg	`params` must be an object	`params` 必須是物件
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	路徑精確工具
+	Anchor Eraser Brush	錨點橡皮擦筆刷
+	Extend Path Tool	延長路徑工具
+	Measure & Inspect Tool	測量與檢查工具
+	Anchor Inspector	錨點檢查器
+	Add Points at Crossings	在交叉處增加錨點
+	Split at Crossings	在交叉處分割
+	Extend Path	延長路徑
+	Measure & Inspect	測量與檢查
+	Set Anchor	設定錨點
+	Make Smooth	轉為平滑
+	Make Corner	轉為角點
+	Equalize Handles	等長控制把手
+	Remove Points, Keep Shape	刪除錨點並保持形狀
+	Add Points to Segments…	在線段中增加錨點…
+	Add Points to Segments	在線段中增加錨點
+	Open a document to edit its anchor points.	開啟文件以編輯其錨點。
+	Anchors selected: {count}	已選取錨點：{count}
+	Direct-select anchor points to edit them.	直接選取錨點以編輯它們。
+	Length	長度
+	In:	入：
+	Out:	出：
+	Add Points	增加錨點
+	Points per segment	每段錨點數
+	Close Path:	封閉路徑：
+	Keep Handles	保留控制把手
+	Straight	直線
+	Stretch Curve	延展曲線
+@msg	direct-select the anchor points to remove	請直接選取要刪除的錨點
+@msg	select segments, or paths, to add points to	請選取要增加錨點的線段或路徑
+@msg	select open paths to close	請選取要封閉的開放路徑
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	路徑太多或太複雜，無法找到交叉處（最多 10000 段）
+@msg	the paths have too many anchors to edit at once	路徑的錨點太多，無法一次編輯
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	智慧筆型
+	Smart Pen Tool	智慧筆型工具
+	Smart Pen Panel	智慧筆型面板
+	Next Segment	下一個線段
+	Curved	曲線
+	Retract Handles	收回控制把手
+	Close or Join	封閉或連接
+	Open a document to draw with the Smart Pen.	開啟文件以使用智慧筆型繪製。
+	Straight or Curved Segment	直線或曲線線段
+@msg	the path is locked or hidden	路徑已鎖定或隱藏
+@msg	`id` is not a path	`id` 不是路徑
+@msg	the path has no open subpath	路徑沒有開放的子路徑
+@msg	the subpath is closed	子路徑已封閉
+@msg	the subpath is closed or too short to close	子路徑已封閉或太短，無法封閉
+@msg	the path is too short to remove a point from	路徑太短，無法移除錨點
+@msg	the segment can't be bent that far	線段無法彎曲到這個程度
+@msg	give `{a}` and `{b}`	請提供 `{a}` 和 `{b}`
+@msg	`t` must be from 0 to 1	`t` 必須介於 0 到 1
+@msg	`segment` must be "straight" or "curved"	`segment` 必須是 "straight" 或 "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` 必須是 "free"、"keepAngles" 或 "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` 必須是 [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	依顏色類型選取
+	Objects with Spot Colors	使用特別色的物件
+	Objects with Color Effects	帶有顏色效果的物件
+	RGB Images	RGB 影像
+	CMYK Images	CMYK 影像
+	Grayscale Images	灰階影像
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` 必須是 spotColors、colorEffects、rgbImages、cmykImages 或 grayImages

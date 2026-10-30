@@ -102,6 +102,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     let swatches = d.str("tab") == "swatches";
     let mut tab = None;
+    let mut eyedropper = false;
     let resp = egui::Area::new(area)
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
@@ -114,6 +115,12 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         if widgets::icon_button(ui, icon, tip, on, 24.0).clicked() {
                             tab = Some(if icon == "palette" { "color" } else { "swatches" });
                         }
+                    }
+                    // A stop's colour can come from the art, as from the Gradient panel's eyedropper.
+                    if matches!(target, Target::Stop(..))
+                        && widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the stop's colour"), false, 24.0).clicked()
+                    {
+                        eyedropper = true;
                     }
                 });
                 ui.add_space(6.0);
@@ -141,6 +148,11 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         })
         .response;
+    if eyedropper {
+        app.ui.dialog = None;
+        crate::panels::gradient::stop_eyedropper(app);
+        return;
+    }
     // The frame it opened in (its first drawn).
     let frame = ctx.cumulative_frame_nr();
     let opened = d.fields.get(OPENED).and_then(Value::as_u64).unwrap_or(frame);

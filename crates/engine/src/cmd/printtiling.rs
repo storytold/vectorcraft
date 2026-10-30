@@ -10,7 +10,7 @@ use vectorcraft_pdf::{TileOrigin, TilingPage};
 
 use super::fileio::pdf::pdf_error;
 use super::print::{settings, to_json};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, index};
 
 const SET: &str = "print.tiling.set";
 

@@ -94,7 +94,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 25] = [
+pub static LANGUAGES: [LangInfo; 26] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -317,6 +317,17 @@ pub static LANGUAGES: [LangInfo; 25] = [
     // `tr-*` locale (including `tr-TR` and `tr-CY`) resolves here.
     LangInfo {
         code: "tr", name: "Türkçe", source: include_str!("i18n/tr.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
+    },
+    // Catalan: the whole interface and the status and error messages, keeping the same names in
+    // English as Spanish; one/other plurals. Every `ca-*` locale (including `ca-ES`, `ca-AD`,
+    // `ca-FR`, `ca-IT` and `ca-ES-VALENCIA`) resolves here.
+    LangInfo {
+        code: "ca",
+        name: "Català",
+        source: include_str!("i18n/ca.tsv"),
+        plural: plural_one_other,
+        complete_menus: true,
+        catalog: OnceLock::new(),
     },
 ];
 
@@ -664,17 +675,22 @@ mod tests;
 
 /// `name` lowercased with the Latin accents that occur in language names folded away, so a
 /// byte-wise sort reads alphabetically. Other scripts are left as they are.
-fn name_sort_key(name: &str) -> String {
+pub fn name_sort_key(name: &str) -> String {
     name.chars()
         .flat_map(char::to_lowercase)
         .map(|c| match c {
             'à'..='å' | 'ā' | 'ă' | 'ą' => 'a',
             'ç' | 'ć' | 'č' => 'c',
+            'ď' | 'đ' => 'd',
             'è'..='ë' | 'ē' | 'ě' | 'ę' | 'ế' | 'ệ' => 'e',
-            'ì'..='ï' | 'ī' => 'i',
-            'ñ' | 'ń' | 'ň' => 'n',
+            'ğ' | 'ģ' => 'g',
+            'ì'..='ï' | 'ī' | 'ı' => 'i',
+            'ł' | 'ļ' => 'l',
+            'ñ' | 'ń' | 'ň' | 'ņ' => 'n',
             'ò'..='ö' | 'ø' | 'ő' => 'o',
-            'ś' | 'š' => 's',
+            'ř' => 'r',
+            'ś' | 'š' | 'ş' | 'ș' => 's',
+            'ť' | 'ț' | 'ţ' => 't',
             'ù'..='ü' | 'ū' | 'ů' | 'ű' => 'u',
             'ý' | 'ÿ' => 'y',
             'ź' | 'ż' | 'ž' => 'z',
@@ -696,5 +712,6 @@ mod picker_order_tests {
         assert!(keys.windows(2).all(|w| w[0] <= w[1]), "{keys:?}");
         assert_eq!(name_sort_key("Čeština"), "cestina");
         assert_eq!(name_sort_key("Türkçe"), "turkce");
+        assert_eq!(name_sort_key("Łącza"), "lacza");
     }
 }

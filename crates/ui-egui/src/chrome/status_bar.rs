@@ -1,5 +1,5 @@
 use super::tabs::artboard_list;
-use super::*;
+use super::{Arc, ROTATE_VIEW_ANGLES, Sense, Stroke, Tokens, Ui, VectorcraftApp, ZOOM_STOPS, json, theme, vec2, widgets, zoom_label};
 
 /// Draw the status message, bounded readouts and artboard navigation controls.
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -13,7 +13,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let print = app.session.prefs.display_print_size;
                 let shown = crate::state::zoom_display_percent(zoom, print);
                 ui.name_inputs(tl!("Zoom"), |ui| {
-                    egui::ComboBox::from_id_salt("zoom-combo")
+                    craft_ui::ComboBox::from_id_salt("zoom-combo")
                         .selected_text(egui::RichText::new(zoom_label(zoom, print)).size(11.5))
                         .width(76.0)
                         .show_ui(ui, |ui| {
@@ -36,7 +36,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 });
                 let rot = app.view().map(|v| v.rotation).unwrap_or(0.0);
                 ui.name_inputs(tl!("Rotation"), |ui| {
-                    egui::ComboBox::from_id_salt("rot-combo")
+                    craft_ui::ComboBox::from_id_salt("rot-combo")
                         .selected_text(egui::RichText::new(format!("{rot:.0}°")).size(11.5))
                         .width(52.0)
                         .show_ui(ui, |ui| {

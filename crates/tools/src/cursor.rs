@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Point, Serialize, Vec2};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Cursor {
@@ -171,6 +171,15 @@ pub enum Cursor {
     MeshAdd,
     /// Puppet Warp over the selection's mesh where a pin can go: a click adds one.
     PuppetPin,
+    /// The Anchor Eraser Brush (Path Precision Tools add-on); the brush's circle is drawn round it.
+    AnchorEraser,
+    /// The Extend Path tool (Path Precision Tools add-on).
+    ExtendPath,
+    /// The Measure & Inspect tool (Path Precision Tools add-on).
+    MeasureInspect,
+    /// The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path (over
+    /// a path or while drawing it shows the Pen's and Direct Selection's cursors).
+    SmartPen,
 }
 
 impl Cursor {
@@ -261,7 +270,11 @@ impl Cursor {
             | Cursor::SymbolStyler
             | Cursor::Scissors
             | Cursor::MeshAdd
-            | Cursor::PuppetPin => Cursor::Crosshair,
+            | Cursor::PuppetPin
+            | Cursor::AnchorEraser
+            | Cursor::ExtendPath
+            | Cursor::MeasureInspect
+            | Cursor::SmartPen => Cursor::Crosshair,
             c => c,
         }
     }
@@ -295,9 +308,13 @@ impl Cursor {
             | Cursor::SymbolStainer
             | Cursor::SymbolScreener
             | Cursor::SymbolStyler
-            | Cursor::Scissors => Some(Cursor::Crosshair),
+            | Cursor::Scissors
+            | Cursor::AnchorEraser
+            | Cursor::ExtendPath
+            | Cursor::MeasureInspect => Some(Cursor::Crosshair),
             Cursor::TypeVertical => Some(Cursor::Text),
             Cursor::MeshAdd | Cursor::PuppetPin => Some(Cursor::PenAdd),
+            Cursor::SmartPen => Some(Cursor::Pen),
             Cursor::ScissorsNotAllowed => Some(Cursor::NotAllowed),
             _ => None,
         }

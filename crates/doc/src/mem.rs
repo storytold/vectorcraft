@@ -250,7 +250,7 @@ fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
     if let Some(e) = n.extras_box() {
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
-        b += boxed(&e.dimension) + boxed(&e.live_paint_gaps);
+        b += boxed(&e.dimension) + boxed(&e.live_paint_gaps) + boxed(&e.colorize);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         b += e.objects_on_path.as_deref().map_or(0, |o| {

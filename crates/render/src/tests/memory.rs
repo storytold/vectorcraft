@@ -6,6 +6,7 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 
+use crate::blobs::blob_key;
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
 
@@ -131,6 +132,96 @@ fn kept_mips_draw_without_decoding_the_full_pixels_again() {
     let frame = r.render(&moved, 32, 16, quarter, &on);
     assert!(images::store().peek(&full).is_none(), "the full pixels were decoded again");
     assert!(frame.pixels == Renderer::new().render(&moved, 32, 16, quarter, &on).pixels);
+}
+
+/// With `kept_images_only` (the canvas's low-resolution fill), an image the store holds no pixels
+/// of draws as a light gray box and is not decoded. Once decoded, it draws from the pixels the
+/// store holds: the full pixels, when the mip for its size is not kept, and that mip is not made.
+#[test]
+fn kept_images_only_draw_from_the_store_without_decoding() {
+    let _fonts = fonts_steady();
+    let d = doc_with_image("img", png(64, 64, 105), 64, 64);
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, ..Default::default() };
+    let quarter = Affine::scale(0.25);
+    let full = blob_key(&d.images["img"]).0;
+    let mut r = Renderer::new();
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&full).is_none(), "not decoded");
+    assert!(boxed.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 40), "a light box where the image is");
+    // A frame at full size decodes the full pixels and makes no mip.
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let quarter_mip = images::ImageKey { mip: 2, ..full.clone() };
+    assert!(images::store().peek(&full).is_some() && images::store().peek(&quarter_mip).is_none());
+    let drawn = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&quarter_mip).is_none(), "no mip made");
+    assert!(drawn.pixels == Renderer::new().render(&d, 16, 16, quarter, &RenderOptions::default()).pixels, "the full pixels, drawn small");
+}
+
+/// With `kept_images_only`, a blur on an image the store holds no pixels of blurs the light gray
+/// box. Once the image is decoded, the same renderer blurs the image's pixels and does not draw
+/// the blurred box again from its raster cache.
+#[test]
+fn kept_images_only_make_effect_rasters_again_once_the_image_is_decoded() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(64.0, 64.0);
+    d.images.insert("img".into(), ImageBlob::new("image/png", png(64, 64, 107)));
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: "img".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 2.0})));
+    d.insert(Some(layer), 0, n).unwrap();
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, dragging: true, ..Default::default() };
+    let quarter = Affine::scale(0.25);
+    let full = blob_key(&d.images["img"]).0;
+    let mut r = Renderer::new();
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(images::store().peek(&full).is_none(), "not decoded");
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let drawn = r.render(&d, 16, 16, quarter, &kept);
+    assert!(drawn.pixels != boxed.pixels, "the image's pixels, not the box");
+    assert!(drawn.pixels == Renderer::new().render(&d, 16, 16, quarter, &kept).pixels, "as a new renderer draws it");
+}
+
+/// With `kept_images_only`, an image still to be decoded draws as a light gray box, not crossed
+/// with `mark_undecoded_images`. An image the store notes as undecodable is not tried again and
+/// draws without that box: as it draws with the option off,
+/// nothing, or the crossed box with `mark_undecoded_images`. A blur on such an image, cached while
+/// the image was still to be decoded, is made again once the image is noted.
+#[test]
+fn kept_images_only_leave_out_an_image_noted_as_undecodable() {
+    let _fonts = fonts_steady();
+    let mut cut = png(64, 64, 109);
+    cut.truncate(cut.len() / 2);
+    let d = doc_with_image("cut", cut.clone(), 64, 64);
+    let mut blurred = Document::new(64.0, 64.0);
+    blurred.images.insert("cut".into(), ImageBlob::new("image/png", cut));
+    let (id, layer) = (blurred.alloc_id(), blurred.layers[0].id);
+    let im = ImageObject { key: "cut".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    n.appearance.effects.push(effect("blur.gaussian", serde_json::json!({"radius": 2.0})));
+    blurred.insert(Some(layer), 0, n).unwrap();
+    let kept = RenderOptions { kept_images_only: true, image_mips: true, dragging: true, ..Default::default() };
+    let marked = RenderOptions { mark_undecoded_images: true, ..kept.clone() };
+    let quarter = Affine::scale(0.25);
+    let attempts = || crate::paint::DECODE_ATTEMPTS.with(std::cell::Cell::get);
+    let tried = attempts();
+    let (mut r, mut rb) = (Renderer::new(), Renderer::new());
+    let boxed = r.render(&d, 16, 16, quarter, &kept);
+    assert!(boxed.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 40), "a light box while it is still to be decoded");
+    assert!(r.render(&d, 16, 16, quarter, &marked).pixels == boxed.pixels, "with mark_undecoded_images too, and not crossed");
+    let blurred_box = rb.render(&blurred, 16, 16, quarter, &kept);
+    assert!(blurred_box.pixels.iter().any(|&b| b > 0), "the blurred box");
+    assert_eq!(attempts(), tried, "not tried");
+    // The frame for the view tries it once and notes it.
+    let _ = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions { image_mips: true, ..Default::default() });
+    let tried = attempts();
+    assert!(rb.render(&blurred, 16, 16, quarter, &kept).pixels.iter().all(|&b| b == 0), "no blurred box from the raster cache");
+    assert!(r.render(&d, 16, 16, quarter, &kept).pixels.iter().all(|&b| b == 0), "no box");
+    let off = RenderOptions { mark_undecoded_images: true, image_mips: true, dragging: true, ..Default::default() };
+    let crossed = Renderer::new().render(&d, 16, 16, quarter, &off);
+    assert!(crossed.pixels != boxed.pixels, "the crossed box is not the light box");
+    assert!(r.render(&d, 16, 16, quarter, &marked).pixels == crossed.pixels, "the crossed box, as with the option off");
+    assert_eq!(attempts(), tried, "not tried again");
 }
 
 /// A document of `n` point type objects reading `word`, in rows.

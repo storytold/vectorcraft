@@ -582,7 +582,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         }
         let mut range = get(d, "range").as_str().unwrap_or_default().to_string();
-        let edit = egui::TextEdit::singleline(&mut range).desired_width(140.0).hint_text("1-3, 5");
+        let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5");
         if ui.add_enabled(artboards == PrintArtboards::Range, edit).changed() {
             set(d, "range", json!(range));
         }

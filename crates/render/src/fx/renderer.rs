@@ -2,10 +2,13 @@ use super::bounds::{cull_bounds, effected_path};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
-    DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor, shade,
+    DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
     shade_filter, shadow_filter, silhouette,
 };
-use super::*;
+use super::{
+    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, Vec2, blend_mode,
+    effects, fill_rule, peniko,
+};
 
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
@@ -112,7 +115,8 @@ impl Renderer {
                 let view = Affine::scale(1.0 / scale) * Affine::translate((-x0, -y0)) * f.view;
                 // Art is culled against the raster's own area: members of a group outside the view cast their shadows in it.
                 let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
-                let crop = Frame { mt: false, view, visible, ..*f };
+                let ink = darkness.map_or(f.ink, |d| f.ink.darkened(d));
+                let crop = Frame { mt: false, view, visible, ink, ..*f };
                 let before = self.stats.moved;
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 // A silhouette drawn over moved rasters makes a moved shadow.
@@ -125,9 +129,8 @@ impl Renderer {
                     Made { pixels: silhouette(&pm, darkness.is_some()), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
                 let (wu, hu) = (w as usize, h as usize);
                 let sigma = blur / 2.0 / f.px / scale;
-                if let Some(darkness) = darkness {
+                if darkness.is_some() {
                     // The object's own colors, blurred, with the black Darkness adds (premultiplied).
-                    let keep = 1.0 - shade(f.ink, darkness);
                     let mut planes: [Vec<f32>; 4] = [
                         pm.data().iter().map(|p| p.r as f32).collect(),
                         pm.data().iter().map(|p| p.g as f32).collect(),
@@ -140,7 +143,7 @@ impl Renderer {
                     let [r, g, b, a] = &planes;
                     for (k, px) in pm.data_mut().iter_mut().enumerate() {
                         let al = (a[k] * opacity).clamp(0.0, 255.0).round();
-                        let value = |plane: &Vec<f32>| (plane[k] * opacity * keep).round().clamp(0.0, al) as u8;
+                        let value = |plane: &Vec<f32>| (plane[k] * opacity).round().clamp(0.0, al) as u8;
                         *px = vello_cpu::color::PremulRgba8 { r: value(r), g: value(g), b: value(b), a: al as u8 };
                     }
                 } else {
@@ -216,15 +219,9 @@ impl Renderer {
         self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
-            paint(r, c, &shifted(fr, dx, dy));
-            // Darkness: black over the object's own colors, keeping their alpha.
-            if let Some(black) = darkness.map(|d| shade(f.ink, d)).filter(|d| *d > 0.0) {
-                c.set_transform(fr.view);
-                c.set_blend_mode(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::SrcAtop));
-                c.set_paint(peniko::Color::new([0.0, 0.0, 0.0, black]));
-                c.fill_rect(&reach);
-                c.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
-            }
+            let ink = darkness.map_or(fr.ink, |d| fr.ink.darkened(d));
+            let source = Frame { ink, ..*fr };
+            paint(r, c, &shifted(&source, dx, dy));
             c.pop_layer();
         });
     }
@@ -275,7 +272,11 @@ impl Renderer {
         let view = Affine::scale(1.0 / scale) * Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view;
         // Culled against the raster's area, as `shadow_raster` draws the silhouette.
         let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
-        let crop = Frame { mt: false, view, visible, ..*f };
+        let ink = match fx {
+            RasterFx::DropShadow { darkness: Some(d), .. } => f.ink.darkened(*d),
+            _ => f.ink,
+        };
+        let crop = Frame { mt: false, view, visible, ink, ..*f };
         self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
@@ -691,5 +692,47 @@ impl Renderer {
                 }
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RenderOptions;
+    use vectorcraft_color::Color;
+    use vectorcraft_doc::{Document, color::BlendMode};
+
+    #[test]
+    fn uncached_darkness_shadow_subtracts_before_separate_opacity() {
+        let doc = Document::new(100.0, 100.0);
+        let symbols = doc.symbol_boxes().quick();
+        let opts = RenderOptions::default();
+        let frame = Frame {
+            mt: false,
+            doc: &doc,
+            symbols: &symbols,
+            view: Affine::IDENTITY,
+            visible: Rect::new(0.0, 0.0, 100.0, 100.0),
+            px: 1.0,
+            opts: &opts,
+            ink: Ink::Display,
+            plates: None,
+        };
+        let mut ctx = frame.offscreen_context(100, 100);
+        let mut r = Renderer::new();
+        let fx =
+            RasterFx::DropShadow { mode: BlendMode::Normal, opacity: 0.5, dx: 40.0, dy: 0.0, blur: 0.0, color: Color::BLACK, darkness: Some(0.25) };
+        let source = Rect::new(10.0, 10.0, 30.0, 30.0);
+        r.draw_shadow_filter(&mut ctx, &frame, &fx, source, &mut |_, c, f| {
+            c.set_transform(f.view);
+            c.set_paint(f.ink.color(&Color::rgb(0.8, 0.4, 0.2), 1.0));
+            c.fill_rect(&source);
+        });
+        ctx.flush();
+        let mut pm = vello_cpu::Pixmap::new(100, 100);
+        ctx.render(&mut pm, &mut r.resources);
+        let px = pm.data()[20 * 100 + 60];
+        assert!(px.r.abs_diff(70) <= 1 && px.g.abs_diff(19) <= 1 && px.b == 0 && px.a.abs_diff(128) <= 1, "{px:?}");
+        assert!(r.shadows.is_empty());
     }
 }

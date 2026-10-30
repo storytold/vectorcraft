@@ -554,17 +554,20 @@ fn a_mixed_selection_lists_what_its_objects_share() {
     run(&mut app, "select.set", json!({"ids": ids}));
     let shown = frame(&mut app);
     let kind = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(ids[0].as_u64().unwrap())).unwrap().kind_label();
-    assert_eq!(shown.first().map(String::as_str), Some(kind), "the object row names their kind: {shown:?}");
+    assert_eq!(shown.iter().find(|t| *t != "?").map(String::as_str), Some(kind), "the object row names their kind: {shown:?}");
     assert!(shown.iter().any(|t| t == "Mixed Appearances"), "{shown:?}");
     assert!(shown.iter().any(|t| t == "Stroke:") && !shown.iter().any(|t| t == "Fill:"), "the stroke, not the fills: {shown:?}");
     assert!(shown.iter().any(|t| t.contains("Feather")), "the shared effect: {shown:?}");
     assert!(shown.iter().any(|t| t == "Opacity:"), "{shown:?}");
+    // The object row's chip says the fills differ, like the Properties panel's "?" chip.
+    assert!(shown.iter().any(|t| t == "?"), "{shown:?}");
     // Alike objects list their whole stack, without the note.
     run(&mut app, "paint.setFill", json!({"ids": ids, "color": "#ffff00"}));
     let shown = frame(&mut app);
     assert!(!shown.iter().any(|t| t == "Mixed Appearances") && shown.iter().any(|t| t == "Fill:"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "?"), "{shown:?}");
     // A path and type.
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 180, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [ids[0].clone(), t]}));
-    assert_eq!(frame(&mut app).first().map(String::as_str), Some("Mixed Objects"));
+    assert_eq!(frame(&mut app).iter().find(|t| *t != "?").map(String::as_str), Some("Mixed Objects"));
 }

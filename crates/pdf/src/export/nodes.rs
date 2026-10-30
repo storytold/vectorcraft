@@ -1,5 +1,8 @@
-use super::exporter::{address, blend, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable};
-use super::*;
+use super::exporter::{address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32, Paint, Path, Rect,
+    Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
+};
 
 impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
@@ -134,7 +137,7 @@ impl Exporter<'_> {
         }
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m),
+            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
             _ => None,
         };
         if let Some(m) = mask
@@ -179,7 +182,10 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => self.image(s, im, alpha),
+            NodeKind::Image(im) => {
+                let colorized = n.extras().colorize.as_deref().and_then(|p| self.colorized_image(im, p, !n.extras().pixelated));
+                self.image(s, im, colorized.or(alpha), n.extras().pixelated)
+            }
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
                 // instances multiply.
@@ -192,6 +198,8 @@ impl Exporter<'_> {
                     self.node(s, &art, page, true);
                 }
             }
+            // A gradient mesh is a smooth patch shading where it can be written as one.
+            NodeKind::Mesh(m) if self.mesh(s, m) => {}
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
@@ -209,6 +217,56 @@ impl Exporter<'_> {
         for _ in 0..pushes {
             s.pop();
         }
+    }
+
+    /// Gradient mesh `m` as one PDF Type 6 (Coons patch) shading filling its outline (ISO 32000-1,
+    /// 8.7.4.5.7): each patch blends its corner colours bilinearly, as the canvas draws it, and
+    /// the viewer or RIP does so smoothly at its own resolution. Cutting the mesh into flat quads
+    /// instead banded, left seams between them, and made files with many meshes very large.
+    /// Corner colours are written as [`Self::page_color`] writes any colour; RGB among other
+    /// models goes through RGB, as the writer needs one colour space a shading (ink-based ones:
+    /// CMYK and grey, merge). `false` when it isn't written so: the caller draws it expanded.
+    /// That is a mesh with see-through points (their opacities would be a soft mask of another
+    /// patch shading, which a common viewer, Poppler, draws with gaps and too opaque; the quads
+    /// carry their own opacity), an invalid mesh, or one beyond the coordinates a file holds.
+    fn mesh(&mut self, s: &mut Surface, m: &vectorcraft_doc::live::GradientMesh) -> bool {
+        if !m.is_valid() || !m.points.iter().all(|p| p.opacity >= 1.0) {
+            return false;
+        }
+        let Some(bounds) = m.bounds() else { return false };
+        if !writable(s, Affine::IDENTITY, bounds) {
+            return false;
+        }
+        let Some(path) = to_path(s, &m.outline().to_bezpath()) else { return false };
+        let page: Vec<vectorcraft_color::Color> = m.points.iter().map(|p| self.page_color(&p.color)).collect();
+        let mixed = page.windows(2).any(|w| w[0].model() != w[1].model());
+        let rgb = page.iter().any(|c| matches!(c, vectorcraft_color::Color::Rgb { .. } | vectorcraft_color::Color::Lab { .. }));
+        let colors: Vec<krilla::color::Color> =
+            page.iter().map(|c| if mixed && rgb { color(&c.in_model(vectorcraft_color::cms::Model::Rgb)) } else { color(c) }).collect();
+        let pt = |p: vectorcraft_geom::Point| (p.x as f32, p.y as f32);
+        let mut patches = Vec::with_capacity(m.rows as usize * m.cols as usize);
+        for r in 0..m.rows as usize {
+            for c in 0..m.cols as usize {
+                // The corners in the order a Type 6 shading lists them: down the left edge (v),
+                // along the bottom (u), back up the right edge and back along the top.
+                let corners = [m.idx(r, c), m.idx(r + 1, c), m.idx(r + 1, c + 1), m.idx(r, c + 1)];
+                let (left, bottom, right, top) = (m.edge_v(r, c), m.edge_u(r + 1, c), m.edge_v(r, c + 1), m.edge_u(r, c));
+                let points =
+                    [left.p0, left.p1, left.p2, left.p3, bottom.p1, bottom.p2, bottom.p3, right.p2, right.p1, right.p0, top.p2, top.p1].map(pt);
+                let Some(colors) =
+                    corners.iter().map(|&i| colors.get(i).cloned()).collect::<Option<Vec<_>>>().and_then(|v| <[_; 4]>::try_from(v).ok())
+                else {
+                    return false;
+                };
+                patches.push(krilla::paint::MeshPatch { points, colors, opacities: [NormalizedF32::ONE; 4] });
+            }
+        }
+        let mesh = krilla::paint::MeshGradient { patches, transform: xf(Affine::IDENTITY), anti_alias: false };
+        s.set_stroke(None);
+        s.set_fill(Some(Fill { paint: mesh.into(), opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_path(&path);
+        s.set_fill(None);
+        true
     }
 
     fn shape(&mut self, s: &mut Surface, n: &Node, bp: &BezPath, r: FillRule, page: Rect) {

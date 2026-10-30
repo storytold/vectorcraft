@@ -11,7 +11,7 @@ use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind
 use vectorcraft_geom::Rect;
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

@@ -27,7 +27,7 @@ pub const ADJUSTMENTS: [&str; 6] =
 
 /// Is `id` a colour adjustment effect?
 pub fn is_adjustment(id: &str) -> bool {
-    ADJUSTMENTS.contains(&id)
+    ADJUSTMENTS.contains(&id) || crate::addons::color::is_color_effect(id)
 }
 
 fn visible_adjustment(e: &Effect) -> bool {
@@ -88,6 +88,8 @@ enum Adjust {
     ShiftToColor { target: [f32; 3], amount: f32, preserve: bool },
     /// Warm/cool and magenta/green shifts, -1..1.
     TemperatureTint { temperature: f32, tint: f32 },
+    /// One of the Color Effects add-on's.
+    Addon(crate::addons::color::Adjust),
 }
 
 /// The colour adjustments of an effect list, composed in order.
@@ -175,7 +177,7 @@ impl Adjust {
                 preserve: flag(p, "preserveLightness", true),
             },
             "adjust.temperatureTint" => Adjust::TemperatureTint { temperature: amount(p, "temperature"), tint: amount(p, "tint") },
-            _ => return None,
+            _ => Adjust::Addon(crate::addons::color::Adjust::parse(id, p)?),
         })
     }
 
@@ -225,6 +227,7 @@ impl Adjust {
                 let (t, m) = (temperature * 0.3, tint * 0.3);
                 [r * (1.0 + t), g * (1.0 - m), b * (1.0 - t)]
             }
+            Adjust::Addon(a) => a.apply([r, g, b]),
         }
     }
 }

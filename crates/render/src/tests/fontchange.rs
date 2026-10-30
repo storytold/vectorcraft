@@ -26,6 +26,23 @@ pub(crate) fn adding_fonts() -> RwLockWriteGuard<'static, ()> {
     FONTS.write().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// What `step` returns from a run in which the fonts stayed the same. The fonts can change while
+/// [`fonts_steady`] is held: the first lookup by family name catalogs the installed fonts, and
+/// resolving a cataloged family, or a character no loaded font has, loads a face. `step` runs up
+/// to 100 times, until [`vectorcraft_text::FontDb::generation`] is the same after a run as before
+/// it.
+pub(crate) fn with_fonts_unchanged<T>(mut step: impl FnMut() -> T) -> T {
+    let db = vectorcraft_text::FontDb::global();
+    for _ in 0..100 {
+        let before = db.generation();
+        let out = step();
+        if db.generation() == before {
+            return out;
+        }
+    }
+    panic!("the fonts changed during each of 100 runs");
+}
+
 /// The bundled Source Serif 4 renamed `family` (as long as the original name).
 fn serif_as(family: &str) -> Vec<u8> {
     let mut data = include_bytes!("../../../../assets/fonts/SourceSerif4-Regular.ttf").to_vec();

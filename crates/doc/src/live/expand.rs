@@ -1,7 +1,10 @@
-use super::envelope::{EnvelopeOptions, expand_envelope};
+use super::envelope::{EnvelopeOptions, PreserveShape, expand_envelope};
 use super::mesh::GradientMesh;
 use super::warp::map_nonlinear;
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, Color, FillLayer, ImageObject, Node, NodeId, NodeKind, Paint, PathData, Point, Rect, SubPath, Vec2,
+    blend_expand,
+};
 
 /// Optional hook that converts nodes the pure evaluation can't map (text) to outlines.
 pub type Outliner<'a> = Option<&'a dyn Fn(&Node) -> Option<Node>>;
@@ -154,8 +157,10 @@ fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
 
 /// Image `n` (`im`) pushed through the warp as a raster mesh warp: its frame cut into
 /// `w.cells`² cells of two triangles, each a clip group showing the image under the affine map
-/// that takes the triangle where the warp takes its corners. Each piece reaches a little past its
-/// edges (at most half a point) so neighbours overlap and no seams show.
+/// that takes the triangle where the warp takes its corners (with Preserve Shape Using
+/// Transparency, the image masked by the triangle; with Anti-Alias off, drawn without smoothing).
+/// Each piece reaches a little past its edges (at most half a point) so neighbours overlap and no
+/// seams show.
 fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
     let k = w.cells.max(1);
     // Two triangles a cell, three objects each; an image an inner envelope already cut into
@@ -186,11 +191,20 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
                         if len > 1e-12 { *p + v * (grow / len) } else { *p }
                     })
                     .collect();
-                let mut clip = Node::path(n.id, PathData::single(SubPath::polyline(&tri, true)), Appearance::default());
+                let shape = PathData::single(SubPath::polyline(&tri, true));
+                let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
+                image.extras_mut().pixelated = !w.options.anti_alias;
+                if w.options.preserve_shape == PreserveShape::Transparency {
+                    // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
+                    // white opacity mask) instead of its clipping path.
+                    let white = Node::path(n.id, shape, Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+                    pieces.push(Arc::new(image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))))));
+                    continue;
+                }
+                let mut clip = Node::path(n.id, shape, Appearance::default());
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
                     *clipping = true;
                 }
-                let image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 pieces.push(Arc::new(Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })));
             }
         }

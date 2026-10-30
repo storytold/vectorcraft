@@ -19,7 +19,7 @@ use vectorcraft_pathops::BoolOp;
 
 use super::edit::selected_roots;
 use super::menucmds::isolated_doc;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, color_value, f64_or, has_selection, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(

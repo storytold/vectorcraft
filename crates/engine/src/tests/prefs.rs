@@ -998,6 +998,114 @@ fn whole_objects_moved_with_selected_anchors_follow_transform_pattern_tiles() {
     }
 }
 
+/// A Direct Selection or Group Selection drag that starts on the fill of a path selected whole,
+/// while another path has an anchor selected, moves the path whole and only that anchor of the
+/// other path, in one undo step, as a drag of the anchor does. With Transform Pattern Tiles on,
+/// the tiles of the path selected whole move with it. Alt pressed during the drag copies the
+/// selected objects instead.
+#[test]
+fn a_drag_from_a_fill_moves_only_the_selected_anchors_of_partly_selected_paths() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    let filled = patterned_square(&mut s);
+    let other = square(&mut s, 300.0, 100.0);
+    let v = ViewInfo { smart_guides: false, snap_to_point: false, corner_widgets: false, ..ViewInfo::default() };
+    set_pref(&mut s, "transformPatternTiles", json!(true));
+    let xs = |s: &Session| -> Vec<f64> {
+        s.doc().unwrap().doc.node(other).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p.x).collect()
+    };
+    let before = xs(&s);
+    for tool in ["directSelection", "groupSelection"] {
+        s.select_tool(tool, v).unwrap();
+        s.execute("select.set", &json!({"ids": [filled.0]})).unwrap();
+        s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+        gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
+        assert_eq!(top_left(&s, filled), (110.0, 100.0), "{tool}: the square moves whole");
+        let mut moved = before.clone();
+        moved[0] += 10.0;
+        assert_eq!(xs(&s), moved, "{tool}: the selected anchor moves alone");
+        assert_eq!(s.journal.last().unwrap().0, "path.moveAnchors", "{tool}");
+        assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Move"), "{tool}");
+        assert_eq!(pattern_tiles(&s, filled), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0], "{tool}: the tiles move with the square");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((top_left(&s, filled), xs(&s)), ((100.0, 100.0), before.clone()), "{tool}: one undo step");
+        // Alt pressed during the drag copies the selected objects and leaves the originals.
+        let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+        let objects = count(&s);
+        s.execute("select.set", &json!({"ids": [filled.0]})).unwrap();
+        s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+        let alt = vectorcraft_tools::Mods { alt: true, ..vectorcraft_tools::Mods::default() };
+        s.pointer(&PointerEvent::new(Down, 125.0, 125.0), v).unwrap();
+        s.pointer(&PointerEvent::new(Drag, 130.0, 125.0), v).unwrap();
+        s.pointer(&PointerEvent::new(Drag, 135.0, 125.0).with_mods(alt), v).unwrap();
+        s.pointer(&PointerEvent::new(Up, 135.0, 125.0).with_mods(alt), v).unwrap();
+        assert_eq!((top_left(&s, filled), xs(&s), count(&s)), ((100.0, 100.0), before.clone(), objects + 2), "{tool}: copied");
+        assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Copy"), "{tool}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(count(&s), objects, "{tool}");
+    }
+}
+
+/// A path selected whole inside a selected group moves once, with the group, when the selection
+/// also holds a direct-selected anchor: a Group Selection drag from the path's fill (which adds
+/// the group) and an arrow key move both by 10 pt.
+#[test]
+fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    let (a, b) = (square(&mut s, 100.0, 100.0), square(&mut s, 160.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let other = square(&mut s, 300.0, 100.0);
+    let v = ViewInfo { smart_guides: false, snap_to_point: false, corner_widgets: false, ..ViewInfo::default() };
+    let first_x = |s: &Session| s.doc().unwrap().doc.node(other).unwrap().path_data().unwrap().subpaths[0].anchors[0].p.x;
+    s.select_tool("groupSelection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
+    assert!(s.doc().unwrap().selection.contains(g), "the press added the group");
+    assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (170.0, 100.0), 310.0), "the drag");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0, a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0, "big": true})).unwrap();
+    assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (170.0, 100.0), 310.0), "the arrow key");
+}
+
+/// Transform Again after a Direct Selection drag from a fill with an anchor of another path
+/// selected moves the path selected whole and only that anchor again, by the same distance. A
+/// drag back to where it began leaves that move to repeat, and `path.moveAnchors` run as a
+/// command is repeated too.
+#[test]
+fn transform_again_repeats_a_drag_from_a_fill_with_anchors_selected() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    let filled = square(&mut s, 100.0, 100.0);
+    let other = square(&mut s, 300.0, 100.0);
+    let v = ViewInfo { smart_guides: false, snap_to_point: false, corner_widgets: false, ..ViewInfo::default() };
+    let xs = |s: &Session| -> Vec<f64> {
+        s.doc().unwrap().doc.node(other).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p.x).collect()
+    };
+    let mut moved = xs(&s);
+    s.select_tool("directSelection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [filled.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    moved[0] += 20.0;
+    assert_eq!((top_left(&s, filled), xs(&s)), ((120.0, 100.0), moved.clone()));
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Transform Again"));
+    // A drag that ends where it began leaves the move to repeat.
+    gesture(&mut s, v, &[(Down, 145.0, 125.0), (Drag, 155.0, 125.0), (Drag, 145.0, 125.0), (Up, 145.0, 125.0)]);
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    moved[0] += 10.0;
+    assert_eq!((top_left(&s, filled), xs(&s)), ((130.0, 100.0), moved), "after a drag back to its start");
+    // The command, as an action plays it back, is repeated the same way.
+    s.execute("path.moveAnchors", &json!({"dx": 0, "dy": 5})).unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(top_left(&s, filled), (130.0, 110.0), "path.moveAnchors");
+}
+
 /// General › Select Same Tint % (#394): off, Select › Same › Fill Color takes every tint of the
 /// swatch; on, only the same tint.
 #[test]
@@ -1508,6 +1616,23 @@ fn real_time_drawing_off_skips_tool_previews_until_commit() {
     assert!(s.doc().unwrap().revision > rev, "on again: previews run while dragging");
 }
 
+/// #4646: with Real-time Drawing off, a ruler guide moved with the Selection tool still moves
+/// while it is dragged (the guide is all the drag shows).
+#[test]
+fn real_time_drawing_off_still_shows_a_dragged_guide() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 200.0), v).unwrap();
+    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
+    assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+}
+
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
 #[test]
 fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
@@ -1759,4 +1884,28 @@ fn transform_panel_patterns_defaults_to_following_the_general_preference() {
     s.execute("prefs.set", &json!({"key": "transformPanelPatterns", "value": "both"})).unwrap();
     s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
     assert_eq!(s.prefs.transform_panel_patterns, "default");
+}
+
+/// Character panel › Show Snap to Glyph Options (#4232): `view.snapToGlyph.options` reads and sets
+/// the options, all on by default, kept as the `glyphSnap` preference group; bad keys and values
+/// change nothing, and resetting the preferences turns them all back on.
+#[test]
+fn snap_to_glyph_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"baseline": true, "xHeight": true, "bounds": true, "proximity": true, "angular": true, "anchors": true});
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+    let mut set = all.clone();
+    (set["xHeight"], set["angular"]) = (json!(false), json!(false));
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({"xHeight": false, "angular": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "glyphSnap"})).unwrap(), set);
+    assert!(!s.prefs.glyph_snap.x_height && s.prefs.glyph_snap.baseline);
+    for bad in [json!({"xHeight": 1}), json!({"glyphBounds": false})] {
+        assert!(s.execute("view.snapToGlyph.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "glyphSnap", "value": bad})).is_err(), "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "glyphSnap", "value": {"anchors": false}})).unwrap();
+    set["anchors"] = json!(false);
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
 }

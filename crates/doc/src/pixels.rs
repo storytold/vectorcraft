@@ -62,6 +62,61 @@ impl ImageBlob {
     }
 }
 
+/// How a grayscale image's file stores its pixels ([`ImageBlob::gray_source`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GraySource {
+    /// One bit a pixel: black and white only.
+    pub one_bit: bool,
+    /// The file has an alpha channel.
+    pub alpha: bool,
+}
+
+impl ImageBlob {
+    /// Whether the image's file stores grayscale or 1-bit pixels (the images a fill color
+    /// colorizes), and how; `None` for color images and data that isn't an image. Reads only its
+    /// header.
+    pub fn gray_source(&self) -> Option<GraySource> {
+        let gray = |one_bit: bool, alpha: bool| Some(GraySource { one_bit, alpha });
+        if let Some((kind, _)) = crate::cmyk::tiff(&self.bytes) {
+            return match kind {
+                tiff::ColorType::Gray(bits) => gray(bits == 1, false),
+                tiff::ColorType::GrayA(bits) => gray(bits == 1, true),
+                _ => None,
+            };
+        }
+        if crate::cmyk::jpeg_components(&self.bytes) == Some(1) {
+            return gray(false, false);
+        }
+        use image::{ExtendedColorType as E, ImageDecoder as _};
+        let reader = image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?;
+        match reader.into_decoder().ok()?.original_color_type() {
+            E::L1 => gray(true, false),
+            E::La1 => gray(true, true),
+            E::L2 | E::L4 | E::L8 | E::L16 => gray(false, false),
+            E::La2 | E::La4 | E::La8 | E::La16 => gray(false, true),
+            _ => None,
+        }
+    }
+
+    /// How much of a colorize paint each pixel shows, row by row from the top: how dark the pixel
+    /// is (255 less its Rec. 709 luma) scaled by its alpha, so white and transparent pixels are 0.
+    /// Returns the width, the height and one byte a pixel; `None` when the image can't be decoded
+    /// within [`MAX_RASTER_ALLOC`].
+    pub fn coverage(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (w, h) = img.dimensions();
+        let cover = img
+            .pixels()
+            .map(|p| {
+                let [r, g, b, a] = p.0;
+                let luma = 0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32;
+                ((255.0 - luma).clamp(0.0, 255.0) * a as f32 / 255.0).round() as u8
+            })
+            .collect();
+        Some((w, h, cover))
+    }
+}
+
 impl ImageBlob {
     /// The colour around pixel (`x`, `y`) (pixel space): the alpha-weighted average of the `size` ×
     /// `size` pixels centred on it, clipped to the image, as straight RGBA. `None` outside the
@@ -297,5 +352,67 @@ mod tests {
         assert_eq!(b.content_key(), blob(&[[255, 0, 0, 255], [255, 0, 0, 128], [0, 0, 255, 255], [10, 20, 30, 0]], 2, 2).content_key());
         assert!(b.map_rgb(|c| c).is_none(), "nothing changed");
         assert!(ImageBlob::png(vec![1, 2, 3]).map_rgb(|c| c).is_none(), "undecodable");
+    }
+
+    /// An uncompressed 1-bit TIFF, BlackIsZero, of `w` × `h` pixels: `rows` holds each row's bits,
+    /// padded to a byte, most significant bit first.
+    fn bilevel_tiff(w: u16, h: u16, rows: &[u8]) -> Vec<u8> {
+        // Tag, type (3 short, 4 long) and value of each entry, in tag order.
+        let data_at = 8 + 2 + 9 * 12 + 4;
+        let entries: [(u16, u16, u32); 9] = [
+            (256, 3, w.into()),
+            (257, 3, h.into()),
+            (258, 3, 1),
+            (259, 3, 1),
+            (262, 3, 1),
+            (273, 4, data_at),
+            (277, 3, 1),
+            (278, 3, h.into()),
+            (279, 4, rows.len() as u32),
+        ];
+        let mut out = b"II*\0".to_vec();
+        out.extend_from_slice(&8u32.to_le_bytes());
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        for (tag, kind, value) in entries {
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&kind.to_le_bytes());
+            out.extend_from_slice(&1u32.to_le_bytes());
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(rows);
+        out
+    }
+
+    fn png_of(img: image::DynamicImage) -> ImageBlob {
+        let mut png = Vec::new();
+        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        ImageBlob::png(png)
+    }
+
+    #[test]
+    fn grayscale_and_1_bit_files_are_told_from_color_ones() {
+        let gray = |one_bit, alpha| Some(GraySource { one_bit, alpha });
+        let l8 = png_of(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap()));
+        assert_eq!(l8.gray_source(), gray(false, false));
+        let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(1, 1, vec![0, 128]).unwrap()));
+        assert_eq!(la8.gray_source(), gray(false, true));
+        let mut jpeg = Vec::new();
+        jpeg_encoder::Encoder::new(&mut jpeg, 90).encode(&[0, 255, 0, 255], 2, 2, jpeg_encoder::ColorType::Luma).unwrap();
+        assert_eq!(ImageBlob::new("image/jpeg", jpeg).gray_source(), gray(false, false));
+        // Black, white; white, black.
+        let tif = ImageBlob::new("image/tiff", bilevel_tiff(2, 2, &[0b0100_0000, 0b1000_0000]));
+        assert_eq!(tif.gray_source(), gray(true, false));
+        assert_eq!(tif.coverage(), Some((2, 2, vec![255, 0, 0, 255])), "black covers, white doesn't");
+        // Color images and data that isn't an image.
+        assert_eq!(blob(&[[0, 0, 0, 255], [9, 9, 9, 255]], 2, 1).gray_source(), None);
+        assert_eq!(ImageBlob::png(vec![1, 2, 3]).gray_source(), None);
+    }
+
+    #[test]
+    fn coverage_is_darkness_times_alpha() {
+        let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(4, 1, vec![0, 255, 255, 255, 51, 255, 0, 128]).unwrap()));
+        assert_eq!(la8.coverage(), Some((4, 1, vec![255, 0, 204, 128])));
+        assert_eq!(ImageBlob::png(vec![1, 2, 3]).coverage(), None);
     }
 }

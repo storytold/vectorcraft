@@ -1,7 +1,10 @@
 use super::graphic_style::GraphicStyle;
 use super::limits::MAX_NEXT_ID;
 use super::records::{ImageBlob, SavedSelection, SavedView};
-use super::*;
+use super::{
+    Arc, Document, ImageObject, Node, NodeKind, SYMBOL_EXPORT_TYPE, SYMBOL_NINE_SLICE, SYMBOL_REGISTRATION, SymbolExportType, SymbolNineSlice,
+    SymbolRegistration,
+};
 
 impl Document {
     /// The pixels image `im` shows: its own ([`ImageObject::pixels`]) or this document's.

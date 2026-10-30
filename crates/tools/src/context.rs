@@ -1,4 +1,4 @@
-use super::*;
+use super::{Document, NodeId, Paint, Point, Selection, Unit, Vec2, distort, select, xform};
 
 /// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
@@ -63,6 +63,50 @@ impl ScreenFrame {
     }
 }
 
+/// The Character panel's Snap to Glyph options (`view.snapToGlyph.options`): which guides View ›
+/// Snap to Glyph gives. All on by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GlyphSnap {
+    /// The baseline of a single line of type.
+    pub baseline: bool,
+    /// The x-height: the top of its lowercase letters.
+    pub x_height: bool,
+    /// Glyph Bounds: each glyph's top, bottom, left and right edges.
+    pub bounds: bool,
+    /// Proximity Guides: across the baseline at both edges of each character's width.
+    pub proximity: bool,
+    /// Angular Guides: along a glyph's slanted straight segments, and every guide of rotated type
+    /// (which runs at its angle).
+    pub angular: bool,
+    /// Anchor Point: the anchor points of each glyph's outline.
+    pub anchors: bool,
+}
+
+impl Default for GlyphSnap {
+    fn default() -> Self {
+        Self { baseline: true, x_height: true, bounds: true, proximity: true, angular: true, anchors: true }
+    }
+}
+
+impl GlyphSnap {
+    /// These options with the ones `p` names (camelCase booleans), or why `p` can't set them.
+    pub fn merged(self, p: &serde_json::Value) -> Result<Self, String> {
+        let mut o = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        match (p, o.as_object_mut()) {
+            (serde_json::Value::Null, _) => {}
+            (serde_json::Value::Object(given), Some(cur)) => {
+                for (k, v) in given {
+                    let slot = cur.get_mut(k).ok_or_else(|| format!("unknown Snap to Glyph option `{k}`"))?;
+                    *slot = serde_json::Value::Bool(v.as_bool().ok_or_else(|| format!("`{k}` must be true or false"))?);
+                }
+            }
+            _ => return Err("the Snap to Glyph options must be an object".into()),
+        }
+        serde_json::from_value(o).map_err(|e| e.to_string())
+    }
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -96,8 +140,11 @@ pub struct ToolContext<'a> {
     pub snap_tangent: bool,
     /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
     pub snap_perpendicular: bool,
-    /// View → Snap to Glyph: drawn points snap to live-text baselines and glyph bounds (with Smart Guides).
+    /// View → Snap to Glyph: drawn points snap to live-text glyph bounds, and on a single line of type
+    /// to its baseline, x-height, character widths and glyph anchor points (with Smart Guides).
     pub snap_to_glyph: bool,
+    /// Which of Snap to Glyph's guides there are (the Character panel's Snap to Glyph options).
+    pub glyph_snap: GlyphSnap,
     /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
     pub corner_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
@@ -234,6 +281,20 @@ impl ToolContext<'_> {
     /// Star tool drag: outer (R1) and inner (R2) radii from the centre to the pointer.
     pub fn star_radii_label(&self, outer: f64, inner: f64) -> String {
         format!("R1: {}\nR2: {}", self.len(outer), self.len(inner))
+    }
+    /// The move an arrow key nudges by: General › Keyboard Increment (ten times with Shift),
+    /// along General › Constrain Angle's axes; `None` for other keys.
+    pub fn arrow_nudge(&self, key: crate::ToolKey, mods: crate::Mods) -> Option<Vec2> {
+        use crate::ToolKey;
+        let step = self.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+        let d = match key {
+            ToolKey::Left => Point::new(-step, 0.0),
+            ToolKey::Right => Point::new(step, 0.0),
+            ToolKey::Up => Point::new(0.0, -step),
+            ToolKey::Down => Point::new(0.0, step),
+            _ => return None,
+        };
+        Some(vectorcraft_geom::constrain_axes(self.constrain_angle).map_or(d, |axes| axes * d).to_vec2())
     }
     /// A move label: `dX: …` over `dY: …`.
     pub fn offset_label(&self, dx: f64, dy: f64) -> String {

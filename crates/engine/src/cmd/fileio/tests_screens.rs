@@ -634,6 +634,151 @@ fn zip_archives_store_their_files() {
     assert!(super::zip::entries(&broken).is_err(), "the CRC catches a changed byte");
 }
 
+/// The compression method of each file in `zip` (0: stored, 8: deflated), from its central directory.
+fn methods(zip: &[u8]) -> Vec<u16> {
+    let u16_at = |at: usize| usize::from(u16::from_le_bytes([zip[at], zip[at + 1]]));
+    let end = zip.len() - 22;
+    let mut at = u32::from_le_bytes(zip[end + 16..end + 20].try_into().unwrap()) as usize;
+    (0..u16_at(end + 10))
+        .map(|_| {
+            let method = u16_at(at + 10) as u16;
+            at += 46 + u16_at(at + 28) + u16_at(at + 30) + u16_at(at + 32);
+            method
+        })
+        .collect()
+}
+
+#[test]
+fn zip_archives_deflate_what_gets_smaller() {
+    // A xorshift run: bytes that deflating makes larger.
+    let mut x = 0x9E37_79B9u32;
+    let noise: Vec<u8> = (0..4096)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x as u8
+        })
+        .collect();
+    let text = "<rect x=\"5\" y=\"5\" width=\"20\" height=\"20\"/>\n".repeat(100).into_bytes();
+    let files = [("art.svg", text.clone()), ("sub/ünï.png", noise.clone()), ("empty", vec![])];
+    let zip = super::zip::deflate(&files, super::zip::FIXED_TIME, || false).unwrap();
+    assert_eq!(methods(&zip), [8, 0, 0], "the text deflated, the noise and the empty file stored");
+    assert!(zip.windows(noise.len()).any(|w| w == noise.as_slice()), "a stored file's bytes are in the archive as they are");
+    assert!(zip.len() < super::zip::store(&files).unwrap().len());
+    let back = super::zip::entries(&zip).unwrap();
+    assert_eq!(back.len(), 3);
+    for ((n, b), (m, c)) in files.iter().zip(&back) {
+        assert_eq!((*n, b), (m.as_str(), c));
+    }
+    assert_eq!(super::zip::deflate(&files, super::zip::FIXED_TIME, || false).unwrap(), zip, "the same files, the same archive");
+}
+
+/// `deflate` asks `stop` before each chunk of a file and drops the archive when it answers true.
+#[test]
+fn zip_deflating_stops_between_chunks() {
+    let big = vec![7u8; 3 * super::zip::DEFLATE_CHUNK];
+    let files = [("a.bin", big.clone()), ("b.bin", big)];
+    let asked = std::cell::Cell::new(0);
+    let all = super::zip::deflate(&files, super::zip::FIXED_TIME, || {
+        asked.set(asked.get() + 1);
+        false
+    });
+    assert!(all.is_ok());
+    assert_eq!(asked.get(), 6, "once per chunk of each file");
+    asked.set(0);
+    let r = super::zip::deflate(&files, super::zip::FIXED_TIME, || {
+        asked.set(asked.get() + 1);
+        asked.get() == 2
+    });
+    assert!(r.is_err(), "stopped");
+    assert_eq!(asked.get(), 2, "nothing more is deflated after the stop");
+}
+
+/// A cancel that comes after the last file was encoded (here: during the last step, a row that
+/// repeats the one before it and writes nothing) returns no files and no archive, as it writes no
+/// archive into a folder.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_cancel_after_the_last_file_returns_nothing() {
+    let mut s = session(1);
+    let dir = std::env::temp_dir().join(format!("vc-screens-cancel-last-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let rows = json!([{"format": "svg"}, {"format": "svg"}]);
+    for p in [json!({ "formats": rows }), json!({ "formats": rows, "zip": true }), json!({ "formats": rows, "zip": true, "folder": folder })] {
+        let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+        let token = vectorcraft_doc::cancel::CancelToken::new();
+        let on_last = token.clone();
+        let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(move |done, total, _| {
+            if done + 1 == total {
+                on_last.cancel();
+            }
+        });
+        let mut written = vec![];
+        let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || {
+            prepared.write(&mut |path: &str, _: &[u8]| {
+                written.push(path.to_string());
+                Ok(())
+            })
+        });
+        assert!(matches!(r, Err(crate::EngineError::Cancelled)), "{p}: {r:?}");
+        assert_eq!(written, Vec::<String>::new(), "{p}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A folder export without a ZIP writes each file as it goes: a cancel during the last step, a
+/// row that repeats the one before it and writes nothing, comes after every file was written, so
+/// the export returns the written files instead of the cancelled error.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_cancel_after_the_last_file_keeps_a_finished_folder_export() {
+    let mut s = session(1);
+    let dir = std::env::temp_dir().join(format!("vc-screens-cancel-folder-{}", std::process::id()));
+    let folder = dir.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    let p = json!({ "formats": [{"format": "svg"}, {"format": "svg"}], "folder": folder });
+    let prepared = s.prepare_screen_export("document.exportForScreens", &p).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    let on_last = token.clone();
+    let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(move |done, total, _| {
+        if done + 1 == total {
+            on_last.cancel();
+        }
+    });
+    let mut written = vec![];
+    let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || {
+        prepared.write(&mut |path: &str, _: &[u8]| {
+            written.push(path.to_string());
+            Ok(())
+        })
+    });
+    let r = r.unwrap();
+    assert_eq!(written.len(), 1, "{written:?}");
+    assert_eq!(r["files"], json!(written));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn zip_exports_deflate_their_files() {
+    let mut s = session(1);
+    for i in 0..40 {
+        s.execute("shape.rectangle", &json!({"x": i % 30, "y": i % 20, "width": 8, "height": 6})).unwrap();
+    }
+    let p = json!({"formats": [{"format": "svg"}, {"format": "png"}]});
+    let plain = files(&export(&mut s, p.clone()));
+    let mut q = p;
+    q["zip"] = json!(true);
+    let r = export(&mut s, q);
+    let zip = b64(&r);
+    assert_eq!(super::zip::entries(&zip).unwrap(), plain, "every file comes back byte for byte");
+    let svg = plain.iter().position(|(n, _)| n.ends_with(".svg")).unwrap();
+    let png = plain.iter().position(|(n, _)| n.ends_with(".png")).unwrap();
+    let methods = methods(&zip);
+    assert_eq!((methods[svg], methods[png]), (8, 0), "the SVG deflated, the PNG stored");
+    assert!(zip.len() < super::zip::store(&plain).unwrap().len(), "smaller than the stored archive");
+    assert_eq!(r["bytes"].as_u64(), Some(zip.len() as u64));
+}
+
 #[test]
 fn the_document_remembers_its_export_settings() {
     let mut s = session(2);

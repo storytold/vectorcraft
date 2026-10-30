@@ -510,6 +510,22 @@ fn structured_junk() {
         ("shapeBuilder.regions", json!({"ids": [2, 3], "gap": "x"})),
         ("shapeBuilder.regions", json!({"gap": true})),
         ("shapeBuilder.regions", json!({"gap": 12, "ids": [u64::MAX]})),
+        // Smart Pen add-on.
+        ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
+        ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
+        ("addon.pen.append", json!({"id": 2, "x": 9.9e8, "y": -9.9e8, "in": [-9.9e8, 9.9e8], "out": [9.9e8, 9.9e8], "segment": "curved"})),
+        ("addon.pen.close", json!({"id": 2, "subpath": u64::MAX, "segment": "curved"})),
+        ("addon.pen.close", json!({"id": 3, "segment": "straight"})),
+        ("addon.pen.segment", json!({"id": 2, "segment": u64::MAX, "curved": true})),
+        ("addon.pen.segment", json!({"id": 2, "subpath": 0, "segment": 0, "curved": "yes"})),
+        ("addon.pen.removePoint", json!({"id": 2, "anchor": u64::MAX, "plain": true})),
+        ("addon.pen.removePoint", json!({"id": 2, "anchor": 0})),
+        ("addon.pen.togglePoint", json!({"id": 2, "anchor": 0, "ratio": 1e308})),
+        ("addon.pen.togglePoint", json!({"id": 2, "subpath": 0, "anchor": 1})),
+        ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": 0.0, "dx": 9.9e8, "dy": -9.9e8, "mode": "keepAngles"})),
+        ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
+        ("addon.pen.nextSegment", json!({"curved": "yes"})),
+        ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

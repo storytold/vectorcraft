@@ -1,6 +1,6 @@
 use super::run::normalize_panel;
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
-use super::*;
+use super::{Brightness, Value, VectorcraftApp};
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
@@ -156,8 +156,9 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Engine commands that take `ids` and otherwise act on the Appearance panel's subject (the
-/// targeted layer, group or object, else the selection). Without `ids` and without a subject they
-/// are off, as the panel's buttons are: in menus, in the command palette and on their keys.
+/// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
+/// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
+/// on their keys.
 pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
@@ -181,7 +182,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
+        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
+            crate::panels::character::text_style(app).is_some()
+        }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
@@ -189,6 +192,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
+        "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
+        "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -216,7 +221,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
-        "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
@@ -232,10 +237,15 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with(crate::panels::symbols::USER_SLOT) => crate::panels::symbols::user_library(app, id).is_some(),
         "ui.saveBrushLibrary" => crate::panels::brushes::has_brushes(app),
         id if id.starts_with(crate::panels::brushes::USER_SLOT) => crate::panels::brushes::user_library(app, id).is_some(),
-        "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        // Dimmed for appearance attributes, which Expand Appearance expands first (#3089).
+        "ui.expandDialog" => {
+            app.session.active().is_some_and(|d| !d.selection.is_empty()) && !vectorcraft_engine::cmd::expand::has_appearance(&app.session)
+        }
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
+        "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
+        "ui.dialogReset" => crate::dialogs::can_reset(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
@@ -255,6 +265,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.perspectivePlane" => app.session.active().is_some(),
         // Only one window per document so far: greyed out, as Window › Arrange's items are (#3724).
         "window.newWindow" => false,
+        "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }
 }

@@ -1,5 +1,9 @@
 use super::align::choice;
-use super::*;
+use super::{
+    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
+    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    selected_roots_to_transform,
+};
 
 fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     if let Some(o) = point_param(p, "origin") {
@@ -231,13 +235,40 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     let (ids, anchors) = match ids_param(p, "ids") {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };
-    apply_transform(s, "Transform", ids, m, p, anchors)
+    // Shaper's Construction mode: an original shape moved wholly outside its group's bounds leaves
+    // the group.
+    let moved = if bool_or(p, "releaseOutside", false) && !bool_or(p, "copy", false) && !anchors {
+        crate::cmd::shaper::moving_sources(s, &ids)?
+    } else {
+        vec![]
+    };
+    // Outside a drag and an undo group, the move and the removal are one undo step, named for the
+    // removal when there is one.
+    let grouped = !moved.is_empty() && s.doc()?.interaction.is_none() && s.doc()?.undo_group.is_none();
+    if grouped {
+        s.begin_named_undo_group(None);
+    }
+    let r = apply_transform(s, "Transform", ids, m, p, anchors);
+    let released = match &r {
+        Ok(_) if !moved.is_empty() => crate::cmd::shaper::release_outside(s, &moved),
+        _ => Ok(false),
+    };
+    if grouped && let Some(st) = s.active_mut() {
+        st.undo_group = None;
+        if matches!(released, Ok(true))
+            && let Some(e) = st.history.undo.last_mut()
+        {
+            e.label = "Remove from Shaper Group".into();
+        }
+    }
+    released?;
+    r
 }
 
 pub(super) fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {

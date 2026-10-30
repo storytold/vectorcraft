@@ -1,5 +1,5 @@
 use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
-use super::*;
+use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
 /// generic parameter dialog (fields = the defaults) instead of running immediately.
@@ -11,6 +11,16 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
+}
+
+/// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
+/// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
+/// that hold the selected objects (`scope: "group"`).
+pub(super) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
+    match target.0.as_str() {
+        "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        _ => target,
+    }
 }
 
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
@@ -37,6 +47,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
         "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
         "path.average" => ("average", json!({"axis": "both"})),
+        // Average & Join opens on the joined anchor chosen last (Corner the first time).
+        "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
+        "path.averageJoin" => ("averageJoin", json!({"to": "corner"})),
         // Offset Path opens on the values it was last confirmed with.
         "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
@@ -44,6 +57,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         // "Open this dialog with these settings next time" was ticked.
         "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
         "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields(app)),
+        "object.path.smooth" => (crate::dialogs::smooth_slider::KIND, crate::dialogs::smooth_slider::fields()),
         "object.path.splitIntoGrid" => {
             // The grid starts at the size of the selection.
             let size =
@@ -51,7 +65,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
-        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::fields()),
+        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })
 }
@@ -109,7 +123,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
-    if SUBJECT_COMMANDS.contains(&id) && p.get("ids").is_none() && p.get("id").is_none() && !has_subject(app) {
+    if SUBJECT_COMMANDS.contains(&id)
+        && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
+        && p.get("id").is_none()
+        && !has_subject(app)
+    {
         return;
     }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
@@ -119,22 +137,54 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
         return;
     }
+    if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {
+        return;
+    }
+    // Help links: the command returns the URL; a menu click opens it (agents just get the URL).
+    if matches!(id, "help.discord" | "help.website" | "help.appPage" | "help.github") {
+        app.open_link(id);
+        return;
+    }
+    // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
+    // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
+    // their own bounds.
+    let follows_align_to = id == "object.align"
+        && p.as_object().is_some_and(|o| !o.contains_key("to"))
+        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
+    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    // Image Trace traces off the UI thread, with its progress (#3098).
+    if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+        if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
+    if let Err(e) = app.run(id, p) {
+        app.status(e);
+    } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
+        app.ui.open_panel = Some("patternOptions".into());
+    }
+}
+
+/// The dialogs the Envelope, Variables, Pathfinder, Repeat, type, graph and View commands open when called without
+/// params; whether `id` was one of them.
+fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
     if crate::dialogs::envelope::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::envelope::open(app, id) {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Variables (data merge): a name and a kind, a name and a row of values.
     if crate::dialogs::variables::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
         crate::dialogs::variables::open(app, id, None);
-        return;
+        return true;
     }
     // Pathfinder Options: a dialog with the current options.
     if id == "object.pathfinder.options" && p.as_object().is_none_or(|o| o.is_empty()) {
         crate::dialogs::pathfinder_options::open(app);
-        return;
+        return true;
     }
     // Repeat Options: a dialog with the selected repeat's current values.
     if id == "object.repeat.options"
@@ -142,7 +192,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && let Some(fields) = crate::panels::pattern_options::repeat_fields(app)
     {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Repeat Options", "params": fields}));
-        return;
+        return true;
     }
     // Area Type Options and Type on a Path Options: dialogs with the selected type's current
     // values (the command's query), less those the dialog leaves alone.
@@ -158,14 +208,14 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
             }
             Err(e) => app.status(e.to_string()),
         }
-        return;
+        return true;
     }
     // Object → Graph → Type… / Data…: dialogs with the selected graph's current values.
     if matches!(id, "graph.setType" | "graph.setData") && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = graph_dialog(app, id) {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Object → Graph → Design… / Column… / Marker…: the document's graph designs.
     if matches!(id, "graph.design" | "graph.column" | "graph.marker") && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -177,20 +227,20 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
-        return;
+        return true;
     }
     // New View…: a name dialog, starting from the first free "View N".
     if id == "view.saved.new" && p.as_object().is_none_or(|o| o.is_empty()) {
         let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedView::default_name(&d.doc.views)).unwrap_or_default();
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
-        return;
+        return true;
     }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Rotate View with no angle, as the command palette runs it, opens a dialog for the angle, with
     // the view's angle filled in.
@@ -201,20 +251,26 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
             }
             None => app.status("no document"),
         }
-        return;
+        return true;
     }
+    false
+}
+
+/// The dialogs the selection, raster, wrap, blend and Expand commands open when called without params; whether `id`
+/// was one of them.
+fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
         let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedSelection::default_name(&d.doc.saved_selections)).unwrap_or_default();
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Save Selection", "params": {"name": name}}));
-        return;
+        return true;
     }
     // Edit Selection…: the saved selections in a list, to rename or delete.
     if id == "select.editSaved" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_selection::open(app) {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Document Raster Effects Settings and File Info: their dialogs.
     if matches!(id, "document.rasterEffectsSettings" | "file.info") && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -222,7 +278,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Rasterize…: its options, starting from the document's raster effects settings.
     if id == "object.rasterize" && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -233,7 +289,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
             }
             Err(e) => app.status(e.to_string()),
         }
-        return;
+        return true;
     }
     // Text Wrap Options: a dialog with the selected wrap object's current values.
     if id == "object.textWrap.options" && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -243,37 +299,21 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
             }
             Err(e) => app.status(e.to_string()),
         }
-        return;
+        return true;
     }
     // Blend Options…: its dialog, on the selected blend's options.
     if id == "object.blend.options" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::blend_options::open(app) {
             app.status(e);
         }
-        return;
+        return true;
     }
     // Expand…: its dialog.
     if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::expand::open(app) {
             app.status(e);
         }
-        return;
+        return true;
     }
-    // Help links: the command returns the URL; a menu click opens it (agents just get the URL).
-    if matches!(id, "help.discord" | "help.website" | "help.appPage" | "help.github") {
-        app.open_link(id);
-        return;
-    }
-    // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
-    // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
-    // their own bounds.
-    let follows_align_to = id == "object.align"
-        && p.as_object().is_some_and(|o| !o.contains_key("to"))
-        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
-    if let Err(e) = app.run(id, p) {
-        app.status(e);
-    } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
-        app.ui.open_panel = Some("patternOptions".into());
-    }
+    false
 }

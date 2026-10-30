@@ -328,6 +328,63 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
+/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
+/// Tracking commands give the keyboard focus ([`highlight`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Field {
+    /// The font family menu: it opens, and its search field takes the focus.
+    FontName,
+    Kerning,
+    Tracking,
+}
+
+impl Field {
+    /// The id the panel draws the field with ([`show`], [`metrics_grid`]).
+    fn salt(self) -> &'static str {
+        match self {
+            Field::FontName => "ch-font",
+            Field::Kerning => "ch-kern",
+            Field::Tracking => "ch-track",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Field::FontName => "fontName",
+            Field::Kerning => "kerning",
+            Field::Tracking => "tracking",
+        }
+    }
+}
+
+/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
+/// Character panel if it is hidden (a shown one is activated, so its floating window comes
+/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
+/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
+/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
+    // `window.panel` would hide a floating panel in front of its window, or an open flyout.
+    if crate::panel_docking::showing(&app.ui, "character") {
+        app.run("window.panel.activate", json!({"panel": "character"}))?;
+    } else {
+        app.run("window.panel", json!({"panel": "character"}))?;
+    }
+    if text_style(app).is_none() {
+        app.character_focus = None;
+        return Err("select some type first".into());
+    }
+    app.character_focus = Some(field);
+    Ok(json!({ "field": field.name() }))
+}
+
+/// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
+/// Returns whether the text is now underlined.
+pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let (s, _) = text_style(app).ok_or("select some type first")?;
+    format(app, json!({"underline": !s.underline}));
+    Ok(json!(!s.underline))
+}
+
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
@@ -369,6 +426,7 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 /// Plain text of the last text copied inside the Type tool (paste from the native menu, which
 /// can't read the system clipboard).
 static CLIP: Mutex<String> = Mutex::new(String::new());
+static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
@@ -376,12 +434,22 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         return false;
     }
     let Ok(r) = app.session.execute("text.getRange", &json!({"id": id.0, "start": a, "end": b})) else { return false };
-    app.session.set_tool_option("copy", &r["runs"]);
+    let runs = r["runs"].clone();
+    app.session.set_tool_option("copy", &runs);
+    *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
     let text = r["text"].as_str().unwrap_or("").to_string();
     if let Some(ctx) = CTX.get() {
         ctx.copy_text(text.clone());
     }
-    *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text;
+    *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text.clone();
+    if let Ok(parsed_runs) = serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs)
+        && !parsed_runs.is_empty()
+    {
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "", vectorcraft_doc::CharStyle::default());
+        t.runs = parsed_runs;
+        let node = vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(1), vectorcraft_doc::NodeKind::Text(Box::new(t)));
+        app.session.clipboard.nodes = vec![node];
+    }
     true
 }
 
@@ -400,9 +468,19 @@ fn text_key(app: &mut VectorcraftApp, k: ToolKey, m: Mods) {
     }
 }
 
-fn text_paste(app: &mut VectorcraftApp, s: Option<String>) {
-    let s = s.unwrap_or_else(|| CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone());
+fn text_paste(app: &mut VectorcraftApp, s: Option<String>, plain: bool) {
+    let text_from_clip = CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let s = s.unwrap_or(text_from_clip);
     if !s.is_empty() {
+        if plain {
+            app.session.set_tool_option("copy", &json!([]));
+        } else if let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            let clip_text: String =
+                serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs.clone()).unwrap_or_default().into_iter().map(|r| r.text).collect();
+            if clip_text == s {
+                app.session.set_tool_option("copy", &runs);
+            }
+        }
         let v = app.view_info();
         let target_before = crate::ime::target(&mut app.session, v);
         let before = crate::ime::stamp(&mut app.session, v);
@@ -433,7 +511,8 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
-        "edit.paste" | "edit.pasteWithoutFormatting" => text_paste(app, None),
+        "edit.paste" => text_paste(app, None, false),
+        "edit.pasteWithoutFormatting" => text_paste(app, None, true),
         "edit.clear" => text_key(app, ToolKey::Delete, Mods::default()),
         _ => return None,
     }
@@ -521,7 +600,7 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     text_key(app, ToolKey::Delete, Mods::default());
                 }
             }
-            TextInput::Paste(s) => text_paste(app, s),
+            TextInput::Paste(s) => text_paste(app, s, false),
             TextInput::Face(f) => {
                 if let Err(e) = toggle_face(app, f) {
                     app.status(e);
@@ -711,17 +790,68 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
 }
 
+/// The panel state key of the panel menu's Show Snap to Glyph Options.
+const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    attributes(app, ui);
+    // Drawing over type needs no type selected, so the options show without one too.
+    if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS) {
+        snap_to_glyph_options(app, ui);
+    }
+}
+
+/// The Snap to Glyph options (Show Snap to Glyph Options): which guides View › Snap to Glyph gives,
+/// each a checkbox running `view.snapToGlyph.options`. Dimmed while Snap to Glyph is off.
+fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.add_space(4.0);
+    ui.separator();
+    widgets::section_header(ui, "Snap to Glyph");
+    let (o, enabled) = (app.session.prefs.glyph_snap, app.ui.view.snap_to_glyph);
+    egui::Grid::new("ch-snap-to-glyph").num_columns(2).show(ui, |ui| {
+        for (i, (label, key, on)) in [
+            ("Baseline", "baseline", o.baseline),
+            ("x-height", "xHeight", o.x_height),
+            ("Glyph Bounds", "bounds", o.bounds),
+            ("Proximity Guides", "proximity", o.proximity),
+            ("Angular Guides", "angular", o.angular),
+            ("Anchor Point", "anchors", o.anchors),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            // A known key and a bool: the command can't refuse it.
+            if widgets::check(ui, label, on, enabled) {
+                app.run("view.snapToGlyph.options", json!({ key: !on })).ok();
+            }
+            if i % 2 == 1 {
+                ui.end_row();
+            }
+        }
+    });
+}
+
+/// The character attributes of the type selected (an empty state without any).
+fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((s, _)) = text_style(app) else {
+        app.character_focus = None;
         super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
         return;
     };
     let w = ui.available_width();
+    // The field a Highlight command asked for takes the focus as it is drawn. If no field took it
+    // (a sizing pass), the next frame tries again.
+    if let Some(f) = app.character_focus {
+        widgets::arm_field_focus(ui.ctx(), f.salt());
+    }
     font_pickers(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");
     metrics_grid(app, ui, "ch-grid", &s, w, !hidden);
+    if app.character_focus.is_some() && !widgets::disarm_field_focus(ui.ctx()) {
+        app.character_focus = None;
+    }
     if hidden {
         return;
     }
@@ -830,6 +960,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "ch-hide-options");
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "ch-hide-options", !hidden);
+    }
+    let glyph = pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS);
+    if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
     }
     ui.separator();
     let s = st.map(|x| x.0);

@@ -1,5 +1,5 @@
 use super::fonts::MAX_RECENT_FONTS;
-use super::*;
+use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
 
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.

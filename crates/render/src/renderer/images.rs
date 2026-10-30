@@ -1,42 +1,93 @@
-use super::*;
+use super::{
+    Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key, blob_pixmap,
+    fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
+};
 use crate::images;
 
+/// The color image node `n` is colorized with ([`vectorcraft_doc::NodeExtras::colorize`]), if it
+/// is, as `ink` paints it: the display color, or on an ink plane the color's own inks, as a fill
+/// of that color paints them.
+pub(super) fn image_tint(n: &Node, ink: Ink) -> Option<[u8; 3]> {
+    let c = n.extras().colorize.as_deref()?.color()?;
+    Some(ink.rgb(&c).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
+}
+
 impl Renderer {
-    pub(crate) fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject) {
-        self.draw_image_in(ctx, f, im, None);
+    /// Draw an image, colorized with `tint` when given ([`image_tint`]).
+    pub(crate) fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject, tint: Option<[u8; 3]>) {
+        self.draw_image_in(ctx, f, im, None, tint, false);
     }
 
     /// Draw an image, or with `area` (a region in the document inside the image's frame, see
-    /// [`plain_image`]) the image painted into that region.
+    /// [`plain_image`]) the image painted into that region; colorized with `tint` when given; with
+    /// `pixelated` ([`vectorcraft_doc::NodeExtras::pixelated`]) without smoothing.
     pub(super) fn draw_image_in(
         &mut self,
         ctx: &mut RenderContext,
         f: &Frame,
         im: &vectorcraft_doc::ImageObject,
         area: Option<&(BezPath, FillRule)>,
+        tint: Option<[u8; 3]>,
+        pixelated: bool,
     ) {
         let rect = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
         let outline = f.opts.outline;
         // With mips the full pixels are only looked at (not marked used) until they're drawn, and
-        // a mip the store holds is drawn without them: they may have been dropped (#2820).
-        let mips = f.opts.image_mips;
+        // a mip the store holds is drawn without them: they may have been dropped (#2820). A
+        // pixelated image is drawn from its full pixels: a mip averages them.
+        let mips = f.opts.image_mips && !pixelated;
         let unit = f.view * im.xf * Affine::scale_non_uniform(im.width as f64, im.height as f64);
+        // The outline view shows the image's own pixels.
+        let tint = tint.filter(|_| !outline);
+        // With `kept_images_only`, an image still to be decoded: it draws as a light box, not as
+        // an undecoded image.
+        let mut pending = false;
         let shown = if outline && !f.doc.setup.outline_images {
             None
-        } else if let Some(pm) = mips.then(|| self.kept_mip(f, &im.key, im.pixels.as_deref(), outline, unit)).flatten() {
+        } else if f.opts.kept_images_only {
+            let kept = self.nearest_kept(f, &im.key, im.pixels.as_deref(), outline, tint, unit);
+            pending = kept.is_none() && !self.noted_undecodable(f.doc, &im.key, im.pixels.as_deref());
+            if pending {
+                // Not decoded: a light box where the image will be, as a placed document's
+                // bitmap shows while it is made (`placed_document`).
+                ctx.set_paint(f.ink.fixed([128, 128, 128, 40]));
+                match area {
+                    Some((bp, rule)) => {
+                        ctx.set_transform(f.view);
+                        ctx.set_fill_rule(fill_rule(*rule));
+                        ctx.fill_path(bp);
+                    }
+                    None => {
+                        ctx.set_transform(f.view * im.xf);
+                        ctx.fill_rect(&rect);
+                    }
+                }
+            }
+            kept
+        } else if let Some(pm) = mips.then(|| self.kept_mip(f, &im.key, im.pixels.as_deref(), outline, tint, unit)).flatten() {
             Some(pm)
         } else {
             self.image_pixmap(f.doc, &im.key, im.pixels.as_deref(), outline, !mips).map(|(key, pm)| {
-                let (key, pm) = if outline { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.image_blob(im), !mips) };
+                let (key, pm) = match tint {
+                    Some(rgb) => colorized_pixmap(key, &pm, rgb, !mips),
+                    None => (key, pm),
+                };
+                // A colorized image is already in the frame's ink ([`image_tint`]), and with
+                // Separations Preview its color is already the visible plates' (`proof::prepare`).
+                let (key, pm) = if outline || tint.is_some() { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.image_blob(im), !mips) };
+                let (key, pm) = match f.plates.filter(|_| !outline && tint.is_none()) {
+                    Some(lut) => proof::plate_image(lut, &key, &pm, f.doc.image_blob(im), !mips),
+                    None => (key, pm),
+                };
                 if mips { image_mip(&key, pm, unit) } else { pm }
             })
         };
         if let Some(pm) = shown {
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
-            let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
+            let quality = if f.opts.smooth_images && !pixelated { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
             let sampler = peniko::ImageSampler { quality, ..Default::default() };
             ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler });
             match area {
@@ -68,7 +119,7 @@ impl Renderer {
                     }
                 }
             }
-        } else if f.opts.mark_undecoded_images && (!outline || f.doc.setup.outline_images) {
+        } else if f.opts.mark_undecoded_images && !pending && (!outline || f.doc.setup.outline_images) {
             self.draw_undecoded_mark(ctx, f, im, area);
         }
         if outline {
@@ -191,15 +242,82 @@ impl Renderer {
     }
 
     /// The mip [`image_mip`] draws image `key` (or `own`) with through `m`, in greyscale with
-    /// `grey` (the outline view's), when the store holds it, marked used there; `None` when it
-    /// draws the full pixels or the mip is yet to be made.
-    fn kept_mip(&self, f: &Frame, key: &str, own: Option<&vectorcraft_doc::ImageBlob>, grey: bool, m: Affine) -> Option<Arc<Pixmap>> {
+    /// `grey` (the outline view's) or colorized with `tint`, when the store holds it, marked used
+    /// there; `None` when it draws the full pixels or the mip is yet to be made.
+    fn kept_mip(
+        &self,
+        f: &Frame,
+        key: &str,
+        own: Option<&vectorcraft_doc::ImageBlob>,
+        grey: bool,
+        tint: Option<[u8; 3]>,
+        m: Affine,
+    ) -> Option<Arc<Pixmap>> {
         let (key, (w, h)) = self.image_key(f.doc, key, own, grey)?;
-        let key = if grey { key } else { ink::ink_key(&key, f.ink) };
+        let key = shown_key(f, key, grey, tint);
         let level = mip_level(m, w, h);
         if level == 0 {
             return None;
         }
         images::store().get(&images::ImageKey { mip: level, ..key })
     }
+
+    /// The pixels of image `key` (or `own`) that [`RenderOptions::kept_images_only`] draws through
+    /// `m`, in greyscale with `grey` (the outline view's) or colorized with `tint`: of the mips the
+    /// store holds, the one [`image_mip`] would draw, else the nearest finer one (the full pixels
+    /// last), else the nearest coarser one. `None` when the store holds none. Nothing is marked used.
+    fn nearest_kept(
+        &self,
+        f: &Frame,
+        key: &str,
+        own: Option<&vectorcraft_doc::ImageBlob>,
+        grey: bool,
+        tint: Option<[u8; 3]>,
+        m: Affine,
+    ) -> Option<Arc<Pixmap>> {
+        let (key, (w, h)) = self.image_key(f.doc, key, own, grey)?;
+        let key = shown_key(f, key, grey, tint);
+        let level = mip_level(m, w, h);
+        let s = images::store();
+        let at = |l: u8| s.peek(&images::ImageKey { mip: l, ..key.clone() });
+        (0..=level).rev().find_map(at).or_else(|| (level + 1..=16).find_map(at))
+    }
+
+    /// Whether the shared store notes image `key` (or `own`), or the image an adjusted image is
+    /// made from, as one whose pixels can't be decoded. Nothing is decoded.
+    fn noted_undecodable(&self, doc: &Document, key: &str, own: Option<&vectorcraft_doc::ImageBlob>) -> bool {
+        match own.or_else(|| doc.images.get(key)) {
+            Some(blob) => {
+                let content = blob_key(blob).0.content;
+                images::store().is_undecodable(&content)
+            }
+            None => self.adjusts.get(key).is_some_and(|(src, ..)| self.noted_undecodable(doc, src, None)),
+        }
+    }
+}
+
+/// The key [`Renderer::draw_image_in`] gives the pixels it draws of image pixels `key`: in
+/// greyscale with `grey` (the outline view's) or colorized with `tint` as they are, else painted
+/// with the frame's ink and shown through its Separations Preview plates.
+fn shown_key(f: &Frame, key: images::ImageKey, grey: bool, tint: Option<[u8; 3]>) -> images::ImageKey {
+    let key = images::ImageKey { tint, ..key };
+    if grey || tint.is_some() {
+        return key;
+    }
+    let key = ink::ink_key(&key, f.ink);
+    match f.plates {
+        Some(lut) => images::ImageKey { plates: lut.generation, ..key },
+        None => key,
+    }
+}
+
+/// Image pixels `pm` (kept as `key`) colorized with `rgb` ([`images::colorized`]), kept with the
+/// images, and their key. `touch` marks them used there.
+fn colorized_pixmap(key: images::ImageKey, pm: &Pixmap, rgb: [u8; 3], touch: bool) -> (images::ImageKey, Arc<Pixmap>) {
+    let key = images::ImageKey { tint: Some(rgb), ..key };
+    if let Some(p) = lookup(&key, touch) {
+        return (key, p);
+    }
+    let pm = images::store().insert(key.clone(), Arc::new(images::colorized(pm, rgb)));
+    (key, pm)
 }

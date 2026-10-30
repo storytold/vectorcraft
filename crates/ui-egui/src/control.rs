@@ -259,41 +259,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
         "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
-        "ui.pointer" => {
-            let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
-            let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
-            let view = app.view_info();
-            let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
-            for e in events {
-                let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
-                    "down" => PointerKind::Down,
-                    "drag" => PointerKind::Drag,
-                    "up" => PointerKind::Up,
-                    "move" => PointerKind::Move,
-                    "doubleclick" | "dblclick" => PointerKind::DoubleClick,
-                    other => return err(format!("unknown pointer kind `{other}`")),
-                };
-                let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
-                let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-                let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
-                    match xf {
-                        Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
-                        None => return err("no canvas yet"),
-                    }
-                } else {
-                    vectorcraft_geom::Point::new(x, y)
-                };
-                let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
-                crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
-                let hold = PointerEvent::json_hold(e);
-                if hold > 0.0 {
-                    let r = app.session.tool_tick(hold, view);
-                    crate::canvas::apply_requests(app, r);
-                }
-            }
-            ctx.request_repaint();
-            wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
-        }
+        "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
             if let Err(e) = reserve_synthetic(app, 2 + usize::from(s("text").is_some())) {
@@ -318,51 +284,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ctx.request_repaint();
             ok(Value::Null)
         }
-        "ui.click" | "ui.drag" => {
-            // Validate the entire expansion before appending even the initial move/press.
-            let steps = if req.method == "ui.drag" {
-                match input_count(p, "steps", 8, MAX_DRAG_STEPS) {
-                    Ok(n) => n,
-                    Err(e) => return err(e),
-                }
-            } else {
-                0
-            };
-            let count = match input_count(p, "count", 1, MAX_CLICK_COUNT) {
-                Ok(n) => n,
-                Err(e) => return err(e),
-            };
-            let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
-                return err("synthetic input event count is out of range");
-            };
-            if let Err(e) = reserve_synthetic(app, events) {
-                return err(e);
-            }
-            // Screen-space (egui points) pointer input through egui itself: reaches every widget.
-            let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
-            let button = match s("button") {
-                Some("right") | Some("secondary") => egui::PointerButton::Secondary,
-                _ => egui::PointerButton::Primary,
-            };
-            let modifiers = modifiers(p);
-            let a = egui::pos2(f("x"), f("y"));
-            let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
-            app.synthetic.push(egui::Event::PointerMoved(a));
-            app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
-            if req.method == "ui.drag" {
-                for i in 1..=steps {
-                    let t = i as f32 / steps as f32;
-                    app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
-                }
-            }
-            app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
-            for _ in 1..count {
-                app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
-                app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
-            }
-            ctx.request_repaint();
-            ok(Value::Null)
-        }
+        "ui.click" | "ui.drag" => synthetic_click(app, ctx, req),
         "ui.wheel" => {
             if let Err(e) = reserve_synthetic(app, 2) {
                 return err(e);
@@ -392,48 +314,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ctx.request_repaint();
             ok(Value::Null)
         }
-        "ui.set" => {
-            let mut r = Ok(Value::Null);
-            if let Some(b) = s("brightness") {
-                r = app.run("window.brightness", json!({"brightness": b}));
-            }
-            if let Some(pn) = s("panel") {
-                r = app.run("window.panel", json!({"panel": pn}));
-            }
-            if let Some(st) = s("status") {
-                app.ui.status = st.to_string();
-            }
-            for (k, flag) in [
-                ("rulers", "view.rulers"),
-                ("outline", "view.outline"),
-                ("grid", "view.grid"),
-                ("smartGuides", "view.smartGuides"),
-                ("boundingBox", "view.boundingBox"),
-            ] {
-                if let Some(want) = p.get(k).and_then(Value::as_bool) {
-                    let cur = match k {
-                        "rulers" => app.ui.view.rulers,
-                        "outline" => app.ui.view.outline,
-                        "grid" => app.ui.view.grid,
-                        "smartGuides" => app.ui.view.smart_guides,
-                        _ => app.ui.view.bounding_box,
-                    };
-                    if cur != want {
-                        r = app.run(flag, json!({}));
-                    }
-                }
-            }
-            if let Some(v) = p.get("controlBar").and_then(Value::as_bool) {
-                app.ui.control_bar = v;
-            }
-            if let Some(v) = p.get("imageTracePreview").and_then(Value::as_bool) {
-                r = app.run("imageTrace.preview", json!({"on": v}));
-            }
-            if p.get("closePanel").is_some() {
-                app.ui.open_panel = None;
-            }
-            wrap(r)
-        }
+        "ui.set" => set_ui(app, req),
         "ui.dialog.set" => match app.ui.dialog.as_mut() {
             Some(d) => {
                 let fields = match dialog_fields(p) {
@@ -446,7 +327,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
                 for (f, value) in fields {
-                    d.fields.insert(f, value);
+                    crate::dialogs::set_field(d, f, value);
                 }
                 ok(serde_json::to_value(&*d).unwrap_or_default())
             }
@@ -619,3 +500,136 @@ pub(crate) fn save_screenshot_with_limit(
 
 #[cfg(test)]
 mod tests;
+
+/// `ui.pointer`: pointer events through the tools.
+fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
+    let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
+    let view = app.view_info();
+    let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    for e in events {
+        let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
+            "down" => PointerKind::Down,
+            "drag" => PointerKind::Drag,
+            "up" => PointerKind::Up,
+            "move" => PointerKind::Move,
+            "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+            other => return err(format!("unknown pointer kind `{other}`")),
+        };
+        let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
+        let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
+        let pos = if e.get("space").and_then(Value::as_str) == Some("screen") {
+            match xf {
+                Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
+                None => return err("no canvas yet"),
+            }
+        } else {
+            vectorcraft_geom::Point::new(x, y)
+        };
+        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+        crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
+        let hold = PointerEvent::json_hold(e);
+        if hold > 0.0 {
+            let r = app.session.tool_tick(hold, view);
+            crate::canvas::apply_requests(app, r);
+        }
+    }
+    ctx.request_repaint();
+    wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "key": d["key"], "tool": app.session.tool_id()})))
+}
+
+/// `ui.click` and `ui.drag`: pointer input through egui itself.
+fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // Validate the entire expansion before appending even the initial move/press.
+    let steps = if req.method == "ui.drag" {
+        match input_count(p, "steps", 8, MAX_DRAG_STEPS) {
+            Ok(n) => n,
+            Err(e) => return err(e),
+        }
+    } else {
+        0
+    };
+    let count = match input_count(p, "count", 1, MAX_CLICK_COUNT) {
+        Ok(n) => n,
+        Err(e) => return err(e),
+    };
+    let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
+        return err("synthetic input event count is out of range");
+    };
+    if let Err(e) = reserve_synthetic(app, events) {
+        return err(e);
+    }
+    // Screen-space (egui points) pointer input through egui itself: reaches every widget.
+    let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    let button = match s("button") {
+        Some("right") | Some("secondary") => egui::PointerButton::Secondary,
+        _ => egui::PointerButton::Primary,
+    };
+    let modifiers = modifiers(p);
+    let a = egui::pos2(f("x"), f("y"));
+    let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
+    app.synthetic.push(egui::Event::PointerMoved(a));
+    app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
+    if req.method == "ui.drag" {
+        for i in 1..=steps {
+            let t = i as f32 / steps as f32;
+            app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
+        }
+    }
+    app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
+    for _ in 1..count {
+        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
+        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
+    }
+    ctx.request_repaint();
+    ok(Value::Null)
+}
+
+/// `ui.set`: view flags, panels and status.
+fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
+    let p = &req.params;
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    let mut r = Ok(Value::Null);
+    if let Some(b) = s("brightness") {
+        r = app.run("window.brightness", json!({"brightness": b}));
+    }
+    if let Some(pn) = s("panel") {
+        r = app.run("window.panel", json!({"panel": pn}));
+    }
+    if let Some(st) = s("status") {
+        app.ui.status = st.to_string();
+    }
+    for (k, flag) in [
+        ("rulers", "view.rulers"),
+        ("outline", "view.outline"),
+        ("grid", "view.grid"),
+        ("smartGuides", "view.smartGuides"),
+        ("boundingBox", "view.boundingBox"),
+    ] {
+        if let Some(want) = p.get(k).and_then(Value::as_bool) {
+            let cur = match k {
+                "rulers" => app.ui.view.rulers,
+                "outline" => app.ui.view.outline,
+                "grid" => app.ui.view.grid,
+                "smartGuides" => app.ui.view.smart_guides,
+                _ => app.ui.view.bounding_box,
+            };
+            if cur != want {
+                r = app.run(flag, json!({}));
+            }
+        }
+    }
+    if let Some(v) = p.get("controlBar").and_then(Value::as_bool) {
+        app.ui.control_bar = v;
+    }
+    if let Some(v) = p.get("imageTracePreview").and_then(Value::as_bool) {
+        r = app.run("imageTrace.preview", json!({"on": v}));
+    }
+    if p.get("closePanel").is_some() {
+        app.ui.open_panel = None;
+    }
+    wrap(r)
+}

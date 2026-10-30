@@ -43,5 +43,5 @@ pub use entry::{
     import, import_with_report, is_glyph_outlines, is_outlines_note,
 };
 #[cfg(test)]
-pub(crate) use entry::{import_with_reader_options, read};
+pub(crate) use entry::{TEST_MAX_OBJECTS, import_with_reader_options, read};
 pub(crate) use state::{closed_subpaths, round3};

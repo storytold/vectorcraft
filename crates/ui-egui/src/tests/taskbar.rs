@@ -163,3 +163,74 @@ fn type_converts_between_point_and_area_type() {
     click(&mut app, "Convert To Point Type");
     assert!(matches!(text_kind(&app), TextKind::Point));
 }
+
+/// The path's anchors (its first subpath).
+fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
+    match kind(app, id) {
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.clone(),
+        k => panic!("not a path: {k:?}"),
+    }
+}
+
+/// With the Direct Selection tool, a path selected whole offers its anchor points' actions instead
+/// of Edit Path and Offset Path (#4469), as after the bar's own Edit Path.
+#[test]
+fn direct_selection_of_a_whole_path_offers_its_anchor_actions() {
+    let mut app = app();
+    let line = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}]})).unwrap());
+    select(&mut app, &[line]);
+    click(&mut app, "Edit Path");
+    assert_eq!(app.session.tool_id(), "directSelection");
+    assert!(app.session.active().unwrap().selection.anchors.is_empty(), "the path is selected whole");
+    let (_, texts) = bar(&mut app);
+    for label in ["Connect", "Corner", "Smooth", "Simplify", "Duplicate"] {
+        assert!(has(&texts, label), "{label}: {texts:?}");
+    }
+    for label in ["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"] {
+        assert!(!has(&texts, label), "{label}: {texts:?}");
+    }
+    // Smooth and Corner convert every anchor of the path, one undo step each.
+    click(&mut app, "Smooth");
+    let a = anchors(&app, line);
+    assert_eq!(a[1].kind, vectorcraft_geom::AnchorKind::Smooth, "{a:?}");
+    assert!(a[1].has_in() && a[1].has_out(), "{a:?}");
+    click(&mut app, "Corner");
+    assert!(anchors(&app, line).iter().all(|a| !a.has_in() && !a.has_out()), "{:?}", anchors(&app, line));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(anchors(&app, line)[1].has_in(), "Corner undoes in one step");
+    // Connect closes the open path; a closed one isn't offered it.
+    click(&mut app, "Connect");
+    assert!(matches!(kind(&app, line), NodeKind::Path { path, .. } if path.is_closed()));
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Connect") && has(&texts, "Corner"), "{texts:?}");
+}
+
+/// Anchors picked out with the Direct Selection tool keep the full set: Remove and Cut need them.
+#[test]
+fn direct_selected_anchors_still_offer_remove_and_cut() {
+    let mut app = app();
+    let line = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}]})).unwrap());
+    app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+    app.run("select.anchors", json!({"id": line, "anchors": [[0, 1]]})).unwrap();
+    let (_, texts) = bar(&mut app);
+    for label in ["Remove Anchor Points", "Connect", "Cut Path", "Corner", "Smooth"] {
+        assert!(has(&texts, label), "{label}: {texts:?}");
+    }
+    assert!(!has(&texts, "Edit Path"), "{texts:?}");
+}
+
+/// A compound path under the Direct Selection tool isn't offered Edit Path, which would only switch
+/// to the tool already in use; the Selection tool still offers it.
+#[test]
+fn a_compound_path_under_direct_selection_drops_edit_path() {
+    let mut app = app();
+    let a = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 120, "height": 100})).unwrap());
+    let b = id(app.run("shape.ellipse", json!({"x": 70, "y": 60, "width": 50, "height": 50})).unwrap());
+    select(&mut app, &[a, b]);
+    let c = id(app.run("object.compoundPath.make", json!({})).unwrap());
+    click(&mut app, "Edit Path");
+    assert_eq!(app.session.tool_id(), "directSelection");
+    select(&mut app, &[c]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Release Compound Path") && !has(&texts, "Edit Path"), "{texts:?}");
+}

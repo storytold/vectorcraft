@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Serialize, logo};
 
 /// Tracing mode (Illustrator's Mode popup).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

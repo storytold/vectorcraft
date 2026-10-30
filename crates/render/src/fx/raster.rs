@@ -1,5 +1,5 @@
 use super::entries::{Drawn, Inputs, Made, raster_bytes};
-use super::*;
+use super::{Affine, Document, EdgeMode, Filter, FilterPrimitive, Ink, RasterFx, Rect, RenderContext, Vec2, effects, peniko};
 
 pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -> Filter {
     Filter::from_primitive(FilterPrimitive::DropShadowOnly {
@@ -11,19 +11,9 @@ pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -
     })
 }
 
-/// The layer filter of a drop shadow with Darkness: the object's own pixels blurred.
+/// The layer filter of a drop shadow with Darkness: source paints are adjusted before blur.
 pub(super) fn shade_filter(blur: f64) -> Filter {
     Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: (blur / 2.0).max(0.0) as f32, edge_mode: EdgeMode::None })
-}
-
-/// How much darker (0..1) a drop shadow with Darkness `darkness` makes the values `ink` paints:
-/// black added leaves the cyan, magenta and yellow plane of a CMYK document as it is and scales
-/// the complemented black plane, as it scales screen colors, by 1 − `darkness`.
-pub(super) fn shade(ink: Ink, darkness: f32) -> f32 {
-    match ink {
-        Ink::Cmy => 0.0,
-        Ink::K | Ink::Display | Ink::RichBlack => darkness,
-    }
 }
 
 /// What a shadow or glow raster is made from ([`Made::pixels`]): the silhouette's alpha, or its

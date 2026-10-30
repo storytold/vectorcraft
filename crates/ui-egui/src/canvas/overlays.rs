@@ -1,9 +1,7 @@
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
-use super::outline::{
-    DRAW_INSIDE_OUTLINE, KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn,
-};
-use super::*;
+use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn};
+use super::{Color32, CornerRadius, NodeKind, Overlay, Point, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
@@ -23,6 +21,27 @@ pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) 
     if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n, &st.doc.symbol_boxes()), xf, Stroke::new(1.5, color));
+    }
+}
+
+/// Draw Inside (Shift+D): while the mode lasts, a dotted open rectangle round the corners of the
+/// object drawn into, selected or not (#4319).
+pub(super) fn draw_inside_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    if app.session.draw_mode != vectorcraft_engine::DrawMode::Inside {
+        return;
+    }
+    let (Some(id), Some(st)) = (app.session.draw_inside, app.session.active()) else { return };
+    let Some(bounds) = st.doc.node(id).and_then(|n| n.visual_bounds()) else { return };
+    // A few pixels outside the object, clear of its stroke.
+    let pad = 4.0 / xf.zoom;
+    let [a, b, c, d] = xf.quad(bounds.inflate(pad, pad))[..] else { return };
+    let stroke = Stroke::new(1.0, c32(st.doc.layer_color(id)));
+    for (corner, sides) in [(a, [b, d]), (b, [c, a]), (c, [d, b]), (d, [a, c])] {
+        for next in sides {
+            // Each arm runs a third of its side at most, so the rectangle stays open.
+            let arm = ((next - corner).length() / 3.0).min(16.0);
+            p.extend(Shape::dashed_line(&[corner, corner + (next - corner).normalized() * arm], stroke, 3.0, 2.0));
+        }
     }
 }
 
@@ -68,28 +87,6 @@ fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size:
 
 fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
-}
-
-/// Draw Inside's indicator: a dashed outline around the object new art is drawn into, so the mode
-/// can be told to be on (#4319). Drawn in the object's layer colour.
-pub(super) fn draw_inside_indicator(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    if app.session.draw_mode != vectorcraft_engine::DrawMode::Inside {
-        return;
-    }
-    let Some(st) = app.session.active() else { return };
-    let Some((id, n)) = app.session.draw_inside.and_then(|id| Some((id, st.doc.node(id)?))) else { return };
-    let stroke = Stroke::new(DRAW_INSIDE_OUTLINE, c32(st.doc.layer_color(id)));
-    // Too many paths to outline every frame: the object's bounds stand for them.
-    let symbols = st.doc.symbol_boxes();
-    let outline = if too_many_anchors([n]) {
-        n.geometric_bounds_with(&symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath())
-    } else {
-        Some(node_outline(n, &symbols))
-    };
-    let Some(outline) = outline else { return };
-    for line in to_screen_path(&outline, xf) {
-        p.extend(Shape::dashed_line(&line, stroke, 5.0, 3.0));
-    }
 }
 
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {

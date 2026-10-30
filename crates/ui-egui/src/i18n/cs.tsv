@@ -71,6 +71,7 @@
 	Check Script	Zkontrolovat skript
 	Other Script…	Jiný skript…
 	Document Setup…	Nastavení dokumentu…
+	Switch Units	Přepnout jednotky
 	Document Color Mode	Barevný režim dokumentu
 	CMYK Color	Barvy CMYK
 	RGB Color	Barvy RGB
@@ -190,6 +191,7 @@
 	Other Layers	Ostatní vrstvy
 	Unlock All	Odemknout vše
 	Hide	Skrýt
+	Unselected Artwork	Nevybranou kresbu
 	Show All	Zobrazit vše
 	Expand…	Rozložit…
 	Expand Appearance	Rozložit vzhled
@@ -223,6 +225,7 @@
 	Offset Path…	Odsadit cestu…
 	Reverse Path Direction	Obrátit směr cesty
 	Simplify…	Zjednodušit…
+	Smooth…	Vyhladit…
 	Add Anchor Points	Přidat kotevní body
 	Remove Anchor Points	Odstranit kotevní body
 	Divide Objects Below	Rozdělit objekty pod
@@ -284,6 +287,7 @@
 	Clipping Mask	Ořezová maska
 	Edit Clipping Path	Upravit ořezovou cestu
 	Compound Path	Složená cesta
+	Compound Shape	Složený tvar
 	Artboards	Pracovní plochy
 	Convert to Artboards	Převést na pracovní plochy
 	Rearrange All Artboards…	Přeuspořádat všechny pracovní plochy…
@@ -411,6 +415,11 @@
 	Fill Color	Barva výplně
 	Opacity	Krytí
 	Stroke Color	Barva tahu
+	Fill Gradient	Přechod výplně
+	Stroke Gradient	Přechod tahu
+	Fill Pattern	Vzorek výplně
+	Stroke Pattern	Vzorek tahu
+	Patterns	Vzorky
 	Stroke Weight	Tloušťka tahu
 	Graphic Style	Grafický styl
 	Symbol Instance	Instance symbolu
@@ -617,6 +626,8 @@
 	Saved View 25	Uložené zobrazení 25
 	Window	Okno
 	New Window	Nové okno
+	Next Document	Další dokument
+	Previous Document	Předchozí dokument
 	Cascade	Do kaskády
 	Tile	Vedle sebe
 	Float in Window	Uvolnit do samostatného okna
@@ -820,6 +831,10 @@
 	Shaper	Shaper
 	Expand Shaper Group	Rozložit skupinu Shaper
 	Release Shaper Group	Uvolnit skupinu Shaper
+	Remove from Shaper Group	Odebrat ze skupiny Shaper
+@msg	source must be the id of a Shaper Group's original shape	source musí být identifikátor původního tvaru skupiny Shaper
+@msg	group must be the id of a Shaper Group	group musí být identifikátor skupiny Shaper
+@msg	the shape is not an editable original shape of that Shaper Group	tvar není upravitelný původní tvar této skupiny Shaper
 	Select Shaper Face	Vybrat oblast Shaper
 	Constrain	Omezit
 	Free Transform	Volná transformace
@@ -1652,6 +1667,12 @@ lighting	Light	Světlo
 	Document Library	Knihovna dokumentu
 	Library:	Knihovna:
 	Tracing Presets	Přednastavení vektorizace
+	Manage Presets	Spravovat přednastavení
+	Save as New Preset…	Uložit jako nové přednastavení…
+	Rename…	Přejmenovat…
+	Rename Preset	Přejmenovat přednastavení
+	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
+	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
 	Method:	Metoda:
 	Mode:	Režim:
 	Noise	Šum
@@ -1683,6 +1704,7 @@ lighting	Light	Světlo
 	Locked	Zamčené
 	Hidden	Skryté
 	Filter Layers Panel Rows	Filtrovat řádky panelu Vrstvy
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označuje změněná nastavení: uložte přednastavení pod jiným názvem
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musí být pole těchto názvů: {_1}
 	Graphics	Grafika
 	Local Libraries	Místní knihovny
@@ -1754,6 +1776,7 @@ lighting	Light	Světlo
 	Show Original Path	Zobrazit původní cestu
 	Open this dialog with these settings next time	Příště otevřít toto dialogové okno s tímto nastavením
 	Auto-Simplify	Automaticky zjednodušit
+	Auto-Smooth	Automaticky vyhladit
 	Transparency Options	Možnosti průhlednosti
 	Color Mixer (Shift-click the chip)	Míchání barev (Shift+kliknutí na políčko)
 	Fill: click for swatches, Shift-click for the color mixer	Výplň: kliknutím otevřete vzorník, Shift+kliknutím míchání barev
@@ -1803,13 +1826,13 @@ lighting	Light	Světlo
 	Roman Hanging Punctuation	Visící latinková interpunkce
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
 	Single-line Composer	Sazba jednoho řádku
+	Toggle Line Composer	Přepnout sazbu řádků
 	Space After Paragraph	Mezera za odstavcem
 	Space Before Paragraph	Mezera před odstavcem
 	Top-to-Top Leading	Proklad od horní k horní
 	Bottom-to-Bottom Leading	Proklad od dolní k dolní
 	Burasagari	Burasagari
 	Force	Vynutit
-	Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap	Rozložení se týká složených tvarů (Alt+kliknutí na režim tvaru) — v plánu
 	Expand Compound Shape	Rozložit složený tvar
 	Make Compound Shape	Vytvořit složený tvar
 	Pathfinder Options…	Možnosti operací s cestami…
@@ -2071,6 +2094,10 @@ lighting	Light	Světlo
 	Outer Corner Tile	Dlaždice vnějšího rohu
 	Side Tile	Boční dlaždice
 	Inner Corner Tile	Dlaždice vnitřního rohu
+	Auto-Centered	Auto: na střed
+	Auto-Between	Auto: mezi
+	Auto-Sliced	Auto: seříznuté
+	Auto-Overlap	Auto: přesah
 	Start Tile	Počáteční dlaždice
 	End Tile	Koncová dlaždice
 	Fit	Přizpůsobení
@@ -2345,6 +2372,8 @@ lighting	Light	Světlo
 	Locate Selected Objects	Najít vybrané objekty
 	Thumbnails:	Miniatury:
 	Anchor Points	Kotevní body
+	"In" Control Points	„Vstupní“ řídicí body
+	"Out" Control Points	„Výstupní“ řídicí body
 	Brush Affects:	Štětec ovlivňuje:
 	Complexity:	Složitost:
 	Detail:	Podrobnost:
@@ -3285,6 +3314,7 @@ theme	Appearance	Motiv
 	Make Envelope	Vytvořit obálku
 	Move Envelope Mesh Point	Přesunout bod sítě obálky
 	Move Mesh Point	Přesunout bod sítě
+	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
 	Reset with Mesh	Obnovit sítí
@@ -3757,6 +3787,9 @@ axis	Both	Obě
 	Increase Font Size by Five Steps	Zvětšit velikost písma o pět kroků
 	Reset Tracking and Kerning	Obnovit prostrkání a vyrovnání párů
 	Reset Horizontal Scale	Obnovit vodorovnou změnu velikosti
+	Highlight Font Name	Zvýraznit název písma
+	Highlight Kerning	Zvýraznit vyrovnání párů
+	Highlight Tracking	Zvýraznit prostrkání
 	Step Type	Krokovat text
 	Get Text Range	Získat rozsah textu
 	Punctuation	Interpunkce
@@ -3767,6 +3800,7 @@ axis	Both	Obě
 	Set Text	Nastavit text
 	Insert Character	Vložit znak
 	Replace	Nahradit
+	Replace:	Nahradit:
 	Type on a Path Options	Možnosti textu na cestě
 	Highlight Variable	Zvýraznit proměnnou
 	New Variable	Nová proměnná
@@ -3958,6 +3992,7 @@ font-technology	Variable	Variabilní
 	Default Fill and Stroke (D)	Výchozí výplň a tah (D)
 	Fill (X), double-click for the Color Picker	Výplň (X), dvojklikem otevřete výběr barvy
 	Opacity:	Krytí:
+	Shape Mode	Režim tvaru
 	Shape Modes:	Režimy tvarů:
 	Stroke (X), double-click for the Color Picker	Tah (X), dvojklikem otevřete výběr barvy
 	Stroke:	Tah:
@@ -4006,7 +4041,9 @@ font-technology	Variable	Variabilní
 	Mojikumi	Mojikumi
 	N pt per	N pt na
 	New Character Style	Nový styl znaků
+	New Character Style…	Nový styl znaků…
 	New Paragraph Style	Nový styl odstavce
+	New Paragraph Style…	Nový styl odstavce…
 	Paragraph Style Options	Možnosti stylu odstavce
 	Redefine Character Style	Předefinovat styl znaků
 	Redefine Paragraph Style	Předefinovat styl odstavce
@@ -4098,6 +4135,13 @@ imageTrace	Outline	Obrys
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
 @msg	select some type first	nejprve vyberte text
+@msg	the selection has no gradient fill	výběr nemá přechodovou výplň
+@msg	the selection has no gradient stroke	výběr nemá přechodový tah
+@msg	the selection has no pattern fill	výběr nemá vzorkovou výplň
+@msg	the selection has no pattern stroke	výběr nemá vzorkový tah
+@msg	no gradient swatch `{name}`	přechodová položka vzorníku `{name}` neexistuje
+@msg	no pattern swatch `{name}`	vzorková položka vzorníku `{name}` neexistuje
+@msg	the library item is damaged	položka knihovny je poškozená
 @msg	{_1} has no {_2} style	{_1} nemá styl {_2}
 @msg	a layer couldn't be read	vrstvu nelze přečíst
 @msg	it has more than one artboard	má více než jednu pracovní plochu
@@ -4202,8 +4246,10 @@ imageTrace	Outline	Obrys
 @msg	`freeform.points` must be an array	`freeform.points` musí být pole
 @msg	`freeform.lines` must be an array	`freeform.lines` musí být pole
 @msg	`gradient` must be an object	`gradient` musí být objekt
+@msg	`groupColors` must be an array	`groupColors` musí být pole
 @msg	`library` is a library id or name (see {list})	`library` je ID nebo název knihovny (viz {list})
 @msg	`mode` applies to freeform gradients	`mode` platí pro volné přechody
+@msg	`preserve` must be an object	`preserve` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
@@ -4224,6 +4270,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be one of {_1}	`{key}` musí být jedno z {_1}
 @msg	`{key}` must be true or false	`{key}` musí být true nebo false
+@msg	`top` and `below` can't both be true	`top` a `below` nemohou být zároveň true
 @msg	`select` must be true or false	`select` musí být true nebo false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` a `maxAnchors` musí být celá čísla
 @msg	`{key}` must be a number not below 0	`{key}` musí být číslo nejméně 0
@@ -4237,6 +4284,7 @@ imageTrace	Outline	Obrys
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` je procesní barva: tóny platí pro globální a přímé barvy
 @msg	`{name}` is no recovery entry name	`{name}` není název položky obnovení
 @msg	`{name}` isn't a colour swatch	`{name}` není barevná položka vzorníku
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	procesní barva nemůže obarvit obraz ve stupních šedi s průhledností: použijte přímou barvu, černou nebo bílou
 @msg	`{path}` must be a bool or an object of bools	`{path}` musí být bool nebo objekt hodnot bool
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` není barva (#rrggbb nebo název přednastavení)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` není nástroj zkapalnění
@@ -4282,6 +4330,10 @@ imageTrace	Outline	Obrys
 @msg	a page tree node has no kids	uzel stromu stránek nemá potomky
 @msg	a page's placement is not finite	umístění stránky není konečné
 @msg	a preset named `{_1}` exists	přednastavení s názvem `{_1}` existuje
+@msg	`name` is empty	`name` je prázdný
+@msg	`newName` is empty	`newName` je prázdný
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` je vestavěné přednastavení a nelze ho změnit: uložte ho pod jiným názvem
+@msg	`{name}` is a built-in preset and stays	`{name}` je vestavěné přednastavení a nelze ho odstranit
 @msg	a swatch or color group named `{n}` exists	položka vzorníku nebo skupina barev s názvem `{n}` existuje
 @msg	a slice size must be a positive number of points	velikost řezu musí být kladný počet bodů
 @msg	a spine keeps at least two points	páteř si ponechává alespoň dva body
@@ -4301,6 +4353,7 @@ imageTrace	Outline	Obrys
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
 @msg	the Color Picker is not open	Výběr barvy není otevřený
 @msg	the Simplify slider is not open	Posuvník Zjednodušit není otevřený
+@msg	the Smooth slider is not open	Posuvník Vyhladit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
@@ -4373,6 +4426,7 @@ imageTrace	Outline	Obrys
 @msg	missing `id` (see plugin.list)	chybí `id` (viz plugin.list)
 @msg	missing `name`	chybí `name`
 @msg	missing `tool`	chybí `tool`
+@msg	missing id	chybí id
 @msg	missing index	chybí index
 @msg	missing number `{key}`	chybí číslo `{key}`
 @msg	missing integer `{key}`	chybí celé číslo `{key}`
@@ -4405,6 +4459,7 @@ imageTrace	Outline	Obrys
 @msg	no current layer	žádná aktuální vrstva
 @msg	no data	žádná data
 @msg	no dialog open	není otevřeno žádné dialogové okno
+@msg	the open dialog has no Reset	otevřené dialogové okno nemá tlačítko Obnovit
 @msg	no document	žádný dokument
 @msg	no document open	není otevřen žádný dokument
 @msg	no effect applied yet	zatím nebyl použit žádný efekt
@@ -4438,6 +4493,8 @@ imageTrace	Outline	Obrys
 @msg	no print service	chybí tisková služba
 @msg	no revert command	chybí příkaz pro návrat k uložené verzi
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	uložené přednastavení PDF s názvem `{name}` neexistuje (vestavěná přednastavení jsou jen pro čtení: vytvořte z nich nové)
+@msg	no saved preset named `{name}`	uložené přednastavení s názvem `{name}` neexistuje
+@msg	no saved preset named `{name}` to rename	uložené přednastavení s názvem `{name}` k přejmenování neexistuje
 @msg	no saved presets	žádná uložená přednastavení
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	uložené přednastavení tisku s názvem `{name}` neexistuje ({DEFAULT_PRESET} je chráněné: vytvořte z něj nové)
 @msg	no saved profiles	žádné uložené profily
@@ -4484,8 +4541,10 @@ imageTrace	Outline	Obrys
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
+@msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
 @msg	nothing encoded	nic nebylo zakódováno
 @msg	nothing selected	nic není vybráno
+@msg	nothing selected is in a group	nic z výběru není ve skupině
 @msg	nothing to align	není co zarovnat
 @msg	nothing to distort	není co deformovat
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	není co exportovat: dokument nemá žádnou viditelnou kresbu (nebo zapněte Použít pracovní plochy)
@@ -4559,6 +4618,7 @@ imageTrace	Outline	Obrys
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	select at least two objects	vyberte alespoň dva objekty
+@msg	exit isolation mode first	nejprve ukončete izolovaný režim
 @msg	select objects, not layers	vyberte objekty, ne vrstvy
 @msg	select one path, or give its `id`	vyberte jednu cestu, nebo zadejte její `id`
 @msg	select paths to join	vyberte cesty ke spojení
@@ -4611,10 +4671,14 @@ imageTrace	Outline	Obrys
 @msg	the layer or group is locked	vrstva nebo skupina je zamčená
 @msg	the guide is on a hidden or locked layer	vodítko je ve skryté nebo zamčené vrstvě
 @msg	the target layer is locked or hidden	cílová vrstva je zamčená nebo skrytá
+@msg	the object is hidden or locked	objekt je skrytý nebo zamčený
+@msg	the object is outside the isolated group	objekt je mimo izolovanou skupinu
+@msg	type objects can't be isolated	textové objekty nelze izolovat
 @msg	the layer to flatten into is hidden	vrstva, do které se má sloučit, je skrytá
 @msg	the object already has an opacity mask	objekt už má masku krytí
 @msg	the object has no geometry	objekt nemá žádnou geometrii
 @msg	the object has no opacity mask	objekt nemá masku krytí
+@msg	stop editing the opacity mask first	nejprve ukončete úpravy masky krytí
 @msg	the object has no stroke	objekt nemá tah
 @msg	the object is beyond the plane's horizon	objekt je za horizontem roviny
 @msg	the object isn't in perspective	objekt není v perspektivě
@@ -4660,6 +4724,7 @@ imageTrace	Outline	Obrys
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	neznámé přednastavení `{name}` (high, medium, low nebo uložené: viz flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	neznámé přednastavení `{name}` (viz flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	neznámé přednastavení `{name}` (viz webExport.presets.list)
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	neznámé přednastavení `{name}`: není vestavěné ani uložené (viz imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	neznámá strana `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	neznámý nástroj `{tool}`
 @msg	unknown tool `{t}`	neznámý nástroj `{t}`
@@ -4811,6 +4876,9 @@ imageTrace	Outline	Obrys
 @msg	not a PSD file	nejde o soubor PSD
 @msg	the PSD file has an unknown colour mode ({m})	soubor PSD má neznámý barevný režim ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	obrazová data souboru PSD používají neznámou kompresi ({m})
+@msg	the PCX file is cut short	soubor PCX je useknutý
+@msg	the PCX file's header is damaged	hlavička souboru PCX je poškozená
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	soubory PCX s {bits}bitovými obrazovými body v {planes} rovinách nelze přečíst
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
@@ -5613,4 +5681,150 @@ axis	Y Axis	osa Y
 	Scale Presets	Přednastavení měřítka
 @msg	a {width}×{height} screenshot's byte count overflows	počet bajtů snímku {width}×{height} přeteče
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	okno {what} ({points} bodů × {scale} DPI) nemůže určit velikost snímku
+# Object › Expand… dimmed until Expand Appearance (#3089).
+	Expand Appearance first (Object › Expand Appearance)	Nejprve rozložte vzhled (Objekt › Rozložit vzhled)
 	Live preview	Živý náhled
+# Align panel menu › Align to Glyph Bounds (#4231).
+	Point Text	Bodový text
+	Area Text	Text v oblasti
+# Character panel menu › Show Snap to Glyph Options (#4232).
+	Show Snap to Glyph Options	Zobrazit možnosti přichytávání ke glyfům
+	Hide Snap to Glyph Options	Skrýt možnosti přichytávání ke glyfům
+	Snap to Glyph Options	Možnosti přichytávání ke glyfům
+	x-height	Výška x
+	Glyph Bounds	Hranice glyfů
+	Proximity Guides	Vodítka blízkosti
+	Angular Guides	Úhlová vodítka
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Zprůměrovat a spojit…
+	Average & Join	Zprůměrovat a spojit
+anchor	Points:	Body:
+@msg	select two open path ends, or two open paths, to average and join	vyberte dva konce otevřených cest nebo dvě otevřené cesty ke zprůměrování a spojení
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Vyčištění kresby
+	Simplify Anchors (Keep Shape)…	Zjednodušit kotevní body (zachovat tvar)…
+	Health Check	Kontrola stavu
+	Show Issue	Zobrazit problém
+	Fix All Issues	Opravit všechny problémy
+	Fix Issues	Opravit problémy
+	Deep Ungroup…	Oddělit všechny úrovně…
+	Rejoin Path Pieces…	Znovu spojit části cest…
+	Document Health Check	Kontrola stavu dokumentu
+	Check Selection	Zkontrolovat výběr
+	Check Document	Zkontrolovat dokument
+	No issues found.	Nebyly nalezeny žádné problémy.
+	Changed since the last check.	Změněno od poslední kontroly.
+	Fix Selected	Opravit vybrané
+	Fix All	Opravit vše
+	Issues fixed: {count}	Opravené problémy: {count}
+	Open a document to check it for issues.	Otevřete dokument a zkontrolujte jeho problémy.
+	Empty Text	Prázdný text
+	Unpainted Objects	Objekty bez barvy
+	Zero-Opacity Objects	Objekty s nulovým krytím
+	Duplicate Objects	Duplicitní objekty
+	Off-Artboard Art	Kresba mimo pracovní plochy
+	Duplicate Anchors	Duplicitní kotevní body
+	Tiny Handles	Drobné úchyty
+	Collinear Anchors	Kolineární kotevní body
+	Nearly Coincident Anchors	Téměř shodné kotevní body
+	Nearly Closed Paths	Téměř uzavřené cesty
+	Filled Open Paths	Vyplněné otevřené cesty
+	Needless Clipping Groups	Zbytečné ořezové skupiny
+	Needless Compound Paths	Zbytečné složené cesty
+	Needless Groups	Zbytečné skupiny
+	Empty Artboards	Prázdné pracovní plochy
+	Protect Corners	Chránit rohy
+	Gap	Mezera
+	Include Clip Groups	Zahrnout ořezové skupiny
+@msg	`tolerance` must be from 1 to 100	`tolerance` musí být od 1 do 100
+@msg	`gap` must be from 0 to 6 pt	`gap` musí být od 0 do 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Zjednodušit kotevní body: cesty mají příliš mnoho kotevních bodů, než aby je šlo zjednodušit najednou
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Znovu spojit části cest: příliš mnoho cest ke spojení najednou
+@msg	None of these issues are left: check again	Žádný z těchto problémů už nezůstal: zkontrolujte znovu
+@msg	`kinds` must be a list of issue kinds	`kinds` musí být seznam druhů problémů
+@msg	missing `kind`	chybí `kind`
+	Simplify Anchors (Keep Shape)	Zjednodušit kotevní body (zachovat tvar)
+	Deep Ungroup	Oddělit všechny úrovně
+	Rejoin Path Pieces	Znovu spojit části cest
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Barevné efekty
+	Color Effects Panel	Panel Barevné efekty
+	Exposure	Expozice
+	Exposure…	Expozice…
+	Desaturate	Odbarvit
+	Adjustment	Úprava
+	Add as Effect	Přidat jako efekt
+	Apply as Filter	Použít jako filtr
+	Select objects to adjust their colors.	Vyberte objekty, jejichž barvy chcete upravit.
+	Brightness/Contrast	Jas/kontrast
+	Hue/Saturation	Odstín/sytost
+	Temperature/Tint	Teplota/nádech
+@msg	`{id}` is not a colour adjustment	`{id}` není úprava barev
+@msg	missing `effect`	chybí `effect`
+@msg	`params` must be an object	`params` musí být objekt
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Přesné nástroje pro cesty
+	Anchor Eraser Brush	Štětec gumy kotevních bodů
+	Extend Path Tool	Nástroj Prodloužit cestu
+	Measure & Inspect Tool	Nástroj Měřit a zkoumat
+	Anchor Inspector	Inspektor kotevních bodů
+	Add Points at Crossings	Přidat body v křížení
+	Split at Crossings	Rozdělit v křížení
+	Extend Path	Prodloužit cestu
+	Measure & Inspect	Měřit a zkoumat
+	Set Anchor	Nastavit kotevní bod
+	Make Smooth	Změnit na hladký
+	Make Corner	Změnit na rohový
+	Equalize Handles	Vyrovnat úchyty
+	Remove Points, Keep Shape	Odstranit body, zachovat tvar
+	Add Points to Segments…	Přidat body do segmentů…
+	Add Points to Segments	Přidat body do segmentů
+	Open a document to edit its anchor points.	Otevřete dokument a upravte jeho kotevní body.
+	Anchors selected: {count}	Vybrané kotevní body: {count}
+	Direct-select anchor points to edit them.	Kotevní body pro úpravy vyberte přímým výběrem.
+	In:	Vstup:
+	Out:	Výstup:
+	Add Points	Přidat body
+	Points per segment	Bodů na segment
+	Close Path:	Uzavřít cestu:
+	Keep Handles	Zachovat úchyty
+	Straight	Přímý
+	Stretch Curve	Natáhnout křivku
+@msg	direct-select the anchor points to remove	přímým výběrem vyberte kotevní body k odstranění
+@msg	select segments, or paths, to add points to	vyberte segmenty nebo cesty, do nichž přidat body
+@msg	select open paths to close	vyberte otevřené cesty k uzavření
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	příliš mnoho nebo příliš spletených cest pro nalezení jejich křížení (nejvýše 10000 segmentů)
+@msg	the paths have too many anchors to edit at once	cesty mají příliš mnoho kotevních bodů na úpravu najednou
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Chytré pero
+	Smart Pen Tool	Nástroj Chytré pero
+	Smart Pen Panel	Panel Chytré pero
+	Next Segment	Další segment
+	Curved	Zakřivený
+	Retract Handles	Zasunout úchyty
+	Close or Join	Uzavřít nebo spojit
+	Open a document to draw with the Smart Pen.	Otevřete dokument a kreslete chytrým perem.
+	Straight or Curved Segment	Přímý nebo zakřivený segment
+@msg	the path is locked or hidden	cesta je zamčená nebo skrytá
+@msg	`id` is not a path	`id` není cesta
+@msg	the path has no open subpath	cesta nemá žádnou otevřenou dílčí cestu
+@msg	the subpath is closed	dílčí cesta je uzavřená
+@msg	the subpath is closed or too short to close	dílčí cesta je uzavřená nebo příliš krátká k uzavření
+@msg	the path is too short to remove a point from	cesta je příliš krátká na odebrání bodu
+@msg	the segment can't be bent that far	segment nelze ohnout tak daleko
+@msg	give `{a}` and `{b}`	zadejte `{a}` a `{b}`
+@msg	`t` must be from 0 to 1	`t` musí být od 0 do 1
+@msg	`segment` must be "straight" or "curved"	`segment` musí být "straight" nebo "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musí být "free", "keepAngles" nebo "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` musí být [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Vybrat podle druhu barvy
+	Objects with Spot Colors	Objekty s přímými barvami
+	Objects with Color Effects	Objekty s barevnými efekty
+	RGB Images	Obrazy RGB
+	CMYK Images	Obrazy CMYK
+	Grayscale Images	Obrazy ve stupních šedi
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` musí být spotColors, colorEffects, rgbImages, cmykImages nebo grayImages

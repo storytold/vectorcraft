@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{CharStyle, Document, NodeId, NodeKind, ParaStyle, TextStyleDef};
 
 use super::typecmd::{refresh_bounds, text_targets};
-use super::*;
+use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
 
 pub const NORMAL_CHAR: &str = "[Normal Character Style]";
 pub const NORMAL_PARA: &str = "[Normal Paragraph Style]";
@@ -366,9 +366,25 @@ pub(crate) fn selected_style_attrs(s: &Session, para: bool) -> Result<Option<Map
     selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char })
 }
 
+/// The attributes `charStyle.new` (`para`: `paraStyle.new`) would give a style made now from
+/// `target` (its `id`, `start` and `end`; empty for the selected objects). `None` without text
+/// there.
+pub fn target_style_attrs(s: &Session, target: &Value, para: bool) -> Option<Map<String, Value>> {
+    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }).ok().flatten()
+}
+
 /// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
 pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
+}
+
+/// The name `charStyle.new` (`para`: `paraStyle.new`) gives a style when it is given none: the
+/// first "Character Style N" ("Paragraph Style N") that no character style (paragraph style) of the
+/// document has.
+pub fn new_style_name(d: &Document, para: bool) -> String {
+    let kind = if para { Kind::Para } else { Kind::Char };
+    let base = if para { "Paragraph Style" } else { "Character Style" };
+    (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string())
 }
 
 fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
@@ -436,10 +452,9 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         },
     };
     let d = &s.doc()?.doc;
-    let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };
     let name = match str_param(p, "name") {
         Some(n) => n.trim().to_string(),
-        None => (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string()),
+        None => new_style_name(d, kind == Kind::Para),
     };
     if name.is_empty() {
         return Err(bad(&c, "give the style a name"));

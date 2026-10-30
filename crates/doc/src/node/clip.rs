@@ -1,5 +1,5 @@
 use super::kind::NodeKind;
-use super::*;
+use super::{BezPath, FillRule, Node, Outliner, Rect, shapes};
 
 /// Unites filled regions (each under its own fill rule) into one path filled non-zero. Booleans
 /// live above this crate (`vectorcraft-pathops`), so callers supply it.

@@ -3,7 +3,7 @@ use super::invoke::click_target;
 use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, unlock_item_label};
 use super::state::{shortcut_of, shown_state};
 use super::tree::menu_tree_named;
-use super::*;
+use super::{Entry, Item, Serialize, Value, VectorcraftApp};
 
 /// A menu item as it shows now ([`entry`]).
 pub struct Row<'a> {

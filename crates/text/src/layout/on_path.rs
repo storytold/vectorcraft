@@ -2,7 +2,10 @@ use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{Metrics, optical_hangs, optical_hangs_rtl, optical_share, roman_share};
 use super::flow::list_markers;
 use super::region::in_range;
-use super::*;
+use super::{
+    Affine, ArcPath, BezPath, Ctx, GlyphBend, Justify, LineInfo, ListMarker, ParamCurve, PathAlign, PathData, PathEffect, PathEl, Point, Range,
+    SGlyph, Shape, TextObject, Vec2, style_metrics,
+};
 
 /// The distance along type on a path each glyph takes: its advance measured `spacing` points above
 /// the path (Type on a Path Options › Spacing), so glyphs close up round the outside of a curve and

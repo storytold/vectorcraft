@@ -36,6 +36,14 @@ const MAX_STATES: usize = 65_536;
 /// takes a few million; the walk reads about 15 million a second, twice as fast as the
 /// interpreter draws them.
 const MAX_OPS: usize = 64_000_000;
+/// The most bytes of form XObject content walked per page, a form drawn again counted again:
+/// [`MAX_OPS`] guards content that is mostly operators, this content that isn't (a form of long
+/// strings, inline image data or spaces). An operator takes some 10 to 40 bytes (a curve's six
+/// numbers about 40), so a page of ordinary content within `MAX_OPS` walks up to about this much;
+/// a page that draws a form decoding to 64 MiB a thousand times (#3569, which hung) stops at its
+/// 33rd reading. The interpreter reads every form again too, and nothing else bounds what it
+/// decodes. (2 GiB: within a 32-bit `usize`, for the web build.)
+const MAX_FORM_CONTENT: usize = 2 << 30;
 /// The most marked-content sequences noted per page (24 bytes each): past it the rest of the
 /// page isn't told apart either.
 const MAX_TAGS: usize = 4_000_000;
@@ -461,6 +469,8 @@ struct Walker<'w, 'p> {
     ops: usize,
     max_ops: usize,
     max_form_bytes: usize,
+    /// The bytes of form content walked so far ([`MAX_FORM_CONTENT`]).
+    form_content: usize,
     out: Scan,
     /// A form XObject hidden by its own optional content was met.
     hidden_form: bool,
@@ -819,6 +829,11 @@ impl Walker<'_, '_> {
                         self.out.cut = true;
                         return;
                     };
+                    self.form_content = self.form_content.saturating_add(data.len());
+                    if self.form_content > MAX_FORM_CONTENT {
+                        self.out.cut = true;
+                        return;
+                    }
                     // Ordinary filtered form decoders may return a prefix at their limit.
                     // Reaching that bound cannot certify a complete form, even at an operator boundary.
                     if !s.filters().is_empty() && data.len() >= self.max_form_bytes {
@@ -1038,6 +1053,7 @@ fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &
         ops: 0,
         max_ops: max_ops(),
         max_form_bytes,
+        form_content: 0,
         out: Scan::default(),
         hidden_form: false,
         states: vec![State::default()],

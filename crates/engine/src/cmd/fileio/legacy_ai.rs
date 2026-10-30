@@ -37,7 +37,7 @@ use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Anchor, FillRule, PathData, Point, Rect, SubPath};
 
-use super::super::*;
+use super::super::{Affine, EngineError, NodeId, Result, bad};
 use super::{ArtboardPick, Encoded, Format};
 
 /// Does `p` ask a save in `f` for a legacy `.ai` file of version 7 (`aiVersion: "7"`)? An unknown

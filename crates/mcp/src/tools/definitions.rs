@@ -1,6 +1,6 @@
 use super::dispatch::{BRIEF, MAX_SIDE_WINDOW, MENU_FILTER, TRACE_VIEWS};
 use super::handlers::MAX_DIALOG_FIELDS;
-use super::*;
+use super::{FORMATS, OPEN_EXTS, SAVE_FORMATS, Value, format, json};
 
 // ---------- schemas ----------
 

@@ -105,6 +105,7 @@ fn every_dialog_draws() {
     for (kind, fields) in [
         ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
         ("average", json!({"axis": "both"})),
+        ("averageJoin", json!({"to": "corner"})),
         (crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"})),
         ("newWorkspace", json!({"name": "Mine"})),
         ("shortcuts", json!({})),
@@ -393,6 +394,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.swatchOptions", json!({"name": "White"})),
         ("ui.colorPicker", json!({})),
         ("ui.graphicStyleOptions", json!({})),
+        ("ui.newCharStyle", json!({})),
         ("ui.newArtboard", json!({})),
         ("ui.brushOptions", json!({"name": "3 pt. Round"})),
         ("ui.brushOptions", json!({"name": "Bristle Round"})),
@@ -1413,6 +1415,45 @@ fn zig_zag_has_sliders_and_radio_buttons() {
     assert!(!lines.contains(&"Ridges:"), "{lines:?}");
 }
 
+/// #4488: Roughen's dialog has Size and Detail sliders laid out as Zig Zag's, Pucker & Bloat's its
+/// amount as a slider from Pucker to Bloat, and Tweak's Horizontal and Vertical sliders.
+#[test]
+fn roughen_pucker_bloat_and_tweak_have_sliders() {
+    use crate::widgets::accessibility_tests::{slider_value, tree};
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Size:", "Relative", "Absolute", "Detail:", "Points", "Smooth", "Corner"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Size:"), (Some(5.0), Some(0.0), Some(100.0), Some("5%".into())));
+    assert_eq!(slider_value(&shown, "Detail:"), (Some(10.0), Some(0.0), Some(100.0), None));
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.puckerBloat"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("amount".into(), json!(-60));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Amount:", "Pucker", "Bloat"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    let (value, min, max, _) = slider_value(&shown, "Amount:");
+    assert_eq!((value, min, max), (Some(-60.0), Some(-200.0), Some(200.0)));
+    // Tweak: Horizontal and Vertical sliders, Relative / Absolute, and the points it moves.
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.tweak"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for want in ["Horizontal:", "Vertical:", "Relative", "Absolute", "Anchor Points", "\"In\" Control Points", "\"Out\" Control Points"] {
+        assert!(lines.contains(&want), "no {want:?} in {lines:?}");
+    }
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Horizontal:"), (Some(10.0), Some(0.0), Some(100.0), Some("10%".into())));
+}
+
 /// Screen readers get the number and text of the field beside each dialog slider, in the field's
 /// unit, with the rail's range (extended to a number past the rail's end): Transform Each's Scale
 /// and Move, Zig Zag's Size and Ridges, a form slider (Vector Halftone's Frequency), the Pencil's
@@ -1659,6 +1700,40 @@ fn free_distort_reset_puts_the_corners_back() {
     let s = app.session.active().unwrap();
     let effects = &s.doc.node(s.selection.objects[0]).unwrap().appearance.effects;
     assert_eq!((effects.len(), effects[0].params["corners"].clone()), (1, rest));
+}
+
+/// While Alt is held, the Flare Tool Options' Cancel button reads Reset; Reset puts every option
+/// back to the tool's default and leaves the dialog open, letting Alt go shows Cancel again, and OK
+/// keeps the defaults.
+#[test]
+fn flare_options_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "flare"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("diameter", json!(250)), ("rays", json!(4)), ("ringsOn", json!(false)), ("growth", json!(80))] {
+        d.fields.insert(k.into(), v);
+    }
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!(
+        (d.f64("diameter", 0.0), d.f64("rays", 0.0), d.bool("ringsOn"), d.f64("growth", 0.0), d.f64("direction", 0.0)),
+        (100.0, 15.0, true, 20.0, 45.0)
+    );
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    f.button(&mut app, "Cancel");
+    confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("flare");
+    assert_eq!(
+        (o["diameter"].as_f64(), o["rays"].as_u64(), o["ringsOn"].as_bool(), o["growth"].as_f64()),
+        (Some(100.0), Some(15), Some(true), Some(20.0))
+    );
 }
 
 /// The slider that screen readers name `label` in `out`'s tree: its node id, number and text.
@@ -2410,4 +2485,112 @@ fn artboard_options_selected_fit_spans_other_boards_and_off_board_art() {
     assert_eq!(app.session.doc().unwrap().doc, before);
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, after);
+}
+
+/// An effect dialog keeps a distance typed outside the effect's range to the range, so the field
+/// shows what the effect applies: Color Halftone's Max Radius below 4 pt is 4 pt (#4637).
+#[test]
+fn an_effect_dialog_keeps_a_typed_distance_within_the_effects_range() {
+    let enter = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    for (typed, applied) in [("1 pt", 4.0), ("0.5 px", 4.0), ("200 pt", 127.0), ("10 pt", 10.0)] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+        // Max Radius, the first field, is focused: type over it and press Enter.
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text(typed.into())]);
+        frame(&mut app, vec![enter()]);
+        assert!(app.ui.dialog.is_none(), "{typed}");
+        let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        assert_eq!(node.appearance.effects.last().map(|e| e.params["maxRadius"].clone()), Some(json!(applied)), "{typed}");
+    }
+}
+
+/// #4638: typing invalid input in an effect length field does not silently revert to a sub-minimum
+/// or out-of-range value; sub-minimum input is clamped immediately and invalid input clears cleanly.
+#[test]
+fn color_halftone_invalid_input_does_not_revert_to_sub_minimum_value() {
+    let mut app = app();
+    let _id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+    frame(&mut app, vec![]);
+    // 1. Enter 0.5 px (sub-minimum): clamped immediately to 4 pt on commit
+    frame(&mut app, vec![egui::Event::Text("0.5 px".into())]);
+    frame(&mut app, vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(4.0));
+    let s1 = frame(&mut app, vec![]);
+    let shows_clamped_text = s1.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Text(t) => t.galley.text().trim() == "4 pt",
+        _ => false,
+    });
+    assert!(shows_clamped_text, "rendered field must show clamped '4 pt' text after sub-minimum commit");
+
+    // 2. Return focus to Max Radius with Shift+Tab, type invalid text, and commit with Enter
+    frame(
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT }],
+    );
+    frame(&mut app, vec![egui::Event::Text("1jgghgh".into())]);
+    let _out = frame(
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    // Dialog remains open and retains the clamped 4.0 pt rather than reverting to 0.5 px
+    assert!(app.ui.dialog.is_some(), "dialog must remain open on invalid Enter commit");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(4.0));
+
+    // The field paints with rejection highlight (width 1.5, accent_strong)
+    let next_out = frame(&mut app, vec![]);
+    let has_rejection_highlight = next_out.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Rect(r) => (r.stroke.width - 1.5).abs() < 1e-3 && r.stroke.color.a() > 0,
+        _ => false,
+    });
+    assert!(has_rejection_highlight, "Max Radius must display rejection highlight after invalid input");
+    let shows_clamped_after_invalid = next_out.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Text(t) => t.galley.text().trim() == "4 pt",
+        _ => false,
+    });
+    assert!(shows_clamped_after_invalid, "rendered field must retain '4 pt' text after invalid input rejection");
+}
+
+#[test]
+fn bounded_field_with_inches_does_not_clamp_point_bounds_to_inch_numbers() {
+    let mut test_app = app();
+    let _id = test_app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    // Switch document units to Inches
+    test_app.run("document.setup", json!({"units": "Inches"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    test_app.run("select.all", json!({})).unwrap();
+    test_app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+    frame(&mut test_app, vec![]);
+    // Type 1 in: 72 pt is within 4..127 pt range and must not clamp to ~1.76 pt
+    frame(&mut test_app, vec![egui::Event::Text("1 in".into())]);
+    frame(
+        &mut test_app,
+        vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    assert_eq!(test_app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(72.0));
 }

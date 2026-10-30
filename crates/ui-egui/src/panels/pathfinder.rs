@@ -1,7 +1,10 @@
 //! Pathfinder panel: Shape Modes (+ Expand) and Pathfinders, with icons drawn for VectorCraft.
+//! Alt-clicking a Shape Mode makes a compound shape; with members of one selected, a Shape Mode
+//! sets theirs.
 
 use egui::Ui;
 use serde_json::json;
+use vectorcraft_engine::doc::ShapeMode;
 
 use super::{pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
@@ -39,9 +42,10 @@ fn operands(app: &VectorcraftApp) -> usize {
     }
 }
 
-/// An operation's button, greyed out and saying what it needs unless the selection has `min` operands.
-fn button(ui: &mut Ui, icon: &str, tip: &str, n: usize, min: usize) -> bool {
-    let resp = widgets::icon_button_enabled(ui, icon, tip, false, n >= min, 34.0);
+/// An operation's button, lit while `selected`, greyed out and saying what it needs unless the
+/// selection has `min` operands.
+fn button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, n: usize, min: usize) -> bool {
+    let resp = widgets::icon_button_enabled(ui, icon, tip, selected, n >= min, 34.0);
     if n < min {
         resp.on_hover_text(tl!("Select two or more objects, or a group"));
         return false;
@@ -49,31 +53,46 @@ fn button(ui: &mut Ui, icon: &str, tip: &str, n: usize, min: usize) -> bool {
     resp.clicked()
 }
 
+/// A Shape Mode button clicked: Alt makes a compound shape of the selection in `mode`; with
+/// members of compound shapes selected they take `mode`; otherwise operation `op` runs.
+fn shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, label: &str, mode: ShapeMode, members: bool) {
+    if ui.input(|i| i.modifiers.alt) {
+        crate::menus::invoke(app, "object.compoundShape.make", json!({"mode": mode.name()}));
+    } else if members {
+        crate::menus::invoke(app, "object.compoundShape.setMode", json!({"mode": mode.name()}));
+    } else {
+        run(app, ui, op, label);
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = operands(app);
-    let t = crate::theme::Tokens::get(ui.ctx());
+    // The modes of the compound-shape members selected: their Shape Mode button lights when they
+    // share one.
+    let modes = vectorcraft_engine::cmd::selected_member_modes(&app.session);
+    let shared = modes.first().copied().filter(|m| modes.iter().all(|x| x == m));
+    let expand = crate::menus::enabled(app, "object.compoundShape.expand");
     widgets::subheader(ui, tl!("Shape Modes:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
-        for (icon, tip, op) in SHAPE_MODES {
-            if button(ui, icon, tip, n, 2) {
-                run(app, ui, op, tip);
+        // Selected members can always take a mode.
+        let count = if modes.is_empty() { n } else { n.max(2) };
+        for ((icon, tip, op), mode) in SHAPE_MODES.into_iter().zip(ShapeMode::ALL) {
+            if button(ui, icon, tip, shared == Some(mode), count, 2) {
+                shape_mode(app, ui, op, tip, mode, !modes.is_empty());
             }
         }
-        ui.add_enabled_ui(false, |ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().min(90.0), 26.0), egui::Sense::hover());
-            ui.painter().rect_filled(r, 2, t.hover.gamma_multiply(0.5));
-            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, tl!("Expand"), egui::FontId::proportional(12.5), t.text_disabled);
-        })
-        .response
-        .on_disabled_hover_text(tl!("Expand applies to compound shapes (Alt-click a shape mode) — on the roadmap"));
+        let resp = ui.add_enabled_ui(expand, |ui| widgets::flat_button_fit(ui, "Expand", 90.0)).inner;
+        if resp.on_hover_text(tl!("Expand Compound Shape")).on_disabled_hover_text(tl!("Expand Compound Shape")).clicked() {
+            crate::menus::invoke(app, "object.compoundShape.expand", json!({}));
+        }
     });
     widgets::subheader(ui, tl!("Pathfinders:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
         for (icon, tip, op) in PATHFINDERS {
             let min = if op == "outline" || op == "divide" { 1 } else { 2 };
-            if button(ui, icon, tip, n, min) {
+            if button(ui, icon, tip, false, n, min) {
                 run(app, ui, op, tip);
             }
         }
@@ -103,15 +122,21 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::menus::invoke(app, "object.pathfinder.options", json!({}));
     }
     ui.separator();
-    menu_item(ui, tl!("Make Compound Shape"), false, false);
-    menu_item(ui, tl!("Release Compound Shape"), false, false);
-    menu_item(ui, tl!("Expand Compound Shape"), false, false);
+    for (label, id) in [
+        (tl!("Make Compound Shape"), "object.compoundShape.make"),
+        (tl!("Release Compound Shape"), "object.compoundShape.release"),
+        (tl!("Expand Compound Shape"), "object.compoundShape.expand"),
+    ] {
+        if menu_item(ui, label, crate::menus::enabled(app, id), false) {
+            crate::menus::invoke(app, id, json!({}));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::widgets::accessibility_tests::{named, tree};
+    use crate::widgets::accessibility_tests::{named, role_and_state, tree};
     use serde_json::Value;
     use vectorcraft_engine::doc::{NodeId, NodeKind};
 
@@ -153,6 +178,36 @@ mod tests {
             assert_eq!(node.role(), egui::accesskit::Role::Button, "{label}");
             assert!(!node.is_disabled(), "{label}");
         }
+    }
+
+    /// The panel menu's compound shape items: Make with two or more objects selected, Release and
+    /// Expand with a compound shape (or a member of one); the Expand button follows Expand, and
+    /// with a member selected its Shape Mode button is lit.
+    #[test]
+    fn compound_shape_items_follow_the_selection() {
+        use egui::accesskit::{Role, Toggled};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+        let b = app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 50, "height": 50})).unwrap()["id"].clone();
+        let state = |app: &mut VectorcraftApp| {
+            let items = tree(|ui| menu(app, ui));
+            let on = |label: &str| !named(&items, &format!("   {label}")).is_disabled();
+            let panel = tree(|ui| show(app, ui));
+            (on("Make Compound Shape"), on("Release Compound Shape"), on("Expand Compound Shape"), !named(&panel, "Expand").is_disabled())
+        };
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        assert_eq!(state(&mut app), (false, false, false, false), "one object");
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(state(&mut app), (true, false, false, false), "two objects");
+        app.run("object.compoundShape.make", json!({"mode": "subtract"})).unwrap();
+        assert_eq!(state(&mut app), (false, true, true, true), "a compound shape");
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        assert_eq!(state(&mut app), (false, true, true, true), "a member");
+        let panel = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&panel, "Minus Front"), (Role::Button, Some(Toggled::True)), "the member's mode");
+        assert!(!named(&panel, "Unite").is_disabled(), "a member takes another mode");
+        assert_ne!(role_and_state(&panel, "Unite").1, Some(Toggled::True));
     }
 
     /// The panel menu's Trap… is enabled for two objects and opens the Trap options; OK adds the

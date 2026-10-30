@@ -7,8 +7,8 @@ use super::envelope::{
     env_edit_contents, env_expand, env_info, env_make_mesh, env_make_top, env_make_warp, env_options, env_release, env_reset_mesh, env_reset_warp,
     env_set_mesh_point,
 };
-use super::mesh::{mesh_add_line, mesh_create, mesh_delete_point, mesh_expand, mesh_move_point, mesh_set_color};
-use super::*;
+use super::mesh::{mesh_add_line, mesh_create, mesh_delete_point, mesh_expand, mesh_move_point, mesh_move_points, mesh_set_color};
+use super::{CommandSpec, always, cmd, has_doc, has_multi, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -245,7 +245,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index, color, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour of one mesh point",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color?, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
             has_doc,
             mesh_set_color
         ),
@@ -257,6 +257,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or mesh envelope (its handles follow), or with `handle` place that handle end at (x, y)",
             has_doc,
             mesh_move_point
+        ),
+        cmd!(
+            "object.mesh.movePoints",
+            "Move Mesh Points",
+            [],
+            None,
+            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh envelopes by (dx, dy), their handles with them (one undo step; an index out of range changes nothing)",
+            has_doc,
+            mesh_move_points
         ),
         cmd!(
             "object.mesh.addLine",

@@ -283,7 +283,7 @@ pub struct Entry {
     pub is_tool: bool,
 }
 
-/// Every tool and menu command the editor lists.
+/// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
 pub fn entries() -> &'static [Entry] {
     static E: OnceLock<Vec<Entry>> = OnceLock::new();
     E.get_or_init(|| {
@@ -333,6 +333,80 @@ fn runs_without_params(params: &str) -> bool {
         .strip_prefix('{')
         .and_then(|r| r.split_once('}'))
         .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
+}
+
+/// Does the editor list `e` under `overrides`? An entry that [`needs_a_value`] is listed only while
+/// the user has given it a shortcut.
+fn listed(overrides: &Overrides, e: &Entry) -> bool {
+    !needs_a_value(&e.key) || overrides.get(&crate::keymap::stored_key(&e.key)).is_some_and(|t| !t.is_empty())
+}
+
+/// Is `key` a command with a menu path and no default shortcut that a key press can't run: no
+/// item of the menu bar runs it without params, it opens no dialog when run without them (as the
+/// Variables panel's commands do), and its params doc names a field a call must give (File ›
+/// Document Setup › Units, `{units}`)?
+fn needs_a_value(key: &str) -> bool {
+    fn run_bare(items: &[menus::Item], out: &mut HashSet<&'static str>) {
+        for it in items {
+            match it {
+                menus::Item::Cmd(_, id, p) if p.as_object().is_none_or(|o| o.is_empty()) => {
+                    out.insert(id);
+                }
+                menus::Item::Sub(_, children) => run_bare(children, out),
+                _ => {}
+            }
+        }
+    }
+    static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    KEYS.get_or_init(|| {
+        let mut bare = HashSet::new();
+        for (_, items) in menus::menu_tree() {
+            run_bare(&items, &mut bare);
+        }
+        vectorcraft_engine::command_specs()
+            .iter()
+            .filter(|c| {
+                !c.menu.is_empty()
+                    && c.shortcut.is_none()
+                    && !bare.contains(c.id)
+                    && !crate::dialogs::variables::opens(c.id)
+                    && names_a_required_field(c.params)
+            })
+            .map(|c| c.id)
+            .collect()
+    })
+    .contains(key)
+}
+
+/// Does a params doc name a field a call must give? Its fields are the top-level parts of its
+/// first `{…}`. A field is optional when it is empty, starts with `…`, gives a default (`rows=10`)
+/// or each of its names ends with `?` (`id?|ids?: [id…]`); `{index | indices}` names a required
+/// field. A doc that does not start with `{` names none.
+fn names_a_required_field(params: &str) -> bool {
+    let required = |f: &str| {
+        let f = f.trim();
+        let end = f.find([':', '=', '(']).unwrap_or(f.len());
+        !(f.is_empty() || f.starts_with('…') || f[end..].starts_with('=') || f[..end].split('|').all(|n| n.trim().ends_with('?')))
+    };
+    let Some(rest) = params.strip_prefix('{') else { return false };
+    let (mut depth, mut quoted, mut start) = (0usize, false, 0);
+    for (i, ch) in rest.char_indices() {
+        match ch {
+            '"' => quoted = !quoted,
+            _ if quoted => {}
+            '{' | '[' | '(' => depth += 1,
+            '}' if depth == 0 => return required(&rest[start..i]),
+            '}' | ']' | ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                if required(&rest[start..i]) {
+                    return true;
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 pub fn entry(key: &str) -> Option<&'static Entry> {
@@ -510,6 +584,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             Ok(Value::Array(
                 entries()
                     .iter()
+                    .filter(|e| listed(ov, e))
                     .filter(|e| q.is_empty() || e.label.to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q))
                     .map(|e| json!({"id": e.key, "label": e.label, "group": e.group, "shortcut": effective_with(&km, &e.key), "default": default_of(&e.key), "overridden": crate::keymap::has_override(ov, &e.key)}))
                     .collect(),
@@ -648,6 +723,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut km = Cow::Borrowed(&view.keymap);
     let mut ok = false;
     let mut cancel = false;
+    drop_hidden(&mut d, km.overrides());
     let recording = d.str("__recording");
     // Record a chord (before widgets see the keys). Modifiers held down are part of the next key's
     // chord, not a chord of their own.
@@ -712,7 +788,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let mut q = d.str("query");
-                if ui.add(egui::TextEdit::singleline(&mut q).hint_text(tl!("Search")).desired_width(200.0)).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut q).align(egui::Align2::LEFT_CENTER).hint_text(tl!("Search")).desired_width(200.0)).changed()
+                {
                     d.fields.insert("query".into(), json!(q));
                 }
             });
@@ -732,7 +809,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new(tl!("Shortcut")).color(t.text_dim).size(11.0));
             });
             egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, false]).show(ui, |ui| {
-                for (i, e) in entries().iter().enumerate().filter(|(_, e)| e.is_tool == tools) {
+                for (i, e) in entries().iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
                     let sc = match &km {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
                         Cow::Owned(km) => effective_with(km, &e.key),
@@ -902,6 +979,18 @@ fn export_from_dialog(app: &mut VectorcraftApp) {
     app.ui.shortcut_set = saved_set;
 }
 
+/// A row that left the list (Clear, Use Default, Reset to Defaults or another set took the
+/// shortcut from a command that needs a value) is no longer recorded, selected or offered by Go to
+/// Conflict, so the next key press does not give the hidden command a shortcut.
+fn drop_hidden(d: &mut Dialog, overrides: &Overrides) {
+    for field in ["__recording", "__selected", "__conflict"] {
+        let key = d.str(field);
+        if !key.is_empty() && entry(&key).is_none_or(|e| !listed(overrides, e)) {
+            d.fields.insert(field.into(), json!(""));
+        }
+    }
+}
+
 /// Apply a recorded chord to `key` in the working set, warning about (and resolving) conflicts.
 fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
     d.fields.insert("__recording".into(), json!(""));
@@ -962,6 +1051,52 @@ mod tests {
         // A modifier's own key press is no chord (#487).
         assert_eq!(chord_from_event(Key::ShiftLeft, Modifiers::SHIFT), None);
         assert!(normalize("ShiftLeft").is_none() && normalize("Cmd+ControlRight").is_none());
+    }
+
+    #[test]
+    fn clearing_a_row_that_leaves_the_list_stops_its_recording() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "edit.duplicate", "Cmd+Alt+Shift+F11");
+        open(&mut app);
+        let mut d = app.ui.dialog.clone().unwrap();
+        let start = keymap_with(&dialog_overrides(&d));
+        let set = |d: &mut Dialog, key: &str| {
+            d.fields.insert("__recording".into(), json!(key));
+            d.fields.insert("__selected".into(), json!(key));
+        };
+        let state = |d: &Dialog| (d.str("__recording"), d.str("__selected"));
+        // Clear, and Use Default, take the row out of the list: its recording stops.
+        let mut km = start.clone();
+        set(&mut d, "document.setUnits");
+        assign_in(&mut km, "document.setUnits", None, true).unwrap();
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(state(&d), (String::new(), String::new()));
+        let mut km = start.clone();
+        set(&mut d, "document.setUnits");
+        km.reset(&command_of("document.setUnits"));
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(state(&d), (String::new(), String::new()));
+        // A row that stays listed keeps its recording, and so does a tool's.
+        let mut km = start.clone();
+        set(&mut d, "edit.duplicate");
+        assign_in(&mut km, "edit.duplicate", None, true).unwrap();
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(state(&d), ("edit.duplicate".to_string(), "edit.duplicate".to_string()));
+        set(&mut d, "tool:groupSelection");
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(state(&d), ("tool:groupSelection".to_string(), "tool:groupSelection".to_string()));
+        // A chord taken from a row that then leaves the list offers no Go to Conflict for it.
+        let mut km = start.clone();
+        record(&mut d, &mut km, "edit.duplicate", "Cmd+Alt+Shift+F12");
+        assert_eq!(d.str("__conflict"), "document.setUnits");
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(d.str("__conflict"), "");
+        // A conflict with a row that stays listed is kept.
+        let mut km = start.clone();
+        record(&mut d, &mut km, "document.setUnits", "Cmd+Alt+Shift+F11");
+        drop_hidden(&mut d, km.overrides());
+        assert_eq!(d.str("__conflict"), "edit.duplicate");
     }
 
     #[test]
@@ -1124,6 +1259,75 @@ mod tests {
         let mut ov = Overrides::new();
         assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
         assert_eq!(effective_in(&ov, "symbol.breakLink").as_deref(), Some("Cmd+Alt+Shift+F9"));
+    }
+
+    /// The Menu Commands rows the dialog draws for `query`.
+    fn menu_rows(app: &mut VectorcraftApp, query: &str) -> Vec<String> {
+        open(app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tab".into(), json!("menu"));
+        d.fields.insert("query".into(), json!(query));
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        // The modal draws nothing in its first frame, which only sizes it.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        app.ui.dialog = None;
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().contains(" › ") => Some(t.galley.text().to_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A menu command whose params need a value (Units needs `{units}`) is not listed while it has
+    /// no shortcut. A shortcut the user gave it keeps it listed, where it can be changed or cleared.
+    #[test]
+    fn commands_that_need_a_value_are_listed_only_with_the_users_shortcut() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let list = run_command(&mut app, "shortcuts.list", &json!({"query": "document.setUnits"})).unwrap().unwrap();
+        assert_eq!(list, json!([]));
+        assert!(!menu_rows(&mut app, "units").iter().any(|r| r.ends_with(" › Units")));
+        // A key saved for it before stays listed.
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        let list = run_command(&mut app, "shortcuts.list", &json!({"query": "document.setUnits"})).unwrap().unwrap();
+        let e = &list[0];
+        assert_eq!(
+            (e["id"].as_str(), e["shortcut"].as_str(), e["overridden"].as_bool()),
+            (Some("document.setUnits"), Some("Cmd+Alt+Shift+F12"), Some(true))
+        );
+        assert!(menu_rows(&mut app, "units").iter().any(|r| r == "File › Document Setup › Units"));
+        // An empty saved shortcut (as an imported set can hold) gives it no key, so it is not listed.
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "document.setUnits", "");
+        let list = run_command(&mut app, "shortcuts.list", &json!({"query": "document.setUnits"})).unwrap().unwrap();
+        assert_eq!(list, json!([]));
+        // Every entry with a default shortcut is listed, and so are commands a key press runs: one
+        // whose params are all optional, one the menu bar runs without params (Rotate… opens its
+        // dialog) and one that opens a dialog for its values (New Variable).
+        let none = Overrides::new();
+        let dropped: Vec<&str> = entries().iter().filter(|e| default_of(&e.key).is_some() && !listed(&none, e)).map(|e| e.key.as_str()).collect();
+        assert!(dropped.is_empty(), "{dropped:?}");
+        for id in ["edit.duplicate", "object.pathfinder.unite", "object.rotate", "variable.define", "object.distributeSpacing"] {
+            assert!(entry(id).is_some_and(|e| listed(&none, e)), "{id}");
+        }
+        for (doc, required) in [
+            ("{}", false),
+            ("{units: \"Points\"|\"Picas\"} the units", true),
+            ("{ids?: [id…] (selected first), dx?, dy?}", false),
+            ("{name? (trimmed, as `to`), attrs?: {…}}", false),
+            ("{columns=10, rows=10 (whole numbers)}", false),
+            ("{index | indices: [index…]}", true),
+            ("{index?: n | indices?: [n…]}", false),
+            ("{…as document.save} {path?}", false),
+            ("{find, replace?: \"\"}", true),
+            ("same as file.save", false),
+        ] {
+            assert_eq!(names_a_required_field(doc), required, "{doc}");
+        }
     }
 
     /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in

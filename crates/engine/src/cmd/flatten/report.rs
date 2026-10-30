@@ -1,6 +1,9 @@
 use super::apply::{kept_work, opaque, plan, stroked};
 use super::options::FlattenOptions;
-use super::*;
+use super::{
+    Appearance, Color, Deserialize, Document, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, Serialize, Session, Value, bad, isolated_doc,
+    json, roots_of, shape_node, str_param, targets,
+};
 
 /// The top-level objects among `ids` (or the selection), in paint order: layers stand for their
 /// contents; hidden and locked objects and clipping paths are left alone.

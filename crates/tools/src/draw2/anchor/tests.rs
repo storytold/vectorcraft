@@ -301,6 +301,34 @@ fn scissors_splits_at_segment() {
     );
 }
 
+/// With Alt held the Scissors tool acts as the Add Anchor Point tool: a click sends what the Add
+/// Anchor Point tool's click sends (an anchor inserted on a segment, nothing away from every path)
+/// and never splits, and the cursor is the Add Anchor Point tool's everywhere. Without Alt it cuts
+/// again.
+#[test]
+fn scissors_with_alt_adds_an_anchor() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("scissors");
+    let mut add = AnchorTool::new("addAnchor");
+    let alt = Mods { alt: true, ..Mods::default() };
+    for (x, y) in [(200.0, 150.0), (150.0, 101.0), (200.0, 100.0), (400.0, 400.0)] {
+        let down = PointerEvent::new(PointerKind::Down, x, y);
+        let a = t.pointer(&cx, &down.with_mods(alt));
+        assert_eq!(a, add.pointer(&cx, &down), "({x}, {y})");
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "path.split")), "({x}, {y})");
+        assert_eq!(t.cursor(&cx, Point::new(x, y), alt), Cursor::PenAdd, "({x}, {y})");
+    }
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 150.0).with_mods(alt));
+    assert!(matches!(&a[..], [Action::Exec(c, v)] if c == "path.insertAnchor" && v["id"] == id.0 && v["segment"] == 1));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 150.0));
+    assert!(matches!(&a[..], [Action::Exec(c, v)] if c == "path.split" && v["id"] == id.0 && v["segment"] == 1));
+    assert_eq!(t.cursor(&cx, Point::new(200.0, 150.0), Mods::default()), Cursor::Scissors);
+    assert_eq!(t.cursor(&cx, Point::new(400.0, 400.0), Mods::default()), Cursor::ScissorsNotAllowed);
+}
+
 /// The Add Anchor Point, Delete Anchor Point, Anchor Point and Scissors tools pick anchors and
 /// segments only on the art a click can pick: not on a Shaper Group's original shapes unless
 /// they are isolated (Construction mode), and in isolation mode only on the isolated object.
@@ -507,6 +535,58 @@ fn anchor_point_space_mid_drag_moves_the_anchor() {
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 370.0));
     assert!(matches!(&a[..], [Action::Preview(c, _)] if c == "path.convertAnchor"), "{a:?}");
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 260.0, 370.0)), vec![Action::Commit]);
+}
+
+/// Escape during a drag cancels it, whatever the drag does, and the release after it does
+/// nothing; Enter leaves the drag alone. After a press that has not moved, Escape drops the press,
+/// so its release does not make the smooth anchor a corner.
+#[test]
+fn escape_cancels_an_anchor_point_drag() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let space = Mods { space: true, ..Mods::default() };
+    // (what, the press, its modifiers, Space held during the second drag step)
+    for (what, x, y, mods, spaced) in [
+        ("convert", 100.0, 300.0, Mods::default(), false),
+        ("handle", 240.0, 320.0, Mods::default(), false),
+        ("segment", 150.0, 200.0, Mods::default(), false),
+        ("shift move", 200.0, 300.0, shift, false),
+        ("space move", 100.0, 300.0, Mods::default(), true),
+    ] {
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(mods));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 20.0, y + 30.0));
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(..)]), "{what}: {a:?}");
+        let step = if spaced { space } else { Mods::default() };
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 30.0, y + 40.0).with_mods(step));
+        let moved = matches!(&a[..], [Action::Preview(c, _)] if c == "path.moveAnchor");
+        assert_eq!(moved, spaced || what == "shift move", "{what}: {a:?}");
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty(), "{what}: Enter leaves the drag alone");
+        assert!(t.busy(), "{what}");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+        assert!(!t.busy(), "{what}");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 40.0, y + 50.0)).is_empty(), "{what}: the drag is over");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x + 40.0, y + 50.0)).is_empty(), "{what}: the release does nothing");
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
+    }
+    // A click on the smooth anchor makes it a corner; Escape between press and release drops it.
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty(), "nothing began, so nothing is canceled");
+    assert!(!t.busy());
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 300.0)).is_empty());
+    // With nothing pressed, Escape is not the tool's.
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
 }
 
 #[test]

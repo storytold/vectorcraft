@@ -174,6 +174,109 @@ fn blit(p: &mut Player, rop: u32, src: (i16, i16, i16, i16), dest: (i16, i16, i1
     p.image(img, Rect::new(xs, top, xs + ws, top + hs), d, rop, 1.0);
 }
 
+/// PolyPolygon (0x0538).
+fn rec_poly_polygon(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let n = usize::from(r.u16()?);
+    if r.rest().len() < n * 2 {
+        return None;
+    }
+    let counts: Vec<usize> = (0..n).map(|_| r.u16().map(usize::from)).collect::<Option<_>>()?;
+    let mut polys = Vec::with_capacity(n);
+    for c in counts {
+        polys.push(points(r, c)?);
+    }
+    p.poly_poly(&polys, true);
+    Some(())
+}
+
+/// Arc (0x0817), Pie (0x081A) and Chord (0x0830).
+fn rec_arc(p: &mut Player, function: u16, r: &mut Reader) -> Option<()> {
+    let (end, start) = (point_yx(r)?, point_yx(r)?);
+    let b = rect_brtl(r)?;
+    let kind = match function {
+        0x0817 => ArcKind::Open,
+        0x081A => ArcKind::Pie,
+        _ => ArcKind::Chord,
+    };
+    p.arc(b, start, end, kind);
+    Some(())
+}
+
+/// CreateFontIndirect (0x02FB).
+fn rec_create_font(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let height = f64::from(r.i16()?);
+    r.skip(2)?;
+    let escapement = f64::from(r.i16()?);
+    r.skip(2)?;
+    let weight = i32::from(r.i16()?);
+    let italic = r.bytes(1)?.first().is_some_and(|b| *b != 0);
+    r.skip(7)?;
+    let face: Vec<u8> = r.rest().iter().take(32).take_while(|b| **b != 0).copied().collect();
+    p.create(Obj::Font(FontObj { height, escapement, weight, italic, face: ansi(&face) }));
+    Some(())
+}
+
+/// TextOut (0x0521).
+fn rec_text_out(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let n = usize::try_from(r.i16()?).ok()?;
+    let s = ansi(r.bytes(n)?);
+    r.skip(n % 2)?;
+    let at = point_yx(r)?;
+    p.text(at, &s);
+    Some(())
+}
+
+/// ExtTextOut (0x0A32).
+fn rec_ext_text_out(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let at = point_yx(r)?;
+    let n = usize::try_from(r.i16()?).ok()?;
+    let opts = r.u16()?;
+    // ETO_OPAQUE or ETO_CLIPPED: a rectangle comes first.
+    if opts & 0x6 != 0 {
+        r.skip(8)?;
+    }
+    let s = ansi(r.bytes(n)?);
+    p.text(at, &s);
+    Some(())
+}
+
+/// StretchDIB (0x0F43).
+fn rec_stretch_dib(p: &mut Player, r: &mut Reader) -> Option<()> {
+    let rop = r.u32()?;
+    r.skip(2)?;
+    let (hs, ws, ys, xs) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
+    let (hd, wd, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
+    blit(p, rop, (xs, ys, ws, hs), (xd, yd, wd, hd), Some(r.rest()));
+    Some(())
+}
+
+/// StretchBlt (0x0B41).
+fn rec_stretch_blt(p: &mut Player, body: &[u8], r: &mut Reader) -> Option<()> {
+    let rop = r.u32()?;
+    let (hs, ws, ys, xs) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
+    // Without a bitmap, a reserved word comes before the destination.
+    let with_bitmap = body.len() > 22;
+    if !with_bitmap {
+        r.skip(2)?;
+    }
+    let (hd, wd, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
+    blit(p, rop, (xs, ys, ws, hs), (xd, yd, wd, hd), with_bitmap.then(|| r.rest()));
+    Some(())
+}
+
+/// BitBlt (0x0940).
+fn rec_bit_blt(p: &mut Player, body: &[u8], r: &mut Reader) -> Option<()> {
+    let rop = r.u32()?;
+    let (ys, xs) = (r.i16()?, r.i16()?);
+    let with_bitmap = body.len() > 20;
+    if !with_bitmap {
+        r.skip(2)?;
+    }
+    let (h, w, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
+    blit(p, rop, (xs, ys, w, h), (xd, yd, w, h), with_bitmap.then(|| r.rest()));
+    Some(())
+}
+
 /// Play one record (`r`: its parameters). `None`: unknown or damaged.
 fn record(p: &mut Player, function: u16, body: &[u8]) -> Option<()> {
     let mut r = Reader::new(body);
@@ -193,34 +296,14 @@ fn record(p: &mut Player, function: u16, body: &[u8]) -> Option<()> {
             let pts = points(&mut r, n)?;
             p.poly(&pts, function == 0x0324, false);
         }
-        0x0538 => {
-            let n = usize::from(r.u16()?);
-            if r.rest().len() < n * 2 {
-                return None;
-            }
-            let counts: Vec<usize> = (0..n).map(|_| r.u16().map(usize::from)).collect::<Option<_>>()?;
-            let mut polys = Vec::with_capacity(n);
-            for c in counts {
-                polys.push(points(&mut r, c)?);
-            }
-            p.poly_poly(&polys, true);
-        }
+        0x0538 => rec_poly_polygon(p, &mut r)?,
         0x041B => p.figure(shapes::rectangle(rect_brtl(&mut r)?.abs()).to_bezpath(), true),
         0x0418 => p.figure(shapes::ellipse(rect_brtl(&mut r)?.abs()).to_bezpath(), true),
         0x061C => {
             let (h, w) = (f64::from(r.i16()?), f64::from(r.i16()?));
             p.figure(super::round_rect(rect_brtl(&mut r)?, w, h), true);
         }
-        0x0817 | 0x081A | 0x0830 => {
-            let (end, start) = (point_yx(&mut r)?, point_yx(&mut r)?);
-            let b = rect_brtl(&mut r)?;
-            let kind = match function {
-                0x0817 => ArcKind::Open,
-                0x081A => ArcKind::Pie,
-                _ => ArcKind::Chord,
-            };
-            p.arc(b, start, end, kind);
-        }
+        0x0817 | 0x081A | 0x0830 => rec_arc(p, function, &mut r)?,
         0x0416 => p.clip_rect(rect_brtl(&mut r)?),
         0x0415 => p.exclude_clip(),
         0x012D => p.select(u32::from(r.u16()?)),
@@ -235,65 +318,14 @@ fn record(p: &mut Player, function: u16, body: &[u8]) -> Option<()> {
             let style = u32::from(r.u16()?);
             p.create(Obj::Brush(BrushObj::from_log(style, color(&mut r)?)));
         }
-        0x02FB => {
-            let height = f64::from(r.i16()?);
-            r.skip(2)?;
-            let escapement = f64::from(r.i16()?);
-            r.skip(2)?;
-            let weight = i32::from(r.i16()?);
-            let italic = r.bytes(1)?.first().is_some_and(|b| *b != 0);
-            r.skip(7)?;
-            let face: Vec<u8> = r.rest().iter().take(32).take_while(|b| **b != 0).copied().collect();
-            p.create(Obj::Font(FontObj { height, escapement, weight, italic, face: ansi(&face) }));
-        }
+        0x02FB => rec_create_font(p, &mut r)?,
         0x00F7 | 0x06FF => p.create(Obj::Other),
         0x01F9 | 0x0142 => p.create(Obj::Brush(BrushObj::Pattern)),
-        0x0521 => {
-            let n = usize::try_from(r.i16()?).ok()?;
-            let s = ansi(r.bytes(n)?);
-            r.skip(n % 2)?;
-            let at = point_yx(&mut r)?;
-            p.text(at, &s);
-        }
-        0x0A32 => {
-            let at = point_yx(&mut r)?;
-            let n = usize::try_from(r.i16()?).ok()?;
-            let opts = r.u16()?;
-            // ETO_OPAQUE or ETO_CLIPPED: a rectangle comes first.
-            if opts & 0x6 != 0 {
-                r.skip(8)?;
-            }
-            let s = ansi(r.bytes(n)?);
-            p.text(at, &s);
-        }
-        0x0F43 => {
-            let rop = r.u32()?;
-            r.skip(2)?;
-            let (hs, ws, ys, xs) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
-            let (hd, wd, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
-            blit(p, rop, (xs, ys, ws, hs), (xd, yd, wd, hd), Some(r.rest()));
-        }
-        0x0B41 => {
-            let rop = r.u32()?;
-            let (hs, ws, ys, xs) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
-            // Without a bitmap, a reserved word comes before the destination.
-            let with_bitmap = body.len() > 22;
-            if !with_bitmap {
-                r.skip(2)?;
-            }
-            let (hd, wd, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
-            blit(p, rop, (xs, ys, ws, hs), (xd, yd, wd, hd), with_bitmap.then(|| r.rest()));
-        }
-        0x0940 => {
-            let rop = r.u32()?;
-            let (ys, xs) = (r.i16()?, r.i16()?);
-            let with_bitmap = body.len() > 20;
-            if !with_bitmap {
-                r.skip(2)?;
-            }
-            let (h, w, yd, xd) = (r.i16()?, r.i16()?, r.i16()?, r.i16()?);
-            blit(p, rop, (xs, ys, w, h), (xd, yd, w, h), with_bitmap.then(|| r.rest()));
-        }
+        0x0521 => rec_text_out(p, &mut r)?,
+        0x0A32 => rec_ext_text_out(p, &mut r)?,
+        0x0F43 => rec_stretch_dib(p, &mut r)?,
+        0x0B41 => rec_stretch_blt(p, body, &mut r)?,
+        0x0940 => rec_bit_blt(p, body, &mut r)?,
         0x061D => {
             let rop = r.u32()?;
             let (h, w, y, x) = (f64::from(r.i16()?), f64::from(r.i16()?), f64::from(r.i16()?), f64::from(r.i16()?));

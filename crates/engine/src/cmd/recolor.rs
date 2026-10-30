@@ -13,7 +13,9 @@ use vectorcraft_doc::swatches::{node_colors, node_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::colorcmds::{Recolor, Scope};
-use super::*;
+use super::{
+    CommandSpec, Result, Session, always, bad, check_switches, checked_ids_param, cmd, color_value, has_doc, index, str_param, switch_or, text_param,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -152,15 +154,18 @@ fn colors(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "colors": v }))
 }
 
-/// The `method` parameter (`default` without one).
+/// The `method` parameter (`default` without one, or for null). A `method` that is not a string,
+/// such as `5`, names no method.
 fn method_param(p: &Value, cmd: &str, default: Method) -> Result<Method> {
-    match str_param(p, "method") {
-        None => Ok(default),
-        Some(m) => Method::parse(m).ok_or_else(|| {
-            let ids: Vec<&str> = Method::ALL.iter().map(|m| m.id()).collect();
-            bad(cmd, format!("unknown method `{m}` ({})", ids.join("|")))
-        }),
-    }
+    let (m, named) = match p.get("method") {
+        None | Some(Value::Null) => return Ok(default),
+        Some(Value::String(m)) => (m.clone(), true),
+        Some(v) => (v.to_string(), false),
+    };
+    Method::parse(&m).filter(|_| named).ok_or_else(|| {
+        let ids: Vec<&str> = Method::ALL.iter().map(|m| m.id()).collect();
+        bad(cmd, format!("unknown method `{m}` ({})", ids.join("|")))
+    })
 }
 
 fn key_str(c: &Color) -> Value {
@@ -172,8 +177,17 @@ fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
     let method = method_param(p, C, Method::ScaleTints)?;
     let palette = super::swatchlib::limit_param(s, p, C)?;
     let def = Preserve::default();
-    let flag = |k: &str, d: bool| p.get("preserve").map_or(d, |v| bool_or(v, k, d));
-    let preserve = Preserve { white: flag("white", def.white), black: flag("black", def.black), grays: flag("grays", def.grays) };
+    let given = match p.get("preserve") {
+        None | Some(Value::Null) => &Value::Null,
+        Some(v @ Value::Object(_)) => v,
+        Some(_) => return Err(bad(C, "`preserve` must be an object")),
+    };
+    let flag = |k: &str, d: bool| switch_or(given, k, d, C);
+    let preserve = Preserve { white: flag("white", def.white)?, black: flag("black", def.black)?, grays: flag("grays", def.grays)? };
+    let colors = match p.get("colors") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(index(super::menucmds::whole_or(p, "colors", 0, C)?)),
+    };
     let (ids, only) = scope_ids(s, p, C)?;
     let st = s.doc()?;
     let (kept, used): (Vec<Used>, Vec<Used>) = used_colors(&st.doc, &ids, only.as_ref()).into_iter().partition(|u| preserve.keeps(&u.color));
@@ -186,7 +200,7 @@ fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let unit_colors = |g: &[&Used]| g.iter().map(|u| u.color).collect::<Vec<_>>();
-    let rows: Vec<Vec<&Used>> = match p.get("colors").and_then(Value::as_u64).map(index) {
+    let rows: Vec<Vec<&Used>> = match colors {
         Some(n) if n < units.len() => {
             let keys: Vec<Color> = units.iter().map(|g| method.key_color(&unit_colors(g)).unwrap_or_default()).collect();
             let weights: Vec<f32> = units.iter().map(|g| g.iter().map(|u| u.count as f32).sum()).collect();
@@ -275,7 +289,7 @@ fn parse_rows(p: &Value, cmd: &str) -> Result<Vec<Row>> {
                     Some(v) => vec![cur(v)?],
                     None => return Err(bad(cmd, "each row needs `from`")),
                 };
-                Ok(Row { from, to: new(r.get("to"))?, exclude: bool_or(r, "exclude", false) })
+                Ok(Row { from, to: new(r.get("to"))?, exclude: switch_or(r, "exclude", false, cmd)? })
             })
             .collect(),
         _ => Err(bad(cmd, "missing `map` (rows [{from, to}] or {current: new})")),
@@ -419,10 +433,11 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let row_swatches: Vec<Option<Swatch>> =
         rows.iter().map(|r| r.new_color().and_then(|c| lib_swatches.iter().find(|w| w.paint.color() == Some(c)).cloned())).collect();
     let ids = s.doc()?.selection.objects.clone();
-    let group = str_param(p, "group");
+    let group = text_param(p, "group", C)?;
     if ids.is_empty() && group.is_none() {
         return Err(bad(C, "select artwork to recolour, or give a colour `group`"));
     }
+    check_switches(p, &["includeImages", "includePatterns"], C)?;
     let scope = Scope { fill: true, stroke: true, ..Scope::of(p) };
     let label = if ids.is_empty() { "Edit Color Group" } else { "Recolor Artwork" };
     // `model`: keep each colour's model (default), take the new colour's own, or the document's.
@@ -448,7 +463,12 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The colours a colour group takes follow the model too (`document` converts them).
     let in_doc_model = |c: Color| doc_model.map_or(c, |m| c.in_model(m));
-    let new: Vec<Color> = match p.get("groupColors").and_then(Value::as_array) {
+    let group_colors = match p.get("groupColors") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(cs)) => Some(cs),
+        Some(_) => return Err(bad(C, "`groupColors` must be an array")),
+    };
+    let new: Vec<Color> = match group_colors {
         Some(cs) => cs
             .iter()
             .map(|v| {
@@ -459,7 +479,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             .collect::<Result<_>>()?,
         None => rows.iter().filter_map(Row::new_color).collect(),
     };
-    let rename = str_param(p, "rename");
+    let rename = text_param(p, "rename", C)?;
     let (changed, edit, added, converted) = s.edit(label, |d, _| {
         // The rows' library swatches join the document (one it has with that name and colour is
         // used as it is).
@@ -518,12 +538,13 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
 fn randomize(_: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "recolor.randomize";
     let rows = parse_rows(p, C)?;
-    let mut rng = Rng::new(p.get("seed").and_then(Value::as_u64).unwrap_or(0));
+    let mut rng = Rng::new(super::menucmds::whole_or(p, "seed", 0, C)?);
+    let (order, saturation_brightness) = (switch_or(p, "order", true, C)?, switch_or(p, "saturationBrightness", false, C)?);
     let mut news: Vec<Color> = rows.iter().filter_map(Row::new_color).collect();
-    if bool_or(p, "order", true) {
+    if order {
         rng.shuffle(&mut news);
     }
-    if bool_or(p, "saturationBrightness", false) {
+    if saturation_brightness {
         news = news.into_iter().map(|c| rng.saturation_brightness(c)).collect();
     }
     let mut news = news.into_iter();
