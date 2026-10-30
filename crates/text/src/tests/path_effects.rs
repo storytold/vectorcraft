@@ -120,17 +120,6 @@ fn point_and_on_path(text: &str, style: CharStyle, path: &vectorcraft_geom::Path
     (point, layout(FontDb::global(), &t))
 }
 
-/// Each drawn glyph's area on the path over its area as point type (1: the same size), by byte.
-fn size_ratios(text: &str, point: &TextLayout, on_path: &TextLayout) -> Vec<(usize, f64)> {
-    let area = |g: &PositionedGlyph| g.xf.determinant().abs();
-    on_path
-        .glyphs
-        .iter()
-        .filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()))
-        .filter_map(|g| point.glyphs.iter().find(|p| p.byte == g.byte && p.gid == g.gid).map(|p| (g.byte, area(g) / area(p))))
-        .collect()
-}
-
 /// The texts tried: Latin, Arabic and mixed (the Arabic ones only with an Arabic font installed).
 fn texts() -> Vec<(&'static str, CharStyle)> {
     let latin = CharStyle { size: 24.0, ..CharStyle::default() };
@@ -144,36 +133,50 @@ fn texts() -> Vec<(&'static str, CharStyle)> {
     out
 }
 
-/// Gravity keeps every glyph whole: at its size (it leans toward the path's centre, it is not
-/// crushed), drawn, and near the path, for Latin, Arabic and mixed text on an open curve and a
-/// circle.
+/// Gravity: the middle of each glyph's baseline lies on the path (of each joined Arabic word's, which
+/// tilts as one, its joins intact) and its vertical edges point at the path's centre, for Latin,
+/// Arabic and mixed text on an open curve and a circle.
 #[test]
-fn gravity_keeps_every_glyph_whole() {
+fn gravity_points_vertical_edges_at_the_path_centre() {
     for path in paths() {
         let along = path.to_bezpath();
+        let centre = path.bounds().unwrap_or_default().center();
         for (text, style) in texts() {
-            let (point, l) = point_and_on_path(text, style, &path, PathEffect::Gravity);
+            let (_, l) = point_and_on_path(text, style, &path, PathEffect::Gravity);
             assert!(!l.overflow, "{text}");
-            let ratios = size_ratios(text, &point, &l);
-            assert!(!ratios.is_empty(), "{text}: nothing drawn");
-            for (byte, r) in &ratios {
-                assert!((r - 1.0).abs() < 1e-6, "{text}: the glyph at byte {byte} is drawn at {r} of its area");
+            let drawn: Vec<_> = l.glyphs.iter().filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty())).collect();
+            assert!(!drawn.is_empty(), "{text}: nothing drawn");
+            // Glyphs in one frame (a joined word, or a glyph alone), in the order laid out.
+            let mut frames: Vec<Vec<&PositionedGlyph>> = vec![];
+            for g in drawn {
+                let same = |h: &PositionedGlyph| {
+                    let (a, b) = (g.xf.as_coeffs(), h.xf.as_coeffs());
+                    (0..4).all(|k| (a[k] - b[k]).abs() < 1e-9)
+                };
+                match frames.last_mut() {
+                    Some(f) if f.last().is_some_and(|h| same(h)) => f.push(g),
+                    _ => frames.push(vec![g]),
+                }
             }
-            // Vertical edges lean at most 45° off the path's normal.
-            for g in l.glyphs.iter().filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty())) {
-                let [a, b, c, d, ..] = g.xf.as_coeffs();
-                let (x, y) = (kurbo::Vec2::new(a, b), kurbo::Vec2::new(c, d));
-                let lean = (x.dot(y) / (x.hypot() * y.hypot())).abs();
-                assert!(lean <= std::f64::consts::FRAC_1_SQRT_2 + 1e-9, "{text}: a glyph leans {}°", lean.acos().to_degrees());
-            }
-            for g in l.glyphs.iter().filter(|g| !g.outline.elements().is_empty()) {
-                let b = g.outline.bounding_box();
-                let near = along
-                    .segments()
-                    .map(|s| kurbo::ParamCurveNearest::nearest(&s, b.center(), 1e-3).distance_sq)
-                    .fold(f64::INFINITY, f64::min)
-                    .sqrt();
-                assert!(near < 40.0, "{text}: a glyph {near} pt off the path");
+            for f in &frames {
+                let (first, last) = (f[0], f[f.len() - 1]);
+                let [a, b, c, d, ..] = first.xf.as_coeffs();
+                let scale = a.hypot(b);
+                // Middle of the frame's baseline: from the first glyph's origin to the last one's end.
+                let start = first.xf.inverse() * (first.xf * Point::ZERO);
+                let end = first.xf.inverse() * (last.xf * Point::new(last.advance / scale, 0.0));
+                let mid = first.xf * start.midpoint(end);
+                let off = along.segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+                assert!(off < 0.05, "{text}: a baseline middle {off} pt off the path");
+                // Vertical edges (the y axis, glyph down) point away from the centre: up is toward the
+                // outside, along the line from the centre through the middle.
+                let up = -kurbo::Vec2::new(c, d).normalize();
+                let out = (mid - centre).normalize();
+                assert!(
+                    up.dot(out) > 1.0 - 1e-6 || up.dot(out) < -1.0 + 1e-6,
+                    "{text}: vertical edges at {}° to the centre",
+                    up.dot(out).clamp(-1.0, 1.0).acos().to_degrees()
+                );
             }
         }
     }

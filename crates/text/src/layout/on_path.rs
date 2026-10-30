@@ -131,10 +131,6 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) 
         .then_some(out)
 }
 
-/// How far Gravity lets a glyph's vertical edges lean off the path's normal toward the path's
-/// centre: their cosine (45°), so glyphs stay legible where the centre lies near the path.
-const GRAVITY_MIN_COS: f64 = std::f64::consts::FRAC_1_SQRT_2;
-
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -332,11 +328,12 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     // being placed: where its baseline starts and how far along it the next glyph goes. A joined
     // word steps as one block, so its joins stay closed; other glyphs each step on their own.
     let mut stair: Option<(Point, f64)> = None;
-    // 3D Ribbon: each block of joined glyphs stands level on one baseline, centred on the path
-    // where the block's middle is: for each glyph, that point along the path and how far along
-    // the baseline (glyph space) from it the glyph starts. Other glyphs are blocks of one.
+    // 3D Ribbon and Gravity: each block of joined glyphs stands on one baseline, centred on the
+    // path where the block's middle is, and turns as one: for each glyph, that point along the
+    // path and how far along the baseline (glyph space) from it the glyph starts. Other glyphs are
+    // blocks of one.
     let joins = |g: &SGlyph| g.cursive && !g.ch.is_whitespace() && g.inline.is_none();
-    let mut ribbon: Vec<(f64, f64)> = Vec::with_capacity(fit);
+    let mut blocks: Vec<(f64, f64)> = Vec::with_capacity(fit);
     {
         let placed: Vec<(&SGlyph, f64)> = sg.iter().zip(&steps).take(fit).map(|(g, &step)| (g, step)).collect();
         let (mut i, mut at) = (0, s0);
@@ -347,7 +344,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             let width: f64 = block.iter().map(|(g, _)| g.adv).sum();
             let mut x = -width * 0.5;
             for (g, _) in block {
-                ribbon.push((at + along * 0.5, x));
+                blocks.push((at + along * 0.5, x));
                 x += g.adv;
             }
             at += along;
@@ -362,8 +359,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             None => ap.at(s).0,
         };
         stair = joined.then(|| stair.map_or((stair_at, g.adv), |(base, along)| (base, along + g.adv)));
-        let (ribbon_s, ribbon_x) = ribbon.get(gi).copied().unwrap_or((s + step * 0.5, -g.adv * 0.5));
-        let (ribbon_p, ribbon_dir) = ap.at(ribbon_s);
+        let (block_s, block_x) = blocks.get(gi).copied().unwrap_or((s + step * 0.5, -g.adv * 0.5));
+        let (block_p, block_dir) = ap.at(block_s);
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
         let half = Affine::translate((-g.adv * 0.5, rise));
@@ -382,30 +379,31 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             // mirrored.
             // A block of joined glyphs stands on its first glyph's baseline, so its joins meet.
             PathEffect::Ribbon3d => {
-                let dir = ribbon_dir;
+                let dir = block_dir;
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
-                Affine::translate(ribbon_p.to_vec2()) * Affine::new([sx, 0.0, -dir.y, dir.x, 0.0, 0.0]) * Affine::translate((ribbon_x, rise))
+                Affine::translate(block_p.to_vec2()) * Affine::new([sx, 0.0, -dir.y, dir.x, 0.0, 0.0]) * Affine::translate((block_x, rise))
             }
             PathEffect::StairStep => Affine::translate(stair_at.to_vec2()) * Affine::translate((0.0, rise)),
-            // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
-            // up side, and leaning at most 45° off the path's normal, [`GRAVITY_MIN_COS`]). The
-            // glyph keeps its height across the path and so its size: the y axis is as long as it
-            // takes to stand one unit off the path. On a long, flat path the centre lies near the
-            // path, so most glyphs lean as far as they may: at the former 73° and squashed to 0.3
-            // of their height they were slivers.
+            // The middle of the glyph's baseline (a joined block's) on the path, x axis along the
+            // tangent there, vertical edges pointing at the path's centre (on the glyph's up side).
+            // On a circle that is Rainbow, as the public help says ("Applying the Gravity effect to
+            // text on a perfectly circular path creates a result that looks like the default
+            // Rainbow effect", [Create type on a path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html)).
+            // Where the line from the centre runs nearly along the path the glyph leans far and thins:
+            // that is the effect, not capped here.
             PathEffect::Gravity => {
+                let dir = block_dir;
                 let n = Vec2::new(dir.y, -dir.x);
-                let mut up = p - centre;
-                up = if up.hypot() < 1e-9 { n } else { up / up.hypot() };
+                let away = block_p - centre;
+                let mut up = if away.hypot() < 1e-9 { n } else { away / away.hypot() };
                 if up.dot(n) < 0.0 {
                     up = -up;
                 }
-                if up.dot(n) < GRAVITY_MIN_COS {
-                    let along = up - n * up.dot(n);
-                    up = n * GRAVITY_MIN_COS + along / along.hypot().max(1e-9) * (1.0 - GRAVITY_MIN_COS * GRAVITY_MIN_COS).sqrt();
+                // Exactly along the path it would flatten the glyph to nothing: stand it up instead.
+                if up.dot(n) < 1e-6 {
+                    up = n;
                 }
-                let up = up / up.dot(n);
-                Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * half
+                Affine::translate(block_p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * Affine::translate((block_x, rise))
             }
         };
         // The caret's baseline moves with the type.
