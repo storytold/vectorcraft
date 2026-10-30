@@ -132,20 +132,34 @@ fn shape_builder_builds_its_map_once_for_hover_alt_hover_and_a_merge() {
     // The merge left the document as it was (it failed, say): the map still fits it.
     t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 75.0));
     assert_eq!(t.cache.builds, 1, "a hover after a merge that changed nothing");
+    // A new revision of the same art (a view setting, a preference) keeps the map.
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     t.pointer(&cx2, &ev(PointerKind::Move, 75.0, 75.0));
-    assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    assert_eq!(t.cache.builds, 1, "a hover on a new revision of the same art");
+    assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+    // The same objects, one of them moved.
+    let mut moved = d.clone();
+    let second = s.objects[1];
+    moved.node_mut(second).unwrap().transform(vectorcraft_geom::Affine::translate((10.0, 0.0)), false);
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&moved, &s, &p) };
+    t.pointer(&cx3, &ev(PointerKind::Move, 75.0, 75.0));
+    assert_eq!(t.cache.builds, 2, "a hover on a new revision of other art");
 }
 
 /// A row of `n` selected squares 20 pt wide, each overlapping the next by half: 4 segments each.
 fn square_row(n: usize) -> (Document, Selection) {
+    square_row_at(n, 0.0)
+}
+
+/// [`square_row`] with the squares' tops at `y`: the same objects, moved.
+fn square_row_at(n: usize, y: f64) -> (Document, Selection) {
     let mut d = Document::new(500.0, 500.0);
     let l = d.layers[0].id;
     let mut s = Selection::default();
     for k in 0..n {
         let x = k as f64 * 10.0;
         let id = d.alloc_id();
-        d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), Appearance::default_art())).unwrap();
         s.add(id);
     }
     (d, s)
@@ -176,9 +190,10 @@ fn shape_builder_hover_builds_a_large_map_on_another_thread() {
     assert_eq!((t.cache.builds, t.cache.background), (1, 1));
     assert_eq!(t.overlays(&cx1).len(), 2, "the region's hatch and outline");
     // A new revision while the map of the one before it is being built: only the newer one's
-    // map is used.
-    let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
-    let cx3 = ToolContext { revision: (1, 3), ..cx(&d, &s, &p) };
+    // map is used. Each revision moves the squares down 1 pt.
+    let rows: Vec<Document> = (0..7).map(|k| square_row_at(40, f64::from(k)).0).collect();
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&rows[2], &s, &p) };
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&rows[3], &s, &p) };
     t.pointer(&cx2, &hover);
     t.pointer(&cx3, &hover);
     poll_until_ready(&mut t, &cx3);
@@ -186,27 +201,263 @@ fn shape_builder_hover_builds_a_large_map_on_another_thread() {
     assert_eq!((t.cache.builds, t.cache.background), (3, 3), "the earlier revision's map, then the newer one's");
     assert_eq!(t.cache.key.as_ref().map(|k| k.1), Some((1, 3)));
     // A host without frames waits for the map.
-    let cx4 = ToolContext { revision: (1, 4), ..cx(&d, &s, &p) };
+    let cx4 = ToolContext { revision: (1, 4), ..cx(&rows[4], &s, &p) };
     t.pointer(&cx4, &hover);
     assert!(t.waiting() && t.hover.is_none());
     t.poll(&cx4, true);
     assert!(!t.waiting());
     assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (4, 4));
-    // A press while the map is being built waits for it, and the drag merges.
-    let cx5 = ToolContext { revision: (1, 5), ..cx(&d, &s, &p) };
+    // A drag while the map is being built is replayed once it is there, and merges (on
+    // another thread, see `shape_builder_merges_a_large_selection_on_another_thread` and
+    // `shape_builder_gesture_waits_for_the_map_without_holding_the_caller`).
+    let cx5 = ToolContext { revision: (1, 5), ..cx(&rows[5], &s, &p) };
     t.pointer(&cx5, &hover);
     t.pointer(&cx5, &ev(PointerKind::Down, 15.0, 10.0));
     t.pointer(&cx5, &ev(PointerKind::Drag, 35.0, 10.0));
-    let acts = t.pointer(&cx5, &ev(PointerKind::Up, 35.0, 10.0));
-    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    assert!(t.pointer(&cx5, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    let acts = t.poll(&cx5, true);
     assert_eq!((t.cache.builds, t.cache.background), (5, 5));
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
     assert!(!t.waiting());
     // Changing an option forgets a map being built with the old one.
-    let cx6 = ToolContext { revision: (1, 6), ..cx(&d, &s, &p) };
+    let cx6 = ToolContext { revision: (1, 6), ..cx(&rows[6], &s, &p) };
     t.pointer(&cx6, &hover);
     t.set_option("gapDetection", &json!(true));
     assert!(!t.waiting());
+}
+
+/// Polls `t` until it stops waiting, as the desktop app does each frame, and returns the
+/// actions the polls gave.
+fn poll_actions(t: &mut dyn Tool, cx: &ToolContext) -> Vec<Action> {
+    let start = std::time::Instant::now();
+    let mut acts = vec![];
+    while t.waiting() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(60), "the tool is still waiting");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        acts.extend(t.poll(cx, false));
+    }
+    acts
+}
+
+/// A Shape Builder over `square_row(40)` (160 segments) that has merged nothing, with its map,
+/// after a click at (15, 10) that started a merge on another thread.
+fn clicked_row(cx: &ToolContext) -> ShapeBuilderTool {
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(cx, &ev(PointerKind::Move, 15.0, 10.0));
+    poll_until_ready(&mut t, cx);
+    t.pointer(cx, &ev(PointerKind::Down, 15.0, 10.0));
+    assert!(t.pointer(cx, &ev(PointerKind::Up, 15.0, 10.0)).is_empty(), "the release returns before the merge is computed");
+    assert!(t.waiting() && t.editing());
+    t
+}
+
+#[test]
+fn shape_builder_merges_a_large_selection_on_another_thread() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let computed = merges_computed();
+    let mut t = clicked_row(&cx);
+    assert_eq!(t.cursor(&cx, Point::new(15.0, 10.0), Mods::default()), Cursor::Busy);
+    assert_eq!(t.overlays(&cx).len(), 2, "the clicked region's hatch and outline stay");
+    // A press while the merge is being computed starts no gesture.
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 35.0, 10.0)).is_empty());
+    assert!(!t.busy());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    let acts = poll_actions(&mut t, &cx);
+    assert_eq!(merges_computed(), computed, "the merge was computed on another thread");
+    let [Action::Exec(id, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!((id.as_str(), &params["points"]), ("shapeBuilder.merge", &json!([[15.0, 10.0]])));
+    assert!(!t.waiting() && !t.editing());
+    assert_eq!(t.cursor(&cx, Point::new(15.0, 10.0), Mods::default()), Cursor::ShapeBuilder);
+    let m = t.shape_builder_merge().expect("the merge the command takes");
+    assert!(Arc::ptr_eq(&m.map, &t.cache.map));
+    assert_eq!((m.touched.regions.len(), m.touched.lines.len(), m.touched.edges.len()), (1, 0, 0));
+    assert!(!m.geometry.union.is_empty());
+    assert_eq!(m.geometry, merge_geometry(&m.map, &m.touched, m.gap, &m.inputs));
+    assert_eq!(m.geometry.rests.iter().flatten().count(), 2, "the two squares over the region change");
+    // The next event lets it go.
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.shape_builder_merge().is_none());
+}
+
+#[test]
+fn shape_builder_drops_a_merge_the_art_changed_under() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let mut fewer = Selection::default();
+    fewer.set(s.objects.iter().skip(1).copied());
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let (moved, _) = square_row_at(40, 5.0);
+    let later = [
+        // An edit or an undo: the squares moved.
+        ToolContext { revision: (1, 2), ..cx(&moved, &s, &p) },
+        // Another document.
+        ToolContext { revision: (2, 1), ..cx(&d, &s, &p) },
+        // Another selection.
+        ToolContext { revision: (1, 1), ..cx(&d, &fewer, &p) },
+    ];
+    for (k, cx2) in later.iter().enumerate() {
+        let mut t = clicked_row(&cx1);
+        // Dropped at the first poll, before the thread is done.
+        assert!(t.poll(cx2, false).is_empty(), "change {k}: the merge is not applied");
+        assert!(!t.editing() && !t.waiting() && t.shape_builder_merge().is_none(), "change {k}");
+    }
+    // Unchanged, the same wait applies it.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.poll(&cx1, true).len(), 1);
+    // A copy of the document at the same revision (a save stamps its dates on a copy), and
+    // finishing the edit before a command, apply it too.
+    let copy = d.clone();
+    let cx3 = ToolContext { revision: (1, 1), ..cx(&copy, &s, &p) };
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.finish_edit(&cx3).len(), 1);
+    assert!(!t.editing() && t.shape_builder_merge().is_some());
+    // Switching away applies it.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.deactivate(&cx1).len(), 1);
+    assert!(!t.editing());
+}
+
+/// A new revision of the document that leaves the selection's inputs as they were (a view
+/// setting or a preference that redraws it) keeps the merge being computed, the gesture made
+/// while the map is being built and the map itself: the merge applies with the map it was
+/// computed over, and no map is built again.
+#[test]
+fn shape_builder_keeps_its_work_over_a_new_revision_of_the_same_art() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+    // A merge being computed.
+    let computed = merges_computed();
+    let mut t = clicked_row(&cx1);
+    let acts = poll_actions(&mut t, &cx2);
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    assert_eq!(merges_computed(), computed, "the merge computed on another thread");
+    let m = t.shape_builder_merge().expect("the merge the command takes");
+    assert!(Arc::ptr_eq(&m.map, &t.cache.map), "the map the merge was computed over");
+    assert_eq!(t.cache.key.as_ref().map(|k| k.1), Some((1, 2)));
+    assert_eq!(t.cache.builds, 1, "no map built again");
+    // Finishing it before a command too.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.finish_edit(&cx2).len(), 1);
+    // A hover over the new revision builds no map.
+    let mut t = ShapeBuilderTool::default();
+    let hover = ev(PointerKind::Move, 15.0, 10.0);
+    t.pointer(&cx1, &hover);
+    poll_until_ready(&mut t, &cx1);
+    t.pointer(&cx2, &hover);
+    assert!(!t.waiting() && matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+    assert_eq!(t.cache.builds, 1);
+    // A map being built, and a gesture made meanwhile.
+    let drag = [ev(PointerKind::Down, 15.0, 10.0), ev(PointerKind::Drag, 35.0, 10.0), ev(PointerKind::Up, 35.0, 10.0)];
+    let mut ready = ShapeBuilderTool::default();
+    ready.pointer(&cx1, &hover);
+    poll_until_ready(&mut ready, &cx1);
+    for e in &drag {
+        ready.pointer(&cx1, e);
+    }
+    let want = poll_actions(&mut ready, &cx1);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &hover);
+    for e in &drag {
+        assert!(t.pointer(&cx1, e).is_empty());
+    }
+    assert!(t.editing() && t.cache.builds == 0, "the gesture waits for the map");
+    assert_eq!(poll_actions(&mut t, &cx2), want);
+    assert_eq!((t.cache.builds, t.cache.background), (1, 1), "the map built for the first revision");
+    // Finishing it before a command waits for the map being built rather than building it again.
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &hover);
+    for e in &drag {
+        t.pointer(&cx1, e);
+    }
+    assert_eq!(t.finish_edit(&cx2), want);
+    assert_eq!((t.cache.builds, t.cache.background), (1, 1), "the map built on the other thread");
+    // Another document with the same art drops the merge.
+    let cx3 = ToolContext { revision: (2, 1), ..cx(&d, &s, &p) };
+    let mut t = clicked_row(&cx1);
+    assert!(t.poll(&cx3, false).is_empty());
+    assert!(!t.editing());
+}
+
+/// A press while the map of a large selection is being built on another thread does not wait
+/// for it: the gesture is recorded, each event returns at once, and the polls replay it once
+/// the map is there, giving the merge the same gesture gives over the map. Finishing the edit
+/// waits for the map and the merge; another revision of other art drops the gesture.
+#[test]
+fn shape_builder_gesture_waits_for_the_map_without_holding_the_caller() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let hover = ev(PointerKind::Move, 15.0, 10.0);
+    let drag = [ev(PointerKind::Down, 15.0, 10.0), ev(PointerKind::Drag, 35.0, 10.0), ev(PointerKind::Up, 35.0, 10.0)];
+    let mut ready = ShapeBuilderTool::default();
+    ready.pointer(&cx1, &hover);
+    poll_until_ready(&mut ready, &cx1);
+    for e in &drag {
+        ready.pointer(&cx1, e);
+    }
+    let want = poll_actions(&mut ready, &cx1);
+    assert!(matches!(want.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{want:?}");
+    let made_while_building = || {
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx1, &hover);
+        for e in &drag {
+            assert!(t.pointer(&cx1, e).is_empty());
+        }
+        assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+        assert!(t.editing() && t.waiting());
+        t
+    };
+    let mut t = made_while_building();
+    assert_eq!(t.cursor(&cx1, Point::new(35.0, 10.0), Mods::default()), Cursor::Busy);
+    // A press before the gesture is replayed starts nothing.
+    assert!(t.pointer(&cx1, &ev(PointerKind::Down, 55.0, 10.0)).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Up, 55.0, 10.0)).is_empty());
+    assert_eq!(poll_actions(&mut t, &cx1), want);
+    assert!(!t.editing() && t.shape_builder_merge().is_some());
+    // Finishing the edit before a command waits for both.
+    let mut t = made_while_building();
+    assert_eq!(t.finish_edit(&cx1), want);
+    // Another revision of other art before the map is there drops the gesture.
+    let mut t = made_while_building();
+    let (moved, _) = square_row_at(200, 5.0);
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&moved, &s, &p) };
+    assert!(t.poll(&cx2, false).is_empty());
+    assert!(!t.editing());
+}
+
+/// Escape during a drag made while the map of a large selection is being built cancels the
+/// recorded gesture too: the release and the polls after it merge nothing, the tool stops
+/// waiting once the map is there, and the next drag merges on its own.
+#[test]
+fn shape_builder_escape_cancels_a_gesture_made_while_the_map_is_built() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.pointer(&cx1, &ev(PointerKind::Down, 15.0, 10.0)).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Drag, 35.0, 10.0)).is_empty());
+    assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+    assert!(t.claims_key(&cx1, ToolKey::Escape));
+    assert!(t.key(&cx1, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    assert!(poll_actions(&mut t, &cx1).is_empty(), "the canceled gesture merges nothing");
+    assert!(!t.waiting() && !t.editing());
+    // The next drag merges what it touches, with no event of the canceled one.
+    let mut fresh = ShapeBuilderTool::default();
+    fresh.pointer(&cx1, &ev(PointerKind::Move, 55.0, 10.0));
+    poll_until_ready(&mut fresh, &cx1);
+    let next = [ev(PointerKind::Down, 55.0, 10.0), ev(PointerKind::Drag, 75.0, 10.0), ev(PointerKind::Up, 75.0, 10.0)];
+    for e in &next {
+        fresh.pointer(&cx1, e);
+        t.pointer(&cx1, e);
+    }
+    assert_eq!(poll_actions(&mut t, &cx1), poll_actions(&mut fresh, &cx1));
 }
 
 #[test]
@@ -809,9 +1060,15 @@ fn bucket_keeps_its_map_while_the_document_is_unchanged() {
     // The fill left the document as it was: the map still fits it.
     t.pointer(&cx1, &ev(PointerKind::Move, 25.0, 50.0));
     assert_eq!(t.cache.builds, 1, "a hover after a fill that changed nothing");
+    // A new revision of the same art keeps the map; one with an object moved builds it again.
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     t.pointer(&cx2, &ev(PointerKind::Move, 25.0, 50.0));
-    assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    assert_eq!(t.cache.builds, 1, "a hover on a new revision of the same art");
+    let mut moved = d.clone();
+    moved.node_mut(b).unwrap().transform(vectorcraft_geom::Affine::translate((10.0, 0.0)), false);
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&moved, &s, &p) };
+    t.pointer(&cx3, &ev(PointerKind::Move, 25.0, 50.0));
+    assert_eq!(t.cache.builds, 2, "a hover on a new revision of other art");
 }
 
 #[test]

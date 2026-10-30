@@ -1,4 +1,4 @@
-use super::lookup::{Face, MAPS_BUILT, faces_of, outline_snap, shape_builder_shapes};
+use super::lookup::{Face, MAPS_BUILT, MERGES_COMPUTED, faces_of, node_outline, outline_snap, shape_builder_shapes};
 use super::*;
 
 /// Shape Builder hover hatch colour (neutral grey) and Live Paint highlight red.
@@ -10,6 +10,12 @@ pub const HIGHLIGHT_RED: [u8; 3] = [0xff, 0x2a, 0x2a];
 /// count them.
 pub fn maps_built() -> usize {
     MAPS_BUILT.with(std::cell::Cell::get)
+}
+
+/// How many Shape Builder merges ([`merge_geometry`]) this thread has computed, for tests that
+/// count them.
+pub fn merges_computed() -> usize {
+    MERGES_COMPUTED.with(std::cell::Cell::get)
 }
 
 /// The Shape Builder's planar map of a selection.
@@ -338,6 +344,112 @@ impl BuilderMap {
         let bounds_one = |(e, _): &(po::Shape, Rect)| self.sides(e).iter().any(|r| r.is_some_and(|r| touched.regions.contains(&r)));
         touched.edges.iter().copied().filter(|&k| self.edges.get(k).is_some_and(|e| !bounds_one(e))).collect()
     }
+
+    /// What `shapeBuilder.merge` touches: the regions the marquee from `marquee.0` to `marquee.1`
+    /// reaches, then what the drag along `pts` touches ([`Self::builder_hits_along`]), and the
+    /// edges that deletes ([`Self::erased_edges`]).
+    pub fn merge_touched(&self, pts: &[Point], marquee: Option<(Point, Point)>, piece_tol: Option<f64>) -> Touched {
+        let mut touched = Touched { regions: marquee.map(|(a, b)| self.regions_in_marquee(a, b)).unwrap_or_default(), ..Default::default() };
+        touched.extend(&self.builder_hits_along(pts, piece_tol));
+        touched.edges = self.erased_edges(&touched);
+        touched
+    }
+}
+
+/// What a merge needs of each input besides the map: its outline as drawn ([`node_outline`]) and
+/// whether its fill closes its open subpaths (Consider Open Filled Paths as Closed, and a fill).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MergeInput {
+    pub outline: Option<PathData>,
+    pub fill_closes: bool,
+}
+
+/// The [`MergeInput`] of each of `leaves`.
+pub fn merge_inputs(leaves: &[&Node], open_filled_as_closed: bool) -> Vec<MergeInput> {
+    leaves
+        .iter()
+        .map(|l| MergeInput { outline: node_outline(l).map(|o| o.0), fill_closes: open_filled_as_closed && !l.appearance.fill_paint().is_none() })
+        .collect()
+}
+
+/// What is left of an input a merge or a delete changes: its faces not touched, united
+/// (`united`), or its own outline, with the deleted edges cut out of it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rest {
+    pub path: PathData,
+    pub united: bool,
+}
+
+/// The new shapes of a Shape Builder merge or delete ([`merge_geometry`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MergeGeometry {
+    /// The union of the touched regions (empty when none is touched).
+    pub union: PathData,
+    /// For each closed input, what goes in its place when the gesture changes it.
+    pub rests: Vec<Option<Rest>>,
+}
+
+/// The new shapes of a gesture over `map` that touched `touched`, closing gaps up to `gap`: the
+/// union of the touched regions, and for each closed input that has a touched region or a deleted
+/// edge, what is left of it. An input a touched region covers keeps its other faces, united
+/// (they share their edges with the merged faces exactly, where subtracting the merged shape left
+/// slivers of the outline along them, #569; a sliver goes in only where the input covers it and
+/// the merged shape does not take it in); then each deleted edge is cut out of it. Inputs with
+/// pieces of open paths (`map.lines`) are left to the caller.
+pub fn merge_geometry(map: &BuilderMap, touched: &Touched, gap: f64, inputs: &[MergeInput]) -> MergeGeometry {
+    MERGES_COMPUTED.with(|n| n.set(n.get() + 1));
+    let cuts: Vec<&SubPath> = touched.edges.iter().filter_map(|&k| map.edges.get(k)?.0.path.subpaths.first()).collect();
+    let picked: Vec<&po::Region> = touched.regions.iter().filter_map(|&i| map.regions.get(i).map(|r| &r.0)).collect();
+    let faces = po::FaceMerger::with_gap(&map.shapes, gap);
+    let union = if picked.is_empty() { PathData::default() } else { faces.merge(&picked) };
+    let rests = map
+        .shapes
+        .iter()
+        .enumerate()
+        .map(|(i, sh)| {
+            let input = inputs.get(i)?;
+            let in_union = picked.iter().any(|r| r.sources.contains(&i));
+            if map.lines.iter().any(|(l, _)| l.key == i as u64) || (!in_union && cuts.is_empty()) {
+                return None;
+            }
+            let mut rest = if in_union {
+                let kept: Vec<&po::Region> = map
+                    .regions
+                    .iter()
+                    .enumerate()
+                    .filter(|(k, (r, ..))| r.sources.contains(&i) && !touched.regions.contains(k))
+                    .map(|(_, (r, ..))| r)
+                    .collect();
+                if kept.is_empty() { PathData::default() } else { faces.merge_rest(i, &kept, &picked) }
+            } else {
+                input.outline.clone().unwrap_or_else(|| sh.path.clone())
+            };
+            // Edges come back from the planar map within a few hundredths of the outlines they
+            // follow, whatever else is selected.
+            let cut_tol = outline_snap(&sh.path);
+            let mut cut = false;
+            for piece in &cuts {
+                if let Some(r) = po::cut_out(&rest, piece, input.fill_closes, cut_tol) {
+                    rest = r;
+                    cut = true;
+                }
+            }
+            (in_union || cut).then_some(Rest { path: rest, united: in_union })
+        })
+        .collect();
+    MergeGeometry { union, rests }
+}
+
+/// A merge computed on another thread for a Shape Builder click or drag
+/// ([`Tool::shape_builder_merge`]): the map, what the gesture touched and the inputs it was
+/// computed from, and the result. `shapeBuilder.merge` takes the result when it would compute the
+/// same.
+pub struct PreparedMerge {
+    pub map: Arc<BuilderMap>,
+    pub touched: Touched,
+    pub gap: f64,
+    pub inputs: Vec<MergeInput>,
+    pub geometry: MergeGeometry,
 }
 
 /// The regions, line pieces and edges a Shape Builder gesture has touched, in the order touched.

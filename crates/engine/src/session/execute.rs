@@ -1,5 +1,6 @@
 use super::{
     CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+    waits_for_tool_edit,
 };
 
 impl Session {
@@ -35,6 +36,12 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // An edit the active tool is computing on another thread (a Shape Builder merge) is
+        // applied before a command that may edit, select, save or give a document a new revision,
+        // as the click came first. Queries that only read do not wait for it.
+        if self.depth == 0 && waits_for_tool_edit(id) {
+            self.finish_tool_edit_later()?;
+        }
         // The crate's own tests are the audit of the params descriptions (#1442): a key a test
         // passes that its command's description doesn't name fails the test.
         #[cfg(test)]

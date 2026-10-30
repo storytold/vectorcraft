@@ -31,6 +31,11 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            held_input: Default::default(),
+            input_count: 0,
+            edit_started_by: None,
+            settling_tool_edit: false,
+            held_ui: vec![],
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -130,6 +135,9 @@ impl Session {
             return;
         }
         let view = self.last_view;
+        // The edit the tool computes on another thread and the input held for it belong to the
+        // document being left. The switch goes on whatever they did, as for the deactivation.
+        let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));

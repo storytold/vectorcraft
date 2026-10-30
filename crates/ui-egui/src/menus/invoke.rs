@@ -123,6 +123,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
+    // A command chosen while the tool computes an edit on another thread (a Shape Builder merge)
+    // comes after it: the edit is applied first, so the command's dialog, or the app's own dialog
+    // (Recolor Artwork), opens on the art as the gesture left it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     if SUBJECT_COMMANDS.contains(&id)
         && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
         && p.get("id").is_none()

@@ -190,6 +190,10 @@ impl Session {
     /// [`Session::end_undo_scope`]: open an undo group there or, when one is open already, join it,
     /// so that the edits are part of its step. `None` without a document.
     pub fn begin_undo_scope(&mut self) -> Option<UndoScope> {
+        // An edit the tool computes on another thread is a step before the scope, so the scope's
+        // snapshot holds it. A failure to apply it was the edit's own, and the scope begins all the
+        // same.
+        let _ = self.finish_tool_edit_later();
         let journal = self.journal.len();
         let st = self.active()?;
         let uid = st.uid;

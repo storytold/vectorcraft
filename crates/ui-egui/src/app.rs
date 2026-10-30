@@ -88,6 +88,7 @@ impl VectorcraftApp {
             pending_url: None,
             control_rx: None,
             pending_screenshots: vec![],
+            pointer_replies: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
             screenshot_reserved: 0,
@@ -304,8 +305,9 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents,
-        // once the saves running in the background are done. Not while a file dialog's sheet is on
-        // the window: what asked for it runs again when it answers.
+        // once the saves running in the background are done and a Shape Builder merge being
+        // computed is applied. Not while a file dialog's sheet is on the window: what asked for it
+        // runs again when it answers.
         if ctx.input(|i| i.viewport().close_requested()) {
             // This native viewport is going away: release its IME context. No request is
             // allocated here: the close prompt or file sheet publishes no custom descriptor, so a
@@ -313,7 +315,7 @@ impl VectorcraftApp {
             // fresh generation on the next pass (never inherits a composition across the prompt).
             crate::ime::close_viewport(self, ctx);
             self.ime_context.end_viewport(ctx.viewport_id());
-            background::wait_all(self);
+            unsaved::finish_pending(self);
             if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
@@ -338,6 +340,7 @@ impl VectorcraftApp {
         // system title bar this is where the document name lives, as the in-app mark is hidden.
         crate::chrome::sync_window_title(self, ctx);
         self.drain_control(ctx);
+        self.answer_pointer_replies(ctx);
         // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
         // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
         // the request) to read the formats and then pastes them. A text paste in the same UI pass

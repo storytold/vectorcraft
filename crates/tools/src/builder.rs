@@ -32,7 +32,7 @@ mod live_paint;
 mod lookup;
 mod map;
 
-use cache::RegionCache;
+use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
 #[cfg(test)]
 use live_paint::LpHover;
 use live_paint::lp_color;
@@ -42,7 +42,10 @@ pub use lookup::{
     is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for,
     sources, visible_edge_near, visible_face_at,
 };
-pub use map::{BuilderMap, HATCH, HIGHLIGHT_RED, Hit, Touched, hatch, maps_built, sample_polyline, sorted_roots};
+pub use map::{
+    BuilderMap, HATCH, HIGHLIGHT_RED, Hit, MergeGeometry, MergeInput, PreparedMerge, Rest, Touched, hatch, maps_built, merge_geometry, merge_inputs,
+    merges_computed, sample_polyline, sorted_roots,
+};
 /// Small, Medium and Large gap lengths in points.
 pub const GAP_LENGTHS: [f64; 3] = [3.0, 6.0, 12.0];
 
@@ -166,6 +169,52 @@ pub struct ShapeBuilderTool {
     /// The pointer went more than [`CLICK_TOL_PX`] from the press during the drag, so the gesture
     /// is not a click.
     far: bool,
+    /// The merge of the last gesture over a large selection, being computed on another thread.
+    merging: Option<PendingMerge>,
+    /// That merge once computed, for `shapeBuilder.merge` ([`Tool::shape_builder_merge`]).
+    prepared: Option<Arc<PreparedMerge>>,
+    /// A gesture made while the map of a large selection is being built on another thread.
+    deferred: Option<Deferred>,
+}
+
+/// A Shape Builder gesture made while the map of the selection was being built on another
+/// thread: the map key and the inputs it was made over, its pointer events, which [`Tool::poll`]
+/// replays once the map is there, and whether the release has come.
+struct Deferred {
+    key: CacheKey,
+    shapes: Vec<po::Shape>,
+    events: Vec<PointerEvent>,
+    released: bool,
+}
+
+/// A Shape Builder merge being computed on another thread: the map key it is for (the document,
+/// its revision and the selection), the `shapeBuilder.merge` params that apply it, what it was
+/// computed from, and the channel the result arrives on.
+struct PendingMerge {
+    key: CacheKey,
+    params: Value,
+    map: Arc<BuilderMap>,
+    touched: Touched,
+    gap: f64,
+    inputs: Vec<MergeInput>,
+    done: Receiver<MergeGeometry>,
+}
+
+/// Computes [`merge_geometry`] on a new thread; None when no thread starts.
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_merge(map: Arc<BuilderMap>, touched: Touched, gap: f64, inputs: Vec<MergeInput>) -> Option<Receiver<MergeGeometry>> {
+    let (tx, done) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new().name("vectorcraft-shape-builder-merge".into()).spawn(move || {
+        // The tool may have dropped the receiver meanwhile (another tool, another document).
+        let _ = tx.send(merge_geometry(&map, &touched, gap, &inputs));
+    });
+    spawned.is_ok().then_some(done)
+}
+
+/// The web build has no threads: the merge runs in the command.
+#[cfg(target_arch = "wasm32")]
+fn spawn_merge(_map: Arc<BuilderMap>, _touched: Touched, _gap: f64, _inputs: Vec<MergeInput>) -> Option<Receiver<MergeGeometry>> {
+    None
 }
 
 /// How close (screen px) the pointer must come to a line piece or an edge to delete it.
@@ -208,6 +257,132 @@ impl ShapeBuilderTool {
 
     fn line_tol(cx: &ToolContext, alt: bool) -> Option<f64> {
         alt.then(|| cx.tol(LINE_TOL_PX))
+    }
+
+    /// Starts computing the merge `params` describe on another thread when the map of the
+    /// selection is current and has more than [`BACKGROUND_SEGMENTS`] segments; `false` when it
+    /// did not (small selections, the web build), and the command computes it.
+    fn start_merge(&mut self, cx: &ToolContext, params: &Value) -> bool {
+        let key = RegionCache::key_for(cx, self.opts.open_filled_as_closed);
+        if cfg!(target_arch = "wasm32") || params.get("splitStroke").is_some() || self.cache.key.as_ref() != Some(&key) {
+            return false;
+        }
+        let map = Arc::clone(&self.cache.map);
+        let segments: usize = map.shapes.iter().map(|s| s.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>()).sum();
+        if segments <= BACKGROUND_SEGMENTS {
+            return false;
+        }
+        // What the command reads from its params, read the same way.
+        let num = |v: &Value| v.as_f64().unwrap_or(f64::NAN);
+        let pts: Vec<Point> = params["points"].as_array().map(|a| a.iter().map(|q| Point::new(num(&q[0]), num(&q[1]))).collect()).unwrap_or_default();
+        let marquee = params["rect"].as_array().filter(|r| r.len() == 4).map(|r| {
+            let (x, y) = (num(&r[0]), num(&r[1]));
+            (Point::new(x, y), Point::new(x + num(&r[2]), y + num(&r[3])))
+        });
+        let piece_tol = (params["erase"] == json!(true)).then(|| params["tolerance"].as_f64().unwrap_or(2.0).clamp(0.0, 1000.0));
+        let touched = map.merge_touched(&pts, marquee, piece_tol);
+        if touched.is_empty() {
+            return false;
+        }
+        let roots = sorted_roots(cx.doc, &cx.selection.objects);
+        let (_, leaves) = shape_builder_shapes(cx.doc, &roots, self.opts.open_filled_as_closed);
+        let inputs = merge_inputs(&leaves, self.opts.open_filled_as_closed);
+        let gap = self.gap();
+        let Some(done) = spawn_merge(Arc::clone(&map), touched.clone(), gap, inputs.clone()) else { return false };
+        self.merging = Some(PendingMerge { key, params: params.clone(), map, touched, gap, inputs, done });
+        true
+    }
+
+    /// Takes the merge being computed on another thread once it has arrived, or with `wait` once
+    /// it arrives: the action that applies it, while the document, the selection and its inputs are
+    /// those it was computed for. When one of them changed (an edit or a selection made other than
+    /// by a command, which applies the merge first), the merge is dropped at once, without waiting
+    /// for the thread. A copy of the document (a save stamping its dates) and a new revision that leaves
+    /// the inputs as they were keep the merge. When the thread failed, the command computes the
+    /// merge and reports what went wrong.
+    fn poll_merge(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
+        let Some(mut m) = self.merging.take() else { return vec![] };
+        let now = RegionCache::key_for(cx, m.key.3);
+        if (now.1.0, &now.2) != (m.key.1.0, &m.key.2) {
+            return vec![];
+        }
+        // A new revision that leaves the selection's inputs as they were (a view setting or a
+        // preference that redraws the document) keeps the merge.
+        if now.1 != m.key.1 {
+            if !self.inputs_are(cx, m.key.3, &m.map.shapes) {
+                return vec![];
+            }
+            m.key = now;
+        }
+        let got = if wait { m.done.recv().map_err(|_| TryRecvError::Disconnected) } else { m.done.try_recv() };
+        let geometry = match got {
+            Ok(g) => Some(g),
+            Err(TryRecvError::Empty) => {
+                self.merging = Some(m);
+                return vec![];
+            }
+            Err(TryRecvError::Disconnected) => None,
+        };
+        self.prepared = geometry.map(|geometry| Arc::new(PreparedMerge { map: m.map, touched: m.touched, gap: m.gap, inputs: m.inputs, geometry }));
+        vec![Action::Exec("shapeBuilder.merge".into(), m.params)]
+    }
+
+    /// Is the map of the selection being built on another thread (it is not current yet)?
+    fn map_building(&mut self, cx: &ToolContext) -> bool {
+        self.cache.ready(cx, self.opts.open_filled_as_closed).is_none() && self.cache.pending.is_some()
+    }
+
+    /// Are the inputs of the selection in `cx` `shapes`? The map, or the map being built, is filed
+    /// under the key of `cx` first when they are its inputs ([`RegionCache::rekey`]).
+    fn inputs_are(&mut self, cx: &ToolContext, open_filled_as_closed: bool, shapes: &[po::Shape]) -> bool {
+        let _ = self.cache.rekey(cx, open_filled_as_closed);
+        let key = RegionCache::key_for(cx, open_filled_as_closed);
+        if self.cache.key.as_ref() == Some(&key) {
+            return self.cache.shapes == shapes;
+        }
+        if let Some(p) = self.cache.pending.as_ref().filter(|p| p.key == key) {
+            return p.shapes == shapes;
+        }
+        let roots = sorted_roots(cx.doc, &cx.selection.objects);
+        shape_builder_shapes(cx.doc, &roots, open_filled_as_closed).0 == shapes
+    }
+
+    /// Is a gesture made while the map was being built released and waiting for the map?
+    fn deferred_released(&self) -> bool {
+        self.deferred.as_ref().is_some_and(|d| d.released)
+    }
+
+    /// Replays the released gesture made while the map was being built once the map is there, or
+    /// with `wait` once it is built, and with `wait` also waits for the merge it starts: the
+    /// actions the gesture gives. When the document, the selection or its inputs changed since the
+    /// gesture, it is dropped; a new revision that leaves them as they were keeps it.
+    fn replay_deferred(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
+        if !self.deferred_released() {
+            return vec![];
+        }
+        let ofac = self.opts.open_filled_as_closed;
+        let now = RegionCache::key_for(cx, ofac);
+        if let Some(mut d) = self.deferred.take() {
+            if (d.key.1.0, &d.key.2) != (now.1.0, &now.2) || (d.key.1 != now.1 && !self.inputs_are(cx, ofac, &d.shapes)) {
+                return vec![];
+            }
+            d.key = now;
+            self.deferred = Some(d);
+        }
+        if wait {
+            self.cache.get(cx, self.opts.open_filled_as_closed);
+        } else if self.map_building(cx) {
+            return vec![];
+        }
+        let Some(d) = self.deferred.take() else { return vec![] };
+        let mut acts = vec![];
+        for ev in &d.events {
+            acts.extend(self.pointer(cx, ev));
+        }
+        if wait {
+            acts.extend(self.poll_merge(cx, true));
+        }
+        acts
     }
 
     /// Adds what the drag from `from` to `to` touches, picked as `shapeBuilder.merge` picks it.
@@ -271,6 +446,8 @@ impl Tool for ShapeBuilderTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        // The command has taken the merge computed for the last gesture by now.
+        self.prepared = None;
         match ev.kind {
             PointerKind::Move => {
                 self.alt = ev.mods.alt;
@@ -279,7 +456,8 @@ impl Tool for ShapeBuilderTool {
                 vec![]
             }
             PointerKind::Down => {
-                if cx.selection.is_empty() {
+                // While a merge is being computed, a press starts no gesture.
+                if cx.selection.is_empty() || self.editing() {
                     return vec![];
                 }
                 self.dragging = true;
@@ -288,11 +466,35 @@ impl Tool for ShapeBuilderTool {
                 self.points = vec![p];
                 self.far = false;
                 self.touched = Touched::default();
+                // While the map is being built on another thread, the gesture is recorded and
+                // replayed once the map is there.
+                if self.map_building(cx) {
+                    let key = RegionCache::key_for(cx, self.opts.open_filled_as_closed);
+                    let shapes = match self.cache.pending.as_ref().filter(|p| p.key == key) {
+                        Some(p) => p.shapes.clone(),
+                        None => self.cache.inputs(cx, self.opts.open_filled_as_closed).0,
+                    };
+                    self.deferred = Some(Deferred { key, shapes, events: vec![*ev], released: false });
+                    return vec![];
+                }
                 self.touch(cx, None, p);
                 vec![]
             }
             PointerKind::Drag if self.dragging => {
                 self.at = Some(p);
+                if let Some(d) = &mut self.deferred {
+                    // The drag's line or marquee shows meanwhile.
+                    d.events.push(*ev);
+                    if let Some((a, _)) = self.marquee {
+                        self.marquee = Some((a, p));
+                    } else if self.opts.straight_line {
+                        self.points.truncate(1);
+                        self.points.push(p);
+                    } else if self.points.last().is_none_or(|q| q.distance(p) >= cx.tol(1.0)) {
+                        self.points.push(p);
+                    }
+                    return vec![];
+                }
                 if self.points.first().is_some_and(|s| s.distance(p) > cx.tol(CLICK_TOL_PX)) {
                     self.far = true;
                 }
@@ -313,6 +515,13 @@ impl Tool for ShapeBuilderTool {
             }
             PointerKind::Up if self.dragging => {
                 self.dragging = false;
+                if let Some(d) = &mut self.deferred {
+                    d.events.push(*ev);
+                    d.released = true;
+                    self.points.clear();
+                    self.marquee = None;
+                    return vec![];
+                }
                 if self.marquee.is_some() {
                     self.marquee_to(cx, p);
                 } else if self.opts.straight_line {
@@ -358,6 +567,10 @@ impl Tool for ShapeBuilderTool {
                 if self.opts.swatches {
                     params["pickColorFrom"] = json!("swatches");
                 }
+                // A large selection's merge is computed on another thread; `poll` applies it.
+                if self.start_merge(cx, &params) {
+                    return vec![];
+                }
                 vec![Action::Exec("shapeBuilder.merge".into(), params)]
             }
             _ => vec![],
@@ -366,10 +579,13 @@ impl Tool for ShapeBuilderTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = vec![];
-        let map = &self.cache.map;
-        let color = if self.alt { HIGHLIGHT_RED } else { HATCH };
-        let show: Vec<Hit> = if self.dragging {
-            let t = &self.touched;
+        // While a merge is being computed, what its gesture touched stays highlighted.
+        let map = self.merging.as_ref().map_or(&self.cache.map, |m| &m.map);
+        // The mode of the gesture being merged, else the drag's or the hover's.
+        let alt = self.merging.as_ref().filter(|_| !self.dragging).map_or(self.alt, |m| m.params["erase"] == json!(true));
+        let color = if alt { HIGHLIGHT_RED } else { HATCH };
+        let touched = if self.dragging { Some(&self.touched) } else { self.merging.as_ref().map(|m| &m.touched) };
+        let show: Vec<Hit> = if let Some(t) = touched {
             let regions = t.regions.iter().map(|&i| Hit::Region(i));
             regions.chain(t.lines.iter().map(|&i| Hit::Line(i))).chain(map.erased_edges(t).into_iter().map(Hit::Edge)).collect()
         } else {
@@ -378,7 +594,7 @@ impl Tool for ShapeBuilderTool {
         for hit in show {
             match hit {
                 // Highlight Fill off: merge mode leaves the regions as they are.
-                Hit::Region(_) if !self.alt && !self.opts.highlight_fill => {}
+                Hit::Region(_) if !alt && !self.opts.highlight_fill => {}
                 Hit::Region(i) => {
                     if let Some((_, bp, _)) = map.regions.get(i) {
                         out.push(Overlay::Path { path: hatch(bp, cx.tol(4.0)), color, width: 1.0, dashed: false });
@@ -421,7 +637,10 @@ impl Tool for ShapeBuilderTool {
     fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
         // A drag keeps the mode it started in; hovering follows the key.
         let erase = if self.dragging { self.alt } else { m.alt };
-        if erase {
+        if self.editing() {
+            // The merge of the last gesture, or the map it waits for, is being computed.
+            Cursor::Busy
+        } else if erase {
             Cursor::ShapeBuilderErase
         } else if self.stroke.is_some() && !self.dragging {
             // Over a stroke a click splits.
@@ -436,28 +655,51 @@ impl Tool for ShapeBuilderTool {
     }
 
     fn waiting(&self) -> bool {
-        self.cache.waiting()
+        self.cache.waiting() || self.merging.is_some() || self.deferred.is_some()
     }
 
-    fn poll(&mut self, cx: &ToolContext, wait: bool) {
-        if !self.cache.waiting() || self.dragging {
-            return;
+    fn editing(&self) -> bool {
+        self.merging.is_some() || self.deferred_released()
+    }
+
+    fn finish_edit(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut acts = self.replay_deferred(cx, true);
+        acts.extend(self.poll_merge(cx, true));
+        acts
+    }
+
+    /// Choosing another tool or another document applies the merge being computed first.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.finish_edit(cx)
+    }
+
+    fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
+        let mut acts = self.poll_merge(cx, wait);
+        if !acts.is_empty() || self.dragging {
+            return acts;
         }
         // The map that arrives may be for an earlier revision; the hover then starts the current
         // one's, which `wait` waits for too.
-        loop {
+        while self.cache.waiting() {
             self.cache.settle(wait);
             if let Some(p) = self.at {
                 self.hover_at(cx, p);
             }
-            if !wait || !self.cache.waiting() {
+            if !wait {
                 break;
             }
         }
+        // A gesture made while the map was being built goes on once it is there.
+        acts.extend(self.replay_deferred(cx, wait));
+        acts
     }
 
     fn shape_builder_map(&self) -> Option<(Arc<BuilderMap>, f64)> {
         self.cache.key.is_some().then(|| (Arc::clone(&self.cache.map), self.cache.gap))
+    }
+
+    fn shape_builder_merge(&self) -> Option<Arc<PreparedMerge>> {
+        self.prepared.clone()
     }
 
     /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch
@@ -468,13 +710,16 @@ impl Tool for ShapeBuilderTool {
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        if !self.claims_key(cx, key) {
+        // While a merge is being computed, the arrows leave the current fill it takes as it was.
+        if !self.claims_key(cx, key) || self.editing() {
             return vec![];
         }
         if key == ToolKey::Escape {
             self.dragging = false;
             self.points.clear();
             self.touched = Touched::default();
+            // A gesture recorded while the map is being built is canceled with it.
+            self.deferred = None;
             (self.marquee, self.hover, self.far) = (None, None, false);
             return vec![];
         }

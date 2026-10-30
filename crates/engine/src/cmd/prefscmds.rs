@@ -558,6 +558,12 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // The edit the active tool computes on another thread is applied first (the Preferences
+        // dialog applies its settings here, outside a command). A failure to apply it was the
+        // edit's own, and the preferences apply all the same.
+        if self.depth == 0 {
+            let _ = self.finish_tool_edit_later();
+        }
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;

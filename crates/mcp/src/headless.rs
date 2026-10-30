@@ -173,6 +173,8 @@ impl Headless {
                 UiRequest::Place(p) => {
                     self.session.execute("file.place", &p).map_err(|e| e.to_string())?;
                 }
+                // The host keeps its view's artboard on a press, as for the presses it hands over.
+                UiRequest::HeldPress { .. } => {}
             }
         }
         Ok(())
@@ -195,10 +197,11 @@ impl Headless {
             let ev = PointerEvent { kind, pos: Point::new(x, y), mods, pressure: PointerEvent::json_pressure(e) };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
-            // With no frames to show the highlight in later, a hover waits for the work the tool
-            // runs on another thread.
-            if kind == PointerKind::Move && self.session.tool_waiting() {
-                self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+            // With no frames to show the highlight or apply an edit in later, each event waits for
+            // the work the tool runs on another thread (a hover's map, a release's merge).
+            if self.session.tool_waiting() {
+                let reqs = self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+                self.apply_ui_requests(reqs, &mut requests)?;
             }
             let hold = PointerEvent::json_hold(e);
             if hold > 0.0 {

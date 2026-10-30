@@ -1,4 +1,4 @@
-use super::{NodeId, Value, cmd};
+use super::{NodeId, Value, cmd, find_command};
 
 /// The commands that act on the active artboard (#693), which the app passes as their `artboard`:
 /// Paste in Place, in Front and in Back paste onto it, Align to Artboard aligns to it, Distribute
@@ -61,6 +61,34 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
             }
         }
     }
+}
+
+/// Queries that apply the edit the active tool is computing before they run, as edits do
+/// ([`Session::finish_tool_edit`]): a batch runs edits, Find Objects with `select`, Select All
+/// Instances and Lock Guides change the selection, and the proof views, the preferences and added
+/// fonts give the documents new revisions (they draw again, and type lays out again).
+const WAIT_FOR_TOOL_EDIT: &[&str] = &[
+    "command.batch",
+    "document.find",
+    "symbol.selectInstances",
+    "view.guides.lock",
+    "view.proofSetup",
+    "view.proofColors",
+    "view.overprintPreview",
+    "view.separationsPreview",
+    "prefs.set",
+    "prefs.reset",
+    "text.addFontFiles",
+];
+
+/// Does command `id`, run on its own, first apply the edit the active tool is computing on
+/// another thread and the input held for it ([`Session::finish_tool_edit`])? Every command that
+/// can edit, select, save or give a document a new revision does; queries that only read do not
+/// (`commands_that_do_not_wait_for_a_tool_edit_change_no_document` in the command sweep checks
+/// them). A frontend that adds params from
+/// its own state (the active artboard) applies them first itself.
+pub fn waits_for_tool_edit(id: &str) -> bool {
+    find_command(id).is_some_and(|spec| spec.journal || WAIT_FOR_TOOL_EDIT.contains(&id))
 }
 
 /// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with

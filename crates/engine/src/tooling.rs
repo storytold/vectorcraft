@@ -76,6 +76,23 @@ pub enum UiRequest {
     /// Place a file with these `file.place` params: a click or drag of the place cursor, when
     /// [`Session::place_cursor_requests`] is set.
     Place(Value),
+    /// A press held while the tool computed an edit on another thread was made now, at `pos` in the
+    /// document with [`crate::DocState::uid`] `doc`, with tool `tool` active (the selection tool Cmd
+    /// lent): the frontend does what it does after a press it hands over itself.
+    HeldPress {
+        doc: Option<u64>,
+        pos: Point,
+        tool: &'static str,
+    },
+}
+
+/// Pointer or key input that came while the active tool computed an edit on another thread
+/// ([`Tool::editing`]), made in order once the edit is applied ([`Session::tool_poll`],
+/// [`Session::finish_tool_edit`]).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum HeldInput {
+    Pointer(PointerEvent),
+    Key(ToolKey, Mods),
 }
 
 impl Session {
@@ -99,6 +116,7 @@ impl Session {
 
     /// Choose a tool (the toolbar, its shortcut, MCP), finishing any pending tool work first.
     pub fn select_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
+        self.finish_tool_edit_later()?;
         // Choosing a perspective tool shows the document's perspective grid; Hide Grid hides it
         // again, the tool staying chosen.
         if matches!(id, "perspectiveGrid" | "perspectiveSelection")
@@ -120,6 +138,8 @@ impl Session {
     /// Switch to tool `id` without choosing it afresh (back from a temporary tool: a hidden
     /// perspective grid stays hidden), finishing any pending tool work first.
     pub fn switch_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
+        // The edit the tool computes on another thread and the input held for it come first.
+        self.finish_tool_edit_later()?;
         self.give_back_tool(view)?;
         if self.tool.id() == id {
             return Ok(());
@@ -337,8 +357,85 @@ impl Session {
         self.tool_panic.take().map_or(Ok(()), Err)
     }
 
-    /// Feed a pointer event to the active tool. Returns requests for the UI.
+    /// Feed a pointer event to the active tool. Returns requests for the UI. While the tool computes
+    /// an edit on another thread, a press and what follows it are held and made once the edit is
+    /// applied, in order ([`Session::tool_poll`]); moves of the pointer with no button held go to
+    /// the tool at once.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        let n = self.next_input();
+        if ev.kind != PointerKind::Move && (!self.held_input.is_empty() || self.tool_edit_pending()) {
+            self.held_input.push_back((n, HeldInput::Pointer(*ev), view));
+            return Ok(vec![]);
+        }
+        let r = self.pointer_now(ev, view);
+        self.note_edit_start(n);
+        r
+    }
+
+    /// The number of the next pointer or key event handed to the session.
+    fn next_input(&mut self) -> u64 {
+        let n = self.input_count;
+        self.input_count = n.wrapping_add(1);
+        n
+    }
+
+    /// How many pointer and key events have been handed to the session ([`Session::pointer`],
+    /// [`Session::tool_key`]); with [`Session::input_applied`], a frontend tells when the events it
+    /// handed over have been made.
+    pub fn input_count(&self) -> u64 {
+        self.input_count
+    }
+
+    /// Have the events numbered `from..to` ([`Session::input_count`] before and after handing them
+    /// over) been made, and the edit they started on another thread applied?
+    pub fn input_applied(&self, from: u64, to: u64) -> bool {
+        let ours = |n: &u64| (from..to).contains(n);
+        !self.held_input.iter().any(|(n, ..)| ours(n)) && !(self.tool_edit_pending() && self.edit_started_by.as_ref().is_some_and(ours))
+    }
+
+    /// After event `n` was made: the event that started the edit being computed, if one is.
+    fn note_edit_start(&mut self, n: u64) {
+        if !self.tool_edit_pending() {
+            self.edit_started_by = None;
+        } else if self.edit_started_by.is_none() {
+            self.edit_started_by = Some(n);
+        }
+    }
+
+    /// Is the active tool, or the tool Cmd lent the selection tool's drag away from, computing an
+    /// edit on another thread?
+    fn tool_edit_pending(&self) -> bool {
+        self.tool.editing() || self.lender.as_ref().is_some_and(|t| t.editing())
+    }
+
+    /// Makes the input held while the tool computed an edit, in order, until a held gesture starts
+    /// another such edit.
+    fn replay_held_input(&mut self) -> Result<Vec<UiRequest>> {
+        let mut ui = vec![];
+        let mut failed = None;
+        while !self.tool_edit_pending()
+            && let Some((n, input, view)) = self.held_input.pop_front()
+        {
+            let r = match input {
+                HeldInput::Pointer(ev) => self.pointer_now(&ev, view).map(|mut r| {
+                    if ev.kind == PointerKind::Down {
+                        r.push(UiRequest::HeldPress { doc: self.active().map(|d| d.uid), pos: ev.pos, tool: self.tool.id() });
+                    }
+                    r
+                }),
+                HeldInput::Key(key, mods) => self.tool_key_now(key, mods, view),
+            };
+            self.note_edit_start(n);
+            match r {
+                Ok(r) => ui.extend(r),
+                // The input after it is still made, as it was when each event came on its own.
+                Err(e) => failed = failed.or(Some(e)),
+            }
+        }
+        failed.map_or(Ok(ui), Err)
+    }
+
+    fn pointer_now(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.last_view = view;
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
@@ -431,19 +528,148 @@ impl Session {
         self.tool.wants_samples()
     }
 
-    /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`])?
+    /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`]), is input
+    /// held until an edit it computes is applied, or are requests for the UI left from making it?
     pub fn tool_waiting(&self) -> bool {
-        self.tool.waiting()
+        self.tool.waiting() || !self.held_input.is_empty() || !self.held_ui.is_empty()
     }
 
     /// Lets the active tool check on the work [`Session::tool_waiting`] reports, and with `wait`
-    /// wait for it to finish ([`Tool::poll`]).
-    pub fn tool_poll(&mut self, view: ViewInfo, wait: bool) -> Result<()> {
-        self.with_tool_cx(view, |t, cx| t.poll(cx, wait));
-        self.take_tool_panic()
+    /// wait for it to finish ([`Tool::poll`]); an edit the work made is applied, and then the input
+    /// held for it is made. Returns requests for the UI, those left from making held input where
+    /// nothing could take them first ([`Session::finish_tool_edit_later`]).
+    pub fn tool_poll(&mut self, view: ViewInfo, wait: bool) -> Result<Vec<UiRequest>> {
+        if self.settling_tool_edit {
+            return Ok(vec![]);
+        }
+        self.settling_tool_edit = true;
+        let r = self.tool_poll_now(view, wait);
+        self.settling_tool_edit = false;
+        // On an error the requests left wait for the next poll.
+        let r = r?;
+        let mut ui = std::mem::take(&mut self.held_ui);
+        ui.extend(r);
+        Ok(ui)
     }
 
+    fn tool_poll_now(&mut self, view: ViewInfo, wait: bool) -> Result<Vec<UiRequest>> {
+        let acts = self.with_tool_cx(view, |t, cx| t.poll(cx, wait));
+        self.take_tool_panic()?;
+        let applied = !acts.is_empty();
+        let mut ui = self.apply_actions(acts)?;
+        if !self.tool_edit_pending() {
+            self.edit_started_by = None;
+            // The input held for an edit applied now is made at the next poll, so what waits for the
+            // edit alone (a `ui.pointer` reply) sees the document as the edit left it.
+            if !applied {
+                ui.extend(self.replay_held_input()?);
+            }
+        }
+        Ok(ui)
+    }
+
+    /// Is the active tool computing an edit on another thread ([`Tool::editing`]), or is input held
+    /// until it is applied?
+    pub fn tool_editing(&self) -> bool {
+        self.tool_edit_pending() || !self.held_input.is_empty()
+    }
+
+    /// Waits for the edit the active tool computes on another thread and applies it
+    /// ([`Tool::finish_edit`]), then makes the input held for it, waiting in turn for an edit that
+    /// starts, so what runs next sees the document as the gestures left it. Commands, saves, option
+    /// changes, interactions, undo scopes and tool or document switches call it first. Returns
+    /// requests for the UI, with those left from earlier ([`Session::finish_tool_edit_later`]); on
+    /// an error, the next [`Session::tool_poll`] returns them.
+    pub fn finish_tool_edit(&mut self) -> Result<Vec<UiRequest>> {
+        if self.settling_tool_edit {
+            return Ok(vec![]);
+        }
+        let mut ui = std::mem::take(&mut self.held_ui);
+        if self.tool_editing() {
+            self.settling_tool_edit = true;
+            let r = self.finish_tool_edit_now();
+            self.settling_tool_edit = false;
+            match r {
+                Ok(r) => ui.extend(r),
+                Err(e) => {
+                    ui.append(&mut self.held_ui);
+                    self.held_ui = ui;
+                    return Err(e);
+                }
+            }
+        }
+        Ok(ui)
+    }
+
+    /// [`Session::finish_tool_edit`] for a caller that cannot hand requests to the UI (a command, a
+    /// tool switch): the next [`Session::tool_poll`] returns them, and [`Session::tool_waiting`]
+    /// holds until then.
+    pub(crate) fn finish_tool_edit_later(&mut self) -> Result<()> {
+        let ui = self.finish_tool_edit()?;
+        self.held_ui.extend(ui);
+        Ok(())
+    }
+
+    fn finish_tool_edit_now(&mut self) -> Result<Vec<UiRequest>> {
+        let mut ui = vec![];
+        let mut failed = None;
+        loop {
+            match self.finish_pending_edit() {
+                Ok(r) => ui.extend(r),
+                Err(e) => failed = failed.or(Some(e)),
+            }
+            // A tool that cannot finish its edit keeps the input held.
+            if self.tool_edit_pending() {
+                break;
+            }
+            self.edit_started_by = None;
+            if self.held_input.is_empty() {
+                break;
+            }
+            match self.replay_held_input() {
+                Ok(r) => ui.extend(r),
+                Err(e) => failed = failed.or(Some(e)),
+            }
+        }
+        match failed {
+            None => Ok(ui),
+            Some(e) => {
+                self.held_ui.extend(ui);
+                Err(e)
+            }
+        }
+    }
+
+    /// Waits for the edit being computed and applies it: the active tool's, or that of the tool
+    /// Cmd lent the selection tool's drag away from, which is active meanwhile.
+    fn finish_pending_edit(&mut self) -> Result<Vec<UiRequest>> {
+        if self.tool.editing() {
+            let acts = self.with_tool_cx(self.last_view, |t, cx| t.finish_edit(cx));
+            self.take_tool_panic()?;
+            return self.apply_actions(acts);
+        }
+        let Some(lender) = self.lender.take_if(|t| t.editing()) else { return Ok(vec![]) };
+        let lent = std::mem::replace(&mut self.tool, lender);
+        let acts = self.with_tool_cx(self.last_view, |t, cx| t.finish_edit(cx));
+        let r = self.take_tool_panic().and_then(|()| self.apply_actions(acts));
+        self.lender = Some(std::mem::replace(&mut self.tool, lent));
+        r
+    }
+
+    /// A key for the active tool. While the tool computes an edit on another thread, the key is held
+    /// and made once the edit is applied, after the input held before it.
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        let n = self.next_input();
+        if self.tool_editing() {
+            self.held_input.push_back((n, HeldInput::Key(key, mods), view));
+            return Ok(vec![]);
+        }
+        let r = self.tool_key_now(key, mods, view);
+        self.note_edit_start(n);
+        r
+    }
+
+    fn tool_key_now(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
         // 1–4 pick the active perspective plane while the grid is shown.
         if let Some(plane) = self.plane_key(key) {
             self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
@@ -593,7 +819,8 @@ impl Session {
     /// tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
-        let lent = if mods.cmd && self.lender.is_none() { self.lent_tool(self.tool.id(), &mods) } else { None };
+        // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
+        let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
         let c = match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
@@ -611,6 +838,9 @@ impl Session {
         self.tool.options()
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
+        // The active tool's edit being computed is applied with the options it was started with. A
+        // failure to apply it was the edit's own, and the option is set all the same.
+        let _ = self.finish_tool_edit_later();
         self.tool.set_option(key, v);
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
@@ -661,6 +891,10 @@ impl Session {
             && vectorcraft_tools::tool_info(t).is_none()
         {
             return Err(format!("unknown tool `{t}`"));
+        }
+        // The active tool's merge being computed is applied with the options it was started with.
+        if tool.is_none_or(|t| t == self.tool.id()) {
+            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {

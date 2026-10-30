@@ -136,12 +136,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         app.session.tool_hover_ended(view);
         ui.ctx().request_repaint();
     }
-    // The tool works on another thread (a large selection's planar map): it checks each frame
-    // whether the work is done, and then shows the highlight under the pointer.
+    // The tool works on another thread (a large selection's planar map or merge): it checks each
+    // frame whether the work is done, and then shows the highlight under the pointer or applies
+    // the edit.
     if app.session.tool_waiting() {
-        if let Err(e) = app.session.tool_poll(view, false) {
-            app.status(e.to_string());
-        }
+        let r = app.session.tool_poll(view, false);
+        apply_requests(app, r);
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
     }
     if pointer.primary_released()

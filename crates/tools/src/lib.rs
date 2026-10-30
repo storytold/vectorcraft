@@ -248,19 +248,39 @@ pub trait Tool: Send {
         false
     }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
-    /// for the Shape Builder and the Live Paint Bucket)? It highlights no region under the pointer
-    /// until the work is done. While this holds, the desktop app calls [`Tool::poll`] each frame,
-    /// and hosts without frames call it with `wait` after a [`PointerKind::Move`].
+    /// for the Shape Builder and the Live Paint Bucket, a Shape Builder merge of one)? It
+    /// highlights nothing under the pointer until a map is done. While this holds, the desktop app
+    /// calls [`Tool::poll`] each frame, and hosts without frames call it with `wait` after each
+    /// pointer event.
     fn waiting(&self) -> bool {
         false
     }
-    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once it
-    /// is done, the tool shows the highlight under the pointer where it last moved.
-    fn poll(&mut self, _cx: &ToolContext, _wait: bool) {}
+    /// Is the tool computing an edit on another thread, which [`Tool::poll`] applies once it is
+    /// done (a Shape Builder merge of a large selection)?
+    fn editing(&self) -> bool {
+        false
+    }
+    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once a
+    /// map is done, the tool shows the highlight under the pointer where it last moved; once an
+    /// edit is done, the actions returned apply it.
+    fn poll(&mut self, _cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        vec![]
+    }
+    /// Waits for the edit [`Tool::editing`] reports and returns the actions that apply it, before
+    /// a command runs on the document; none when the document's revision or the selection changed
+    /// since the gesture.
+    fn finish_edit(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
     /// The Shape Builder's planar map of the selection, with the outline edges, and the gap it
     /// closes, when the tool has one. `shapeBuilder.merge` uses it in place of a map of its own
     /// when the map's inputs are the merge's inputs.
     fn shape_builder_map(&self) -> Option<(std::sync::Arc<builder::BuilderMap>, f64)> {
+        None
+    }
+    /// The Shape Builder merge the tool computed on another thread for its last gesture, which
+    /// `shapeBuilder.merge` takes when it would compute the same ([`builder::PreparedMerge`]).
+    fn shape_builder_merge(&self) -> Option<std::sync::Arc<builder::PreparedMerge>> {
         None
     }
 }

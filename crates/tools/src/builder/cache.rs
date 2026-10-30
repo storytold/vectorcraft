@@ -8,18 +8,21 @@ pub(super) type CacheKey = (usize, (u64, u64), Vec<NodeId>, bool);
 
 /// Hovering builds the map of inputs with more segments than this on another thread
 /// ([`RegionCache::ready`]); smaller maps are built on the calling thread.
-const BACKGROUND_SEGMENTS: usize = 128;
+pub(super) const BACKGROUND_SEGMENTS: usize = 128;
 
-/// A map being built on another thread: the key it is for, the drawn outlines of its inputs, and
-/// the channel it arrives on.
-struct Pending {
-    key: CacheKey,
+/// A map being built on another thread: the key it is for, its inputs and their drawn outlines,
+/// and the channel it arrives on.
+pub(super) struct Pending {
+    pub(super) key: CacheKey,
+    pub(super) shapes: Vec<po::Shape>,
     outlines: Vec<PathData>,
     done: Receiver<BuilderMap>,
 }
 
 /// The planar map of the current selection, cached by document identity, revision, selection and
-/// whether filled open paths count as closed.
+/// whether filled open paths count as closed. When only the document's identity or revision
+/// changed and the selection's inputs did not (a view setting, a preference, a copy of the
+/// document), the map is kept under the new key ([`RegionCache::rekey`]).
 #[derive(Default)]
 pub(super) struct RegionCache {
     pub(super) key: Option<CacheKey>,
@@ -31,8 +34,12 @@ pub(super) struct RegionCache {
     pub(super) gap: f64,
     /// The outlines of the Shape Builder's inputs as they are drawn (see [`BuilderMap::stroke_at`]).
     pub(super) outlines: Vec<PathData>,
+    /// The inputs the map was built from.
+    pub(super) shapes: Vec<po::Shape>,
+    /// The last key whose inputs [`Self::rekey`] compared with the map's.
+    compared: Option<CacheKey>,
     /// The map being built on another thread, if any.
-    pending: Option<Pending>,
+    pub(super) pending: Option<Pending>,
     /// The key of the last map whose build on another thread failed.
     failed: Option<CacheKey>,
     /// How many times the map has been built.
@@ -76,13 +83,13 @@ impl RegionCache {
         Self { live: true, ..Default::default() }
     }
 
-    fn key_for(cx: &ToolContext, open_filled_as_closed: bool) -> CacheKey {
+    pub(super) fn key_for(cx: &ToolContext, open_filled_as_closed: bool) -> CacheKey {
         (cx.doc as *const Document as usize, cx.revision, cx.selection.objects.clone(), open_filled_as_closed)
     }
 
     /// The inputs of the selection's map, back → front, and their drawn outlines (Shape Builder
     /// only).
-    fn inputs(&self, cx: &ToolContext, open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<PathData>) {
+    pub(super) fn inputs(&self, cx: &ToolContext, open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<PathData>) {
         let roots = sorted_roots(cx.doc, &cx.selection.objects);
         if self.live {
             (shapes_for(cx.doc, &roots).0, vec![])
@@ -93,8 +100,9 @@ impl RegionCache {
         }
     }
 
-    fn install(&mut self, key: CacheKey, map: BuilderMap, outlines: Vec<PathData>) {
+    fn install(&mut self, key: CacheKey, map: BuilderMap, shapes: Vec<po::Shape>, outlines: Vec<PathData>) {
         self.map = Arc::new(map);
+        self.shapes = shapes;
         self.outlines = outlines;
         self.key = Some(key);
         #[cfg(test)]
@@ -122,8 +130,12 @@ impl RegionCache {
     pub(super) fn get(&mut self, cx: &ToolContext, open_filled_as_closed: bool) -> &BuilderMap {
         let key = Self::key_for(cx, open_filled_as_closed);
         if self.key.as_ref() != Some(&key) {
-            let built = self.pending.take().filter(|p| p.key == key).and_then(|p| Some((p.done.recv().ok()?, p.outlines)));
-            let (map, outlines) = match built {
+            let inputs = self.rekey(cx, open_filled_as_closed);
+            if self.key.as_ref() == Some(&key) {
+                return &self.map;
+            }
+            let built = self.pending.take().filter(|p| p.key == key).and_then(|p| Some((p.done.recv().ok()?, p.shapes, p.outlines)));
+            let (map, shapes, outlines) = match built {
                 Some(b) => {
                     #[cfg(test)]
                     {
@@ -132,13 +144,43 @@ impl RegionCache {
                     b
                 }
                 None => {
-                    let (shapes, outlines) = self.inputs(cx, open_filled_as_closed);
-                    (build_map(shapes, self.live, self.gap), outlines)
+                    let (shapes, outlines) = inputs.unwrap_or_else(|| self.inputs(cx, open_filled_as_closed));
+                    (build_map(shapes.clone(), self.live, self.gap), shapes, outlines)
                 }
             };
-            self.install(key, map, outlines);
+            self.install(key, map, shapes, outlines);
         }
         &self.map
+    }
+
+    /// When the map, or the map being built, is for the selection of `cx` but for another revision
+    /// or address of the document, and the selection's inputs and their outlines are those it is
+    /// made from, files it under the key of `cx`: nothing it is made from changed. Returns the
+    /// inputs it computed when that did not file a map (they changed), for the caller to build
+    /// from.
+    pub(super) fn rekey(&mut self, cx: &ToolContext, open_filled_as_closed: bool) -> Option<(Vec<po::Shape>, Vec<PathData>)> {
+        let key = Self::key_for(cx, open_filled_as_closed);
+        let other = |k: &CacheKey| *k != key && (&k.2, k.3) == (&key.2, key.3);
+        if self.pending.as_ref().is_some_and(|p| p.key == key) {
+            return None;
+        }
+        let installed = self.key.as_ref().is_some_and(other);
+        let building = self.pending.as_ref().is_some_and(|p| other(&p.key));
+        // The inputs are compared once for each key.
+        if (!installed && !building) || self.compared.as_ref() == Some(&key) {
+            return None;
+        }
+        self.compared = Some(key.clone());
+        let (shapes, outlines) = self.inputs(cx, open_filled_as_closed);
+        if installed && self.shapes == shapes && self.outlines == outlines {
+            self.key = Some(key);
+            return None;
+        }
+        if let Some(p) = self.pending.as_mut().filter(|p| other(&p.key) && p.shapes == shapes && p.outlines == outlines) {
+            p.key = key;
+            return None;
+        }
+        Some((shapes, outlines))
     }
 
     /// Takes the map being built on another thread once it has arrived, or with `wait` once it
@@ -152,7 +194,7 @@ impl RegionCache {
                 {
                     self.background += 1;
                 }
-                self.install(p.key, map, p.outlines);
+                self.install(p.key, map, p.shapes, p.outlines);
             }
             // The build failed (a bug in the planar map): hovering does not build it again, and a
             // gesture builds it on the calling thread, which reports the failure.
@@ -171,21 +213,25 @@ impl RegionCache {
         if self.key.as_ref() == Some(&key) {
             return Some(&self.map);
         }
+        let inputs = self.rekey(cx, open_filled_as_closed);
+        if self.key.as_ref() == Some(&key) {
+            return Some(&self.map);
+        }
         if self.pending.is_some() || self.failed.as_ref() == Some(&key) {
             return None;
         }
-        let (shapes, outlines) = self.inputs(cx, open_filled_as_closed);
+        let (shapes, outlines) = inputs.unwrap_or_else(|| self.inputs(cx, open_filled_as_closed));
         let segments: usize = shapes.iter().map(|s| s.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>()).sum();
         if segments > BACKGROUND_SEGMENTS && cfg!(not(target_arch = "wasm32")) {
-            if let Some(done) = spawn_build(shapes, self.live, self.gap) {
-                self.pending = Some(Pending { key, outlines, done });
+            if let Some(done) = spawn_build(shapes.clone(), self.live, self.gap) {
+                self.pending = Some(Pending { key, shapes, outlines, done });
                 return None;
             }
             // No thread started: build here.
             return Some(self.get(cx, open_filled_as_closed));
         }
-        let map = build_map(shapes, self.live, self.gap);
-        self.install(key, map, outlines);
+        let map = build_map(shapes.clone(), self.live, self.gap);
+        self.install(key, map, shapes, outlines);
         Some(&self.map)
     }
 

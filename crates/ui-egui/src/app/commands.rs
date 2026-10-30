@@ -1,5 +1,5 @@
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
 
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
@@ -20,6 +20,14 @@ impl VectorcraftApp {
         // panel passing a key its command doesn't read shows up in the tests.
         if cfg!(debug_assertions) {
             menus::check_params(&self.session, id, &params)?;
+        }
+        // A command that waits for the edit the tool computes on another thread and the input held
+        // for it waits before the app adds the view's active artboard to its params: a held press
+        // may change it. The app's own commands (its dialogs, panels and view) wait too.
+        let ui_command = vectorcraft_engine::find_command(id).is_none();
+        if (ui_command || vectorcraft_engine::waits_for_tool_edit(id)) && self.session.tool_waiting() {
+            let r = self.session.finish_tool_edit();
+            canvas::apply_requests(self, r);
         }
         let artboards = self.artboard_tool_state();
         if let Some(r) = menus::run_ui_command(self, id, &params) {

@@ -711,16 +711,21 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
-        "ui.menuDialog" => match s("command").as_deref() {
-            Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-            c => match c.and_then(|c| menu_dialog(app, c)) {
-                Some((kind, fields)) => {
-                    app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                    Ok(Value::Null)
-                }
-                None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
-            },
-        },
+        "ui.menuDialog" => {
+            // As from the menu ([`invoke`]), the edit the tool computes on another thread first.
+            let r = app.session.finish_tool_edit();
+            crate::canvas::apply_requests(app, r);
+            match s("command").as_deref() {
+                Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
+                c => match c.and_then(|c| menu_dialog(app, c)) {
+                    Some((kind, fields)) => {
+                        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+                        Ok(Value::Null)
+                    }
+                    None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+                },
+            }
+        }
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.corners" => crate::dialogs::corners::open(app, p),
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),

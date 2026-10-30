@@ -66,6 +66,10 @@ pub fn available(app: &VectorcraftApp) -> bool {
 /// checked here first, so a bad one is an error at once. When no thread could start, the file is
 /// placed at once → `file.place`'s reply.
 pub fn start(app: &mut VectorcraftApp, p: &Value, dropped: bool) -> Result<Value, String> {
+    // The edit the tool computes on another thread comes first: the object Replace swaps is the
+    // one selected after it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     let job = app.session.prepare_place(p).map_err(|e| e.to_string())?;
     let name = job.name();
     let started = spawn(app, name.clone(), name, dropped, move || job.read().map(|r| Read::Place(Box::new(r))).map_err(|e| e.to_string()))?;

@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use super::{ControlRequest, MAX_DIALOG_FIELDS, Outcome, handle};
 use crate::state::Dialog;
@@ -9,6 +10,27 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
     let (req, _) = ControlRequest::new(method, params);
     let Outcome::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
     r
+}
+
+#[test]
+fn deferred_pointer_reply_uses_the_gesture_document_after_file_new() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let (reply, received) = std::sync::mpsc::channel();
+    let at = app.session.input_count();
+    app.pointer_replies.push(super::PendingPointerReply { from: at, to: at, document: app.session.active().map(|d| d.uid), reply });
+
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
+    app.answer_pointer_replies(&egui::Context::default());
+
+    let result = received.try_recv().unwrap();
+    assert_eq!(result["ok"], true, "{result}");
+    assert_eq!(result["result"]["selection"], json!([id]));
+    assert_eq!(result["result"]["key"], Value::Null);
+    assert_eq!(result["result"]["tool"], "rectangle");
 }
 
 #[test]
@@ -247,6 +269,242 @@ fn pointer_replies_name_the_key_object() {
     };
     assert_eq!(click(&mut app), Some(b), "a click on a selected object makes it the key");
     assert_eq!(click(&mut app), Some(Value::Null), "a click on the key again lets it go");
+}
+
+/// A Shape Builder click on a large selection merges on another thread: the frames go on, and
+/// the `ui.pointer` reply comes once the merge is applied, with the selection after it.
+#[test]
+fn pointer_reply_waits_for_a_merge_on_another_thread() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx);
+    app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    let ctx = egui::Context::default();
+    let send = |app: &mut VectorcraftApp, events: Value| {
+        let (req, reply) = ControlRequest::new("ui.pointer", json!({"events": events}));
+        tx.send(req).unwrap();
+        app.drain_control(&ctx);
+        reply
+    };
+    let hover = send(&mut app, json!([{"kind": "move", "x": 15, "y": 10}]));
+    assert_eq!(hover.try_recv().unwrap()["ok"], true, "a hover is answered at once");
+    app.session.tool_poll(app.view_info(), true).unwrap();
+    let revision = app.session.active().unwrap().revision;
+    let click = send(&mut app, json!([{"kind": "down", "x": 15, "y": 10}, {"kind": "up", "x": 15, "y": 10}]));
+    assert!(click.try_recv().is_err() && app.session.tool_editing(), "the click is not answered before the merge is applied");
+    // A hover sent meanwhile is answered at once; a click is made after the merge, and its
+    // reply waits until then.
+    let hover = send(&mut app, json!([{"kind": "move", "x": 35, "y": 10}]));
+    assert_eq!(hover.try_recv().map(|r| r["ok"].clone()), Ok(json!(true)), "a hover during the merge");
+    let cmd = json!({"cmd": true});
+    let press = send(&mut app, json!([{"kind": "down", "x": 500, "y": 150, "mods": cmd}, {"kind": "up", "x": 500, "y": 150, "mods": cmd}]));
+    assert!(press.try_recv().is_err(), "a Cmd-click during the merge waits for it");
+    let hover = send(&mut app, json!([{"kind": "move", "x": 45, "y": 10}]));
+    assert_eq!(hover.try_recv().map(|r| r["ok"].clone()), Ok(json!(true)), "a hover after the held Cmd-click");
+    let start = std::time::Instant::now();
+    let reply = loop {
+        if let Ok(r) = click.try_recv() {
+            break r;
+        }
+        assert!(app.session.tool_editing(), "the merge is being computed until the reply goes");
+        assert_eq!(app.session.active().unwrap().revision, revision);
+        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        // A frame: the canvas checks on the tool, then the replies are answered.
+        let r = app.session.tool_poll(app.view_info(), false);
+        crate::canvas::apply_requests(&mut app, r);
+        app.answer_pointer_replies(&ctx);
+    };
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert_eq!(reply["result"]["selection"].as_array().map(Vec::len), Some(41), "{reply}: the selection after the merge");
+    assert_ne!(app.session.active().unwrap().revision, revision);
+    let press = loop {
+        if let Ok(r) = press.try_recv() {
+            break r;
+        }
+        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply to the Cmd-click");
+        let r = app.session.tool_poll(app.view_info(), false);
+        crate::canvas::apply_requests(&mut app, r);
+        app.answer_pointer_replies(&ctx);
+    };
+    assert_eq!(press["result"]["selection"].as_array().map(Vec::len), Some(0), "{press}: the lent selection tool deselected after the merge");
+    assert_eq!(press["result"]["tool"], "shapeBuilder", "{press}");
+}
+
+/// A Cmd-click held while a Shape Builder merge is computed on another thread makes the artboard
+/// it lands in active once it is made, as a Cmd-click made at once does: by the frames' checks,
+/// by choosing another tool first, or before a command that acts on the active artboard takes
+/// it.
+#[test]
+fn a_held_cmd_click_makes_its_artboard_active() {
+    for then in ["frames", "another tool", "All on Active Artboard", "another document"] {
+        held_cmd_click(then);
+    }
+}
+
+fn held_cmd_click(then: &str) {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    if then == "another document" {
+        // A document with an artboard where the press is, whose view keeps its own.
+        app.run("file.new", json!({"width": 1400, "height": 200})).unwrap();
+        app.run("artboard.new", json!({"x": 1000, "y": 0, "width": 300, "height": 200})).unwrap();
+        app.view_mut().unwrap().artboard = 0;
+    }
+    app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+    app.run("artboard.new", json!({"x": 1000, "y": 0, "width": 300, "height": 200})).unwrap();
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    app.view_mut().unwrap().artboard = 0;
+    let view = app.view_info();
+    let at = |kind, x, mods| PointerEvent { kind, pos: vectorcraft_geom::Point::new(x, 10.0), mods, pressure: 1.0 };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Move, 15.0, Mods::default()), view);
+    app.session.tool_poll(view, true).unwrap();
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Down, 15.0, Mods::default()), view);
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Up, 15.0, Mods::default()), view);
+    let cmd = Mods { cmd: true, ..Default::default() };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Down, 1100.0, cmd), view);
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Up, 1100.0, cmd), view);
+    assert_eq!(app.view().unwrap().artboard, 0, "{then}: the Cmd-click is held");
+    if then == "another tool" {
+        app.select_tool("rectangle");
+        assert!(!app.session.tool_editing(), "{then}");
+    }
+    if then == "All on Active Artboard" {
+        app.run("select.allOnArtboard", json!({})).unwrap();
+        assert!(app.session.doc().unwrap().selection.is_empty(), "{then}: the second artboard, which holds no art");
+    }
+    let doc = app.session.active_index().unwrap();
+    if then == "another document" {
+        // A document tab chosen.
+        app.session.set_active(0);
+    }
+    while app.session.tool_waiting() {
+        let r = app.session.tool_poll(view, true);
+        crate::canvas::apply_requests(&mut app, r);
+    }
+    app.sync_views();
+    assert_eq!(app.views[doc].artboard, 1, "{then}: the Cmd-click made the artboard it landed in active");
+    if then == "another document" {
+        assert_eq!(app.views[0].artboard, 0, "{then}: the other document's view keeps its artboard");
+    }
+}
+
+/// A dialog chosen from the menu, or with `ui.menuDialog`, while a Shape Builder merge is
+/// computed on another thread opens after the merge is applied, on the merged art. So do the
+/// app's own dialogs (Recolor Artwork), from the menu or a panel's button.
+#[test]
+fn menu_dialogs_open_after_a_merge_on_another_thread() {
+    for route in ["menu", "ui.menuDialog", "app dialog from the menu", "app dialog from a panel"] {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+        for k in 0..40 {
+            app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+        let view = app.view_info();
+        let at = |kind| PointerEvent { kind, pos: vectorcraft_geom::Point::new(15.0, 10.0), mods: Mods::default(), pressure: 1.0 };
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Move), view);
+        app.session.tool_poll(view, true).unwrap();
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Down), view);
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Up), view);
+        assert!(app.session.tool_editing(), "{route}");
+        match route {
+            "menu" => crate::menus::invoke(&mut app, "object.move", json!({})),
+            "ui.menuDialog" => {
+                app.run("ui.menuDialog", json!({"command": "object.move"})).unwrap();
+            }
+            "app dialog from the menu" => crate::menus::invoke(&mut app, "ui.recolorDialog", json!({})),
+            _ => {
+                app.run("ui.recolorDialog", json!({})).unwrap();
+            }
+        }
+        assert!(app.ui.dialog.is_some(), "{route}: the dialog is open");
+        assert!(!app.session.tool_editing(), "{route}");
+        let merged = app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone());
+        assert_eq!(merged.as_deref(), Some("Shape Builder"), "{route}");
+        assert_eq!(app.session.doc().unwrap().selection.objects.len(), 41, "{route}: the dialog acts on the merged art");
+    }
+}
+
+/// The Separations panel's checkboxes and a preference set while a Shape Builder merge is
+/// computed on another thread give the documents new revisions: the merge is applied first,
+/// and the document keeps it.
+#[test]
+fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
+    let cases = [
+        ("view.separationsPreview", json!({"on": false})),
+        ("view.overprintPreview", json!({"on": false})),
+        ("prefs.set", json!({"values": {"gridlineEvery": 90}})),
+    ];
+    for (id, params) in cases {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+        for k in 0..40 {
+            app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+        let view = app.view_info();
+        let at = |kind| PointerEvent { kind, pos: vectorcraft_geom::Point::new(15.0, 10.0), mods: Mods::default(), pressure: 1.0 };
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Move), view);
+        app.session.tool_poll(view, true).unwrap();
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Down), view);
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Up), view);
+        assert!(app.session.tool_editing(), "{id}");
+        app.run(id, params).unwrap();
+        assert!(!app.session.tool_editing(), "{id}");
+        for _ in 0..3 {
+            app.session.tool_poll(view, false).unwrap();
+        }
+        let merged = app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone());
+        assert_eq!(merged.as_deref(), Some("Shape Builder"), "{id}");
+        assert_eq!(app.session.doc().unwrap().selection.objects.len(), 41, "{id}");
+    }
+}
+
+/// Saving, exporting or closing while a Shape Builder merge is computed on another thread
+/// applies the merge first: the file holds it, and closing asks to save it.
+#[test]
+fn save_and_close_apply_a_merge_on_another_thread_first() {
+    let dir = vectorcraft_testkit::temp_dir("control-merge-save");
+    for then in ["file.saveAs", "file.exportAs", "file.close"] {
+        let services = Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+        for k in 0..40 {
+            app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+        // As if just saved: only the merge modifies it.
+        app.session.doc_mut().unwrap().mark_saved();
+        let view = app.view_info();
+        let at = |kind| PointerEvent { kind, pos: vectorcraft_geom::Point::new(15.0, 10.0), mods: Mods::default(), pressure: 1.0 };
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Move), view);
+        app.session.tool_poll(view, true).unwrap();
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Down), view);
+        crate::canvas::dispatch(&mut app, &at(PointerKind::Up), view);
+        assert!(app.session.tool_editing() && !app.session.doc().unwrap().is_dirty(), "{then}");
+        let path = dir.join(if then == "file.exportAs" { "a.svg" } else { "a.vectorcraft" });
+        let p = if then == "file.close" { json!({}) } else { json!({"path": path.to_string_lossy()}) };
+        let r = app.run(then, p).unwrap();
+        assert!(!app.session.tool_editing(), "{then}");
+        let merged = app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone());
+        assert_eq!(merged.as_deref(), Some("Shape Builder"), "{then}");
+        match then {
+            "file.saveAs" => assert!(!app.session.doc().unwrap().is_dirty(), "the file holds the merge"),
+            "file.exportAs" => assert!(app.session.doc().unwrap().is_dirty(), "an export leaves the document modified"),
+            _ => assert_eq!(r["pending"], "saveChanges", "closing asks to save the merge"),
+        }
+    }
 }
 
 /// `ui.dialog.set` of a field the open dialog does not have is an error that lists its fields,

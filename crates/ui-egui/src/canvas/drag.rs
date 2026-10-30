@@ -257,17 +257,27 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
     {
         v.artboard = i;
     }
-    // A press with a selection tool inside an artboard makes it the active one (#693), as the
-    // Artboard tool's does: Paste in Place and in Front or Back then paste onto it, Align to
-    // Artboard aligns to it, and All on Active Artboard selects on it.
-    if ev.kind == PointerKind::Down
-        && vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id())
-        && let Some(i) = app.session.active().and_then(|d| d.doc.artboard_at(ev.pos))
-        && let Some(v) = app.view_mut()
-    {
-        v.artboard = i;
+    if ev.kind == PointerKind::Down {
+        pressed_with(app, app.session.active_index(), ev.pos, app.session.tool_id());
     }
     apply_requests(app, r);
+}
+
+/// A press at `pos` in document `index` with tool `tool` (a selection tool) inside an artboard
+/// makes it that document's active one (#693), as the Artboard tool's does: Paste in Place and in
+/// Front or Back then paste onto it, Align to Artboard aligns to it, and All on Active Artboard
+/// selects on it.
+fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool: &str) {
+    if !vectorcraft_tools::catalog::is_selection_tool(tool) {
+        return;
+    }
+    app.sync_views();
+    if let Some(i) = index
+        && let Some(board) = app.session.documents().get(i).and_then(|d| d.doc.artboard_at(pos))
+        && let Some(v) = app.views.get_mut(i)
+    {
+        v.artboard = board;
+    }
 }
 
 /// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
@@ -280,6 +290,11 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
+                    // In the document the press was made in, which may no longer be the active one.
+                    vectorcraft_engine::UiRequest::HeldPress { doc, pos, tool } => {
+                        let index = doc.and_then(|uid| app.session.documents().iter().position(|d| d.uid == uid));
+                        pressed_with(app, index, pos, tool);
+                    }
                 }
             }
         }
