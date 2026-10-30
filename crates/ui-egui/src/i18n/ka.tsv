@@ -4073,6 +4073,13 @@ font-technology	Variable	ცვლადი
 @msg	select an image	მონიშნეთ გამოსახულება
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
+@msg	Recolor completed; {objects} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	Recolor completed; {objects} was left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {objects}
+@msg	1 locked object	1 ჩაკეტილი ობიექტი
+@msg	{n} locked objects	{n} ჩაკეტილი ობიექტი
+@msg	1 hidden object	1 დამალული ობიექტი
+@msg	{n} hidden objects	{n} დამალული ობიექტი
 @msg	select at least two objects	მონიშნეთ ორი ობიექტი მაინც
 @msg	exit isolation mode first	ჯერ გამოდით იზოლაციის რეჟიმიდან
 @msg	select objects, not layers	მონიშნეთ ობიექტები და არა შრეები

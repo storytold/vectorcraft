@@ -4265,6 +4265,13 @@ theme	Appearance	Εμφάνιση
 @msg	select an image	επιλέξτε εικόνα
 @msg	select an object in perspective	επιλέξτε αντικείμενο σε προοπτική
 @msg	select artwork (or a colour group) to recolor	επιλέξτε σχέδιο (ή ομάδα χρωμάτων) για επαναχρωματισμό
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {locked} και {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {objects}
+@msg	1 locked object	1 κλειδωμένο αντικείμενο
+@msg	{n} locked objects	{n} κλειδωμένα αντικείμενα
+@msg	1 hidden object	1 κρυφό αντικείμενο
+@msg	{n} hidden objects	{n} κρυφά αντικείμενα
 @msg	select at least two objects	επιλέξτε τουλάχιστον δύο αντικείμενα
 @msg	exit isolation mode first	βγείτε πρώτα από τη λειτουργία απομόνωσης
 @msg	select objects, not layers	επιλέξτε αντικείμενα, όχι επίπεδα

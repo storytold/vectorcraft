@@ -1481,6 +1481,28 @@ fn messages_translate_by_template_and_their_parts() {
     assert_eq!(message(Lang::EN, nested), nested);
 }
 
+/// The note `recolor.apply` and the Edit Colors commands give when they leave out locked or hidden
+/// objects is translated whole, its counts included, in every complete-message language.
+#[test]
+fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
+    let notes = [
+        ("Recolor completed; 2 locked objects and 1 hidden object were left unchanged", ["2", "1"]),
+        ("Recolor completed; 1 locked object and 3 hidden objects were left unchanged", ["1", "3"]),
+        ("Recolor completed; 1 locked object was left unchanged", ["1", "1"]),
+        ("Recolor completed; 5 hidden objects were left unchanged", ["5", "5"]),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (note, counts) in notes {
+            let shown = message(lang, note);
+            // Whole words, so that a translation such as Catalan's "objecte" is not read as English.
+            let english = ["completed", "locked", "hidden", "object", "objects", "unchanged"];
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
+            assert!(counts.iter().all(|n| shown.contains(n)), "{code}: {shown}");
+        }
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(

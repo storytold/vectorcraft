@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "Invert Colors", &invert)
         ),
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to CMYK",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
+            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed, notChanged, warning?}",
             has_selection,
             |s, p| recolor(s, p, "Convert to CMYK", &to_cmyk)
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Grayscale",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
+            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed, notChanged, warning?}",
             has_selection,
             |s, p| recolor(s, p, "Convert to Grayscale", &to_gray)
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to RGB",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
+            "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed, notChanged, warning?}",
             has_selection,
             |s, p| {
                 recolor(s, p, "Convert to RGB", &|c| {
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Saturate…",
             ["Edit", "Edit Colors"],
             None,
-            "{intensity: -100..100 (%; a number outside the range counts as its nearest end), fill?, stroke?, includeImages?, includePatterns?, ids?} scale saturation by (1 + intensity/100), reaching what edit.colors.invert does → {changed}",
+            "{intensity: -100..100 (%; a number outside the range counts as its nearest end), fill?, stroke?, includeImages?, includePatterns?, ids?} scale saturation by (1 + intensity/100), reaching what edit.colors.invert does → {changed, notChanged, warning?} (as edit.colors.invert)",
             has_selection,
             saturate
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Adjust Color Balance…",
             ["Edit", "Edit Colors"],
             None,
-            "{mode?: \"rgb\"|\"cmyk\"|\"gray\"|\"global\" (default: from the channels given), r?, g?, b? | c?, m?, y?, k? | gray? | tint?: -100..100 (% added per channel, default 0; `tint` is global mode: it shifts the tints of colours and gradient stops linked to global and spot swatches, which stay linked, and leaves other colours and images alone), convert?: false (true: the results stay in the adjusted model; false: each colour keeps its own), fill?, stroke?, includeImages?, includePatterns?, ids?} reaching what edit.colors.invert does → {changed}",
+            "{mode?: \"rgb\"|\"cmyk\"|\"gray\"|\"global\" (default: from the channels given), r?, g?, b? | c?, m?, y?, k? | gray? | tint?: -100..100 (% added per channel, default 0; `tint` is global mode: it shifts the tints of colours and gradient stops linked to global and spot swatches, which stay linked, and leaves other colours and images alone), convert?: false (true: the results stay in the adjusted model; false: each colour keeps its own), fill?, stroke?, includeImages?, includePatterns?, ids?} reaching what edit.colors.invert does → {changed, notChanged, warning?} (as edit.colors.invert)",
             has_selection,
             adjust_balance
         ),
@@ -213,6 +213,48 @@ impl<'a> Recolor<'a> {
         Self { links: Some(links), ..Self::new(scope, f) }
     }
 
+    /// A pass that maps colors as this one does, with nothing recolored yet.
+    fn again(&self) -> Self {
+        Self { links: self.links, ..Self::new(self.scope, self.f) }
+    }
+
+    /// The entries of `objects` (ids, each with a flag) whose object this pass would change, other
+    /// than by swatch links alone, its patterns' tiles included. The document stays as it is.
+    pub(crate) fn would_change<T: Copy>(mut self, d: &Document, objects: &[(NodeId, T)]) -> Vec<(NodeId, T)> {
+        let tried: Vec<(&Node, Node, T)> =
+            objects.iter().filter_map(|&(id, flag)| d.node(id).and_then(|n| Some((n, self.subtree(d, n)?, flag)))).collect();
+        let same = self.link_only_copies(d);
+        tried.into_iter().filter_map(|(n, m, flag)| (without_links(m, &same) != without_links(n.clone(), &same)).then_some((n.id, flag))).collect()
+    }
+
+    /// The patterns this pass has copied whose copy differs from the original only by swatch
+    /// links: the copy's name → the original's. A copy whose tile uses other copies counts when
+    /// those copies do.
+    fn link_only_copies(&self, d: &Document) -> HashMap<String, String> {
+        let art = |v: &[Arc<Node>], same: &HashMap<String, String>| v.iter().map(|n| without_links((**n).clone(), same)).collect::<Vec<_>>();
+        let copies: HashMap<&str, &PatternDef> = self.new_patterns.iter().map(|p| (p.name.as_str(), p)).collect();
+        let pairs: Vec<(&String, &String, &PatternDef, &PatternDef)> = self
+            .patterns
+            .iter()
+            .filter_map(|(old, new)| {
+                let new = new.as_ref()?;
+                Some((new, old, d.pattern(old)?, *copies.get(new.as_str())?))
+            })
+            .collect();
+        let mut same = HashMap::new();
+        loop {
+            let found: Vec<(String, String)> = pairs
+                .iter()
+                .filter(|(new, _, original, copy)| !same.contains_key(*new) && art(&original.art, &same) == art(&copy.art, &same))
+                .map(|(new, old, _, _)| ((*new).clone(), (*old).clone()))
+                .collect();
+            if found.is_empty() {
+                return same;
+            }
+            same.extend(found);
+        }
+    }
+
     /// Recolour the objects `ids` and everything inside them (each once), add the new images and
     /// pattern swatches, and return the number of paints, meshes and images changed.
     pub(crate) fn run(mut self, d: &mut Document, ids: &[NodeId]) -> usize {
@@ -313,6 +355,29 @@ impl<'a> Recolor<'a> {
     }
 }
 
+/// `n` with the swatch links of its paints and its children's removed, each color kept as it
+/// shows, and each pattern named in `same` (a copy → its original) by its original's name.
+fn without_links(mut n: Node, same: &HashMap<String, String>) -> Node {
+    for p in vectorcraft_doc::swatches::node_paints_mut(&mut n) {
+        map_links(p, &|_, link, _| link.take().is_some());
+        match p {
+            Paint::Gradient(g) => g.swatch = None,
+            Paint::Pattern { pattern, .. } => {
+                if let Some(original) = same.get(pattern.as_str()) {
+                    *pattern = original.clone();
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            *c = Arc::new(without_links((**c).clone(), same));
+        }
+    }
+    n
+}
+
 /// What a pass over document `d` does to each colour the shared visitor meets.
 struct Visit<'p, 'a> {
     pass: &'p mut Recolor<'a>,
@@ -335,14 +400,105 @@ pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color)
     run_pass(s, p, label, Recolor::new(Scope::of(p), f))
 }
 
-/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step.
+/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step. The reply's
+/// `notChanged` counts the locked and hidden objects the selection left out ([`left_out`]) that
+/// the pass would have changed.
 fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Value> {
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
+    let (ids, left) = match ids_param(p, "ids") {
+        Some(v) => (v, vec![]),
+        None => {
+            let roots = selected_roots(s)?;
+            let st = s.doc()?;
+            let left = left_out(&st.doc, st.isolation, &roots);
+            (roots, left)
+        }
     };
-    let n = s.edit(label, |d, _| Ok(pass.run(d, &ids)))?;
-    Ok(json!({ "changed": n }))
+    let (n, not_changed) = s.edit(label, |d, _| {
+        let not_changed = NotChanged::of(pass.again().would_change(d, &left).into_iter().map(|(_, hidden)| hidden));
+        Ok((pass.run(d, &ids), not_changed))
+    })?;
+    let mut out = json!({ "changed": n });
+    not_changed.report(&mut out);
+    Ok(out)
+}
+
+/// The objects a recolor of `roots` leaves out of the art the user meant to recolor, each with
+/// whether it is hidden (otherwise it is locked). When `roots` are exactly the objects Select All
+/// takes (in isolation mode, those of the isolated group), these are the objects beside them that
+/// Select All skips: hidden or locked objects, the objects of hidden or locked layers and
+/// sublayers, and, outside isolation mode, objects on locked artboards (counted as locked). The art
+/// of template layers and the objects inside a group are not listed. With any other `roots`, none.
+pub(crate) fn left_out(d: &Document, iso: Option<NodeId>, roots: &[NodeId]) -> Vec<(NodeId, bool)> {
+    fn visit(n: &Node, hidden: bool, locked: bool, all: &HashSet<NodeId>, board_locked: &dyn Fn(&Node) -> bool, out: &mut Vec<(NodeId, bool)>) {
+        for c in n.children().into_iter().flatten() {
+            if c.is_template() {
+                continue;
+            }
+            let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
+            if c.is_layer() {
+                visit(c, hidden, locked, all, board_locked, out);
+            } else if !all.contains(&c.id) && (hidden || locked || board_locked(c)) {
+                out.push((c.id, hidden));
+            }
+        }
+    }
+    let all: HashSet<NodeId> = super::select::selectable(d, iso).into_iter().collect();
+    let picked: HashSet<NodeId> = roots.iter().copied().collect();
+    if picked.is_empty() || picked != all {
+        return vec![];
+    }
+    let mut out = vec![];
+    match iso.and_then(|i| d.node(i)) {
+        Some(c) => visit(c, false, false, &all, &|_| false, &mut out),
+        None => {
+            let boards = d.locked_artboards();
+            let board_locked = |n: &Node| !boards.is_empty() && boards.holds(n);
+            for l in d.layers.iter().filter(|l| !l.is_template()) {
+                visit(l, !l.visible, l.locked, &all, &board_locked, &mut out);
+            }
+        }
+    }
+    out
+}
+
+/// How many locked and hidden objects a recolor left out ([`left_out`]) although it would have
+/// changed their colors. An object both hidden and locked counts as hidden.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct NotChanged {
+    pub locked: usize,
+    pub hidden: usize,
+}
+
+impl NotChanged {
+    /// The counts of objects given by whether each is hidden.
+    pub(crate) fn of(hidden: impl IntoIterator<Item = bool>) -> Self {
+        hidden.into_iter().fold(Self::default(), |n, h| if h { Self { hidden: n.hidden + 1, ..n } } else { Self { locked: n.locked + 1, ..n } })
+    }
+
+    /// Add `notChanged` to reply `out`, and a `warning`, which the app shows in its status bar,
+    /// when any object is counted.
+    pub(crate) fn report(self, out: &mut Value) {
+        out["notChanged"] = json!({ "locked": self.locked, "hidden": self.hidden });
+        if let Some(w) = self.warning() {
+            out["warning"] = json!(w);
+        }
+    }
+
+    fn warning(self) -> Option<String> {
+        let part = |n: usize, kind: &str| match n {
+            0 => None,
+            1 => Some(format!("1 {kind} object")),
+            n => Some(format!("{n} {kind} objects")),
+        };
+        match (part(self.locked, "locked"), part(self.hidden, "hidden")) {
+            (Some(locked), Some(hidden)) => Some(format!("Recolor completed; {locked} and {hidden} were left unchanged")),
+            (Some(objects), None) | (None, Some(objects)) if self.locked + self.hidden == 1 => {
+                Some(format!("Recolor completed; {objects} was left unchanged"))
+            }
+            (Some(objects), None) | (None, Some(objects)) => Some(format!("Recolor completed; {objects} were left unchanged")),
+            (None, None) => None,
+        }
+    }
 }
 
 fn saturate(s: &mut Session, p: &Value) -> Result<Value> {

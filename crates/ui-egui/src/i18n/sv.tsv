@@ -4216,6 +4216,13 @@ axis	Both	Båda
 @msg	select an image	markera en bild
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Omfärgning klar; utan ändring: {objects}
+@msg	1 locked object	1 låst objekt
+@msg	{n} locked objects	{n} låsta objekt
+@msg	1 hidden object	1 dolt objekt
+@msg	{n} hidden objects	{n} dolda objekt
 @msg	select at least two objects	markera minst två objekt
 @msg	exit isolation mode first	avsluta isoleringsläget först
 @msg	select objects, not layers	markera objekt, inte lager

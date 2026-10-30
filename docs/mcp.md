@@ -1805,6 +1805,15 @@ patterns out. The Blend commands also grade gradient meshes, which keep their sh
 `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest end). Without one, or with a
 value that is not a number, it answers `` missing number `intensity` `` and changes nothing.
 
+The reply of `recolor.apply` and of every command above except the Blend commands has `notChanged: {locked, hidden}`.
+When the selection is exactly what `select.all` takes (in isolation mode, what it takes inside the isolated group), it
+counts the objects `select.all` left out whose colors the command would have changed: locked or hidden objects, the
+objects of locked or hidden layers and sublayers, and objects on locked artboards (counted as locked). An object that
+is both hidden and locked counts as hidden. Template layers' art is not counted. Locked and hidden objects inside a
+selected group are recolored and not counted. With any other selection, or with `ids`, both counts are 0. When a count
+is above 0 the reply also has a `warning`, which the app shows in the status bar, for example
+`Recolor completed; 3 locked objects and 1 hidden object were left unchanged`.
+
 ```json
 {"name":"run_command","arguments":{"command":"recolor.colors","params":{}}}
 {"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#0055ff"},"includeImages":false}}}

@@ -4393,6 +4393,13 @@ theme	Appearance	외관
 @msg	print settings are not an object	인쇄 설정이 개체가 아닙니다
 @msg	no colour group `{g}`	색상 그룹 `{g}`이(가) 없습니다
 @msg	select artwork (or a colour group) to recolor	리컬러할 아트웍(또는 색상 그룹)을 선택하세요
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {locked}, {hidden}
+@msg	Recolor completed; {objects} were left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	Recolor completed; {objects} was left unchanged	색상 재지정이 완료되었습니다. 변경되지 않음: {objects}
+@msg	1 locked object	잠긴 개체 1개
+@msg	{n} locked objects	잠긴 개체 {n}개
+@msg	1 hidden object	숨겨진 개체 1개
+@msg	{n} hidden objects	숨겨진 개체 {n}개
 @msg	Downloaded {_1} file(s)	파일 {_1}개를 다운로드했습니다
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
 @msg	no file system here	여기에는 파일 시스템이 없습니다

@@ -4468,6 +4468,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	print settings are not an object	プリント設定がオブジェクト形式ではありません
 @msg	no colour group `{g}`	カラーグループ `{g}` が見つかりません
 @msg	select artwork (or a colour group) to recolor	再配色するアートワーク (またはカラーグループ) を選択してください
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	再配色が完了しました。変更されなかったもの: {locked}、{hidden}
+@msg	Recolor completed; {objects} were left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	Recolor completed; {objects} was left unchanged	再配色が完了しました。変更されなかったもの: {objects}
+@msg	1 locked object	ロックされたオブジェクト 1 個
+@msg	{n} locked objects	ロックされたオブジェクト {n} 個
+@msg	1 hidden object	非表示のオブジェクト 1 個
+@msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Downloaded {_1} file(s)	{_1} 個のファイルをダウンロードしました
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
 @msg	no file system here	この環境にはファイルシステムがありません

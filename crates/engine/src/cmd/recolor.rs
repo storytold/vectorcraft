@@ -12,7 +12,7 @@ use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::swatches::{node_colors, node_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
-use super::colorcmds::{Recolor, Scope};
+use super::colorcmds::{NotChanged, Recolor, Scope, left_out};
 use super::{
     CommandSpec, Result, Session, always, bad, check_switches, checked_ids_param, cmd, color_value, has_doc, index, str_param, switch_or, text_param,
 };
@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model)}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model), notChanged: {locked, hidden} (as edit.colors.invert), warning?: set when notChanged counts any object}",
             has_doc,
             apply
         ),
@@ -116,6 +116,38 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
     }
     used.sort_by(|a, b| b.1.count.cmp(&a.1.count).then(a.0.cmp(&b.0)));
     used.into_iter().map(|(_, u)| u).collect()
+}
+
+/// The colors `n` shows, in paint order ([`node_colors`]), then the colors of the tiles of the
+/// patterns it uses as fills or strokes, and of the patterns those tiles use (each pattern once).
+fn shown_colors<'a>(d: &'a Document, n: &'a Node) -> Vec<Color> {
+    let mut colors = vec![];
+    node_colors(n, &mut |c, _| colors.push(*c));
+    let mut patterns: Vec<&str> = vec![];
+    pattern_names(n, &mut patterns);
+    let mut next = 0;
+    while let Some(&name) = patterns.get(next) {
+        next += 1;
+        for a in d.pattern(name).map(|def| def.art.as_slice()).unwrap_or_default() {
+            node_colors(a, &mut |c, _| colors.push(*c));
+            pattern_names(a, &mut patterns);
+        }
+    }
+    colors
+}
+
+/// Adds the names of the patterns `n` and the objects inside it use as fills or strokes to `names`,
+/// leaving out names already there.
+fn pattern_names<'a>(n: &'a Node, names: &mut Vec<&'a str>) {
+    n.walk(&mut |m| {
+        for p in node_paints(m) {
+            if let Paint::Pattern { pattern, .. } = p
+                && !names.contains(&pattern.as_str())
+            {
+                names.push(pattern);
+            }
+        }
+    });
 }
 
 /// The objects whose colors `recolor.colors` and `recolor.reduce` read, for [`used_colors`]: `ids`
@@ -433,6 +465,10 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let row_swatches: Vec<Option<Swatch>> =
         rows.iter().map(|r| r.new_color().and_then(|c| lib_swatches.iter().find(|w| w.paint.color() == Some(c)).cloned())).collect();
     let ids = s.doc()?.selection.objects.clone();
+    let left = {
+        let st = s.doc()?;
+        left_out(&st.doc, st.isolation, &super::edit::roots_of(&st.doc, ids.clone()))
+    };
     let group = text_param(p, "group", C)?;
     if ids.is_empty() && group.is_none() {
         return Err(bad(C, "select artwork to recolour, or give a colour `group`"));
@@ -480,7 +516,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         None => rows.iter().filter_map(Row::new_color).collect(),
     };
     let rename = text_param(p, "rename", C)?;
-    let (changed, edit, added, converted) = s.edit(label, |d, _| {
+    let (changed, edit, added, converted, not_changed) = s.edit(label, |d, _| {
         // The rows' library swatches join the document (one it has with that name and colour is
         // used as it is).
         let mut added = vec![];
@@ -517,11 +553,26 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         let map = ColorMap::new(&rows, method, own_model, &links, kept);
         let f = |c: Color| map.map(c);
         let lf = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| map.map_link(c, link, tint);
+        // The objects left out whose colors the pass would change, with the colors they show now.
+        // The trial pass does not count towards the note on color models.
+        let before: Vec<(NodeId, Vec<Color>, bool)> = Recolor::with_links(scope, &f, &lf)
+            .would_change(d, &left)
+            .into_iter()
+            .filter_map(|(id, hidden)| Some((id, shown_colors(d, d.node(id)?), hidden)))
+            .collect();
+        map.converted.set(false);
         let changed = Recolor::with_links(scope, &f, &lf).run(d, &ids);
         let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, rename, C)).transpose()?;
-        Ok((changed, edit, added, map.converted.get()))
+        // Rewriting the group's swatches can change the colors of art linked to them, left out or
+        // not, and of the patterns it uses. Art that only loses its link keeps its colors and is
+        // counted.
+        let not_changed = NotChanged::of(
+            before.iter().filter(|(id, colors, _)| d.node(*id).is_some_and(|now| shown_colors(d, now) == *colors)).map(|(_, _, hidden)| *hidden),
+        );
+        Ok((changed, edit, added, map.converted.get(), not_changed))
     })?;
     let mut out = json!({ "changed": changed, "swatches": added });
+    not_changed.report(&mut out);
     if let Some(e) = edit {
         e.defaults(s);
         out["relinked"] = json!(e.relinked());

@@ -5328,6 +5328,13 @@
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloració completada; sense canvis: {objects}
+@msg	1 locked object	1 objecte bloquejat
+@msg	{n} locked objects	{n} objectes bloquejats
+@msg	1 hidden object	1 objecte ocult
+@msg	{n} hidden objects	{n} objectes ocults
 @msg	select at least two objects	selecciona almenys dos objectes
 @msg	select objects, not layers	selecciona objectes, no capes
 @msg	select one object	selecciona un objecte

@@ -4232,6 +4232,13 @@ theme	Appearance	Erscheinungsbild
 @msg	select an image	wählen Sie ein Bild aus
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Neufärben abgeschlossen; unverändert: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Neufärben abgeschlossen; unverändert: {objects}
+@msg	1 locked object	1 gesperrtes Objekt
+@msg	{n} locked objects	{n} gesperrte Objekte
+@msg	1 hidden object	1 ausgeblendetes Objekt
+@msg	{n} hidden objects	{n} ausgeblendete Objekte
 @msg	select at least two objects	wählen Sie mindestens zwei Objekte aus
 @msg	exit isolation mode first	beenden Sie zuerst den Isolationsmodus
 @msg	select objects, not layers	wählen Sie Objekte aus, keine Ebenen

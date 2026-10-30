@@ -4520,6 +4520,13 @@ imageTrace	Outline	Ääriviiva
 @msg	select an image	valitse kuva
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {objects}
+@msg	1 locked object	1 lukittu objekti
+@msg	{n} locked objects	{n} lukittua objektia
+@msg	1 hidden object	1 piilotettu objekti
+@msg	{n} hidden objects	{n} piilotettua objektia
 @msg	select at least two objects	valitse vähintään kaksi objektia
 @msg	exit isolation mode first	poistu ensin eristystilasta
 @msg	select objects, not layers	valitse objekteja, ei tasoja

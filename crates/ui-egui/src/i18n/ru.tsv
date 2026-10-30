@@ -4347,6 +4347,13 @@ axis	Both	Оба
 @msg	select an image	выделите изображение
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Перекрашивание завершено; без изменений: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Перекрашивание завершено; без изменений: {objects}
+@msg	1 locked object	заблокированный объект (1)
+@msg	{n} locked objects	заблокированные объекты ({n})
+@msg	1 hidden object	скрытый объект (1)
+@msg	{n} hidden objects	скрытые объекты ({n})
 @msg	select at least two objects	выделите как минимум два объекта
 @msg	exit isolation mode first	сначала выйдите из режима изоляции
 @msg	select objects, not layers	выделите объекты, а не слои

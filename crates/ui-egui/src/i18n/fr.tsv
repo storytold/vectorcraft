@@ -4308,6 +4308,13 @@ axis	Both	Les deux
 @msg	select an image	sélectionnez une image
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloration terminée ; sans changement : {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloration terminée ; sans changement : {objects}
+@msg	1 locked object	1 objet verrouillé
+@msg	{n} locked objects	{n} objets verrouillés
+@msg	1 hidden object	1 objet masqué
+@msg	{n} hidden objects	{n} objets masqués
 @msg	select at least two objects	sélectionnez au moins deux objets
 @msg	exit isolation mode first	quittez d’abord le mode Isolation
 @msg	select objects, not layers	sélectionnez des objets, pas des calques

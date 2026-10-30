@@ -3886,6 +3886,13 @@ axis	Both	Ambos
 @msg	select an image	selecione uma imagem
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Recoloração concluída; sem alteração: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Recoloração concluída; sem alteração: {objects}
+@msg	1 locked object	1 objeto bloqueado
+@msg	{n} locked objects	{n} objetos bloqueados
+@msg	1 hidden object	1 objeto oculto
+@msg	{n} hidden objects	{n} objetos ocultos
 @msg	select at least two objects	selecione pelo menos dois objetos
 @msg	exit isolation mode first	saia do modo de isolamento primeiro
 @msg	select objects, not layers	selecione objetos, não camadas

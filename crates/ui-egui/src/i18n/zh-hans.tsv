@@ -4185,6 +4185,13 @@ imageTrace	Outline	轮廓
 @msg	print settings are not an object	打印设置不是对象
 @msg	no colour group `{g}`	没有颜色组 `{g}`
 @msg	select artwork (or a colour group) to recolor	请选择要重新着色的图稿 (或颜色组)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	重新着色已完成；未更改：{locked}和{hidden}
+@msg	Recolor completed; {objects} were left unchanged	重新着色已完成；未更改：{objects}
+@msg	Recolor completed; {objects} was left unchanged	重新着色已完成；未更改：{objects}
+@msg	1 locked object	1 个锁定的对象
+@msg	{n} locked objects	{n} 个锁定的对象
+@msg	1 hidden object	1 个隐藏的对象
+@msg	{n} hidden objects	{n} 个隐藏的对象
 @msg	Downloaded {_1} file(s)	已下载 {_1} 个文件
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
 @msg	no file system here	此处没有文件系统

@@ -4444,6 +4444,13 @@ imageTrace	Outline	Kontur
 @msg	select an image	zaznacz obraz
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Zmiana kolorów zakończona; bez zmian: {locked} i {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Zmiana kolorów zakończona; bez zmian: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Zmiana kolorów zakończona; bez zmian: {objects}
+@msg	1 locked object	zablokowany obiekt (1)
+@msg	{n} locked objects	zablokowane obiekty ({n})
+@msg	1 hidden object	ukryty obiekt (1)
+@msg	{n} hidden objects	ukryte obiekty ({n})
 @msg	select at least two objects	zaznacz co najmniej dwa obiekty
 @msg	exit isolation mode first	najpierw wyjdź z trybu izolacji
 @msg	select objects, not layers	zaznacz obiekty, nie warstwy

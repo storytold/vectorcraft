@@ -2126,6 +2126,13 @@ file-filter	Templates	範本
 @msg	print settings are not an object	列印設定不是物件
 @msg	no colour group `{g}`	沒有顏色群組 `{g}`
 @msg	select artwork (or a colour group) to recolor	請選取要重新上色的圖稿 (或顏色群組)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	重新上色已完成；未變更：{locked}和{hidden}
+@msg	Recolor completed; {objects} were left unchanged	重新上色已完成；未變更：{objects}
+@msg	Recolor completed; {objects} was left unchanged	重新上色已完成；未變更：{objects}
+@msg	1 locked object	1 個鎖定的物件
+@msg	{n} locked objects	{n} 個鎖定的物件
+@msg	1 hidden object	1 個隱藏的物件
+@msg	{n} hidden objects	{n} 個隱藏的物件
 @msg	Downloaded {_1} file(s)	已下載 {_1} 個檔案
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「在瀏覽器中預覽」需要桌面應用程式 (網頁版會改為下載檔案)
 @msg	no file system here	此處沒有檔案系統

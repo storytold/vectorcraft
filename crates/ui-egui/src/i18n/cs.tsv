@@ -4617,6 +4617,13 @@ imageTrace	Outline	Obrys
 @msg	select an image	vyberte obraz
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Přebarvení dokončeno; beze změny: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Přebarvení dokončeno; beze změny: {objects}
+@msg	1 locked object	zamčený objekt (1)
+@msg	{n} locked objects	zamčené objekty ({n})
+@msg	1 hidden object	skrytý objekt (1)
+@msg	{n} hidden objects	skryté objekty ({n})
 @msg	select at least two objects	vyberte alespoň dva objekty
 @msg	exit isolation mode first	nejprve ukončete izolovaný režim
 @msg	select objects, not layers	vyberte objekty, ne vrstvy

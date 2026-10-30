@@ -4075,6 +4075,13 @@ axis	Both	Her İkisi
 @msg	select an image	bir resim seç
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {objects}
+@msg	1 locked object	1 kilitli nesne
+@msg	{n} locked objects	{n} kilitli nesne
+@msg	1 hidden object	1 gizli nesne
+@msg	{n} hidden objects	{n} gizli nesne
 @msg	select at least two objects	en az iki nesne seç
 @msg	exit isolation mode first	önce izolasyon modundan çık
 @msg	select objects, not layers	katmanları değil nesneleri seçin

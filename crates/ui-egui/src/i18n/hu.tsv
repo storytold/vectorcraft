@@ -5018,6 +5018,13 @@ imageTrace	Outline	Körvonal
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Átszínezés kész; változatlan maradt: {locked} és {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Átszínezés kész; változatlan maradt: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Átszínezés kész; változatlan maradt: {objects}
+@msg	1 locked object	1 zárolt objektum
+@msg	{n} locked objects	{n} zárolt objektum
+@msg	1 hidden object	1 rejtett objektum
+@msg	{n} hidden objects	{n} rejtett objektum
 @msg	select at least two objects	jelölj ki legalább két objektumot
 @msg	exit isolation mode first	előbb lépj ki az elkülönítési módból
 @msg	select objects, not layers	objektumokat jelölj ki, rétegeket ne

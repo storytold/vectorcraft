@@ -4670,6 +4670,13 @@ theme	Appearance	Giao diện
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Đã tô màu lại xong; không thay đổi: {locked} và {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Đã tô màu lại xong; không thay đổi: {objects}
+@msg	1 locked object	1 đối tượng bị khóa
+@msg	{n} locked objects	{n} đối tượng bị khóa
+@msg	1 hidden object	1 đối tượng bị ẩn
+@msg	{n} hidden objects	{n} đối tượng bị ẩn
 @msg	select at least two objects	hãy chọn ít nhất hai đối tượng
 @msg	exit isolation mode first	hãy thoát chế độ cô lập trước
 @msg	select objects, not layers	hãy chọn đối tượng, không phải lớp
