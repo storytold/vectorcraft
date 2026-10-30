@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G13: gradient presets done; G1: Average & Join with a corner or smooth choice, Cmd+Alt+Shift+J, done; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G11: Shift and Alt take effect mid-drag on bounding-box handles (#4711); previously: G13: gradient presets done; G1: Average & Join with a corner or smooth choice, Cmd+Alt+Shift+J, done; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -238,6 +238,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Estimate:** 30–50 h (the corpus and QA part blocks beta).
 
 ## G11 Correctness bugs in core tools
+
+- **Done (#4711):** Shift and Alt pressed or let go while a bounding-box handle is dragged take effect at once, with the pointer still: the canvas sends the tool its drag again in the frame the modifiers change (a press that has not dragged stays a click). Broader G11 scope and estimates unchanged.
 
 - **Live trace result bounds and selection highlights exclude the retained bitmap except in source-image views:** `live_trace_result_bounds_exclude_the_retained_bitmap_at_any_angle` checks every TraceView, geometric and visual bounds and rotated result bounds. `live_trace_selection_highlight_excludes_the_retained_source_rectangle` checks result highlights and the existing ordinary-group policy. Shared editing-child traversal also preserves Shaper handling. Broader scope and estimates unchanged.
 
@@ -657,6 +659,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | G11: Shift and Alt pressed or let go during a bounding-box handle drag take effect without a move (#4711); estimate unchanged |
 | 2026-10-30 | minor | G1: Object › Path › Average & Join… (`path.averageJoin`, Cmd+Alt+Shift+J) moves two open path ends to their midpoint and joins them there, the joined anchor a corner or a smooth point as its dialog's Points choice asks, in one undo step; the "Average and Join in one step" entry is done. Estimate unchanged |
 | 2026-10-30 | minor | G12: Preferences audit (#394): 5 options are stored but not acted on (Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard), each waiting on a subsystem; Highlight Alternate Glyphs, Real-time Drawing and the Devices options act. Estimate unchanged. |
 | 2026-10-29 | minor | G10: the Linux Flatpak on GNOME copies and pastes text through the core Wayland protocol; pictures and `image/svg+xml` there listed as missing. Estimate unchanged. |

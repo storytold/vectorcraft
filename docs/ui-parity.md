@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Gradient panel presets; View › Hide Artboards hides their edges and shows the canvas as paper (#4038); scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Shift and Alt take effect mid-drag on bounding-box handles (#4711); previously: Gradient panel presets; View › Hide Artboards hides their edges and shows the canvas as paper (#4038); scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -171,7 +171,7 @@ tools, never checked side by side) isn't captured row by row.
 | Behaviour | Status | Notes |
 |---|---|---|
 | Moving a rounded rectangle with Craquelure at high DPI | partial | Distance searches optimized; moved-viewport pixels unchanged for three texture effects; `texture_drag_perf` probe available. Idle Windows mouse-drag QA remains (#1257) |
-| Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | |
+| Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | Shift and Alt pressed or let go in the middle of a handle drag take effect at once, with the pointer still (#4711); `modifiers_changed_during_a_handle_drag_take_effect_without_a_move` |
 | Rotated objects keep a rotated bounding box and their angle; Reset Bounding Box | done | |
 | Free Transform, Scale and Reflect along a rotated box | missing | |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |
@@ -368,6 +368,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | Bounding-box handles: Shift and Alt pressed or let go mid-drag take effect without a move (#4711); scores and estimates unchanged |
 | 2026-10-30 | minor | Smart Pen add-on: an Alt-drag away from paths selects points with a marquee; scores and estimates unchanged |
 | 2026-10-30 | minor | Color Effects add-on: Select by Color Kind; scores and estimates unchanged |
 | 2026-10-30 | minor | View › Hide Artboards hides their edges and shows the canvas as paper (#4038); scores and estimates unchanged |

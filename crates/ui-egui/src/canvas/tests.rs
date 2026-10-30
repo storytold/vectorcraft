@@ -6089,6 +6089,61 @@ fn stationary_press_is_not_a_drag() {
     assert!(moved, "the first move after the press is a drag");
 }
 
+/// #4711: Shift or Alt pressed or released while a handle is dragged takes effect at once, with
+/// the pointer still: the frame whose modifiers changed sends the tool its drag again, where it
+/// is. Shift keeps the proportions, Alt scales about the center, and letting go undoes each.
+#[test]
+fn modifiers_changed_during_a_handle_drag_take_effect_without_a_move() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    let id = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    // One headless frame with `events`, then the modifiers held at its end.
+    let run = |app: &mut VectorcraftApp, mut events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+        events.push(egui::Event::ModifiersChanged(modifiers));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1920.0, 1200.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let bounds = |app: &VectorcraftApp| app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
+    run(&mut app, vec![], egui::Modifiers::NONE);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let corner = xf.to_screen(Point::new(200.0, 200.0));
+    let to = xf.to_screen(Point::new(220.0, 240.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    run(&mut app, vec![egui::Event::PointerMoved(corner)], egui::Modifiers::NONE);
+    run(&mut app, vec![button(corner, true)], egui::Modifiers::NONE);
+    run(&mut app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE);
+    let free = bounds(&app);
+    assert!(
+        close(free.x1, 220.0) && close(free.y1, 240.0) && close(free.x0, 100.0) && close(free.y0, 100.0),
+        "the handle follows the pointer: {free:?}"
+    );
+    // Shift pressed with the pointer still: the box becomes square at once.
+    run(&mut app, vec![], egui::Modifiers::SHIFT);
+    let shifted = bounds(&app);
+    assert!(
+        close(shifted.width(), shifted.height()) && close(shifted.x0, 100.0) && close(shifted.y0, 100.0),
+        "Shift mid-drag keeps the proportions: {shifted:?}"
+    );
+    assert!(shifted != free, "Shift changed the preview");
+    // Shift let go and Alt pressed, still without a move: the box scales about its center.
+    run(&mut app, vec![], egui::Modifiers::ALT);
+    let about_center = bounds(&app);
+    assert!(close(about_center.center().x, 150.0) && close(about_center.center().y, 150.0), "Alt mid-drag scales about the center: {about_center:?}");
+    assert!(close(about_center.x1, 220.0) && close(about_center.y1, 240.0), "the dragged handle stays under the pointer: {about_center:?}");
+    // Both let go: back to the free scale.
+    run(&mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(bounds(&app), free, "letting the modifiers go undoes them");
+    run(&mut app, vec![button(to, false)], egui::Modifiers::NONE);
+    assert_eq!(bounds(&app), free, "the release commits the scale the modifiers left");
+}
+
 /// #834: a bezier drag's preview follows every position the pointer is seen at. egui's frame
 /// delta is zero in the frame the pointer comes back into the window after leaving it
 /// (`PointerGone` forgets where it was), so a drag gated on it kept the preview where the

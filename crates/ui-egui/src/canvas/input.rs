@@ -19,7 +19,16 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // double-taps) where it was seen last (#491).
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     let view = app.view_info();
-    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view };
+    // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
+    // without moving the mouse (Alt switches the Shape Builder to erase mode), and sends a tool's
+    // drag in progress again where the pointer is, so Shift and Alt take effect mid-drag (#4711).
+    let mods_changed = ui.data_mut(|d| {
+        let id = egui::Id::unique("canvas-mods");
+        let prev = d.get_temp::<egui::Modifiers>(id);
+        d.insert_temp(id, m);
+        prev.is_some_and(|prev| prev != m)
+    });
+    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, mods_changed };
     touch_gestures(app, ui, rect, view);
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
     // tool's press is dropped, as a right-click presses nothing.
@@ -27,14 +36,6 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         drop_press(app, ui, view);
     }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
-    // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
-    // without moving the mouse (Alt switches the Shape Builder to erase mode).
-    let mods_changed = ui.data_mut(|d| {
-        let id = egui::Id::unique("canvas-mods");
-        let prev = d.get_temp::<egui::Modifiers>(id);
-        d.insert_temp(id, m);
-        prev.is_some_and(|prev| prev != m)
-    });
     // Where the tool hovers: the pointer over the canvas itself, not over a floating panel, a menu,
     // a popup or a dialog drawn on top of it ([`on_canvas`]).
     let hover_tool = hover.filter(|p| on_canvas(ui, resp, *p));
@@ -177,6 +178,8 @@ struct Pointing<'a> {
     xf: Xf,
     v: View,
     view: vectorcraft_engine::ViewInfo,
+    /// A modifier was pressed or let go since the frame before.
+    mods_changed: bool,
 }
 
 /// Zoom around the pointer, and scroll ([`wheel`]); a trackpad rotation turns the view. Returns the pointer, the
@@ -291,7 +294,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
 
 /// A gesture held at `p`: the view follows, or the tool gets drag events.
 fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) {
-    let Pointing { resp, rect, pointer, m, space, xf, view, .. } = *f;
+    let Pointing { resp, rect, pointer, m, space, xf, view, mods_changed, .. } = *f;
     // Where the pointer was in the frame before: a zoom marquee moved with Space follows it.
     let before: Option<Pos2> = ui.data(|dd| dd.get_temp(drag_pos_id()));
     ui.data_mut(|dd| dd.insert_temp(drag_pos_id(), p));
@@ -360,8 +363,12 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             // mouse's, a pen's on X11 among them, take the host's latest. Other tools get
             // the last position only, so a costly drag preview runs once a frame.
             let moves = tool_frame_moves(ui, app);
+            // Shift or Alt pressed or let go with the pointer still: a drag already under way gets
+            // its last position again, so the modifier takes effect at once (#4711). A press that
+            // has not dragged yet stays a click.
+            let dragged = ui.data(|dd| dd.get_temp::<Point>(tool_drag_doc_id()).is_some());
             // A frame whose pointer ends where the last one did still moved in between.
-            if tool_drag_moved(ui, &xf, p, pointer) || !moves.is_empty() {
+            if tool_drag_moved(ui, &xf, p, pointer) || !moves.is_empty() || (mods_changed && dragged) {
                 for (at, force) in moves {
                     let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
                     dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure }, view);
