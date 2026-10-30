@@ -1,14 +1,14 @@
 //! Object → Blend → Blend Options (also the Blend tool's double-click, Alt-click and toolbar
 //! button): Spacing (Smooth Color, Specified Steps or Specified Distance) with its value,
 //! Orientation (Align to Page or Align to Path), Spine (Auto, Always or Never), the Blend panel's
-//! easing (Type, Ramp, Midpoint and the independent color Shift), and Direction and Reverse Spine,
+//! easing (Type, Ramp and the independent color Shift), and Direction and Reverse Spine,
 //! opened on the selected blend's options and previewed live on it; OK keeps the preview as one
 //! undo step (`object.blend.options`). With no blend selected it sets the options new blends start
 //! with (the easing is per blend).
 //!
 //! Fields: `spacing` (`smooth` | `steps` | `distance`), `steps` (1..1000), `distance` (pt),
 //! `orientation` (`page` | `path`), `spineMode` (`auto` | `always` | `never`), `easingType`,
-//! `ramp`, `midpoint`, `colorShift`, `preview`, and `__target` (`blend` or `defaults`, from
+//! `ramp`, `colorShift`, `preview`, and `__target` (`blend` or `defaults`, from
 //! `object.blend.info`).
 
 use egui::{CornerRadius, Sense, Stroke, Vec2, pos2, vec2};
@@ -30,17 +30,22 @@ const LABEL_W: f32 = 82.0;
 /// Spacing modes: (value, label).
 pub(crate) const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("steps", "Specified Steps"), ("distance", "Specified Distance")];
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Blend Options").into(), body, confirm, preview: true, min_width: 300.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Blend Options").into(),
+    body,
+    confirm,
+    preview: true,
+    min_width: 420.0,
+    max_width: Some(460.0),
+    ..DialogSpec::FORM
+};
 
 /// Open Blend Options on the selected blend's options (else those new blends start with).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut fields = app.session.execute("object.blend.info", &json!({})).map_err(|e| e.to_string())?;
     let target = fields["target"].clone();
     let Some(o) = fields.as_object_mut() else { return Err("no blend options".into()) };
-    o.retain(|k, _| {
-        matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "spineMode" | "easingType" | "ramp" | "midpoint" | "colorShift")
-    });
+    o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation" | "spineMode" | "easingType" | "ramp" | "colorShift"));
     o.insert("__target".into(), target);
     o.insert("preview".into(), json!(true));
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -64,7 +69,6 @@ fn params(d: &Dialog) -> Value {
     if on_blend(d) {
         p["easingType"] = json!(d.str("easingType"));
         p["ramp"] = json!(d.f64("ramp", 0.0));
-        p["midpoint"] = json!(d.f64("midpoint", 50.0));
         p["colorShift"] = json!(d.f64("colorShift", 0.0));
     }
     p
@@ -136,13 +140,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             let mut ramp = d.f64("ramp", 0.0);
             if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
                 d.fields.insert("ramp".into(), json!(ramp));
-            }
-        });
-        ui.add_space(6.0);
-        widgets::label_row(ui, tl!("Midpoint:"), LABEL_W, |ui| {
-            let mut midpoint = d.f64("midpoint", 50.0);
-            if ui.add(egui::Slider::new(&mut midpoint, 1.0..=99.0).suffix("%")).changed() {
-                d.fields.insert("midpoint".into(), json!(midpoint));
             }
         });
         ui.add_space(6.0);
@@ -294,25 +291,17 @@ mod tests {
         app.run("ui.blendOptions", json!({})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert!(d.str("easingType") == "easeIn", "the easing rows read the blend");
-        // Type, Ramp, Midpoint and the color Shift preview like the panel's.
+        // Type, Ramp and the color Shift preview like the panel's.
         let d = app.ui.dialog.as_mut().unwrap();
         d.fields.insert("easingType".into(), json!("easeOut"));
         d.fields.insert("ramp".into(), json!(40.0));
-        d.fields.insert("midpoint".into(), json!(25.0));
         d.fields.insert("colorShift".into(), json!(-20.0));
         frame(&mut app);
         let s = spec(&app, id);
-        assert_eq!(
-            (s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, (s.ease.midpoint * 100.0) as i32, s.color_shift as i32),
-            ("easeOut", 40, 25, -20),
-            "previewed"
-        );
+        assert_eq!((s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, s.color_shift as i32), ("easeOut", 40, -20), "previewed");
         crate::dialogs::confirm(&mut app).unwrap();
         let s = spec(&app, id);
-        assert_eq!(
-            (s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, (s.ease.midpoint * 100.0) as i32, s.color_shift as i32),
-            ("easeOut", 40, 25, -20)
-        );
+        assert_eq!((s.ease.kind.id(), (s.ease.ramp * 100.0) as i32, s.color_shift as i32), ("easeOut", 40, -20));
     }
 
     #[test]

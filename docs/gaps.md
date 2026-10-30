@@ -418,7 +418,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   rectangle, with the image's transform kept; each point takes the average colour and opacity of the picture around it
   (#1676). A linked image is refused, as the public documentation has it.
 - **Partial:** blend easing and spine (#1124, 30.7): Window › Blend has Type (Ease In, Ease Out, Ease In Out,
-  Ease Out In), Ramp 0–100%, Midpoint 1–99% and independent color Shift and Spine (Auto, Always, Never); the Type and Ramp move the
+  Ease Out In), Ramp 0–100% and independent color Shift and Spine (Auto, Always, Never); the Type and Ramp move the
   steps between any two keys, spine or not, while Spine Never takes the spine off the distribution and the
   canvas, Always runs the steps along the straight lines between the keys, and Auto follows a replaced spine or
   Align to Path. With a blend selected, the Blend tool and the Selection tool show its
@@ -426,10 +426,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   and up — the pointer's height is the count on an exponential scale (a box height covers 1–1000
   steps, and the handle keeps its place when the box rotates) and it rests where the count lands
   instead of pinning to the top — switching a Smooth Color or Distance blend to Specified Steps with
-  the first drag — and, on the blend's spine, the Ease knob at the blend's midpoint (the step-count pair's halfway step:
-  drag it to move where the 50% step lands) with a linked Ramp handle above it (its distance from the knob the
-  easing's strength) and the Colour handle below, each drag one undo step in step with the panel, hovering a
-  handle naming it on a pill. The Blend Options dialog carries the same controls as the panel. The step
+  the first drag. The Blend Options dialog carries the same controls as the panel. The step
   positions and Align to Path's angles come from the spine's own bezier, so a blend with many steps keeps
   turning smoothly instead of in polyline jumps.
   The original polynomial distributions approximate the public description; easing is one curve for the whole
@@ -650,6 +647,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | G1: Blend Options dialog no longer spans the window — capped at 460 pt wide (min 420). Reverted the easing canvas handles (Ease knob, linked Ramp, Colour) and the Midpoint slider from panel and dialog; midpoint clamp back to 0.05–0.95. The step-count knob still rests at its count's height on the fixed 1–1000 exponential scale. Direction and Reverse Spine buttons remain in panel and dialog. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
 | 2026-10-30 | minor | G1: blend step-count knob now rests at a height that matches the count on a fixed 1–1000 exponential scale (1 at the bottom of the box, 1000 at the top) instead of always pinning to the top corner, so a blend with few steps sits low; dragging follows the pointer live and the knob stays at the released count's height. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
 | 2026-10-29 | minor | G1: Blend panel and Blend Options parity: Midpoint slider (1–99%) added to both, easing ungated from Spine so Type/Ramp/Midpoint/Shift show whenever a blend is selected; the dialog gains Direction (dc-swap) and Reverse Spine buttons that cancel the live preview, roll it back, run the command as its own undo step, then re-preview the fields; estimate unchanged |
 | 2026-10-28 | minor | G1: blend handles pass two: the Ease knob is the blend's midpoint (where the 50% step lands) and the linked Ramp handle shapes the easing to it, so the knob controls the base point instead of the curve twice; Type and Ramp move the steps between any two keys, so the Ease, linked Ramp and Colour handles show in every spine mode; the step-count knob sits at the box's top corner during a drag's value and returns there when let go, and its chevrons draw over its white fill; spine positions and Align to Path angles come from the bezier itself, so many steps turn smoothly instead of in polyline jumps; estimate unchanged |

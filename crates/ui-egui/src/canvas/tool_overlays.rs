@@ -318,14 +318,12 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
 }
 
 /// The on-canvas handles of a selected live blend: the step-count handle on the selection's
-/// bounding box's right edge (white with up/down chevrons; its height is the count), and the Ease
-/// knob on the spine with the linked Ramp handle above it and the Colour handle below (white with
-/// a dark outline, the Colour knob's middle the accent).
-/// Hovering one names it on a pill; the drag's own value label comes from the tool. Visible with
+/// bounding box's right edge (white with up/down chevrons; its height is the count).
+/// Hovering it names it on a pill; the drag's own value label comes from the tool. Visible with
 /// the Selection tool (the one blend selected whole) and with the Blend tool (every selected
 /// blend).
 pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    use vectorcraft_tools::blendhandles::{BlendHandles, BlendPart, HANDLE_RADIUS, RAMP_RADIUS, hit_part};
+    use vectorcraft_tools::blendhandles::{BlendHandles, BlendPart, HANDLE_RADIUS, hit_part};
     let tool = app.session.tool_id();
     if tool != "selection" && tool != "blend" {
         return;
@@ -340,11 +338,6 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
     if handles.is_empty() {
         return;
     }
-    let t = Tokens::get(p.ctx());
-    let knob = |p: &egui::Painter, at: egui::Pos2, radius: f32| {
-        p.circle_filled(at, radius, KNOB_FILL);
-        p.circle_stroke(at, radius, Stroke::new(2.0, KNOB_STROKE));
-    };
     let dragging = app.session.tool_blend_handle();
     for h in &handles {
         // The chevrons of the step count, in the knob (over its fill, under its outline). While
@@ -360,14 +353,6 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
             p.line_segment([m, m + vec2(w, dir * d)], Stroke::new(1.5, KNOB_STROKE));
         }
         p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, KNOB_STROKE));
-        if let Some(e) = h.easing_handles() {
-            let (ease, ramp, color) = (xf.to_screen(e.ease), xf.to_screen(e.ramp), xf.to_screen(e.color));
-            p.line_segment([ease, ramp], Stroke::new(1.5, KNOB_STROKE));
-            knob(p, ease, HANDLE_RADIUS);
-            knob(p, ramp, RAMP_RADIUS);
-            knob(p, color, HANDLE_RADIUS);
-            p.circle_filled(color, 2.5, t.accent);
-        }
     }
     // Hovering a handle names it, until a drag takes over.
     if app.session.tool_busy() {
@@ -378,25 +363,6 @@ pub(super) fn blend_handles_overlay(app: &mut VectorcraftApp, p: &egui::Painter,
     let Some(h) = handles.get(i) else { return };
     let (at, text) = match part {
         BlendPart::Steps => (h.steps_at, tl!("Modify Steps").to_string()),
-        BlendPart::Ease | BlendPart::Ramp | BlendPart::Color => {
-            let Some(e) = h.easing_handles() else { return };
-            let values = |n: &vectorcraft_doc::Node| match &n.kind {
-                vectorcraft_doc::NodeKind::Blend { spec, .. } => Some((spec.ease.midpoint * 100.0, spec.ease.ramp * 100.0, spec.color_shift)),
-                _ => None,
-            };
-            let at = match part {
-                BlendPart::Ease => e.ease,
-                BlendPart::Ramp => e.ramp,
-                _ => e.color,
-            };
-            let (at, text) = match (part, st.doc.node(h.id).and_then(values)) {
-                (BlendPart::Ease, Some((mid, _, _))) => (at, format!("{} {} %", tl!("Midpoint:"), mid.round())),
-                (BlendPart::Ramp, Some((_, ramp, _))) => (at, format!("{} {} %", tl!("Ease:"), ramp.round())),
-                (_, Some((_, _, shift))) => (at, format!("{} {}{} %", tl!("Shift Colors"), if shift < 0.0 { "−" } else { "" }, shift.abs().round())),
-                _ => return,
-            };
-            (at, text)
-        }
     };
     hover_pill(p, xf.to_screen(at) + vec2(14.0, 14.0), &text);
 }

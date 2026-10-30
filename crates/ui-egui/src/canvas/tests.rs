@@ -7132,11 +7132,10 @@ fn text_threads_skip_the_links_of_a_frame_in_perspective() {
     assert_eq!(o.iter().filter(|x| matches!(x, Overlay::Line { .. })).count(), 7);
 }
 
-/// A selected blend shows its on-canvas handles with the Selection tool: the step-count handle at
-/// the top of the bounding box's right edge, and on the spine the Ease knob with its linked Ramp
-/// handle and the Colour handle; hovering one names it, and every spine mode keeps them.
+/// A selected blend shows its on-canvas step-count handle with the Selection tool: the handle
+/// rests at the height matching the blend's count, and hovering it names it.
 #[test]
-fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
+fn a_selected_blend_shows_its_step_handle_and_hovering_names_it() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app.ui.task_bar = false;
@@ -7150,8 +7149,7 @@ fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
-    // The knobs draw white with a dark outline; the step-count knob rests at the box's top corner,
-    // and the linked Ramp knob hangs above the Ease knob.
+    // Only the step-count knob draws, white with a dark outline.
     let stroke = super::tool_overlays::KNOB_STROKE;
     let knobs = |app: &mut VectorcraftApp| -> Vec<egui::Pos2> {
         shapes(app, &ctx)
@@ -7166,27 +7164,23 @@ fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
     let frame_box = app.selection_box();
     let st = app.session.active().unwrap();
     let h = vectorcraft_tools::blendhandles::BlendHandles::selected(&st.doc, &st.selection, frame_box, xf.zoom).unwrap();
-    let e = h.easing_handles().unwrap();
     let at = knobs(&mut app);
-    assert_eq!(at.len(), 4, "{at:?}");
+    assert_eq!(at.len(), 1, "{at:?}");
     near(&at, "the steps handle", xf.to_screen(h.steps_at));
-    near(&at, "the ease handle", xf.to_screen(e.ease));
-    near(&at, "the ramp handle", xf.to_screen(e.ramp));
-    near(&at, "the colour handle", xf.to_screen(e.color));
-    // Hovering the ease handle names its midpoint, on a pill.
+    // Hovering the steps handle names it, on a pill.
     let raw = |events: Vec<egui::Event>| egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw(vec![egui::Event::PointerMoved(xf.to_screen(Point::new(60.0, 10.0)))]), |ui| show(&mut app, ui));
+    let mut out = ctx.run_ui(raw(vec![egui::Event::PointerMoved(xf.to_screen(h.steps_at))]), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Midpoint: 50"), "the ease handle's hover label in {text}");
-    // Spine Never keeps them: the easing moves the steps between any two keys.
+    assert!(text.contains("Modify Steps"), "the steps handle's hover label in {text}");
+    // Spine Never keeps the step handle: it still shows.
     app.run("object.blend.options", json!({"spineMode": "never"})).unwrap();
     let at = knobs(&mut app);
-    assert_eq!(at.len(), 4, "{at:?}");
+    assert_eq!(at.len(), 1, "{at:?}");
     assert!(at.iter().any(|q| q.distance(xf.to_screen(h.steps_at)) < 2.0), "{at:?}");
 }
 

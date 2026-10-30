@@ -93,7 +93,7 @@ pub struct BlendEase {
     pub kind: BlendEaseType,
     #[serde(default, deserialize_with = "blend_ramp")]
     pub ramp: f64,
-    /// Where the blend's halfway step sits along a pair of keys (0.01-0.99, 0.5 at the middle):
+    /// Where the blend's halfway step sits along a pair of keys (0.05-0.95, 0.5 at the middle):
     /// the on-canvas Ease knob's place.
     #[serde(default = "half", deserialize_with = "blend_midpoint", skip_serializing_if = "midpoint_is_half")]
     pub midpoint: f64,
@@ -110,7 +110,7 @@ fn midpoint_is_half(m: &f64) -> bool {
 
 fn blend_midpoint<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     let v = serde_json::Value::deserialize(d)?;
-    Ok(v.as_f64().filter(|n| n.is_finite()).map_or(0.5, |n| n.clamp(0.01, 0.99)))
+    Ok(v.as_f64().filter(|n| n.is_finite()).map_or(0.5, |n| n.clamp(0.05, 0.95)))
 }
 
 impl Default for BlendEase {
@@ -137,7 +137,7 @@ impl BlendEase {
     pub fn apply(&self, u: f64) -> f64 {
         let u = if u.is_finite() { u.clamp(0.0, 1.0) } else { 0.0 };
         let r = if self.ramp.is_finite() { self.ramp.clamp(0.0, 1.0) } else { 0.0 };
-        let m = if self.midpoint.is_finite() { self.midpoint.clamp(0.01, 0.99) } else { 0.5 };
+        let m = if self.midpoint.is_finite() { self.midpoint.clamp(0.05, 0.95) } else { 0.5 };
         let half = |v: f64| {
             let eased = match self.kind {
                 BlendEaseType::In => v * v,

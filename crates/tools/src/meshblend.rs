@@ -326,44 +326,7 @@ mod tests {
         s.set([b]);
         let c = cx(&d, &s, &p);
         let mut t = create("blend").unwrap();
-        // The ease handle on the spine, the linked ramp handle above it, the colour handle below.
-        assert_eq!(t.cursor(&c, Point::new(60.0, 10.0), Mods::default()), Cursor::Move);
-        assert_eq!(t.cursor(&c, Point::new(60.0, 0.0), Mods::default()), Cursor::Move);
-        assert_eq!(t.cursor(&c, Point::new(60.0, 24.0), Mods::default()), Cursor::Move);
         assert_eq!(t.cursor(&c, Point::new(115.0, 5.0), Mods::default()), Cursor::BlendObject);
-        // Dragging the ease handle toward the second key eases out; the undo step opens with the
-        // drag's first change and the count label travels beside the pointer.
-        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 10.0)), vec![]);
-        assert!(t.busy());
-        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 80.0, 10.0));
-        assert!(
-            matches!(&acts[..], [Action::Begin(name), Action::Preview(id, p)]
-                if name == "Blend Options" && id == "object.blend.options"
-                    && (p["midpoint"].as_f64().unwrap_or_default() - 70.0).abs() < 0.1),
-            "{acts:?}"
-        );
-        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "Midpoint 70%")), "{:?}", t.overlays(&c));
-        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 80.0, 10.0)), vec![Action::Commit]);
-        assert!(!t.busy());
-        // The linked ramp handle raises the ramp on its own: its distance from the ease knob.
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 0.0));
-        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 60.0, -16.0));
-        assert!(
-            matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options" && p["easingType"] == json!("easeIn") && p["ramp"] == json!(100.0)),
-            "{acts:?}"
-        );
-        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 60.0, -16.0));
-        // The colour-shift handle moves independently: 60 % of the way leans the colours late.
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 24.0));
-        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 70.0, 24.0));
-        assert!(
-            matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options"
-                    && (p["colorShift"].as_f64().unwrap_or_default() + 22.02).abs() < 0.01),
-            "{acts:?}"
-        );
-        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 70.0, 24.0));
         // The steps handle rides the box's right edge, its height the count on the fixed
         // 1..1000 scale: the bottom is 1, the top is 1000, halfway up is ~32, and half a box
         // above the top reaches the 1000 cap. The knob follows the pointer while it drags.
@@ -390,16 +353,6 @@ mod tests {
         );
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "1000")), "{:?}", t.overlays(&c));
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 142.0, -10.0));
-        // Never keeps the easing handles: the easing moves the steps between any two keys.
-        let (d2, b2) = doc_with_blend(BlendSpineMode::Never);
-        let (mut s2, p2) = (Selection::default(), paint());
-        s2.set([b2]);
-        let c2 = cx(&d2, &s2, &p2);
-        assert_eq!(
-            crate::blendhandles::BlendDrag::hit_any(&c2, Point::new(60.0, 10.0), Mods::default()).unwrap().grab(),
-            (b2, crate::blendhandles::BlendPart::Ease)
-        );
-        assert_eq!(t.cursor(&c2, Point::new(60.0, 10.0), Mods::default()), Cursor::Move);
     }
 
     #[test]

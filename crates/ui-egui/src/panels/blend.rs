@@ -1,11 +1,11 @@
 //! Blend panel (Window → Blend): Make, the Spacing, Orientation and Spine of the selected blend
-//! (with no blend selected, the options new blends start with), Type, Ramp, Midpoint and Shift,
+//! (with no blend selected, the options new blends start with), Type, Ramp and Shift,
 //! Reverse Front to Back, Reverse Spine, Replace Spine, Expand and Release. Each control runs its
 //! Object → Blend command (`object.blend.make`, `object.blend.options` and the others), so a
 //! change of the selected blend's spacing, orientation, spine or easing shows on the canvas at
 //! once as one undo step. Make is dimmed until two or more objects are selected. Spacing and
-//! Orientation are dimmed until a blend or two or more objects are selected, Type, Ramp, Midpoint
-//! and Shift until a blend is selected, and the other buttons until a blend is selected.
+//! Orientation are dimmed until a blend or two or more objects are selected, Type, Ramp and Shift
+//! until a blend is selected, and the other buttons until a blend is selected.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -125,12 +125,6 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
             let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
             if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
                 change = Some(json!({"ramp": ramp}));
-            }
-        });
-        widgets::label_row(ui, tl!("Midpoint:"), LABEL_W, |ui| {
-            let mut midpoint = info["midpoint"].as_f64().unwrap_or(50.0);
-            if ui.add(egui::Slider::new(&mut midpoint, 1.0..=99.0).suffix("%")).changed() {
-                change = Some(json!({"midpoint": midpoint}));
             }
         });
     });
