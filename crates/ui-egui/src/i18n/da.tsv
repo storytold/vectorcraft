@@ -1144,7 +1144,7 @@ lighting	Light	Lys
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Træk for at frigøre værktøjslinjen
-	Drag to the window's left edge to dock	Træk til vinduets venstre kant for at fastgøre
+	Drag to the window's left or right edge to dock	Træk til vinduets venstre eller højre kant for at fastgøre
 	Crystallize	Krystallisér
 	Add Anchor Point Tool	Tilføj ankerpunkt-værktøj
 	Anchor Point Tool	Ankerpunktværktøj
@@ -5652,3 +5652,4 @@ anchor	Points:	Punkter:
 	Simplify Anchors (Keep Shape)	Forenkl ankerpunkter (bevar form)
 	Deep Ungroup	Afgruppér alle niveauer
 	Rejoin Path Pieces	Forbind kurvestykker igen
+@msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`

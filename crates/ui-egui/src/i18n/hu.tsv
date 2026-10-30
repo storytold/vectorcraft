@@ -1105,7 +1105,7 @@ font-technology	Variable	Változó
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
 	Drag to float the toolbar	Húzd el az eszköztár lebegtetéséhez
 	Drag to move	Húzással áthelyezhető
-	Drag to the window's left edge to dock	Dokkoláshoz húzd az ablak bal szélére
+	Drag to the window's left or right edge to dock	Dokkoláshoz húzd az ablak bal vagy jobb szélére
 	Step up or down	Léptetés fel vagy le
 	Drag values or labels. Double-click a value to type.	Húzd az értékeket vagy a címkéket. Gépeléshez kattints duplán egy értékre.
 	Draw	Rajzolás
@@ -5733,3 +5733,4 @@ anchor	Points:	Pontok:
 	Simplify Anchors (Keep Shape)	Horgonypontok egyszerűsítése (alak megtartása)
 	Deep Ungroup	Csoportbontás minden szinten
 	Rejoin Path Pieces	Útvonaldarabok újraegyesítése
+@msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`

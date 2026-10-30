@@ -412,7 +412,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     let id = drawer_id();
     let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(WIDTH, 200.0), |r| r.size());
-    let x = (bar.right() + GAP).min(screen.right() - size.x - GAP).max(screen.left());
+    let x = crate::toolbar::beside(bar, size.x, GAP, crate::toolbar::room(app, ctx).shrink(GAP));
     // Never above the toolbar's top: higher up are the window's title bar (and on macOS its
     // buttons) and the bars under it.
     let top = bar.top().max(screen.top() + GAP);

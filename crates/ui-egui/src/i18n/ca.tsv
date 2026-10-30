@@ -1204,7 +1204,7 @@
 	Drag to float as a toolbar	Arrossega per surar com a barra d’eines
 	Drag to float the toolbar	Arrossega per fer surar la barra d’eines
 	Drag to move	Arrossega per moure
-	Drag to the window's left edge to dock	Arrossega fins a la vora esquerra de la finestra per acoblar
+	Drag to the window's left or right edge to dock	Arrossega fins a la vora esquerra o dreta de la finestra per acoblar
 	Drag values or labels. Double-click a value to type.	Arrossega els valors o les etiquetes. Fes doble clic en un valor per escriure’l.
 	Draw	Dibuixa
 	Draw Behind	Dibuixa al darrere
@@ -5738,3 +5738,4 @@ anchor	Points:	Punts:
 	Simplify Anchors (Keep Shape)	Simplifica els punts d’ancoratge (mantén la forma)
 	Deep Ungroup	Desagrupa tots els nivells
 	Rejoin Path Pieces	Torna a unir els trossos de traçat
+@msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`

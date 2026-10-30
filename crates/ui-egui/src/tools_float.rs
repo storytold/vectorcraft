@@ -1,12 +1,13 @@
-//! The Tools panel floats by its title bar and docks again on the window's left edge
-//! ([`crate::toolbar`]). It stays outside the docking layout: dragging its title bar out of the
-//! docked panel floats it under the pointer, a floating panel's title bar moves it, and a release
-//! over the strip along the window's left edge (lit up) docks it there. Escape or losing the
+//! The Tools panel floats by its title bar and docks again on the window's left edge, or on the
+//! right, left of the panels ([`crate::toolbar`]). It stays outside the docking layout: dragging
+//! its title bar out of the docked panel floats it under the pointer, a floating panel's title bar
+//! moves it, and a release over the strip along the window's left edge, or the strip left of the
+//! panels or along the window's right edge (lit up), docks it there. Escape or losing the
 //! window's focus puts it back where the drag began.
 //!
-//! `window.panel.float {panel: "tools"}` / `window.panel.dock {panel: "tools"}` do the same for
-//! agents. Its position is kept with the preferences and in user workspaces, and a position saved
-//! on a bigger window is clamped into this one when drawn.
+//! `window.panel.float {panel: "tools"}` / `window.panel.dock {panel: "tools", side?}` do the same
+//! for agents. Its position and side are kept with the preferences and in user workspaces, and a
+//! position saved on a bigger window is clamped into this one when drawn.
 
 use egui::{CornerRadius, Id, Pos2, Rect, Stroke, Vec2, pos2, vec2};
 use serde_json::{Value, json};
@@ -27,6 +28,8 @@ struct Move {
     grab: Vec2,
     from: Pos2,
     original: Option<[f32; 2]>,
+    /// The side it was docked on before the drag.
+    right: bool,
 }
 
 fn move_id() -> Id {
@@ -36,6 +39,18 @@ fn move_id() -> Id {
 /// The strip along the window's left edge where the Tools panel docks, as last laid out.
 pub(crate) fn tools_zone_id() -> Id {
     Id::unique("tools-float-zone")
+}
+
+/// The strip left of the panels (along the canvas's right edge) where the Tools panel docks on the
+/// right, as last laid out.
+pub(crate) fn tools_zone_right_id() -> Id {
+    Id::unique("tools-float-zone-right")
+}
+
+/// The canvas's right edge as last laid out: a Tools panel docked right stands just inside it,
+/// left of the panels.
+pub(crate) fn canvas_right_id() -> Id {
+    Id::unique("tools-float-canvas-right")
 }
 
 /// `pos` moved so a panel of `size` stays inside `screen` (a position saved on a bigger window).
@@ -52,7 +67,7 @@ fn gesture_allowed(ctx: &egui::Context) -> bool {
 
 fn start(app: &VectorcraftApp, ctx: &egui::Context, grab: Vec2) {
     let Some(from) = ctx.input(|i| i.pointer.press_origin().or(i.pointer.interact_pos())) else { return };
-    ctx.data_mut(|d| d.insert_temp(move_id(), Move { grab, from, original: app.ui.toolbar_pos }));
+    ctx.data_mut(|d| d.insert_temp(move_id(), Move { grab, from, original: app.ui.toolbar_pos, right: app.ui.toolbar_right }));
 }
 
 /// The Tools panel's title bar was pressed (`title`, the panel's bounds `bounds`): docked, dragging
@@ -75,9 +90,17 @@ pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &
     }
 }
 
-/// The docking strip under `at`, if any.
-fn drop_zone(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
-    ctx.data(|d| d.get_temp::<Rect>(tools_zone_id())).filter(|r| r.contains(at))
+/// The docking strip under `at`, if any, and whether it docks the panel on the right. Left of the
+/// panels or anywhere along the window's right edge, it docks left of the panels, so that strip
+/// lights up.
+fn drop_zone(ctx: &egui::Context, at: Pos2) -> Option<(Rect, bool)> {
+    let (left, right) = ctx.data(|d| (d.get_temp::<Rect>(tools_zone_id()), d.get_temp::<Rect>(tools_zone_right_id())));
+    if let Some(r) = left.filter(|r| r.contains(at)) {
+        return Some((r, false));
+    }
+    let r = right?;
+    let at_edge = at.x >= ctx.content_rect().right() - crate::toolbar::WIDTH && r.y_range().contains(at.y);
+    (r.contains(at) || at_edge).then_some((r, true))
 }
 
 fn highlight(ctx: &egui::Context, zone: Rect) {
@@ -93,6 +116,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(m) = ctx.data(|d| d.get_temp::<Move>(move_id())) else { return };
     if !gesture_allowed(ctx) {
         app.ui.toolbar_pos = m.original;
+        app.ui.toolbar_right = m.right;
         ctx.data_mut(|d| d.remove::<Move>(move_id()));
         return;
     }
@@ -106,14 +130,15 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         {
             app.ui.toolbar_pos = Some([p.x, p.y]);
         }
-        if let Some(zone) = zone {
+        if let Some((zone, _)) = zone {
             highlight(ctx, zone);
         }
         return;
     }
     ctx.data_mut(|d| d.remove::<Move>(move_id()));
-    if zone.is_some() {
+    if let Some((_, right)) = zone {
         app.ui.toolbar_pos = None;
+        app.ui.toolbar_right = right;
     }
 }
 
@@ -142,9 +167,23 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if !(raw.eq_ignore_ascii_case("tools") || raw.eq_ignore_ascii_case("toolbar")) {
         return None;
     }
-    Some(position(p).map(|at| {
+    // Docking: at the window's left edge, or on the right left of the panels (default: the side it
+    // docked at last).
+    let right = match p.get("side").and_then(Value::as_str) {
+        None => Ok(app.ui.toolbar_right),
+        // `Start` and `End`, as panels take them, too.
+        Some(s) if s.eq_ignore_ascii_case("left") || s.eq_ignore_ascii_case("start") => Ok(false),
+        Some(s) if s.eq_ignore_ascii_case("right") || s.eq_ignore_ascii_case("end") => Ok(true),
+        Some(s) => Err(format!("side is left or right, not `{s}`")),
+    };
+    Some(position(p).and_then(|at| {
+        let right = right?;
         app.ui.toolbar_pos = float.then(|| at.map_or(TOOLS_AT, |p| [p.x, p.y]));
         app.ui.toolbar |= float;
-        json!({ "panel": "tools", "floating": float, "pos": app.ui.toolbar_pos })
+        if !float {
+            app.ui.toolbar_right = right;
+        }
+        let side = if app.ui.toolbar_right { "right" } else { "left" };
+        Ok(json!({ "panel": "tools", "floating": float, "pos": app.ui.toolbar_pos, "side": side }))
     }))
 }

@@ -3411,7 +3411,7 @@ axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
-	Drag to the window's left edge to dock	Arraste até a borda esquerda da janela para encaixar
+	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	the selection has no gradient fill	a seleção não tem gradiente de preenchimento
@@ -5664,3 +5664,4 @@ anchor	Points:	Pontos:
 	Simplify Anchors (Keep Shape)	Simplificar Pontos de Ancoragem (Manter Forma)
 	Deep Ungroup	Desagrupar Todos os Níveis
 	Rejoin Path Pieces	Reunir Partes de Caminho
+@msg	side is left or right, not `{s}`	side é left ou right, não `{s}`

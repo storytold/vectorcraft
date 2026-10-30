@@ -3738,7 +3738,7 @@ theme	Appearance	Erscheinungsbild
 	Float Panel	Bedienfeld ablösen
 	Dock Panel	Bedienfeld andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
-	Drag to the window's left edge to dock	Zum Andocken an den linken Fensterrand ziehen
+	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen
 	Float Tool Group	Werkzeuggruppe ablösen
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -5329,3 +5329,4 @@ anchor	Points:	Punkte:
 	Simplify Anchors (Keep Shape)	Ankerpunkte vereinfachen (Form erhalten)
 	Deep Ungroup	Alle Gruppierungsebenen aufheben
 	Rejoin Path Pieces	Pfadstücke wieder zusammenfügen
+@msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
