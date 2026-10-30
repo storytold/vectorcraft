@@ -5,6 +5,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
 pub(super) mod adjust;
+mod ai_open_path;
 mod appearance;
 mod areafit;
 mod assets;

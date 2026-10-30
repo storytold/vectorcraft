@@ -959,17 +959,17 @@ dependencies = [
 [[package]]
 name = "craft-docpath"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -992,7 +992,7 @@ dependencies = [
 [[package]]
 name = "craft-keymap"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "egui",
  "serde",
@@ -1002,7 +1002,7 @@ dependencies = [
 [[package]]
 name = "craft-pdf"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "hayro-interpret",
  "hayro-syntax",
@@ -1013,7 +1013,7 @@ dependencies = [
 [[package]]
 name = "craft-print"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "craft-winprint-gdi",
  "miniz_oxide 0.9.1",
@@ -1026,7 +1026,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
@@ -1047,7 +1047,7 @@ dependencies = [
 [[package]]
 name = "craft-update"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "chrono",
  "dunce",
@@ -1072,7 +1072,7 @@ dependencies = [
 [[package]]
 name = "craft-window"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "egui",
  "objc2 0.6.5",
@@ -2172,7 +2172,7 @@ checksum = "9f4d0e94ddd48749f06bbe4e5389fb9799a0c45bcaf00495042076ef05e3241a"
 [[package]]
 name = "hayro-cmap"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "brotli",
  "hayro-postscript",
@@ -2181,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "hayro-interpret"
 version = "0.7.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "bitflags 2.13.2",
  "hayro-cmap",
@@ -2199,7 +2199,7 @@ dependencies = [
 [[package]]
 name = "hayro-jbig2"
 version = "0.3.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
@@ -2217,12 +2217,12 @@ dependencies = [
 [[package]]
 name = "hayro-postscript"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 
 [[package]]
 name = "hayro-syntax"
 version = "0.7.2"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "flate2",
  "hayro-ccitt",
@@ -2830,7 +2830,7 @@ dependencies = [
 [[package]]
 name = "krilla"
 version = "0.8.2"
-source = "git+https://github.com/storytold/craft-libs?rev=92d392cff132eaf53e13afff77f38b5c11b73aa0#92d392cff132eaf53e13afff77f38b5c11b73aa0"
+source = "git+https://github.com/storytold/craft-libs?rev=67cbb60759c76c53469d304f8d99c172b03c3a1b#67cbb60759c76c53469d304f8d99c172b03c3a1b"
 dependencies = [
  "base64 0.22.1",
  "bumpalo",
