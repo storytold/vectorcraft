@@ -400,6 +400,13 @@ impl VectorcraftApp {
             egui_extras::install_image_loaders(ctx);
             self.styled = true;
         }
+        // Han ideographs follow the interface language: the scripts share the code points and differ
+        // only in the glyph forms, so the language - not the character - picks the face. This runs
+        // every pass, not only while the fonts are being installed: changing the interface language
+        // must reach the database too. The setter is a no-op unless the language changed, and only a
+        // real change invalidates the render caches.
+        let cjk = vectorcraft_text::CjkPreference::for_language(self.ui_language().code());
+        vectorcraft_text::FontDb::global().set_cjk_preference(cjk);
         if !self.fonts_ready {
             // `set_fonts` applies at once only while no text was laid out in this pass; when it
             // defers, the next pass applies it and this leaves input and drawing to that pass.
@@ -515,5 +522,23 @@ impl VectorcraftApp {
             self.issue_screenshots(&ctx);
         }
         let _ = json!(null);
+    }
+}
+
+/// The Han preference has to follow a language change made after the first frame, so it is set
+/// outside `ui_setup`'s `fonts_ready` branch - that branch is entered once. (#1424 review)
+#[cfg(test)]
+mod preference_wiring_tests {
+    #[test]
+    fn the_han_preference_is_set_outside_the_fonts_ready_branch() {
+        let source = include_str!("app.rs");
+        let setup = source.split("fn ui_setup").nth(1).expect("ui_setup exists");
+        let setup = setup.split("\n    }\n").next().expect("ui_setup's body");
+        let call = setup.find("set_cjk_preference").expect("ui_setup sets the Han preference");
+        let guard = setup.find("if !self.fonts_ready").expect("the font install guard");
+        assert!(
+            call < guard,
+            "set_cjk_preference sits inside the fonts_ready branch: a language changed after the first frame would keep the old face"
+        );
     }
 }

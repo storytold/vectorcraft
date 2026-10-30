@@ -2,9 +2,10 @@
 use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::cache::Catalog;
+#[cfg(not(target_arch = "wasm32"))]
+use super::cjk::is_han_script;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
 use super::glyph_pen::{FlipPen, svg_drawn};
-#[cfg(not(target_arch = "wasm32"))]
 use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
@@ -374,6 +375,22 @@ impl FontDb {
         if let Some(f) = self.loaded_fallback(c, exclude, weight, italic) {
             return Some(f);
         }
+        // Han is a preference, not a shaping need: the scripts share the code points and differ only
+        // in the forms, so it decides which *system* face to load when nothing loaded covers `c`. It
+        // must never load one ahead of a face the database already draws with, or opening an existing
+        // document in another language would redraw it (#1424 review). A language that names no Han
+        // script leaves this order exactly as it was.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let prefer = self.cjk_preference().families();
+            if !prefer.is_empty()
+                && is_han_script(c)
+                && self.load_families(c, prefer)
+                && let Some(f) = self.family_fallback(c, exclude, prefer, weight, italic)
+            {
+                return Some(f);
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         self.system_fallback(c);
         // Another lookup may have loaded the face while this one searched. Loading no new
@@ -546,5 +563,68 @@ impl FontDb {
         let key = (face.id, gid, if used { coloured } else { None });
         self.colours.lock().unwrap_or_else(std::sync::PoisonError::into_inner).keep(key, content.clone());
         content
+    }
+}
+
+/// The Han preference against real system fonts: it picks the *system* face to load, and never
+/// outranks a face the database already draws with (#1424).
+#[cfg(test)]
+mod preference_tests {
+    use super::super::cjk::{CjkPreference, HAN_SIMPLIFIED_FAMILIES, HAN_TRADITIONAL_FAMILIES};
+    use super::*;
+
+    /// A character that an installed family of `families` covers and that no already-loaded face
+    /// answers with, so the preference is what decides the lookup. Which character that is depends on
+    /// what the machine has installed, so it is found rather than assumed.
+    fn probe_for(families: &[&str]) -> Option<char> {
+        const CANDIDATES: &[char] = &['東', '文', '中', '國', '頁', '汉', '语', '骨', '龍'];
+        CANDIDATES.iter().copied().find(|c| {
+            FontDb::for_system_scan_test().loaded_fallback(*c, 0, 400.0, false).is_none()
+                && FontDb::for_system_scan_test().load_families(*c, families)
+        })
+    }
+
+    /// A preference decides which *system* face to load; it never loads one ahead of a face the
+    /// database already draws with, so an existing document opened in another language looks the
+    /// same. (Moving the preference ahead of `loaded_fallback` fails this: the probe is a character
+    /// the preference's own family covers, so it would answer instead.)
+    #[test]
+    fn a_preference_does_not_outrank_a_face_that_is_already_loaded() {
+        let db = FontDb::for_system_scan_test();
+        let Some(probe) = probe_for(HAN_TRADITIONAL_FAMILIES) else {
+            eprintln!("skipped: no Traditional family covers a candidate, or a bundled face already does");
+            return;
+        };
+        let Some(before) = db.face_covering(probe) else { return };
+        let loaded: Vec<String> = db.read_faces().iter().map(|f| f.family.clone()).collect();
+        db.set_cjk_preference(CjkPreference::TraditionalChinese);
+        let after = db.face_covering(probe).expect("the face that covered it before");
+        assert_eq!(before.id, after.id, "the preference must not change which loaded face draws {probe:?}");
+        for family in HAN_TRADITIONAL_FAMILIES {
+            assert!(
+                !db.is_loaded(family) || loaded.iter().any(|f| f.eq_ignore_ascii_case(family)),
+                "the preference loaded {family} although a loaded face already covered {probe:?}"
+            );
+        }
+    }
+
+    /// With no loaded face to answer with, the preference decides which installed family is loaded: a
+    /// Traditional interface must not be served the Simplified family, and the other way round.
+    /// (Removing the preference step fails this: the general list answers, and it holds no Traditional
+    /// name.)
+    #[test]
+    fn a_preference_picks_the_system_face_to_load() {
+        for (preference, expected) in
+            [(CjkPreference::TraditionalChinese, HAN_TRADITIONAL_FAMILIES), (CjkPreference::SimplifiedChinese, HAN_SIMPLIFIED_FAMILIES)]
+        {
+            let Some(probe) = probe_for(expected) else {
+                eprintln!("skipped: no {preference:?} family covers a candidate, or a bundled face already does");
+                continue;
+            };
+            let db = FontDb::for_system_scan_test();
+            db.set_cjk_preference(preference);
+            let face = db.face_covering(probe).expect("the preference's family covers it");
+            assert!(expected.contains(&face.family.as_str()), "{preference:?} was served {}", face.family);
+        }
     }
 }
