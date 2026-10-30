@@ -278,3 +278,24 @@ fn ribbon_keeps_joined_words_on_one_baseline() {
         assert!(off < 0.05, "word {w}: the middle of its baseline is {off} pt off the path");
     }
 }
+
+/// No effect reflects a glyph: all the way round a circle, where the path runs leftward too, each
+/// glyph's transform keeps its handedness (a positive determinant), for Latin and Arabic.
+#[test]
+fn no_effect_mirrors_a_glyph() {
+    let [_, circle] = paths();
+    let mut texts = vec![("Around and around the circle path we go, all the way round", CharStyle { size: 18.0, ..CharStyle::default() })];
+    if let Some(face) = arabic_face() {
+        texts.push(("سكة للتصميم سكة للتصميم سكة للتصميم سكة للتصميم", CharStyle { size: 18.0, ..style(&face) }));
+    }
+    for effect in PathEffect::ALL {
+        for (text, style) in &texts {
+            let (_, l) = point_and_on_path(text, style.clone(), &circle, effect);
+            let drawn: Vec<_> = l.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).collect();
+            assert!(drawn.len() > 20, "{effect:?}: {}", drawn.len());
+            for g in drawn {
+                assert!(g.xf.determinant() > 0.0, "{effect:?} {text}: the glyph at byte {} is mirrored", g.byte);
+            }
+        }
+    }
+}

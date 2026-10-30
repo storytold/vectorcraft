@@ -370,16 +370,21 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         // Glyph space: x along the advance, y down from the baseline; `pre` maps it onto the path.
         let pre = match t.path_effect {
             PathEffect::Rainbow => Affine::translate(p.to_vec2()) * Affine::rotate(angle) * half,
-            // x axis along the tangent, y axis stays vertical.
-            PathEffect::Skew => Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, 1.0, 0.0, 0.0]) * half,
-            // x axis stays horizontal (facing the path's direction), y axis perpendicular to the path.
+            // x axis along the tangent, y axis stays vertical: down where the path runs rightward, up
+            // where it runs leftward, so the glyph turns over there (as Rainbow's does) instead of
+            // being mirrored.
+            PathEffect::Skew => {
+                let down = if dir.x < 0.0 { -1.0 } else { 1.0 };
+                Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, down, 0.0, 0.0]) * half
+            }
+            // x axis stays horizontal (facing the path's direction), y axis perpendicular to the path,
+            // on the glyphs' underside: where the path runs leftward the glyph turns over, never
+            // mirrored.
             // A block of joined glyphs stands on its first glyph's baseline, so its joins meet.
             PathEffect::Ribbon3d => {
                 let dir = ribbon_dir;
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
-                Affine::translate(ribbon_p.to_vec2())
-                    * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0])
-                    * Affine::translate((ribbon_x, rise))
+                Affine::translate(ribbon_p.to_vec2()) * Affine::new([sx, 0.0, -dir.y, dir.x, 0.0, 0.0]) * Affine::translate((ribbon_x, rise))
             }
             PathEffect::StairStep => Affine::translate(stair_at.to_vec2()) * Affine::translate((0.0, rise)),
             // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
