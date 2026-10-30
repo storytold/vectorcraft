@@ -21,6 +21,7 @@ mod added;
 mod alternates;
 mod build;
 mod cache;
+mod cjk;
 mod composite;
 mod db;
 mod dirs;
@@ -39,6 +40,8 @@ pub(crate) use added::recently_added_of;
 pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
+pub use cjk::CjkPreference;
+
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
@@ -126,6 +129,8 @@ pub struct FontDb {
     /// The lookups of the custom character sets of the composite fonts held or lent, each built
     /// when first used.
     custom_classes: Mutex<composite::CustomClasses>,
+    /// Which script's Han ideographs the interface asked for (see [`FontDb::set_cjk_preference`]).
+    cjk: RwLock<CjkPreference>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.
