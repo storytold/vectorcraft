@@ -276,39 +276,44 @@ fn ribbon_sets_every_glyph_on_the_path_at_its_size() {
 
 /// 3D Ribbon: the glyphs of a joined Arabic word share one baseline (the same line through each
 /// glyph's origin, in the same direction), so neighbours meet where they join, and the middle of
-/// that baseline lies on the path.
+/// that baseline lies on the path, on an open curve and on a circle.
 #[test]
 fn ribbon_keeps_joined_words_on_one_baseline() {
     let Some(face) = arabic_face() else {
         eprintln!("no Arabic font installed: skipped");
         return;
     };
-    let [curve, _] = paths();
-    let (_, l) = point_and_on_path(TEXT, style(&face), &curve, PathEffect::Ribbon3d);
-    let word = |b: usize| TEXT.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
-    for w in 0..2 {
-        let g: Vec<_> =
-            l.glyphs.iter().filter(|g| TEXT.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()) && word(g.byte) == w).collect();
-        assert!(g.len() > 1);
-        let (first, rest) = g.split_first().unwrap();
-        let [a, b, c, d, ..] = first.xf.as_coeffs();
-        for h in rest {
-            let [ha, hb, hc, hd, ..] = h.xf.as_coeffs();
-            assert!((ha - a).abs() < 1e-9 && (hb - b).abs() < 1e-9 && (hc - c).abs() < 1e-9 && (hd - d).abs() < 1e-9, "word {w}: one frame");
-            // Its origin lies on the first glyph's baseline: no step across the path.
-            let local = first.xf.inverse() * (h.xf * Point::ZERO);
-            assert!(local.y.abs() < 1e-6, "word {w}: a glyph {} font units off the word's baseline", local.y);
+    for curve in paths() {
+        let (_, l) = point_and_on_path(TEXT, style(&face), &curve, PathEffect::Ribbon3d);
+        let word = |b: usize| TEXT.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
+        for w in 0..2 {
+            let g: Vec<_> =
+                l.glyphs.iter().filter(|g| TEXT.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()) && word(g.byte) == w).collect();
+            assert!(g.len() > 1);
+            let (first, rest) = g.split_first().unwrap();
+            let [a, b, c, d, ..] = first.xf.as_coeffs();
+            for h in rest {
+                let [ha, hb, hc, hd, ..] = h.xf.as_coeffs();
+                assert!((ha - a).abs() < 1e-9 && (hb - b).abs() < 1e-9 && (hc - c).abs() < 1e-9 && (hd - d).abs() < 1e-9, "word {w}: one frame");
+                // Its origin lies on the first glyph's baseline: no step across the path.
+                let local = first.xf.inverse() * (h.xf * Point::ZERO);
+                assert!(local.y.abs() < 1e-6, "word {w}: a glyph {} font units off the word's baseline", local.y);
+            }
+            let scale = {
+                let [a, b, ..] = first.xf.as_coeffs();
+                a.hypot(b)
+            };
+            let width: f64 = g.iter().map(|g| g.advance).sum::<f64>() / scale;
+            let left = g.iter().map(|h| first.xf.inverse() * (h.xf * Point::ZERO)).map(|p| p.x).fold(f64::INFINITY, f64::min);
+            let mid = first.xf * Point::new(left + width / 2.0, 0.0);
+            let off = curve
+                .to_bezpath()
+                .segments()
+                .map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq)
+                .fold(f64::INFINITY, f64::min)
+                .sqrt();
+            assert!(off < 0.05, "word {w}: the middle of its baseline is {off} pt off the path");
         }
-        let scale = {
-            let [a, b, ..] = first.xf.as_coeffs();
-            a.hypot(b)
-        };
-        let width: f64 = g.iter().map(|g| g.advance).sum::<f64>() / scale;
-        let left = g.iter().map(|h| first.xf.inverse() * (h.xf * Point::ZERO)).map(|p| p.x).fold(f64::INFINITY, f64::min);
-        let mid = first.xf * Point::new(left + width / 2.0, 0.0);
-        let off =
-            curve.to_bezpath().segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
-        assert!(off < 0.05, "word {w}: the middle of its baseline is {off} pt off the path");
     }
 }
 
