@@ -906,9 +906,10 @@ fn round_corners_also_rounds_where_a_curve_meets_a_line() {
 }
 
 #[test]
-fn round_corners_keeps_straight_corners_as_they_were() {
-    // The D's straight corners are rounded as before, next to the new cuts: same anchors, same
-    // quarter-circle handles, and the path still starts at its first corner's rounding.
+fn round_corners_keeps_right_angles_as_they_were() {
+    // The D's straight right-angle corners are rounded as before the effect used Live Corners'
+    // cut: same anchors, same quarter-circle handles, and the path still starts at its first
+    // corner's rounding.
     use vectorcraft_geom::Anchor;
     let p = Point::new;
     let k = 8.0 * shapes::KAPPA;
@@ -918,6 +919,24 @@ fn round_corners_keeps_straight_corners_as_they_were() {
     assert_eq!(a[1], Anchor::with_handles(p(8.0, 0.0), p(8.0 - k, 0.0), p(8.0, 0.0)));
     // A path of straight corners only is rounded exactly as before.
     assert_eq!(stylize::round_corners(&square(), 10.0).subpaths[0].anchors.len(), 8);
+}
+
+#[test]
+fn round_corners_radius_is_how_far_the_cut_reaches_along_each_side() {
+    // An acute straight-sided corner gets a true circular arc too: the cut meets each side
+    // `radius` from the corner, as before, and the arc's own radius follows from the angle.
+    let p = Point::new;
+    let tri = PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 20.0), p(0.0, 40.0)], true));
+    let out = run("stylize.roundCorners", json!({"radius": 10}), &tri);
+    assert_eq!(out.anchor_count(), 6);
+    let tip = p(100.0, 20.0);
+    let near_tip: Vec<f64> = out.subpaths[0].anchors.iter().map(|a| a.p.distance(tip)).filter(|d| *d < 20.0).collect();
+    assert_eq!(near_tip.len(), 2, "{near_tip:?}");
+    assert!(near_tip.iter().all(|d| close(*d, 10.0, 1e-6)), "{near_tip:?}");
+    // No corner is left: every cut meets both sides smoothly.
+    assert!(vectorcraft_geom::corners::path_corners(&out).is_empty(), "{out:?}");
+    // A NaN radius leaves the path as it is.
+    assert_eq!(stylize::round_corners(&tri, f64::NAN), tri);
 }
 
 #[test]
