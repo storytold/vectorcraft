@@ -6,7 +6,7 @@
 //! the Type tool […] and click anywhere on the object's path", [Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html);
 //! "To create horizontal text along a path, select the Type tool or the Type On A Path tool […] If
 //! the path is closed, rather than open, you must use the Type On A Path tool", [Create type on a
-//! path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html)),
+//! path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)),
 //! Alt or not: type along a closed path stays with Type on a Path.
 //! Area Type / Type on a Path: click a path to turn it into a text frame or a baseline
 //! (`text.createInPath`). While type is being edited, a click that lands on no type only
