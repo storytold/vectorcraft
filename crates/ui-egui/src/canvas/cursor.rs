@@ -119,7 +119,8 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::PencilNew => C::Crosshair,
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
         Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
-        Cursor::TypeVertical => C::VerticalText,
+        Cursor::TypeVertical | Cursor::TypeAreaVertical | Cursor::TypeOnPathVertical => C::VerticalText,
+        Cursor::TypeArea | Cursor::TypeOnPath => C::Text,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
