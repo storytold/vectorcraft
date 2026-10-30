@@ -131,6 +131,10 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) 
         .then_some(out)
 }
 
+/// How far Gravity lets a glyph's vertical edges lean off the path's normal toward the path's
+/// centre: their cosine (45°), so glyphs stay legible where the centre lies near the path.
+const GRAVITY_MIN_COS: f64 = std::f64::consts::FRAC_1_SQRT_2;
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -341,7 +345,11 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             }
             PathEffect::StairStep => Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise)),
             // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
-            // up side, and never closer than ~17° to the baseline so glyphs stay legible).
+            // up side, and leaning at most 45° off the path's normal, [`GRAVITY_MIN_COS`]). The
+            // glyph keeps its height across the path and so its size: the y axis is as long as it
+            // takes to stand one unit off the path. On a long, flat path the centre lies near the
+            // path, so most glyphs lean as far as they may: at the former 73° and squashed to 0.3
+            // of their height they were slivers.
             PathEffect::Gravity => {
                 let n = Vec2::new(dir.y, -dir.x);
                 let mut up = p - centre;
@@ -349,10 +357,11 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
                 if up.dot(n) < 0.0 {
                     up = -up;
                 }
-                if up.dot(n) < 0.3 {
+                if up.dot(n) < GRAVITY_MIN_COS {
                     let along = up - n * up.dot(n);
-                    up = n * 0.3 + along / along.hypot().max(1e-9) * (1.0 - 0.09f64).sqrt();
+                    up = n * GRAVITY_MIN_COS + along / along.hypot().max(1e-9) * (1.0 - GRAVITY_MIN_COS * GRAVITY_MIN_COS).sqrt();
                 }
+                let up = up / up.dot(n);
                 Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * half
             }
         };
