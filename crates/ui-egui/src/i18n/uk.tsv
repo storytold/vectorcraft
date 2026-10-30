@@ -3847,7 +3847,7 @@ axis	Both	Обидві
 	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
-	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
+	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
@@ -5343,3 +5343,4 @@ anchor	Points:	Точки:
 	Simplify Anchors (Keep Shape)	Спростити опорні точки (зберегти форму)
 	Deep Ungroup	Розгрупувати всі рівні
 	Rejoin Path Pieces	З’єднати частини контурів
+@msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

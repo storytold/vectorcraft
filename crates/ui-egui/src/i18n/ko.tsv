@@ -3784,7 +3784,7 @@ axis	Both	양쪽
 	Float Panel	패널 분리
 	Dock Panel	패널 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
-	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
+	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
 	Services	서비스
 	Hide VectorCraft	VectorCraft 숨기기
@@ -5326,3 +5326,4 @@ anchor	Points:	포인트:
 	Simplify Anchors (Keep Shape)	앵커 포인트 단순화(모양 유지)
 	Deep Ungroup	모든 단계 그룹 해제
 	Rejoin Path Pieces	패스 조각 다시 연결
+@msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)

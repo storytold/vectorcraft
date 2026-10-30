@@ -1155,7 +1155,7 @@ lighting	Light	Światło
 	Toggle single/double column	Przełącz jedną/dwie kolumny
 	W:	S:
 	Drag to float the toolbar	Przeciągnij, aby odpiąć pasek narzędzi
-	Drag to the window's left edge to dock	Przeciągnij do lewej krawędzi okna, aby zadokować
+	Drag to the window's left or right edge to dock	Przeciągnij do lewej lub prawej krawędzi okna, aby zadokować
 	Crystallize	Krystalizacja
 	Add Anchor Point Tool	Narzędzie Dodaj punkt kontrolny
 	Anchor Point Tool	Narzędzie Punkt kontrolny
@@ -5601,3 +5601,4 @@ anchor	Points:	Punkty:
 	Simplify Anchors (Keep Shape)	Uprość punkty kontrolne (zachowaj kształt)
 	Deep Ungroup	Rozgrupuj wszystkie poziomy
 	Rejoin Path Pieces	Ponownie połącz fragmenty ścieżek
+@msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`

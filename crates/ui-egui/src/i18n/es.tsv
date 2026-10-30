@@ -3818,7 +3818,7 @@ axis	Both	Ambos
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
-	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
+	Drag to the window's left or right edge to dock	Arrastrar al borde izquierdo o derecho de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -5689,3 +5689,4 @@ anchor	Points:	Puntos:
 	Simplify Anchors (Keep Shape)	Simplificar puntos de ancla (mantener forma)
 	Deep Ungroup	Desagrupar todos los niveles
 	Rejoin Path Pieces	Volver a unir fragmentos de trazado
+@msg	side is left or right, not `{s}`	side es left o right, no `{s}`

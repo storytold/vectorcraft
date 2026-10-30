@@ -1158,7 +1158,7 @@ lighting	Light	Licht
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Sleep om de werkbalk zwevend te maken
-	Drag to the window's left edge to dock	Sleep naar de linkerrand van het venster om te dokken
+	Drag to the window's left or right edge to dock	Sleep naar de linker- of rechterrand van het venster om te dokken
 	Crystallize	Kristalliseren
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
@@ -5696,3 +5696,4 @@ anchor	Points:	Punten:
 	Simplify Anchors (Keep Shape)	Ankerpunten vereenvoudigen (vorm behouden)
 	Deep Ungroup	Alle groeperingsniveaus opheffen
 	Rejoin Path Pieces	Padstukken opnieuw verbinden
+@msg	side is left or right, not `{s}`	side is left of right, niet `{s}`

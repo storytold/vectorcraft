@@ -3741,7 +3741,7 @@ axis	Both	Båda
 	Float Panel	Gör panelen flytande
 	Dock Panel	Docka panel
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
-	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
+	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
@@ -5771,3 +5771,4 @@ anchor	Points:	Punkter:
 	Simplify Anchors (Keep Shape)	Förenkla ankarpunkter (behåll formen)
 	Deep Ungroup	Dela upp grupper på alla nivåer
 	Rejoin Path Pieces	Foga samman banbitar igen
+@msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`

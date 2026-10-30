@@ -3854,7 +3854,7 @@ axis	Both	Оба
 	Float Panel	Сделать панель плавающей
 	Dock Panel	Прикрепить панель
 	Drag to float the toolbar	Перетащите, чтобы сделать панель инструментов плавающей
-	Drag to the window's left edge to dock	Перетащите к левому краю окна для прикрепления
+	Drag to the window's left or right edge to dock	Перетащите к левому или правому краю окна для прикрепления
 	Float Tool Group	Сделать группу инструментов плавающей
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -5725,3 +5725,4 @@ anchor	Points:	Точки:
 	Simplify Anchors (Keep Shape)	Упростить опорные точки (сохранить форму)
 	Deep Ungroup	Разгруппировать все уровни
 	Rejoin Path Pieces	Соединить части контуров
+@msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`

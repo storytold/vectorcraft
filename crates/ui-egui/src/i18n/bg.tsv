@@ -3741,7 +3741,7 @@ axis	Both	И двете
 	Float Panel	Плаващ панел
 	Dock Panel	Закотвен панел
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
-	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
+	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
@@ -5637,3 +5637,4 @@ anchor	Points:	Точки:
 	Simplify Anchors (Keep Shape)	Опростяване на опорните точки (запазване на формата)
 	Deep Ungroup	Разгрупиране на всички нива
 	Rejoin Path Pieces	Повторно свързване на части от пътища
+@msg	side is left or right, not `{s}`	side е left или right, а не `{s}`

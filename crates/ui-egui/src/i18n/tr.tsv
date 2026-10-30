@@ -3636,7 +3636,7 @@ axis	Both	Her İkisi
 	Float Panel	Paneli Yüzer Yap
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
-	Drag to the window's left edge to dock	Sabitlemek için pencerenin sol kenarına sürükleyin
+	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
 @msg	select some type first	önce bir tür seçin
@@ -5705,3 +5705,4 @@ anchor	Points:	Noktalar:
 	Simplify Anchors (Keep Shape)	Bağlantı Noktalarını Basitleştir (Şekli Koru)
 	Deep Ungroup	Tüm Düzeylerde Grubu Çöz
 	Rejoin Path Pieces	Yol Parçalarını Yeniden Birleştir
+@msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil

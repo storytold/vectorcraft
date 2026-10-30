@@ -3946,7 +3946,7 @@ theme	Appearance	Εμφάνιση
 	Drag to float as a toolbar	Σύρετε για αποδέσμευση ως γραμμή εργαλείων
 	Put back in the toolbar	Επαναφορά στη γραμμή εργαλείων
 	Drag to float the toolbar	Σύρετε για αποδέσμευση της γραμμής εργαλείων
-	Drag to the window's left edge to dock	Σύρετε στο αριστερό άκρο του παραθύρου για σύνδεση
+	Drag to the window's left or right edge to dock	Σύρετε στο αριστερό ή στο δεξί άκρο του παραθύρου για σύνδεση
 	Float Tool Group	Αποδέσμευση ομάδας εργαλείων
 @msg	a PostScript error ({name} in `{op}`)	σφάλμα PostScript ({name} στην εντολή `{op}`)
 @msg	a PostScript error ({name} in `{op}`), in {procs}	σφάλμα PostScript ({name} στην εντολή `{op}`), στις διαδικασίες {procs}
@@ -5699,3 +5699,4 @@ anchor	Points:	Σημεία:
 	Simplify Anchors (Keep Shape)	Απλοποίηση σημείων αγκύρωσης (διατήρηση σχήματος)
 	Deep Ungroup	Κατάργηση ομαδοποίησης σε όλα τα επίπεδα
 	Rejoin Path Pieces	Επανένωση τμημάτων διαδρομών
+@msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`

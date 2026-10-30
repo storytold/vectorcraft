@@ -413,6 +413,13 @@ impl VectorcraftApp {
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        // A Tools panel docked right stands here, at the canvas's right edge: between the canvas
+        // and the panels, or at the window's edge while they are hidden.
+        let canvas_right = ui.max_rect().right();
+        ui.ctx().data_mut(|d| d.insert_temp(crate::tools_float::canvas_right_id(), canvas_right));
+        if self.ui.toolbar && self.ui.screen_mode < 3 && toolbar::docked_right(self) {
+            toolbar::show(self, ui);
+        }
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
@@ -480,7 +487,9 @@ impl VectorcraftApp {
             // Keeps the previous frame's value valid for menus drawn above, before the bars.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
-        if self.ui.toolbar && self.ui.screen_mode < 3 {
+        // Docked right, the Tools panel stands left of the panels, inside the canvas's area
+        // (`canvas_area`).
+        if self.ui.toolbar && self.ui.screen_mode < 3 && !toolbar::docked_right(self) {
             toolbar::show(self, ui);
         }
         panels::library_panel::tidy(self);

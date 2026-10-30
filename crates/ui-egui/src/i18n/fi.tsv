@@ -1204,7 +1204,7 @@ lighting	Light	Valo
 	X:	X:
 	Y:	Y:
 	Drag to float the toolbar	Kelluta työkaluriviä vetämällä
-	Drag to the window's left edge to dock	Telakoi vetämällä ikkunan vasempaan reunaan
+	Drag to the window's left or right edge to dock	Telakoi vetämällä ikkunan vasempaan tai oikeaan reunaan
 	Crystallize	Kiteytä
 	Add Anchor Point Tool	Lisää ankkuripiste -työkalu
 	Anchor Point Tool	Ankkuripistetyökalu
@@ -5778,3 +5778,4 @@ anchor	Points:	Pisteet:
 	Simplify Anchors (Keep Shape)	Yksinkertaista ankkuripisteet (säilytä muoto)
 	Deep Ungroup	Pura kaikki ryhmitystasot
 	Rejoin Path Pieces	Yhdistä polun palat uudelleen
+@msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`

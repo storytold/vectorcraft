@@ -51,6 +51,9 @@ pub struct Workspace {
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Where the Tools panel floats (built-in workspaces: docked).
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel stands on the right, left of the panels (built-in workspaces: left).
+    #[serde(default)]
+    pub toolbar_right: bool,
     /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
@@ -187,6 +190,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         docking_icons: Default::default(),
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
+        toolbar_right: ui.toolbar_right,
         dock_width: ui.dock_width,
     }
 }
@@ -210,6 +214,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.docking = w.docking.clone().filter(crate::panel_docking::valid);
     ui.docking_hidden = w.docking_hidden.clone();
     ui.toolbar_pos = w.toolbar_pos;
+    ui.toolbar_right = w.toolbar_right;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
     ui.flyout = None;

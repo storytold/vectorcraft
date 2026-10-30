@@ -989,7 +989,7 @@ font-technology	Variable	Biến thiên
 	Drag to float as a toolbar	Kéo để thả nổi thanh công cụ
 	Drag to float the toolbar	Kéo để thả nổi thanh công cụ
 	Drag to move	Kéo để di chuyển
-	Drag to the window's left edge to dock	Kéo đến cạnh trái cửa sổ để neo
+	Drag to the window's left or right edge to dock	Kéo đến cạnh trái hoặc phải cửa sổ để neo
 	Step up or down	Tăng hoặc giảm một bước
 	Drag values or labels. Double-click a value to type.	Kéo giá trị hoặc nhãn. Bấm đúp vào giá trị để nhập.
 	Draw	Vẽ
@@ -5345,3 +5345,4 @@ anchor	Points:	Điểm:
 	Simplify Anchors (Keep Shape)	Đơn giản hóa điểm neo (giữ hình dạng)
 	Deep Ungroup	Bỏ nhóm mọi cấp
 	Rejoin Path Pieces	Nối lại các mảnh đường dẫn
+@msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`

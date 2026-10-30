@@ -3858,7 +3858,7 @@ axis	Both	Entrambi
 	Float Panel	Rendi mobile pannello
 	Dock Panel	Ancora pannello
 	Drag to float the toolbar	Trascina per rendere mobile la barra degli strumenti
-	Drag to the window's left edge to dock	Trascina sul bordo sinistro della finestra per ancorare
+	Drag to the window's left or right edge to dock	Trascina sul bordo sinistro o destro della finestra per ancorare
 	Float Tool Group	Rendi mobile gruppo strumenti
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -5363,3 +5363,4 @@ anchor	Points:	Punti:
 	Simplify Anchors (Keep Shape)	Semplifica punti di ancoraggio (mantieni forma)
 	Deep Ungroup	Separa tutti i livelli
 	Rejoin Path Pieces	Ricongiungi parti di tracciato
+@msg	side is left or right, not `{s}`	side è left o right, non `{s}`

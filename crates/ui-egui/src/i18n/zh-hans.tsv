@@ -4859,7 +4859,7 @@ axis	Both	两者
 	Float Panel	浮动面板
 	Dock Panel	停放面板
 	Drag to float the toolbar	拖动以浮动工具栏
-	Drag to the window's left edge to dock	拖到窗口左边缘以停放
+	Drag to the window's left or right edge to dock	拖到窗口左边缘或右边缘以停放
 	Float Tool Group	浮动工具组
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -5586,3 +5586,4 @@ anchor	Points:	点：
 	Simplify Anchors (Keep Shape)	简化锚点（保持形状）
 	Deep Ungroup	取消所有层级编组
 	Rejoin Path Pieces	重新连接路径片段
+@msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`

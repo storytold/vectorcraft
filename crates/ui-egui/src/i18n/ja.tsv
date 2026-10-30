@@ -3802,7 +3802,7 @@ axis	Both	両方
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
-	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
+	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
@@ -5432,3 +5432,4 @@ anchor	Points:	ポイント:
 	Simplify Anchors (Keep Shape)	アンカーポイントを単純化（形状を維持）
 	Deep Ungroup	すべての階層のグループ解除
 	Rejoin Path Pieces	パスの断片を再連結
+@msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
