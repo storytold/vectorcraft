@@ -332,14 +332,38 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     // being placed: where its baseline starts and how far along it the next glyph goes. A joined
     // word steps as one block, so its joins stay closed; other glyphs each step on their own.
     let mut stair: Option<(Point, f64)> = None;
-    for (g, &step) in sg.iter().zip(&steps).take(fit) {
+    // 3D Ribbon: each block of joined glyphs stands level on one baseline, centred on the path
+    // where the block's middle is: for each glyph, that point along the path and how far along
+    // the baseline (glyph space) from it the glyph starts. Other glyphs are blocks of one.
+    let joins = |g: &SGlyph| g.cursive && !g.ch.is_whitespace() && g.inline.is_none();
+    let mut ribbon: Vec<(f64, f64)> = Vec::with_capacity(fit);
+    {
+        let placed: Vec<(&SGlyph, f64)> = sg.iter().zip(&steps).take(fit).map(|(g, &step)| (g, step)).collect();
+        let (mut i, mut at) = (0, s0);
+        while let Some(&(first, _)) = placed.get(i) {
+            let n = if joins(first) { placed.get(i..).map_or(1, |rest| rest.iter().take_while(|(g, _)| joins(g)).count()) } else { 1 };
+            let block = placed.get(i..i + n).unwrap_or_default();
+            let along: f64 = block.iter().map(|(_, step)| step).sum();
+            let width: f64 = block.iter().map(|(g, _)| g.adv).sum();
+            let mut x = -width * 0.5;
+            for (g, _) in block {
+                ribbon.push((at + along * 0.5, x));
+                x += g.adv;
+            }
+            at += along;
+            i += n.max(1);
+        }
+    }
+    for (gi, (g, &step)) in sg.iter().zip(&steps).take(fit).enumerate() {
         let s = s0 + x;
-        let joined = g.cursive && !g.ch.is_whitespace() && g.inline.is_none();
+        let joined = joins(g);
         let stair_at = match stair.filter(|_| joined) {
             Some((base, along)) => base + Vec2::new(along, 0.0),
             None => ap.at(s).0,
         };
         stair = joined.then(|| stair.map_or((stair_at, g.adv), |(base, along)| (base, along + g.adv)));
+        let (ribbon_s, ribbon_x) = ribbon.get(gi).copied().unwrap_or((s + step * 0.5, -g.adv * 0.5));
+        let (ribbon_p, ribbon_dir) = ap.at(ribbon_s);
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
         let half = Affine::translate((-g.adv * 0.5, rise));
@@ -349,9 +373,13 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             // x axis along the tangent, y axis stays vertical.
             PathEffect::Skew => Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, 1.0, 0.0, 0.0]) * half,
             // x axis stays horizontal (facing the path's direction), y axis perpendicular to the path.
+            // A block of joined glyphs stands on its first glyph's baseline, so its joins meet.
             PathEffect::Ribbon3d => {
+                let dir = ribbon_dir;
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
-                Affine::translate(p.to_vec2()) * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0]) * half
+                Affine::translate(ribbon_p.to_vec2())
+                    * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0])
+                    * Affine::translate((ribbon_x, rise))
             }
             PathEffect::StairStep => Affine::translate(stair_at.to_vec2()) * Affine::translate((0.0, rise)),
             // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's

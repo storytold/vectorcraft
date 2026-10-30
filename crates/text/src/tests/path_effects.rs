@@ -209,3 +209,72 @@ fn stair_step_keeps_joined_words_on_one_baseline() {
     let first = |w: usize| words.iter().find(|(b, _)| word(*b) == w).map(|(_, y)| *y).unwrap_or_default();
     assert!((first(0) - first(1)).abs() > 0.5, "the two words step apart: {words:?}");
 }
+
+/// 3D Ribbon: every glyph keeps its width (horizontal edges stay horizontal, vertical edges stand
+/// across the path); a Latin glyph sits with the middle of its baseline on the path, and a joined
+/// Arabic word stands level on one baseline centred on the path, so its joins meet.
+#[test]
+fn ribbon_sets_every_glyph_on_the_path_at_its_size() {
+    for path in paths() {
+        let along = path.to_bezpath();
+        for (text, style) in texts() {
+            let (point, l) = point_and_on_path(text, style, &path, PathEffect::Ribbon3d);
+            for g in l.glyphs.iter().filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty())) {
+                let Some(p) = point.glyphs.iter().find(|p| p.byte == g.byte && p.gid == g.gid) else { continue };
+                let [a, b, ..] = g.xf.as_coeffs();
+                let [pa, pb, ..] = p.xf.as_coeffs();
+                assert!(
+                    (a.hypot(b) / pa.hypot(pb) - 1.0).abs() < 1e-6,
+                    "{text}: the glyph at byte {} is {} as wide",
+                    g.byte,
+                    a.hypot(b) / pa.hypot(pb)
+                );
+                // The middle of its baseline, in font units: half its advance.
+                let mid = g.xf * Point::new(g.advance / 2.0 / pa.hypot(pb), 0.0);
+                if !g.rtl {
+                    let off =
+                        along.segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+                    assert!(off < 0.05, "{text}: the glyph at byte {} stands {off} pt off the path", g.byte);
+                }
+            }
+        }
+    }
+}
+
+/// 3D Ribbon: the glyphs of a joined Arabic word share one baseline (the same line through each
+/// glyph's origin, in the same direction), so neighbours meet where they join, and the middle of
+/// that baseline lies on the path.
+#[test]
+fn ribbon_keeps_joined_words_on_one_baseline() {
+    let Some(face) = arabic_face() else {
+        eprintln!("no Arabic font installed: skipped");
+        return;
+    };
+    let [curve, _] = paths();
+    let (_, l) = point_and_on_path(TEXT, style(&face), &curve, PathEffect::Ribbon3d);
+    let word = |b: usize| TEXT.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
+    for w in 0..2 {
+        let g: Vec<_> =
+            l.glyphs.iter().filter(|g| TEXT.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()) && word(g.byte) == w).collect();
+        assert!(g.len() > 1);
+        let (first, rest) = g.split_first().unwrap();
+        let [a, b, c, d, ..] = first.xf.as_coeffs();
+        for h in rest {
+            let [ha, hb, hc, hd, ..] = h.xf.as_coeffs();
+            assert!((ha - a).abs() < 1e-9 && (hb - b).abs() < 1e-9 && (hc - c).abs() < 1e-9 && (hd - d).abs() < 1e-9, "word {w}: one frame");
+            // Its origin lies on the first glyph's baseline: no step across the path.
+            let local = first.xf.inverse() * (h.xf * Point::ZERO);
+            assert!(local.y.abs() < 1e-6, "word {w}: a glyph {} font units off the word's baseline", local.y);
+        }
+        let scale = {
+            let [a, b, ..] = first.xf.as_coeffs();
+            a.hypot(b)
+        };
+        let width: f64 = g.iter().map(|g| g.advance).sum::<f64>() / scale;
+        let left = g.iter().map(|h| first.xf.inverse() * (h.xf * Point::ZERO)).map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let mid = first.xf * Point::new(left + width / 2.0, 0.0);
+        let off =
+            curve.to_bezpath().segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+        assert!(off < 0.05, "word {w}: the middle of its baseline is {off} pt off the path");
+    }
+}
