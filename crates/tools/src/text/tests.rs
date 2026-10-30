@@ -817,9 +817,9 @@ fn the_pointer_shows_the_type_tool_shift_or_alt_switches_to() {
 }
 
 /// The plain Type tools make type in or along a path clicked on its outline: area type inside a
-/// closed path, type on a path along an open one or, with Alt held, along a closed one. A click away
-/// from paths still makes point type, a drag still draws a frame (even from a path's outline), and
-/// a click on existing type edits it. The pointer says which.
+/// closed path (Alt held or not: type along a closed path is Type on a Path's) and type on a path
+/// along an open one. A click away from paths still makes point type, a drag still draws a frame
+/// (even from a path's outline), and a click on existing type edits it. The pointer says which.
 #[test]
 fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
     let (mut d, rect, line) = doc_with_rect_and_line();
@@ -831,7 +831,7 @@ fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
         for (at, mods, path, mode, cursor) in [
             (on_rect, Mods::default(), rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
             (on_line, Mods::default(), line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
-            (on_rect, ALT, rect, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
+            (on_rect, ALT, rect, "area", if vertical { Cursor::TypeAreaVertical } else { Cursor::TypeArea }),
             (on_line, ALT, line, "onPath", if vertical { Cursor::TypeOnPathVertical } else { Cursor::TypeOnPath }),
         ] {
             assert_eq!(TypeTool::new(id).cursor(&c, Point::new(at.0, at.1), mods), cursor, "{id} {at:?} {mods:?}");
@@ -872,6 +872,25 @@ fn the_type_tool_makes_type_in_or_along_a_clicked_path() {
     let acts = gesture(&mut tool, &c, (100.0, 150.0), None, Mods::default(), Mods::default());
     assert!(made(&acts).is_none(), "{acts:?}");
     assert_eq!(tool.editing, Some(tid));
+}
+
+/// A guide is no path to set type in or along while guides are hidden or locked: the click makes
+/// point type, as it does on the selection tools' terms.
+#[test]
+fn the_type_tool_leaves_hidden_or_locked_guides_alone() {
+    let (mut d, rect, _) = doc_with_rect_and_line();
+    if let Some(NodeKind::Path { guide, .. }) = d.node_mut(rect).map(|n| &mut n.kind) {
+        *guide = true;
+    }
+    let (sel, p) = (Selection::default(), paint());
+    let mut c = cx(&d, &sel, &p);
+    c.guides = false;
+    assert_eq!(TypeTool::new("type").cursor(&c, Point::new(100.0, 150.0), Mods::default()), Cursor::Text);
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.create"), "{acts:?}");
+    c.guides = true;
+    let acts = gesture(&mut TypeTool::new("type"), &c, (100.0, 150.0), None, Mods::default(), Mods::default());
+    assert_eq!(made(&acts).map(|(cmd, _)| cmd), Some("text.createInPath"), "{acts:?}");
 }
 
 /// While type is being edited, Shift and Alt switch no tool: a frame dragged out is the tool

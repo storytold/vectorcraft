@@ -257,21 +257,21 @@ look = "The Text I-beam turned a quarter turn."
 [[cursor]]
 id = "TypeArea"
 group = "Type"
-shown_when = ["Type and Area Type over a closed path's outline, Alt up for Type: a click sets area type inside the path."]
+shown_when = ["Type over a closed path's outline, and Area Type over one with Alt up: a click sets area type inside the path."]
 hotspot = "The I-beam's centre."
 look = "The Text I-beam with a small badge below right: a square frame with three short lines of type in it."
 
 [[cursor]]
 id = "TypeAreaVertical"
 group = "Type"
-shown_when = ["Vertical Type and Vertical Area Type over a closed path's outline, Alt up for Vertical Type: a click sets vertical area type inside the path."]
+shown_when = ["Vertical Type over a closed path's outline, and Vertical Area Type over one with Alt up: a click sets vertical area type inside the path."]
 hotspot = "The I-beam's centre."
 look = "TypeArea turned a quarter turn."
 
 [[cursor]]
 id = "TypeOnPath"
 group = "Type"
-shown_when = ["Type over an open path's outline, or a closed one with Alt held; Type on a Path over any path's outline; Area Type over an open path with Alt held: a click sets type along the path."]
+shown_when = ["Type over an open path's outline; Type on a Path over any path's outline (Alt up); Area Type over an open path with Alt held: a click sets type along the path."]
 hotspot = "The I-beam's centre."
 look = "The Text I-beam with a small badge below right: a short smooth curve with a dot on it."
 

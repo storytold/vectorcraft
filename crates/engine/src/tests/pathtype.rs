@@ -278,21 +278,20 @@ fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
     assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
 }
 
-/// Type on a path made by clicking a path with the plain Type tool (an open path, or a closed one
-/// with Alt held) shows its brackets as soon as the Selection or Direct Selection tool is chosen,
-/// and its centre bracket, dragged across the path, flips it.
+/// Type on a path made by clicking a path with the plain Type tool (an open path) or Type on a
+/// Path (a closed one) shows its brackets as soon as the Selection or Direct Selection tool is
+/// chosen, and its centre bracket, dragged across the path, flips it.
 #[test]
 fn type_on_a_path_made_with_the_type_tool_has_brackets_at_once() {
     let v = ViewInfo::default();
-    let alt = Mods { alt: true, ..Mods::default() };
     for (tool, d, mods) in [
         ("selection", "M100 300 L500 300", Mods::default()),
         ("directSelection", "M100 300 L500 300", Mods::default()),
-        ("selection", "M100 300 L500 300 L500 500 L100 500 Z", alt),
+        ("selection", "M100 300 L500 300 L500 500 L100 500 Z", Mods::default()),
     ] {
         let mut s = session();
         s.execute("path.create", &json!({ "d": d })).unwrap();
-        s.select_tool("type", v).unwrap();
+        s.select_tool(if d.ends_with('Z') { "typeOnPath" } else { "type" }, v).unwrap();
         for kind in [PointerKind::Down, PointerKind::Up] {
             s.pointer(&PointerEvent::new(kind, 300.0, 300.0).with_mods(mods), v).unwrap();
         }
