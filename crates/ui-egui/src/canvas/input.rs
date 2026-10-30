@@ -389,7 +389,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
 
 /// A gesture released at `p`: the view settles, or the tool gets its up.
 fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) {
-    let Pointing { resp, rect, m, space, xf, view, .. } = *f;
+    let Pointing { resp, rect, m, space, xf, view, mods_changed, .. } = *f;
     // The last position the tool's drag got: none if the press never dragged.
     let last_drag: Option<Point> = ui.data(|dd| dd.get_temp(tool_drag_doc_id()));
     // Where the pointer was in the frame before: a zoom marquee moved with Space follows it.
@@ -432,10 +432,11 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             }
             // A move that came in the release's own frame shapes the preview first: the
             // tools commit the last preview, which should be where the pointer let go
-            // (#834). Only once the press has dragged, so a click's jitter stays a click
-            // (the Pen's corner anchor, no nudge with Direct Selection).
+            // (#834), with the modifiers held as it did (#4711). Only once the press has
+            // dragged, so a click's jitter stays a click (the Pen's corner anchor, no nudge
+            // with Direct Selection).
             if let Some(last) = last_drag
-                && last != xf.to_doc(p)
+                && (last != xf.to_doc(p) || mods_changed)
             {
                 let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
                 dispatch(app, &ev, view);

@@ -6144,6 +6144,45 @@ fn modifiers_changed_during_a_handle_drag_take_effect_without_a_move() {
     assert_eq!(bounds(&app), free, "the release commits the scale the modifiers left");
 }
 
+/// #4711 review: a modifier changed in the release's own frame, with the pointer still, shapes
+/// the commit: the release sends the tool its drag again before its up, as a move in that frame
+/// does (#834), so Shift pressed as the mouse lets go leaves a proportional box.
+#[test]
+fn a_modifier_changed_in_the_release_frame_shapes_the_committed_scale() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    let id = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1920.0, 1200.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let bounds = |app: &VectorcraftApp| app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
+    run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let corner = xf.to_screen(Point::new(200.0, 200.0));
+    let to = xf.to_screen(Point::new(220.0, 240.0));
+    let button = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    run(&mut app, vec![egui::Event::PointerMoved(corner)]);
+    run(&mut app, vec![button(corner, true, egui::Modifiers::NONE)]);
+    run(&mut app, vec![egui::Event::PointerMoved(to)]);
+    assert!(close(bounds(&app).x1, 220.0) && close(bounds(&app).y1, 240.0), "{:?}", bounds(&app));
+    // Shift pressed and the mouse let go in the same frame, the pointer where it was.
+    run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), button(to, false, egui::Modifiers::SHIFT)]);
+    let committed = bounds(&app);
+    assert!(
+        close(committed.width(), committed.height()) && close(committed.x0, 100.0) && close(committed.y0, 100.0),
+        "the commit is proportional: {committed:?}"
+    );
+    assert!(!app.session.in_interaction(), "the drag is over");
+}
+
 /// #834: a bezier drag's preview follows every position the pointer is seen at. egui's frame
 /// delta is zero in the frame the pointer comes back into the window after leaving it
 /// (`PointerGone` forgets where it was), so a drag gated on it kept the preview where the

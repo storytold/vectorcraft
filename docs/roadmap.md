@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G11: Shift and Alt take effect mid-drag on bounding-box handles (#4711); previously: M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -64,7 +64,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
    Selection, smart guides and snapping first. 60–90 h, parallel by tool.
 2. **`.ai` files from real users** (G9): layer structure (#951), guides (#779). 10–20 h.
 3. **Launch and stability** (G10): the Windows and Linux start-up reports. 20–35 h.
-4. **Core-tool bugs** (G11): SVG units reverting to points (#864) and a Transform effect in a fill's or stroke's own effects (#885). Shape Builder regions (#937), Asset Export ghost borders (#983 / #1037) and the stalling bezier drag preview (#834) are fixed. 8–15 h.
+4. **Core-tool bugs** (G11): SVG units reverting to points (#864) and a Transform effect in a fill's or stroke's own effects (#885). Shape Builder regions (#937), Asset Export ghost borders (#983 / #1037), the stalling bezier drag preview (#834) and Shift/Alt ignored mid-drag on bounding-box handles (#4711) are fixed. 8–15 h.
 5. **Raster effects** (G2) alongside: the Effect Gallery's filter thumbnails and in-dialog preview area (the gallery and every Photoshop-style filter are in), 1–2 h.
 
 ## Next
@@ -139,6 +139,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | G11: Shift and Alt pressed or let go during a bounding-box handle drag, or in its release frame, take effect (#4711); estimate unchanged |
 | 2026-10-29 | minor | M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged |
 | 2026-10-26 | minor | M4/G9: EPS Save and Save As: an opened EPS saves back to its own path as EPS, keeping the chosen artboard's page frame and transparent margins and the complete editable VectorCraft document; Save's TIFF preview is capped at 1024 px (Export keeps 2048); partly read, preview-only or damaged-editing-data sources still need confirmation before they are overwritten; it does not write Illustrator's own editing data (#868), and G9's real-file import fidelity is unchanged; scores and estimates unchanged |
 | 2026-10-25 | minor | M10/G1: a selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); estimates unchanged |
