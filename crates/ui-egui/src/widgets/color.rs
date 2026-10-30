@@ -846,7 +846,7 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
         let steps =
             i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
         let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
-            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v as f32),
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v.rem_euclid(360.0) as f32),
             _ => None,
         });
         (steps + dx + dy, set)

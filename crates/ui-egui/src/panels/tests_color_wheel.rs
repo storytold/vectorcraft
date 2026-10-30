@@ -445,6 +445,20 @@ fn screen_readers_read_and_move_the_ring_and_the_square() {
     assert!(near(hsb(&fill(h.state())), [200.0, 0.19, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&fill(h.state())));
 }
 
+#[test]
+fn a_huge_set_value_on_the_ring_wraps_like_any_other_hue() {
+    let mut h = harness(app(json!([0.3, 0.6, 0.3])));
+    let (target_node, target_tree) = h.get_by_label("Hue ring").accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(1e300));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    h.run_steps(1);
+    let color = fill(h.state());
+    let Color::Rgb { r, g, b } = color else { panic!("expected RGB fill: {color:?}") };
+    assert!([r, g, b].iter().all(|v| v.is_finite()), "{color:?}");
+    assert!(hsb(&color).iter().all(|v| v.is_finite()), "{:?}", hsb(&color));
+    assert!(near(hsb(&color), [0.0, 0.5, 0.6], [1e-3, 1e-3, 1e-3]), "{:?}", hsb(&color));
+}
+
 /// A step past the edge of the square leaves the fill alone: a CMYK cyan shows at 100% saturation,
 /// and a step up from there neither separates it again nor adds an undo step.
 #[test]
