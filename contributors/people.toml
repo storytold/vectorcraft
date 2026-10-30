@@ -83,6 +83,11 @@ real_name = "Atos Lins"
 display_name = "Atos Lins"
 sync_github_name = false
 
+[people.sirj0k3r]
+real_name = "Pedro Ferreira"
+display_name = "sirj0k3r"
+sync_github_name = false
+
 [people.sanyamsingh001]
 display_name = "sanyamsingh001"
 sync_github_name = false
