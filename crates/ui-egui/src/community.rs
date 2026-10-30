@@ -32,7 +32,10 @@ pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egu
     let at = egui::pos2(0.0, r.center().y - galley.size().y / 2.0);
     let ir = egui::Rect::from_center_size(r.left_center() + vec2(h * 0.35 + icon / 2.0, 0.0), vec2(icon, icon));
     if large {
-        let fill = if resp.hovered() { DISCORD.gamma_multiply(0.85) } else { DISCORD };
+        // The theme's accent, as the primary buttons use it, so the call to action matches the
+        // rest of the window (and PhotoCraft's, #4684); Discord's colour stays on the app-bar icon.
+        let t = Tokens::get(ui.ctx());
+        let fill = if resp.hovered() { t.accent } else { t.accent_strong };
         ui.painter().rect_filled(r, CornerRadius::same((h / 2.0) as u8), fill);
         icons::paint(ui, "message-circle", ir, Color32::WHITE);
         ui.painter().galley(egui::pos2(ir.right() + h * 0.2, at.y), galley, Color32::WHITE);

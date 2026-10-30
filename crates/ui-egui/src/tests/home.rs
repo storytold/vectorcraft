@@ -438,3 +438,34 @@ fn a_queued_reopen_keeps_the_roots_it_was_asked_in() {
     assert_eq!(app.session.documents().len(), 1, "the file outside the roots is not opened");
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// The x-centre of the first text shape whose text is `text` on a drawn Home screen, and the
+/// window's centre (#4684).
+fn text_centre_x(app: &mut VectorcraftApp, text: &str) -> Option<(f32, f32)> {
+    fn find(s: &egui::Shape, text: &str) -> Option<f32> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos.x + t.galley.size().x / 2.0),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, text)),
+            _ => None,
+        }
+    }
+    app.canvas_rect = None;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 700.0));
+    let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let x = out.shapes.iter().find_map(|c| find(&c.shape, text))?;
+    Some((x, screen.center().x))
+}
+
+/// The Home screen centres its welcome and its community block, as PhotoCraft's does (#4684).
+#[test]
+fn home_welcome_and_community_are_centred() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for text in ["Welcome to VectorCraft", "Community"] {
+        let (x, centre) = text_centre_x(&mut app, text).unwrap_or_else(|| panic!("{text} is drawn"));
+        assert!((x - centre).abs() < 2.0, "{text} is centred: {x} vs {centre}");
+    }
+}
