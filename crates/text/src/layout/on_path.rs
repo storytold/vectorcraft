@@ -329,10 +329,6 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         PathAlign::Center => (m.0 - m.1) * 0.5,
     };
     let mut x = 0.0;
-    // Stair Step: the block of joined glyphs (a script whose letters join, no space between them)
-    // being placed: where its baseline starts and how far along it the next glyph goes. A joined
-    // word steps as one block, so its joins stay closed; other glyphs each step on their own.
-    let mut stair: Option<(Point, f64)> = None;
     // 3D Ribbon and Gravity: each block of joined glyphs stands on one baseline, centred on the
     // path where the block's middle is, and turns as one: for each glyph, that point along the
     // path and how far along the baseline (glyph space) from it the glyph starts. Other glyphs are
@@ -358,14 +354,16 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     }
     for (gi, (g, &step)) in sg.iter().zip(&steps).take(fit).enumerate() {
         let s = s0 + x;
-        let joined = joins(g);
-        let stair_at = match stair.filter(|_| joined) {
-            Some((base, along)) => base + Vec2::new(along, 0.0),
-            None => ap.at(s).0,
-        };
-        stair = joined.then(|| stair.map_or((stair_at, g.adv), |(base, along)| (base, along + g.adv)));
         let (block_s, block_x) = blocks.get(gi).copied().unwrap_or((s + step * 0.5, -g.adv * 0.5));
         let (block_p, block_dir) = ap.at(block_s);
+        // Stair Step: a glyph on its own stands with the left end of its baseline on the path; a
+        // joined word steps as one block, the middle of its baseline on the path, so its joins
+        // stay closed.
+        let stair = if joins(g) {
+            Affine::translate(block_p.to_vec2()) * Affine::translate((block_x, rise))
+        } else {
+            Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise))
+        };
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
         let half = Affine::translate((-g.adv * 0.5, rise));
@@ -388,7 +386,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
                 Affine::translate(block_p.to_vec2()) * Affine::new([sx, 0.0, -dir.y, dir.x, 0.0, 0.0]) * Affine::translate((block_x, rise))
             }
-            PathEffect::StairStep => Affine::translate(stair_at.to_vec2()) * Affine::translate((0.0, rise)),
+            PathEffect::StairStep => stair,
             // The middle of the glyph's baseline (a joined block's) on the path, x axis along the
             // tangent there, vertical edges pointing at the path's centre (on the glyph's up side).
             // On a circle that is Rainbow, as the public help says ("Applying the Gravity effect to

@@ -213,6 +213,36 @@ fn stair_step_keeps_joined_words_on_one_baseline() {
     assert!((first(0) - first(1)).abs() > 0.5, "the two words step apart: {words:?}");
 }
 
+/// Stair Step: the middle of a joined Arabic word's baseline lies on the path, on an open curve and
+/// a circle, alone or beside Latin.
+#[test]
+fn stair_step_sets_joined_words_on_the_path_by_their_middle() {
+    let Some(face) = arabic_face() else {
+        eprintln!("no Arabic font installed: skipped");
+        return;
+    };
+    for path in paths() {
+        let along = path.to_bezpath();
+        for text in [TEXT, "سكة للتصميم gravity"] {
+            let (_, l) = point_and_on_path(text, style(&face), &path, PathEffect::StairStep);
+            let word = |b: usize| text.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
+            for w in 0..2 {
+                let g: Vec<_> =
+                    l.glyphs.iter().filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()) && word(g.byte) == w).collect();
+                let scale = {
+                    let [a, b, ..] = g[0].xf.as_coeffs();
+                    a.hypot(b)
+                };
+                let left = g.iter().map(|h| (h.xf * Point::ZERO).x).fold(f64::INFINITY, f64::min);
+                let right = g.iter().map(|h| (h.xf * Point::new(h.advance / scale, 0.0)).x).fold(f64::NEG_INFINITY, f64::max);
+                let mid = Point::new((left + right) / 2.0, (g[0].xf * Point::ZERO).y);
+                let off = along.segments().map(|s| kurbo::ParamCurveNearest::nearest(&s, mid, 1e-4).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+                assert!(off < 0.05, "{text} word {w}: the middle of its baseline is {off} pt off the path");
+            }
+        }
+    }
+}
+
 /// 3D Ribbon: every glyph keeps its width (horizontal edges stay horizontal, vertical edges stand
 /// across the path); a Latin glyph sits with the middle of its baseline on the path, and a joined
 /// Arabic word stands level on one baseline centred on the path, so its joins meet.
