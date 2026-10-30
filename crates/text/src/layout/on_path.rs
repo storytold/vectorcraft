@@ -38,9 +38,11 @@ const BEND_PIECES: usize = 32;
 const BEND_MAX_ELEMENTS: usize = 8192;
 
 /// `outline` (text space, placed straight by `pre`, which takes the glyph's pen space there) bent
-/// along `ap` as `bend` says ([`GlyphBend`]); `None` where the path doesn't turn under the glyph
-/// (it stays as it is, exactly), or the bent outline would be too large or not finite.
-fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) -> Option<BezPath> {
+/// along `ap` as `bend` says ([`GlyphBend`]): across the path (Rainbow), or with `upright` its
+/// vertical edges kept vertical, down for 1 and up for -1 (Skew); `None` where the path doesn't turn
+/// under the glyph (it stays as it is, exactly), or the bent outline would be too large or not
+/// finite.
+fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend, upright: Option<f64>) -> Option<BezPath> {
     let GlyphBend { s, step, advance, rise } = *bend;
     if outline.elements().is_empty() || !(advance > 1e-9 && step.is_finite() && step > 0.0 && s.is_finite() && rise.is_finite()) {
         return None;
@@ -59,7 +61,10 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) 
     let k = step / advance;
     let map = |q: Point| {
         let (p, d) = ap.at(s + q.x * k);
-        p + Vec2::new(-d.y, d.x) * (q.y + rise)
+        match upright {
+            Some(down) => p + Vec2::new(0.0, down * (q.y + rise)),
+            None => p + Vec2::new(-d.y, d.x) * (q.y + rise),
+        }
     };
     // Pieces short enough that mapping a piece's control points stays within the tolerance: the
     // error of a piece of length L under curvature c, at height y, is about L² c (1 + |y| c) / 8.
@@ -426,14 +431,16 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             }
         }
         cx.emit(g, pre, origin, angle, g.adv, 0);
-        // A glyph of a script whose letters join is bent along a curved path (Rainbow), so its
-        // joining strokes meet its neighbours' instead of standing off the curve.
-        if t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {
+        // A glyph of a script whose letters join is bent along a curved path (Rainbow, and Skew with
+        // its vertical edges kept upright, turned over where the path runs leftward), so its joining
+        // strokes meet its neighbours' instead of standing off the curve.
+        let upright = (t.path_effect == PathEffect::Skew).then(|| if dir.x < 0.0 { -1.0 } else { 1.0 });
+        if matches!(t.path_effect, PathEffect::Rainbow | PathEffect::Skew) && g.cursive && !cx.vertical && g.inline.is_none() {
             let bend = GlyphBend { s, step, advance: g.adv, rise };
             if let Some(last) = cx.out.glyphs.last_mut()
                 && last.image.is_none()
                 && last.colour.is_none()
-                && let Some(bent) = bend_outline(&last.outline, pre, &ap, &bend)
+                && let Some(bent) = bend_outline(&last.outline, pre, &ap, &bend, upright)
             {
                 last.outline = bent;
                 last.bend = Some(bend);

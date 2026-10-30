@@ -302,3 +302,24 @@ fn no_effect_mirrors_a_glyph() {
         }
     }
 }
+
+/// Skew bends joined Arabic glyphs along a curved path, as Rainbow does, so where one ends along the
+/// path the next begins and their joins meet; Latin glyphs stay unbent.
+#[test]
+fn skew_bends_joined_glyphs_so_their_joins_meet() {
+    let [_, circle] = paths();
+    let (_, latin) = point_and_on_path("Skewed", CharStyle { size: 24.0, ..CharStyle::default() }, &circle, PathEffect::Skew);
+    assert!(latin.glyphs.iter().all(|g| g.bend.is_none()));
+    let Some(face) = arabic_face() else {
+        eprintln!("no Arabic font installed: skipped");
+        return;
+    };
+    let (_, l) = point_and_on_path(TEXT, CharStyle { size: 48.0, ..style(&face) }, &circle, PathEffect::Skew);
+    let bent: Vec<_> = l.glyphs.iter().filter_map(|g| g.bend.map(|b| (g.byte, b))).collect();
+    assert!(bent.len() >= 6, "{bent:?}");
+    let word = |b: usize| TEXT.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
+    for w in bent.windows(2).filter(|w| word(w[0].0) == word(w[1].0)) {
+        let (a, b) = (w[0].1, w[1].1);
+        assert!((a.s + a.step - b.s).abs() < 1e-6, "a gap along the path between joined glyphs: {a:?} {b:?}");
+    }
+}
