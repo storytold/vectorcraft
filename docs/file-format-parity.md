@@ -7,6 +7,9 @@ Every format Illustrator opens, places, saves or exports, against VectorCraft's 
 documentation (helpx "file formats" and Save/Export pages), not from its installed bundle: the clean-room rule
 forbids reading the install. Part of [target-app-parity.md](target-app-parity.md).
 
+> **CDR status:** 2026-10-30 · CDR.1–CDR.12 retain partial native import in the current format and viewport modules.
+> The dated verification below describes its measured scope; scores and hour estimates are unchanged.
+
 **Fidelity** is estimated unless a test is named. Test sources: unit and property tests per crate
 (`crates/svg/tests`, `crates/pdf/tests`, `crates/format/tests/prop_format.rs`), import fuzzing
 (`crates/engine/tests/import_fuzz.rs`), the Affinity corpus (`cargo xtask corpus --affinity`, 51 pinned public
@@ -17,7 +20,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 26 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, JPEG 2000, PICT, Pixar, Word `.doc`, PS |
+| Formats opened or placed | ~30 | 27 | CorelDRAW import is partial; missing: FreeHand, DWG, HEIC/HEIF, JPEG 2000, PICT, Pixar, Word `.doc`, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (no Illustrator editing data) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
@@ -110,7 +113,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | PCX | open, place | yes (1 bit in the header palette's first two colors, black and white without them; 1 bit in two to four planes and 4 bits with up to 16 colors; 2 bits in the CGA colors the header's CGA palette settings pick; 8 bits with the 256-color palette, gray without one; 24-bit color in three planes) | no | the header's HDpi and VDpi size the image; a file of another depth or plane count, cut short or past the pixel allowance is refused with a message; tests in `crates/engine/src/cmd/fileio/tests_pcxread.rs` and `crates/engine/tests/import_fuzz.rs` |
 | PICT, Pixar PXR | open, place (legacy) | no | no | rarely used |
 | FreeHand `.fh*` | open (legacy) | no | no | |
-| CorelDRAW `.cdr` | open | no | no | |
+| CorelDRAW `.cdr` | open | partial | no | native geometry, pages, groups, paint and cropped embedded images; CDR.8 adds editable nested PowerClip, modern rectangle corners, polygon/star seeds, B-spline cubics and fill rules; explicit loss warnings; [subset and checks](#coreldraw-editable-imports-cdr8), [CDR import](cdr-import.md) |
 | Text `.txt` | place, export | place (Text Import Options) | yes | |
 | RTF `.rtf` | place | place (area type with fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/rtf.rs`; fuzzed (`text_import_fuzz.rs`); `\'hh` bytes read as Windows-1252 or Mac Roman only |
 | Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |
@@ -119,6 +122,30 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | OBJ / USDA / glTF | 3D export | — | no | needs 3D (gap G3) |
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art |
+
+## CorelDRAW editable imports (CDR.8)
+
+- **PowerClip:** native content references resolve to editable clipping groups, including nested and rotated frames, ordered children and the frame's own fill and outline. Missing, ambiguous and cyclic references are rejected; expansion has cumulative visit, point and depth limits.
+- **Modern rectangle corners:** asymmetric round, inward scallop and chamfer treatments become editable paths, retaining relative and absolute radius scaling through the object's transform. Legacy layouts and unknown metadata retain warned fallbacks; oversized radii are clamped with a warning.
+- **Polygon/star seeds:** the actual seed's anchors and cubic handles expand by its side count and repetition step, then its axis scales. Unsupported modes and non-coprime compound-star steps are rejected rather than replaced by regular polygons.
+- **B-splines:** native controls and clamped points become editable cubic paths, including open endpoints and the curved closed seam. Other property identifiers are not guessed as geometry.
+- **Compound coverage:** even-odd is the default; explicit argument `14001 = 1` selects nonzero winding, including the PowerClip frame's clipping rule.
+- **Focused verification passed (2026-10-22):** 72 parser tests, eight CDR engine tests and two engine fuzz checks passed. `crates/engine/tests/cdr_files.rs` compared 32 pages from 29 original CDR15/16/27 files with independent SVGs through `CDR_FIXTURE_DIR`, including `powerclip`, `corners`, `corner-types`, `polygons`, `fill-rules` and `bspline`. Vector-only imports contain no image resources; their worst mean byte difference was 0.053344/255 under the existing 0.1 threshold. `crates/engine/src/cmd/fileio/tests_cdr.rs` verifies clipped-child editing, Undo, native save/reopen, Place/Undo and vector `<clipPath>` export. Bitmap colour/profile differences remain a separate measurement.
+- **Still unsupported:** text/font/style reconstruction, master-page artwork, patterns, colour profiles and Corel-specific effects. PowerClip fitting/locking settings and complex transparency remain unverified. Source CDRs stay read-only; there is no CDR export. See [observed record subset and boundaries](cdr-vector-records.md).
+
+### CDR revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-30 | minor | CDR.12: choose the initial viewport from individual drawn-object bounds when art lies on opposite sides of an empty page; retain saved-camera and conservative clip/effect bounds. Keep CDR evidence and revisions separate from shared assessment updates, and correct revision-entry spacing. Scores and hour estimates are unchanged. |
+| 2026-10-30 | minor | CDR.11: integrate the native reader with the current format registry and split viewport modules, preserving PCX support, saved-camera validation and original CDR tests. Format counts include PCX and partial CDR import; scores and hour estimates are unchanged. |
+| 2026-10-22 | minor | CDR.10: native curve decoding separates two-million coordinate work from one-million editable anchors and avoids a temporary full point vector. Optional control-heavy original-file oracle and independent quota/alias checks; scores and hours unchanged. |
+| 2026-10-22 | minor | CDR.9: exact PowerClip aliases retain separate occurrences under bounded name materialization; drawing-only zero-page CDRs recover a warned artboard from editable artwork bounds. A local 180-curve/424-subpath file matches its independent Corel SVG; broader scores unchanged. |
+| 2026-10-22 | minor | CDR.8: editable nested PowerClip, modern round/scallop/chamfer corners with relative/absolute scaling, polygon/star seeds, B-spline cubics and default even-odd/explicit winding coverage. Focused parser/engine/fuzz checks and 32 original oracle pages passed. Import remains partial; scores and hours unchanged. |
+| 2026-10-20 | minor | CDR.6: share identical bitmap resource aliases before decoding; accept different raw encodings of the same image identifier only when dimensions and complete decoded PNG bytes agree; retain cumulative work quotas and reject conflicting content. |
+| 2026-10-20 | minor | CDR.5: keep CDR revision entries apart from the shared format summary and the current upstream history entry, allowing independent format documentation updates to merge. |
+| 2026-10-19 | minor | CDR.4: native embedded bitmap data, continuous alpha and editable crop outlines; first display fits artwork outside every artboard without changing document coordinates. Original bitmap/SVG oracles and viewport regressions; scores and estimates unchanged. |
+| 2026-10-19 | minor | CDR.1: bounded native CorelDRAW import, explicit feature-loss warnings and original CorelDRAW 15/16/27 fixture checks; see [CDR import](cdr-import.md). Scores and estimates unchanged. |
 
 ## PDF editable imports
 

@@ -201,6 +201,42 @@ pub fn art_bounds(doc: &Document) -> Option<Rect> {
     doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(&symbols, l)))
 }
 
+/// The bounds of all drawn art when each independent object's bounds is off every artboard.
+/// Ordinary groups and layers are traversed as in [`art_bounds`]; clipping and objects with
+/// their own effects keep their conservative bounds as one object. A gap between separate
+/// objects cannot make an empty artboard count as occupied. Empty or non-finite art returns `None`.
+pub fn off_artboard_bounds(doc: &Document) -> Option<Rect> {
+    let symbols = doc.symbol_boxes();
+    let pages = doc.artboards.iter().map(|a| a.rect).reduce(|acc, next| acc.union(next));
+    let mut bounds = None;
+    if doc.layers.iter().all(|n| collect_off_artboard_bounds(&symbols, n, pages, &mut bounds)) { bounds } else { None }
+}
+
+/// Accumulate visible bounds, stopping at the first on-page or non-finite object.
+/// The union of pages rejects distant objects before checking individual artboards.
+fn collect_off_artboard_bounds(symbols: &SymbolBoxes, n: &Node, pages: Option<Rect>, bounds: &mut Option<Rect>) -> bool {
+    if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. }) {
+        return true;
+    }
+    match &n.kind {
+        NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(n) => {
+            children.iter().skip(usize::from(n.extras().shaper.is_some())).all(|c| collect_off_artboard_bounds(symbols, c, pages, bounds))
+        }
+        _ => {
+            let Some(b) = drawn_bounds(symbols, n) else { return true };
+            if [b.x0, b.y0, b.x1, b.y1].iter().any(|v| !v.is_finite()) {
+                return false;
+            }
+            let overlaps = |r: Rect| b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0;
+            if pages.is_some_and(overlaps) && symbols.document().artboards.iter().any(|a| overlaps(a.rect)) {
+                return false;
+            }
+            *bounds = vectorcraft_geom::union_opt(*bounds, Some(b));
+            true
+        }
+    }
+}
+
 /// Bounds of the art an export draws ([`art_bounds`]) that is on artboard rectangle `rect`: each
 /// object of a layer or sublayer whose drawn bounds overlap `rect`, with all of its bounds; a group
 /// or a clipping layer counts as one object. `None` when no object overlaps `rect`.

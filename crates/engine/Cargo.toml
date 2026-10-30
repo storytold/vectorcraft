@@ -35,6 +35,7 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
+vectorcraft-cdr = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
@@ -51,6 +52,7 @@ log = { workspace = true }
 rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
+vectorcraft-cdr = { workspace = true, features = ["synth"] }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }

@@ -208,7 +208,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
     if !fitted {
-        fit(app, "view.fitArtboard");
+        match app.view_mut().and_then(|v| v.initial_target.take()) {
+            Some(target) => view::fit_rect(app, target, false),
+            None => fit(app, "view.fitArtboard"),
+        }
     }
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {

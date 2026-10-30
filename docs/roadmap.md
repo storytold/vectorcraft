@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -38,6 +38,26 @@ Forward-looking plan. Where VectorCraft stands is in [`ROADMAP.md`](../ROADMAP.m
 agent wall-clock hours, one agent. There is no `cargo xtask scorecard` or `cargo xtask parity` in this repo yet
 (the clean-room rule rules out a menu dump of Illustrator as an oracle; a checklist built from Illustrator's
 public menu documentation would be allowed).
+
+> **M4/CDR status:** 2026-10-30 · CDR.1–CDR.12 provide partial native import with editable PowerClip,
+> modern corners, polygon/star seeds, B-spline cubics and fill rules. Focused checks and 32 oracle pages passed.
+> Scores and hour estimates are unchanged; the focused M4 follow-up below records the scope.
+
+CDR.9 also recovers drawing-only zero-page files from their editable artwork bounds
+and accepts exact PowerClip aliases with bounded expanded names. A supplied 180-curve
+file is checked against its independent Corel SVG; no private fixture is distributed.
+
+### CDR revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-30 | minor | CDR.12: choose the initial viewport from individual drawn-object bounds when art lies on opposite sides of an empty page; retain saved-camera and conservative clip/effect bounds. Keep CDR evidence and revisions separate from shared assessment updates, and correct revision-entry spacing. Scores and hour estimates are unchanged. |
+| 2026-10-30 | minor | CDR.11: integrate the native reader with the current format registry and split viewport modules, preserving PCX support, saved-camera validation and original CDR tests. Format counts include PCX and partial CDR import; scores and hour estimates are unchanged. |
+| 2026-10-22 | minor | M4/CDR.10: stream native curve coordinates and distinguish cumulative coordinate-work and editable-anchor quotas for control-heavy files; retain bounds on aliases and procedural expansion. Scores and hours unchanged. |
+| 2026-10-22 | minor | M4/CDR.9: exact PowerClip aliases share definitions under bounded expansion, and drawing-only zero-page CDRs recover an artboard from editable artwork bounds. Independent private-file SVG comparison and native anchor-edit/save/reopen checks passed; full CI passed all 10 stages and 8521 tests. Import remains partial; scores and hours unchanged. |
+| 2026-10-22 | minor | M4/CDR.8: editable nested PowerClip, modern corner treatments and scaling, polygon/star seeds, B-spline cubics and alternate/winding fills. CDR scope moved to a focused M4 follow-up row; focused checks and 32 original oracle pages passed. Import remains partial; scores and hours unchanged. |
+| 2026-10-19 | minor | CDR.4: native embedded bitmap data, continuous alpha and editable crop outlines; first display fits artwork outside every artboard without changing document coordinates. Original bitmap/SVG oracles and viewport regressions; scores and estimates unchanged. |
+| 2026-10-19 | minor | M4/CDR.1: partial native CorelDRAW open and place; original CorelDRAW 15/16/27 fixtures and bounded malformed-input checks. Scores and estimates unchanged. |
 
 ## Alpha gate
 
@@ -105,6 +125,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance; width-point creation and adjoining adjustment regression-tested; dialog layout reviewed) | ⬜ (new ruler-guide Alt orientation implemented; existing-guide Escape cancellation regression-tested; broader pass remains) | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 PngSuite integrity and bounded fetching verified (#1729); real-world corpus/manual QA remain | 50–80 |
 | M14 follow-up | Color Picker layout (#2008) | ✅ Compact controls, centered header, stacked actions, aligned fields and screen sampling; narrow windows scroll vertically | Included above |
+| M4 follow-up | CorelDRAW import (CDR.1–CDR.8) | 🟡 [Partial native open/place](cdr-import.md), source files kept read-only. CDR.8 adds editable PowerClip references/nesting, round/scallop/chamfer rectangle corners with relative/absolute scaling, polygon/star seeds, B-spline cubics and default even-odd/explicit `14001` winding. Focused parser/engine/fuzz checks and 32 original 15/16/27 oracle pages passed. Text, master pages, styles, profiles and Corel-specific effects remain unsupported; [scope and boundaries](cdr-vector-records.md) | Existing M4 estimate unchanged |
 | | **Total to full parity** (one agent; from [target-app-parity.md](target-app-parity.md)) | | **~360–590** |
 
 Milestone estimates predate the 2026-10-10 re-measure for M1–M14; the area table in

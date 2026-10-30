@@ -491,6 +491,7 @@ pub const FORMATS: &[Format] = &[
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
     // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    reader("cdr", "CorelDRAW", &["cdr"], "application/vnd.corel-draw", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -527,6 +528,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
@@ -593,6 +595,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
     "txt",
     "rtf",
     "docx",

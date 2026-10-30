@@ -1,0 +1,23 @@
+[package]
+name = "vectorcraft-cdr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bounded, native CorelDRAW CDR vector import"
+
+[features]
+synth = []
+
+[lints]
+workspace = true
+
+[dependencies]
+vectorcraft-geom = { workspace = true }
+vectorcraft-color = { workspace = true }
+vectorcraft-doc = { workspace = true }
+flate2 = { workspace = true }
+crc32fast = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

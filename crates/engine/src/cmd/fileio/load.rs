@@ -71,6 +71,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
+    if vectorcraft_cdr::is_cdr(bytes) {
+        return format("cdr");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -316,6 +319,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        "cdr" => {
+            let i = vectorcraft_cdr::import(bytes).map_err(|e| err(format!("can't open `{title}`: {e}")))?;
+            (i.document, i.warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),

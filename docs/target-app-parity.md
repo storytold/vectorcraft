@@ -42,6 +42,40 @@ the work list made from it. Deep areas have their own checklists: [UI and intera
 [file formats](file-format-parity.md), [hardware](hardware-parity.md), [languages](localization-parity.md),
 [effects](effects-parity.md) and [type](type-parity.md).
 
+## CorelDRAW import submission
+
+This section records the CDR submission against its pinned runtime and local validation. The shared assessment and revision history remain those of the integration base; this documentation relocation adds no runtime behavior or combined-build claim.
+
+> **CDR status:** 2026-10-30 · CDR.1–CDR.12 provide partial native import with editable vectors, bounded aliases, zero-page recovery and control-heavy curve capacity.
+> Validation boundaries are recorded below and in the CDR notes. Feature, format and readiness scores and hour estimates are unchanged.
+
+**File formats / CDR.8 (2026-10-22):** CorelDRAW in the gap row above denotes incomplete native import:
+the [partial importer](cdr-import.md) now retains editable PowerClip references/nesting, modern
+round/scallop/chamfer corners with relative/absolute scaling, polygon/star seeds, B-spline cubics and
+default even-odd/explicit `14001` winding. Text/font/style reconstruction, master pages,
+patterns, colour profiles and Corel-specific effects remain unsupported. Focused parser/engine/fuzz
+checks and 32 original oracle pages passed (evidence below). The area's **75%** and **10–20 h**
+estimates are unchanged.
+
+CDR.9 additionally recovers zero-by-zero page metadata with a warned, artwork-fitted
+board and bounded PowerClip aliases. The local zero-page oracle retains 180 curves,
+424 subpaths and zero images; measured colour/geometry differences are below the
+existing 0.1/255 threshold. Source files and derived artwork remain private.
+  - CorelDRAW native open/place (CDR.1–CDR.8) remains partial: geometry, pages, layers, groups, paint and cropped embedded images are retained, with explicit loss warnings and read-only source files. CDR.8 resolves PowerClip references and nesting into editable clipping groups, preserving ordered children and the frame's paint; modern asymmetric round/scallop/chamfer corners retain relative/absolute radius scaling; polygon/star seeds expand their actual anchors and cubic handles by side count and repetition step; B-spline controls and clamped points become cubic paths. Compound paths default to even-odd; argument `14001 = 1` selects nonzero winding for paths and clipping frames. Reference expansion is bounded and rejects missing, ambiguous or cyclic references. Text/font/style reconstruction, master-page artwork, patterns, profiles and Corel-specific effects remain unsupported; [observed subset and boundaries](cdr-vector-records.md).
+    **Focused verification passed (2026-10-22):** 72 parser tests, eight CDR engine tests and two engine fuzz checks. `crates/engine/tests/cdr_files.rs` compared 32 pages from 29 original CDR15/16/27 files with independent SVGs (`CDR_FIXTURE_DIR`), including `powerclip`, `corners`, `corner-types`, `polygons`, `fill-rules` and `bspline`; every vector-only scene has zero image resources and the worst mean byte difference is 0.053344/255, below the existing 0.1 threshold. `crates/engine/src/cmd/fileio/tests_cdr.rs` verifies clipped-child editing, Undo, native save/reopen, Place/Undo and vector `<clipPath>` export. Fixtures remain local; bitmap profile differences stay separate; [CDR import and verification](cdr-import.md). Scores and hours unchanged.
+
+### CDR revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-19 | minor | CDR.1: bounded native CorelDRAW import, explicit feature-loss warnings and original CorelDRAW 15/16/27 fixture checks; see [CDR import](cdr-import.md). Scores and estimates unchanged. |
+| 2026-10-19 | minor | CDR.4: native embedded bitmap data, continuous alpha and editable crop outlines; first display fits artwork outside every artboard without changing document coordinates. Original bitmap/SVG oracles and viewport regressions; scores and estimates unchanged. |
+| 2026-10-22 | minor | CDR.8: partial native import gains editable PowerClip references/nesting, modern round/scallop/chamfer corners with relative/absolute scaling, polygon/star seeds, B-spline cubics and default even-odd/explicit winding fills. Focused parser/engine/fuzz checks and 32 original oracle pages passed. CDR-specific gaps moved below the shared area table to keep independent updates mergeable. Scores and hours unchanged. |
+| 2026-10-22 | minor | CDR.9: exact PowerClip aliases retain their separate page/parent occurrences with bounded name materialization; drawing-only zero-page files recover a warned artboard from native artwork bounds. A private 180-curve/424-subpath drawing matches its independent Corel SVG; native anchor editing, Undo and save/reopen passed. Full CI passed all 10 stages and 8521 tests. Scores and hours unchanged. |
+| 2026-10-22 | minor | CDR.10: native curves stream borrowed point/flag arrays under separate two-million-coordinate and one-million-anchor quotas; repeated and procedural geometry stays bounded. A private file retains 1897 paths, 4343 subpaths and 468205 anchors; independent Corel raster coverage agrees outside a one-pixel edge band. Corel's truncated SVG is not used as a complete oracle; CMYK colour fidelity remains separate. Scores and hours unchanged. |
+| 2026-10-30 | minor | CDR.11: integrate the native reader with the current format registry and split viewport modules, preserving PCX support, saved-camera validation and original CDR tests. Format counts include PCX and partial CDR import; scores and hour estimates are unchanged. |
+| 2026-10-30 | minor | CDR.12: choose the initial viewport from individual drawn-object bounds when art lies on opposite sides of an empty page; retain saved-camera and conservative clip/effect bounds. Keep CDR evidence and revisions separate from shared assessment updates, and correct revision-entry spacing. Scores and hour estimates are unchanged. |
+
 ## Headline
 
 | Number | Value | Kind |

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Point, Rect};
 
 use crate::theme::Brightness;
 
@@ -13,8 +13,12 @@ pub struct View {
     pub zoom: f64,
     /// Document point at the centre of the canvas.
     pub center: Point,
-    /// False until the view was fitted to the artboard on first display.
+    /// False until the view was fitted on first display.
     pub fitted: bool,
+    /// Artwork outside every artboard is shown on first display, once the canvas has a size.
+    /// This transient camera hint never becomes document data or control state.
+    #[serde(skip)]
+    pub(crate) initial_target: Option<Rect>,
     /// View rotation in degrees (Rotate View tool).
     pub rotation: f64,
     /// The artboard the status bar's navigator is on (an index): Fit Artboard in Window and Actual
@@ -24,15 +28,20 @@ pub struct View {
 }
 
 impl Default for View {
+    /// Start at 100% with a pending first-display fit and no imported-artwork hint.
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0 }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, initial_target: None, rotation: 0.0, artboard: 0 }
     }
 }
 
 impl View {
     /// The view a document opens at: the one it was saved with, else fitted on first display.
     pub fn of(st: &vectorcraft_engine::DocState) -> Self {
-        st.view.as_ref().and_then(Self::saved).unwrap_or_default()
+        st.view.as_ref().and_then(Self::saved).unwrap_or_else(|| {
+            let initial_target =
+                vectorcraft_render::encode::off_artboard_bounds(&st.doc).filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()));
+            Self { initial_target, ..Self::default() }
+        })
     }
 
     /// The view `v` saved (the one a document was saved with, or a View → New View… one), within
@@ -43,6 +52,7 @@ impl View {
             zoom: v.zoom.clamp(0.0313, 640.0),
             center: v.center,
             fitted: true,
+            initial_target: None,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
         })

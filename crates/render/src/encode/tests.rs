@@ -357,3 +357,69 @@ fn art_bounds_end_at_a_clipping_layers_clip() {
     }
     assert_eq!(art_bounds(&d), Some(Rect::new(2.0, 3.0, 20.0, 10.0)));
 }
+
+/// Separate objects can surround an empty page, even inside ordinary nested groups.
+#[test]
+fn off_artboard_bounds_check_objects_instead_of_their_combined_box() {
+    for depth in 0..=2 {
+        let mut d = Document::new(200.0, 100.0);
+        let paint = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+        let mut nodes: Vec<Arc<Node>> = [-150.0, 310.0]
+            .map(|x| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 35.0, x + 40.0, 65.0)), paint.clone())))
+            .to_vec();
+        for _ in 0..depth {
+            nodes = vec![Arc::new(Node::group(d.alloc_id(), nodes))];
+        }
+        Arc::make_mut(&mut d.layers[0]).children_mut().unwrap().extend(nodes);
+        let target = art_bounds(&d).unwrap();
+        assert_eq!(target.center(), d.artboards[0].rect.center());
+        assert_eq!(off_artboard_bounds(&d), Some(target));
+        // A second page surrounds neither object either; the space between pages is not art.
+        let mut second = d.artboards[0].clone();
+        second.id = 2;
+        second.rect = Rect::new(500.0, 0.0, 700.0, 100.0);
+        d.artboards.push(second);
+        assert_eq!(off_artboard_bounds(&d), Some(target));
+        add_rect(&mut d, Rect::new(520.0, 35.0, 560.0, 65.0), false);
+        assert_eq!(off_artboard_bounds(&d), None, "art on any page keeps page framing");
+    }
+}
+
+/// Clipped content is measured through its clip; hidden art, guides and templates do not occupy a page.
+#[test]
+fn off_artboard_bounds_keep_clipping_and_visibility_semantics() {
+    let mut d = Document::new(200.0, 100.0);
+    let paint = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let clip = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-120.0, 20.0, -80.0, 60.0)), paint.clone());
+    let content = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-200.0, 0.0, 100.0, 100.0)), paint.clone());
+    let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(content)], clip: true });
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, group).unwrap();
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), paint.clone());
+    hidden.visible = false;
+    d.insert(Some(layer), 1, hidden).unwrap();
+    add_rect(&mut d, Rect::new(10.0, 10.0, 30.0, 30.0), true);
+    let template_art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), paint);
+    let mut template = Node::layer(d.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { template: on, children, .. } = &mut template.kind {
+        *on = true;
+        children.push(Arc::new(template_art));
+    }
+    d.layers.push(Arc::new(template));
+    assert_eq!(off_artboard_bounds(&d), Some(Rect::new(-120.0, 20.0, -80.0, 60.0)));
+    assert_eq!(off_artboard_bounds(&d), art_bounds(&d));
+}
+
+/// An effect can reach a page even when the group's source geometry is wholly outside it.
+#[test]
+fn off_artboard_bounds_keep_group_effect_reach() {
+    let mut d = Document::new(200.0, 100.0);
+    let paint = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let path = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-6.0, 20.0, -2.0, 40.0)), paint);
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(path)]);
+    group.appearance.effects.push(shadow_right());
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, group).unwrap();
+    assert!(art_bounds(&d).unwrap().x1 > 0.0);
+    assert_eq!(off_artboard_bounds(&d), None);
+}

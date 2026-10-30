@@ -3,12 +3,16 @@ use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, To
 
 /// Fit the view (View → Fit Artboard / Fit All / Actual Size).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
-    let Some(rect) = app.canvas_rect else {
+    // An explicit navigation command takes precedence over a pending first-display hint.
+    if let Some(v) = app.view_mut() {
+        v.initial_target = None;
+    }
+    if app.canvas_rect.is_none() {
         if let Some(v) = app.view_mut() {
             v.fitted = false;
         }
         return;
-    };
+    }
     let current = app.view().map_or(0, |v| v.artboard);
     let Some(st) = app.session.active() else { return };
     let target = match how {
@@ -19,7 +23,13 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
     let Some(target) = target else { return };
-    let zoom = if how == "view.actualSize" {
+    fit_rect(app, target, how == "view.actualSize");
+}
+
+/// Fit a camera target without moving artwork or changing an artboard.
+pub(super) fn fit_rect(app: &mut VectorcraftApp, target: Rect, actual_size: bool) {
+    let Some(rect) = app.canvas_rect else { return };
+    let zoom = if actual_size {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
         // The width and height of the box round the target turned with the view, at zoom 1.

@@ -21,6 +21,47 @@ use vectorcraft_doc::Document;
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::rich_session;
 
+// ---------- CorelDRAW native vectors and embedded bitmaps ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    /// Exercise shared CDR loading with bounded arbitrary input without panicking.
+    fn cdr_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
+        survive("CDR garbage", || vectorcraft_cdr::import(&bytes).ok().map(|i| i.document))?;
+    }
+
+    #[test]
+    /// Carry mutated original CDR records through open, place, rendering and export.
+    fn cdr_damaged_records_survive_open_place_render_and_export(
+        cut in 0usize..4096,
+        edits in prop::collection::vec((any::<usize>(), any::<u8>()), 0..12),
+        fixture in 0u8..4,
+    ) {
+        let mut bytes = match fixture {
+            0 => vectorcraft_cdr::synth::rectangle(),
+            1 => vectorcraft_cdr::synth::clipped_bitmap(),
+            2 => vectorcraft_cdr::synth::powerclip(),
+            _ => vectorcraft_cdr::synth::zero_sized_page(),
+        };
+        for (offset, value) in edits {
+            let length = bytes.len();
+            if let Some(byte) = bytes.get_mut(offset % length) { *byte = value; }
+        }
+        bytes.truncate(cut.min(bytes.len()));
+        survive("CDR damaged native records", || vectorcraft_cdr::import(&bytes).ok().map(|i| i.document))?;
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+            let params = json!({"name": "mutated.cdr", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        result.map_err(|message| TestCaseError::fail(format!("CDR open/place panicked: {message}")))?;
+    }
+}
+
 /// 64 cases each, unless `PROPTEST_CASES` asks for more.
 fn config() -> ProptestConfig {
     let mut c = ProptestConfig { failure_persistence: None, ..ProptestConfig::default() };

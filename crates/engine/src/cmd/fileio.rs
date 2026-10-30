@@ -130,6 +130,8 @@ mod tests;
 #[cfg(test)]
 mod tests_affinity;
 #[cfg(test)]
+mod tests_cdr;
+#[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]
 mod tests_pdfcolor;

@@ -24,6 +24,15 @@ Rust dependencies (vello_cpu, kurbo, peniko, skrifa, harfrust, usvg, linesweeper
 fetched through crates.io under their own permissive licenses (mostly MIT and/or Apache-2.0; also
 BSD, ISC, Zlib, BSL-1.0 and Unicode-3.0).
 
+CorelDRAW file-format reference
+
+The independent Rust CDR reader consulted the MIT-licensed Kaitai CDR grammar
+(Copyright 2020 Kaitai team), at revision 9d8e2704b946961f5114115f1a488750a3c86ed0:
+https://github.com/kaitai-io/coreldraw_cdr.ksy.
+Its attribution and MIT license are retained in crates/cdr/LICENSE-kaitai.txt.
+Further documentation and the original-fixture verification boundary are recorded
+in crates/cdr/README.md and docs/cdr-import.md.
+
 JPEG export uses the jpeg-encoder crate (MIT OR Apache-2.0, and the IJG License): this software is
 based in part on the work of the Independent JPEG Group.
 
