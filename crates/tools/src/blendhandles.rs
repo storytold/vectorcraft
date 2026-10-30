@@ -1,7 +1,6 @@
-//! The on-canvas controls of a selected live blend: the step-count handle at the top of the
-//! selection's bounding box's right edge (dragging it down or up sets the Specified Steps count,
-//! on an exponential scale — a box height covers 1 to the blend's count now, so the handle rests
-//! at the top and half a box above it reaches 1000 — and it returns to the top when let go), and
+//! The on-canvas controls of a selected live blend: the step-count handle on the bbox edge (dragging it
+//! down or up sets the Specified Steps count, on an exponential scale — 1 at the bottom, 1000 at the top
+//! — and the handle rests where the current count lands instead of always at the top), and
 //! on the spine the Ease knob at the blend's midpoint with a linked Ramp handle beside it
 //! (bezier-handle style: its distance from the knob is the Ramp) and the Colour handle under the
 //! spine. The Selection tool and the Blend tool hit-test through here, and the canvas draws the
@@ -117,17 +116,14 @@ impl BlendHandles {
         let edge_up = (to_doc * Point::new(rect.x1, rect.y0) - edge_base) / h;
         let edge_out = to_doc * Point::new(rect.x1 + 1.0, rect.y1) - edge_base;
         let gap = HANDLE_GAP / zoom;
-        // The count handle rests at the box's top corner and returns there when a drag ends; the
-        // drag itself reads the pointer's height on the edge, so counts stay easy to hit.
-        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, 1.0);
+        // The count handle rests at the height that matches the blend's count on the fixed
+        // 1..1000 scale (bottom is 1, top is 1000), so a blend with few steps sits low and a
+        // blend near 1000 sits at the top. A drag reads the pointer's height on the edge, and
+        // the handle stays where the released count lands instead of snapping back.
         let (spine, stops) = blend_key_stops(children, spec)?;
         if !stops.iter().all(|s| s.is_finite()) {
             return None;
         }
-        // The steps scale runs from 1 at the box's bottom to the count now at its top, so the
-        // handle resting at the top is always where the blend's count is; above the top it
-        // reaches the 1000 cap half a box up. A drag that releases at another count makes that
-        // count the new top.
         let pair_len = match (stops.first(), stops.get(1)) {
             (Some(a), Some(b)) => (b - a).abs(),
             _ => spine.length(),
@@ -136,6 +132,11 @@ impl BlendHandles {
             (Some(a), Some(b)) => blend_step_count(a, b, spec.spacing, pair_len).clamp(1, STEPS_MAX as usize) as u32,
             _ => 1,
         };
+        // The steps scale runs from 1 at the box's bottom to 1000 at its top on an exponential
+        // scale, so the handle's height shows the count now. Dragging above the box keeps the
+        // knob at the 1000 cap; releasing leaves it at the count's position.
+        let steps_height = (steps_now as f64).ln() / STEPS_MAX.ln();
+        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, steps_height.clamp(0.0, 1.0));
         // The Ease knob sits at the shape's halfway point under the easing, the linked Ramp
         // handle hangs off it perpendicular to the spine (its distance the Ramp), and the Colour
         // handle sits at the colour's halfway point on the spine's other side. The easing moves
@@ -208,22 +209,16 @@ impl BlendHandles {
         json!({ "spacing": "steps", "steps": self.steps_count_at(p) })
     }
 
-    /// The count the pointer at `p` gives on the steps scale.
+    /// The count the pointer at `p` gives on the steps scale: 1 at the box's bottom, 1000 at
+    /// its top, exponential in between. Dragging above the box clamps to the 1000 cap.
     fn steps_count_at(&self, p: Point) -> u32 {
-        let h = self.steps_height_at(p);
-        let now = f64::from(self.steps_now.max(1));
-        let n = if h <= 1.0 {
-            now.powf(h)
-        } else {
-            // Above the box the scale runs from the count at its top to the 1000 cap.
-            let f = ((h - 1.0) / STEPS_BOXES_ABOVE).clamp(0.0, 1.0);
-            (now.ln() + (STEPS_MAX.ln() - now.ln()) * f).exp()
-        };
+        let h = self.steps_height_at(p).min(1.0);
+        let n = STEPS_MAX.powf(h);
         n.round().clamp(1.0, STEPS_MAX) as u32
     }
 
     /// Where the steps handle sits for the pointer at `p`: on the edge, at the pointer's height
-    /// (so the knob follows it while it drags, and rests at the top again when let go).
+    /// (so the knob follows it while it drags, and stays at the count's position when let go).
     pub fn steps_point_at(&self, p: Point) -> Point {
         steps_place(self.edge_base, self.edge_up, self.edge_out, self.edge_gap, self.edge_h, self.steps_height_at(p))
     }
@@ -507,36 +502,35 @@ mod tests {
     }
 
     #[test]
-    fn the_steps_handle_rests_at_the_box_top_and_drags_the_count() {
+    fn the_steps_handle_rests_at_the_count_height_on_the_edge() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        // The handle rests at the box's top corner, 22 pt off its right edge, whatever the count.
-        assert!(h.steps_at.distance(Point::new(142.0, 0.0)) < 1e-6, "{:?}", h.steps_at);
         assert_eq!(h.steps_now, 3);
-        // Its height is the count on an exponential scale anchored at the count now: the bottom
-        // corner is 1, halfway up is sqrt(3), the top corner 3, and half a box above it the 1000
-        // cap (further up stays there).
+        // The handle rests at the height matching 3 on the fixed 1..1000 scale: low on the box,
+        // not pinned at the top corner.
+        assert!(h.steps_at.y > 10.0, "handle should sit low for few steps, got {:?}", h.steps_at);
+        assert!(h.steps_at.distance(Point::new(142.0, 0.0)) > 5.0, "not at the top corner: {:?}", h.steps_at);
+        // The scale: bottom 1, middle ~32, top 1000; above the box caps at 1000.
         assert_eq!(h.steps_params(Point::new(142.0, 20.0))["steps"], 1);
-        assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 2);
-        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 3);
+        assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 32);
+        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 1000);
         assert_eq!(h.steps_params(Point::new(142.0, -10.0))["steps"], 1000);
         assert_eq!(h.steps_params(Point::new(142.0, -20.0))["steps"], 1000);
         // The knob follows the pointer up the edge.
         assert!(h.steps_point_at(Point::new(142.0, 10.0)).distance(Point::new(142.0, 10.0)) < 1e-6);
-        // A count of 100 keeps the clean log scale: bottom 1, halfway 10, top 100.
+        // A count of 100 sits two thirds of the way up (log scale).
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::Steps(100));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         assert_eq!(h.steps_now, 100);
         assert_eq!(h.steps_params(Point::new(142.0, 20.0))["steps"], 1);
-        assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 10);
-        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 100);
+        assert_eq!(h.steps_params(Point::new(142.0, 10.0))["steps"], 32);
+        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 1000);
         assert_eq!(h.steps_params(Point::new(142.0, -10.0))["steps"], 1000);
-        // A Smooth Color blend still drags to Specified Steps, from the count it shows now.
+        // A Smooth Color blend shows its own count (50) at its height.
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::SmoothColor);
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
-        assert!(h.steps_at.distance(Point::new(142.0, 0.0)) < 1e-6, "{:?}", h.steps_at);
         assert_eq!(h.steps_now, 50);
-        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 50);
+        assert_eq!(h.steps_params(Point::new(142.0, 0.0))["steps"], 1000);
         assert_eq!(h.steps_params(Point::new(142.0, 20.0))["steps"], 1);
     }
 
@@ -568,8 +562,10 @@ mod tests {
         s.set([b]);
         let p = paint();
         let c = cx(&d, &s, &p);
-        let rest = 0.0;
-        // The steps handle at the box's top corner, the ease knob on the spine, the linked Ramp
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        // The handle rests at its count's height on the fixed 1..1000 scale, so rest there.
+        let rest = h.steps_at.y;
+        // The steps handle at its count height, the ease knob on the spine, the linked Ramp
         // handle above it and the colour handle below.
         for (at, part) in [
             (Point::new(142.0, rest), BlendPart::Steps),

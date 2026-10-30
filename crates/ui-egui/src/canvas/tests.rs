@@ -7191,9 +7191,9 @@ fn a_selected_blend_shows_its_handles_and_hovering_names_one() {
 }
 
 /// The step-count knob follows the pointer up the box's edge while it drags, and when it is let
-/// go the new count becomes the top of its scale, so the knob snaps back to the box's top.
+/// go it rests at the height matching the new count on the fixed 1..1000 scale.
 #[test]
-fn the_step_count_knob_follows_the_pointer_and_snaps_back_to_the_top() {
+fn the_step_count_knob_follows_the_pointer_and_rests_at_its_count() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app.ui.task_bar = false;
@@ -7226,16 +7226,16 @@ fn the_step_count_knob_follows_the_pointer_and_snaps_back_to_the_top() {
             .collect()
     };
     let near = |at: &[egui::Pos2], what: &str, p: egui::Pos2| assert!(at.iter().any(|q| q.distance(p) < 2.0), "{what} at {p:?} among {at:?}");
-    // Press at rest and drag halfway down the edge: the count goes from 4 to 2, and the knob
-    // draws at the pointer instead of at the top.
+    // Press at rest and drag halfway down the edge: the count goes from 4 to ~32, and the knob
+    // draws at the pointer instead of at its rest height.
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(top), primary(top, true)]);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(middle)]);
     let at = knobs(&mut app);
     near(&at, "the dragging steps knob", middle);
     assert!(at.iter().all(|q| q.distance(top) > 2.0), "not resting at the top while it drags: {at:?}");
-    // Let go: 2 is the count now, so it becomes the new top of the scale and the knob rests there.
+    // Let go: 32 is the count now, so the knob stays at the count's height (halfway up the box).
     frame(&mut app, &ctx, vec![primary(middle, false)]);
     let h = handles(&mut app);
-    assert_eq!(h.steps_now, 2);
+    assert_eq!(h.steps_now, 32);
     near(&knobs(&mut app), "the steps knob after the drag", xf.to_screen(h.steps_at));
 }

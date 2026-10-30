@@ -422,11 +422,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   steps between any two keys, spine or not, while Spine Never takes the spine off the distribution and the
   canvas, Always runs the steps along the straight lines between the keys, and Auto follows a replaced spine or
   Align to Path. With a blend selected, the Blend tool and the Selection tool show its
-  on-canvas handles: a step-count handle at the top corner of the selection bounding box's right edge that
-  slides down and up — the pointer's height is the count on an exponential scale (a box height covers 1–100
-  steps, half a box above it reaches the 1000 cap, and the handle keeps its place when the box rotates) and it
-  returns to the top when let go — switching a Smooth Color or Distance blend to Specified Steps with the first
-  drag — and, on the blend's spine, the Ease knob at the blend's midpoint (the step-count pair's halfway step:
+  on-canvas handles: a step-count handle on the selection bounding box's right edge that slides down
+  and up — the pointer's height is the count on an exponential scale (a box height covers 1–1000
+  steps, and the handle keeps its place when the box rotates) and it rests where the count lands
+  instead of pinning to the top — switching a Smooth Color or Distance blend to Specified Steps with
+  the first drag — and, on the blend's spine, the Ease knob at the blend's midpoint (the step-count pair's halfway step:
   drag it to move where the 50% step lands) with a linked Ramp handle above it (its distance from the knob the
   easing's strength) and the Colour handle below, each drag one undo step in step with the panel, hovering a
   handle naming it on a pill. The Blend Options dialog carries the same controls as the panel. The step
@@ -650,7 +650,8 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-29 | minor | G1: Blend panel and Blend Options parity: Midpoint slider (1–99%) added to both, easing ungated from Spine so Type/Ramp/Midpoint/Shift show whenever a blend is selected; the dialog gains Direction (dc-swap) and Reverse Spine buttons that cancel the live preview, roll it back, run the command as its own undo step, then re-preview the fields; the step-count knob follows the pointer live on the bbox edge while dragging (exponential 1 at bottom, count at top, 1000 half a box above), snaps back to the top on release with the released count as the new range end; estimate unchanged |
+| 2026-10-30 | minor | G1: blend step-count knob now rests at a height that matches the count on a fixed 1–1000 exponential scale (1 at the bottom of the box, 1000 at the top) instead of always pinning to the top corner, so a blend with few steps sits low; dragging follows the pointer live and the knob stays at the released count's height. fmt, clippy -D warnings, doc/tools/engine/ui-egui tests and wasm check pass |
+| 2026-10-29 | minor | G1: Blend panel and Blend Options parity: Midpoint slider (1–99%) added to both, easing ungated from Spine so Type/Ramp/Midpoint/Shift show whenever a blend is selected; the dialog gains Direction (dc-swap) and Reverse Spine buttons that cancel the live preview, roll it back, run the command as its own undo step, then re-preview the fields; estimate unchanged |
 | 2026-10-28 | minor | G1: blend handles pass two: the Ease knob is the blend's midpoint (where the 50% step lands) and the linked Ramp handle shapes the easing to it, so the knob controls the base point instead of the curve twice; Type and Ramp move the steps between any two keys, so the Ease, linked Ramp and Colour handles show in every spine mode; the step-count knob sits at the box's top corner during a drag's value and returns there when let go, and its chevrons draw over its white fill; spine positions and Align to Path angles come from the bezier itself, so many steps turn smoothly instead of in polyline jumps; estimate unchanged |
 | 2026-10-28 | minor | G1: blend easing and spine: the Blend panel and Blend Options gain Spine (Auto, Always, Never), Never takes the spine off the distribution and the canvas, Always eases along the straight lines between the keys, and Auto follows a replaced spine or Align to Path; with a blend selected the Blend tool and the Selection tool show its on-canvas handles — the step-count handle riding the selection box's right edge (its height the count, exponential 1–100 in the box to 1000 half a box above, kept when the box rotates), the Ease knob with a linked Ramp handle and the Colour handle, each drag one undo step, hover names on pills; Blend Options carries the panel's easing; number fields centre their text again. One curve for the whole blend; estimate unchanged |
 | 2026-10-26 | minor | G7: View › New View… / Edit Views… ([public source](https://helpx.adobe.com/illustrator/using/viewing-artwork.html)): the View menu lists every one of a document's 25 saved views (it listed 10), Edit Views… lists them to rename or delete in one undo step (`view.saved.edit {edits}`), and a file's views are checked when it opens; New View/Edit Views leave G7's missing list; estimate unchanged |

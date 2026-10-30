@@ -364,18 +364,19 @@ mod tests {
             "{acts:?}"
         );
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 70.0, 24.0));
-        // The steps handle rides the box's right edge, its height the count: halfway from the
-        // bottom (1) to the count now (3) is 2, and half a box above the top reaches the 1000
-        // cap. The knob follows the pointer while it drags.
-        let rest = 0.0;
+        // The steps handle rides the box's right edge, its height the count on the fixed
+        // 1..1000 scale: the bottom is 1, the top is 1000, halfway up is ~32, and half a box
+        // above the top reaches the 1000 cap. The knob follows the pointer while it drags.
+        // Rest at the count's height (3 → low on the box).
+        let rest = 20.0 * (1.0 - 3.0_f64.ln() / 1000.0_f64.ln());
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 142.0, rest));
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 142.0, 10.0));
         assert!(
             matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
-                if id == "object.blend.options" && p["spacing"] == json!("steps") && p["steps"] == json!(2)),
+                if id == "object.blend.options" && p["spacing"] == json!("steps") && p["steps"] == json!(32)),
             "{acts:?}"
         );
-        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "2")), "{:?}", t.overlays(&c));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "32")), "{:?}", t.overlays(&c));
         let live = t.blend_handle().expect("the steps knob is live");
         assert_eq!((live.0, live.1), (b, crate::blendhandles::BlendPart::Steps));
         assert!(live.2.distance(Point::new(142.0, 10.0)) < 1e-6, "{live:?}");
