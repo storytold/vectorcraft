@@ -71,6 +71,8 @@ pub struct Brackets {
     span: (f64, f64),
     /// The end bracket was placed (not the end of the path, or once round it).
     end_set: bool,
+    /// The type reads right to left: it begins at the end bracket and ends at the start one.
+    rtl: bool,
 }
 
 impl Brackets {
@@ -88,7 +90,10 @@ impl Brackets {
         if !det.is_finite() || det.abs() < 1e-12 || arc.is_empty() {
             return None;
         }
-        Some(Self { id, xf: t.xf, arc, span: t.kind.path_span()?, end_set: end.is_some() })
+        let text = t.plain_text();
+        let first = text.split(['\n', '\u{2029}']).next().unwrap_or_default();
+        let rtl = !t.vertical && vectorcraft_text::paragraph_is_rtl(first, t.para_at(0).direction);
+        Some(Self { id, xf: t.xf, arc, span: t.kind.path_span()?, end_set: end.is_some(), rtl })
     }
 
     /// Where bracket `b` stands, as a fraction of the path's length (past 1 round a closed path).
@@ -114,23 +119,25 @@ impl Brackets {
 
     /// The lines that draw bracket `b` at `zoom` (screen px per point): a stem across the path, and
     /// for the start and end brackets a foot along it into the type's span, ending in an arrowhead
-    /// (start) or a stop bar (end).
+    /// where the type begins (the start bracket, or the end one for type read right to left) and a
+    /// stop bar where it ends.
     fn lines(&self, b: Bracket, zoom: f64) -> Vec<(Point, Point)> {
         let px = 1.0 / zoom.max(1e-9);
         let (p, dir, up) = self.frame(self.at(b));
         let top = p + up * UP_PX * px;
         let stem = (p - up * DOWN_PX * px, top);
         let tip = TIP_PX * px;
-        match b {
-            Bracket::Centre => vec![stem],
-            Bracket::Start => {
-                let end = top + dir * FOOT_PX * px;
-                vec![stem, (top, end), (end, end - dir * tip + up * tip), (end, end - dir * tip - up * tip)]
-            }
-            Bracket::End => {
-                let end = top - dir * FOOT_PX * px;
-                vec![stem, (top, end), (end + up * tip, end - up * tip)]
-            }
+        // The foot points into the span: along the path from the start bracket, back from the end.
+        let into = match b {
+            Bracket::Centre => return vec![stem],
+            Bracket::Start => dir,
+            Bracket::End => -dir,
+        };
+        let end = top + into * FOOT_PX * px;
+        if (b == Bracket::Start) != self.rtl {
+            vec![stem, (top, end), (end, end - into * tip + up * tip), (end, end - into * tip - up * tip)]
+        } else {
+            vec![stem, (top, end), (end + up * tip, end - up * tip)]
         }
     }
 
@@ -716,5 +723,41 @@ mod tests {
         let Some(Overlay::Path { path, .. }) = o.last() else { panic!("{o:?}") };
         let w = vectorcraft_geom::kurbo::Shape::bounding_box(path).width();
         assert!((w - 45.0).abs() < 1.0, "the line is {w} pt long, not the 45 pt the type will take");
+    }
+
+    /// For type read right to left the arrowhead marks where it begins, the end bracket, and the
+    /// stop bar the start bracket; the feet still point into the span.
+    #[test]
+    fn right_to_left_type_has_its_arrowhead_on_the_end_bracket() {
+        let (mut d, id) = doc_with_path_type();
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            t.para.direction = Some(vectorcraft_doc::ParaDirection::RightToLeft);
+        }
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let b = Brackets::of(&cx).pop().unwrap();
+        assert!(b.rtl);
+        // The start bracket at x 160: its foot runs right to x 167 and ends in a bar.
+        assert_eq!(
+            b.lines(Bracket::Start, 1.0),
+            vec![
+                (Point::new(160.0, 306.0), Point::new(160.0, 278.0)),
+                (Point::new(160.0, 278.0), Point::new(167.0, 278.0)),
+                (Point::new(167.0, 275.0), Point::new(167.0, 281.0)),
+            ]
+        );
+        // The end bracket at x 400: its foot runs left to x 393 and ends in an arrowhead pointing left.
+        let end = b.lines(Bracket::End, 1.0);
+        assert_eq!(end.len(), 4);
+        assert!(end.contains(&(Point::new(393.0, 278.0), Point::new(396.0, 275.0))), "{end:?}");
+        // Arabic text with no direction set reads right to left too.
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            let mut arabic = vectorcraft_doc::TextObject::point(Point::ZERO, "سكة", Default::default());
+            arabic.kind = t.kind.clone();
+            **t = arabic;
+        }
+        let cx = crate::testutil::cx(&d, &s, &p);
+        assert!(Brackets::of(&cx).pop().unwrap().rtl);
     }
 }
