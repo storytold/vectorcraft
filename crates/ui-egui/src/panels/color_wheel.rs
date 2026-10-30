@@ -23,16 +23,22 @@ const MAX_WHEEL: f32 = 200.0;
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
 const MEMORY: &str = "color-wheel-hsb";
 
-/// What the HSB picked last belongs to: the document, the selected objects, the proxy, the
-/// gradient stop or freeform point, and the color the pick stored. The wheel shows that HSB only
-/// while all of them are unchanged.
+/// What the HSB picked last belongs to: the document, the selected objects or text characters,
+/// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
+/// the pick stored. The wheel shows that HSB only while all of them are unchanged.
 #[derive(Clone, Debug, PartialEq)]
 struct Owner {
     doc: Option<u64>,
     selection: Vec<NodeId>,
+    /// The Type tool's selected characters, when it edits the paint.
+    text_selection: Option<(NodeId, usize, usize)>,
+    /// The Appearance panel's active fill or stroke row.
+    appearance_item: Option<usize>,
     fill: bool,
     /// The selected gradient stop (`Some((false, i))`) or freeform point (`Some((true, i))`).
     slot: Option<(bool, usize)>,
+    /// The gradient behind a selected stop or point, including its other colors.
+    gradient: Option<Paint>,
     color: Color,
 }
 
@@ -47,8 +53,11 @@ impl Owner {
         Self {
             doc: st.map(|d| d.uid),
             selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
+            text_selection: super::character::text_editing(app),
+            appearance_item: app.session.appearance_item(),
             fill: app.session.fill_active,
             slot,
+            gradient: slot.map(|_| super::active_paint(app)),
             color,
         }
     }
@@ -150,8 +159,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
+    apply(app, &tgt, c, phase, behind);
     if !behind {
         set_pstate(ui.ctx(), MEMORY, Some((Owner::of(app, &tgt, c), cms.display_rgb(&c), hsb)));
     }
-    apply(app, &tgt, c, phase, behind);
 }

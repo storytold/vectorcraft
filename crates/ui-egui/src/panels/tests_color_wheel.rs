@@ -308,6 +308,75 @@ fn the_remembered_hue_stays_with_its_object() {
     assert!(!(1.0..359.0).contains(&hue), "the white object's own hue is 0°, not 120°: {hue}");
 }
 
+/// Equal colors on two appearance fills have separate remembered hues. A square pick on the
+/// second white fill uses its own 0° hue after the first fill was changed from green to white.
+#[test]
+fn the_remembered_hue_stays_with_its_appearance_item() {
+    let mut app = app(json!("#00ff00"));
+    let id = app.session.active().unwrap().selection.objects[0];
+    app.run("appearance.addFill", json!({})).unwrap(); // [Fill, Stroke, Fill]
+    app.run("paint.setFill", json!({"item": 2, "color": "#ffffff"})).unwrap();
+    app.run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+    let mut h = harness(app);
+    let sq = rect_of(&h, "Saturation and brightness");
+    drag(&mut h, &[in_square(sq, 0.995, 0.995), Pos2::new(sq.left() - 5.0, sq.top() - 3.0)], Modifiers::NONE);
+    let item_fill = |app: &VectorcraftApp, index| {
+        app.session.doc().unwrap().doc.node(id).unwrap().appearance.fill_at(Some(index)).unwrap().paint.color().unwrap()
+    };
+    assert_eq!(item_fill(h.state(), 0), Color::WHITE);
+    assert_eq!(item_fill(h.state(), 2), Color::WHITE);
+    h.state_mut().run("appearance.setActiveItem", json!({"index": 2})).unwrap();
+    h.run_steps(1);
+    click(&mut h, in_square(sq, 0.995, 0.995), Modifiers::NONE);
+    let hue = hsb(&item_fill(h.state(), 2))[0];
+    assert!(!(1.0..359.0).contains(&hue), "the second fill's own hue is 0°, not 120°: {hue}");
+    assert_eq!(item_fill(h.state(), 0), Color::WHITE);
+}
+
+/// The Type tool can recolor a selected character range without changing the selected object.
+/// The next range of the same color starts with its own hue.
+#[test]
+fn the_remembered_hue_stays_with_its_text_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 100, "text": "AB", "color": "#00ff00"})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "fill": "#ffffff"})).unwrap();
+    app.select_tool("type");
+    app.session.set_tool_option("textSelection", &json!({"id": id, "start": 0, "end": 1}));
+    let mut h = harness(app);
+    let sq = rect_of(&h, "Saturation and brightness");
+    drag(&mut h, &[in_square(sq, 0.995, 0.995), Pos2::new(sq.left() - 5.0, sq.top() - 3.0)], Modifiers::NONE);
+    h.state_mut().session.set_tool_option("textSelection", &json!({"id": id, "start": 1, "end": 2}));
+    h.run_steps(1);
+    click(&mut h, in_square(sq, 0.995, 0.995), Modifiers::NONE);
+    let node = h.state().session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!("still text") };
+    assert_eq!(t.runs.first().unwrap().style.fill.color(), Some(Color::WHITE));
+    let hue = hsb(&t.runs.last().unwrap().style.fill.color().unwrap())[0];
+    assert!(!(1.0..359.0).contains(&hue), "the second character's own hue is 0°, not 120°: {hue}");
+}
+
+/// Replacing a gradient can keep the same selected stop and color while changing the paint it
+/// belongs to. The new gradient starts with that stop's own hue.
+#[test]
+fn the_remembered_hue_stays_with_its_gradient() {
+    let mut app = app(json!("#00ff00"));
+    let first = json!([{"offset": 0, "color": "#00ff00"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": first}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    let mut h = harness(app);
+    let sq = rect_of(&h, "Saturation and brightness");
+    drag(&mut h, &[in_square(sq, 0.995, 0.995), Pos2::new(sq.left() - 5.0, sq.top() - 3.0)], Modifiers::NONE);
+    let second = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#ff0000"}]);
+    h.state_mut().run("paint.setFill", json!({"gradient": {"stops": second}})).unwrap();
+    assert_eq!(h.state().session.selected_stop(), Some(0));
+    h.run_steps(1);
+    click(&mut h, in_square(sq, 0.995, 0.995), Modifiers::NONE);
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let hue = hsb(&g.gradient.stops[0].color)[0];
+    assert!(!(1.0..359.0).contains(&hue), "the new gradient's white stop has hue 0°, not 120°: {hue}");
+}
+
 /// The remembered HSB holds only while the color displays as it did when picked: in another
 /// working RGB space the wheel shows the color's own HSB there.
 #[test]
