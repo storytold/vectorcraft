@@ -328,8 +328,18 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         PathAlign::Center => (m.0 - m.1) * 0.5,
     };
     let mut x = 0.0;
+    // Stair Step: the block of joined glyphs (a script whose letters join, no space between them)
+    // being placed: where its baseline starts and how far along it the next glyph goes. A joined
+    // word steps as one block, so its joins stay closed; other glyphs each step on their own.
+    let mut stair: Option<(Point, f64)> = None;
     for (g, &step) in sg.iter().zip(&steps).take(fit) {
         let s = s0 + x;
+        let joined = g.cursive && !g.ch.is_whitespace() && g.inline.is_none();
+        let stair_at = match stair.filter(|_| joined) {
+            Some((base, along)) => base + Vec2::new(along, 0.0),
+            None => ap.at(s).0,
+        };
+        stair = joined.then(|| stair.map_or((stair_at, g.adv), |(base, along)| (base, along + g.adv)));
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
         let half = Affine::translate((-g.adv * 0.5, rise));
@@ -343,7 +353,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
                 Affine::translate(p.to_vec2()) * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0]) * half
             }
-            PathEffect::StairStep => Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise)),
+            PathEffect::StairStep => Affine::translate(stair_at.to_vec2()) * Affine::translate((0.0, rise)),
             // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
             // up side, and leaning at most 45° off the path's normal, [`GRAVITY_MIN_COS`]). The
             // glyph keeps its height across the path and so its size: the y axis is as long as it

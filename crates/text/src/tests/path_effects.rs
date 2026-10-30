@@ -178,3 +178,34 @@ fn gravity_keeps_every_glyph_whole() {
         }
     }
 }
+
+/// Stair Step: the glyphs of a joined Arabic word step as one block, on one baseline, so their joins
+/// stay closed; Latin glyphs each step on their own.
+#[test]
+fn stair_step_keeps_joined_words_on_one_baseline() {
+    let [curve, _] = paths();
+    let baselines = |text: &str, style: CharStyle| -> Vec<(usize, f64)> {
+        let (_, l) = point_and_on_path(text, style, &curve, PathEffect::StairStep);
+        l.glyphs
+            .iter()
+            .filter(|g| text.get(g.byte..g.byte + g.len).is_some_and(|c| !c.trim().is_empty()))
+            .map(|g| (g.byte, g.xf.translation().y))
+            .collect()
+    };
+    let latin = baselines("Stairs", CharStyle { size: 24.0, ..CharStyle::default() });
+    assert!(latin.windows(2).any(|w| (w[0].1 - w[1].1).abs() > 0.5), "Latin steps glyph by glyph: {latin:?}");
+    let Some(face) = arabic_face() else {
+        eprintln!("no Arabic font installed: skipped");
+        return;
+    };
+    let text = "سكة للتصميم";
+    let words: Vec<_> = baselines(text, style(&face));
+    let word = |b: usize| text.get(..b).map_or(0, |t| t.chars().filter(|c| c.is_whitespace()).count());
+    for w in 0..2 {
+        let ys: Vec<f64> = words.iter().filter(|(b, _)| word(*b) == w).map(|(_, y)| *y).collect();
+        assert!(ys.len() > 1, "{words:?}");
+        assert!(ys.iter().all(|y| (y - ys[0]).abs() < 1e-6), "word {w} on one baseline: {ys:?}");
+    }
+    let first = |w: usize| words.iter().find(|(b, _)| word(*b) == w).map(|(_, y)| *y).unwrap_or_default();
+    assert!((first(0) - first(1)).abs() > 0.5, "the two words step apart: {words:?}");
+}
