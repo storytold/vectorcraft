@@ -13,6 +13,7 @@ pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
 pub mod brush_options;
+pub mod bullets_numbering;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -321,6 +322,7 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,

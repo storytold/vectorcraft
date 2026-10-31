@@ -535,6 +535,101 @@ fn backspace_deletes_selection_or_word() {
     assert_eq!(tool.caret, 6);
 }
 
+/// Tab and Shift+Tab with the caret at the start of a list paragraph move it a level down or up
+/// with one `text.setFormat` (one undo step), ending the typing first; at level 1 Shift+Tab and at
+/// level 9 Tab do nothing. Anywhere else Tab inserts a tab: in the middle or at the end of a list
+/// paragraph, with characters selected, and in a paragraph in no list.
+#[test]
+fn tab_at_the_start_of_a_list_paragraph_changes_its_level() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let (mut d, id, mut tool) = editing("One\nTwo\nThree");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    let dot = |level| vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot).at_level(level)), ..Default::default() };
+    t.set_paragraph_styles(vec![dot(1), dot(9), vectorcraft_doc::ParaStyle::default()]);
+    let press = |tool: &mut TypeTool, at: (usize, usize), mods: Mods| {
+        (tool.anchor, tool.caret) = at;
+        key(tool, &d, ToolKey::Tab, mods)
+    };
+    let level = |acts: &[Action]| match acts {
+        [Action::Exec(cmd, p)] if cmd == "text.setFormat" => {
+            assert_eq!((p["id"].as_u64(), p["end"].as_u64()), (Some(id.0), p["start"].as_u64()));
+            (p["start"].as_u64(), p["listLevel"].as_i64())
+        }
+        other => panic!("not a level change: {other:?}"),
+    };
+    assert_eq!(level(&press(&mut tool, (0, 0), Mods::default())), (Some(0), Some(2)));
+    assert_eq!(level(&press(&mut tool, (4, 4), SHIFT)), (Some(4), Some(8)));
+    assert!(press(&mut tool, (0, 0), SHIFT).is_empty(), "Shift+Tab at level 1 does nothing");
+    assert!(press(&mut tool, (4, 4), Mods::default()).is_empty(), "Tab at level 9 does nothing");
+    let inserts_tab = |acts: &[Action], at: u64| {
+        acts.iter().any(
+            |a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["start"].as_u64() == Some(at) && p["runs"][0]["text"] == "\t"),
+        )
+    };
+    for (at, why) in [((1, 1), "mid-item"), ((3, 3), "at the item's end"), ((0, 2), "with characters selected"), ((8, 8), "in no list")] {
+        let mut fresh = TypeTool::new("type");
+        fresh.start_editing(id, 0);
+        let acts = press(&mut fresh, at, Mods::default());
+        assert!(inserts_tab(&acts, at.0 as u64), "{why}: {acts:?}");
+    }
+    // While typing, Tab at the start of a list paragraph ends the typing first.
+    let mut typing = TypeTool::new("type");
+    typing.start_editing(id, 3);
+    let snapshot = d.clone();
+    let mut after = d.clone();
+    let acts = typing.text_input(&cx(&d, &Selection::default(), &paint()), "!");
+    apply(&mut after, &snapshot, &acts);
+    let acts = {
+        (typing.anchor, typing.caret) = (5, 5);
+        typing.key(&cx(&after, &Selection::default(), &paint()), ToolKey::Tab, SHIFT)
+    };
+    assert_eq!(acts.first(), Some(&Action::Commit));
+    assert!(matches!(&acts[1..], [Action::Exec(cmd, p)] if cmd == "text.setFormat" && p["listLevel"] == 8 && p["start"] == 5), "{acts:?}");
+}
+
+/// In a threaded frame, the start of the frame is the start of a list paragraph only when the
+/// frames before it end with a paragraph break: Tab there in a paragraph that goes on from the
+/// frame before inserts a tab, and Tab after the paragraph's end changes the next one's level.
+#[test]
+fn tab_at_the_start_of_a_threaded_frame_changes_a_level_only_at_a_paragraph_start() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let dot = vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot)), ..Default::default() };
+    let threaded = |first: &str, second: &str| {
+        let (mut d, a) = doc_with_text(first);
+        let l = d.layers[0].id;
+        let b = d.alloc_id();
+        let mut t = TextObject::point(Point::new(100.0, 300.0), second, CharStyle { size: 20.0, ..Default::default() });
+        t.set_paragraph_styles(vec![dot.clone(); second.matches('\n').count() + 1]);
+        let NodeKind::Text(head) = &d.node(a).unwrap().kind else { panic!("text") };
+        t.first_para_continues = vectorcraft_text::thread::continued(&[head, &t])[1];
+        d.insert(Some(l), 0, Node::new(b, NodeKind::Text(Box::new(t)))).unwrap();
+        let NodeKind::Text(t) = &mut d.node_mut(a).unwrap().kind else { panic!("text") };
+        t.set_paragraph_styles(vec![dot.clone(); first.matches('\n').count() + 1]);
+        d.text_threads.push(vec![a, b]);
+        let mut tool = TypeTool::new("type");
+        tool.start_editing(b, 0);
+        (d, b, tool)
+    };
+    let level_change = |acts: &[Action]| matches!(acts, [Action::Exec(cmd, p)] if cmd == "text.setFormat" && p["listLevel"] == 2);
+    let inserts_tab =
+        |acts: &[Action]| acts.iter().any(|a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["runs"][0]["text"] == "\t"));
+    // "Two" goes on from the first frame: Tab at the frame's start inserts a tab, and Tab at the
+    // start of "Three" changes its level.
+    let (d, _, mut tool) = threaded("One\nTw", "o\nThree");
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(inserts_tab(&acts), "mid-paragraph: {acts:?}");
+    let (d, _, mut tool) = threaded("One\nTw", "o\nThree");
+    (tool.anchor, tool.caret) = (2, 2);
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(level_change(&acts), "at the next paragraph: {acts:?}");
+    // A frame after a paragraph break, or after frames with no text, starts a paragraph.
+    for first in ["One\n", ""] {
+        let (d, _, mut tool) = threaded(first, "Two");
+        let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+        assert!(level_change(&acts), "after {first:?}: {acts:?}");
+    }
+}
+
 #[test]
 fn double_and_triple_click_select_word_and_paragraph() {
     let (d, id, mut tool) = editing("Alpha beta\ngamma");
@@ -1546,4 +1641,32 @@ fn shift_enter_inserts_soft_return() {
     apply(&mut d, &snap, &acts);
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "Hello\u{2028}\n World");
+}
+
+#[test]
+fn soft_return_in_a_list_item_keeps_tab_within_the_paragraph() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+
+    let (mut d, id, mut tool) = editing("One");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    t.set_all_paras(vectorcraft_doc::ParaStyle { list: Some(ParaList::bulleted(Bullet::Dot)), ..Default::default() });
+    tool.caret = 3;
+    tool.anchor = 3;
+    let snapshot = d.clone();
+    let acts = key(&mut tool, &d, ToolKey::Enter, SHIFT);
+    apply(&mut d, &snapshot, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.plain_text(), "One\u{2028}");
+    assert_eq!(t.paragraph_count(), 1);
+    assert_eq!(t.para_at(0).list, Some(ParaList::bulleted(Bullet::Dot)));
+
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(acts.iter().any(
+        |a| matches!(a, Action::Preview(cmd, p) if cmd == "text.editRange" && p["runs"][0]["text"].as_str().is_some_and(|s| s.ends_with('\t')))
+    ));
+
+    tool.caret = 0;
+    tool.anchor = 0;
+    let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
+    assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.setFormat" && p["listLevel"] == 2)));
 }

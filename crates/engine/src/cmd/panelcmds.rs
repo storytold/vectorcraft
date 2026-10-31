@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\" (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\", listAlign?: \"left\"|\"right\", listLevel?: 1..9 (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right; listAlign \"right\" (Bullets and Numbering…'s Alignment) puts the marker against the text, and \"left\" (the default) puts it at the first line's start, the text starting at the same place with either; it sets the paragraphs that are in a list or that the call puts in one, and a list keeps it when it changes between bullets and numbers; listLevel (Tab and Shift+Tab at the start of a list paragraph, Bullets and Numbering…'s Level) is a whole number from 1 to 9 that sets the paragraphs in a list or that the call puts in one, a list keeping it when it changes between bullets and numbers, and a list turned on without listLevel starting at level 1; each level past the first sets the paragraph 18 pt further in than its left indent, and each level counts its own numbers: a list paragraph with text sets the counts of the levels deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a shallower level goes on with that level's count), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -315,6 +315,19 @@ fn spacing_param(p: &Value, key: &str, c: &str) -> Result<Option<[Option<f64>; 3
     }
 }
 
+/// The list level `listLevel` gives (None without one): a whole number from 1 to
+/// [`vectorcraft_doc::text::LIST_LEVELS`], written `2` or `2.0`.
+fn list_level_param(p: &Value, cmd: &str) -> Result<Option<u8>> {
+    let key = "listLevel";
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let (min, max) = (1, vectorcraft_doc::text::LIST_LEVELS);
+    match v.as_f64() {
+        Some(x) if x.fract() == 0.0 && (min as f64..=max as f64).contains(&x) => Ok(Some(x as u8)),
+        Some(x) => Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})"))),
+        None => Err(bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
+
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
     let ids = super::typecmd::text_targets(s, p, C)?;
@@ -344,6 +357,8 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "list",
         "bullet",
         "number",
+        "listAlign",
+        "listLevel",
         "hyphenate",
         "wordsLongerThan",
         "afterFirst",
@@ -454,6 +469,11 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         &["none", "arabic", "upperLetters", "lowerLetters", "upperRoman", "lowerRoman", "twoDigits", "threeDigits"],
     )?
     .map(|n| NUMBERS.iter().find(|(k, _)| *k == n).map(|&(_, style)| style));
+    // …and `listAlign` where the marker stands before the text, in every list paragraph.
+    let list_align = super::object::choice(p, C, "listAlign", &["left", "right"])?
+        .map(|a| if a == "right" { vectorcraft_doc::text::ListAlign::Right } else { vectorcraft_doc::text::ListAlign::Left });
+    // …and `listLevel` the level of every list paragraph, 1 to 9.
+    let list_level = list_level_param(p, C)?;
     let indents_given = num("leftIndent").is_some() || num("firstLineIndent").is_some();
     let spacing = |k: &str| spacing_param(p, k, C);
     let (word_spacing, letter_spacing, glyph_scaling) = (spacing("wordSpacing")?, spacing("letterSpacing")?, spacing("glyphScaling")?);
@@ -528,6 +548,31 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             super::textedit::change_font_axes(st, v);
         }
     };
+    // The list settings of one paragraph: `list`, `bullet`, `number`, `listAlign` and `listLevel`.
+    let lists = |para: &mut vectorcraft_doc::ParaStyle| {
+        if list.is_some() || bullet.is_some() || number.is_some() {
+            let on = list != Some("none") && bullet != Some(None) && number != Some(None);
+            let had = para.list;
+            // A numbered list for list "number", or without `list` for a number style.
+            let numbered = list == Some("number") || (list.is_none() && number.is_some());
+            // The list's other settings (the marker's alignment) stay as they were.
+            para.list = on.then(|| vectorcraft_doc::text::ParaList {
+                bullet: bullet.flatten().or(had.map(|l| l.bullet)).unwrap_or_default(),
+                number: numbered.then(|| number.flatten().or(had.and_then(|l| l.number)).unwrap_or_default()),
+                ..had.unwrap_or_default()
+            });
+            // A paragraph that joins a list with no left or first-line indent gets a
+            // hanging indent, unless the call sets an indent.
+            if on && had.is_none() && !indents_given && para.left_indent == 0.0 && para.first_line_indent == 0.0 {
+                para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
+                para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
+            }
+        }
+        if let Some(l) = para.list.as_mut() {
+            l.align = list_align.unwrap_or(l.align);
+            l.level = list_level.unwrap_or(l.level);
+        }
+    };
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -551,22 +596,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = num("spaceAfter") {
                     para.space_after = v.clamp(-MAX_PARA, MAX_PARA);
                 }
-                if list.is_some() || bullet.is_some() || number.is_some() {
-                    let on = list != Some("none") && bullet != Some(None) && number != Some(None);
-                    let had = para.list;
-                    // A numbered list for list "number", or without `list` for a number style.
-                    let numbered = list == Some("number") || (list.is_none() && number.is_some());
-                    para.list = on.then(|| vectorcraft_doc::text::ParaList {
-                        bullet: bullet.flatten().or(had.map(|l| l.bullet)).unwrap_or_default(),
-                        number: numbered.then(|| number.flatten().or(had.and_then(|l| l.number)).unwrap_or_default()),
-                    });
-                    // A paragraph that joins a list with no left or first-line indent gets a
-                    // hanging indent, unless the call sets an indent.
-                    if on && had.is_none() && !indents_given && para.left_indent == 0.0 && para.first_line_indent == 0.0 {
-                        para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
-                        para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
-                    }
-                }
+                lists(para);
                 if let Some(v) = flag("hyphenate") {
                     para.hyphenate = v;
                 }
@@ -654,14 +684,14 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The part of a story paragraph in one frame, as [`convert_list_to_text`] reads it: the frame,
 /// the frame's paragraph, its bytes there, its list, the marker the frame's layout draws for it
-/// and the numbered paragraphs the frame counts before it.
+/// and the numbered paragraphs the frame counts before it at each list level.
 struct ParagraphPart {
     frame: usize,
     index: usize,
     bytes: std::ops::Range<usize>,
     list: Option<vectorcraft_doc::text::ParaList>,
     marker: Option<String>,
-    count: u32,
+    count: vectorcraft_doc::text::ListCounts,
 }
 
 /// A paragraph of a story: its parts in thread order (a later frame's first paragraph goes on
@@ -703,7 +733,7 @@ fn marker_extent(
     lay: &vectorcraft_text::TextLayout,
     index: usize,
     bytes: std::ops::Range<usize>,
-    count: u32,
+    count: vectorcraft_doc::text::ListCounts,
 ) -> (f64, f64) {
     let width = |lay: &vectorcraft_text::TextLayout, start: usize| {
         lay.markers.iter().find(|m| lay.glyphs.get(m.glyphs.start).is_some_and(|g| g.byte == start)).map(|m| {
@@ -717,7 +747,7 @@ fn marker_extent(
         probe.runs = vectorcraft_text::edit::slice_runs(&t.runs, bytes.start, bytes.end);
         probe.ruby.clear();
         probe.set_all_paras(t.para_at(index).clone());
-        probe.list_count = count;
+        probe.set_list_counts(count);
         probe.first_para_continues = false;
         width(&vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe), 0).unwrap_or((0.0, 0.0))
     })
@@ -853,7 +883,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
         let plains: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
         for (f, ((id, t), plain)) in story.iter().zip(&frames).zip(&plains).enumerate() {
             let named = if ids.contains(id) { range.map_or(0..t.paragraph_count(), |r| r.paras(t)) } else { 0..0 };
-            let mut count = t.list_count;
+            let mut count = t.list_counts();
             let mut start = 0;
             for (k, piece) in plain.split('\n').enumerate() {
                 let bytes = start..start + piece.len();
@@ -915,8 +945,9 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
                 // the left indent, nor one past it in a paragraph with no tab of its own.
                 let style = t.para_at(para.index);
                 let (width, gap) = marker_extent(t, lay, para.index, para.bytes.clone(), para.count);
-                let pen = style.left_indent + style.first_line_indent + width;
-                let indent = style.left_indent;
+                // A list level past the first sets the paragraph further in than its left indent.
+                let indent = style.laid_out_left_indent();
+                let pen = indent + style.first_line_indent + width;
                 let before = style.tabs.iter().any(|tab| tab.position > pen + 1e-6 && tab.position < indent - 1e-6);
                 let end = pen + gap;
                 let needed = |x: f64| !plain_stop_at(&style.tabs, x) || style.tabs.iter().any(|tab| aligned_between(tab, pen, x));
@@ -948,6 +979,8 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
             // A paragraph in several frames is changed in its main part and in its empty parts:
             // re-flowing the thread gives the other parts with text the main part's style.
             let Some(mut style) = frames.get(para.frame).map(|t| t.para_at(para.index).clone()) else { continue };
+            // The paragraph keeps the indent its list level set it at.
+            style.left_indent = style.laid_out_left_indent();
             style.list = None;
             if direction.is_some() {
                 style.direction = direction;

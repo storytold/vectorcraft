@@ -21,7 +21,10 @@ pub use para_style::{
     ParaStyle, SingleWordJustify,
 };
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
-pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};
+pub use tabs_lists::{
+    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
+    TabStop,
+};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
@@ -94,6 +97,11 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
+    /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
+    /// and the file saves them only when not empty.
+    #[serde(default, rename = "listLevelCounts", skip_serializing_if = "Vec::is_empty")]
+    pub list_level_counts: Vec<u32>,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,

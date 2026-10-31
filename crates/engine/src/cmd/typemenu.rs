@@ -366,8 +366,10 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The point origin sits where the alignment anchors the first line.
             let p0 = t.para_at(0);
-            let (x0, x1) =
-                lay.lines.first().map_or((fb.x0, fb.x1), |l| (l.avail.0 - p0.left_indent - p0.first_line_indent, l.avail.1 + p0.right_indent));
+            let (x0, x1) = lay
+                .lines
+                .first()
+                .map_or((fb.x0, fb.x1), |l| (l.avail.0 - p0.laid_out_left_indent() - p0.first_line_indent, l.avail.1 + p0.right_indent));
             let ox = match p0.justify {
                 Justify::Center | Justify::JustifyCenter => (x0 + x1) * 0.5,
                 Justify::Right | Justify::JustifyRight => x1,

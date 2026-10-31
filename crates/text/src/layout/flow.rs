@@ -34,7 +34,7 @@ fn compose_para(
     let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
     // A tab's width depends on where it falls in its line, which the composer's fixed glyph widths
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
-    // The tab after a list marker always starts the first line and has a fixed width.
+    // The tab of a list marker is on the first line, with the marker, and has a fixed width.
     let has_tab = sg.iter().any(|g| g.ch == '\t' && g.len > 0);
     let has_soft_break = sg.iter().any(|g| g.ch == '\u{2028}');
     if composer != Composer::EveryLine
@@ -66,7 +66,7 @@ fn compose_para(
     // indents of a right-to-left list ([`line_indents`]) keep.
     while widths.len() < sg.len() {
         let first = widths.is_empty();
-        let ind_l = para.left_indent + if first && !continued { para.first_line_indent } else { 0.0 };
+        let ind_l = para.laid_out_left_indent() + if first && !continued { para.first_line_indent } else { 0.0 };
         // Only the first line's first word is known here. Later lines are placed as the composed
         // lines need: each fits its width, so its first word does too.
         let word = if first { word_width(sg, 0) } else { 0.0 };
@@ -104,11 +104,11 @@ fn compose_para(
 }
 
 /// The list marker of each of the paragraphs `paras` of `t` (None for none): bullets, and numbers
-/// counted through consecutive list paragraphs from [`TextObject::list_count`], as
+/// counted per level through consecutive list paragraphs from [`TextObject::list_counts`], as
 /// [`vectorcraft_doc::text::ParaList::next_marker`] counts them.
 pub(super) fn list_markers(t: &TextObject, paras: &[Range<usize>]) -> Vec<Option<String>> {
-    let mut count = t.list_count;
-    paras.iter().enumerate().map(|(pi, pr)| vectorcraft_doc::text::ParaList::next_marker(t.para_at(pi).list, pr.is_empty(), &mut count)).collect()
+    let mut counts = t.list_counts();
+    paras.iter().enumerate().map(|(pi, pr)| vectorcraft_doc::text::ParaList::next_marker(t.para_at(pi).list, pr.is_empty(), &mut counts)).collect()
 }
 
 /// Whether paragraph `para` (right to left when `rtl`) has its indents mirrored: a horizontal
@@ -120,9 +120,10 @@ fn mirrors_indents(para: &ParaStyle, rtl: bool, vertical: bool) -> bool {
 /// The indents at the left and at the right of a line of paragraph `para` (its first line when
 /// `first`). With `mirror` ([`mirrors_indents`]) the left and first-line indents are measured from
 /// the right and the right indent from the left: the bullet of a right-to-left list hangs at the
-/// right, and the lines it wraps to line up with the text after the bullet.
+/// right, and the lines it wraps to line up with the text after the bullet. A list level past the
+/// first adds to the left indent ([`ParaStyle::laid_out_left_indent`]), mirrored with it.
 fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
-    let start = para.left_indent + if first { para.first_line_indent } else { 0.0 };
+    let start = para.laid_out_left_indent() + if first { para.first_line_indent } else { 0.0 };
     if mirror { (para.right_indent, start) } else { (start, para.right_indent) }
 }
 
@@ -722,7 +723,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         let mut scale = 1.0;
         let mut leader = "";
         if glyph.ch == '\t' {
-            // The tab after a list marker keeps the width `prepend_marker` gave it.
+            // The tab of a list marker keeps the width `prepend_marker` gave it.
             if glyph.len > 0 {
                 (advance, leader) = tab_advance(&para.tabs, tab_origin, x - tab_shift, &sg[glyph_index + 1..trimmed.max(glyph_index + 1)]);
             }
@@ -763,7 +764,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         if glyph_index < paragraph.marker {
             let at = cx.out.glyphs.len();
             marker_glyphs = Some(marker_glyphs.map_or(at..at + 1, |range: Range<usize>| range.start.min(at)..range.end.max(at + 1)));
-            if glyph_index + 1 == paragraph.marker {
+            if glyph.ch == '\t' {
                 marker_tab = at;
             }
         }

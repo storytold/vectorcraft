@@ -206,7 +206,7 @@ impl Tool for TypeTool {
                 out
             }
             ToolKey::Enter => self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None),
-            ToolKey::Tab => self.replace(cx, "\t", None),
+            ToolKey::Tab => self.tab(cx, &t, &text, (a, b), mods.shift),
             ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };

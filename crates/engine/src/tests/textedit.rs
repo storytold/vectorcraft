@@ -703,6 +703,45 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     assert!(s.execute("text.startList", &json!({"at": 3})).is_err(), "id required");
 }
 
+/// A list typed with "1. " starts at level 1. Tab at the start of the item Return makes moves it
+/// to level 2, where it is numbered from 1, Return continues the list at that level, and
+/// Shift+Tab moves an item back up, where it goes on with level 1's count. "1. " typed at the
+/// start of an item at level 2 stays text.
+#[test]
+fn a_typed_list_takes_its_levels_from_tab_and_shift_tab() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let v = ViewInfo::default();
+    let mut s = session();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    let typed = |s: &mut Session, text: &str| {
+        for c in text.chars() {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+    };
+    let shift = Mods { shift: true, ..Mods::default() };
+    typed(&mut s, "1. Apples");
+    key(&mut s, ToolKey::Enter, Mods::default());
+    key(&mut s, ToolKey::Tab, Mods::default());
+    typed(&mut s, "Pears");
+    key(&mut s, ToolKey::Enter, Mods::default());
+    typed(&mut s, "Plums");
+    key(&mut s, ToolKey::Enter, Mods::default());
+    key(&mut s, ToolKey::Tab, shift);
+    typed(&mut s, "Figs");
+    let arabic = ParaList::numbered(NumberStyle::Arabic);
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "Apples\nPears\nPlums\nFigs");
+    assert_eq!((0..4).map(|i| t.para_at(i).list).collect::<Vec<_>>(), [arabic, arabic.at_level(2), arabic.at_level(2), arabic].map(Some));
+    assert_eq!(list_markers(&s, id), ["1.", "1.", "2.", "2."]);
+    key(&mut s, ToolKey::Enter, Mods::default());
+    key(&mut s, ToolKey::Tab, Mods::default());
+    typed(&mut s, "1. ");
+    let t = obj(&s, id);
+    assert_eq!((t.plain_text().as_str(), t.para_at(4).list), ("Apples\nPears\nPlums\nFigs\n1. ", Some(arabic.at_level(2))));
+}
+
 /// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
 /// and keeps what was typed, and typing goes on after it.
 #[test]
@@ -1142,6 +1181,18 @@ fn convert_area_point_keeps_text_in_place_for_every_alignment() {
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
         assert!(!lay.overflow);
     }
+}
+
+#[test]
+fn convert_area_to_point_keeps_a_deeper_list_item_in_place() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Item", "size": 18, "area": {"width": 150, "height": 200}})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "bullet", "listLevel": 3})).unwrap();
+    let before = first_glyph_doc_pos(&obj(&s, id));
+    s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+    let after = first_glyph_doc_pos(&obj(&s, id));
+    assert!((after - before).hypot() < 0.01, "{before:?} → {after:?}");
 }
 
 #[test]

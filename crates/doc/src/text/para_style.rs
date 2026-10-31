@@ -257,6 +257,12 @@ impl ParaStyle {
         }
     }
 
+    /// The left indent the layout sets the paragraph at: its left indent, and for a paragraph in a
+    /// list at a level past the first, [`ParaList::level_indent`] more.
+    pub fn laid_out_left_indent(&self) -> f64 {
+        self.left_indent + self.list.map_or(0.0, |l| l.level_indent())
+    }
+
     /// The leading of characters styled `st` in this paragraph, as the layout sets it: their own
     /// leading, or for Auto leading the paragraph's Justification › Auto Leading share of their
     /// size (exactly [`CharStyle::effective_leading`] at the default 120%, or when the share is

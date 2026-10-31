@@ -333,6 +333,13 @@ font-technology	Variable	Μεταβλητές
 	Apply Bullets	Εφαρμογή κουκκίδων
 	Numbered List	Αριθμημένη λίστα
 	Apply Numbers	Εφαρμογή αρίθμησης
+	Bullets and Numbering…	Κουκκίδες και αρίθμηση…
+	Numbers	Αριθμοί
+	Level:	Επίπεδο:
+	Bullet Character:	Χαρακτήρας κουκκίδας:
+	Number Style:	Στυλ αρίθμησης:
+	Left Indent:	Αριστερή εσοχή:
+	First Line Indent:	Εσοχή πρώτης γραμμής:
 	Convert to Text	Μετατροπή σε κείμενο
 	Filled Dot	Γεμάτη κουκκίδα
 	Dash	Παύλα

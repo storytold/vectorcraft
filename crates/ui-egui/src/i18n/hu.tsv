@@ -494,6 +494,13 @@ font-technology	Variable	Változó
 	Apply Bullets	Felsorolásjelek alkalmazása
 	Numbered List	Számozott lista
 	Apply Numbers	Számozás alkalmazása
+	Bullets and Numbering…	Felsorolásjelek és számozás…
+	Numbers	Számok
+	Level:	Szint:
+	Bullet Character:	Felsorolásjel:
+	Number Style:	Számozás stílusa:
+	Left Indent:	Bal behúzás:
+	First Line Indent:	Első sor behúzása:
 	Convert to Text	Átalakítás szöveggé
 	Filled Dot	Kitöltött pont
 	Dash	Gondolatjel

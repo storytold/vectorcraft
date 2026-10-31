@@ -2,7 +2,7 @@ use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
 use super::para_style::ParaStyle;
 use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
-use super::tabs_lists::ParaList;
+use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
 impl TextObject {
@@ -88,9 +88,19 @@ impl TextObject {
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
         }
+    }
+    /// The list counts the story's earlier frames carry into this frame at each level
+    /// ([`Self::list_count`] and [`Self::list_level_counts`]).
+    pub fn list_counts(&self) -> ListCounts {
+        ListCounts::from_parts(self.list_count, &self.list_level_counts)
+    }
+    /// Set the list counts the story's earlier frames carry into this frame ([`Self::list_counts`]).
+    pub fn set_list_counts(&mut self, counts: ListCounts) {
+        (self.list_count, self.list_level_counts) = counts.parts();
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()

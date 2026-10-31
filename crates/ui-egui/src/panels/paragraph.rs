@@ -1,8 +1,9 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), the
-//! Bullets and Numbered List buttons and their presets, indents, space before/after, Hyphenate,
-//! Insert Kashidas (with the Indic options), Mojikumi Set and Kinsoku Set (with the East Asian
-//! options); the panel menu turns Roman Hanging Punctuation on and off, opens Justification… and
-//! Hyphenation… and picks the Single-line or Every-line Composer.
+//! Bullets and Numbered List buttons and their presets (More Options opens Bullets and
+//! Numbering…), indents, space before/after, Hyphenate, Insert Kashidas (with the Indic options),
+//! Mojikumi Set and Kinsoku Set (with the East Asian options); the panel menu turns Roman Hanging
+//! Punctuation on and off, opens Justification… and Hyphenation… and picks the Single-line or
+//! Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
@@ -188,7 +189,7 @@ fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
 }
 
 /// A distance shared by every paragraph in scope, or `None` when they differ (blank spin field).
-fn shared_para_field(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> f64) -> Option<f64> {
+pub(crate) fn shared_para_field(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> f64) -> Option<f64> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -221,7 +222,7 @@ pub(crate) fn shared_single_word_justify(app: &VectorcraftApp) -> Option<SingleW
 }
 
 /// A paragraph attribute shared by every paragraph in scope, or `None` when they differ.
-fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
+pub(crate) fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -377,6 +378,25 @@ pub(crate) fn apply_numbers(app: &mut VectorcraftApp, p: &Value) -> Result<Value
     run_on_paragraphs(app, "text.setFormat", params)
 }
 
+/// The Bullets presets, in the order they are listed: (name, `text.setFormat`'s `bullet`, bullet;
+/// None for the preset that turns the list off).
+pub(crate) fn bullet_presets() -> [(&'static str, &'static str, Option<vectorcraft_doc::text::Bullet>); 5] {
+    use vectorcraft_doc::text::Bullet;
+    [
+        (tl!("None"), "none", None),
+        (tl!("Filled Dot"), "dot", Some(Bullet::Dot)),
+        (tl!("Dash"), "dash", Some(Bullet::Dash)),
+        (tl!("Hollow Circle"), "circle", Some(Bullet::Circle)),
+        (tl!("Filled Square"), "square", Some(Bullet::Square)),
+    ]
+}
+
+/// The first `n` numbers of number style `style`, as the Numbered List presets show them ("1, 2,
+/// 3").
+pub(crate) fn number_sample(style: vectorcraft_doc::text::NumberStyle, n: u32) -> String {
+    (1..=n).map(|k| style.format(k)).collect::<Vec<_>>().join(", ")
+}
+
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`): the markers of the
 /// list paragraphs of the selected type, or of those the Type tool's selection touches, become
 /// characters of the text and the lists are turned off (`text.convertListToText`, which also moves
@@ -389,9 +409,9 @@ pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, St
 /// The Bullets button and the arrow beside it (Paragraph panel). The button makes the paragraphs
 /// the panel acts on a bulleted list (`text.setFormat {list: "bullet"}`) and shows pressed while
 /// they all are one. The arrow lists the presets (`{bullet}`): None turns the list off, and the
-/// one every paragraph has is checked.
+/// one every paragraph has is checked. More Options after them opens Bullets and Numbering on its
+/// Bullets tab.
 pub fn bullets_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    use vectorcraft_doc::text::Bullet;
     let t = Tokens::get(ui.ctx());
     let shown = shared_para(app, |p| p.list.filter(|l| l.number.is_none()).map(|l| l.bullet));
     if widgets::icon_button(ui, "dc-para-bullets", tl!("Bullets"), matches!(shown, Some(Some(_))), size).clicked() {
@@ -404,31 +424,28 @@ pub fn bullets_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
     arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Bullets")));
     let arrow = arrow.on_hover_text(tl!("Bullets"));
-    let presets = [
-        (tl!("None"), "none", None),
-        (tl!("Filled Dot"), "dot", Some(Bullet::Dot)),
-        (tl!("Dash"), "dash", Some(Bullet::Dash)),
-        (tl!("Hollow Circle"), "circle", Some(Bullet::Circle)),
-        (tl!("Filled Square"), "square", Some(Bullet::Square)),
-    ];
+    let mut more = false;
     let picked = egui::Popup::menu(&arrow).show(|ui| {
         let mut picked = None;
-        for (name, key, bullet) in presets {
+        for (name, key, bullet) in bullet_presets() {
             if bullet_row(ui, name, bullet, shown == Some(bullet)) {
                 picked = Some(key);
             }
         }
+        more = more_options_row(ui);
         picked
     });
     if let Some(key) = picked.and_then(|r| r.inner) {
         format(app, json!({ "bullet": key }));
+    }
+    if more {
+        more_options(app, "bullets");
     }
 }
 
 /// A row of the Bullets presets: a check when `checked`, the bullet drawn (a slash for None), then
 /// its name. Whether it was clicked.
 fn bullet_row(ui: &mut Ui, name: &str, bullet: Option<vectorcraft_doc::text::Bullet>, checked: bool) -> bool {
-    use vectorcraft_doc::text::Bullet;
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(130.0, 22.0), egui::Sense::click());
     if resp.hovered() {
@@ -439,24 +456,53 @@ fn bullet_row(ui: &mut Ui, name: &str, bullet: Option<vectorcraft_doc::text::Bul
     if checked {
         painter.text(rect.left_center() + vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, "✓", font.clone(), t.text_strong);
     }
-    let c = rect.left_center() + vec2(28.0, 0.0);
-    let stroke = egui::Stroke::new(1.5, t.text_strong);
-    match bullet {
-        None => painter.line_segment([c + vec2(-5.0, 5.0), c + vec2(5.0, -5.0)], stroke),
-        Some(Bullet::Dot) => painter.circle_filled(c, 3.0, t.text_strong),
-        Some(Bullet::Dash) => painter.line_segment([c - vec2(4.0, 0.0), c + vec2(4.0, 0.0)], stroke),
-        Some(Bullet::Circle) => painter.circle_stroke(c, 3.0, egui::Stroke::new(1.2, t.text_strong)),
-        Some(Bullet::Square) => painter.rect_filled(egui::Rect::from_center_size(c, vec2(6.0, 6.0)), 0.0, t.text_strong),
-    };
+    paint_bullet(painter, rect.left_center() + vec2(28.0, 0.0), bullet, t.text_strong);
     painter.text(rect.left_center() + vec2(42.0, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), checked, name));
     resp.clicked()
 }
 
+/// Draw `bullet` centered on `c` in `color` as the presets show it (a slash for None).
+pub(crate) fn paint_bullet(painter: &egui::Painter, c: egui::Pos2, bullet: Option<vectorcraft_doc::text::Bullet>, color: egui::Color32) {
+    use vectorcraft_doc::text::Bullet;
+    let stroke = egui::Stroke::new(1.5, color);
+    match bullet {
+        None => painter.line_segment([c + vec2(-5.0, 5.0), c + vec2(5.0, -5.0)], stroke),
+        Some(Bullet::Dot) => painter.circle_filled(c, 3.0, color),
+        Some(Bullet::Dash) => painter.line_segment([c - vec2(4.0, 0.0), c + vec2(4.0, 0.0)], stroke),
+        Some(Bullet::Circle) => painter.circle_stroke(c, 3.0, egui::Stroke::new(1.2, color)),
+        Some(Bullet::Square) => painter.rect_filled(egui::Rect::from_center_size(c, vec2(6.0, 6.0)), 0.0, color),
+    };
+}
+
+/// More Options at the end of the Bullets and Numbered List presets, under a line. Whether it was
+/// clicked.
+fn more_options_row(ui: &mut Ui) -> bool {
+    let t = Tokens::get(ui.ctx());
+    ui.separator();
+    let (rect, resp) = ui.allocate_exact_size(vec2(130.0, 22.0), egui::Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, egui::CornerRadius::same(4), t.hover);
+    }
+    let name = tl!("More Options");
+    ui.painter().text(rect.left_center() + vec2(22.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text_strong);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), name));
+    resp.clicked()
+}
+
+/// More Options: open Bullets and Numbering on `tab` (`ui.bulletsAndNumbering`), or show why it
+/// can't open.
+fn more_options(app: &mut VectorcraftApp, tab: &str) {
+    if let Err(e) = app.run("ui.bulletsAndNumbering", json!({ "tab": tab })) {
+        app.status(e);
+    }
+}
+
 /// The Numbered List button and the arrow beside it (Paragraph panel). The button makes the
 /// paragraphs the panel acts on a numbered list (`text.setFormat {list: "number"}`) and shows
 /// pressed while they all are one. The arrow lists the presets (`{number}`), each shown by its
-/// first three numbers: None turns the list off, and the one every paragraph has is checked.
+/// first three numbers: None turns the list off, and the one every paragraph has is checked. More
+/// Options after them opens Bullets and Numbering on its Numbers tab.
 pub fn numbers_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     use vectorcraft_doc::text::NumberStyle;
     let t = Tokens::get(ui.ctx());
@@ -471,21 +517,25 @@ pub fn numbers_button(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     crate::icons::paint(ui, "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(10.0, 10.0)), t.text_dim);
     arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Numbered List")));
     let arrow = arrow.on_hover_text(tl!("Numbered List"));
+    let mut more = false;
     let picked = egui::Popup::menu(&arrow).show(|ui| {
         let mut picked = None;
         if bullet_row(ui, tl!("None"), None, shown == Some(None)) {
             picked = Some(None);
         }
         for style in NumberStyle::ALL {
-            let sample = (1..=3).map(|n| style.format(n)).collect::<Vec<_>>().join(", ");
-            if number_row(ui, &sample, shown == Some(Some(style))) {
+            if number_row(ui, &number_sample(style, 3), shown == Some(Some(style))) {
                 picked = Some(Some(style));
             }
         }
+        more = more_options_row(ui);
         picked
     });
     if let Some(style) = picked.and_then(|r| r.inner) {
         format(app, json!({ "number": style.map_or(json!("none"), |s| json!(s)) }));
+    }
+    if more {
+        more_options(app, "numbers");
     }
 }
 
