@@ -740,11 +740,19 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Reset Panel: the paragraphs the panel acts on ([`format`]) take Auto alignment, no list, no
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
-/// options, Auto direction, Bottom-to-Bottom Leading, Regular burasagari, the Hard kinsoku set, the
-/// Every-line Composer, Roman Hanging Punctuation off and no kashidas.
+/// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
+/// Set, Regular burasagari, the Hard kinsoku set, the Every-line Composer, Roman Hanging
+/// Punctuation off, no kashidas and no tab stops, as one undo step named Reset Panel (inside an
+/// undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
     let j = vectorcraft_doc::JustificationOptions::default();
+    // The Type tool's typing session stays an undo step of its own.
+    super::character::end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
     format(
         app,
@@ -754,10 +762,16 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "hyphenLimit": h.hyphen_limit, "hyphenationZone": h.zone, "hyphenateCapitalized": h.capitalized, "kashida": "none",
             "wordSpacing": j.word_spacing, "letterSpacing": j.letter_spacing, "glyphScaling": j.glyph_scaling,
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
-            "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "kinsoku": "hard", "composer": "everyLine",
-            "romanHangingPunctuation": false
+            "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
+            "composer": "everyLine", "romanHangingPunctuation": false
         }),
     );
+    para_cmd(app, "text.tabs.clear", json!({}));
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]
