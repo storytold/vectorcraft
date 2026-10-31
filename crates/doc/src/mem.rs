@@ -98,7 +98,7 @@ impl Document {
             vec_bytes(g) + g.iter().map(|g: &SwatchGroup| g.name.capacity() + swatches_bytes(&g.swatches)).sum::<usize>()
         });
         n += shared(&self.graphic_styles, &newer.graphic_styles, |g| {
-            vec_bytes(g) + g.iter().map(|g: &GraphicStyle| g.name.capacity() + appearance_heap(&g.appearance)).sum::<usize>()
+            vec_bytes(g) + g.iter().map(|g: &GraphicStyle| g.name.capacity() + appearance_heap_bytes(&g.appearance)).sum::<usize>()
         });
         let styles = |s: &Vec<TextStyleDef>| vec_bytes(s) + s.iter().map(|s| s.name.capacity() + map_bytes(&s.attrs)).sum::<usize>();
         n += shared(&self.char_styles, &newer.char_styles, styles);
@@ -245,7 +245,7 @@ fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
     let mut b = ALLOC + ARC + size_of::<Node>();
     b += n.name.as_ref().map_or(0, String::capacity);
     if !other.is_some_and(|m| Shared::ptr_eq(&m.appearance, &n.appearance)) {
-        b += ALLOC + ARC + appearance_heap(&n.appearance);
+        b += ALLOC + ARC + appearance_heap_bytes(&n.appearance);
     }
     if let Some(e) = n.extras_box() {
         b += ALLOC + size_of::<NodeExtras>();
@@ -289,32 +289,53 @@ fn text_bytes(t: &TextObject) -> usize {
         + vec_bytes(&t.cached_baselines)
 }
 
-/// The heap an appearance owns (not the appearance itself).
-fn appearance_heap(a: &Appearance) -> usize {
+/// Approximate retained memory of an appearance and its owned buffers, without serialization.
+pub fn appearance_heap_bytes(a: &Appearance) -> usize {
     size_of::<Appearance>()
         + vec_bytes(&a.items)
         + a.items
             .iter()
-            .map(|i| match i {
-                AppearanceItem::Fill(f) => paint_heap(&f.paint),
-                AppearanceItem::Stroke(s) => paint_heap(&s.paint),
+            .map(|item| {
+                let paint = paint_heap_bytes(item.paint());
+                let effects = effects_heap(item.effects());
+                let stroke = match item {
+                    AppearanceItem::Stroke(s) => {
+                        s.dash.as_ref().map_or(0, |d| vec_bytes(&d.pattern))
+                            + s.profile.as_ref().map_or(0, |p| vec_bytes(&p.points))
+                            + s.pressure.as_ref().map_or(0, |p| vec_bytes(&p.points))
+                            + s.brush.as_ref().map_or(0, String::capacity)
+                    }
+                    _ => 0,
+                };
+                paint + effects + stroke
             })
             .sum::<usize>()
-        + vec_bytes(&a.effects)
-        + a.effects.iter().map(|e: &Effect| e.id.capacity() + json_bytes(&e.params)).sum::<usize>()
+        + effects_heap(&a.effects)
 }
 
-fn paint_heap(p: &Paint) -> usize {
+fn effects_heap(effects: &Vec<Effect>) -> usize {
+    vec_bytes(effects) + effects.iter().map(|e| e.id.capacity() + json_bytes(&e.params)).sum::<usize>()
+}
+
+/// Approximate heap retained by one paint, without serializing it.
+pub fn paint_heap_bytes(p: &Paint) -> usize {
     match p {
         Paint::Solid { swatch, .. } => swatch.as_ref().map_or(0, String::capacity),
-        Paint::Gradient(g) => ALLOC + size_of_val(&**g) + vec_bytes(&g.gradient.stops),
+        Paint::Gradient(g) => {
+            ALLOC
+                + size_of_val(&**g)
+                + vec_bytes(&g.gradient.stops)
+                + g.gradient.stops.iter().map(|s| s.swatch.as_ref().map_or(0, String::capacity)).sum::<usize>()
+                + g.swatch.as_ref().map_or(0, String::capacity)
+                + g.freeform.as_ref().map_or(0, |f| vec_bytes(&f.points) + vec_bytes(&f.lines) + f.lines.iter().map(vec_bytes).sum::<usize>())
+        }
         Paint::Pattern { pattern, .. } => pattern.capacity(),
         Paint::None => 0,
     }
 }
 
 fn swatches_bytes(s: &[Swatch]) -> usize {
-    ALLOC + std::mem::size_of_val(s) + s.iter().map(|w| w.name.capacity() + paint_heap(&w.paint)).sum::<usize>()
+    ALLOC + std::mem::size_of_val(s) + s.iter().map(|w| w.name.capacity() + paint_heap_bytes(&w.paint)).sum::<usize>()
 }
 
 /// A vector's buffer (not what its elements own).

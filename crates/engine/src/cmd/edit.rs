@@ -486,6 +486,9 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.redo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    let paints = e.color_mode_paints.clone();
+    turned.color_mode_paints = e.color_mode_paints;
+    turned.recost_paints();
     st.history.redo.push(turned);
     st.history.trim();
     st.revision += 1;
@@ -496,6 +499,11 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     super::maskedit::follow_history(st, editing);
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
+    if let Some((before, _)) = paints {
+        s.paint.fill = before.fill;
+        s.paint.stroke = before.stroke;
+        s.paint.appearance = before.appearance;
+    }
     Ok(json!({ "undone": label }))
 }
 
@@ -512,6 +520,9 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.undo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    let paints = e.color_mode_paints.clone();
+    turned.color_mode_paints = e.color_mode_paints;
+    turned.recost_paints();
     st.history.undo.push(turned);
     st.history.trim();
     st.revision += 1;
@@ -521,6 +532,11 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     super::maskedit::follow_history(st, editing);
     leave_isolation_if_gone(st);
     super::globaledit::follow_history(st);
+    if let Some((_, after)) = paints {
+        s.paint.fill = after.fill;
+        s.paint.stroke = after.stroke;
+        s.paint.appearance = after.appearance;
+    }
     Ok(json!({ "redone": label }))
 }
 

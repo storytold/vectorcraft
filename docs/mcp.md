@@ -611,9 +611,13 @@ remembers its options, so the next save reuses them; a document not yet saved as
 VectorCraft Options the last native Save or Save As used (not its artboards, nor Use Compression). A PDF opened with `pages`, `cropTo` or `password` is only part
 of the file, so Save asks for a new name instead of writing it back.
 `file.documentColorMode {mode, convert?, intent?, grays?}` switches the document color mode, converting the colors of
-the art (opacity masks included), symbols, graph designs, pattern tiles (with the tile that pattern editing's Cancel
-puts back), graphic styles, brushes (their art and a Hue Shift key color) and swatches through the color settings, in
-one undo step (`object.convertDocumentColorMode` is an alias kept for older scripts). Gray colors stay Gray and print
+the art (opacity masks, effect colors and the series paints and label styles that graphs keep included), symbols,
+graph designs, pattern tiles (with the tile that pattern editing's Cancel puts back), graphic styles (their effect
+colors included), brushes (their art and a Hue Shift key color) and swatches through the color settings, in one undo
+step (`object.convertDocumentColorMode` is an alias kept for older scripts). It also converts the fill, stroke and
+effect colors that new art takes; Undo restores their original values and Redo reapplies the conversion. The light
+colors of 3D effects stay RGB.
+Gray colors stay Gray and print
 on the black plate only. RGB grays are colors like any
 other: to CMYK they separate through the profile into four-colour greys and a rich black, as Illustrator converts
 them. `grays: "black"` puts RGB greys with R = G = B on the black plate instead, K = their grey value (the inks Edit Colors ›

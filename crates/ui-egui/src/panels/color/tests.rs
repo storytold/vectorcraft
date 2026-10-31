@@ -238,11 +238,12 @@ fn the_picked_mode_comes_back_after_a_restart() {
     app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
     app.run("select.none", json!({})).unwrap();
     let ctx = egui::Context::default();
-    assert_eq!(slider_labels(&mut app, &ctx), ["R", "G", "B"], "the white default is RGB");
+    assert_eq!(slider_labels(&mut app, &ctx), ["C", "M", "Y", "K"], "the white default follows the CMYK document");
     let _ = ctx.run_ui(Default::default(), |ui| {
         let tgt = target(&app, ui);
         set_mode(&mut app, &tgt, Mode::Cmyk);
     });
+    assert_eq!(app.ui.color_mode, Some(Mode::Cmyk));
     assert_eq!(slider_labels(&mut app, &ctx), ["C", "M", "Y", "K"]);
     // Quit and start again: the saved UI state comes back, the session and the panel are new.
     let saved: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
@@ -250,7 +251,8 @@ fn the_picked_mode_comes_back_after_a_restart() {
     app.ui = saved.sanitized();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
-    assert!(matches!(crate::panels::current_paints(&app).0.color(), Some(Color::Rgb { .. })), "the defaults start as RGB white");
+    assert_eq!(app.ui.color_mode, Some(Mode::Cmyk), "the picked mode comes back");
+    assert!(matches!(crate::panels::current_paints(&app).0.color(), Some(Color::Cmyk { .. })), "the defaults follow the CMYK document");
     let ctx = egui::Context::default();
     assert_eq!(slider_labels(&mut app, &ctx), ["C", "M", "Y", "K"]);
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();

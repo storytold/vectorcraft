@@ -179,6 +179,7 @@ impl Session {
             cmd::settle_interaction(self)?;
         }
         self.clear_deferred_overlay_cache();
+        let paint = self.paint.clone();
         let st = self.doc_mut()?;
         if st.interaction.is_some() {
             return Ok(());
@@ -188,6 +189,10 @@ impl Session {
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
+            paint,
+            preview_paint: None,
+            color_mode_paints: None,
+            deferred_color_mode: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
             variables_highlight: st.variables_highlight.clone(),
@@ -200,10 +205,10 @@ impl Session {
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
-        {
+        let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
-            let Some(it) = &st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
+            let Some(it) = &mut st.interaction else { return Err(EngineError::Other("no interaction in progress".into())) };
             // Undoing the previous preview counts as a change, so views redraw even when the command
             // below returns without an edit.
             let selection_changed = st.selection != *it.selection;
@@ -211,6 +216,11 @@ impl Session {
                 st.revision += 1;
             }
             st.doc = it.doc.clone();
+            let restore_paint = cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch");
+            let paint = it.paint.clone();
+            it.preview_paint = None;
+            it.color_mode_paints = None;
+            it.deferred_color_mode = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
@@ -218,30 +228,54 @@ impl Session {
             // even when the preview fails.
             deselect_hidden(&menu, &st.doc, &mut st.selection);
             cmd::globaledit::follow_history(st);
+            (paint, restore_paint)
+        };
+        if restore_paint {
+            self.paint = paint.clone();
         }
-        // The previous preview's paint is undone with it.
         self.pending_paint = None;
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params).or_else(|| cmd::bounds_rewrite(self, cmd, params));
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
+        // A selected object's converted appearance must not replace the current paints while
+        // this tentative color-mode preview is still cancellable.
+        let color_mode_paint = matches!(cmd, "file.documentColorMode" | "object.convertDocumentColorMode").then(|| self.paint.clone());
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
         self.previewing = outer;
+        if let Some(paint) = color_mode_paint {
+            self.paint = paint;
+        }
         let params = self.noted(params);
+        let batch_paint = (r.is_ok() && cmd == "command.batch").then(|| self.paint.clone());
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
             // A failed preview leaves the document at the snapshot, so nothing is left to commit
             // (not even an earlier successful preview, which the reset above already undid).
             it.preview = r.is_ok().then(|| (cmd.to_string(), params));
+            if it.color_mode_paints.is_some() {
+                it.preview_paint = batch_paint.clone();
+            }
+        }
+        if batch_paint.is_some() && self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.preview_paint.is_some()) {
+            self.paint = paint;
         }
         r
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
+        if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
+            self.paint = paint;
+        }
         self.remember_pending_paint();
+        cmd::colormgmt::commit_new_art_colors(self)?;
+        let paint = self.paint.clone();
         let st = self.doc_mut()?;
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
+        if let Some((_, after)) = &mut it.color_mode_paints {
+            after.clone_from(&paint);
+        }
         let perspective_again = it.perspective_again.take();
         let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
         // Alt pressed or released during a move drag turns it into a copy or back: name it for
@@ -307,6 +341,14 @@ impl Session {
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
         self.pending_paint = None;
+        if let Some(paint) = self
+            .active()
+            .and_then(|st| st.interaction.as_ref())
+            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch"))
+            .map(|it| it.paint.clone())
+        {
+            self.paint = paint;
+        }
         let menu = self.menu.clone();
         let st = self.doc_mut()?;
         st.undo_interaction();

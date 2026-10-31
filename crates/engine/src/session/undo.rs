@@ -13,10 +13,11 @@ impl Session {
 
     /// [`Session::begin_undo_group`] with the undo step named `label` (else after its first edit).
     pub fn begin_named_undo_group(&mut self, label: Option<String>) {
+        let paint = self.paint.clone();
         if let Some(st) = self.active_mut()
             && st.undo_group.is_none()
         {
-            st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label });
+            st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label, paint });
         }
     }
 
@@ -27,9 +28,10 @@ impl Session {
     /// entry that made the document stays.
     pub(super) fn open_undo_groups_in_new_documents(&mut self, open: &[u64]) {
         let Some(label) = &self.explicit_undo_group else { return };
+        let paint = self.paint.clone();
         for st in &mut self.docs {
             if !open.contains(&st.uid) && st.undo_group.is_none() {
-                st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label: label.clone() });
+                st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label: label.clone(), paint: paint.clone() });
             }
         }
     }
@@ -91,12 +93,28 @@ impl Session {
                 continue;
             }
             let Some(g) = st.undo_group.take() else { continue };
+            // Redo of a group that changed document color mode restores the new-art colors the
+            // whole group left, not the ones right after the conversion.
+            if !cancel
+                && let Some(first) = &g.first
+                && let Some(e) = st.history.undo.last_mut().filter(|e| Arc::ptr_eq(&e.doc, first))
+                && let Some((_, after)) = &mut e.color_mode_paints
+            {
+                after.clone_from(&self.paint);
+                e.recost_paints();
+                st.history.trim();
+            }
             // Only while the group's step is still the newest one.
             if cancel
                 && let Some(first) = g.first
                 && st.history.undo.last().is_some_and(|e| Arc::ptr_eq(&e.doc, &first))
                 && let Some(e) = st.history.undo.pop()
             {
+                if let Some((before, _)) = e.color_mode_paints {
+                    self.paint.fill = before.fill;
+                    self.paint.stroke = before.stroke;
+                    self.paint.appearance = before.appearance;
+                }
                 st.doc = e.doc;
                 st.selection = Arc::unwrap_or_clone(e.selection);
                 deselect_hidden(&self.menu, &st.doc, &mut st.selection);
@@ -193,11 +211,17 @@ impl Session {
         let journal = self.journal.len();
         let st = self.active()?;
         let uid = st.uid;
+        let color_mode_paints = st
+            .undo_group
+            .as_ref()
+            .and_then(|g| g.first.as_ref())
+            .and_then(|first| st.history.undo.last().filter(|e| Arc::ptr_eq(&e.doc, first)).and_then(|e| e.color_mode_paints.clone()));
+        let paint = self.paint.clone();
         let joined = st.undo_group.as_ref().map(|g| (st.doc.clone(), st.selection.clone(), g.first.clone()));
         if joined.is_none() {
             self.begin_undo_group();
         }
-        Some(UndoScope { uid, journal, joined })
+        Some(UndoScope { uid, journal, joined, paint, color_mode_paints })
     }
 
     /// End `scope` in its own document, whichever document is active now; undo groups open in other
@@ -218,13 +242,19 @@ impl Session {
         if !cancel || !newest {
             return;
         }
+        let colors_changed = st.history.undo.last().and_then(|e| e.color_mode_paints.as_ref()) != scope.color_mode_paints.as_ref();
         match &first {
             // The scope's first edit recorded the group's step.
             None => {
                 st.history.undo.pop();
                 g.first = None;
             }
-            Some(f) if g.first.as_ref().is_some_and(|now| Arc::ptr_eq(now, f)) => {}
+            Some(f) if g.first.as_ref().is_some_and(|now| Arc::ptr_eq(now, f)) => {
+                if let Some(e) = st.history.undo.last_mut() {
+                    e.color_mode_paints = scope.color_mode_paints;
+                    e.recost_paints();
+                }
+            }
             Some(_) => return,
         }
         st.doc = doc;
@@ -233,6 +263,11 @@ impl Session {
         deselect_hidden(&menu, &st.doc, &mut st.selection);
         st.history.recost_last(&st.doc);
         st.revision += 1;
+        if colors_changed {
+            self.paint.fill = scope.paint.fill;
+            self.paint.stroke = scope.paint.stroke;
+            self.paint.appearance = scope.paint.appearance;
+        }
         self.journal.truncate(scope.journal);
         // The next commands take the cut entries' numbers, so no open undo group keeps them.
         for g in self.docs.iter_mut().filter_map(|st| st.undo_group.as_mut()) {

@@ -311,6 +311,16 @@ impl DocState {
                 _ => it.selection,
             };
             self.push_undo(it.label, it.doc, selection);
+            if let Some(paints) = it.color_mode_paints
+                && let Some(e) = self.history.undo.last_mut()
+            {
+                match &mut e.color_mode_paints {
+                    Some((_, after)) => *after = paints.1,
+                    slot => *slot = Some(paints),
+                }
+                e.recost_paints();
+                self.history.trim();
+            }
             self.revision += 1;
         }
     }

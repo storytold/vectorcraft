@@ -35,6 +35,7 @@ pub mod live;
 pub mod live_paint;
 pub mod marks;
 mod mem;
+pub use mem::{appearance_heap_bytes, paint_heap_bytes};
 pub mod metadata;
 pub mod node;
 pub mod objects_on_path;

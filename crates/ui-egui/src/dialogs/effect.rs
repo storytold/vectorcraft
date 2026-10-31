@@ -467,7 +467,11 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
         if d.fields.contains_key(key) {
             widgets::label_row(ui, label, LABEL_W, |ui| {
-                form::text(ui, d, key, width);
+                if key == "color" {
+                    form::color_text(ui, d, key, width);
+                } else {
+                    form::text(ui, d, key, width);
+                }
             });
         }
     }
@@ -699,13 +703,8 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
         if widgets::radio(ui, tl!("Color"), !darkness, true) {
             d.fields.insert("shade".into(), json!("color"));
         }
-        ui.add_enabled_ui(!darkness, |ui| match d.fields.get("color") {
-            Some(Value::String(_)) | None => {
-                form::text(ui, d, "color", 128.0);
-            }
-            Some(other) => {
-                widgets::dim_label(ui, &other.to_string());
-            }
+        ui.add_enabled_ui(!darkness, |ui| {
+            form::color_text(ui, d, "color", 128.0);
         });
         ui.end_row();
         if widgets::radio(ui, tl!("Darkness"), darkness, true) {
