@@ -3735,6 +3735,8 @@ imageTrace	Outline	Contour
 	 selects several, or draws one inside an artboard)	 en sélectionne plusieurs ou en crée un dans un plan de travail)
 	 a stroke to add a width point  |  	 sur un contour pour ajouter un point de largeur  |  
 	 to change one side  |  	 pour modifier un seul côté  |  
+	 a point to move the profile, a handle to scale it  |  	 un point pour déplacer le profil, une poignée pour le redimensionner  |  
+	 to scale one side of the profile  |  	 pour redimensionner un seul côté du profil  |  
 	 to select more points  |  	 pour sélectionner d’autres points  |  
 	 a point to edit it  |  	 sur un point pour le modifier  |  
 	 to remove points	 pour supprimer des points

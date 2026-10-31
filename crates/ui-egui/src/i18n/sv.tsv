@@ -3666,6 +3666,8 @@ imageTrace	Outline	Kontur
 	 selects several, or draws one inside an artboard)	 markerar flera eller skapar en ny i en rityta)
 	 a stroke to add a width point  |  	 en kontur för att lägga till en breddpunkt  |  
 	 to change one side  |  	 för att ändra en sida  |  
+	 a point to move the profile, a handle to scale it  |  	 en punkt för att flytta profilen, ett handtag för att skala den  |  
+	 to scale one side of the profile  |  	 för att skala ena sidan av profilen  |  
 	 to select more points  |  	 för att markera fler punkter  |  
 	 a point to edit it  |  	 en punkt för att redigera den  |  
 	 to remove points	 för att ta bort punkter

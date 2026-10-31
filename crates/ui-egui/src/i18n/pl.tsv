@@ -1118,6 +1118,8 @@ lighting	Light	Światło
 	 selects several, or draws one inside an artboard)	 zaznacza kilka lub tworzy nowy wewnątrz obszaru kompozycji)
 	 a stroke to add a width point  |  	 obrys, aby dodać punkt szerokości  |  
 	 to change one side  |  	 aby zmienić jedną stronę  |  
+	 a point to move the profile, a handle to scale it  |  	 punkt, aby przesunąć profil, uchwyt, aby go skalować  |  
+	 to scale one side of the profile  |  	 aby skalować jedną stronę profilu  |  
 	 to select more points  |  	 aby zaznaczyć więcej punktów  |  
 	 a point to edit it  |  	 punkt, aby go edytować  |  
 	 to remove points	 aby usunąć punkty

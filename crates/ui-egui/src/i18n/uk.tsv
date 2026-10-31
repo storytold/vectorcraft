@@ -3767,6 +3767,8 @@ imageTrace	Outline	Контур
 	 selects several, or draws one inside an artboard)	 вибирає кілька або створює нову всередині монтажної області)
 	 a stroke to add a width point  |  	 обведення для додавання точки ширини  |  
 	 to change one side  |  	 для зміни однієї сторони  |  
+	 a point to move the profile, a handle to scale it  |  	 точку для переміщення профілю, маркер для його масштабування  |  
+	 to scale one side of the profile  |  	 для масштабування однієї сторони профілю  |  
 	 to select more points  |  	 для виділення інших точок  |  
 	 a point to edit it  |  	 точку, щоб редагувати її  |  
 	 to remove points	 для видалення точок

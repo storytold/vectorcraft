@@ -3653,6 +3653,8 @@ imageTrace	Outline	Kontur
 	 selects several, or draws one inside an artboard)	 wählt mehrere aus oder erstellt eine neue in einer Zeichenfläche)
 	 a stroke to add a width point  |  	 an einer Kontur fügt einen Breitenpunkt hinzu  |  
 	 to change one side  |  	 ändert nur eine Seite  |  
+	 a point to move the profile, a handle to scale it  |  	 verschiebt das Profil an einem Punkt, skaliert es an einem Griff  |  
+	 to scale one side of the profile  |  	 skaliert eine Seite des Profils  |  
 	 to select more points  |  	 wählt weitere Punkte aus  |  
 	 a point to edit it  |  	 auf einen Punkt bearbeitet ihn  |  
 	 to remove points	 entfernt Punkte

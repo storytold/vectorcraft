@@ -1105,6 +1105,8 @@ lighting	Light	Cahaya
 	 selects several, or draws one inside an artboard)	 memilih beberapa, atau membuat satu di dalam artboard)
 	 a stroke to add a width point  |  	 stroke untuk menambah titik lebar  |  
 	 to change one side  |  	 untuk mengubah satu sisi  |  
+	 a point to move the profile, a handle to scale it  |  	 titik untuk memindahkan profil, tuas untuk menskalakannya  |  
+	 to scale one side of the profile  |  	 untuk menskalakan satu sisi profil  |  
 	 to select more points  |  	 untuk memilih lebih banyak titik  |  
 	 a point to edit it  |  	 titik untuk mengeditnya  |  
 	 to remove points	 untuk menghapus titik

@@ -1039,6 +1039,8 @@ lighting	Light	სინათლე
 	 on the canvas to create one	 ტილოზე — ახლის შესაქმნელად
 	 a stroke to add a width point  |  	 კონტურზე — სიგანის წერტილის დასამატებლად  |  
 	 to change one side  |  	 — ერთი მხარის შესაცვლელად  |  
+	 a point to move the profile, a handle to scale it  |  	 წერტილი — პროფილის გადასატანად, სახელური — მის მასშტაბირებისთვის  |  
+	 to scale one side of the profile  |  	 — პროფილის ერთი მხარის მასშტაბირებისთვის  |  
 	 to select more points  |  	 — მეტი წერტილის მოსანიშნად  |  
 	 a point to edit it  |  	 წერტილზე — მის დასარედაქტირებლად  |  
 	 to remove points	 — წერტილების ამოსაშლელად

@@ -1165,6 +1165,8 @@ lighting	Light	Valo
 	 selects several, or draws one inside an artboard)	 valitsee useita tai luo uuden piirtoalustan sisään)
 	 a stroke to add a width point  |  	 viivaa lisätäksesi leveyspisteen  |  
 	 to change one side  |  	 muuttaaksesi yhtä puolta  |  
+	 a point to move the profile, a handle to scale it  |  	 pisteestä profiilin siirtoon, kahvasta sen skaalaamiseen  |  
+	 to scale one side of the profile  |  	 profiilin yhden puolen skaalaamiseen  |  
 	 to select more points  |  	 valitaksesi lisää pisteitä  |  
 	 a point to edit it  |  	 pistettä muokataksesi sitä  |  
 	 to remove points	 poistaaksesi pisteitä

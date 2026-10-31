@@ -810,6 +810,8 @@ font-technology	Variable	가변
 	 to apply the selection's to it  |  	 선택 항목의 속성 적용  |  
 	 to blend from it  |  	 여기서 블렌드 시작  |  
 	 to change one side  |  	 한쪽만 변경  |  
+	 a point to move the profile, a handle to scale it  |  	 점으로 프로파일 이동, 핸들로 크기 조절  |  
+	 to scale one side of the profile  |  	 프로파일의 한쪽만 크기 조절  |  
 	 to close  |  	 닫기  |  
 	 to constrain proportions  |  	 비율 고정  |  
 	 to copy  |  	 복사  |  
