@@ -164,10 +164,13 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
-    // Pravopis srpskoga jezika (Matica srpska, 2010, т. 168) and CLDR: „…” outside, ’…’ inside.
+    // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
+    // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
+    // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
     ("Serbian: Cyrillic", "sr-Cyrl", Quotes { double: ['„', '”'], single: ['’', '’'] }),
     ("Serbian: Latin", "sr-Latn", Quotes { double: ['„', '”'], single: ['’', '’'] }),
-    // CLDR: „…“ outside, ‚…‘ inside.
+    // „…“ outside, ‚…‘ inside: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/hr.xml,
+    // `delimiters`).
     ("Croatian", "hr", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Turkish", "tr", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Japanese", "ja", Quotes { double: ['「', '」'], single: ['『', '』'] }),
@@ -389,6 +392,8 @@ mod tests {
         }
     }
 
+    /// Straight quotes become the language's: opening or closing by what comes before, inner
+    /// quotes as single ones, and the context carried across pieces converted apart.
     #[test]
     fn quotes_open_and_close_by_context() {
         let mut prev = None;
