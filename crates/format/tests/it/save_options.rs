@@ -5,10 +5,13 @@
 use std::sync::Arc;
 
 use serde_json::Value;
+use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::links::LinkInfo;
-use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind, Symbol};
-use vectorcraft_format::{ICC_MIME, PRETTY_MAX_BYTES, PRETTY_MAX_OBJECTS, SaveOptions, load, load_file, pdf_content, save_file, save_with};
-use vectorcraft_geom::path::{PathData, SubPath};
+use vectorcraft_doc::{Appearance, BlendSpec, Document, EnvelopeKind, ImageBlob, ImageObject, LiveShape, Node, NodeKind, OpacityMask, Symbol};
+use vectorcraft_format::{
+    ICC_MIME, MAX_PRECISION, PRETTY_MAX_BYTES, PRETTY_MAX_OBJECTS, SaveOptions, load, load_file, pdf_content, save_file, save_with,
+};
+use vectorcraft_geom::path::{Anchor, PathData, SubPath};
 use vectorcraft_geom::{Affine, Point};
 use vectorcraft_testkit::fixtures::DocBuilder;
 
@@ -205,4 +208,118 @@ fn art_outside_the_layers_counts_too() {
     let bytes = save_file(&d);
     assert!(!is_pretty(&bytes));
     assert_eq!(load(&bytes).unwrap().symbols.len(), 1);
+}
+
+/// One path at `x, y`, its out handle at `x + 6.1234567, y - 0.00001` (`-0.0` at 4 decimals when
+/// `y` is 0), filled with a color whose components have many digits.
+fn precise_path(d: &mut Document, x: f64, y: f64) -> Node {
+    let p = Point::new(x, y);
+    let a = Anchor { p, h_in: p, h_out: Point::new(x + 6.1234567, y - 0.00001), kind: Default::default() };
+    let sp = SubPath::new(vec![a, Anchor::corner(Point::new(x + 20.0, y))], false);
+    let fill = Paint::solid(Color::rgb(0.02745098, 0.33333334, 0.9019608));
+    Node::path(d.alloc_id(), PathData::single(sp), Appearance::basic(fill, Paint::None, 0.0))
+}
+
+/// A document with a precise path in the layer, in an opacity mask, in a symbol (placed with a
+/// precise transform) and in a brush kept as foreign data.
+fn precise_doc() -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let mut n = precise_path(&mut d, 3.4876474632797176, 3.499999999999999);
+    n.extras_mut().mask = Some(Box::new(OpacityMask::new(precise_path(&mut d, 7.77777777, 1.0), false)));
+    d.insert(Some(layer), 0, n).unwrap();
+    let art = precise_path(&mut d, 1.23456789, 0.0);
+    d.symbols.push(Symbol { name: "S".into(), art: Arc::new(art) });
+    let xf = Affine::new([1.0, 0.0, 0.0, 1.0, 0.123456789, 0.0]);
+    let id = d.alloc_id();
+    d.insert(Some(layer), 1, Node::new(id, NodeKind::SymbolInstance { symbol: "S".into(), xf })).unwrap();
+    let brush = serde_json::to_value(precise_path(&mut d, 5.55555555, 4.0)).unwrap();
+    d.unknown.insert("brushes".into(), serde_json::json!([{"name": "B", "type": "art", "art": brush}]));
+    d
+}
+
+fn first_anchor(n: &Node) -> Anchor {
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("not a path: {n:?}") };
+    path.subpaths[0].anchors[0]
+}
+
+#[test]
+fn precision_rounds_path_anchors_and_handles_only() {
+    let d = precise_doc();
+    let bytes = save_with(&d, &SaveOptions { precision: Some(4), ..SaveOptions::default() }).unwrap();
+    let text = String::from_utf8(bytes.clone()).unwrap();
+    assert!(!text.contains("-0.0"), "a handle rounded to zero is written as 0.0");
+    let back = load(&bytes).unwrap();
+    let path = &back.layers[0].children().unwrap()[0];
+    let a = first_anchor(path);
+    assert_eq!((a.p, a.h_in, a.h_out), (Point::new(3.4876, 3.5), Point::new(3.4876, 3.5), Point::new(9.6111, 3.5)));
+    let mask = path.extras().mask.as_ref().unwrap();
+    assert_eq!(first_anchor(&mask.art).p, Point::new(7.7778, 1.0));
+    let a = first_anchor(&back.symbols[0].art);
+    assert_eq!((a.p, a.h_out), (Point::new(1.2346, 0.0), Point::new(7.358, 0.0)));
+    let brush = &back.unknown["brushes"][0]["art"]["kind"]["path"]["subpaths"][0]["anchors"][0];
+    assert_eq!((brush["p"][0].as_f64(), brush["out"][0].as_f64()), (Some(5.5556), Some(11.679)));
+    // Colors and transforms keep every digit.
+    let original = &d.layers[0].children().unwrap()[0];
+    assert_eq!(path.appearance, original.appearance);
+    assert_eq!(mask.art.appearance, original.extras().mask.as_ref().unwrap().art.appearance);
+    let NodeKind::SymbolInstance { xf, .. } = &back.layers[0].children().unwrap()[1].kind else { panic!("not an instance") };
+    assert_eq!(xf.as_coeffs()[4], 0.123456789);
+    // The document saved is left as it was.
+    assert_eq!(first_anchor(&d.layers[0].children().unwrap()[0]).p.x, 3.4876474632797176);
+}
+
+#[test]
+fn precision_rounds_the_paths_objects_keep_besides_their_own() {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let path = || PathData::single(SubPath::polyline(&[Point::new(1.23456789, 0.0), Point::new(9.87654321, 5.0)], false));
+    // Live Corners' uncut outline, and an Intertwine area.
+    let mut n = precise_path(&mut d, 1.0, 1.0);
+    if let NodeKind::Path { live, .. } = &mut n.kind {
+        *live = Some(Box::new(LiveShape::Path { base: path(), radii: vec![2.0], kinds: vec![], radii_relative: false }));
+    }
+    n.extras_mut().intertwine = Some(Box::new(path()));
+    d.insert(Some(layer), 0, n).unwrap();
+    // A blend's replaced spine and an envelope's top-object outline.
+    let keys = vec![Arc::new(precise_path(&mut d, 1.0, 1.0)), Arc::new(precise_path(&mut d, 50.0, 1.0))];
+    let blend = BlendSpec { spine: Some(path()), ..BlendSpec::default() };
+    let id = d.alloc_id();
+    d.insert(Some(layer), 1, Node::new(id, NodeKind::Blend { children: keys, spec: Box::new(blend) })).unwrap();
+    let envelope = NodeKind::Envelope {
+        content: vec![Arc::new(precise_path(&mut d, 1.0, 1.0))],
+        kind: Box::new(EnvelopeKind::TopObject { path: path() }),
+        fidelity: 50.0,
+        editing: false,
+        options: Default::default(),
+        frame: Default::default(),
+    };
+    let id = d.alloc_id();
+    d.insert(Some(layer), 2, Node::new(id, envelope)).unwrap();
+    // The same three objects as brushes' art, and type, whose frame stays exact.
+    let mut brushes: Vec<Value> = d.layers[0].children().unwrap().iter().map(|n| serde_json::json!({"art": n})).collect();
+    let frame = serde_json::json!({"subpaths": [{"anchors": [{"p": [1.23456789, 0.0]}], "closed": true}]});
+    brushes.push(serde_json::json!({"art": {"id": 99, "kind": {"type": "text", "kind": "area", "frame": frame}}}));
+    d.unknown.insert("brushes".into(), Value::Array(brushes));
+    let text = |precision| String::from_utf8(save_with(&d, &SaveOptions { precision, ..SaveOptions::default() }).unwrap()).unwrap();
+    let exact = text(None);
+    assert_eq!((exact.matches("1.23456789").count(), exact.matches("9.87654321").count()), (9, 8), "{exact}");
+    let rounded = text(Some(4));
+    assert_eq!((rounded.matches("1.23456789").count(), rounded.matches("9.87654321").count()), (1, 0), "{rounded}");
+    assert_eq!((rounded.matches("1.2346").count(), rounded.matches("9.8765").count()), (8, 8), "{rounded}");
+}
+
+#[test]
+fn without_precision_coordinates_are_written_exactly() {
+    let d = precise_doc();
+    let exact = save_with(&d, &SaveOptions::default()).unwrap();
+    let text = String::from_utf8(exact.clone()).unwrap();
+    for x in ["3.4876474632797176", "3.499999999999999", "7.77777777", "1.23456789", "5.55555555"] {
+        assert!(text.contains(x), "{x}");
+    }
+    assert_eq!(first_anchor(&load(&exact).unwrap().layers[0].children().unwrap()[0]).p.x, 3.4876474632797176);
+    // A precision over MAX_PRECISION rounds to MAX_PRECISION decimals.
+    let at = |p| save_with(&d, &SaveOptions { precision: Some(p), ..SaveOptions::default() }).unwrap();
+    assert_eq!(at(200), at(MAX_PRECISION));
+    assert!(at(0).len() < at(MAX_PRECISION).len());
 }

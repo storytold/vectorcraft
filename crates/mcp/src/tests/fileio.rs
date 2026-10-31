@@ -195,6 +195,15 @@ fn save_file_takes_the_native_save_options() {
     let shown = saved_with(&mut h, "preview.vectorcraft", json!({"preview": true}));
     assert!(vectorcraft_format::preview(&shown).is_some(), "a preview");
     assert!(vectorcraft_format::preview(&plain).is_none(), "off by default");
+    // `precision` rounds the path coordinates of that save only.
+    let mut p = Headless::new();
+    p.call("engine.execute", json!({"command": "file.new", "params": {"width": 100, "height": 100}})).unwrap();
+    p.call("engine.execute", json!({"command": "path.create", "params": {"anchors": [{"x": 10.123456, "y": 20.654321}, {"x": 30.5, "y": 40.25}]}}))
+        .unwrap();
+    let exact = String::from_utf8(saved_with(&mut p, "exact.vectorcraft", json!({"compress": false}))).unwrap();
+    assert!(exact.contains("10.123456") && exact.contains("20.654321"), "{exact}");
+    let rounded = String::from_utf8(saved_with(&mut p, "rounded.vectorcraft", json!({"compress": false, "precision": 1}))).unwrap();
+    assert!(!rounded.contains("10.123456") && !rounded.contains("20.654321") && rounded.contains("20.7"), "{rounded}");
     // Version 2 files can't be compressed: the engine's error comes back.
     let r = call_tool(&mut h, "save_file", &json!({"path": tmp("v2.vectorcraft"), "version": 2, "compress": true}));
     assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("can't be compressed"), "{r:?}");
@@ -232,6 +241,9 @@ fn save_file_warns_about_options_it_does_not_use() {
     let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp("ignored.ai"), "compress": false, "version": 3})));
     let w = warnings(&r);
     assert!(ignored(&w, "version") && !ignored(&w, "compress"), "{w:?}");
+    // `precision` is read by native files only.
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp("ignored-precision.svg"), "precision": 2})));
+    assert!(ignored(&warnings(&r), "precision"), "{r}");
 
     // A top-level value that disagrees with `options` is refused, and nothing is written.
     let path = tmp("both.vectorcraft");
@@ -241,7 +253,9 @@ fn save_file_warns_about_options_it_does_not_use() {
     assert!(r.is_error && e.contains("`compress: true` and `options.compress: false` disagree"), "{r:?}");
     assert!(!std::path::Path::new(&path).exists(), "nothing is written");
     // Nothing to say when they agree or when every option applies.
-    for mut args in [json!({"compress": true, "options": {"compress": true}}), json!({"compress": false, "version": 3, "preview": true})] {
+    for mut args in
+        [json!({"compress": true, "options": {"compress": true}}), json!({"compress": false, "version": 3, "preview": true, "precision": 4})]
+    {
         args["path"] = json!(tmp("quiet.vectorcraft"));
         let r = text(&call_tool(&mut h, "save_file", &args));
         assert_eq!(r["warnings"], json!([]), "{args}: {r}");
@@ -272,12 +286,12 @@ fn save_file_is_the_same_call_in_the_app_and_headless() {
     let path = tmp("app.vectorcraft");
     let (addr, app) = recording_app();
     let mut remote = Remote::connect(&addr).unwrap();
-    let args = json!({"path": path, "compress": true, "version": 3, "preview": null, "options": {"preview": true}});
+    let args = json!({"path": path, "compress": true, "version": 3, "preview": null, "precision": 2, "options": {"preview": true}});
     assert!(!call_tool(&mut remote, "save_file", &args).is_error);
     drop(remote);
     let seen = app.join().unwrap();
     assert_eq!(seen[0]["method"], "app.save");
-    assert_eq!(seen[0]["params"], json!({"path": path, "compress": true, "version": 3, "options": {"preview": true}, "wait": true}));
+    assert_eq!(seen[0]["params"], json!({"path": path, "compress": true, "version": 3, "precision": 2, "options": {"preview": true}, "wait": true}));
 }
 
 /// The app is asked to write the file before it replies (`wait`), even with Background Save on, so a
