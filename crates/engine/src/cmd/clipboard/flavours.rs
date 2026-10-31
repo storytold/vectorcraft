@@ -413,14 +413,38 @@ fn flavours(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "flavours": s.clipboard_flavour_types() }))
 }
 
+/// A bitmap read as `clipboard.importImage` reads its `dataBase64` ([`read_image`]), for
+/// [`Session::import_image_read`].
+pub struct ImageRead(fileio::RasterImage);
+
+/// Read `bytes` as `clipboard.importImage` reads its `dataBase64`, on any thread: the formats it
+/// stores as PNG are decoded and encoded here.
+pub fn read_image(bytes: &[u8]) -> Result<ImageRead> {
+    let mut img = fileio::raster_image(bytes).map_err(|e| bad("clipboard.importImage", e.to_string()))?;
+    img.blob = links::readable_and_kept(img.blob, links::kept_unread(bytes), false).map_err(|e| bad("clipboard.importImage", e.to_string()))?;
+    Ok(ImageRead(img))
+}
+
+impl Session {
+    /// `clipboard.importImage` with `p` (its `mime` and `center`) for an image [`read_image`] read
+    /// (off the UI thread in the desktop app), which it loads instead of reading `dataBase64`.
+    pub fn import_image_read(&mut self, read: ImageRead, p: &Value) -> Result<Value> {
+        self.image_hand_off = Some(read);
+        let r = self.execute("clipboard.importImage", p);
+        self.image_hand_off = None;
+        r
+    }
+}
+
 fn import_image(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "clipboard.importImage";
     if let Some(m) = str_param(p, "mime").filter(|m| !m.starts_with("image/") || *m == SVG) {
         return Err(bad(C, format!("`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText")));
     }
-    let data = data_param(p, C)?;
-    let mut img = fileio::raster_image(&data).map_err(|e| bad(C, e.to_string()))?;
-    img.blob = links::readable_and_kept(img.blob, links::kept_unread(&data), false).map_err(|e| bad(C, e.to_string()))?;
+    let ImageRead(img) = match s.image_hand_off.take() {
+        Some(read) => read,
+        None => read_image(&data_param(p, C)?)?,
+    };
     let (sx, sy) = pt_per_px(img.ppi);
     let (w, h) = (img.width, img.height);
     let image = ImageObject {
