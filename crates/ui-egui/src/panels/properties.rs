@@ -65,6 +65,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         trace_section(app, ui, &preset, view);
         divider(ui);
     }
+    if let Some(oop) = selected_objects_on_path(app) {
+        objects_on_path_section(app, ui, &oop);
+        divider(ui);
+    }
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -352,6 +356,71 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
                 app.run(id, json!({})).ok();
             }
         }
+    });
+}
+
+/// The Objects on Path groups selected with nothing else: their ids, and the Pivot and Rotate they
+/// share (`None` where they differ).
+struct ObjectsOnPathSelection {
+    ids: Vec<u64>,
+    pivot: Option<u8>,
+    rotate: Option<f64>,
+}
+
+/// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
+/// object is one.
+fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelection> {
+    let st = app.session.active()?;
+    let mut out: Option<ObjectsOnPathSelection> = None;
+    for id in &st.selection.objects {
+        let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
+        match &mut out {
+            None => out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate) }),
+            Some(s) => {
+                s.ids.push(id.0);
+                if s.pivot != Some(rec.pivot) {
+                    s.pivot = None;
+                }
+                if s.rotate != Some(rec.rotate) {
+                    s.rotate = None;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The Objects on Path Options of the selected Objects on Path groups: Pivot, the point of each
+/// object that attaches to the path, and Rotate, the angle each object tilts by from upright on the
+/// path, as the help page places them in the Properties panel
+/// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
+/// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
+/// Pivot square is chosen and Rotate is blank.
+fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
+    section_header(ui, tl!("Objects on Path Options"));
+    let fw = super::field_width(ui);
+    let set = |app: &mut VectorcraftApp, mut p: serde_json::Value| {
+        p["ids"] = json!(oop.ids);
+        if let Err(e) = app.run("object.objectsOnPath.options", p) {
+            app.status(e);
+        }
+    };
+    egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        dim_label(ui, tl!("Pivot:"));
+        // 9 is no square: the groups' pivots differ.
+        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+            && oop.pivot.is_none_or(|p| usize::from(p) != i)
+        {
+            set(app, json!({ "pivot": i }));
+        }
+        ui.end_row();
+        dim_label(ui, tl!("Rotate:"));
+        if let Some(a) = widgets::spin_plain(ui, "props-oop-rotate", oop.rotate, "°", 2, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS)
+            && oop.rotate != Some(a)
+        {
+            set(app, json!({ "rotate": a }));
+        }
+        ui.end_row();
     });
 }
 

@@ -1754,6 +1754,8 @@ font-technology	Variable	가변
 	Objects on Path	패스 위 개체
 	Attach	부착
 	Objects on Path Options	패스 위 개체 옵션
+	Pivot:	피벗:
+	Rotate:	회전:
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장

@@ -1666,3 +1666,77 @@ fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
     let texts = tall(&mut app, &ctx, vec![]);
     assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
 }
+
+/// Two 20 pt squares attached to a horizontal line in an Objects on Path group (`rotate` degrees),
+/// with the group selected → the group.
+fn objects_on_path(app: &mut VectorcraftApp, y: f64, rotate: f64) -> Value {
+    let line = app.run("shape.line", json!({"x1": 20, "y1": y, "x2": 380, "y2": y})).unwrap()["id"].clone();
+    let a = rect(app, 40.0, y - 60.0, 20.0, 20.0);
+    let b = rect(app, 80.0, y - 60.0, 20.0, 20.0);
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let group = app.run("object.objectsOnPath.attach", json!({"path": line, "rotate": rotate})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    group
+}
+
+/// The Pivot and Rotate of the Objects on Path group `id`.
+fn pivot_rotate(app: &VectorcraftApp, id: &Value) -> (u8, f64) {
+    let d = &app.session.active().unwrap().doc;
+    let rec = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().extras().objects_on_path.as_deref().unwrap();
+    (rec.pivot, rec.rotate)
+}
+
+/// The Objects on Path Options section alone.
+fn objects_on_path_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if let Some(oop) = selected_objects_on_path(app) {
+        objects_on_path_section(app, ui, &oop);
+    }
+}
+
+/// The help page's Objects on Path Options section of the Properties panel shows for an Objects on
+/// Path group selected on its own or with other such groups, and not for a plain group, an object
+/// or an Objects on Path group selected with another object.
+#[test]
+fn objects_on_path_groups_show_objects_on_path_options() {
+    let mut app = new_app();
+    let ctx = egui::Context::default();
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Objects on Path Options") && shows(&texts, "Pivot:") && shows(&texts, "Rotate:"), "one group: {texts:?}");
+    let other = objects_on_path(&mut app, 250.0, 0.0);
+    app.run("select.set", json!({"ids": [group, other]})).unwrap();
+    assert!(shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "two groups");
+    let r = rect(&mut app, 300.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [group, r]})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a group and a rectangle");
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a rectangle");
+    let s = rect(&mut app, 340.0, 20.0, 20.0, 20.0);
+    app.run("select.set", json!({"ids": [r, s]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Objects on Path Options"), "a plain group");
+}
+
+/// A click on a Pivot square and a typed Rotate each set the selected groups' Objects on Path
+/// Options in one undo step: one group's, and two groups' at once, where Rotate starts blank as
+/// the groups' angles differ.
+#[test]
+fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
+    let (mut app, ctx) = reference_setup(&[]);
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Top Left");
+    assert_eq!(pivot_rotate(&app, &group), (0, 0.0), "Pivot: top left");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    type_over(&mut app, &ctx, objects_on_path_options, "0°", "30");
+    assert_eq!(pivot_rotate(&app, &group), (0, 30.0), "Rotate: 30°");
+    assert_eq!(undo_depth(&app), depth + 2, "one undo step");
+    let other = objects_on_path(&mut app, 250.0, 45.0);
+    app.run("select.set", json!({"ids": [group, other]})).unwrap();
+    let texts = panel_frame(&mut app, &ctx, vec![], objects_on_path_options);
+    assert!(!shows(&texts, "30°") && !shows(&texts, "45°"), "Rotate is blank: {texts:?}");
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Bottom Right");
+    assert_eq!((pivot_rotate(&app, &group), pivot_rotate(&app, &other)), ((8, 30.0), (8, 45.0)), "both groups' Pivot");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
+}
