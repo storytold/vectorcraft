@@ -1,5 +1,5 @@
 //! Gradient swatches and gradient stops linked to global and spot swatches: the recorded links,
-//! stops following swatch edits, spot stops on their plate and as Separation shadings in PDF.
+//! stops following swatch edits, spot stops on their plate and as Separation and DeviceN shadings in PDF.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, GradientPaint, GradientStop, Paint};
@@ -133,11 +133,51 @@ fn spot_gradients_export_as_separation_shadings() {
     assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Separation/Ink/DeviceCMYK"), "an Ink → paper gradient is a Separation shading");
     // Its function runs over the tints: 80 % (204 / 255) to 0 %.
     assert!(pdf.contains("/C0[0.8]/C1[0]"), "the shading's tints");
-    // Mixing the spot ink with another colour falls back to process colours, with a warning.
+    // Mixing the spot ink with an RGB color writes the gradient without the spot ink, with a warning.
     run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": "#00ff00"}]}));
     let (pdf, warnings) = pdf_of(&s);
-    assert!(!pdf.contains("/Separation"), "no Separation for a mixed gradient");
+    assert!(!pdf.contains("/Separation") && !pdf.contains("/DeviceN"), "no spot ink for a gradient with an RGB stop");
     assert!(warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
+}
+
+#[test]
+fn spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
+    let (mut s, _) = setup();
+    // Ink → process yellow: a DeviceN shading of Yellow and Ink, with no warning.
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": {"c": 0, "m": 0, "y": 0.6, "k": 0}}]}));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/ShadingType 2") && pdf.contains("/DeviceN[/Yellow/Ink]/DeviceCMYK"), "a DeviceN shading of Yellow and Ink");
+    assert!(pdf.contains("/C0[0 1]/C1[0.6 0]"), "the shading's tints: Yellow and Ink");
+    assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
+    // Two spot inks, with an off-center midpoint: a stop halfway between the two inks.
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 1, "m": 0, "y": 1, "k": 0}, "spot": true}));
+    run(
+        &mut s,
+        "paint.editGradient",
+        json!({"stops": [{"offset": 0, "swatch": "Ink", "midpoint": 30}, {"offset": 1, "swatch": "Leaf", "tint": 50}]}),
+    );
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/DeviceN[/Ink/Leaf]/DeviceCMYK"), "a DeviceN shading of both spot inks");
+    let functions: Vec<_> = pdf.match_indices("/C0[").filter_map(|(i, _)| pdf.get(i..i + 32)).collect();
+    assert!(
+        pdf.contains("/C0[1 0]/C1[0.5019608 0.2509804]") && pdf.contains("/C0[0.5019608 0.2509804]/C1[0 0.5019608]"),
+        "the tints through the midpoint: {functions:?}"
+    );
+    assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
+}
+
+#[test]
+fn radial_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
+    let (mut s, _) = setup();
+    run(
+        &mut s,
+        "paint.editGradient",
+        json!({"kind": "radial", "stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": {"c": 0, "m": 0, "y": 0.6, "k": 0}}]}),
+    );
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/ShadingType 3") && pdf.contains("/DeviceN[/Yellow/Ink]/DeviceCMYK"), "a radial DeviceN shading of Yellow and Ink");
+    assert!(pdf.contains("/C0[0 1]/C1[0.6 0]"), "the shading's tints: Yellow and Ink");
+    assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
 }
 
 #[test]
