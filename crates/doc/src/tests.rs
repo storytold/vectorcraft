@@ -96,12 +96,30 @@ fn art_on_artboard_tolerates_roundoff_at_each_edge() {
     ] {
         assert_eq!(d.art_on_artboard(board, false), vec![a], "roundoff at {board:?}");
     }
-    // A real overhang remains outside.
-    for board in
-        [Rect::new(0.001, 0.0, 10.0, 10.0), Rect::new(0.0, 0.001, 10.0, 10.0), Rect::new(0.0, 0.0, 9.999, 10.0), Rect::new(0.0, 0.0, 10.0, 9.999)]
-    {
-        assert!(d.art_on_artboard(board, false).is_empty(), "overhang at {board:?}");
-    }
+    // A board that does not meet the artwork has no art.
+    assert!(d.art_on_artboard(Rect::new(40.0, 40.0, 50.0, 50.0), false).is_empty());
+}
+
+#[test]
+fn art_on_artboard_takes_artwork_larger_than_artboard_or_with_bleed() {
+    let mut d = Document::new(200.0, 200.0);
+    d.setup.bleed = [9.0; 4];
+    let layer = d.layers[0].id;
+    // An oversized background (250x250 centered on the 200x200 artboard, #4479).
+    let bg = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(bg, shapes::rectangle(Rect::new(-25.0, -25.0, 225.0, 225.0)), Appearance::default_art())).unwrap();
+    // A shape with 5pt bleed over the top-right corner.
+    let bleed = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(bleed, shapes::rectangle(Rect::new(150.0, -5.0, 205.0, 50.0)), Appearance::default_art())).unwrap();
+    // A shape completely outside the artboard.
+    let outside = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(outside, shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art()))
+        .unwrap();
+
+    let art = d.art_on_artboard(Rect::new(0.0, 0.0, 200.0, 200.0), false);
+    assert!(art.contains(&bg), "oversized background is on the artboard: {art:?}");
+    assert!(art.contains(&bleed), "bleed shape is on the artboard: {art:?}");
+    assert!(!art.contains(&outside), "outside shape is not on the artboard: {art:?}");
 }
 
 /// The art on a locked artboard (each object of a layer whose bounds overlap it, a group as one

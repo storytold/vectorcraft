@@ -39,25 +39,82 @@ impl Document {
         pick(&|r| r.contains(p)).or_else(|| pick(&|r| artboard_holds(r, p)))
     }
 
+    /// Which artboard in the document owns object bounds `b`: the artboard that holds its center,
+    /// or the one it has the greatest overlap area with if its center lies outside all artboards.
+    pub fn artboard_for_bounds(&self, b: Rect) -> Option<usize> {
+        let c = b.center();
+        if let Some(i) = self.artboard_holding(c, false) {
+            return Some(i);
+        }
+        let mut best: Option<(usize, f64)> = None;
+        for (i, a) in self.artboards.iter().enumerate() {
+            let r = a.rect.inflate(1e-6, 1e-6);
+            let inter_x0 = b.x0.max(r.x0);
+            let inter_y0 = b.y0.max(r.y0);
+            let inter_x1 = b.x1.min(r.x1);
+            let inter_y1 = b.y1.min(r.y1);
+            if inter_x1 > inter_x0 && inter_y1 > inter_y0 {
+                let area = (inter_x1 - inter_x0) * (inter_y1 - inter_y0);
+                if area > 1e-9 && best.is_none_or(|(_, max_area)| area > max_area) {
+                    best = Some((i, area));
+                }
+            }
+        }
+        best.map(|(i, _)| i)
+    }
+
     /// The art that moves with an artboard at `rect`: top-level objects (children of layers and
-    /// sublayers) lying entirely inside it, with symbol instances measured by their art. Locked and
-    /// hidden objects and layers stay put unless `locked_and_hidden` (Selection & Anchor Display ›
+    /// sublayers) on it (lying inside it, larger than it with its center on it, or overlapping it
+    /// without belonging to another artboard), with symbol instances measured by their art. Locked
+    /// and hidden objects and layers stay put unless `locked_and_hidden` (Selection & Anchor Display ›
     /// Move Locked and Hidden Artwork with Artboard).
     pub fn art_on_artboard(&self, rect: Rect, locked_and_hidden: bool) -> Vec<NodeId> {
-        // Art drawn flush with the artboard can end up a rounding error outside it (a background
-        // 3e-14 pt past the top edge, #1295): a millionth of a point is far below anything visible.
-        let rect = rect.inflate(1e-6, 1e-6);
-        fn collect(n: &Node, s: &SymbolBoxes, rect: Rect, all: bool, out: &mut Vec<NodeId>) {
+        let r = rect.inflate(1e-6, 1e-6);
+        let on_artboard = |b: Rect| -> bool {
+            // 1. Wholly inside the artboard (edges included, with tolerance).
+            if b.x0 >= r.x0 && b.y0 >= r.y0 && b.x1 <= r.x1 && b.y1 <= r.y1 {
+                return true;
+            }
+            // 2. Within the artboard's bleed rectangle (if document setup specifies bleed).
+            if self.setup.has_bleed() {
+                let br = self.setup.bleed_rect(rect).inflate(1e-6, 1e-6);
+                if b.x0 >= br.x0 && b.y0 >= br.y0 && b.x1 <= br.x1 && b.y1 <= br.y1 {
+                    if let Some(other) = self.artboard_for_bounds(b).and_then(|i| self.artboards.get(i)) {
+                        return (other.rect.x0 - rect.x0).abs() < 1e-6
+                            && (other.rect.y0 - rect.y0).abs() < 1e-6
+                            && (other.rect.x1 - rect.x1).abs() < 1e-6
+                            && (other.rect.y1 - rect.y1).abs() < 1e-6;
+                    }
+                    return true;
+                }
+            }
+            // 3. Artwork that is larger than the artboard itself (e.g. background shapes, photos,
+            // or full-bleed art spanning across edges, #4479) and placed on this artboard.
+            let is_oversized = b.width() >= rect.width() - 1e-6 || b.height() >= rect.height() - 1e-6;
+            if !is_oversized {
+                return false;
+            }
+            // Must at least meet/intersect the artboard.
+            let inter_x0 = b.x0.max(r.x0);
+            let inter_y0 = b.y0.max(r.y0);
+            let inter_x1 = b.x1.min(r.x1);
+            let inter_y1 = b.y1.min(r.y1);
+            if inter_x1 <= inter_x0 || inter_y1 <= inter_y0 {
+                return false;
+            }
+            self.artboard_for_bounds(b).and_then(|i| self.artboards.get(i)).is_some_and(|a| {
+                (a.rect.x0 - rect.x0).abs() < 1e-6
+                    && (a.rect.y0 - rect.y0).abs() < 1e-6
+                    && (a.rect.x1 - rect.x1).abs() < 1e-6
+                    && (a.rect.y1 - rect.y1).abs() < 1e-6
+            })
+        };
+        fn collect(n: &Node, s: &SymbolBoxes, on: &dyn Fn(Rect) -> bool, all: bool, out: &mut Vec<NodeId>) {
             for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
                 if c.is_layer() {
-                    collect(c, s, rect, all, out);
+                    collect(c, s, on, all, out);
                 } else if let Some(b) = c.geometric_bounds_with(s)
-                    // Inside it, edges included: art flush with the right or bottom edge is on it too
-                    // (`Rect::contains` leaves those out, #890).
-                    && b.x0 >= rect.x0
-                    && b.y0 >= rect.y0
-                    && b.x1 <= rect.x1
-                    && b.y1 <= rect.y1
+                    && on(b)
                 {
                     out.push(c.id);
                 }
@@ -66,7 +123,7 @@ impl Document {
         let symbols = self.symbol_boxes();
         let mut art = vec![];
         for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
-            collect(l, &symbols, rect, locked_and_hidden, &mut art);
+            collect(l, &symbols, &on_artboard, locked_and_hidden, &mut art);
         }
         art
     }
