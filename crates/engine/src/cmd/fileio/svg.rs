@@ -73,6 +73,12 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "keep hidden layers and objects, not displayed (display=\"none\"); document.save sets it unless given",
     },
     FormatOption {
+        name: "guidesAndUnits",
+        ty: "boolean",
+        default: "false",
+        description: "keep the document's units and ruler guides in <metadata> so VectorCraft reopens the SVG with them (other apps ignore it; not written with preserveEditing, which keeps them); document.save sets it unless given",
+    },
+    FormatOption {
         name: "encoding",
         ty: "string",
         default: "\"utf8\"",

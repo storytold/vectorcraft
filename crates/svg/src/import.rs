@@ -38,7 +38,7 @@ pub(super) use importer::PT_PER_IN;
 use importer::SymbolMade;
 pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
-use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
+use layers::{RootUnits, apply_settings, inkscape_pages, promote_sublayers, root_layer_name, saved_settings};
 pub(super) use prepass::Edits;
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 use prepass::{labels, prepass};
@@ -144,6 +144,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     if let Some(boards) = inkscape_pages(&xml, base) {
         im.doc.artboards = boards;
     }
+    // The units and guides our Save kept, in the root's user space (applied once layers exist).
+    let settings = saved_settings(&xml, base);
 
     // Top-level `<g id>` elements become layers (as in the reference app), named from their
     // labels (`data-name`…) else their ids; otherwise all art goes into "Layer 1". A clip path on
@@ -237,6 +239,10 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         }
     }
     im.doc.limit_depth_noting(&mut im.warnings);
+    // After the depth limit, so a guide's layer is one the document keeps.
+    if let Some(settings) = settings {
+        apply_settings(&mut im.doc, settings);
+    }
     Ok((im.doc, im.warnings))
 }
 

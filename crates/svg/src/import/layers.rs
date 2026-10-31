@@ -150,3 +150,66 @@ pub(super) fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<
         .collect();
     (!pages.is_empty()).then_some(pages)
 }
+
+/// The most ruler guides read from a file's settings (untrusted input).
+const MAX_GUIDES: usize = 10_000;
+
+/// A ruler guide our export kept in `<vectorcraft:settings>`: in document points, whether it was an
+/// artboard guide, and its layer's name.
+pub(super) struct SavedGuide {
+    vertical: bool,
+    pos: f64,
+    artboard: bool,
+    layer: Option<String>,
+}
+
+/// The document units and ruler guides our Save kept in `<vectorcraft:settings>`
+/// (`ExportOptions::guides_and_units`), the guides' positions taken through `user` (user units →
+/// document points). `None` when the file has no such element.
+pub(super) fn saved_settings(xml: &roxmltree::Document, user: Affine) -> Option<(Option<Unit>, Vec<SavedGuide>)> {
+    let el = xml.descendants().find(|n| n.tag_name().namespace() == Some(crate::EDITING_NS) && n.tag_name().name() == "settings")?;
+    let units = el.attribute("units").and_then(Unit::named);
+    let guides = el
+        .children()
+        .filter(|n| n.tag_name().namespace() == Some(crate::EDITING_NS) && n.tag_name().name() == "guide")
+        .filter_map(|g| {
+            let vertical = match g.attribute("orientation")? {
+                "vertical" => true,
+                "horizontal" => false,
+                _ => return None,
+            };
+            let at = g.attribute("position")?.trim().parse::<f64>().ok().filter(|v| v.is_finite())?;
+            let p = user * vectorcraft_geom::Point::new(at, at);
+            let pos = if vertical { p.x } else { p.y };
+            pos.is_finite().then(|| SavedGuide {
+                vertical,
+                pos,
+                artboard: g.attribute("artboard") == Some("true"),
+                layer: g.attribute("layer").map(str::to_string),
+            })
+        })
+        .take(MAX_GUIDES)
+        .collect();
+    Some((units, guides))
+}
+
+/// Give `doc` the units and guides of [`saved_settings`]: an artboard guide goes to the first
+/// artboard (the file holds one), and a guide goes on the first layer named as its layer was.
+pub(super) fn apply_settings(doc: &mut vectorcraft_doc::Document, (units, guides): (Option<Unit>, Vec<SavedGuide>)) {
+    if let Some(u) = units {
+        doc.units = u;
+    }
+    let board = doc.artboards.first().map(|a| a.id);
+    for g in guides {
+        let layer = g.layer.as_deref().and_then(|name| layer_named(&doc.layers, name));
+        doc.guides.push(vectorcraft_doc::Guide { vertical: g.vertical, pos: g.pos, artboard: board.filter(|_| g.artboard), layer });
+    }
+}
+
+/// The first layer or sublayer named `name`, depth first.
+fn layer_named(layers: &[Arc<Node>], name: &str) -> Option<NodeId> {
+    layers.iter().find_map(|l| {
+        let NodeKind::Layer { children, .. } = &l.kind else { return None };
+        if l.name.as_deref() == Some(name) { Some(l.id) } else { layer_named(children, name) }
+    })
+}

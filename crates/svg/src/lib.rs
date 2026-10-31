@@ -236,6 +236,10 @@ pub struct ExportOptions {
     /// Keep hidden layers and objects, written hidden (`display="none"`), as Save does; exports
     /// leave them out unless asked.
     pub hidden_layers: bool,
+    /// Keep the document's units and ruler guides in `<metadata>`, so VectorCraft reopens the
+    /// SVG with them (other apps ignore it); Save turns it on, exports leave it off. Not written
+    /// with [`Self::preserve_editing`], whose native document carries them.
+    pub guides_and_units: bool,
     /// The file's character encoding (see [`Output::bytes`]).
     pub encoding: Encoding,
     pub profile: Profile,
@@ -261,6 +265,7 @@ impl Default for ExportOptions {
             metadata: false,
             fewer_tspans: false,
             hidden_layers: false,
+            guides_and_units: false,
             encoding: Encoding::Utf8,
             profile: Profile::Svg11,
             embed_fonts: false,

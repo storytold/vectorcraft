@@ -339,11 +339,13 @@ impl Writer<'_> {
         i
     }
 
-    /// `<metadata>`: the Dublin Core terms of File Info ([`ExportOptions::metadata`]) and the
-    /// native document ([`ExportOptions::preserve_editing`]) with the [`body_hash`] of the markup
-    /// around this element.
+    /// `<metadata>`: the Dublin Core terms of File Info ([`ExportOptions::metadata`]), the
+    /// document's units and ruler guides ([`ExportOptions::guides_and_units`]) and the native
+    /// document ([`ExportOptions::preserve_editing`]) with the [`body_hash`] of the markup around
+    /// this element.
     pub(super) fn metadata(&self, out: &mut String, native: Option<(&[u8], String)>) {
-        if !self.opts.metadata && native.is_none() {
+        let settings = self.settings(native.is_some());
+        if !self.opts.metadata && native.is_none() && settings.is_empty() {
             return;
         }
         let nl = if self.opts.minify { "" } else { "\n" };
@@ -362,6 +364,9 @@ impl Writer<'_> {
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");
         }
+        for (depth, s) in &settings {
+            line(*depth, s);
+        }
         if let Some((bytes, hash)) = native {
             line(
                 2,
@@ -372,6 +377,45 @@ impl Writer<'_> {
             );
         }
         line(1, "</metadata>");
+    }
+
+    /// The `<vectorcraft:settings>` lines (depth, markup) of [`ExportOptions::guides_and_units`]:
+    /// the document's units and its ruler guides in SVG user units. A guide of another artboard
+    /// than the one written is left out, as is its art. None when the option is off, when the
+    /// native document (`native`) carries them, or when there is nothing to keep (pixels, the
+    /// units a plain SVG reopens in, and no guides).
+    fn settings(&self, native: bool) -> Vec<(usize, String)> {
+        let doc = self.doc;
+        if !self.opts.guides_and_units || native {
+            return vec![];
+        }
+        let board = self.opts.artboard.and_then(|i| doc.artboards.get(i)).map(|a| a.id);
+        let guides: Vec<_> = doc.guides.iter().filter(|g| g.pos.is_finite() && g.artboard.is_none_or(|a| Some(a) == board)).collect();
+        if doc.units == vectorcraft_doc::Unit::Pixels && guides.is_empty() {
+            return vec![];
+        }
+        let units = doc.units.key();
+        let open = format!("<vectorcraft:settings xmlns:vectorcraft=\"{EDITING_NS}\" units=\"{units}\"");
+        if guides.is_empty() {
+            return vec![(2, format!("{open}/>"))];
+        }
+        let mut lines = vec![(2, format!("{open}>"))];
+        for g in guides {
+            let at = self.xf * Point::new(g.pos, g.pos);
+            let pos = self.num(if g.vertical { at.x } else { at.y });
+            let mut s = format!("<vectorcraft:guide orientation=\"{}\" position=\"{pos}\"", if g.vertical { "vertical" } else { "horizontal" });
+            if g.artboard.is_some() {
+                s.push_str(" artboard=\"true\"");
+            }
+            // The layer by name: the layers reopen as new objects.
+            if let Some(name) = g.layer.and_then(|id| doc.node(id)).and_then(|n| n.name.as_deref()).filter(|n| valid_xml_value(n)) {
+                s.push_str(&format!(" layer=\"{}\"", xml_attr_escape(name)));
+            }
+            s.push_str("/>");
+            lines.push((3, s));
+        }
+        lines.push((2, "</vectorcraft:settings>".into()));
+        lines
     }
 
     pub(super) fn path_d(&self, p: &PathData, m: Affine) -> String {
