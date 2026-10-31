@@ -255,6 +255,43 @@ fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
+/// Type › Orientation menu checks use `shared_text_flag`; mixed values leave both unchecked.
+#[test]
+fn type_orientation_menu_unchecked_when_shared_vertical_none() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let h = app.run("text.create", json!({"x": 10, "y": 40, "text": "H"})).unwrap()["id"].clone();
+    let v = app.run("text.create", json!({"x": 10, "y": 80, "text": "V", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h, v]})).unwrap();
+    assert_eq!(crate::panels::character::shared_text_flag(&app, |t| t.vertical), None);
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
+#[test]
+fn type_orientation_menu_unchecked_for_three_object_mixed_selections() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
 #[test]
 fn panel_ids_are_case_insensitive_and_labels_work() {
     assert_eq!(normalize_panel("layers"), Some("layers"));
