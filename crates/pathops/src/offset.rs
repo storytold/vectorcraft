@@ -13,6 +13,10 @@ use crate::edit::remove_redundant_points;
 /// Flattening/fit tolerance handed to kurbo's stroker.
 const STROKE_TOL: f64 = 1e-3;
 
+/// Most overlapping segment pairs allowed for planar arrangement in offset path.
+/// Keeps sweep time and memory bounded when dense overlapping strokes multiply (#4145).
+const MAX_OFFSET_SEGMENT_PAIRS: usize = 1 << 19;
+
 /// Drop collinear and coincident spine vertices before stroking (#3446). Uses `tol` only for
 /// redundancy; does not simplify or refit the spine.
 fn compact_stroke_spine(bp: &BezPath, tol: f64) -> BezPath {
@@ -111,8 +115,13 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     } else {
         BezPath::new()
     };
-    let Ok(arr) = Arrangement::new(vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)]) else {
-        return PathData::default();
+    let arr = match Arrangement::new_budgeted(
+        vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
+        MAX_OFFSET_SEGMENT_PAIRS,
+    ) {
+        Ok(arr) => arr,
+        Err(crate::PathOpsError::NonFinite) => return PathData::default(),
+        Err(_) => return path.clone(),
     };
     let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
@@ -306,5 +315,41 @@ mod tests {
         let arc_compact = stroke_bez(&arc_bez, width, cap, join, miter);
         let arc_raw = stroke_bez_without_spine_compact(&arc_bez, width, cap, join, miter);
         assert!(outline_max_deviation(&arc_compact, &arc_raw) <= 1e-3, "curved spine compaction must not refit the stroke outline");
+    }
+
+    #[test]
+    fn offset_path_recovers_gracefully_when_complexity_exceeds_budget() {
+        // Issue #4145: dense overlapping geometry must not hang or panic; if complexity passes
+        // the offset cap, the input path is preserved unchanged.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let path = PathData::from_bezpath(&bp);
+        let res = offset_path(&path, 5.0, Join::Round, 4.0);
+        assert_eq!(res, path);
+    }
+
+    #[test]
+    fn offset_path_returns_empty_on_non_finite() {
+        let rect = kurbo::Rect::new(0.0, 0.0, 100.0, 100.0);
+        let path = PathData::from_bezpath(&rect.to_path(0.1));
+        assert!(offset_path(&path, f64::NAN, Join::Round, 4.0).is_empty());
+        assert!(offset_path(&path, f64::INFINITY, Join::Round, 4.0).is_empty());
+
+        // Even with dense overlapping geometry, non-finite points return empty rather than fallback.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let mut dense_non_finite = PathData::from_bezpath(&bp);
+        dense_non_finite
+            .subpaths
+            .push(SubPath::polyline(&[vectorcraft_geom::Point::new(f64::NAN, 0.0), vectorcraft_geom::Point::new(10.0, 10.0)], true));
+        assert!(offset_path(&dense_non_finite, 5.0, Join::Round, 4.0).is_empty());
     }
 }

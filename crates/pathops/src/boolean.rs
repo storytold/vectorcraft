@@ -285,11 +285,15 @@ impl Tidy {
 }
 
 impl Arrangement {
-    pub(crate) fn new(mut paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+    pub(crate) fn new(paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+        Self::new_budgeted(paths, crate::budget::MAX_SEGMENT_PAIRS)
+    }
+
+    pub(crate) fn new_budgeted(mut paths: Vec<(BezPath, FillRule)>, cap: usize) -> Result<Self, PathOpsError> {
         let eps = eps_for(paths.iter().map(|p| &p.0))?;
         snap_horizontals(&mut paths.iter_mut().map(|p| &mut p.0).collect::<Vec<_>>(), eps);
         // Counted on the snapped geometry, which is what the sweep sees: snapping can bring boxes into contact.
-        if !crate::budget::sweep_fits(paths.iter().map(|p| &p.0)) {
+        if !crate::budget::sweep_fits_within(paths.iter().map(|p| &p.0), cap) {
             return Err(PathOpsError::TooComplex);
         }
         // The sweep can panic on rare near-degenerate input; that must never take the app down,
