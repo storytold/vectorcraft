@@ -400,26 +400,30 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         let fw = super::field_width(ui);
-        egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            let r = ab.rect;
-            for (row, [(l1, k1, v1), (l2, k2, v2)]) in
-                [[("X:", "x", r.x0), ("W:", "width", r.width())], [("Y:", "y", r.y0), ("H:", "height", r.height())]].into_iter().enumerate()
+        let r = ab.rect;
+        // X and Y, then W and H, as two grids side by side: Tab goes down each column (#3953).
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            for (column, cells) in
+                [[("X:", "x", r.x0), ("Y:", "y", r.y0)], [("W:", "width", r.width()), ("H:", "height", r.height())]].into_iter().enumerate()
             {
-                for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
-                    dim_label(ui, label);
-                    let offset = match key {
-                        "x" => origin.x,
-                        "y" => origin.y,
-                        _ => 0.0,
-                    };
-                    if let Some(v) = widgets::num_field_named(ui, ("ab", key, row), Some(tl!(label)), Some(v - offset), units, fw) {
-                        // A new X or Y moves the active artboard; a new W or H goes to every selected one.
-                        let indices = if matches!(key, "width" | "height") { super::artboards::resized_with(app, i) } else { vec![i] };
-                        let common = json!({"scaleArt": scale_art, "moveArt": move_art});
-                        super::artboards::set_props(app, &indices, common, |j, _| Some(json!({"index": j, key: v + offset}))).ok();
+                egui::Grid::new(("ab-grid", column)).num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                    for (row, (label, key, v)) in cells.into_iter().enumerate() {
+                        dim_label(ui, label);
+                        let offset = match key {
+                            "x" => origin.x,
+                            "y" => origin.y,
+                            _ => 0.0,
+                        };
+                        if let Some(v) = widgets::num_field_named(ui, ("ab", key, row), Some(tl!(label)), Some(v - offset), units, fw) {
+                            // A new X or Y moves the active artboard; a new W or H goes to every selected one.
+                            let indices = if matches!(key, "width" | "height") { super::artboards::resized_with(app, i) } else { vec![i] };
+                            let common = json!({"scaleArt": scale_art, "moveArt": move_art});
+                            super::artboards::set_props(app, &indices, common, |j, _| Some(json!({"index": j, key: v + offset}))).ok();
+                        }
+                        ui.end_row();
                     }
-                }
-                ui.end_row();
+                });
             }
         });
         artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
@@ -733,33 +737,50 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space(6.0);
         let link = super::transform::proportional(app, ui);
-        egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "tx", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"x": reference.bounds_xy(v + origin.x, 0.0).0, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
-            dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "ty", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"y": reference.bounds_xy(0.0, v + origin.y).1, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
+        // Two grids, X and Y then W and H: Tab follows the order the fields are made in, so it
+        // goes down each column (#3953).
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            egui::Grid::new("xf-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                dim_label(ui, "X:");
+                if let Some(v) = widgets::num_field_named(ui, "tx", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"x": reference.bounds_xy(v + origin.x, 0.0).0, "reference": refi, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+                dim_label(ui, "Y:");
+                if let Some(v) = widgets::num_field_named(ui, "ty", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"y": reference.bounds_xy(0.0, v + origin.y).1, "reference": refi, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+            });
+            egui::Grid::new("xf-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                dim_label(ui, "W:");
+                if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"width": v, "reference": refi, "proportional": link, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+                dim_label(ui, "H:");
+                if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"height": v, "reference": refi, "proportional": link, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+            });
         });
         super::transform::constrain_link(app, ui);
     });
