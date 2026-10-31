@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Missing Fonts…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
+            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step; type that is hidden or locked, in a hidden or locked group or layer, or on a locked artboard keeps its font → {runs (style runs changed), font, skipped?: the type objects left in a missing font, warning?}",
             has_doc,
             replace_fonts
         ),
@@ -919,35 +919,52 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
     let d = &s.doc()?.doc;
-    let mut ids = vec![];
+    // Only type the Selection tool can reach changes: not hidden or locked, in a hidden or locked
+    // group or layer, or on a locked artboard. The type left in its font is counted.
+    let editable = d.editable();
+    let (mut ids, mut skipped) = (vec![], 0usize);
     for l in &d.layers {
         l.walk(&mut |n| {
             if let NodeKind::Text(t) = &n.kind
                 && t.runs.iter().any(|r| missing(&r.style))
             {
-                ids.push(n.id);
+                if editable(n.id) {
+                    ids.push(n.id);
+                } else {
+                    skipped += 1;
+                }
             }
         });
     }
-    if ids.is_empty() {
+    drop(editable);
+    if ids.is_empty() && skipped == 0 {
         return Err(EngineError::Other("No fonts are missing".into()));
     }
-    let runs = s.edit("Replace Missing Fonts", |d, _| {
-        let mut runs = 0;
-        for id in &ids {
-            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
-                // The style the font has closest to the one the character had.
-                r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
-                r.style.font_family = family.clone();
-                r.style.font_version = None;
-                r.style.font_axes.clear();
-                runs += 1;
+    let runs = if ids.is_empty() {
+        0
+    } else {
+        s.edit("Replace Missing Fonts", |d, _| {
+            let mut runs = 0;
+            for id in &ids {
+                let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+                for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
+                    // The style the font has closest to the one the character had.
+                    r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                    r.style.font_family = family.clone();
+                    r.style.font_version = None;
+                    r.style.font_axes.clear();
+                    runs += 1;
+                }
+                edit::normalize(&mut t.runs);
+                refresh_bounds(t);
             }
-            edit::normalize(&mut t.runs);
-            refresh_bounds(t);
-        }
-        Ok(runs)
-    })?;
-    Ok(json!({ "runs": runs, "font": family }))
+            Ok(runs)
+        })?
+    };
+    let mut out = json!({ "runs": runs, "font": family });
+    if skipped > 0 {
+        out["skipped"] = json!(skipped);
+        out["warning"] = json!(crate::cmd::fonts::REPLACE_SKIPPED);
+    }
+    Ok(out)
 }

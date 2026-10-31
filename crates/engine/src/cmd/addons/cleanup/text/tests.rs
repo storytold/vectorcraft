@@ -339,3 +339,53 @@ fn replace_missing_fonts_with_the_default_or_a_chosen_font() {
     let r = s.execute("addon.cleanup.replaceFonts", &json!({"font": "No Such Font Family"}));
     assert!(matches!(r, Err(EngineError::BadParams { .. })), "{r:?}");
 }
+
+/// Replace Missing Fonts leaves hidden and locked type in its font, and type inside a hidden or
+/// locked group or layer, and says so. Type on a visible, unlocked template layer is changed.
+#[test]
+fn replace_missing_fonts_skips_hidden_and_locked_text() {
+    let mut s = session();
+    let lost = |s: &mut Session, y: i32| text(s, json!({"x": 40, "y": y, "text": "Lost", "size": 12, "font": "No Such Font Family"}));
+    let mut ids = vec![];
+    for y in [20, 40, 60, 80, 100] {
+        ids.push(lost(&mut s, y));
+    }
+    for (id, group, cmd) in
+        [(ids[1], false, "object.hide"), (ids[2], false, "object.lock"), (ids[3], true, "object.hide"), (ids[4], true, "object.lock")]
+    {
+        select(&mut s, &[id]);
+        if group {
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        s.execute(cmd, &json!({})).unwrap();
+    }
+    let mut layer_text = |props: &[Value]| {
+        let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let id = lost(&mut s, 140);
+        for p in props {
+            let mut p = p.clone();
+            p["id"] = json!(layer);
+            s.execute("layer.setProps", &p).unwrap();
+        }
+        id
+    };
+    ids.push(layer_text(&[json!({"visible": false})]));
+    ids.push(layer_text(&[json!({"locked": true})]));
+    // Template on locks the layer; unlocking it makes its type editable again.
+    let template = layer_text(&[json!({"template": true}), json!({"locked": false})]);
+    let family = |s: &Session, id: NodeId| obj(s, id).runs[0].style.font_family.clone();
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    let warning = "some text is hidden or locked, so its font wasn't replaced";
+    assert_eq!((r["runs"].clone(), r["skipped"].clone(), r["warning"].clone()), (json!(2), json!(6), json!(warning)), "{r}");
+    assert_eq!(family(&s, ids[0]), "Source Sans 3");
+    assert_eq!(family(&s, template), "Source Sans 3");
+    for id in &ids[1..] {
+        assert_eq!(family(&s, *id), "No Such Font Family", "object {id:?}");
+    }
+    // Only skipped type left: nothing changes, and the warning says why.
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!((r["runs"].clone(), r["skipped"].clone(), r["warning"].clone()), (json!(0), json!(6), json!(warning)), "{r}");
+    for id in &ids[1..] {
+        assert_eq!(family(&s, *id), "No Such Font Family", "object {id:?}");
+    }
+}

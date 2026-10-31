@@ -5792,7 +5792,9 @@ glyph of its first character lands where it was drawn.
 - `addon.cleanup.resetTextTransform {scale?, ids?}` takes the rotation, shear and reflection off point type, keeping its
   size and the centre of its text. With `scale: true` the horizontal scale goes too, the object's and each character's.
 - `addon.cleanup.replaceFonts {font?}` sets every character of the document's type whose font family isn't available
-  in `font` (by default the default type font, Source Sans 3), in that family's style closest to the one it had.
+  in `font` (by default the default type font, Source Sans 3), in that family's style closest to the one it had. Type
+  that is hidden or locked, or in a hidden or locked group or layer, keeps its font; the reply counts it as `skipped`
+  and carries a `warning`.
 
 In the panel, the Text row (which the panel can hide) runs them: Shift-click Lines to break into paragraphs, and
 Alt-click Reset Transform to reset the horizontal scale too. Recovering live text from outlines, combining vertical

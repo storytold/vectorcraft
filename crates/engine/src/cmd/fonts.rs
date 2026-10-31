@@ -488,8 +488,9 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// What Replace Font says when it left text in the font that it can't reach.
-const REPLACE_SKIPPED: &str = "some text is hidden or locked, so its font wasn't replaced";
+/// What Replace Font and Replace Missing Fonts say when they left text in the font that they can't
+/// reach.
+pub(super) const REPLACE_SKIPPED: &str = "some text is hidden or locked, so its font wasn't replaced";
 
 fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let family = str_param(p, "family").ok_or_else(|| bad("select.font", "missing `family`"))?.to_string();
