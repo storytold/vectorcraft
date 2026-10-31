@@ -101,6 +101,13 @@ fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
     }
 }
 
+/// The width [`primary_button`] and [`secondary_button`] give `text` (their label plus padding, at
+/// least 72), for centring a row of them.
+pub(crate) fn button_width(ui: &Ui, text: &str) -> f32 {
+    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), Color32::PLACEHOLDER);
+    (galley.size().x + 32.0).max(72.0)
+}
+
 /// The accent call-to-action button (dialog OK/Create).
 pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     primary_button_enabled(ui, text, true)
