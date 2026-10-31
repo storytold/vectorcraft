@@ -17,6 +17,10 @@ use crate::{VectorcraftApp, icons, widgets};
 
 const PITCH: f32 = 30.0;
 const WIDTH: f32 = 48.0;
+const TOOL_BUTTON_WIDTH: f32 = 36.0;
+const TOOL_WELL: egui::Vec2 = vec2(30.0, 27.5);
+/// Breathing room between the column header and its drag grip, in logical points.
+const GRIP_SPACING: f32 = 2.0;
 /// Seconds a press on a tool group's button is held before its flyout opens.
 const LONG_PRESS: f64 = 0.35;
 /// Width of the grab bar down a flyout's right side: dragging it tears the flyout off.
@@ -106,10 +110,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.ctx().data_mut(|d| d.insert_temp(crate::tools_float::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
     match app.ui.toolbar_pos {
         None => {
-            let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
-            egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
-                crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
-            });
+            egui::Panel::left("toolbar")
+                .resizable(false)
+                .exact_size(w)
+                .show_separator_line(false)
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| docked(app, ui, cols));
         }
         Some(pos) => {
             // Floating, kept inside the window, its tools scrolling when they don't fit under it.
@@ -136,6 +142,38 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     crate::edit_toolbar::drawer(app, ui.ctx());
 }
 
+/// Host the tools on the same shared, square docking surface as the panel icon rail.
+/// The existing toolbar commands own its column count and floating position; protecting this
+/// single body keeps the docking host from adding another tab strip or layout gestures.
+fn docked(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize) {
+    use craft_ui::docking::{DockArea, Layout, Node};
+
+    let layout = Layout { root: Some(Node::Tabs { panels: vec!["tools"], active: 0 }), floating: Vec::new() };
+    let style = crate::panel_docking::dock_style(ui);
+    let rect = ui.available_rect_before_wrap();
+    let output = DockArea::new(egui::Id::unique("vectorcraft-tools-docking")).show_content(ui, &layout, &style, &mut ToolsContent { app, cols });
+    if let Some(error) = output.error {
+        app.ui.status = error.to_string();
+    }
+    // craft-ui outlines dock columns on all four edges, including above the status bar.
+    ui.painter().rect_stroke(rect, 0.0, style.border, egui::StrokeKind::Inside);
+}
+
+struct ToolsContent<'a> {
+    app: &'a mut VectorcraftApp,
+    cols: usize,
+}
+
+impl craft_ui::docking::DockContent<&'static str> for ToolsContent<'_> {
+    fn body(&mut self, ui: &mut Ui, _id: &&'static str) {
+        body(self.app, ui, self.cols, None);
+    }
+
+    fn permissions(&self, _id: &&'static str) -> craft_ui::docking::Permissions {
+        craft_ui::docking::Permissions::PROTECTED
+    }
+}
+
 /// The Tools panel's contents, docked or floating at `floating`.
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
     let t = Tokens::get(ui.ctx());
@@ -153,6 +191,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
         if hresp.hovered() { t.text_strong } else { t.text },
     );
+    ui.add_space(GRIP_SPACING);
     // Not focusable (`Sense::drag()` is): only the pointer drags the grip, so Tab does not stop on it.
     let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::DRAG);
     for k in 0..6 {
@@ -172,6 +211,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
     let grip_tip = if floating.is_some() { tl!("Drag to the window's left edge to dock") } else { tl!("Drag to float the toolbar") };
     gresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), grip_tip));
     gresp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(grip_tip);
+    if floating.is_none() {
+        // Match the visible tool well's side clearance inside the dock's 1 pt outline.
+        // Account for the well's different horizontal and vertical insets in its hit target.
+        let side_gap = (bounds.width() - cols as f32 * TOOL_BUTTON_WIDTH) * 0.5 + (TOOL_BUTTON_WIDTH - TOOL_WELL.x) * 0.5 - 1.0;
+        let top_inset = (PITCH - 1.0 - TOOL_WELL.y) * 0.5;
+        ui.add_space((side_gap - top_inset).max(0.0));
+    }
     // The tools and the controls under them scroll in a window too short for them.
     widgets::strip_scroll(ui, "toolbar", |ui| {
         let active = app.session.tool_id();
@@ -211,10 +257,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             }
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                // Centred on the panel's inside (`bounds`: within its border and, docked, the
-                // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
-                // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
-                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
+                // Center on the full panel rather than the scroll area's slightly inset row.
+                // The dock's inside outline is symmetric; egui's extra separator is disabled.
+                ui.add_space((bounds.center().x - cols as f32 * TOOL_BUTTON_WIDTH * 0.5 - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let shown_id = if slot.contains(&active) {
@@ -224,8 +269,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     };
                     let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
-                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
+                    let (rect, resp) = ui.allocate_exact_size(vec2(TOOL_BUTTON_WIDTH, PITCH - 1.0), Sense::click_and_drag());
+                    let well = egui::Rect::from_center_size(rect.center(), TOOL_WELL);
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
                     } else if resp.hovered() {
