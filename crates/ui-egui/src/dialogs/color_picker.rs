@@ -113,6 +113,23 @@ impl Channel {
             Channel::Blue => (2, 0, 1),
         }
     }
+    /// The color field's axes (across, up) as keys and screen readers see them: hue in degrees,
+    /// saturation and brightness in percent, red, green and blue from 0 to 255.
+    fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
+        let axis = |i: usize| {
+            let (name, units, suffix) = match (self.is_hsb(), i) {
+                (true, 0) => (tl!("Hue"), 360.0, "°"),
+                (true, 1) => (tl!("Saturation"), 100.0, "%"),
+                (true, _) => (tl!("Brightness"), 100.0, "%"),
+                (false, 0) => (tl!("Red"), 255.0, ""),
+                (false, 1) => (tl!("Green"), 255.0, ""),
+                (false, _) => (tl!("Blue"), 255.0, ""),
+            };
+            widgets::FieldAxis { name, units, suffix }
+        };
+        let (_, x, y) = self.axes();
+        [axis(x), axis(y)]
+    }
 }
 
 /// The picked colour with its HSB (hue in degrees), kept so the hue survives grey colours.
@@ -344,7 +361,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                         } else {
                             let (z, x, y) = field_pos(channel, &p);
                             let at = |x: f32, y: f32| c32(&field_pick(channel, z, x, y).snapped(web).color);
-                            if let (Some((x, y)), _) = widgets::color_field(ui, "cp-field", vec2(side, side), (x, y), &at) {
+                            if let (Some((x, y)), _) =
+                                widgets::color_field(ui, "cp-field", (tl!("Color field"), channel.field_axes()), vec2(side, side), (x, y), true, &at)
+                            {
                                 pick = Some(field_pick(channel, z, x, y));
                             }
                             ui.add_space(SLIDER_GAP);

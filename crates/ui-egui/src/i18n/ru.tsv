@@ -544,6 +544,11 @@ font-technology	Variable	Вариативные
 	Color Table ({n} colors)	Цветовая таблица ({n} цветов)
 	Color Theme	Цветовая тема
 	Color Themes	Цветовые темы
+	Color Wheel	Цветовой круг
+	Hue ring	Кольцо оттенков
+	Saturation and brightness	Насыщенность и яркость
+	Color field	Цветовое поле
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать

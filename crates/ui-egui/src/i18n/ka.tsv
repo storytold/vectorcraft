@@ -556,6 +556,11 @@
 	Color	ფერი
 	Color Guide	ფერის გზამკვლევი
 	Color Themes	ფერის თემები
+	Color Wheel	ფერთა წრე
+	Hue ring	ფერის ტონის რგოლი
+	Saturation and brightness	გაჯერება და სიკაშკაშე
+	Color field	ფერის ველი
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა

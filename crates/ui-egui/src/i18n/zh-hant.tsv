@@ -508,6 +508,11 @@ font-technology	Variable	可變
 	Color Table ({n} colors)	顏色表 ({n} 色)
 	Color Theme	色彩主題
 	Color Themes	色彩主題
+	Color Wheel	色輪
+	Hue ring	色相環
+	Saturation and brightness	飽和度和亮度
+	Color field	顏色區域
+	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色

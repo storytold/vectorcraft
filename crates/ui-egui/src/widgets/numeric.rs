@@ -152,7 +152,7 @@ pub(crate) fn round_to(v: f64, decimals: i32) -> f64 {
 /// One step of a numeric field with each modifier, most specific first (a plain pattern would also
 /// match Shift): ten with Shift, a tenth with Ctrl/Cmd, else one. A Ctrl/Cmd or plain step goes to
 /// the next multiple of its size ([`step_to_multiple`]); a Shift step adds or takes ten.
-const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
+pub(super) const STEPS: [(egui::Modifiers, f64); 3] = [(egui::Modifiers::SHIFT, 10.0), (egui::Modifiers::COMMAND, 0.1), (egui::Modifiers::NONE, 1.0)];
 
 /// `v` moved `n` steps of `size` (down when `n` is negative): the first step goes to the next
 /// multiple of `size` in its direction and each further step adds or takes one `size`. By 1, 5.1

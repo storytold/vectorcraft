@@ -1,5 +1,5 @@
 use super::labels::{label_field, name_field, take_previous_label};
-use super::numeric::{STEP_DECIMALS, field_text, round_to, step_to_multiple};
+use super::numeric::{STEP_DECIMALS, STEPS, field_text, round_to, step_to_multiple};
 use super::text::{after_shift_enter, select_all, shift_enter_keeps_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
@@ -279,31 +279,130 @@ fn gradient_strip(ui: &Ui, rect: Rect, n: usize, vertical: bool, track: &dyn Fn(
     }
 }
 
-/// The Color Picker's 2D colour field: `color_at(x, y)` gives the colour at a point (0..1 each, y
-/// down) and a ring marks `pos`. Returns the clicked or dragged point and the phase.
+/// One axis of a [`color_field`] as keys and screen readers see it: the component's name, how many
+/// of its units the axis spans (an arrow press moves one unit) and the units' suffix.
+#[derive(Clone, Copy, Debug)]
+pub struct FieldAxis<'a> {
+    pub name: &'a str,
+    pub units: f32,
+    pub suffix: &'a str,
+}
+
+/// A press on `resp`, or a click whose press and release came in one frame, gives it the keyboard
+/// focus, so the arrow keys reach it. Escape or a click elsewhere takes the focus away again.
+fn focus_on_press(resp: &Response) {
+    if resp.is_pointer_button_down_on() || resp.clicked() {
+        resp.request_focus();
+    }
+}
+
+/// The arrow keys pressed for control `id` this frame while it has the keyboard focus, in units
+/// ([`STEPS`]: ten with Shift, a tenth with Ctrl/Cmd, else one): (→ minus ←, ↑ minus ↓). The control
+/// takes the arrows of each axis it uses (`horizontal`, `vertical`), which then do not move the focus
+/// to the next widget.
+fn arrow_steps(ui: &Ui, id: egui::Id, horizontal: bool, vertical: bool) -> (f32, f32) {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return (0.0, 0.0);
+    }
+    use egui::Key;
+    let filter = egui::EventFilter { horizontal_arrows: horizontal, vertical_arrows: vertical, ..Default::default() };
+    ui.memory_mut(|m| m.set_focus_lock_filter(id, filter));
+    let (mut x, mut y) = (0.0, 0.0);
+    ui.input_mut(|i| {
+        for (mods, size) in STEPS {
+            let mut count = |key| i.count_and_consume_key(mods, key) as f64 * size;
+            if horizontal {
+                x += count(Key::ArrowRight) - count(Key::ArrowLeft);
+            }
+            if vertical {
+                y += count(Key::ArrowUp) - count(Key::ArrowDown);
+            }
+        }
+    });
+    (x as f32, y as f32)
+}
+
+/// The focus outline of a focused color control.
+fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
+    if ui.memory(|m| m.has_focus(resp.id)) {
+        let t = Tokens::get(ui.ctx());
+        ui.painter().rect_stroke(rect.expand(2.0), 0.0, Stroke::new(1.0, t.accent), StrokeKind::Outside);
+    }
+}
+
+/// A 2D color field (the Color Picker's, the Color Wheel panel's square): `color_at(x, y)` gives
+/// the color at a point (0..1 each, y down) and, when `marked`, a ring marks `pos`. A press gives
+/// it the keyboard focus. While it has the focus, → and ← move `pos` across by one unit of
+/// `axes[0]` and ↑ and ↓ move it up and down by one unit of `axes[1]`, marked or not. Screen
+/// readers read `name` and, when `marked`, both components. They read it as a slider over
+/// `axes[0]`'s units (0 when not `marked`), which their increment and decrement actions move as →
+/// and ← do and their set-value action sets, as for a [`hue_ring`]. Returns the clicked or dragged
+/// point, or the point the keys or actions moved to, and the phase. When `marked`, a step past an
+/// edge returns no point.
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
+    (name, axes): (&str, [FieldAxis<'_>; 2]),
     size: Vec2,
     pos: (f32, f32),
+    marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
 ) -> (Option<(f32, f32)>, Live) {
+    use egui::accesskit::{Action, ActionData};
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    focus_on_press(&resp);
     let painter = ui.painter_at(rect.expand(6.0));
     painter.add(color_mesh(rect, (32, 32), color_at));
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
-    let c = pos2(rect.left() + pos.0.clamp(0.0, 1.0) * rect.width(), rect.top() + pos.1.clamp(0.0, 1.0) * rect.height());
-    painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
-    painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
-    match pointer_phase(&resp) {
-        Some((p, phase)) => {
-            let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
-            (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase)
-        }
-        None => (None, Live::Idle),
+    focus_outline(ui, &resp, rect);
+    let (x, y) = pos;
+    if marked {
+        let c = pos2(rect.left() + x.clamp(0.0, 1.0) * rect.width(), rect.top() + y.clamp(0.0, 1.0) * rect.height());
+        painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
+        painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
     }
+    let value = |v: f32, a: &FieldAxis| format!("{}{}", (v.clamp(0.0, 1.0) * a.units).round(), a.suffix);
+    let text = marked.then(|| {
+        crate::i18n::fmt(
+            tl!("{name1} {value1}, {name2} {value2}"),
+            &[("name1", axes[0].name), ("value1", &value(x, &axes[0])), ("name2", axes[1].name), ("value2", &value(1.0 - y, &axes[1]))],
+        )
+    });
+    let shown = if marked { f64::from(x.clamp(0.0, 1.0) * axes[0].units) } else { 0.0 };
+    resp.widget_info(|| egui::WidgetInfo { current_text_value: text.clone(), ..egui::WidgetInfo::slider(ui.is_enabled(), shown, name) });
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(f64::from(axes[0].units));
+        node.set_numeric_value_step(1.0);
+        for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+            node.add_action(action);
+        }
+    });
+    let (dx, dy) = arrow_steps(ui, resp.id, true, true);
+    let (steps, set) = ui.input(|i| {
+        let steps =
+            i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
+        let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v as f32),
+            _ => None,
+        });
+        (steps, set)
+    });
+    if let Some((p, phase)) = pointer_phase(&resp) {
+        let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
+        return (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase);
+    }
+    let across = set.map_or(x + (dx + steps) / axes[0].units, |v| v / axes[0].units);
+    let moved = (across.clamp(0.0, 1.0), (y - dy / axes[1].units).clamp(0.0, 1.0));
+    // A step past an edge leaves the point where it is. Without a marker there is no color yet, so
+    // a key or an action applies even when the point stays.
+    let asked = set.is_some() || dx + steps != 0.0 || dy != 0.0;
+    if moved != (x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)) || (asked && !marked) {
+        return (Some(moved), Live::Released);
+    }
+    (None, Live::Idle)
 }
 
 /// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
@@ -466,6 +565,152 @@ fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
         }
     }
     egui::Shape::mesh(mesh)
+}
+
+/// The width of a [`hue_ring`]'s band.
+const RING_WIDTH: f32 = 14.0;
+/// How far inside its rect a [`hue_ring`]'s band is drawn: a press up to this far outside the band
+/// still picks a hue.
+const RING_MARGIN: f32 = 4.0;
+
+/// The display sRGB of HSB `[h°, s, v]` as an egui color, with no color conversion.
+pub fn hsb32(hsb: [f32; 3]) -> Color32 {
+    let [r, g, b] = vectorcraft_color::hsb_to_rgb(hsb).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    Color32::from_rgb(r, g, b)
+}
+
+/// The square a [`hue_ring`] drawn in `rect` holds: the largest one inside the band's inner edge,
+/// 2 points clear of it.
+pub fn ring_square(rect: Rect) -> Rect {
+    let inner = rect.width().min(rect.height()) / 2.0 - RING_MARGIN - RING_WIDTH - 2.0;
+    Rect::from_center_size(rect.center(), Vec2::splat(inner.max(0.0) * std::f32::consts::SQRT_2))
+}
+
+/// The part of a [`hue_ring`] a press started on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum RingPart {
+    Band,
+    Inner,
+    Corner,
+}
+
+/// What a [`hue_ring`] did this frame.
+pub struct RingResponse {
+    /// The rect the ring is drawn in.
+    pub rect: Rect,
+    /// A new hue (degrees, 0..360) from a press or drag on the band, an arrow key or a screen
+    /// reader, and its phase.
+    pub hue: Option<(f32, Live)>,
+    /// The pointer of a press or drag that started inside the band's inner edge, and its phase.
+    pub inner: Option<(Pos2, Live)>,
+}
+
+/// A hue ring `size` across: a band of hues drawn [`RING_MARGIN`] inside its rect, the hue
+/// increasing counterclockwise from 3 o'clock as on [`harmony_wheel`], with a marker at `hue` when
+/// `marked`. A press on the band, or up to [`RING_MARGIN`] outside it, picks the hue under the
+/// pointer (with Shift, in 45° steps) and gives the ring the keyboard focus. A press inside the
+/// band's inner edge comes back as `inner`, and a press in the rect's corners does nothing. The part
+/// a press starts on keeps the whole drag. While the ring has the focus, → and ↑ raise `hue` by
+/// 1° and ← and ↓ lower it ([`STEPS`]), marked or not, and 360° wraps to 0°. Screen readers read it
+/// as a slider named `name` from 0 to 360 (0 when not `marked`), which their increment, decrement
+/// and set-value actions move.
+pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hue: f32, marked: bool) -> RingResponse {
+    use egui::accesskit::{Action, ActionData};
+    const SEG: u32 = 72;
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    let c = rect.center();
+    let outer = size / 2.0 - RING_MARGIN;
+    let inner = outer - RING_WIDTH;
+    let mut mesh = egui::Mesh::default();
+    for k in 0..=SEG {
+        let h = k as f32 * 360.0 / SEG as f32;
+        let col = hsb32([h, 1.0, 1.0]);
+        mesh.colored_vertex(wheel_pos(c, inner, h, 1.0), col);
+        mesh.colored_vertex(wheel_pos(c, outer, h, 1.0), col);
+    }
+    for k in 0..SEG {
+        let a = 2 * k;
+        mesh.add_triangle(a, a + 1, a + 2);
+        mesh.add_triangle(a + 1, a + 3, a + 2);
+    }
+    let painter = ui.painter_at(rect);
+    painter.add(egui::Shape::mesh(mesh));
+    painter.circle_stroke(c, outer, Stroke::new(1.0, t.border));
+    painter.circle_stroke(c, inner, Stroke::new(1.0, t.border));
+    if ui.memory(|m| m.has_focus(resp.id)) {
+        painter.circle_stroke(c, outer + 2.0, Stroke::new(1.0, t.accent));
+    }
+    if marked {
+        let m = wheel_pos(c, (inner + outer) / 2.0, hue, 1.0);
+        painter.circle_stroke(m, RING_WIDTH / 2.0 - 1.0, Stroke::new(1.5, Color32::WHITE));
+        painter.circle_stroke(m, RING_WIDTH / 2.0, Stroke::new(1.0, Color32::BLACK));
+    }
+    resp.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), if marked { f64::from(hue) } else { 0.0 }, name));
+    ui.ctx().accesskit_node_builder(resp.id, |node| {
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(360.0);
+        node.set_numeric_value_step(1.0);
+        for action in [Action::SetValue, Action::Increment, Action::Decrement] {
+            node.add_action(action);
+        }
+    });
+    let part_at = |p: Pos2| match p.distance(c) {
+        d if d < inner => RingPart::Inner,
+        d if d <= outer + RING_MARGIN => RingPart::Band,
+        _ => RingPart::Corner,
+    };
+    let part_id = resp.id.with("part");
+    if resp.is_pointer_button_down_on()
+        && ui.input(|i| i.pointer.primary_pressed())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        ui.data_mut(|d| d.insert_temp(part_id, part_at(p)));
+    }
+    let pointer = pointer_phase(&resp);
+    // A click takes the part under it; a drag keeps the part its press started on.
+    let part = match pointer {
+        Some((p, _)) if resp.clicked() => Some(part_at(p)),
+        Some((p, _)) => Some(ui.data(|d| d.get_temp::<RingPart>(part_id)).unwrap_or_else(|| part_at(p))),
+        None => ui.data(|d| d.get_temp::<RingPart>(part_id)),
+    };
+    if resp.clicked() || resp.drag_stopped() {
+        ui.data_mut(|d| d.remove::<RingPart>(part_id));
+    }
+    if part == Some(RingPart::Band) {
+        focus_on_press(&resp);
+    }
+    let (dx, dy) = arrow_steps(ui, resp.id, true, true);
+    let (steps, set) = ui.input(|i| {
+        let steps =
+            i.num_accesskit_action_requests(resp.id, Action::Increment) as f32 - i.num_accesskit_action_requests(resp.id, Action::Decrement) as f32;
+        let set = i.accesskit_action_requests(resp.id, Action::SetValue).find_map(|r| match r.data {
+            Some(ActionData::NumericValue(v)) if v.is_finite() => Some(v.rem_euclid(360.0) as f32),
+            _ => None,
+        });
+        (steps + dx + dy, set)
+    });
+    let mut out = RingResponse { rect, hue: None, inner: None };
+    if let Some((p, phase)) = pointer {
+        match part.unwrap_or_else(|| part_at(p)) {
+            RingPart::Band => {
+                let v = p - c;
+                let h = (-v.y).atan2(v.x).to_degrees();
+                let h = if ui.input(|i| i.modifiers.shift) { (h / 45.0).round() * 45.0 } else { h };
+                out.hue = Some((h.rem_euclid(360.0), phase));
+            }
+            RingPart::Inner => out.inner = Some((p, phase)),
+            RingPart::Corner => {}
+        }
+    } else {
+        let new = set.unwrap_or(hue + steps);
+        // Without a marker there is no color yet, so a set value applies even when it equals `hue`.
+        if new != hue || (set.is_some() && !marked) {
+            out.hue = Some((new.rem_euclid(360.0), Live::Released));
+        }
+    }
+    out
 }
 
 /// What a [`harmony_wheel`] did this frame.

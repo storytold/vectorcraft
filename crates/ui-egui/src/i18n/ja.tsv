@@ -647,6 +647,11 @@ font-technology	Variable	バリアブル
 	Color	カラー
 	Color Guide	カラーガイド
 	Color Themes	カラーテーマ
+	Color Wheel	カラーホイール
+	Hue ring	色相リング
+	Saturation and brightness	彩度と明るさ
+	Color field	カラーフィールド
+	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー

@@ -338,7 +338,7 @@ fn to32(c: &Color) -> Color32 {
 }
 
 /// The global or spot swatch a colour is a tint of (Tint mode).
-struct Tint {
+pub(crate) struct Tint {
     swatch: String,
     spot: bool,
     /// 0..1.
@@ -359,20 +359,20 @@ impl Tint {
 
 /// What the panel is editing: the active proxy's solid colour or a selected gradient stop (with
 /// the global swatch it is a tint of), or a selected freeform point.
-enum Target {
+pub(crate) enum Target {
     Paint(Option<Color>, Option<Tint>),
     Stop { paint: Paint, index: usize, color: Color, tint: Option<Tint> },
     Point { index: usize, color: Color },
 }
 
 impl Target {
-    fn color(&self) -> Option<Color> {
+    pub(crate) fn color(&self) -> Option<Color> {
         match self {
             Target::Paint(c, _) => *c,
             Target::Stop { color, .. } | Target::Point { color, .. } => Some(*color),
         }
     }
-    fn tint(&self) -> Option<&Tint> {
+    pub(crate) fn tint(&self) -> Option<&Tint> {
         match self {
             Target::Paint(_, t) | Target::Stop { tint: t, .. } => t.as_ref(),
             Target::Point { .. } => None,
@@ -409,9 +409,14 @@ fn target_with(app: &VectorcraftApp, mixed: bool) -> Target {
     }
 }
 
+/// [`target`] for the Color Wheel panel, which edits what this panel's sliders edit.
+pub(crate) fn wheel_target(app: &VectorcraftApp, ui: &Ui) -> Target {
+    target(app, ui)
+}
+
 /// Apply `c` to the target, or with `behind` (an Alt-click) to the inactive proxy as a solid
 /// colour, keeping the active proxy in front.
-fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: bool) {
+pub(crate) fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: bool) {
     match tgt {
         Target::Stop { paint: Paint::Gradient(g), index, .. } if !behind => {
             let mut stops = g.gradient.stops.clone();
