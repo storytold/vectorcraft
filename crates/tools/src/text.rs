@@ -44,8 +44,8 @@ mod tool;
 use plain::char_range_to_bytes;
 use plain::common_affixes;
 pub use plain::step_key;
-pub(crate) use ports::port_at;
 pub use ports::{PORT_RISE_PX, PORTS_MAX, Port, PortMarks, PortState, port_centre, port_states, ported, ports_shown, push_port, thread_ports};
+pub(crate) use ports::{port_at, port_near};
 
 /// Which of the Type tools this is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

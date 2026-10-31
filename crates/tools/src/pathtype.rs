@@ -2,9 +2,17 @@
 //! with the Selection and Direct Selection tools. Dragging the start or end bracket sets where the
 //! type begins or ends along its path; dragging the centre bracket slides the type along the path
 //! (its brackets with it) and, dragged across the path, flips the type to the other side
-//! (Cmd/Ctrl held: it only slides). Each drag is one undo step of `type.pathOptions`. The tools
-//! draw the brackets from the same geometry they hit-test. With more than 10,000 type on a path
-//! objects selected, they neither draw nor hit-test any bracket.
+//! (Cmd/Ctrl held: it only slides), as the public help describes
+//! ([Create type on a path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html):
+//! "drag the center bracket along the path […] To flip the direction of text along a path, drag
+//! the bracket across the path"). Each drag is one undo step of `type.pathOptions`. The tools
+//! draw the brackets from the same geometry they hit-test, in screen pixels so they read at any
+//! zoom: the start bracket's foot ends in an arrowhead pointing into the type, the end bracket's
+//! in a stop bar, and the centre bracket carries a square handle. The bracket under the pointer
+//! draws thicker, and the nearest of a bracket and a text port takes a press. While the centre
+//! bracket is dragged, a dashed line beside the path shows where the type lands, solid on the
+//! other side when it will flip. With more than 10,000 type on a path objects selected, they
+//! neither draw nor hit-test any bracket.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, TextKind};
@@ -15,18 +23,26 @@ use crate::{Action, Overlay, PointerEvent, ToolContext};
 
 /// How far a bracket reaches (screen px): up from the path on the type's side, down across it,
 /// and the foot of the start and end brackets along the path, into the type's span.
-const UP_PX: f64 = 14.0;
-const DOWN_PX: f64 = 4.0;
-const FOOT_PX: f64 = 4.0;
+const UP_PX: f64 = 22.0;
+const DOWN_PX: f64 = 6.0;
+const FOOT_PX: f64 = 7.0;
+/// The arrowhead of the start bracket's foot and the stop bar of the end bracket's (screen px).
+const TIP_PX: f64 = 3.0;
+/// The side of the centre bracket's square handle (screen px).
+const HANDLE_PX: f32 = 7.0;
+/// How near (screen px) a press must be to a bracket to take it.
+const HIT_PX: f64 = 8.0;
+/// Stroke widths (screen px) of a bracket, and of the one under the pointer.
+const WIDTH: f32 = 1.25;
+const HOT_WIDTH: f32 = 2.5;
+/// How far from the path (screen px) the landing line of a centre-bracket drag runs.
+const GHOST_PX: f64 = 10.0;
 /// How far past the path (screen px) the centre bracket goes before the type flips.
 const FLIP_PX: f64 = 6.0;
-/// The most points the tools draw for the brackets of a selection, the same number as the canvas's
-/// limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in `crates/ui-egui/src/canvas.rs`).
-/// Past it the tools neither draw nor hit-test any bracket.
-const MAX_POINTS: usize = 100_000;
-/// The points the tools draw for one type on a path's brackets: the two ends of each of the five
-/// lines.
-const POINTS_EACH: usize = 10;
+/// The most selected type on a path objects whose brackets the tools draw and hit-test: a tenth of
+/// the canvas's limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in
+/// `crates/ui-egui/src/canvas.rs`). Past it they neither draw nor hit-test any bracket.
+const MAX_OBJECTS: usize = 10_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bracket {
@@ -94,22 +110,77 @@ impl Brackets {
         (self.xf * p, unit(dir), unit(Vec2::new(dir.y, -dir.x)))
     }
 
-    /// The lines that draw bracket `b` at `zoom` (screen px per point).
+    /// The lines that draw bracket `b` at `zoom` (screen px per point): a stem across the path, and
+    /// for the start and end brackets a foot along it into the type's span, ending in an arrowhead
+    /// (start) or a stop bar (end).
     fn lines(&self, b: Bracket, zoom: f64) -> Vec<(Point, Point)> {
         let px = 1.0 / zoom.max(1e-9);
         let (p, dir, up) = self.frame(self.at(b));
         let top = p + up * UP_PX * px;
         let stem = (p - up * DOWN_PX * px, top);
+        let tip = TIP_PX * px;
         match b {
             Bracket::Centre => vec![stem],
-            Bracket::Start => vec![stem, (top, top + dir * FOOT_PX * px)],
-            Bracket::End => vec![stem, (top, top - dir * FOOT_PX * px)],
+            Bracket::Start => {
+                let end = top + dir * FOOT_PX * px;
+                vec![stem, (top, end), (end, end - dir * tip + up * tip), (end, end - dir * tip - up * tip)]
+            }
+            Bracket::End => {
+                let end = top - dir * FOOT_PX * px;
+                vec![stem, (top, end), (end + up * tip, end - up * tip)]
+            }
         }
     }
 
-    /// The bracket within `tol` (document units) of `p`.
-    fn hit(&self, p: Point, zoom: f64, tol: f64) -> Option<Bracket> {
-        Bracket::ALL.into_iter().find(|b| self.lines(*b, zoom).iter().any(|(a, c)| Line::new(*a, *c).nearest(p, 1e-9).distance_sq <= tol * tol))
+    /// The centre bracket's square handle, at the top of its stem.
+    fn handle(&self, zoom: f64) -> Point {
+        let (p, _, up) = self.frame(self.at(Bracket::Centre));
+        p + up * UP_PX / zoom.max(1e-9)
+    }
+
+    /// The outline of the centre bracket's handle: a square [`HANDLE_PX`] wide, turned with the
+    /// path.
+    fn handle_outline(&self, zoom: f64) -> vectorcraft_geom::kurbo::BezPath {
+        let (_, dir, up) = self.frame(self.at(Bracket::Centre));
+        let c = self.handle(zoom);
+        let h = f64::from(HANDLE_PX) / 2.0 / zoom.max(1e-9);
+        let mut path = vectorcraft_geom::kurbo::BezPath::new();
+        path.move_to(c + (dir + up) * h);
+        path.line_to(c + (-dir + up) * h);
+        path.line_to(c + (-dir - up) * h);
+        path.line_to(c + (dir - up) * h);
+        path.close_path();
+        path
+    }
+
+    /// How far (document units) bracket `b` is from `p`: its lines, and the centre's handle.
+    fn distance(&self, b: Bracket, p: Point, zoom: f64) -> f64 {
+        let lines = self.lines(b, zoom).into_iter().map(|(a, c)| Line::new(a, c).nearest(p, 1e-9).distance_sq.sqrt());
+        let handle = (b == Bracket::Centre).then(|| (self.handle(zoom).distance(p) - f64::from(HANDLE_PX) / 2.0 / zoom.max(1e-9)).max(0.0));
+        lines.chain(handle).fold(f64::INFINITY, f64::min)
+    }
+
+    /// The bracket nearest `p` within `tol` (document units), and how far it is.
+    fn hit(&self, p: Point, zoom: f64, tol: f64) -> Option<(Bracket, f64)> {
+        Bracket::ALL.into_iter().map(|b| (b, self.distance(b, p, zoom))).filter(|(_, d)| *d <= tol).min_by(|a, b| a.1.total_cmp(&b.1))
+    }
+
+    /// The line beside the path where the type lands when its span starts at fraction `start`: on
+    /// the type's side, or on the other one when it will `flip`.
+    fn ghost(&self, start: f64, flip: bool, zoom: f64) -> vectorcraft_geom::kurbo::BezPath {
+        let (s, e) = self.span;
+        let off = GHOST_PX / zoom.max(1e-9) * if flip { -1.0 } else { 1.0 };
+        let closed = self.arc.is_closed();
+        let mut path = vectorcraft_geom::kurbo::BezPath::new();
+        const STEPS: usize = 48;
+        for i in 0..=STEPS {
+            let f = start + (e - s) * i as f64 / STEPS as f64;
+            let f = if closed { f.rem_euclid(1.0) } else { f.clamp(0.0, 1.0) };
+            let (q, _, up) = self.frame(f);
+            let q = q + up * off;
+            if i == 0 { path.move_to(q) } else { path.line_to(q) }
+        }
+        path
     }
 
     /// The fraction of the path's length nearest document point `p`.
@@ -118,37 +189,69 @@ impl Brackets {
     }
 }
 
-/// Whether the selection holds more than [`MAX_POINTS`] / [`POINTS_EACH`] type on a path objects,
+/// Whether the selection holds more than [`MAX_OBJECTS`] type on a path objects,
 /// in perspective or not (counting stops there).
 fn too_many(cx: &ToolContext) -> bool {
     let on_path = |id: &&NodeId| cx.doc.node(**id).is_some_and(|n| matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, TextKind::OnPath { .. })));
-    cx.selection.objects.iter().filter(on_path).nth(MAX_POINTS / POINTS_EACH).is_some()
+    cx.selection.objects.iter().filter(on_path).nth(MAX_OBJECTS).is_some()
 }
 
-/// The selected type on a path's bracket under `p`, if any.
-fn bracket_at(cx: &ToolContext, p: Point) -> Option<(Brackets, Bracket)> {
-    Brackets::of(cx).into_iter().find_map(|b| {
-        let which = b.hit(p, cx.zoom, cx.tol(5.0))?;
-        Some((b, which))
-    })
+/// The selected type on a path's bracket nearest `p` within [`HIT_PX`], and how far it is.
+fn bracket_at(cx: &ToolContext, p: Point) -> Option<(Brackets, Bracket, f64)> {
+    Brackets::of(cx)
+        .into_iter()
+        .filter_map(|b| {
+            let (which, d) = b.hit(p, cx.zoom, cx.tol(HIT_PX))?;
+            Some((b, which, d))
+        })
+        .min_by(|a, b| a.2.total_cmp(&b.2))
 }
 
-/// Is `p` over a bracket of the selected type on a path?
+/// How far (document units) the bracket of the selected type on a path under `p` is from it; None
+/// when no bracket is within reach.
+pub fn bracket_distance(cx: &ToolContext, p: Point) -> Option<f64> {
+    if too_many(cx) {
+        return None;
+    }
+    bracket_at(cx, p).map(|(_, _, d)| d)
+}
+
+/// Is `p` over a bracket of the selected type on a path, nearer than any text port (a start
+/// bracket and an in port sit side by side: the nearer takes the press)?
 pub fn over_bracket(cx: &ToolContext, p: Point) -> bool {
-    !too_many(cx) && bracket_at(cx, p).is_some()
+    bracket_distance(cx, p).is_some_and(|d| crate::text::port_near(cx, p).is_none_or(|(_, _, port)| d <= port))
 }
 
-/// The brackets of the selected type on a path, in their layer's colour.
-pub fn overlays(cx: &ToolContext) -> Vec<Overlay> {
+/// The brackets of the selected type on a path, in their layer's colour: the one under `hover`
+/// thicker, and while `drag` moves the centre bracket the line where the type lands.
+pub fn overlays(cx: &ToolContext, hover: Option<Point>, drag: Option<&BracketDrag>) -> Vec<Overlay> {
     if too_many(cx) {
         return vec![];
     }
+    let hot = match drag {
+        Some(d) => Some((d.brackets.id, d.which)),
+        None => hover.and_then(|p| bracket_at(cx, p)).map(|(b, which, _)| (b.id, which)),
+    };
     let mut out = vec![];
     for b in Brackets::of(cx) {
         let color = cx.doc.layer_color(b.id);
         for which in Bracket::ALL {
-            out.extend(b.lines(which, cx.zoom).into_iter().map(|(a, b)| Overlay::Line { a, b, color, dashed: false }));
+            let width = if hot == Some((b.id, which)) { HOT_WIDTH } else { WIDTH };
+            let mut path = vectorcraft_geom::kurbo::BezPath::new();
+            for (a, c) in b.lines(which, cx.zoom) {
+                path.move_to(a);
+                path.line_to(c);
+            }
+            out.push(Overlay::Path { path, color, width, dashed: false });
         }
+        let width = if hot == Some((b.id, Bracket::Centre)) { HOT_WIDTH } else { WIDTH };
+        out.push(Overlay::Path { path: b.handle_outline(cx.zoom), color, width, dashed: false });
+    }
+    if let Some(d) = drag
+        && let Some((start, flip)) = d.landing
+    {
+        let color = cx.doc.layer_color(d.brackets.id);
+        out.push(Overlay::Path { path: d.brackets.ghost(start, flip, cx.zoom), color, width: if flip { HOT_WIDTH } else { WIDTH }, dashed: !flip });
     }
     out
 }
@@ -162,6 +265,8 @@ pub struct BracketDrag {
     /// Where the press was along the path (a fraction of its length).
     grab: f64,
     began: bool,
+    /// Where a centre-bracket drag lands the type: its start along the path, and whether it flips.
+    landing: Option<(f64, bool)>,
 }
 
 impl BracketDrag {
@@ -170,9 +275,12 @@ impl BracketDrag {
         if too_many(cx) {
             return None;
         }
-        let (brackets, which) = bracket_at(cx, ev.pos)?;
+        if !over_bracket(cx, ev.pos) {
+            return None;
+        }
+        let (brackets, which, _) = bracket_at(cx, ev.pos)?;
         let grab = brackets.fraction_at(ev.pos)?;
-        Some(Self { brackets, which, start: ev.pos, grab, began: false })
+        Some(Self { brackets, which, start: ev.pos, grab, began: false, landing: None })
     }
 
     pub fn drag(&mut self, cx: &ToolContext, p: Point, cmd: bool) -> Vec<Action> {
@@ -185,7 +293,11 @@ impl BracketDrag {
             out.push(Action::Begin("Move Type on a Path".into()));
         }
         let Some(u) = self.brackets.fraction_at(p) else { return out };
-        out.push(Action::Preview("type.pathOptions".into(), self.params(cx, p, u, cmd)));
+        let params = self.params(cx, p, u, cmd);
+        if self.which == Bracket::Centre {
+            self.landing = params["start"].as_f64().map(|s| (s, params.get("flip").is_some()));
+        }
+        out.push(Action::Preview("type.pathOptions".into(), params));
         out
     }
 
@@ -271,14 +383,37 @@ mod tests {
         let p = paint();
         let cx = cx(&d, &s, &p);
         let b = Brackets::of(&cx).pop().unwrap();
-        assert_eq!(b.hit(Point::new(160.0, 290.0), 1.0, 2.0), Some(Bracket::Start));
-        assert_eq!(b.hit(Point::new(280.0, 290.0), 1.0, 2.0), Some(Bracket::Centre));
-        assert_eq!(b.hit(Point::new(400.0, 290.0), 1.0, 2.0), Some(Bracket::End));
-        assert_eq!(b.hit(Point::new(220.0, 290.0), 1.0, 2.0), None);
-        // Drawn over the type's side of the path, with feet pointing into the span.
-        let o = overlays(&cx);
-        assert_eq!(o.len(), 5);
-        assert!(o.contains(&Overlay::Line { a: Point::new(160.0, 286.0), b: Point::new(164.0, 286.0), color: d.layer_color(id), dashed: false }));
+        let which = |p: Point| b.hit(p, 1.0, 2.0).map(|(w, _)| w);
+        assert_eq!(which(Point::new(160.0, 290.0)), Some(Bracket::Start));
+        assert_eq!(which(Point::new(280.0, 290.0)), Some(Bracket::Centre));
+        assert_eq!(which(Point::new(400.0, 290.0)), Some(Bracket::End));
+        assert_eq!(which(Point::new(220.0, 290.0)), None);
+        // Drawn over the type's side of the path, 22 px up and 6 px down, with feet pointing into
+        // the span: the start one ends in an arrowhead, the end one in a bar; the centre bracket
+        // carries a square handle at the top of its stem.
+        let o = overlays(&cx, None, None);
+        assert_eq!(o.len(), 4);
+        let color = d.layer_color(id);
+        let segments = |o: &Overlay| match o {
+            Overlay::Path { path, width, .. } => {
+                assert_eq!(*width, WIDTH);
+                path.segments()
+                    .map(|s| {
+                        let l = vectorcraft_geom::kurbo::ParamCurve::subsegment(&s, 0.0..1.0);
+                        (vectorcraft_geom::kurbo::ParamCurve::start(&l), vectorcraft_geom::kurbo::ParamCurve::end(&l))
+                    })
+                    .collect::<Vec<_>>()
+            }
+            _ => vec![],
+        };
+        let all: Vec<_> = o.iter().flat_map(segments).collect();
+        assert!(all.contains(&(Point::new(160.0, 306.0), Point::new(160.0, 278.0))), "{all:?}");
+        assert!(all.contains(&(Point::new(160.0, 278.0), Point::new(167.0, 278.0))), "{all:?}");
+        assert!(all.contains(&(Point::new(167.0, 278.0), Point::new(164.0, 275.0))), "the start foot's arrowhead: {all:?}");
+        assert!(all.contains(&(Point::new(400.0, 278.0), Point::new(393.0, 278.0))), "{all:?}");
+        assert!(all.contains(&(Point::new(393.0, 275.0), Point::new(393.0, 281.0))), "the end foot's bar: {all:?}");
+        assert!(all.contains(&(Point::new(283.5, 274.5), Point::new(276.5, 274.5))), "the centre handle: {all:?}");
+        assert!(o.iter().all(|o| matches!(o, Overlay::Path { color: c, dashed: false, .. } if *c == color)));
         // Nothing for unselected or other type.
         assert!(Brackets::of(&crate::testutil::cx(&d, &Selection::default(), &p)).is_empty());
         let (d2, area) = doc_with_area_type();
@@ -307,7 +442,7 @@ mod tests {
         // On the start bracket of every copy (they all lie on the same path).
         let at = Point::new(160.0, 290.0);
         let press = PointerEvent::new(PointerKind::Down, at.x, at.y);
-        let lines = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Line { .. })).count();
+        let lines = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Path { .. })).count();
         let tools = |cx: &ToolContext| -> Vec<(usize, Cursor)> {
             let select = crate::select::SelectionTool::default();
             let direct = crate::direct::DirectSelectionTool::new(false);
@@ -316,13 +451,13 @@ mod tests {
         };
         {
             let cx = cx(&d, &s, &p);
-            assert_eq!(overlays(&cx).len(), 50_000);
+            assert_eq!(overlays(&cx, None, None).len(), 40_000);
             assert!(over_bracket(&cx, at) && BracketDrag::hit(&cx, &press).is_some());
-            assert_eq!(tools(&cx), vec![(50_000, Cursor::PathBracket); 2]);
+            assert_eq!(tools(&cx), vec![(40_000, Cursor::PathBracket); 2]);
         }
         add(&mut d, &mut s, 1);
         let cx = cx(&d, &s, &p);
-        assert!(overlays(&cx).is_empty());
+        assert!(overlays(&cx, None, None).is_empty());
         assert!(!over_bracket(&cx, at) && BracketDrag::hit(&cx, &press).is_none());
         for (n, cursor) in tools(&cx) {
             assert_eq!(n, 0);
@@ -363,5 +498,128 @@ mod tests {
         // The end stops at the start.
         let v = preview(&drag(&cx, Point::new(400.0, 295.0), Point::new(110.0, 300.0), Mods::default())).clone();
         assert!((v["end"].as_f64().unwrap() - 0.2).abs() < 1e-6, "{v}");
+    }
+
+    /// The brackets take a press within 8 screen px at any zoom, and not further: their size and
+    /// reach are in screen pixels.
+    #[test]
+    fn brackets_are_hit_within_eight_screen_pixels_at_any_zoom() {
+        let (d, id) = doc_with_path_type();
+        let s = selected(id);
+        let p = paint();
+        for zoom in [0.25, 1.0, 8.0] {
+            let mut cx = cx(&d, &s, &p);
+            cx.zoom = zoom;
+            let px = 1.0 / zoom;
+            // The start bracket's stem stands at x 160 from 6 px below the path to 22 px above it.
+            let near = |dx: f64, dy: f64| over_bracket(&cx, Point::new(160.0 - dx * px, 300.0 - dy * px));
+            assert!(near(7.5, 10.0), "7.5 px beside the stem at zoom {zoom}");
+            assert!(near(0.0, 21.0) && near(0.0, -5.0), "the stem's length at zoom {zoom}");
+            assert!(!near(9.0, 10.0), "9 px beside the stem at zoom {zoom}");
+            // The centre handle, 22 px above the path at x 280.
+            let handle = Point::new(280.0, 300.0 - 22.0 * px);
+            assert!(over_bracket(&cx, handle + Vec2::new(10.0 * px, 0.0)), "beside the handle at zoom {zoom}");
+            let d = BracketDrag::hit(&cx, &PointerEvent::new(PointerKind::Down, handle.x, handle.y)).expect("the handle");
+            assert_eq!(d.which, Bracket::Centre);
+        }
+    }
+
+    /// The bracket under the pointer draws thicker, and while the centre bracket is dragged a dashed
+    /// line beside the path shows where the type lands, solid on the far side once it will flip.
+    #[test]
+    fn the_hovered_bracket_is_thicker_and_a_drag_shows_where_the_type_lands() {
+        let (d, id) = doc_with_path_type();
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let widths =
+            |o: &[Overlay]| o.iter().filter_map(|o| if let Overlay::Path { width, .. } = o { Some(*width) } else { None }).collect::<Vec<_>>();
+        assert_eq!(widths(&overlays(&cx, Some(Point::new(400.0, 290.0)), None)), [WIDTH, WIDTH, HOT_WIDTH, WIDTH]);
+        assert_eq!(widths(&overlays(&cx, Some(Point::new(220.0, 250.0)), None)), [WIDTH; 4]);
+        let mut d = BracketDrag::hit(&cx, &PointerEvent::new(PointerKind::Down, 280.0, 295.0)).unwrap();
+        d.drag(&cx, Point::new(320.0, 295.0), false);
+        let o = overlays(&cx, None, Some(&d));
+        assert_eq!(widths(&o), [HOT_WIDTH, WIDTH, WIDTH, HOT_WIDTH, WIDTH], "the centre bracket and its handle stay hot");
+        let Some(Overlay::Path { path, dashed: true, .. }) = o.last() else { panic!("a dashed landing line: {o:?}") };
+        let b = vectorcraft_geom::kurbo::Shape::bounding_box(path);
+        assert!((b.x0 - 200.0).abs() < 1e-6 && (b.x1 - 400.0).abs() < 1e-6 && (b.y0 - 290.0).abs() < 1e-6, "{b:?}");
+        d.drag(&cx, Point::new(320.0, 330.0), false);
+        let o = overlays(&cx, None, Some(&d));
+        let Some(Overlay::Path { path, dashed: false, width, .. }) = o.last() else { panic!("a solid landing line: {o:?}") };
+        assert_eq!(*width, HOT_WIDTH);
+        assert!(vectorcraft_geom::kurbo::Shape::bounding_box(path).y0 > 300.0, "below the path: it flips");
+    }
+
+    /// A press on a bracket takes it rather than moving the type, and of a bracket and a text port
+    /// side by side the nearer one takes the press, with the cursor to match.
+    #[test]
+    fn a_bracket_beats_moving_the_object_and_the_nearer_of_a_bracket_and_a_port_wins() {
+        let (d, id) = doc_with_path_type();
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let press = |at: Point| {
+            let mut t = crate::select::SelectionTool::default();
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, at.x + 30.0, at.y));
+            (out, t.cursor(&cx, at, Mods::default()))
+        };
+        // On the centre bracket, over the type itself: the type slides along its path.
+        let (out, _) = press(Point::new(280.0, 296.0));
+        assert!(out.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "type.pathOptions")), "{out:?}");
+        assert!(!out.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.move" || c == "transform.move")), "{out:?}");
+        // The in port sits beside the start bracket: find its centre.
+        let mut port = None;
+        for i in 0..200 {
+            for j in 0..80 {
+                let q = Point::new(130.0 + i as f64 * 0.2, 280.0 + j as f64 * 0.5);
+                if let Some((_, crate::text::Port::In, dist)) = crate::text::port_near(&cx, q)
+                    && port.is_none_or(|(_, best)| dist < best)
+                {
+                    port = Some((q, dist));
+                }
+            }
+        }
+        let (centre, _) = port.expect("an in port near the start bracket");
+        assert!(!over_bracket(&cx, centre), "on the port: the port is nearer");
+        assert!(BracketDrag::hit(&cx, &PointerEvent::new(PointerKind::Down, centre.x, centre.y)).is_none());
+        // On the stem, within the port's box if it reaches that far: the bracket is nearer.
+        let stem = Point::new(160.0, centre.y.clamp(279.0, 305.0));
+        assert!(over_bracket(&cx, stem));
+        assert_eq!(press(stem).1, Cursor::PathBracket);
+    }
+
+    /// On a closed circle, a drag of the centre bracket slides the type round its path, flipping it
+    /// across the path: it changes the type's place only, never its path nor moves the object.
+    #[test]
+    fn on_a_circle_the_centre_bracket_moves_the_type_only() {
+        let (mut d, _) = crate::testutil::doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut t = vectorcraft_doc::TextObject::point(Point::ZERO, "Round", Default::default());
+        let circle = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(200.0, 200.0, 400.0, 400.0));
+        t.kind = TextKind::OnPath { path: circle, start: 0.1, end: None };
+        d.insert(Some(l), 1, vectorcraft_doc::Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let b = Brackets::of(&cx).pop().unwrap();
+        let (on, _, up) = b.frame(b.at(Bracket::Centre));
+        for (to, flips) in [(on + up * 5.0, false), (on - up * 40.0, true)] {
+            let mut t = crate::select::SelectionTool::default();
+            let grab = on + up * 10.0;
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, grab.x, grab.y));
+            let to = to + b.frame(b.at(Bracket::Centre)).1 * 30.0;
+            let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+            let previews: Vec<_> = out.iter().filter_map(|a| if let Action::Preview(c, v) = a { Some((c.as_str(), v)) } else { None }).collect();
+            assert_eq!(previews.len(), 1, "{out:?}");
+            let (cmd, v) = previews[0];
+            assert_eq!(cmd, "type.pathOptions");
+            assert_eq!(v["ids"], json!([id.0]));
+            let keys: Vec<_> = v.as_object().unwrap().keys().cloned().collect();
+            assert!(keys.iter().all(|k| ["ids", "start", "end", "flip"].contains(&k.as_str())), "only the type's place: {keys:?}");
+            assert_eq!(v.get("flip").is_some(), flips, "{v}");
+            assert!(out.contains(&Action::Begin("Move Type on a Path".into())));
+        }
     }
 }
