@@ -4,16 +4,19 @@
 //! baseline, text rise, is baseline shift). Each glyph stays where the file drew it: the kerning
 //! and tracking the type takes put it there (#722). Fonts are named from the file's base font name (its
 //! subset prefix dropped, the family matched against the fonts available); a font that isn't
-//! available keeps its name, and the text shows in the fallback font until it is.
+//! available keeps its name. Where the file carries that font, its glyphs make a font kept with the
+//! document ([`crate::import_fonts`]) that draws the type as the file did until its text is
+//! edited ([`keep_file_fonts`]); otherwise the text shows in the fallback font until it is.
 //!
 //! Glyphs each turned a little further along a curve (type set on a path: apps write each glyph
 //! with its own placement) make one type-on-a-path object, its path through the glyphs' baseline.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Node, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, FileFont, FileFonts, Node, NodeId, NodeKind, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -193,6 +196,9 @@ pub(crate) struct TextLine {
     /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
     /// (written right after the line).
     pub held: Vec<Node>,
+    /// A glyph of the line is drawn in a font the file carries for a family that isn't available
+    /// ([`keep_file_fonts`]).
+    pub file_font: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -213,6 +219,9 @@ pub(crate) struct LineFacts {
     /// Horizontal point type: how long the file set it, from its first glyph's origin to the end
     /// of its last glyph that isn't a space (points, along the baseline).
     pub length: f64,
+    /// Set in a font the file carries for a family that isn't available: what its spacing is
+    /// measured from, to measure it again once that font is kept ([`keep_file_fonts`]).
+    pub respace: Option<Box<Spacing>>,
 }
 
 /// The most a glyph on a curve turns from the one before it (about 20°).
@@ -239,6 +248,7 @@ impl TextLine {
             drawn_spaces: vec![],
             drawn_space: None,
             held: vec![],
+            file_font: false,
         }
     }
 
@@ -507,76 +517,153 @@ impl TextLine {
         let angle = self.at.dir.atan2();
         // The glyphs' tops lean along the baseline (+x), up being -y in the type's own space.
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(angle) * Affine::skew(-self.at.slant, 0.0);
-        let db = vectorcraft_text::FontDb::global();
-        // Each glyph where the file put it (#722): the kerning (the font's, or none) and tracking
-        // (one value for the line, or each character its own) that place them there.
-        let placed = (self.upright.is_none() && t.para.direction.is_none())
-            .then(|| place_each(&t, &self.slots, &self.baseline, path.as_ref(), self.at, self.at.size))
-            .flatten()
-            .map(|(runs, laid)| {
-                t.runs = runs;
-                laid.bounds
-            });
-        if let Some(path) = path {
-            // Evenly spaced type keeps its length along the path: the path runs through the
-            // glyphs' origins, one curve each, to the end of the last glyph, and tracking makes up
-            // the difference from the advances.
-            if placed.is_none() {
-                let length: f64 = path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum();
-                let laid = vectorcraft_text::layout(db, &t);
-                let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
-                let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
-                let size = self.at.size;
-                if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size);
-                    t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
-                }
-            }
-            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
-            t.xf = Affine::IDENTITY;
-            t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);
-            return Some((t, self.opacity, facts));
-        }
-        let (start, along) = match self.upright {
+        // How far along the line the file put each glyph: along the path through them (one curve
+        // each), or along the baseline from the line's origin.
+        let along: Vec<f64> = match &path {
+            Some(bp) => std::iter::once(0.0)
+                .chain(bp.segments().scan(0.0, |d, seg| {
+                    *d += kurbo::ParamCurveArclen::arclen(&seg, 1e-3);
+                    Some(*d)
+                }))
+                .take(self.baseline.len())
+                .collect(),
+            None => self.baseline.iter().map(|p| (*p - self.at.origin).dot(self.at.dir)).collect(),
+        };
+        // Evenly spaced type on a path keeps its length along the path: the path runs through the
+        // glyphs' origins, one curve each, to the end of the last glyph.
+        let path_length =
+            path.as_ref().map(|path| path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum());
+        let start = match self.upright {
             // Vertical point type (a column, or a single upright glyph) is anchored at the top
             // centre of its first em box.
-            Some(u) => {
+            Some(u) if path.is_none() => {
                 t.vertical = true;
                 t.xf = Affine::translate(u.top.to_vec2()) * Affine::rotate(angle);
-                (self.at.origin, -self.at.up())
+                -self.at.up()
             }
-            _ => (self.at.origin, self.at.dir),
+            _ => self.at.dir,
         };
-        // Tracking that makes the line as long as in the file: the PDF placed each glyph, the
-        // layout sets them by their advances. Spread over the gaps between characters (tracking
-        // follows each character, the last one's past the end of the line). A horizontal line is
-        // measured to its last glyph that isn't a space: the spaces after it were dropped.
-        let length = (if t.vertical { self.next } else { self.visible } - start).dot(along);
-        if !t.vertical {
+        // A horizontal line is measured to its last glyph that isn't a space (the spaces after it
+        // were dropped), a column to the end of its last glyph.
+        let length = (if t.vertical { self.next } else { self.visible } - self.at.origin).dot(start);
+        if path.is_none() && !t.vertical {
             facts.length = length;
         }
-        // Placed glyph by glyph: laid out so already.
-        if let Some(bounds) = placed {
-            t.cached_bounds = Some(bounds);
-            return Some((t, self.opacity, facts));
+        if let Some(path) = &path {
+            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(path), start: 0.0, end: None };
+            t.xf = Affine::IDENTITY;
         }
-        let laid = vectorcraft_text::layout(db, &t);
-        let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
-        let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
-        let size = self.at.size;
-        let mut bounds = laid.bounds;
-        if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-            // The spaces read from gaps or drawn between glyphs keep their own place only in text
-            // left in the file's order.
-            let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
-            let gaps: Vec<(usize, f64)> = if t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
-            let (tracking, spaces) = spacing(&laid, &gaps, length - natural, chars, size);
-            t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
-            // Tracked: laid out again for its bounds.
-            bounds = vectorcraft_text::layout(db, &t).bounds;
+        // The spaces read from gaps or drawn between glyphs keep their own place only in a line
+        // left in the file's order (not along a path).
+        let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
+        let gaps: Vec<(usize, f64)> =
+            if path.is_none() && t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
+        let s = Spacing {
+            runs: t.runs.clone(),
+            slots: std::mem::take(&mut self.slots),
+            // Glyph by glyph only in horizontal type in the file's order.
+            along: (self.upright.is_none() && t.para.direction.is_none()).then_some(along),
+            slant: if path.is_some() { 0.0 } else { self.at.slant },
+            size: self.at.size,
+            length: path_length.unwrap_or(length),
+            gaps,
+        };
+        space_line(&mut t, &s);
+        // Set in a font the file carries for a family that isn't available: spaced again once that
+        // font is kept with the document ([`keep_file_fonts`]).
+        if self.file_font {
+            facts.respace = Some(Box::new(s));
         }
-        t.cached_bounds = Some(bounds);
         Some((t, self.opacity, facts))
+    }
+}
+
+/// What a line's spacing is measured from: where the file put its glyphs. Kept with a line set in
+/// a font the file carries for a family that isn't available ([`LineFacts::respace`]), to be
+/// measured again against that font once it is kept with the document ([`keep_file_fonts`]).
+#[derive(Clone, Debug)]
+pub(crate) struct Spacing {
+    /// The line's runs, unspaced.
+    runs: Vec<TextRun>,
+    /// Where the file put each character ([`TextLine::slots`]).
+    slots: Vec<Option<Slot>>,
+    /// How far along the line (or its path) the file put each glyph (points); `None` when the
+    /// glyphs aren't placed one by one (vertical type, type in visual order).
+    along: Option<Vec<f64>>,
+    /// The type's slant ([`Placement::slant`]; 0 on a path).
+    slant: f64,
+    size: f64,
+    /// How long the file set the line (points): along its path, to the end of a column, or to
+    /// the last glyph of a horizontal line that isn't a space.
+    length: f64,
+    /// The spaces read from gaps or drawn between glyphs: byte offset, width (points).
+    gaps: Vec<(usize, f64)>,
+}
+
+/// Space `t` (whose runs are `s`'s, unspaced) as the file did ([`Spacing`]): each glyph where the
+/// file put it (#722) with the kerning (the font's, or none) and tracking (one value for the line,
+/// or each character its own) that place them there ([`place_each`]); else tracking that makes
+/// the line as long as in the file (the PDF placed each glyph, the layout sets them by their
+/// advances), spread over the gaps between characters (tracking follows each character, the last
+/// one's past the end of the line). Its bounds are laid out too.
+fn space_line(t: &mut TextObject, s: &Spacing) {
+    let db = vectorcraft_text::FontDb::global();
+    t.runs = s.runs.clone();
+    let on_path = !matches!(t.kind, TextKind::Point);
+    // Measured as point type: type on a path stops at the path's end, which tracking moves.
+    let point = |t: &TextObject| TextObject { kind: TextKind::Point, ..t.clone() };
+    let placed = s.along.as_ref().and_then(|along| place_each(&point(t), &s.slots, along, s.slant, s.size));
+    if let Some((runs, laid)) = placed {
+        t.runs = runs;
+        t.cached_bounds = Some(if on_path { vectorcraft_text::layout(db, t).bounds } else { laid.bounds });
+        return;
+    }
+    let laid = vectorcraft_text::layout(db, &point(t));
+    let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
+    let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
+    let mut bounds = (!on_path).then_some(laid.bounds);
+    if chars > 1 && s.length.is_finite() && (s.length - natural).abs() > s.size * 0.01 {
+        let (tracking, spaces) = spacing(&laid, &s.gaps, s.length - natural, chars, s.size);
+        t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
+        // Tracked: laid out again for its bounds.
+        bounds = None;
+    }
+    t.cached_bounds = Some(bounds.unwrap_or_else(|| vectorcraft_text::layout(db, t).bounds));
+}
+
+/// The type among `nodes` (and in their groups) set in fonts the file carries for families that
+/// aren't available, now kept with the document as `kept` (family and style → the font's blob):
+/// drawn in them while its text is the file's ([`vectorcraft_doc::FileFonts`]), and spaced again
+/// from where the file put each glyph, measured against the file's own widths (not the stand-in's,
+/// which differ, #3756).
+pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], lines: &HashMap<NodeId, LineFacts>, kept: &HashMap<(String, String), String>) {
+    if kept.is_empty() {
+        return;
+    }
+    for n in nodes.iter_mut() {
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(children) = Arc::make_mut(n).children_mut()
+        {
+            keep_file_fonts(children, lines, kept);
+        }
+        let Some(s) = lines.get(&n.id).and_then(|f| f.respace.as_deref()) else { continue };
+        let mut fonts: Vec<FileFont> = vec![];
+        for r in &s.runs {
+            let (family, style) = (&r.style.font_family, &r.style.font_style);
+            if let Some(key) = kept.get(&(family.clone(), style.clone()))
+                && !fonts.iter().any(|f| f.family == *family && f.style == *style)
+            {
+                fonts.push(FileFont { family: family.clone(), style: style.clone(), key: key.clone() });
+            }
+        }
+        if fonts.is_empty() {
+            continue;
+        }
+        if let NodeKind::Text(t) = &mut Arc::make_mut(n).kind {
+            let text: String = s.runs.iter().map(|r| r.text.as_str()).collect();
+            t.file_fonts = Some(Box::new(FileFonts::new(fonts, &text)));
+            space_line(t, s);
+        }
     }
 }
 
@@ -632,21 +719,14 @@ fn restyled(t: &TextObject, kern: Option<f64>, own: &[f64]) -> Vec<TextRun> {
 /// file's widths (not the font's advances, which may be a hair off them) and kept on course where
 /// the differences add up ([`on_course`]).
 ///
-/// The file put the glyph of each character with a [`Slot`] at `baseline` (one origin per glyph),
-/// measured along `path` (type on a path: one curve per glyph) or along `line`'s baseline from its
-/// origin, where a character shifted off it by its baseline shift draws that shift times `line`'s
-/// slant further along (the type's skew leans it so, as the file's text rise did). `None` when the
-/// font laid out isn't the file's (its advances differ from the file's): spacing measured against
-/// a stand-in's widths would keep the stand-in's differences once the font is installed; or when
-/// the glyphs can't be placed so (the layout joins characters the file drew apart).
-fn place_each(
-    t: &TextObject,
-    slots: &[Option<Slot>],
-    baseline: &[Point],
-    path: Option<&BezPath>,
-    line: Placement,
-    size: f64,
-) -> Option<(Vec<TextRun>, TextLayout)> {
+/// The file put the glyph of each character with a [`Slot`] `along` the line (points from its
+/// origin, or along its path), where a character shifted off the baseline by its baseline shift
+/// draws that shift times `slant` further along (the type's skew leans it so, as the file's text
+/// rise did). `None` when the font laid out isn't the file's (its advances differ from the file's):
+/// spacing measured against a stand-in's widths would keep the stand-in's differences once the
+/// font is installed; or when the glyphs can't be placed so (the layout joins characters the file
+/// drew apart).
+fn place_each(t: &TextObject, slots: &[Option<Slot>], along: &[f64], slant: f64, size: f64) -> Option<(Vec<TextRun>, TextLayout)> {
     let chars: Vec<usize> = t
         .runs
         .iter()
@@ -660,20 +740,8 @@ fn place_each(
     if chars.len() < 2 || chars.len() != slots.len() || t.runs.iter().any(|r| r.inline.is_some()) {
         return None;
     }
-    // How far along the line the file put each glyph.
-    let along: Vec<f64> = match path {
-        Some(bp) => std::iter::once(0.0)
-            .chain(bp.segments().scan(0.0, |d, seg| {
-                *d += kurbo::ParamCurveArclen::arclen(&seg, 1e-3);
-                Some(*d)
-            }))
-            .take(baseline.len())
-            .collect(),
-        None => baseline.iter().map(|p| (*p - line.origin).dot(line.dir)).collect(),
-    };
     // Each character's baseline shift, which the type's slant draws `slant` times as far along.
     let shifts: Vec<f64> = t.runs.iter().flat_map(|r| r.text.chars().map(move |_| r.style.baseline_shift)).collect();
-    let slant = if path.is_some() { 0.0 } else { line.slant };
     // Each character's target: where the file put it, if it put it anywhere.
     let target: Vec<Option<(f64, Option<f64>)>> =
         slots.iter().zip(&shifts).map(|(s, shift)| s.and_then(|s| Some((*along.get(s.glyph)? - slant * shift, s.advance)))).collect();

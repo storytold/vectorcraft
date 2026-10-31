@@ -53,6 +53,7 @@ impl FontDb {
             images: Mutex::new(GlyphCache::default()),
             colours: Mutex::new(GlyphCache::default()),
             catalog: RwLock::new(Catalog::new()),
+            file_faces: RwLock::new(super::FileFaces::default()),
             postscript: RwLock::new(PostScriptNames::new()),
             font_paths,
             aliases: RwLock::new(HashMap::new()),

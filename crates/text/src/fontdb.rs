@@ -65,6 +65,21 @@ pub use traits::{FontClass, FontMatch, FontTraits};
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
 
+/// The fonts files carried that the database keeps ([`FontDb::keep_file_font`]), by their blob's key
+/// and by face id.
+#[derive(Default)]
+pub(super) struct FileFaces {
+    pub(super) by_key: HashMap<String, Arc<FontFace>>,
+    pub(super) by_id: HashMap<u32, Arc<FontFace>>,
+}
+
+/// How many fonts files carried the database keeps at most (each shares its document's bytes).
+pub const MAX_FILE_FACES: usize = 4096;
+
+/// What layout names the family of a run drawn in a font a file carried, followed by the face's
+/// id ([`FontDb::style_face`] finds it so): no font's family name starts so.
+pub(crate) const FILE_FONT_FAMILY: &str = "\u{1}file font ";
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
@@ -73,6 +88,9 @@ pub struct FontDb {
     images: Mutex<GlyphImages>,
     colours: Mutex<GlyphColours>,
     catalog: RwLock<Catalog>,
+    /// Fonts files carried for their type ([`vectorcraft_doc::FileFonts`]): apart from the faces,
+    /// so no family name, font menu, fallback or PostScript name lookup finds them.
+    pub(super) file_faces: RwLock<FileFaces>,
     /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
     postscript: RwLock<PostScriptNames>,
     /// Where the system font scan looks.

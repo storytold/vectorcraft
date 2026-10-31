@@ -10,6 +10,8 @@ use super::{
     PathData, PathDrawMode, Pattern, PatternDef, Placement, Rect, Scan, Shape, SoftMask, StrokeProps, TextAs, TextLine, TextOverprint, TilingPattern,
     Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
 };
+use crate::import_fonts::program_facts;
+use vectorcraft_text::{FileFontInfo, FileGlyph};
 
 impl<'p> Builder<'p> {
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
@@ -32,6 +34,8 @@ impl<'p> Builder<'p> {
             font_names: HashMap::new(),
             families: None,
             missing_fonts: vec![],
+            file_glyphs: crate::import_fonts::FileFontGlyphs::default(),
+            file_fonts: HashMap::new(),
             cid_text: HashMap::new(),
             font_chars: HashMap::new(),
             matched: HashMap::new(),
@@ -838,10 +842,8 @@ impl<'p> Builder<'p> {
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of
         // the column's centre (ISO 32000-1 §9.7.4.3); vertical type centres each glyph on the
         // column. Half an em only for a full-width glyph (#722).
-        let top = upright.then(|| {
-            let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
-            m * kurbo::Point::new(vx, 880.0)
-        });
+        let vx = upright.then(|| self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph)));
+        let top = vx.map(|vx| m * kurbo::Point::new(vx, 880.0));
         let place = |line: &mut TextLine| match top {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
@@ -860,8 +862,27 @@ impl<'p> Builder<'p> {
             place(&mut line);
             self.text = Some(line);
         }
+        let outline = o.outline();
+        // A font the file carries for a family that isn't available: the glyph goes into the font
+        // kept with the document, which draws the line as the file does ([`crate::import_fonts`]).
+        if let Some(font) = self.file_font(key, o, &look) {
+            if let Some(line) = &mut self.text {
+                line.file_font = true;
+            }
+            let mut chars = text.chars();
+            if let (Some(ch), None) = (chars.next(), chars.next())
+                && self.file_glyphs.wants(font, ch)
+            {
+                // A glyph set vertically has no horizontal width: its column's, twice its centre.
+                let advance = match vx {
+                    Some(vx) => 2.0 * vx,
+                    None => width.map_or(500.0, f64::from),
+                };
+                self.file_glyphs.add(font, FileGlyph { ch, outline: outline.clone(), advance });
+            }
+        }
         // Its ink: a stroke the file draws as outlines of the glyphs is told by it.
-        let mut ink = o.outline();
+        let mut ink = outline;
         if let Some(line) = &mut self.text
             && !ink.elements().is_empty()
         {
@@ -869,5 +890,35 @@ impl<'p> Builder<'p> {
             line.ink.push(ink.bounding_box());
         }
         true
+    }
+
+    /// The font among the glyphs gathered for fonts kept with the document that glyphs of font
+    /// `key` (drawn with `look`) go into: when the file carries the font's program, no installed
+    /// face has its PostScript name, and its family and style aren't available as named. Decided
+    /// once per font.
+    fn file_font(&mut self, key: u128, o: &craft_pdf::interpret::font::OutlineGlyph, look: &Look) -> Option<usize> {
+        if let Some(f) = self.file_fonts.get(&key) {
+            return *f;
+        }
+        // Not the interpreter's stand-in for a font the file doesn't carry.
+        let carried = self.fonts.get(&key).is_some_and(|f| f.embedded) && o.font_data().is_none_or(|d| d.embedded);
+        let installed = self.font_names.get(&key).is_some_and(|i| i.face.is_some());
+        let available =
+            || vectorcraft_text::FontDb::global().resolve(&look.family, &look.style).is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+        let font = (carried && !installed && !look.family.trim().is_empty() && !available()).then(|| {
+            let data = o.font_data();
+            let (fs_type, metrics) = data.as_ref().map_or((None, None), |d| program_facts(d.data.as_ref().as_ref(), d.index));
+            let name = self.fonts.get(&key).map(|f| f.name.clone()).or_else(|| data.and_then(|d| d.postscript_name)).unwrap_or_default();
+            // A subset's six-letter tag.
+            let postscript = match name.split_once('+') {
+                Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest.to_string(),
+                _ => name,
+            };
+            let (ascent, descent) = metrics.unwrap_or_default();
+            let info = || FileFontInfo { family: look.family.clone(), style: look.style.clone(), postscript, ascent, descent, fs_type };
+            self.file_glyphs.font(&look.family, &look.style, info)
+        });
+        self.file_fonts.insert(key, font);
+        font
     }
 }
