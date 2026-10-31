@@ -216,6 +216,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
+                    let alternatives = flyout_tools(slot);
                     let shown_id = if slot.contains(&active) {
                         active.to_string()
                     } else {
@@ -232,7 +233,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     }
                     let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
                     icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
-                    if slot.len() > 1 {
+                    if has_flyout(slot) {
                         let c = rect.center() + vec2(12.5, 10.0);
                         ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
                     }
@@ -240,22 +241,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         buttons.push((k, rect));
                         resp.dnd_set_drag_payload(crate::edit_toolbar::ToolDrag { tool: shown.id, from_toolbar: true });
                     }
-                    let press = if slot.len() > 1 && !editing { flyout_press(ui, &resp, rect) } else { None };
+                    let press = if has_flyout(slot) && !editing { flyout_press(ui, &resp, rect) } else { None };
                     let alt = ui.input(|inp| inp.modifiers.alt);
                     if press.is_some() {
                         if is_floating(app, slot[0]) {
                             raise = Some(slot[0]);
                         } else {
-                            open_flyout = Some((slot.clone(), rect));
+                            open_flyout = Some((alternatives.clone(), rect));
                         }
                         if press == Some(FlyoutPress::Primary) {
                             ui.data_mut(|d| d.insert_temp(held_id, resp.id));
                         }
                     } else if resp.clicked() && held == Some(resp.id) {
                         // Releasing the long press that opened the flyout leaves it open.
-                    } else if resp.clicked() && alt && slot.len() > 1 {
-                        let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
-                        app.select_tool(slot[(idx + 1) % slot.len()]);
+                    } else if resp.clicked() && alt && has_flyout(slot) {
+                        let idx = alternatives.iter().position(|x| *x == shown.id).unwrap_or(0);
+                        app.select_tool(alternatives[(idx + 1) % alternatives.len()]);
                     } else if resp.double_clicked() {
                         app.select_tool(shown.id);
                         app.run("tool.options", json!({ "tool": shown.id })).ok();
@@ -284,6 +285,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         ui.add_space(8.0);
         bottom_controls(app, ui, &t, cols);
     });
+}
+
+/// The stand-alone shape buttons keep their toolbar slots, but expose the other shape tools in a flyout.
+fn flyout_tools(slot: &[&'static str]) -> Vec<&'static str> {
+    match slot {
+        ["ellipse"] | ["polygon"] => vec!["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "flare", "lineSegment", "arc"],
+        _ => slot.to_vec(),
+    }
+}
+
+fn has_flyout(slot: &[&'static str]) -> bool {
+    slot.len() > 1 || matches!(slot, ["ellipse"] | ["polygon"])
 }
 
 /// How a press on a tool group's button opens its flyout.
