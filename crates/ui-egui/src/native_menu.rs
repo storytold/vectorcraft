@@ -591,10 +591,12 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
 /// the hash changes as the interaction begins and as it ends.
-fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
+pub(crate) fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
+    // Automatic appearance can change via the portal without running a command.
+    app.ui.brightness.id().hash(&mut h);
     let s = &app.session;
     (s.journal.len(), s.active_index(), s.clipboard.is_empty(), s.tool_composing()).hash(&mut h);
     if let Some(d) = s.active() {

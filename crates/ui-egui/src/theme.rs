@@ -585,6 +585,9 @@ pub fn apply(ctx: &egui::Context, b: Brightness) {
 
 /// [`apply`] with an accent colour and colour scheme.
 pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Scheme) {
+    // Observe OS changes without allowing an egui style-branch switch to replace the app's
+    // selected palette. Fixed themes still take precedence over the system appearance.
+    ctx.set_theme(egui::ThemePreference::System);
     let t = Tokens::for_scheme(scheme, b, accent);
     ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
     let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
@@ -628,6 +631,9 @@ pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Sc
         .into();
         s.animation_time = 0.08;
     });
+    let style = ctx.global_style();
+    ctx.set_style_of(egui::Theme::Light, Arc::clone(&style));
+    ctx.set_style_of(egui::Theme::Dark, style);
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! Linux: Preferences › Performance › Linux Display Server › X11 opens the window through XWayland
-//! on a Wayland session, where dropped files arrive (winit 0.30 has no Wayland drag and drop,
-//! #1151). X11 (XWayland) When a Pen Is Attached does so only when a pen is attached as the app
+//! on a Wayland session. This remains an explicit fallback; the pinned Storytold winit fork
+//! now implements Wayland file drops too. X11 (XWayland) When a Pen Is Attached does so only when a pen is attached as the app
 //! starts: winit 0.30 doesn't bind the Wayland tablet protocol, and XWayland hands the pen to X11
 //! windows as a pointer (#2028). Only when XWayland can run the window: an X display is set and
 //! the X11 libraries winit loads at runtime are installed. Otherwise the window opens on Wayland,

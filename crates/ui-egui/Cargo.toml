@@ -20,6 +20,7 @@ bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 interface-fonts = []
 
 [dependencies]
+craft-desktop = { path = "../../vendor/craft-desktop" }
 craft-ui = { workspace = true }
 craft-keymap = { workspace = true, features = ["egui"] }
 vectorcraft-geom = { workspace = true }

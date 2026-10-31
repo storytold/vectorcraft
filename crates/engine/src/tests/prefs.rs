@@ -192,6 +192,18 @@ fn prefs_serde_round_trip_and_tolerates_missing_fields() {
     assert_eq!(partial.corner_radius, 12.0);
 }
 
+#[test]
+fn system_brightness_is_opt_in_and_round_trips() {
+    let mut session = Session::new();
+    assert_eq!(session.prefs.ui_brightness, "mediumDark");
+    session.execute("prefs.set", &json!({"key": "uiBrightness", "value": "system"})).unwrap();
+    let restored: Prefs = serde_json::from_value(session.prefs.to_json()).unwrap();
+    assert_eq!(restored.ui_brightness, "system");
+    assert!(session.execute("prefs.set", &json!({"key": "uiBrightness", "value": "unknown"})).is_err());
+    session.execute("prefs.set", &json!({"key": "uiBrightness", "value": "dark"})).unwrap();
+    assert_eq!(session.prefs.ui_brightness, "dark");
+}
+
 /// Performance › Graphics Processor (#306, #502): automatic by default, set by value or label,
 /// kept through a save/load round trip, and a bad value (0.5.0's `powerSaving` among them) is an
 /// error that changes nothing.

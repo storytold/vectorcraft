@@ -124,6 +124,7 @@ pub struct Prefs {
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
+    /// A fixed brightness, or "system" to follow the desktop. The default stays mediumDark.
     pub ui_brightness: String,
     /// User Interface › Accent Color: the colour of what is on, chosen or focused.
     pub ui_accent: String,

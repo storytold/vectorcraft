@@ -12,6 +12,10 @@ Generated-in-code art is original and has no file to list. This covers the defau
 
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
+| `vendor/winit/examples/data/icon.png` | Winit contributors | https://github.com/rust-windowing/winit/tree/v0.30.13/examples/data | Apache-2.0 (`vendor/winit/LICENSE`) | Upstream example, not application artwork |
+| `vendor/winit/examples/data/gradient.png` | Winit contributors | https://github.com/rust-windowing/winit/tree/v0.30.13/examples/data | Apache-2.0 (`vendor/winit/LICENSE`) | Upstream example |
+| `vendor/winit/examples/data/cross.png` | Winit contributors | https://github.com/rust-windowing/winit/tree/v0.30.13/examples/data | Apache-2.0 (`vendor/winit/LICENSE`) | Upstream example cursor |
+| `vendor/winit/examples/data/cross2.png` | Winit contributors | https://github.com/rust-windowing/winit/tree/v0.30.13/examples/data | Apache-2.0 (`vendor/winit/LICENSE`) | Upstream example cursor |
 | `epaint_default_fonts/fonts/egui-icons.ttf` (egui dependency) | John Slegers (emoji-icon-font) | https://github.com/storytold/egui/blob/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts/egui-icons.txt; original https://github.com/jslegers/emoji-icon-font | MIT (full text in NOTICE) | Small special-icon subset embedded by default_fonts |
 | `epaint_default_fonts/fonts/emoji-icon-font.ttf` (egui dependency) | John Slegers | https://github.com/storytold/egui/blob/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts/emoji-icon-font-mit-license.txt; original https://github.com/jslegers/emoji-icon-font | MIT (full text in NOTICE) | Parent face embedded by monochrome_emoji_fonts |
 | `docs/brand/artcraft-logo-white.png` | ArtCraft team (project owner) | https://getartcraft.com/ | ArtCraft trademark, see docs/brand/LICENSE-brand.txt (not open source) | Used in README only; not shipped in the app |

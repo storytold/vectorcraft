@@ -211,6 +211,20 @@ pressure: set the same preference to **X11 (XWayland)**, or to **X11 (XWayland) 
 XWayland only when a pen is attached as VectorCraft starts, and restart; or start the app with
 `WAYLAND_DISPLAY= vectorcraft` (see [`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
 
+### KDE Plasma integration (fork)
+
+The Linux host exports its existing command menus to Plasma's Global Menu widget while
+retaining the local menus. Disable export with `VECTORCRAFT_NO_GLOBAL_MENU=1`.
+Native Wayland uses KDE's appmenu protocol on the existing window connection; X11 uses the
+window properties and AppMenu registrar. The vendored winit extension is required for
+Wayland (`vendor/winit/CRAFT_PATCH.md`); unsupported desktops keep their local menus.
+
+Preferences › User Interface › Brightness › Automatic follows the system light/dark setting.
+Fixed themes, color schemes and accents remain available and are not overwritten. At UI
+Scaling 1×, native display scaling is preserved. See [KDE appearance and scaling](docs/development.md#kde-appearance-and-scaling)
+for limits and [KDE validation](docs/KDE.md) for build/test commands and the manual checklist;
+model tests do not establish native compositor acceptance.
+
 ### Use it from Claude Code and other agents
 
 Register the MCP server with Claude Code:

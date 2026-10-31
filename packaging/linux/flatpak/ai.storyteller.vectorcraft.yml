@@ -22,6 +22,7 @@ finish-args:
   - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
+  - --talk-name=com.canonical.AppMenu.Registrar
   - --device=dri
   # Printing: lpstat/lp (the cups-client module) reach the host's CUPS through its socket and
   # find driverless network printers through Avahi (`lpstat -e`). Without these the Print

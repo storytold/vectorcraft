@@ -352,7 +352,8 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 - [x] Cached canvas frames keep their document scale during panel/window resize, including rotated views and DPI changes (controlled-worker regression; contributor rebuilt and confirmed the original-file resize scenario on 2026-10-19).
 Medium Dark theme and four brightness levels, the categorized and Advanced toolbars, 35 pt document tabs,
 33 pt panel tabs, hint bar, contextual task bar and native macOS menus, restyled to values measured from
-public screenshots on 2026-10-02 (~75–80% then). Missing: a System theme that follows the OS (#825), a
+public screenshots on 2026-10-02 (~75–80% then). Automatic brightness now follows the OS (#825 in part);
+fixed palettes remain available, and native acceptance/system accent integration remain open. Missing: a
 re-measure of the panels added since. Slider rails show on Medium Dark (#1808, #1662).
 
 - [x] Native saves restore Show Transparency Grid (#1968), without dirtying the document or adding an undo step.
@@ -557,3 +558,15 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-22 | minor | Merge current main and complete the Turkish tab-drag labels and validation messages requested by the maintainer; all 24 catalogs covered; scores and estimates unchanged. |
 | 2026-10-22 | minor | Tab-drag follow-up: reconcile upstream progress updates and document drag lifecycle, insertion behavior and regression contracts; behavior, scores and estimates unchanged. |
 | 2026-10-22 | minor | Artwork dragged with Selection switches visible document tabs after a 400 ms hover, then copies editable artwork on canvas release; source and clipboard stay intact; scores and hours unchanged |
+
+## KDE integration evidence
+
+> **KDE integration update:** 2026-10-21 — optional system appearance and stable egui style branches implemented;
+> focused regressions added. Native KDE theme/multi-monitor acceptance is not implied; scores unchanged.
+
+### KDE integration revision history
+
+| Date | Change | Summary |
+|---|---|---|
+| 2026-10-22 | minor | KDE menu work shares panic recovery with the UI; Automatic brightness marks the effective palette and invalidates cached menus when it changes. Scores unchanged |
+| 2026-10-21 | minor | Automatic brightness is opt-in; Linux portal changes flow through craft-desktop without UI-thread D-Bus waits. Fixed themes survive OS style-branch changes. Scale regressions cover 100/125/150/175/200%; native acceptance and system accent adoption remain open. Scores unchanged. |

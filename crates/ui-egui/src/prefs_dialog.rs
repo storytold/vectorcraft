@@ -110,7 +110,13 @@ fn canvas_color(key: &str) -> Option<egui::Color32> {
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
 pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let p = &app.session.prefs;
-    if let Some(b) = Brightness::parse(&p.ui_brightness)
+    let selected = if p.ui_brightness == "system" {
+        let system = app.services.system_theme.as_ref().and_then(|read| read(ctx)).or_else(|| ctx.system_theme());
+        Some(if system == Some(egui::Theme::Light) { Brightness::Light } else { Brightness::MediumDark })
+    } else {
+        Brightness::parse(&p.ui_brightness)
+    };
+    if let Some(b) = selected
         && b != app.ui.brightness
     {
         app.ui.brightness = b;
@@ -132,7 +138,9 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
         // due), whichever widget asks for one.
         let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
-        ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
+        for theme in [egui::Theme::Light, egui::Theme::Dark] {
+            ctx.style_mut_of(theme, |s| s.interaction.tooltip_delay = delay);
+        }
         crate::scrub::set_enabled(ctx, want.scrub);
         crate::widgets::set_bare_numbers_are_points(ctx, want.bare_points);
         if let Some(c) = want.canvas {

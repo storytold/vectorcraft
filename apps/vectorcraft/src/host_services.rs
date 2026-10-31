@@ -267,6 +267,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // dialogs run the window's events while they are open.
         start_pick: cfg!(unix).then(|| Box::new(move |request: PickRequest| start_pick(request, &p5, &ui)) as vectorcraft_ui_egui::picks::StartPick),
         dialogs_are_sheets: cfg!(target_os = "macos"),
+        system_theme: super::appearance::service(),
         wayland,
         no_cursor_theme: wayland && cursor_theme::theme_missing(),
         #[cfg(target_os = "linux")]

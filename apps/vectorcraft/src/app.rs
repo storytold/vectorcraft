@@ -67,6 +67,13 @@ impl eframe::App for App {
         #[cfg(all(target_os = "macos", feature = "wgpu"))]
         super::mac_color_space::tag(ui);
         file_access::unconfined(|| self.app.ui(ui));
+        #[cfg(target_os = "linux")]
+        if let Some(menu) = self.menu.as_ref()
+            && let Some((state, snapshot)) = vectorcraft_ui_egui::desktop_menu::snapshot_if_changed(&mut self.app, ui.ctx(), self.menu_state)
+        {
+            menu.publish(snapshot);
+            self.menu_state = Some(state);
+        }
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         if self.app.take_prefs_changed() {
@@ -82,6 +89,8 @@ impl eframe::App for App {
         }
     }
     fn on_exit(&mut self) {
+        #[cfg(target_os = "linux")]
+        self.menu.take();
         file_access::unconfined(|| save_prefs(&self.app));
         end_before_teardown(self.frames);
     }
@@ -116,6 +125,13 @@ impl App {
             open_files(&mut self.app, files);
         }
         self.app.tick(ctx);
+        #[cfg(target_os = "linux")]
+        if let Some(menu) = self.menu.as_mut() {
+            for click in menu.take_events() {
+                vectorcraft_ui_egui::desktop_menu::activate(&mut self.app, ctx, click.document, &click.action);
+                self.menu_state = None;
+            }
+        }
         if self.pending_maximize {
             if let Some(w) = &self.winit_window {
                 self.pending_maximize = window::apply_pending_maximize(w, true, &mut self.maximize_tries);

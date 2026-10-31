@@ -130,6 +130,9 @@ pub struct Services {
     pub print: Option<Box<dyn print::PrintService>>,
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<native_menu::NativeMenu>,
+    /// Desktop appearance where winit cannot report it (notably Wayland).
+    /// Used only by Automatic brightness; changes wake the UI through the service.
+    pub system_theme: Option<SystemThemeFn>,
     /// Show file dialogs off the UI thread (desktop Linux, where a dialog in line holds the window
     /// and the compositor finds it not answering, #592) or as sheets on the window (macOS, where a
     /// dialog in line aborts the app, #867): what asked runs again with the answer ([`picks`]).
@@ -158,3 +161,6 @@ pub struct Services {
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).
 pub type NativeInputHook = std::sync::Arc<dyn Fn(&mut egui::RawInput) + Send + Sync>;
+
+/// Platform-owned system appearance provider used by Automatic brightness.
+pub type SystemThemeFn = Box<dyn Fn(&egui::Context) -> Option<egui::Theme>>;

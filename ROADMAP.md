@@ -1,5 +1,7 @@
 # VectorCraft Roadmap
 
+- 2026-10-21: Opt-in Automatic brightness follows the desktop; custom fixed palettes, accents and scale semantics are preserved. Fractional-monitor regression matrix added. Native KDE acceptance remains separate; headline scores unchanged.
+
 - PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.
 - PDF.W1: PDF export and print composition use the shared optional writer for configuration, metadata, font preparation and guarded finalization; drawing and output policy remain app-owned.
 

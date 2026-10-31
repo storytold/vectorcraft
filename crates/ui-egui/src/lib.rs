@@ -32,6 +32,7 @@ pub mod community;
 pub mod control;
 pub mod credits;
 pub mod cursors;
+pub mod desktop_menu;
 pub mod dialogs;
 pub mod dock;
 mod edit_toolbar;
@@ -115,7 +116,8 @@ pub use clock::{now_ms, now_secs};
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, SystemThemeFn,
+    WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
