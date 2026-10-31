@@ -5575,7 +5575,7 @@ axis	Y Axis	Eje Y
 	Include Objects On Canvas	Incluir objetos en el lienzo
 	Result(s): {count}	Resultado(s): {count}
 @msg	select one object	seleccione un objeto
-@msg	Global Edit works on paths, compound paths and symbol instances	La edición global funciona con trazados, trazados compuestos e instancias de símbolos
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La edición global funciona con trazados, trazados compuestos, instancias de símbolos y grupos de ellos
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias giradas o reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos

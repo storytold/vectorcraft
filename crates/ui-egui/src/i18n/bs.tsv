@@ -5562,7 +5562,7 @@ axis	Y Axis	Y osa
 	Include Objects On Canvas	Uključi objekte na platnu
 	Result(s): {count}	Rezultati: {count}
 @msg	select one object	odaberite jedan objekat
-@msg	Global Edit works on paths, compound paths and symbol instances	Globalno uređivanje radi na putanjama, složenim putanjama i instancama simbola
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole

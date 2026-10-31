@@ -5549,7 +5549,7 @@ axis	Y Axis	Y ღერძი
 	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
 	Result(s): {count}	შედეგი: {count}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
-@msg	Global Edit works on paths, compound paths and symbol instances	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებსა და სიმბოლოს ეგზემპლარებზე
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება

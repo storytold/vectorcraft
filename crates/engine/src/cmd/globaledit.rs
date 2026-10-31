@@ -42,8 +42,33 @@
 //! takes the selection there is. Whenever the document is put back (Undo, Redo, a cancelled drag
 //! or scrub, an edit that failed), the members it lacks (or no longer supports) leave the Global
 //! Edit, and it ends when fewer than two are left ([`follow_history`]), so that an object made
-//! later under a freed id is never edited. Rotated copies, groups (the help page "Edit groups with
-//! similar objects") and excluding a member with a Shift-click are not covered.
+//! later under a freed id is never edited. Rotated copies and excluding a member with a
+//! Shift-click are not covered.
+//!
+//! Groups, from the help page "Edit groups with similar objects"
+//! (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html>)
+//! and the guide "Global editing"
+//! (<https://web.archive.org/web/20190826202409/https://helpx.adobe.com/illustrator/using/global-edit.html>):
+//! with one group selected, Start Global Edit finds the groups whose hierarchy and shapes match it,
+//! and an edit made to an object inside one of them (a move, a resize, a new fill or stroke, a
+//! rotation) is made to the corresponding object of the others. The sources do not say how groups
+//! are compared or how their objects correspond; VectorCraft's rules are these:
+//!
+//! - Two groups match when they hold as many objects at every level, in the same stacking order
+//!   and nesting, and the whole of one is the other moved and scaled uniformly (one transform for
+//!   all of the group's objects, so a group whose objects lie apart differently is not a match).
+//!   Appearance compares the fill and stroke of each pair of corresponding objects; Size compares
+//!   the groups' widths and heights. A group that holds a hidden or locked object, or an object
+//!   Global Edit does not support, is not matched, and Start Global Edit refuses to start on one.
+//! - Objects correspond by their place in the group: the second object of the first subgroup
+//!   corresponds to the second object of the first subgroup of each other member. What an edit
+//!   changed about one object (outline, fills and strokes, opacity, blending), and what it changed
+//!   about a group's own settings, is given to the corresponding object of every other member, by
+//!   the rules above and through that member's transform. The other objects of a member are left
+//!   as they are. Objects added to, removed from or moved within a group are not copied to the
+//!   others.
+//! - An object inside a group selected before Start Global Edit is matched as an object, not as a
+//!   group.
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -63,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Start Global Edit",
             ["Select"],
             None,
-            "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} (each defaults to the Global Edit Options) while Global Edit is off: start it on the one selected object, with the objects of the same shape (and, with `appearance`, the same fill and stroke; with `size`, the same width and height) on the artboards given (and, with `includeCanvas`, off every artboard) → {active: true, count, ids}; while on: stop it (Escape does the same) → {active: false}",
+            "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} (each defaults to the Global Edit Options) while Global Edit is off: start it on the one selected object, with the objects of the same shape (and, with `appearance`, the same fill and stroke; with `size`, the same width and height) on the artboards given (and, with `includeCanvas`, off every artboard); on a selected group, with the groups of the same hierarchy and shapes, whose corresponding objects then take an edit made inside one of them → {active: true, count, ids}; while on: stop it (Escape does the same) → {active: false}",
             can_toggle,
             toggle
         ),
@@ -139,51 +164,36 @@ pub struct GlobalEdit {
     /// The objects edited together, the one selected at the start first, each with the transform
     /// (a move and a uniform scale) that maps that first object's outline onto its own.
     pub members: Vec<(NodeId, Affine)>,
+    /// The members are groups: an edit of an object inside one reaches the corresponding object
+    /// of the others.
+    pub groups: bool,
     /// [`highlights`] as of a document revision: the canvas asks every frame.
     outlines: std::cell::RefCell<Option<(u64, Outlines)>>,
 }
 
 /// An outline reduced to its form: the anchors and handles placed in a unit box, with what tells
-/// such outlines apart (kind, fill rule, subpaths and their anchor counts, open or closed).
+/// such outlines apart (kind, fill rule, subpaths and their anchor counts, open or closed). A
+/// group's form holds its objects' outlines in stacking order, all placed in the one unit box of
+/// the whole group, with its hierarchy (the objects each group and subgroup holds).
 struct Form {
     tag: Vec<u64>,
-    symbol: Option<String>,
+    symbols: Vec<String>,
     points: Vec<Point>,
     /// The unit box → the object.
     frame: Affine,
 }
 
+/// A group made with Object › Group: not a graph, a Shaper group, a dimension, objects on a path, a
+/// tracing. Global Edit looks for similar objects only inside these (clip groups included).
+fn plain(n: &Node) -> bool {
+    let x = n.extras();
+    x.graph.is_none() && x.shaper.is_none() && x.dimension.is_none() && x.objects_on_path.is_none() && x.trace.is_none()
+}
+
 impl Form {
     fn of(n: &Node) -> Option<Self> {
-        let mut tag = vec![];
-        let mut points = vec![];
-        let mut symbol = None;
-        let mut push = |path: &PathData, tag: &mut Vec<u64>| {
-            tag.push(path.subpaths.len() as u64);
-            for sp in &path.subpaths {
-                tag.extend([u64::from(sp.closed), sp.anchors.len() as u64]);
-                points.extend(sp.anchors.iter().flat_map(|a| [a.p, a.h_in, a.h_out]));
-            }
-        };
-        let rule = |r: vectorcraft_geom::FillRule| u64::from(r == vectorcraft_geom::FillRule::EvenOdd);
-        match &n.kind {
-            NodeKind::Path { path, rule: r, clipping: false, guide: false, .. } => {
-                tag.extend([0, rule(*r)]);
-                push(path, &mut tag);
-            }
-            NodeKind::Compound { children, rule: r } => {
-                tag.extend([1, rule(*r), children.len() as u64]);
-                for c in children {
-                    push(c.path_data()?, &mut tag);
-                }
-            }
-            NodeKind::SymbolInstance { symbol: s, xf } => {
-                tag.push(2);
-                symbol = Some(s.clone());
-                points.extend([*xf * Point::ZERO, *xf * Point::new(1.0, 0.0), *xf * Point::new(0.0, 1.0)]);
-            }
-            _ => return None,
-        }
+        let (mut tag, mut symbols, mut points) = (vec![], vec![], vec![]);
+        Self::take(n, &mut tag, &mut symbols, &mut points)?;
         let first = *points.first()?;
         let b = points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p));
         let side = b.width().max(b.height());
@@ -193,22 +203,78 @@ impl Form {
         let frame = Affine::translate(b.origin().to_vec2()) * Affine::scale(side);
         let back = frame.inverse();
         points.iter_mut().for_each(|p| *p = back * *p);
-        Some(Self { tag, symbol, points, frame })
+        Some(Self { tag, symbols, points, frame })
+    }
+
+    /// Add what tells `n`'s outline apart and its points; `None` for an object Global Edit does
+    /// not support, and for a group that is not [`plain`], is a clip group or holds a hidden or
+    /// locked object, an object with an opacity mask or any other object it does not support.
+    fn take(n: &Node, tag: &mut Vec<u64>, symbols: &mut Vec<String>, points: &mut Vec<Point>) -> Option<()> {
+        fn push(path: &PathData, tag: &mut Vec<u64>, points: &mut Vec<Point>) {
+            tag.push(path.subpaths.len() as u64);
+            for sp in &path.subpaths {
+                tag.extend([u64::from(sp.closed), sp.anchors.len() as u64]);
+                points.extend(sp.anchors.iter().flat_map(|a| [a.p, a.h_in, a.h_out]));
+            }
+        }
+        let rule = |r: vectorcraft_geom::FillRule| u64::from(r == vectorcraft_geom::FillRule::EvenOdd);
+        match &n.kind {
+            NodeKind::Path { path, rule: r, clipping: false, guide: false, .. } => {
+                tag.extend([0, rule(*r)]);
+                push(path, tag, points);
+            }
+            NodeKind::Compound { children, rule: r } => {
+                tag.extend([1, rule(*r), children.len() as u64]);
+                for c in children {
+                    push(c.path_data()?, tag, points);
+                }
+            }
+            NodeKind::SymbolInstance { symbol: s, xf } => {
+                tag.push(2);
+                symbols.push(s.clone());
+                points.extend([*xf * Point::ZERO, *xf * Point::new(1.0, 0.0), *xf * Point::new(0.0, 1.0)]);
+            }
+            NodeKind::Group { children, clip: false } if plain(n) && !n.extras().compound_shape => {
+                tag.extend([3, children.len() as u64]);
+                for c in children {
+                    if !c.visible || c.locked || c.extras().mask.is_some() {
+                        return None;
+                    }
+                    Self::take(c, tag, symbols, points)?;
+                }
+                // Close the group, so that nesting tells groups apart.
+                tag.push(4);
+            }
+            _ => return None,
+        }
+        Some(())
     }
 
     fn same(&self, o: &Form) -> bool {
         self.tag == o.tag
-            && self.symbol == o.symbol
+            && self.symbols == o.symbols
             && self.points.len() == o.points.len()
             && self.points.iter().zip(&o.points).all(|(a, b)| a.distance(*b) < 1e-6)
     }
 }
 
-/// Global Edit supports paths, compound paths and symbol instances; not images, type, linked
-/// files, objects with an opacity mask, clipping paths or guides (the help page lists images,
-/// text, masks and links as unsupported).
+/// Global Edit supports paths, compound paths, symbol instances and groups of them; not images,
+/// type, linked files, objects with an opacity mask, clipping paths or guides (the help page lists
+/// images, text, masks and links as unsupported).
 fn supported(n: &Node) -> bool {
     n.extras().mask.is_none() && Form::of(n).is_some()
+}
+
+const UNSUPPORTED: &str = "Global Edit works on paths, compound paths, symbol instances and groups of them";
+
+/// The objects and groups in `n` that Appearance compares, in stacking order: `n` itself, and for a
+/// group each object and group inside it after the group, since a group has a fill and stroke of
+/// its own.
+fn leaves<'a>(n: &'a Node, out: &mut Vec<&'a Node>) {
+    out.push(n);
+    if let NodeKind::Group { children, .. } = &n.kind {
+        children.iter().for_each(|c| leaves(c, out));
+    }
 }
 
 fn close(a: f64, b: f64) -> bool {
@@ -216,20 +282,26 @@ fn close(a: f64, b: f64) -> bool {
 }
 
 /// The members a Global Edit started on the one selected object would take, with `o`: that
-/// object first, then the others in paint order.
-fn matches(s: &Session, o: &Options) -> Result<Vec<(NodeId, Affine)>> {
+/// object first, then the others in paint order; and whether they are groups.
+fn matches(s: &Session, o: &Options) -> Result<(Vec<(NodeId, Affine)>, bool)> {
     let st = s.doc()?;
     let d = &st.doc;
     let [id] = st.selection.objects.as_slice() else { return Err(bad(C, "select one object")) };
     let key = d.node(*id).ok_or_else(|| bad(C, "nothing selected"))?;
     let form = match Form::of(key) {
         Some(f) if supported(key) => f,
-        _ => return Err(bad(C, "Global Edit works on paths, compound paths and symbol instances")),
+        _ => return Err(bad(C, UNSUPPORTED)),
     };
+    let groups = matches!(key.kind, NodeKind::Group { .. });
     let symbols = d.symbol_boxes();
     let size = |n: &Node| n.geometric_bounds_with(&symbols).map(|b| (b.width(), b.height()));
     let key_size = size(key);
-    let (fill, stroke) = (fill_of(key), stroke_of(key));
+    let paints = |n: &Node| {
+        let mut l = vec![];
+        leaves(n, &mut l);
+        l.into_iter().map(|n| (fill_of(n), stroke_of(n))).collect::<Vec<_>>()
+    };
+    let key_paints = if o.appearance { paints(key) } else { vec![] };
     let boards: Option<Vec<Rect>> = match &o.artboards {
         None => None,
         Some(r) => Some(
@@ -257,26 +329,29 @@ fn matches(s: &Session, o: &Options) -> Result<Vec<(NodeId, Affine)>> {
         match &n.kind {
             // Look into layers and plain groups (clip groups too: their art, not their clipping path).
             NodeKind::Layer { .. } => return true,
-            NodeKind::Group { .. } => {
-                let x = n.extras();
-                return x.graph.is_none() && x.shaper.is_none() && x.dimension.is_none() && x.objects_on_path.is_none() && x.trace.is_none();
-            }
+            NodeKind::Group { .. } if !plain(n) => return false,
+            NodeKind::Group { .. } if !groups => return true,
+            // A group is matched only with a group, and an object only with an object.
+            NodeKind::Group { .. } => {}
+            _ if groups => return false,
             _ => {}
         }
         if let Some(f) = Form::of(n).filter(|f| f.same(&form) && supported(n))
             && (!o.size || matches!((key_size, size(n)), (Some((w, h)), Some((w2, h2))) if close(w, w2) && close(h, h2)))
-            && (!o.appearance || {
-                let (f2, s2) = (fill_of(n), stroke_of(n));
-                super::select::same_paint(&fill, &f2, true) && super::select::same_paint(&stroke.0, &s2.0, true) && close(stroke.1, s2.1)
-            })
+            && (!o.appearance
+                || paints(n).iter().zip(&key_paints).all(|((f2, s2), (fill, stroke))| {
+                    super::select::same_paint(fill, f2, true) && super::select::same_paint(&stroke.0, &s2.0, true) && close(stroke.1, s2.1)
+                }))
             && in_scope(n)
         {
             out.push((n.id, f.frame * back));
+            return false;
         }
-        // Compound paths, symbol instances and the other objects are taken whole.
-        false
+        // Groups that do not match are searched for similar groups inside them; compound paths,
+        // symbol instances and the other objects are taken whole.
+        groups
     });
-    Ok(out)
+    Ok((out, groups))
 }
 
 fn can_toggle(s: &Session) -> std::result::Result<(), String> {
@@ -289,7 +364,7 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     };
     match st.doc.node(*id) {
         Some(n) if supported(n) => Ok(()),
-        _ => Err("Global Edit works on paths, compound paths and symbol instances".into()),
+        _ => Err(UNSUPPORTED.into()),
     }
 }
 
@@ -301,13 +376,13 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "active": false }));
     }
     let o = s.global_edit_options.with(p, &s.doc()?.doc, C)?;
-    let members = matches(s, &o)?;
+    let (members, groups) = matches(s, &o)?;
     if members.len() < 2 {
         return Err(bad(C, "no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again"));
     }
     let ids: Vec<u64> = members.iter().map(|(id, _)| id.0).collect();
     let st = s.doc_mut()?;
-    st.global_edit = Some(GlobalEdit { members, outlines: Default::default() });
+    st.global_edit = Some(GlobalEdit { members, groups, outlines: Default::default() });
     st.revision += 1;
     Ok(json!({ "active": true, "count": ids.len(), "ids": ids }))
 }
@@ -322,7 +397,7 @@ fn set_options(s: &mut Session, p: &Value) -> Result<Value> {
 /// line of the options): 0 unless one supported object is selected.
 pub fn match_count(s: &Session) -> usize {
     match s.active() {
-        Some(st) if st.global_edit.is_none() => matches(s, &s.global_edit_options).map_or(0, |m| m.len()),
+        Some(st) if st.global_edit.is_none() => matches(s, &s.global_edit_options).map_or(0, |(m, _)| m.len()),
         Some(st) => st.global_edit.as_ref().map_or(0, |g| g.members.len()),
         None => 0,
     }
@@ -349,7 +424,10 @@ pub(crate) fn follow_history(st: &mut crate::DocState) {
 /// What an edit changed about a member: what [`propagate`] gives the others.
 #[derive(Default)]
 struct Changed {
+    /// Its outline; never set for a group, whose outline is its objects'.
     outline: bool,
+    /// The angle of its bounding box.
+    angle: bool,
     /// The member's appearance before and after the edit, when it changed.
     appearance: Option<[Shared<Appearance>; 2]>,
     opacity: bool,
@@ -362,7 +440,8 @@ struct Changed {
 impl Changed {
     fn between(a: &Node, b: &Node) -> Self {
         Self {
-            outline: a.kind != b.kind || a.bbox_angle != b.bbox_angle,
+            outline: !matches!(a.kind, NodeKind::Group { .. }) && a.kind != b.kind,
+            angle: a.bbox_angle != b.bbox_angle,
             appearance: (a.appearance != b.appearance).then(|| [a.appearance.clone(), b.appearance.clone()]),
             opacity: a.opacity != b.opacity,
             blend: a.blend != b.blend,
@@ -373,14 +452,16 @@ impl Changed {
     }
 
     fn any(&self) -> bool {
-        self.outline || self.appearance.is_some() || self.opacity || self.blend || self.isolate || self.knockout || self.knockout_shape
+        self.outline || self.angle || self.appearance.is_some() || self.opacity || self.blend || self.isolate || self.knockout || self.knockout_shape
     }
 
     /// Give `n` what changed, from `model` (the changed member placed on `n`).
     fn apply(&self, model: Node, n: &mut Node) {
+        if self.angle {
+            n.bbox_angle = model.bbox_angle;
+        }
         if self.outline {
             n.kind = model.kind;
-            n.bbox_angle = model.bbox_angle;
         }
         if let Some([a, b]) = &self.appearance {
             give_appearance(a, b, &model.appearance, &mut n.appearance);
@@ -535,44 +616,100 @@ fn renumber(children: &mut [std::sync::Arc<Node>], own: &[NodeId], d: &mut Docum
     }
 }
 
-/// After an edit made while Global Edit is on (`before` → `d`): the first member selected before
-/// or after the edit that it changed is the model, and every other member that is shown and
-/// unlocked gets what changed about it, placed by the members' transforms. → the members it
-/// changed so (which [`Session::edit`] checks stay within the canvas, as it checks the selection).
-pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, selected: [&[NodeId]; 2]) -> Vec<NodeId> {
-    let model = ge.members.iter().filter(|(id, _)| selected.iter().any(|s| s.contains(id))).find_map(|(id, xf)| {
-        let (a, b) = (before.node(*id)?, d.node(*id)?);
-        if std::ptr::eq(a, b) {
+/// What an edit changed in a member: at each index path within it (empty for the member itself),
+/// what changed about the object or group there, with that object or group after the edit.
+type Changes = Vec<(Vec<usize>, Changed, Node)>;
+
+/// Add to `out` what changed from `a` to `b`, the object or group at `path` in a member before and
+/// after an edit. Inside a group, each object that changed is looked at; a group whose objects
+/// were added, removed or moved gives nothing below it.
+fn changes(a: &Node, b: &Node, path: &mut Vec<usize>, out: &mut Changes) {
+    if std::ptr::eq(a, b) {
+        return;
+    }
+    match (&a.kind, &b.kind) {
+        (NodeKind::Group { children: ca, .. }, NodeKind::Group { children: cb, .. }) => {
+            if ca.iter().map(|c| c.id).eq(cb.iter().map(|c| c.id)) {
+                for (i, (x, y)) in ca.iter().zip(cb).enumerate() {
+                    path.push(i);
+                    changes(x, y, path, out);
+                    path.pop();
+                }
+            }
+        }
+        (NodeKind::Group { .. }, _) | (_, NodeKind::Group { .. }) => return,
+        _ => {}
+    }
+    let c = Changed::between(a, b);
+    if c.any() {
+        out.push((path.clone(), c, b.clone()));
+    }
+}
+
+/// The object at `path` in the member `t` that corresponds to the one there in `m` (the model
+/// member before the edit): found only where every group on the way holds as many objects as the
+/// model's does, and when it is the same kind of object.
+fn counterpart(m: &Node, t: &Node, path: &[usize]) -> Option<NodeId> {
+    let (mut m, mut t) = (m, t);
+    for &i in path {
+        let (NodeKind::Group { children: mc, .. }, NodeKind::Group { children: tc, .. }) = (&m.kind, &t.kind) else { return None };
+        if mc.len() != tc.len() {
             return None;
         }
-        let changed = Changed::between(a, b);
-        changed.any().then(|| (*id, *xf, changed, b.clone()))
+        (m, t) = (&**mc.get(i)?, &**tc.get(i)?);
+    }
+    (std::mem::discriminant(&m.kind) == std::mem::discriminant(&t.kind)).then_some(t.id)
+}
+
+/// After an edit made while Global Edit is on (`before` → `d`): the first member selected before
+/// or after the edit that it changed is the model (for groups, the first member the edit changed
+/// that holds a selected object or is selected), and in every other member, each object
+/// corresponding to one the edit changed that is shown and unlocked gets what changed about it,
+/// placed by the members' transforms. → the objects it changed so (which [`Session::edit`] checks
+/// stay within the canvas, as it checks the selection).
+pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, selected: [&[NodeId]; 2]) -> Vec<NodeId> {
+    let holds = |doc: &Document, s: &[NodeId], id: NodeId| {
+        s.contains(&id) || (ge.groups && s.iter().any(|x| doc.ancestry(*x).is_some_and(|a| a.contains(&id))))
+    };
+    let after: &Document = d;
+    let model = ge.members.iter().filter(|(id, _)| holds(before, selected[0], *id) || holds(after, selected[1], *id)).find_map(|(id, xf)| {
+        let (a, b) = (before.node(*id)?, after.node(*id)?);
+        let mut out = vec![];
+        changes(a, b, &mut vec![], &mut out);
+        (!out.is_empty()).then_some((*id, *xf, a, out))
     });
-    let Some((model_id, model_xf, changed, model)) = model else { return vec![] };
+    let Some((model_id, model_xf, was, changed)) = model else { return vec![] };
     let back = model_xf.inverse();
     let mut edited = vec![];
     for (id, xf) in &ge.members {
-        if *id == model_id || !editable(d, *id) {
+        if *id == model_id {
             continue;
         }
-        let mut placed = model.clone();
-        placed.transform(*xf * back, Scaling::default());
-        if changed.outline {
-            let own: Vec<NodeId> = d.node(*id).and_then(Node::children).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();
-            if let Some(ch) = placed.children_mut() {
-                renumber(ch, &own, d);
+        for (path, changed, model) in &changed {
+            let Some(target) = d.node(*id).and_then(|t| counterpart(was, t, path)) else { continue };
+            if !editable(d, target) {
+                continue;
             }
-        }
-        if let Some(n) = d.node_mut(*id) {
-            changed.apply(placed, n);
-            edited.push(*id);
+            let mut placed = model.clone();
+            placed.transform(*xf * back, Scaling::default());
+            if changed.outline {
+                let own: Vec<NodeId> = d.node(target).and_then(Node::children).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();
+                if let Some(ch) = placed.children_mut() {
+                    renumber(ch, &own, d);
+                }
+            }
+            if let Some(n) = d.node_mut(target) {
+                changed.apply(placed, n);
+                edited.push(target);
+            }
         }
     }
     edited
 }
 
-/// The outlines of the members of the active document's Global Edit that are not selected, in
-/// their layer's colour: the canvas highlights them while Global Edit is on.
+/// The outlines of the members of the active document's Global Edit that are not selected (and,
+/// for groups, hold no selected object), in their layer's color: the canvas highlights them while
+/// Global Edit is on.
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
     let Some(ge) = &st.global_edit else { return vec![] };
@@ -585,7 +722,11 @@ pub fn highlights(s: &Session) -> Outlines {
     let out: Vec<_> = ge
         .members
         .iter()
-        .filter(|(id, _)| !st.selection.contains(*id))
+        // In a Global Edit of groups, the member that holds a selected object is not highlighted
+        // either.
+        .filter(|(id, _)| {
+            !st.selection.contains(*id) && !(ge.groups && st.selection.objects.iter().any(|x| st.doc.ancestry(*x).is_some_and(|a| a.contains(id))))
+        })
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id)?;
             let path = match n.stroke_path() {

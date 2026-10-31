@@ -5585,7 +5585,7 @@ axis	Y Axis	Άξονας Y
 	Include Objects On Canvas	Συμπερίληψη αντικειμένων στον καμβά
 	Result(s): {count}	Αποτέλεσμα(τα): {count}
 @msg	select one object	επιλέξτε ένα αντικείμενο
-@msg	Global Edit works on paths, compound paths and symbol instances	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές και παρουσίες συμβόλων
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα

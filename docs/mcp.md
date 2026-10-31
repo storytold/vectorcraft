@@ -1467,6 +1467,18 @@ list, take the whole list. Whenever the document is put back (Undo, Redo, a canc
 longer has leave the Global Edit, which ends when fewer than two are left. An edit that would take any match past the
 canvas fails with the coordinates-out-of-range error and changes nothing. Nothing of it is saved.
 
+With one group selected, `select.globalEdit` finds the groups of the same hierarchy and shapes and returns their ids,
+the selected group first. Two groups match when they hold as many objects at every level, in the same stacking order
+and nesting, and one is the other moved and scaled uniformly as a whole. `appearance` compares the fill and stroke of
+each pair of corresponding objects, and `size` the groups' widths and heights. A group that holds a hidden or locked
+object, or an object Global Edit does not support (type, images), is not matched, and a start on one fails. While it
+is on, an edit of an object inside one of the groups (selected with Direct Selection, or by id with `select.set`) is
+given to the object at the same place in each other group (the second object of its first subgroup, for example), by
+the rules above, through that group's scale; a changed setting of a subgroup itself, such as its opacity, reaches the
+subgroup at the same place. The groups' other objects stay as they are, and objects added to, removed from or moved
+within a group are not copied. An object inside a group that is selected when Global Edit starts is matched as an
+object, with the objects of its shape inside or outside groups.
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default

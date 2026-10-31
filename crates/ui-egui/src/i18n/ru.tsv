@@ -5245,7 +5245,7 @@ axis	Y Axis	Ось Y
 	Include Objects On Canvas	Включать объекты на холсте
 	Result(s): {count}	Результаты: {count}
 @msg	select one object	выберите один объект
-@msg	Global Edit works on paths, compound paths and symbol instances	Глобальное редактирование работает с контурами, составными контурами и экземплярами символов
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальное редактирование работает с контурами, составными контурами, экземплярами символов и их группами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (повёрнутые или отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
 	Add to Symbols	Добавить в символы

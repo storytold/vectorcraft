@@ -287,16 +287,238 @@ fn global_edit_needs_one_supported_object() {
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
     assert!(e.contains("no similar objects") && e.contains("rotated"), "{e}");
     assert!(s.doc().unwrap().global_edit.is_none());
-    // A group of two squares is refused, though another such group exists.
-    let group = |s: &mut Session, x: f64| {
-        let (p, q) = (rect(s, x, 100.0, 10.0, 10.0), rect(s, x + 20.0, 100.0, 10.0, 10.0));
-        sel(s, &[p, q]);
-        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+    // A group that holds type is refused, though another such group exists.
+    let typed = |s: &mut Session, x: f64| {
+        let p = rect(s, x, 100.0, 10.0, 10.0);
+        let t = NodeId(s.execute("text.create", &json!({"x": x + 20.0, "y": 110, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        group(s, &[p, t])
     };
-    let (g, _) = (group(&mut s, 600.0), group(&mut s, 700.0));
+    let (g, _) = (typed(&mut s, 600.0), typed(&mut s, 700.0));
     sel(&mut s, &[g]);
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err();
-    assert!(matches!(e, EngineError::Disabled(..)) && e.to_string().contains("paths, compound paths and symbol instances"), "{e}");
+    assert!(matches!(e, EngineError::Disabled(..)) && e.to_string().contains("symbol instances and groups of them"), "{e}");
+}
+
+fn group(s: &mut Session, ids: &[NodeId]) -> NodeId {
+    sel(s, ids);
+    NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+fn circle(s: &mut Session, x: f64, y: f64, d: f64) -> NodeId {
+    NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": d, "height": d})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// A group of a square and a circle beside it, `k` times the size of a 20 pt square and a 20 pt
+/// circle 40 pt to its right, from (`x`, `y`).
+fn pair(s: &mut Session, x: f64, y: f64, k: f64) -> NodeId {
+    let (sq, c) = (rect(s, x, y, 20.0 * k, 20.0 * k), circle(s, x + 40.0 * k, y, 20.0 * k));
+    group(s, &[sq, c])
+}
+
+fn kids(s: &Session, id: NodeId) -> Vec<NodeId> {
+    node(s, id).children().unwrap().iter().map(|c| c.id).collect()
+}
+
+#[test]
+fn start_global_edit_on_a_group_takes_the_groups_of_the_same_hierarchy_and_shapes() {
+    let mut s = session();
+    let (one, two, half) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 500.0, 0.0, 0.5));
+    // The circle under the square: another stacking order.
+    let swapped = {
+        let c = circle(&mut s, 40.0, 100.0, 20.0);
+        let sq = rect(&mut s, 0.0, 100.0, 20.0, 20.0);
+        group(&mut s, &[c, sq])
+    };
+    // The circle further away: the same shapes, placed apart differently.
+    let apart = {
+        let (sq, c) = (rect(&mut s, 0.0, 200.0, 20.0, 20.0), circle(&mut s, 60.0, 200.0, 20.0));
+        group(&mut s, &[sq, c])
+    };
+    // A third object, and the square in a group of its own: another hierarchy.
+    let three = {
+        let (sq, c, more) = (rect(&mut s, 0.0, 300.0, 20.0, 20.0), circle(&mut s, 40.0, 300.0, 20.0), rect(&mut s, 80.0, 300.0, 5.0, 5.0));
+        group(&mut s, &[sq, c, more])
+    };
+    let nested = {
+        let sq = rect(&mut s, 0.0, 400.0, 20.0, 20.0);
+        let inner = group(&mut s, &[sq]);
+        let c = circle(&mut s, 40.0, 400.0, 20.0);
+        group(&mut s, &[inner, c])
+    };
+    let lone = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    let members = start(&mut s, one, json!({}));
+    assert_eq!(members, [one, two, half], "not {swapped}, {apart}, {three}, {nested} nor the square {lone}");
+    assert!(s.doc().unwrap().global_edit.as_ref().unwrap().groups);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    // Size leaves out the smaller group; Appearance the group whose circle has another fill.
+    assert_eq!(start(&mut s, one, json!({"size": true})), [one, two]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    let circle_two = kids(&s, two)[1];
+    sel(&mut s, &[circle_two]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!(start(&mut s, one, json!({"appearance": true})), [one, half]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    assert_eq!(start(&mut s, one, json!({})), [one, two, half], "Appearance off: fills may differ");
+}
+
+#[test]
+fn appearance_compares_a_groups_own_fill_and_stroke() {
+    let mut s = session();
+    let (one, two, three) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 500.0, 0.0, 1.0));
+    // Only the second group's own stroke differs; its objects are painted as the others' are.
+    s.execute("appearance.addStroke", &json!({"ids": [two.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [two.0], "item": 0, "color": "#000000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [two.0], "item": 0, "weight": 10})).unwrap();
+    assert_eq!(start(&mut s, one, json!({"appearance": true})), [one, three]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    assert_eq!(start(&mut s, one, json!({})), [one, two, three], "Appearance off: group strokes may differ");
+}
+
+#[test]
+fn a_member_group_that_holds_a_selected_object_is_not_highlighted() {
+    let mut s = session();
+    let (one, two, three) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 500.0, 0.0, 1.0));
+    start(&mut s, one, json!({}));
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2);
+    // The circle of the second group selected: only the first and third groups are highlighted.
+    let (round, squares) = (kids(&s, two)[1], [kids(&s, one)[0], kids(&s, three)[0]]);
+    sel(&mut s, &[round]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "{one} and {three}, not {two}");
+    // Objects of the first and third groups selected: only the second group is highlighted.
+    sel(&mut s, &squares);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 1);
+}
+
+#[test]
+fn an_object_selected_inside_a_group_before_the_start_is_matched_as_an_object() {
+    let mut s = session();
+    let (one, two) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0));
+    let lone = rect(&mut s, 0.0, 300.0, 40.0, 40.0);
+    let square = kids(&s, one)[0];
+    assert_eq!(start(&mut s, square, json!({})), [square, kids(&s, two)[0], lone]);
+    assert!(!s.doc().unwrap().global_edit.as_ref().unwrap().groups);
+}
+
+#[test]
+fn an_edit_inside_a_group_reaches_the_corresponding_object_of_the_others_as_one_undo_step() {
+    let mut s = session();
+    let (one, two, half) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 500.0, 0.0, 0.5));
+    let lone = rect(&mut s, 0.0, 300.0, 20.0, 20.0);
+    start(&mut s, one, json!({}));
+    let before = (*s.doc().unwrap().doc).clone();
+    let steps = s.doc().unwrap().history.undo.len();
+    let ([sq1, c1], [sq2, c2], [sq3, c3]) =
+        ([kids(&s, one)[0], kids(&s, one)[1]], [kids(&s, two)[0], kids(&s, two)[1]], [kids(&s, half)[0], kids(&s, half)[1]]);
+    let (squares_were, lone_was) = ([node(&s, sq2), node(&s, sq3)], node(&s, lone));
+    // Moving the circle of the first group moves the circle of each other group, the smaller one
+    // half as far, and leaves the squares where they are.
+    sel(&mut s, &[c1]);
+    s.execute("object.move", &json!({"dx": 10, "dy": 4})).unwrap();
+    assert!(close(bounds(&s, c2), Rect::new(350.0, 4.0, 370.0, 24.0)), "{:?}", bounds(&s, c2));
+    assert!(close(bounds(&s, c3), Rect::new(525.0, 2.0, 535.0, 12.0)), "{:?}", bounds(&s, c3));
+    assert_eq!([node(&s, sq2), node(&s, sq3)], squares_were, "the other objects are left as they are");
+    assert_eq!(node(&s, lone), lone_was, "a square outside the groups is not a member");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    crate::tests_large_edits::undo_gives_back(&mut s, &before);
+    // A resize, a rotation, a fill and a stroke weight of the square reach the other squares.
+    sel(&mut s, &[sq1]);
+    s.execute("object.setBounds", &json!({"height": 10, "reference": 0})).unwrap();
+    assert!(close(bounds(&s, sq3), Rect::new(500.0, 0.0, 510.0, 5.0)), "{:?}", bounds(&s, sq3));
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    assert!(placed(&s, sq1, sq2, Affine::translate((300.0, 0.0))));
+    assert!(placed(&s, sq1, sq3, Affine::translate((500.0, 0.0)) * Affine::scale(0.5)));
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    for id in [sq1, sq2, sq3] {
+        assert_eq!(fill(&s, id), "#ff0000");
+        assert_eq!(node(&s, id).appearance.stroke_width(), 4.0);
+    }
+    assert_ne!(fill(&s, c2), "#ff0000", "the circles keep their fill");
+    // The member ids are kept.
+    assert_eq!((kids(&s, two), kids(&s, half)), (vec![sq2, c2], vec![sq3, c3]));
+    // An anchor moved on the circle of the second group moves on the other circles.
+    s.execute("select.anchors", &json!({"id": c2.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 6, "dy": 0})).unwrap();
+    assert!(placed(&s, c2, c1, Affine::translate((-300.0, 0.0))));
+    assert!(placed(&s, c2, c3, Affine::translate((500.0, 0.0)) * Affine::scale(0.5) * Affine::translate((-300.0, 0.0))));
+}
+
+#[test]
+fn a_drag_inside_a_group_moves_the_corresponding_objects_with_each_preview() {
+    let mut s = session();
+    let (one, two) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 2.0));
+    start(&mut s, one, json!({}));
+    let before = (*s.doc().unwrap().doc).clone();
+    let square = kids(&s, one)[0];
+    sel(&mut s, &[square]);
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 30, "dy": 0})).unwrap();
+    s.preview("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.commit_interaction().unwrap();
+    assert!(close(bounds(&s, kids(&s, two)[0]), Rect::new(310.0, 0.0, 350.0, 40.0)), "{:?}", bounds(&s, kids(&s, two)[0]));
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Move");
+    crate::tests_large_edits::undo_gives_back(&mut s, &before);
+}
+
+#[test]
+fn nested_groups_match_level_by_level_and_edits_reach_the_same_place() {
+    let mut s = session();
+    let nest = |s: &mut Session, x: f64| {
+        let (a, b) = (rect(s, x, 0.0, 10.0, 10.0), circle(s, x + 20.0, 0.0, 10.0));
+        let inner = group(s, &[a, b]);
+        let c = rect(s, x, 40.0, 30.0, 10.0);
+        (group(s, &[inner, c]), b)
+    };
+    let ((one, b1), (two, b2)) = (nest(&mut s, 0.0), nest(&mut s, 300.0));
+    // The same objects, all in one group: another hierarchy.
+    let flat = {
+        let (a, b, c) = (rect(&mut s, 600.0, 0.0, 10.0, 10.0), circle(&mut s, 620.0, 0.0, 10.0), rect(&mut s, 600.0, 40.0, 30.0, 10.0));
+        group(&mut s, &[a, b, c])
+    };
+    assert_eq!(start(&mut s, one, json!({})), [one, two], "not {flat}");
+    sel(&mut s, &[b1]);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(fill(&s, b2), "#00ff00");
+    // A setting of a subgroup itself reaches the subgroup of the other member.
+    let (inner1, inner2) = (kids(&s, one)[0], kids(&s, two)[0]);
+    sel(&mut s, &[inner1]);
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    assert_eq!((node(&s, inner1).opacity, node(&s, inner2).opacity), (0.5, 0.5));
+}
+
+#[test]
+fn groups_with_hidden_locked_or_unsupported_objects_are_left_out() {
+    let mut s = session();
+    let (one, two, three, four) =
+        (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 0.0, 300.0, 1.0), pair(&mut s, 300.0, 300.0, 1.0));
+    s.execute("object.lock", &json!({"ids": [kids(&s, two)[0].0]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [kids(&s, three)[1].0]})).unwrap();
+    assert_eq!(start(&mut s, one, json!({})), [one, four], "groups with a locked or a hidden object are not found");
+    // A member's object locked after the start is not edited; the rest of the member is.
+    s.execute("object.lock", &json!({"ids": [kids(&s, four)[0].0]})).unwrap();
+    let locked_was = node(&s, kids(&s, four)[0]);
+    let [square, round] = [kids(&s, one)[0], kids(&s, one)[1]];
+    sel(&mut s, &[square]);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(node(&s, kids(&s, four)[0]), locked_was);
+    sel(&mut s, &[round]);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(fill(&s, kids(&s, four)[1]), "#ff0000");
+}
+
+#[test]
+fn group_global_edit_follows_isolation_and_artboard_options() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    let (one, two, far) = (pair(&mut s, 0.0, 0.0, 1.0), pair(&mut s, 300.0, 0.0, 1.0), pair(&mut s, 1100.0, 0.0, 1.0));
+    assert_eq!(start(&mut s, one, json!({"artboards": "1"})), [one, two]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    // In isolation mode, only the isolated group's groups are searched.
+    let (a, b) = (pair(&mut s, 0.0, 450.0, 1.0), pair(&mut s, 100.0, 450.0, 1.0));
+    let outer = group(&mut s, &[a, b]);
+    s.execute("object.isolate", &json!({"id": outer.0})).unwrap();
+    assert_eq!(start(&mut s, a, json!({})), [a, b], "not {one}, {two} nor {far}");
 }
 
 #[test]

@@ -5664,7 +5664,7 @@ axis	Y Axis	Y-akseli
 	Include Objects On Canvas	Sisällytä kankaalla olevat objektit
 	Result(s): {count}	Tulokset: {count}
 @msg	select one object	valitse yksi objekti
-@msg	Global Edit works on paths, compound paths and symbol instances	Yleismuokkaus toimii poluille, yhdistelmäpoluille ja symbolien esiintymille
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin

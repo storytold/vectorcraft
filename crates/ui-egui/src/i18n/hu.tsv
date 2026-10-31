@@ -5619,7 +5619,7 @@ axis	Y Axis	Y tengely
 	Include Objects On Canvas	Vásznon lévő objektumok is
 	Result(s): {count}	Eredmény(ek): {count}
 @msg	select one object	jelöljön ki egy objektumot
-@msg	Global Edit works on paths, compound paths and symbol instances	A globális szerkesztés útvonalakon, összetett útvonalakon és szimbólumpéldányokon működik
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (az elforgatott vagy tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all vagy egy tartomány, például 1, 3-5, nem {v}
 	Add to Symbols	Hozzáadás a szimbólumokhoz

@@ -5487,7 +5487,7 @@ axis	Y Axis	Oś Y
 	Include Objects On Canvas	Uwzględnij obiekty na płótnie
 	Result(s): {count}	Wyniki: {count}
 @msg	select one object	zaznacz jeden obiekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Edycja globalna działa na ścieżkach, ścieżkach złożonych i wystąpieniach symboli
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli

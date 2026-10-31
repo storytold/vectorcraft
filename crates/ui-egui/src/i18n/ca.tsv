@@ -4995,7 +4995,7 @@
 @msg	give only one of onto, below and above	doneu només un de onto, below i above
 @msg	give the path `id`	doneu l’`id` del traçat
 @msg	give the path `id` and the width point `index`	doneu el `id` del traçat i l’`index` del punt d’amplada
-@msg	Global Edit works on paths, compound paths and symbol instances	L’edició global funciona amb traçats, traçats compostos i instàncies de símbol
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	L’edició global funciona amb traçats, traçats compostos, instàncies de símbol i grups d’aquests
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradat «{name}» no està definit al fitxer: en lloc seu es fa servir un color pla
 @msg	group must be true or false	group ha de ser true o false
 @msg	guides are locked	les guies estan bloquejades

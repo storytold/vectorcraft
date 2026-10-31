@@ -5215,7 +5215,7 @@ axis	Y Axis	Y-Achse
 	Include Objects On Canvas	Objekte auf der Leinwand einschließen
 	Result(s): {count}	Ergebnis(se): {count}
 @msg	select one object	wählen Sie ein Objekt aus
-@msg	Global Edit works on paths, compound paths and symbol instances	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden und Symbolinstanzen
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
 	Add to Symbols	Zu Symbolen hinzufügen

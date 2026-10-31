@@ -5232,7 +5232,7 @@ axis	Y Axis	Trục Y
 	Include Objects On Canvas	Bao gồm đối tượng trên vùng vẽ
 	Result(s): {count}	Kết quả: {count}
 @msg	select one object	hãy chọn một đối tượng
-@msg	Global Edit works on paths, compound paths and symbol instances	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp và phiên bản biểu tượng
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu

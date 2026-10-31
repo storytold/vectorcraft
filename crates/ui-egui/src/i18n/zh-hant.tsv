@@ -5269,7 +5269,7 @@ axis	Y Axis	Y 軸
 	Include Objects On Canvas	包含畫布上的物件
 	Result(s): {count}	結果：{count}
 @msg	select one object	請選取一個物件
-@msg	Global Edit works on paths, compound paths and symbol instances	整體編輯適用於路徑、複合路徑和符號實體
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	整體編輯適用於路徑、複合路徑、符號實體及其群組
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號

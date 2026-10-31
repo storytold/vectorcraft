@@ -159,6 +159,41 @@ fn the_global_edit_result_count_is_cached() {
     assert_eq!(global_edit_count(&app, &ctx), 1, "other options");
 }
 
+/// With a group selected, Quick Actions has Start Global Edit, and it takes the similar groups.
+#[test]
+fn start_global_edit_quick_action_takes_similar_groups() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let group = |app: &mut VectorcraftApp, x: f64| {
+        let a = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let b = app.run("shape.ellipse", json!({"x": x + 40.0, "y": 20, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("object.group", json!({})).unwrap()["id"].clone()
+    };
+    let (g, other) = (group(&mut app, 20.0), group(&mut app, 200.0));
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    let ctx = egui::Context::default();
+    let tall = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 1600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let texts = tall(&mut app, vec![]);
+    let at = texts.iter().find(|(t, _)| t == "Start Global Edit").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{texts:?}"));
+    let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    tall(&mut app, vec![Event::PointerMoved(at), b(true)]);
+    tall(&mut app, vec![b(false)]);
+    let members: Vec<Value> = app.session.active().unwrap().global_edit.as_ref().unwrap().members.iter().map(|m| json!(m.0.0)).collect();
+    assert_eq!(members, [g, other]);
+}
+
 // Regression test for #1910: the Properties panel's flip buttons are named as the reference
 // app's Properties panel names them, not Flip Horizontal and Flip Vertical (the Transform
 // panel menu's names).

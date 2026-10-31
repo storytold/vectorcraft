@@ -5657,7 +5657,7 @@ axis	Y Axis	Y-axel
 	Include Objects On Canvas	Ta med objekt på arbetsytan
 	Result(s): {count}	Resultat: {count}
 @msg	select one object	markera ett objekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Global redigering fungerar på banor, sammansatta banor och symbolinstanser
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler

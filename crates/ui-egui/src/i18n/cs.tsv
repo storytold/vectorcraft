@@ -5634,7 +5634,7 @@ axis	Y Axis	osa Y
 	Include Objects On Canvas	Zahrnout objekty na plátně
 	Result(s): {count}	Výsledky: {count}
 @msg	select one object	vyberte jeden objekt
-@msg	Global Edit works on paths, compound paths and symbol instances	Globální úpravy pracují s cestami, složenými cestami a instancemi symbolů
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
 	Add to Symbols	Přidat do symbolů

@@ -5550,7 +5550,7 @@ axis	Y Axis	Eixo Y
 	Include Objects On Canvas	Incluir Objetos na Tela
 	Result(s): {count}	Resultado(s): {count}
 @msg	select one object	selecione um objeto
-@msg	Global Edit works on paths, compound paths and symbol instances	A edição global funciona com demarcadores, demarcadores compostos e instâncias de símbolos
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com demarcadores, demarcadores compostos, instâncias de símbolos e grupos deles
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias giradas ou refletidas não são correspondidas); altere as opções de edição global e tente novamente
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ou um intervalo como 1, 3-5, não {v}
 	Add to Symbols	Adicionar aos Símbolos
