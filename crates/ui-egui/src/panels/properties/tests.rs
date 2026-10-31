@@ -1254,18 +1254,18 @@ fn rect(app: &mut VectorcraftApp, x: f64, y: f64, w: f64, h: f64) -> serde_json:
     app.run("shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].clone()
 }
 
-/// One blend selected with the Blend tool has Blend Options in Quick Actions, which opens the
-/// Blend Options dialog on it; OK is one undo step. Not with another tool, nor for a blend
-/// selected with another object.
+/// One selected blend has Blend Options in Quick Actions, with the Selection tool (#4817) as with
+/// the Blend tool, which opens the Blend Options dialog on it; OK is one undo step. Not for a
+/// blend selected with another object.
 #[test]
-fn blend_options_is_a_quick_action_for_one_blend_with_the_blend_tool() {
+fn blend_options_is_a_quick_action_for_one_blend() {
     let mut app = new_app();
     let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 200.0, 20.0, 40.0, 40.0));
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
     let blend = app.run("object.blend.make", json!({})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [blend]})).unwrap();
     let ctx = egui::Context::default();
-    assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "not with the Selection tool");
+    assert!(shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "with the Selection tool");
     app.select_tool("blend");
     app.run("select.set", json!({"ids": [blend]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);

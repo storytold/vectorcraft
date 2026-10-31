@@ -294,3 +294,143 @@ fn the_brush_kernel_removes_only_marked_anchors() {
     assert_eq!(simplify_anchors_keep_shape(&bump, 0.1, &[true; 5]).anchors.len(), 4, "only the anchor on the straight run goes");
     assert_eq!(simplify_anchors_keep_shape(&bump, f64::INFINITY, &[true; 5]).anchors.len(), 2, "unless tolerance is ignored");
 }
+
+/// A circle about (0, 0) of radius 100 with `n` smooth anchors, each arc a cubic.
+fn circle(n: usize) -> SubPath {
+    let step = std::f64::consts::TAU / n as f64;
+    let k = 4.0 / 3.0 * (step / 4.0).tan() * 100.0;
+    let anchors = (0..n).map(|i| {
+        let a = i as f64 * step;
+        let (p, tan) = (pt(a.cos() * 100.0, a.sin() * 100.0), Vec2::new(-a.sin(), a.cos()));
+        Anchor { p, h_in: p - tan * k, h_out: p + tan * k, kind: AnchorKind::Smooth }
+    });
+    SubPath::new(anchors.collect(), true)
+}
+
+#[test]
+fn a_slid_anchor_keeps_the_shape_its_count_and_its_index() {
+    let sp = circle(8);
+    for (index, t) in [(2, 0.5), (2, -0.5), (0, -0.25), (0, 0.25), (7, 0.9), (7, -0.9)] {
+        let (out, strayed) = slide_anchor(&sp, index, t).unwrap();
+        let seg = if t > 0.0 { sp.segment(index) } else { sp.segment((index + 7) % 8) };
+        let want = seg.eval(if t > 0.0 { t } else { 1.0 + t });
+        assert_eq!(out.anchors.len(), 8, "{index} {t}");
+        assert!(out.anchors[index].p.distance(want) < 1e-9, "{index} {t}: the anchor is where it was sent");
+        assert!(strayed < 0.05 && off_circle(&out, pt(0.0, 0.0), 100.0) < 0.05, "{index} {t}: {strayed}");
+        // The other anchors stay.
+        assert!((0..8).filter(|i| *i != index).all(|i| out.anchors[i].p == sp.anchors[i].p), "{index} {t}");
+    }
+}
+
+#[test]
+fn sliding_along_straight_runs_stays_straight_and_ends_do_not_slide() {
+    let sp = line(&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0), (200.0, 100.0)], false);
+    let (out, strayed) = slide_anchor(&sp, 1, 0.5).unwrap();
+    assert_eq!(out.anchors[1].p, pt(150.0, 0.0));
+    assert!(strayed < 1e-9 && out.segment_is_line(0) && out.segment_is_line(1));
+    assert_eq!(slide_anchor(&sp, 1, 0.0).unwrap().0, sp, "no move");
+    assert_eq!(slide_anchor(&sp, 1, 1e-9).unwrap().0, sp, "too small a move");
+    for (i, t) in [(0, 0.5), (3, -0.5), (9, 0.5), (1, 0.99), (1, -1.0), (1, f64::NAN), (1, f64::INFINITY)] {
+        assert!(slide_anchor(&sp, i, t).is_none(), "{i} {t}");
+    }
+    let mut bad = sp.clone();
+    bad.anchors[1].h_out = pt(f64::NAN, 0.0);
+    assert!(slide_anchor(&bad, 1, 0.5).is_none());
+}
+
+#[test]
+fn the_slide_a_pointer_asks_for_and_where_the_tangent_stops() {
+    let sp = line(&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0)], false);
+    assert!(near(slide_t_at(&sp, 1, pt(150.0, 30.0)).unwrap(), 0.5, 1e-6));
+    let back = slide_t_at(&sp, 1, pt(75.0, -30.0)).unwrap();
+    assert!(back < 0.0 && sp.segment(0).eval(1.0 + back).distance(pt(75.0, 0.0)) < 1e-3, "{back}");
+    assert!(near(slide_t_at(&sp, 1, pt(900.0, 0.0)).unwrap(), MAX_SLIDE, 1e-9), "held short of the next anchor");
+    assert!(slide_t_at(&sp, 0, pt(50.0, 0.0)).is_none());
+    assert!(slide_stops(&sp, 1, 0.0).is_empty(), "a straight run has no tangent to reach");
+    let slanted = line(&[(0.0, 0.0), (100.0, 100.0), (250.0, 250.0)], false);
+    assert!(slide_stops(&slanted, 1, 0.0).is_empty(), "nor one that lies on a multiple of 45°");
+    // Round a circle of 4 anchors the tangent is at a multiple of 45° at each anchor and half way.
+    let round = circle(4);
+    let stops = slide_stops(&round, 0, 0.0);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(near(stops[0], -0.5, 1e-6) && near(stops[1], 0.5, 1e-6), "{stops:?}");
+    // From a constrain angle of 22.5°, between those.
+    let stops = slide_stops(&round, 0, 22.5);
+    assert_eq!(stops.len(), 4, "{stops:?}");
+    assert!(stops.windows(2).all(|w| w[0] < w[1]));
+}
+
+#[test]
+fn add_anchors_spaces_them_by_count_or_distance() {
+    let sq = line(&[(0.0, 0.0), (90.0, 0.0), (90.0, 90.0), (0.0, 90.0)], true);
+    let out = add_anchors(&sq, SegmentKind::All, AnchorSpacing::Count(2), 100, 100).unwrap();
+    assert_eq!(out.anchors.len(), 12);
+    assert!(near(out.anchors[1].p.x, 30.0, 1e-6) && near(out.anchors[2].p.x, 60.0, 1e-6));
+    assert!(out.closed);
+    let out = add_anchors(&sq, SegmentKind::All, AnchorSpacing::Distance(40.0), 100, 100).unwrap();
+    assert_eq!(out.anchors.len(), 12, "at 40 and 80, none past the segment");
+    assert!(near(out.anchors[2].p.x, 80.0, 1e-6));
+    assert_eq!(add_anchors(&sq, SegmentKind::All, AnchorSpacing::Distance(1.0), 3, 100).unwrap().anchors.len(), 16, "the cap");
+    assert_eq!(add_anchors(&sq, SegmentKind::All, AnchorSpacing::Distance(0.0), 3, 100).unwrap(), sq);
+    assert_eq!(add_anchors(&sq, SegmentKind::Curved, AnchorSpacing::Count(1), 3, 100).unwrap(), sq, "no curves");
+    assert_eq!(add_anchors(&sq, SegmentKind::All, AnchorSpacing::Count(3), 9, 12).unwrap().anchors.len(), 16, "room for all of them");
+    assert!(add_anchors(&sq, SegmentKind::All, AnchorSpacing::Count(3), 9, 11).is_none(), "no room");
+    // A curve keeps its shape, and a zero-length segment gets nothing.
+    let bent = SubPath::new(
+        vec![
+            Anchor { h_out: pt(0.0, 50.0), ..Anchor::corner(pt(0.0, 0.0)) },
+            Anchor { h_in: pt(100.0, 50.0), ..Anchor::corner(pt(100.0, 0.0)) },
+            Anchor::corner(pt(100.0, 0.0)),
+        ],
+        false,
+    );
+    let out = add_anchors(&bent, SegmentKind::Curved, AnchorSpacing::Count(3), 9, 9).unwrap();
+    assert_eq!(out.anchors.len(), 6);
+    assert!(near(length(&out), length(&bent), 1e-4));
+    assert_eq!(add_anchors(&bent, SegmentKind::Straight, AnchorSpacing::Count(3), 9, 9).unwrap(), bent);
+}
+
+#[test]
+fn smoothing_every_anchor_reads_the_same_either_way_along_the_path() {
+    let zig = line(&[(0.0, 0.0), (30.0, 40.0), (70.0, 0.0), (100.0, 50.0)], false);
+    let mut there = zig.clone();
+    smooth_anchors(&mut there, SMOOTH_RATIO);
+    let mut back = zig.clone();
+    back.reverse();
+    smooth_anchors(&mut back, SMOOTH_RATIO);
+    back.reverse();
+    for (a, b) in there.anchors.iter().zip(&back.anchors) {
+        assert!(a.h_in.distance(b.h_in) < 1e-9 && a.h_out.distance(b.h_out) < 1e-9, "{a:?} {b:?}");
+    }
+    assert!(there.anchors[1].kind == AnchorKind::Smooth && there.anchors[0].has_out() && there.anchors[3].has_in());
+    // Nothing to smooth.
+    for mut sp in [SubPath::default(), line(&[(1.0, 1.0)], false), line(&[(1.0, 1.0)], true)] {
+        let before = sp.clone();
+        smooth_anchors(&mut sp, SMOOTH_RATIO);
+        assert_eq!(sp, before);
+    }
+}
+
+#[test]
+fn splitting_reads_an_anchors_kind_from_its_handles() {
+    // Smooth by its handles though it is called a corner, as a path read back from an outline is.
+    let run = SubPath::new(
+        vec![
+            Anchor::corner(pt(0.0, 0.0)),
+            Anchor { h_in: pt(40.0, 0.0), h_out: pt(60.0, 0.0), ..Anchor::corner(pt(50.0, 0.0)) },
+            Anchor::corner(pt(100.0, 0.0)),
+            Anchor::corner(pt(100.0, 50.0)),
+        ],
+        false,
+    );
+    assert_eq!(split_at_anchors(&run, false, true).len(), 2);
+    assert_eq!(split_at_anchors(&run, true, false).len(), 2);
+    assert_eq!(split_at_anchors(&run, true, true).len(), 3);
+    assert_eq!(split_at_anchors(&run, false, false), std::slice::from_ref(&run));
+    let pieces = split_at_anchors(&run, true, true);
+    assert!(near(pieces.iter().map(length).sum::<f64>(), length(&run), 1e-6), "the shape stays");
+    // A closed subpath opens at its first cut.
+    let sq = line(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)], true);
+    assert_eq!(split_at_anchors(&sq, true, false).len(), 3);
+    assert!(split_at_anchors(&sq, true, false).iter().all(|p| !p.closed));
+}

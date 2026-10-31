@@ -49,6 +49,19 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit
     num_field_named(ui, id, None, value, unit, width)
 }
 
+/// [`num_field`] whose value is clamped to `bounds` (points).
+pub fn num_field_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[])
+}
+
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
@@ -57,7 +70,7 @@ pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
 }
 
 /// Any number: the bounds of a field that has none.
-const ANY: RangeInclusive<f64> = f64::NEG_INFINITY..=f64::INFINITY;
+pub(crate) const ANY: RangeInclusive<f64> = f64::NEG_INFINITY..=f64::INFINITY;
 
 /// `v` within `bounds` (bounds the wrong way round or not numbers don't panic, as `f64::clamp` would).
 fn within(v: f64, bounds: &RangeInclusive<f64>) -> f64 {
@@ -89,15 +102,33 @@ fn unit_field(
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let typed = typed_unit(ui.ctx(), unit);
     let read = |b: &str| typed.parse(&decimal_point(b));
-    let bounds = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
+    let bounds_unit = unit.from_pt(*bounds.start())..=unit.from_pt(*bounds.end());
     let stops: Vec<f64> = stops.iter().map(|&s| unit.from_pt(s)).collect();
-    let stepped = step_value(ui, &resp, &mut buf, &bounds, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
-    let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds);
+    let stepped =
+        step_value(ui, &resp, &mut buf, &bounds_unit, (|b: &str| Some(unit.from_pt(read(b)?)), |v| unit.format(unit.to_pt(v))), None, &stops);
+    let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit {
-        read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None })
+        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+            Some(v) => {
+                let clamped = within(v, &bounds);
+                let formatted = unit.format(clamped);
+                ui.data_mut(|d| d.insert_temp(id, formatted));
+                Some(clamped)
+            }
+            None => {
+                let end = ui.input(|i| i.time + 0.25);
+                ui.data_mut(|d| {
+                    d.remove::<String>(id);
+                    d.insert_temp(id.with("invalid-flash"), end);
+                });
+                crate::widgets::reject_dialog_commit(ui.ctx());
+                ui.ctx().request_repaint();
+                None
+            }
+        }
     } else {
+        ui.data_mut(|d| d.insert_temp(id, buf.clone()));
         stepped.or(scrubbed).map(|v| unit.to_pt(v))
     }
 }

@@ -480,6 +480,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         None => rows.iter().filter_map(Row::new_color).collect(),
     };
     let rename = text_param(p, "rename", C)?;
+    let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let (changed, edit, added, converted) = s.edit(label, |d, _| {
         // The rows' library swatches join the document (one it has with that name and colour is
         // used as it is).
@@ -519,6 +520,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         let lf = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| map.map_link(c, link, tint);
         let changed = Recolor::with_links(scope, &f, &lf).run(d, &ids);
         let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, rename, C)).transpose()?;
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok((changed, edit, added, map.converted.get()))
     })?;
     let mut out = json!({ "changed": changed, "swatches": added });

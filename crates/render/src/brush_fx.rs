@@ -212,7 +212,7 @@ impl Renderer {
                 self.draw_kept_node(ctx, f, p);
                 self.fx_owner = owner;
             } else {
-                self.draw_node(ctx, f, p, true);
+                self.draw_forced_arc(ctx, f, p);
             }
         }
         (self.made_again, self.cur) = outer;
@@ -258,6 +258,36 @@ mod tests {
         // Second frame hits the cache and paints the same.
         let again = render(&mut r, &d);
         assert_eq!(again.pixels, img.pixels);
+    }
+
+    #[test]
+    fn art_brush_piece_applies_its_root_mask() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_doc::OpacityMask;
+
+        let mut d = doc_with_line(Some("Masked art"), 1.0);
+        let mut art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, -5.0, 10.0, 5.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let black = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        art.extras_mut().mask = Some(Box::new(OpacityMask::new(black, true)));
+        let brush = Brush {
+            name: "Masked art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+
+        let mut renderer = Renderer::new();
+        for _ in 0..2 {
+            let img = render(&mut renderer, &d);
+            assert_eq!(img.pixel(100, 50), [255, 255, 255, 255]);
+        }
     }
 
     /// Object opacity fades a brushed stroke's art as a whole, with or without a dash and a fill:

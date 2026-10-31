@@ -339,6 +339,35 @@ fn transform_group_recurses() {
     assert_eq!(child.appearance.stroke_width(), 2.0);
 }
 
+/// A symbol instance in perspective keeps its picture moved by a transform, and loses its
+/// projection when no invertible map of finite numbers draws the moved picture.
+#[test]
+fn a_projection_follows_the_transform_or_is_removed() {
+    use vectorcraft_geom::{Homography, Point};
+    let instance = |h: Homography| {
+        let mut n = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
+        n.extras_mut().perspective =
+            Some(Box::new(crate::PerspectiveAttachment { projection: Some(h.to_array()), ..crate::PerspectiveAttachment::new("left", 0.0) }));
+        n
+    };
+    let projection = |n: &Node| n.extras().perspective.as_deref().and_then(|p| p.projection);
+    // A move by 10 scaled by 1e307: moved by a scale by 10, the product overflows unless scaled down.
+    let big = Homography([[1e307, 0.0, 1e308], [0.0, 1e307, 0.0], [0.0, 0.0, 1e307]]);
+    let mut n = instance(big);
+    n.transform(Affine::scale(10.0), false);
+    let p = Point::new(3.0, 7.0);
+    assert!(n.projection().unwrap().apply(p).unwrap().distance(Point::new(103.0, 7.0)) < 1e-9);
+    // A move by 1e200 moved by a scale by 1e150 sends every point to about (1e350, 0).
+    let far = Homography([[1.0, 0.0, 1e200], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+    let mut n = instance(far);
+    n.transform(Affine::scale(1e150), false);
+    assert_eq!(projection(&n), None);
+    // A transform that is not invertible leaves the projection as it is.
+    let mut n = instance(far);
+    n.transform(Affine::scale(0.0), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+}
+
 #[test]
 fn unplaced_gradients_pin_only_when_a_refit_would_differ() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};

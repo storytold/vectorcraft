@@ -57,6 +57,15 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, _| other_layers(s, true)
         ),
         cmd!(
+            "object.lock.unselected",
+            "Unselected Artwork",
+            ["Object", "Lock"],
+            Some("Cmd+Alt+Shift+2"),
+            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide → {count}",
+            has_selection,
+            |s, _| unselected_art(s, true)
+        ),
+        cmd!(
             "object.hide.above",
             "All Artwork Above",
             ["Object", "Hide"],
@@ -81,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Alt+Shift+3"),
             "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; object.showAll shows them again; disabled in isolation mode → {count}",
             has_selection_outside_isolation,
-            hide_unselected
+            |s, _| unselected_art(s, false)
         ),
         cmd!(
             "object.transformEach",
@@ -106,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded PNG image; each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -321,15 +330,24 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
     Ok(json!({ "count": n }))
 }
 
-/// The objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and hold none of
-/// them. The objects of a selected layer count as selected. Guide paths are left out while `guides_locked`, and so are
-/// the objects that hold one. The walk goes into a plain group that holds a selected object or such a guide path; a
-/// clip group, a Shaper group, a compound path and every other object that holds one is left out with its members.
-fn unselected(d: &vectorcraft_doc::Document, iso: Option<NodeId>, selection: &[NodeId], roots: &[NodeId], guides_locked: bool) -> Vec<NodeId> {
+/// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
+/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
+/// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
+/// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
+/// object or such a guide are left out with their members.
+fn unselected(
+    d: &vectorcraft_doc::Document,
+    iso: Option<NodeId>,
+    selection: &[NodeId],
+    roots: &[NodeId],
+    guides_locked: bool,
+    lock: bool,
+) -> Vec<NodeId> {
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
     roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
-    if guides_locked {
+    if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
@@ -344,24 +362,30 @@ fn unselected(d: &vectorcraft_doc::Document, iso: Option<NodeId>, selection: &[N
             out.push(n.id);
             return false;
         }
-        !roots.contains(&n.id) && matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.extras().shaper.is_none()
+        !roots.contains(&n.id)
+            && (matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.extras().shaper.is_none()
+                || lock && (matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Compound { .. })))
     });
     out
 }
 
-fn hide_unselected(s: &mut Session, _: &Value) -> Result<Value> {
+fn unselected_art(s: &mut Session, lock: bool) -> Result<Value> {
     let roots = selected_roots_to_transform(s)?;
     let guides_locked = s.menu.guides_locked;
     let st = s.doc()?;
-    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked);
-    // With nothing to hide, the document and its undo history stay as they are.
+    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked, lock);
+    // With nothing to lock (Lock) or hide (Hide), the document and its undo history stay as they are.
     if !ids.is_empty() {
-        s.edit("Hide", |d, _| {
-            // Hiding moves no node in the tree, so the paths found up front stay right.
+        s.edit(if lock { "Lock" } else { "Hide" }, |d, _| {
+            // Locking and hiding move no node in the tree, so the paths found up front stay right.
             let paths = d.index_paths(ids.iter().copied());
             for id in &ids {
                 if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p)) {
-                    n.visible = false;
+                    if lock {
+                        n.locked = true;
+                    } else {
+                        n.visible = false;
+                    }
                 }
             }
             Ok(())
@@ -489,15 +513,15 @@ pub(crate) fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
     }
 }
 
-/// `doc` rendered over `region` with `opts` as a PNG in colour model `color`, with the note that an
-/// image in it couldn't be decoded ([`super::rasterfx::undecoded_warning`]).
-fn render_png(
+/// `doc` rendered over `region` with `opts` in colour model `color` (premultiplied RGBA), with the
+/// note that an image in it couldn't be decoded ([`super::rasterfx::undecoded_warning`]).
+fn render_pixels(
     doc: &vectorcraft_doc::Document,
     region: Rect,
     scale: f64,
     opts: &vectorcraft_render::RenderOptions,
     color: RasterColorModel,
-) -> Result<(Vec<u8>, u32, u32, Option<&'static str>)> {
+) -> Result<(vectorcraft_render::Rendered, Option<&'static str>)> {
     if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
@@ -506,13 +530,57 @@ fn render_png(
     let mut img = r.render_region_with(doc, region, scale, opts);
     let warning = super::rasterfx::undecoded_warning(failed);
     RasterEffectsSettings { color_model: color, ..Default::default() }.finish_pixels(&mut img.pixels);
+    Ok((img, warning))
+}
+
+/// [`render_pixels`] as a PNG, with its width and height.
+fn render_png(
+    doc: &vectorcraft_doc::Document,
+    region: Rect,
+    scale: f64,
+    opts: &vectorcraft_render::RenderOptions,
+    color: RasterColorModel,
+) -> Result<(Vec<u8>, u32, u32, Option<&'static str>)> {
+    let (img, warning) = render_pixels(doc, region, scale, opts, color)?;
     Ok((img.to_png().map_err(EngineError::Other)?, img.width, img.height, warning))
+}
+
+/// `doc` over `region` as a CMYK image of its ink amounts (as CMYK exports draw them), with the
+/// transparency of `img` (the same art in screen colours) as a greyscale PNG when it has any: a
+/// CMYK image keeps no alpha of its own.
+fn cmyk_raster(
+    doc: &vectorcraft_doc::Document,
+    region: Rect,
+    scale: f64,
+    opts: &vectorcraft_render::RenderOptions,
+    img: &vectorcraft_render::Rendered,
+) -> Result<(vectorcraft_doc::ImageBlob, Option<Vec<u8>>)> {
+    let inks = vectorcraft_render::Renderer::new().render_region_inks(doc, region, scale, opts);
+    let alpha: Vec<u8> = img.pixels.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
+    // Partly covered pixels carry that much ink: divided back out, as straight colour is, since
+    // the mask applies the coverage.
+    let straight = |v: u8, a: u8| if a == 0 { 0 } else { ((u32::from(v) * 255 + u32::from(a) / 2) / u32::from(a)).min(255) as u8 };
+    let data = inks.as_chunks::<4>().0.iter().zip(&alpha).flat_map(|(p, &a)| p.map(|v| straight(v, a))).collect();
+    let blob = vectorcraft_doc::cmyk::Inks::new(img.width, img.height, data)
+        .and_then(|i| vectorcraft_doc::ImageBlob::cmyk_tiff(&i))
+        .ok_or_else(|| EngineError::Other("the CMYK image couldn't be written".into()))?;
+    if alpha.iter().all(|&a| a == 255) {
+        return Ok((blob, None));
+    }
+    let mask = image::GrayImage::from_raw(img.width, img.height, alpha)
+        .ok_or_else(|| EngineError::Other("the image's transparency doesn't fit it".into()))?;
+    let mut png = Vec::new();
+    mask.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok((blob, Some(png)))
 }
 
 /// The image Object › Rasterize makes of some art, before it goes in a document
 /// ([`rasterize_art`]).
 pub(crate) struct Rasterized {
-    png: Vec<u8>,
+    /// A PNG, or a CMYK image of the art's inks ([`cmyk_raster`]).
+    blob: vectorcraft_doc::ImageBlob,
+    /// A CMYK image's transparency, a greyscale PNG: it becomes the image's opacity mask.
+    alpha: Option<Vec<u8>>,
     width: u32,
     height: u32,
     /// Image pixels → document.
@@ -527,11 +595,18 @@ impl Rasterized {
     /// The image as a new object of `d` (its pixels in `d.images`), in a clip group with the art's
     /// outline when it has one.
     pub(crate) fn into_node(self, d: &mut vectorcraft_doc::Document) -> Node {
-        let key = unique_key(d, "raster");
-        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", self.png));
-        let id = d.alloc_id();
-        let image = ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default(), pixels: None };
-        let node = Node::new(id, NodeKind::Image(Box::new(image)));
+        let image = |d: &mut vectorcraft_doc::Document, blob: vectorcraft_doc::ImageBlob| {
+            let key = unique_key(d, "raster");
+            d.images.insert(key.clone(), blob);
+            let image =
+                ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default(), pixels: None };
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)))
+        };
+        let mut node = image(d, self.blob);
+        if let Some(png) = self.alpha {
+            let art = image(d, vectorcraft_doc::ImageBlob::new("image/png", png));
+            node.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+        }
         match self.clip {
             Some((path, rule)) => super::rasterfx::clip_group(d, path, rule, node),
             None => node,
@@ -541,8 +616,9 @@ impl Rasterized {
 
 /// Object › Rasterize's image of `nodes` (drawn also where hidden) with the params `p` of command
 /// `cmd`, each defaulting to `doc`'s raster effects settings: over the bounds of what the art draws
-/// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels.
-pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str) -> Result<Rasterized> {
+/// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels. With `inks`,
+/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs.
+pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str, inks: bool) -> Result<Rasterized> {
     check_numbers(p, &["ppi"], cmd)?;
     let ppi = f64_or(p, "ppi", doc.raster_effects_ppi);
     if !(1.0..=2400.0).contains(&ppi) {
@@ -606,9 +682,15 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
         .flatten()
         .map(|(bp, rule)| (PathData::from_bezpath(&bp), rule));
     let tmp = isolated_doc(doc, nodes);
-    let (png, width, height, warning) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png), look.color_model)?;
+    let opts = raster.render_options(RasterFormat::Png);
+    let (img, warning) = render_pixels(&tmp, region, scale, &opts, look.color_model)?;
+    let (blob, alpha) = if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && look.color_model == RasterColorModel::Document {
+        cmyk_raster(&tmp, region, scale, &opts, &img)?
+    } else {
+        (vectorcraft_doc::ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?), None)
+    };
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-    Ok(Rasterized { png, width, height, xf, clip, warning })
+    Ok(Rasterized { blob, alpha, width: img.width, height: img.height, xf, clip, warning })
 }
 
 fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
@@ -616,7 +698,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let st = s.doc()?;
     let nodes: Vec<Node> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).collect();
-    let image = rasterize_art(&st.doc, nodes, p, C)?;
+    let image = rasterize_art(&st.doc, nodes, p, C, true)?;
     let (w, h, warning) = (image.width, image.height, image.warning);
     if roots.is_empty() {
         return Err(bad(C, "nothing selected"));

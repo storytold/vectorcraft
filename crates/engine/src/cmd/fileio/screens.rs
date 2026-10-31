@@ -309,6 +309,9 @@ struct ScreenParams {
     /// Where files go: `none` (all in the folder), `rows` (the rows' sub-folders, as
     /// `subfolders`), `format` (a folder per extension), `item`, or `itemFormat`.
     folders: Option<String>,
+    /// Export PDFs As: `single` (the artboards a PDF row writes are the pages of one file) or
+    /// `multiple` (a file per artboard, the default).
+    pdfs: Option<String>,
 }
 
 /// How exported files are sorted into folders.
@@ -389,6 +392,8 @@ struct Naming {
     /// The counter counts files rather than items.
     per_file: bool,
     folders: Folders,
+    /// Export PDFs As › Single file.
+    single_pdf: bool,
 }
 
 impl Naming {
@@ -406,9 +411,14 @@ impl Naming {
             Some("file") => true,
             Some(c) => return Err(bad(C, format!("counterPer `{c}`: item or file"))),
         };
+        let single_pdf = match o.pdfs.as_deref() {
+            None | Some("multiple") => false,
+            Some("single") => true,
+            Some(m) => return Err(bad(C, format!("pdfs `{m}`: single or multiple"))),
+        };
         let filename = safe_name(&super::file_stem(title)).unwrap_or_else(|| "Untitled".into());
         let pattern = o.name.clone().filter(|n| !n.trim().is_empty());
-        Ok(Self { pattern, prefix, filename, when, counter_start: o.counter_start.unwrap_or(1), per_file, folders })
+        Ok(Self { pattern, prefix, filename, when, counter_start: o.counter_start.unwrap_or(1), per_file, folders, single_pdf })
     }
 
     /// The sub-folder (`None` for the export folder itself) and the file name of the file row `r`
@@ -781,15 +791,34 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     // One step per item and row, the files a name collision skips included.
     let steps = (items.len() * rows.len()) as u64;
     let mut step = 0u64;
+    // Export PDFs As › Single file: with several artboards, a PDF row writes them all as the pages
+    // of one file, named as the document, with the first of them.
+    let artboards: Option<Vec<usize>> = items.iter().map(|i| i.artboard).collect::<Option<Vec<_>>>().filter(|a| naming.single_pdf && a.len() > 1);
     for (index, item) in items.iter().enumerate() {
         for r in &rows {
             vectorcraft_doc::cancel::check()?;
             vectorcraft_doc::cancel::progress(step, steps, &format!("Exporting file {} of {steps}", step + 1));
             step += 1;
-            let (sub, file) = naming.file(item, index, files, r);
+            let single = artboards.as_ref().filter(|_| r.format.id == "pdf");
+            if single.is_some() && index > 0 {
+                continue;
+            }
+            let document = single.map(|_| Item {
+                name: naming.filename.clone(),
+                stem: naming.filename.clone(),
+                doc: item.doc.clone(),
+                artboard: None,
+                region: item.region,
+                every_artboard: None,
+            });
+            let (sub, file) = naming.file(document.as_ref().unwrap_or(item), index, files, r);
             let name = sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}"));
             let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key), o.name.is_some()) else { continue };
-            let bytes = if let (Some(all), "pdf") = (&item.every_artboard, r.format.id) {
+            let bytes = if let Some(boards) = single {
+                let mut options = r.options.clone();
+                options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
+                write(&item.doc, "pdf", &options)?
+            } else if let (Some(all), "pdf") = (&item.every_artboard, r.format.id) {
                 // One page per artboard.
                 let mut options = r.options.clone();
                 options["range"] = json!("all");

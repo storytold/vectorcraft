@@ -681,6 +681,73 @@ fn items_and_groups_are_reordered() {
     assert_eq!(groups(&mut s)[0].1, refs(&[("color", "Green"), ("color", "Gray")]), "a group keeps its items when it moves");
 }
 
+/// Dropping art or a colour among the Libraries panel's items: the new item goes just before or
+/// after one of its kind and into a group, or into a group alone, and a bad place adds nothing.
+#[test]
+fn a_new_item_is_added_where_it_is_dropped() {
+    let mut s = session();
+    run(&mut s, "library.create", json!({"name": "Brand"}));
+    for (name, color) in [("Red", "#ff0000"), ("Green", "#00ff00")] {
+        run(&mut s, "library.add", json!({"kind": "fillColor", "color": color, "name": name}));
+    }
+    run(&mut s, "library.createGroup", json!({"name": "Cool", "items": [{"kind": "fillColor", "item": "Green"}]}));
+    // Before an ungrouped item: ungrouped too.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#ffff00", "name": "Yellow", "before": "Red"}));
+    assert!(r["group"].is_null());
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green"]);
+    // After an item in a group, into that group next to it.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#0000ff", "name": "Blue", "group": "cool", "after": "Green"}));
+    assert_eq!(r["group"], "Cool");
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    assert_eq!(groups(&mut s), [("Cool".into(), refs(&[("color", "Green"), ("color", "Blue")]))]);
+    // Into a group alone: last in it, and last of its kind.
+    let shape = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let g = run(&mut s, "library.add", json!({"kind": "graphic", "ids": [shape], "group": "Cool"}));
+    assert_eq!(g["group"], "Cool");
+    let g = g["id"].as_str().unwrap().to_string();
+    assert_eq!(groups(&mut s)[0].1, refs(&[("color", "Green"), ("color", "Blue"), ("graphic", &g)]));
+    // One the library has stays where it is.
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#ff0000", "before": "Yellow"}));
+    assert_eq!((r["name"].as_str(), r["existing"].as_bool()), (Some("Red"), Some(true)));
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    // Bad places add nothing.
+    let other = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 20, "height": 10}))["id"].clone();
+    for bad in [
+        json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}),
+        json!({"kind": "fillColor", "color": "#808080", "before": "Nope"}),
+        json!({"kind": "fillColor", "color": "#808080", "before": "Red", "after": "Blue"}),
+        json!({"kind": "graphic", "ids": [other], "before": "Red"}),
+    ] {
+        assert!(s.execute("library.add", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(order(&mut s, "colors", "name"), ["Yellow", "Red", "Green", "Blue"]);
+    assert_eq!(order(&mut s, "graphics", "id"), [g]);
+}
+
+/// With no library yet, an add that can't be placed makes no "My Library", in the session or in
+/// the library folder; one that can makes it.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_add_that_cannot_be_placed_makes_no_library() {
+    let folder = vectorcraft_testkit::temp_dir("library-add-unplaced").to_string_lossy().to_string();
+    let mut s = session();
+    s.libraries.set_dir(Some(folder.clone()));
+    for bad in [json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}), json!({"kind": "fillColor", "color": "#808080", "after": "Nope"})]
+    {
+        assert!(s.execute("library.add", &bad).is_err(), "{bad}");
+        assert_eq!(run(&mut s, "library.list", json!({}))["libraries"], json!([]), "{bad}");
+    }
+    let mut t = session();
+    t.libraries.set_dir(Some(folder.clone()));
+    assert_eq!(run(&mut t, "library.list", json!({}))["libraries"], json!([]), "no file was written");
+    let r = run(&mut s, "library.add", json!({"kind": "fillColor", "color": "#808080"}));
+    let list = run(&mut s, "library.list", json!({}));
+    assert_eq!((list["current"].clone(), list["libraries"][0]["name"].clone()), (r["library"].clone(), json!("My Library")));
+    let mut u = session();
+    u.libraries.set_dir(Some(folder));
+    assert_eq!(run(&mut u, "library.list", json!({}))["libraries"].as_array().map(Vec::len), Some(1));
+}
+
 /// A library goes out to a file with its art and groups and comes back as a new library, numbered
 /// when its name is taken; the graphic it brings places in a document (#926).
 #[test]

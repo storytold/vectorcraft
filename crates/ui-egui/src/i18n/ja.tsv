@@ -16,10 +16,7 @@
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 	About VectorCraft	VectorCraft について
 	Check for Updates…	アップデートを確認…
-	Checking for updates…	アップデートを確認中…
-	Could not check for updates:\n{error}	アップデートを確認できませんでした:\n{error}
 	VectorCraft Updates	VectorCraft のアップデート
-	VectorCraft {version} is currently the newest version available.	VectorCraft {version} は最新バージョンです。
 	All Scripts	すべての文字
 	Anchors:	アンカー:
 	Any Kind	すべての種類
@@ -1234,6 +1231,13 @@ font-technology	Variable	バリアブル
 	Create Path	パスを作成
 	Create Slice	スライスを作成
 	Create Sub-folders	サブフォルダーを作成
+	Clear Selection	選択を解除
+	Export PDFs As:	PDF の書き出し形式：
+	Single File	単一ファイル
+	Multiple Files	複数ファイル
+	Format Presets	形式プリセット
+	Grid View	グリッド表示
+	Selected: {n}, Total number of files to export: {m}	選択済み：{n}、書き出すファイルの合計数：{m}
 	Create Text	テキストを作成
 	Created	作成日
 	Created:	作成日:
@@ -1300,7 +1304,6 @@ font-technology	Variable	バリアブル
 	Delete Workspace	ワークスペースを削除
 	Delete the graphic style “{name}”?	グラフィックスタイル「{name}」を削除しますか？
 	Delete theme	テーマを削除
-	Delete these {count} swatches and groups?	これら {count} 個のスウォッチとグループを削除しますか？
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
 	Delete “{name}”?	「{name}」を削除しますか？
@@ -1713,6 +1716,7 @@ font-technology	Variable	バリアブル
 	Delete Guides	ガイドを削除
 	Delete Slice	スライスを削除
 	Delete Style	スタイルを削除
+	Delete Styles	スタイルを削除
 	Delete Variables	変数を削除
 	Delete View	表示を削除
 	Done Editing Pattern	パターン編集を完了
@@ -3367,7 +3371,7 @@ gradient-kind	Radial	円形
 	Client-side (.html)	クライアントサイド (.html)
 	Cmd	Cmd
 	Collect Links in a Separate Folder	リンクを別フォルダーに収集
-	Color (,)	カラー (,)
+	Color (, or Shift+,)	カラー (, または Shift+,)
 	Color Group	カラーグループ
 	Color Library	カラーライブラリ
 	Color Management	カラーマネジメント
@@ -3462,7 +3466,7 @@ file-filter	Templates	テンプレート
 	General › Placement › X	一般 › 位置 › X
 	General › Thumbnails	一般 › サムネール
 	Global Process Color, CMYK	グローバルプロセスカラー、CMYK
-	Gradient (.)	グラデーション (.)
+	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
 	Graph Design	グラフのデザイン
@@ -3711,6 +3715,7 @@ file-filter	Templates	テンプレート
 imageTrace	Outline	アウトライン
 @plural	Color Table ({n} color)|Color Table ({n} colors)	カラーテーブル ({n} 色)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} 個のグラフィックスタイルを削除しますか？
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	これら {n} 個のスウォッチとグループを削除しますか？
 @plural	{n} Layer|{n} Layers	{n} レイヤー
 @plural	{n} Object|{n} Objects	{n} オブジェクト
 @plural	{n} area highlighted|{n} areas highlighted	{n} 個の範囲を強調表示
@@ -4427,6 +4432,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	書き出すものがありません: ドキュメントに表示されているアートがありません (または「アートボードを使用」をオンにしてください)
 @msg	add a format to export	書き出す形式を追加してください
 @msg	check an asset to export	書き出すアセットにチェックを入れてください
+@msg	check an artboard to export	書き出すアートボードにチェックを入れてください
 @msg	check a layer to export	書き出すレイヤーにチェックを入れてください
 @msg	select the art to export first	先に書き出すアートを選択してください
 @msg	`{tool}` isn't a freehand tool	`{tool}` はフリーハンドツールではありません
@@ -4542,9 +4548,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no PNG encoder	PNG エンコーダーがありません
 @msg	no document open	ドキュメントが開かれていません
 @msg	no effect applied yet	まだ効果を適用していません
+@msg	no Pathfinder operation applied yet	まだパスファインダーの操作を適用していません
 @msg	no such perspective grid preset	指定された遠近グリッドプリセットが見つかりません
 @msg	no such recent file	指定された最近使ったファイルが見つかりません
 @msg	no such recent font	指定された最近使ったフォントが見つかりません
+@msg	some text is hidden or locked, so its font wasn't replaced	一部のテキストが非表示またはロックされているため、そのフォントは置換されませんでした
 @msg	no such saved selection	指定された選択範囲は保存されていません
 @msg	no such user library	指定されたユーザーライブラリが見つかりません
 @msg	no such view	指定された表示が見つかりません
@@ -5483,3 +5491,210 @@ anchor	Points:	ポイント:
 @msg	select open paths to close	閉じるオープンパスを選択してください
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	パスが多すぎるか複雑すぎて交差点を見つけられません（最大 10000 セグメント）
 @msg	the paths have too many anchors to edit at once	パスのアンカーポイントが多すぎて一度に編集できません
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	パラメトリックシェイプツール
+	Parametric Shape	パラメトリックシェイプ
+	Edit Parametric Shape	パラメトリックシェイプを編集
+	Convert to Parametric Shape	パラメトリックシェイプに変換
+	Ring	リング
+	Arrow	矢印
+	Cross	十字
+	Heart	ハート
+	Gear	歯車
+	Speech Bubble	吹き出し
+	Count:	数:
+	Thickness:	太さ:
+	Inner Radius:	内側の半径:
+	Head:	矢じり:
+	Shaft:	軸:
+	Point:	先端:
+	Tooth Height:	歯の高さ:
+	Tail:	しっぽ:
+	Tip:	先端:
+	Open a document to draw parametric shapes.	パラメトリックシェイプを描くにはドキュメントを開いてください。
+	Select a parametric shape to edit it. With none selected, these set the next shape.	編集するパラメトリックシェイプを選択してください。選択がないときは、次に描くシェイプの値になります。
+@msg	the object is not an editable parametric shape	オブジェクトは編集可能なパラメトリックシェイプではありません
+@msg	select plain rectangles, ellipses or regular polygons to convert	変換する通常の長方形、楕円または正多角形を選択してください
+@msg	the shape's numbers are out of range	シェイプの値が範囲外です
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` には次のいずれかを指定してください:rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` には 3 から 1000 の整数を指定してください
+@msg	`{key}` must be from {lo} to {hi}	`{key}` には {lo} から {hi} を指定してください
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	スマートペン
+	Smart Pen Tool	スマートペンツール
+	Smart Pen Panel	スマートペンパネル
+	Next Segment	次のセグメント
+	Curved	曲線
+	Retract Handles	ハンドルを収める
+	Close or Join	閉じるまたは連結
+	Open a document to draw with the Smart Pen.	スマートペンで描くにはドキュメントを開いてください。
+	Straight or Curved Segment	直線または曲線セグメント
+@msg	the path is locked or hidden	パスがロックされているか非表示です
+@msg	`id` is not a path	`id` はパスではありません
+@msg	the path has no open subpath	パスに開いたサブパスがありません
+@msg	the subpath is closed	サブパスは閉じています
+@msg	the subpath is closed or too short to close	サブパスが閉じているか、短すぎて閉じられません
+@msg	the path is too short to remove a point from	パスが短すぎてポイントを削除できません
+@msg	the segment can't be bent that far	セグメントをそこまで曲げることはできません
+@msg	give `{a}` and `{b}`	`{a}` と `{b}` を指定してください
+@msg	`t` must be from 0 to 1	`t` には 0 から 1 を指定してください
+@msg	`segment` must be "straight" or "curved"	`segment` には "straight" または "curved" を指定してください
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` には "free"、"keepAngles" または "symmetric" を指定してください
+@msg	`{key}` must be [x, y]	`{key}` には [x, y] を指定してください
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	カラーの種類で選択
+	Objects with Spot Colors	特色を使用したオブジェクト
+	Objects with Color Effects	カラー効果のあるオブジェクト
+	RGB Images	RGB 画像
+	CMYK Images	CMYK 画像
+	Grayscale Images	グレースケール画像
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` は spotColors、colorEffects、rgbImages、cmykImages、grayImages のいずれかにしてください
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	ドットの色をアートから取得
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	ダブルトーン…
+	Duotone	ダブルトーン
+	Print Ink Fixes…	印刷インキの修正…
+	Print Ink Fixes	印刷インキの修正
+	Inks	インキ
+	Tone 1	トーン 1
+	Tone 2	トーン 2
+	Tone 3	トーン 3
+	Tone 4	トーン 4
+	Curve	カーブ
+	Reset to Linear	直線にリセット
+	Reset to Inverse	反転にリセット
+	Skip Objects with Spot Colors	特色を使用したオブジェクトをスキップ
+	Ink Limit	インキ総量の上限
+	Exclude Pure Black	純粋なブラックを除外
+	Remove White Overprint	白のオーバープリントを削除
+	Overprint Black	ブラックをオーバープリント
+	Text Only	テキストのみ
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`、`removeWhiteOverprint` または `overprintBlack` を指定してください
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷インキの修正は CMYK ドキュメントで使用できます。先にファイル › ドキュメントのカラーモード › CMYK カラーを選択してください
+@msg	`{key}` must be 0..{max}	`{key}` は 0..{max} にしてください
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	コーナーツール
+	Slide Anchor Along Path	パスに沿ってアンカーポイントをスライド
+	Set Corners	コーナーを設定
+	Remove Corners	コーナーを削除
+	Corners selected: {count}	選択中のコーナー：{count}
+	Apply to Selected Anchors	選択中のアンカーポイントに適用
+@msg	`radius` must be from 0 to 1000000 pt	`radius` は 0 から 1000000 pt にしてください
+@msg	`t` must be a number from -0.98 to 0.98	`t` は -0.98 から 0.98 の数値にしてください
+@msg	choose anchors where two sides meet at an angle: only those take a corner	2 つの辺が角度をなして交わるアンカーポイントを選択してください：コーナーを作れるのはそこだけです
+@msg	give `anchor`, the index of the anchor to slide	スライドするアンカーポイントの番号 `anchor` を指定してください
+@msg	that anchor can't slide: an end of an open path has nowhere to go	そのアンカーポイントはスライドできません：オープンパスの端点には移動先がありません
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	共有エッジ結合ツール
+	Merge Shared Edge	共有エッジを結合
+	Keep Shared Points Together	共有ポイントをまとめて移動
+	Shared Edges	共有エッジ
+	Coincidence:	一致の許容値:
+@msg	`a` and `b` must be two different paths	`a` と `b` は異なる 2 つのパスにしてください
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` は 0.25〜200 pt にしてください
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` は 0〜3 pt にしてください
+@msg	`follow` must be "average", "a" or "b"	`follow` は "average"、"a"、"b" のいずれかにしてください
+@msg	the paths have nothing to merge there	ここには結合できるものがありません
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	テキストを分割
+	Combine Point Text	ポイント文字を結合
+	Join Point Text	ポイント文字を連結
+	Remove Breaks	改行を削除
+	Split Text at Cursor	カーソル位置でテキストを分割
+	Set Alignment, Keep Position	位置を保って行揃えを設定
+	Reset Text Transform	テキストの変形をリセット
+	Replace Missing Fonts…	見つからないフォントを置換…
+	Replace Missing Fonts	見つからないフォントを置換
+	Remove Line Breaks	強制改行を削除
+	Remove Paragraph Breaks	段落の区切りを削除
+	Break Text into Lines	テキストを行に分割
+	Break Text into Paragraphs	テキストを段落に分割
+	Break Text into Words	テキストを単語に分割
+	Break Text into Glyphs	テキストを字形に分割
+	Reset Text Transform and Scale	テキストの変形と比率をリセット
+	Set Alignment, Keep Position:	位置を保って行揃えを設定:
+	Break Text into:	テキストを分割:
+	Split at Cursor	カーソル位置で分割
+	Reset Transform	変形をリセット
+	Shift-click: break into paragraphs	Shift+クリック:段落に分割
+	Alt-click: reset the horizontal scale too	Alt+クリック:水平比率もリセット
+breakText	Lines	行
+breakText	Words	単語
+breakText	Glyphs	字形
+@msg	Click in type with a Type tool to split it	分割するには、文字ツールでテキスト内をクリックしてください
+@msg	Too many type objects to change at once	一度に変更するテキストオブジェクトが多すぎます
+@msg	Too many pieces to make at once	一度に作成する部分が多すぎます
+@msg	Select horizontal point or area type whose text fits	テキストが収まっている横組みのポイント文字またはエリア内文字を選択してください
+@msg	Nothing to split at the cursor	カーソル位置で分割するものがありません
+@msg	Select two or more one-line point type objects on one baseline to combine	結合するには、同じベースライン上にある 1 行のポイント文字オブジェクトを 2 つ以上選択してください
+@msg	Select two or more one-line point type objects to join	連結するには、1 行のポイント文字オブジェクトを 2 つ以上選択してください
+@msg	No line breaks to remove	削除する強制改行がありません
+@msg	No paragraph breaks to remove	削除する段落の区切りがありません
+@msg	Too many breaks to remove at once	一度に削除する改行が多すぎます
+@msg	Select point type	ポイント文字を選択してください
+@msg	The point type is aligned that way already	ポイント文字はすでにその行揃えです
+@msg	The point type has no transform to reset	ポイント文字にリセットする変形がありません
+@msg	No fonts are missing	見つからないフォントはありません
+@msg	the replacement font is not available	置換用のフォントを使用できません
+@msg	missing `align`	`align` がありません
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` は lines、paragraphs、words、glyphs のいずれかにしてください({other} は使用できません)
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` は "line" または "paragraph" にしてください({other} は使用できません)
+@msg	`align` must be "left", "center" or "right", not {other}	`align` は "left"、"center"、"right" のいずれかにしてください({other} は使用できません)
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	パス効果
+	Reverse Direction	方向を反転
+	Align to Corners and Ends	コーナーと先端に整列
+	Count	個数
+	Max Count	最大個数
+	Start Length	始点の長さ
+	Start Percent	始点のパーセント
+	Start Shape	始点の形状
+	End Length	終点の長さ
+	End Percent	終点のパーセント
+	End Shape	終点の形状
+	By Count	個数で指定
+	By Distance	距離で指定
+	Both	両方
+	Shorter Than Length	長さより短いもの
+	Anchors	アンカーポイント
+	Dashes to Geometry	破線をジオメトリに
+	Dashes to Geometry…	破線をジオメトリに…
+	Add Anchors	アンカーポイントを追加
+	Add Anchors…	アンカーポイントを追加…
+	Smooth Anchors	アンカーポイントをスムーズに
+	Smooth Anchors…	アンカーポイントをスムーズに…
+	Simplify Anchors	アンカーポイントを単純化
+	Simplify Anchors…	アンカーポイントを単純化…
+	Split at Anchors	アンカーポイントで分割
+	Split at Anchors…	アンカーポイントで分割…
+	Extend Path…	パスを延長…
+	Close Path…	パスを閉じる…
+	Retract Handles…	ハンドルを収める…
+	Dash 1	線分 1
+	Gap 1	間隔 1
+	Dash 2	線分 2
+	Gap 2	間隔 2
+	Dash 3	線分 3
+	Gap 3	間隔 3
+	Dash 4	線分 4
+	Gap 4	間隔 4
+	Dash 5	線分 5
+	Gap 5	間隔 5
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	配置ツール
+	Arrange in Grid…	グリッドに配置…
+	Arrange in Grid	グリッドに配置
+	Swap Objects	オブジェクトを入れ替え
+	Swap Objects and Sizes	オブジェクトとサイズを入れ替え
+	Replace with Top Object…	最前面のオブジェクトで置き換え…
+	Replace with Top Object	最前面のオブジェクトで置き換え
+	Set Size of Each…	個別にサイズを設定…
+	Set Size of Each	個別にサイズを設定
+@msg	select exactly two objects	オブジェクトをちょうど 2 つ選択してください
+@msg	give `width` or `height`	`width` または `height` を指定してください

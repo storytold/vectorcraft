@@ -21,6 +21,7 @@ pub mod confirm;
 pub mod corners;
 pub mod dimension;
 mod document_setup;
+mod duotone;
 pub mod dxf_import;
 pub mod dxf_options;
 pub mod edit_selection;
@@ -38,7 +39,7 @@ pub mod find_links;
 pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
-mod form;
+pub(crate) mod form;
 pub(crate) mod free_distort;
 pub mod freehand;
 mod gradient_stop;
@@ -386,6 +387,7 @@ registry! {
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
+    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 
@@ -467,9 +469,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
     if let Some(d) = app.ui.dialog.take() {
         // Toolbar-only Flare options start no preview and must not cancel a gesture
-        // that was already active before opening them.
+        // that was already active before opening them. The generic parameter dialog has a spec
+        // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
         let owns_preview = d.kind != flare_options::KIND || d.fields.contains_key(form::PREVIEWED);
-        if spec(&d.kind).preview && owns_preview {
+        if (spec(&d.kind).preview && owns_preview) || d.fields.contains_key(form::PREVIEWED) {
             let _ = app.session.cancel_interaction();
         }
         app.ui.dialog = parent(&d);
@@ -656,7 +659,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
-    if spec.ok.is_some() && ok_enabled && !after_panel && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ok = true;
     }
     if discard {

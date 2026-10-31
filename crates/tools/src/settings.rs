@@ -42,7 +42,7 @@ const ROWS: &[Row] = &[
     (&["blobBrush", "eraser"], None, &["size", "sizeMode", "sizeVariation"]),
     (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
     // Eraser Tool Options' tip shape.
-    (&["eraser"], None, &["angle", "roundness"]),
+    (&["blobBrush", "eraser"], None, &["angle", "roundness"]),
     // Live Paint Selection Tool Options (`builder::LivePaintSelectionTool`).
     (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
     (&["polygon"], None, &["sides"]),
@@ -69,6 +69,11 @@ const ROWS: &[Row] = &[
     // The add-ons' tools (`crate::addons`).
     (&[crate::addons::anchor_eraser::ID], None, &["size", "tolerance", "pressure"]),
     (&[crate::addons::extend_path::ID], None, &["mode"]),
+    (&[crate::addons::corner_tool::ID], None, &["radius", "kind"]),
+    (&[crate::addons::shared_edge::ID], None, &["diameter", "tolerance", "together"]),
+    (&[crate::addons::smart_pen::ID], None, &["next"]),
+    // The kind first: a new kind resets the values after it.
+    (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),
     // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
     (
         &["flare"],

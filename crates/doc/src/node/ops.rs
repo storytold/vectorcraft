@@ -683,8 +683,8 @@ impl Node {
 
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
-    /// stroke opacity below 100%, a blend mode, an opacity mask, effects or transparent gradient
-    /// stops. Hidden objects show none.
+    /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
+    /// stops or a colorized image. Hidden objects show none.
     pub fn shows_transparency(&self) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
@@ -693,6 +693,7 @@ impl Node {
             && (self.opacity < 1.0
                 || self.blend != BlendMode::Normal
                 || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some())
                 || effects(&self.appearance.effects)
                 || self
                     .appearance

@@ -35,6 +35,15 @@ pub struct MeshQuad {
     pub corners: [(Color, f32); 4],
 }
 
+/// One flat-coloured piece of a mesh ([`GradientMesh::pieces`]): a closed outline through
+/// tessellation points, its colour and opacity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeshPiece {
+    pub pts: Vec<Point>,
+    pub color: Color,
+    pub opacity: f32,
+}
+
 /// Create Gradient Mesh → Appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MeshAppearance {
@@ -170,11 +179,22 @@ pub(super) fn grid_len(rows: u32, cols: u32) -> Option<usize> {
 }
 
 impl GradientMesh {
+    /// The most quads one tessellation ([`Self::quads`]) makes, and so the most patches a mesh can
+    /// have: about 170 bytes a quad, so about 170 MB. A file's mesh can have any number of patches
+    /// and the view any zoom; the subdivision per patch gives way before memory does, and a mesh
+    /// with more patches than that is malformed, like a point count that doesn't fit (#3592).
+    pub const MAX_QUADS: usize = 1 << 20;
+
     pub fn idx(&self, r: usize, c: usize) -> usize {
         r * (self.cols as usize + 1) + c
     }
     pub fn is_valid(&self) -> bool {
-        self.rows >= 1 && self.cols >= 1 && grid_len(self.rows, self.cols) == Some(self.points.len())
+        self.rows >= 1 && self.cols >= 1 && grid_len(self.rows, self.cols) == Some(self.points.len()) && self.patches() <= Self::MAX_QUADS
+    }
+
+    /// The number of patches (rows times columns), saturating.
+    fn patches(&self) -> usize {
+        (self.rows as usize).saturating_mul(self.cols as usize)
     }
 
     /// A 1×1 mesh from its four corners (bottom-left, top-left, top-right, bottom-right in u/v
@@ -347,13 +367,20 @@ impl GradientMesh {
         (Color::rgb(rgb[0], rgb[1], rgb[2]), op)
     }
 
-    /// Tessellate into `n`×`n` quads per patch, each coloured at its centre and its corners.
+    /// The quads per patch side [`Self::quads`] cuts at when `n` is asked: 1 to 64, and coarser
+    /// where the patches at `n` would pass [`Self::MAX_QUADS`] (a quad per patch is the least).
+    fn subdivision(&self, n: usize) -> usize {
+        n.clamp(1, 64).min(((Self::MAX_QUADS / self.patches().max(1)) as f64).sqrt() as usize).max(1)
+    }
+
+    /// Tessellate into `n`×`n` quads per patch ([`Self::subdivision`]), each coloured at its centre
+    /// and its corners.
     pub fn quads(&self, n: usize) -> Vec<MeshQuad> {
         if !self.is_valid() {
             return vec![];
         }
-        let n = n.clamp(1, 64);
-        let mut out = Vec::with_capacity(self.rows as usize * self.cols as usize * n * n);
+        let n = self.subdivision(n);
+        let mut out = Vec::with_capacity(self.patches() * n * n);
         let mut grid = vec![Point::ZERO; (n + 1) * (n + 1)];
         let mut colors = vec![(Color::default(), 0.0f32); (n + 1) * (n + 1)];
         for r in 0..self.rows as usize {
@@ -381,6 +408,105 @@ impl GradientMesh {
             }
         }
         out
+    }
+
+    /// Flat-coloured pieces covering the mesh, for outputs that can't shade a mesh smoothly (SVG,
+    /// Expand): each patch cut into `n`×`n` quads as by [`Self::quads`], then neighbouring quads
+    /// joined into square blocks as large as keeps the colour across each block within about one
+    /// 8-bit step. A patch of one colour is one piece; a patch whose colour changes a lot keeps
+    /// all its quads. A piece's outline runs through its quads' outer corners, so it covers what
+    /// they covered, and it takes the colour at its centre.
+    pub fn pieces(&self, n: usize) -> Vec<MeshPiece> {
+        let n = self.subdivision(n);
+        let quads = self.quads(n);
+        let cols = (self.cols as usize).max(1);
+        let mut out = Vec::with_capacity(quads.len());
+        for (k, patch) in quads.chunks_exact(n * n).enumerate() {
+            let (r, c) = (k / cols, k % cols);
+            let side = self.block_side(r, c, n, patch);
+            if side == 1 {
+                out.extend(patch.iter().map(|q| MeshPiece { pts: q.pts.to_vec(), color: q.color, opacity: q.opacity }));
+                continue;
+            }
+            // Tessellation point (i, j) of the patch (0..=n each), from a quad it is a corner of.
+            let at = |i: usize, j: usize| -> Option<Point> {
+                let (qi, qj) = (i.min(n - 1), j.min(n - 1));
+                let q = patch.get(qj * n + qi)?;
+                q.pts
+                    .get(match (i > qi, j > qj) {
+                        (false, false) => 0,
+                        (true, false) => 1,
+                        (true, true) => 2,
+                        (false, true) => 3,
+                    })
+                    .copied()
+            };
+            for j0 in (0..n).step_by(side) {
+                for i0 in (0..n).step_by(side) {
+                    let (i1, j1) = (i0 + side, j0 + side);
+                    // Around the block, in the quads' order: along its top, down its right side,
+                    // back along its bottom and up its left side.
+                    let ring = (i0..i1)
+                        .map(|i| (i, j0))
+                        .chain((j0..j1).map(|j| (i1, j)))
+                        .chain((i0 + 1..=i1).rev().map(|i| (i, j1)))
+                        .chain((j0 + 1..=j1).rev().map(|j| (i0, j)));
+                    let Some(pts) = ring.map(|(i, j)| at(i, j)).collect::<Option<Vec<Point>>>() else { continue };
+                    let half = side as f64 / 2.0;
+                    let (color, opacity) = self.color_at(r, c, (i0 as f64 + half) / n as f64, (j0 as f64 + half) / n as f64);
+                    out.push(MeshPiece { pts, color, opacity });
+                }
+            }
+        }
+        out
+    }
+
+    /// The side, in quads, of the blocks [`Self::pieces`] joins patch (r, c) into, cut into
+    /// `n`×`n` `quads`: the largest divisor of `n` that keeps the colour changing by at most one
+    /// 8-bit step across a block. 1 (no joining) where the patch folds over itself, as the outline
+    /// of a block across the fold wouldn't fill it as its quads do.
+    fn block_side(&self, r: usize, c: usize, n: usize, quads: &[MeshQuad]) -> usize {
+        let corner = |dr: usize, dc: usize| self.points.get(self.idx(r + dr, c + dc));
+        let (Some(p00), Some(p01), Some(p10), Some(p11)) = (corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)) else {
+            return 1;
+        };
+        // Corners all in CMYK mix in their inks ([`Self::color_at`]); the RGB they show is checked too.
+        let inks = [p00, p01, p10, p11].iter().all(|p| matches!(p.color, Color::Cmyk { .. }));
+        let channels = |p: &MeshPoint| -> Vec<f32> {
+            let mut v = p.color.to_rgb().to_vec();
+            if inks && let Color::Cmyk { c, m, y, k } = p.color {
+                v.extend([c, m, y, k]);
+            }
+            v.push(p.opacity);
+            v
+        };
+        let [a, b, cc, d] = [p00, p01, p10, p11].map(channels);
+        // A bilinear patch changes across a block of side h (0..1 of the patch) by at most
+        // h × (du + dv) in each channel, du and dv its largest change along each parameter.
+        let mut steps = 0.0f32;
+        for k in 0..a.len() {
+            let ch = |v: &[f32]| v.get(k).copied().unwrap_or_default();
+            let du = (ch(&a) - ch(&b)).abs().max((ch(&cc) - ch(&d)).abs());
+            let dv = (ch(&a) - ch(&cc)).abs().max((ch(&b) - ch(&d)).abs());
+            steps = steps.max((du + dv) * 255.0);
+        }
+        if !steps.is_finite() {
+            return 1;
+        }
+        let side = (1..=n).rev().find(|&s| n.is_multiple_of(s) && (n / s) as f32 >= steps).unwrap_or(1);
+        if side > 1 {
+            // Every quad turning the same way: the patch doesn't fold, so a block's outline
+            // encloses just what its quads cover.
+            let turn = |q: &MeshQuad| {
+                let [a, b, c, d] = q.pts;
+                (b - a).cross(c - a) + (c - a).cross(d - a)
+            };
+            let first = quads.first().map(turn).unwrap_or_default();
+            if !quads.iter().all(|q| turn(q) * first > 0.0) {
+                return 1;
+            }
+        }
+        side
     }
 
     /// The mesh's outer boundary as a closed path.

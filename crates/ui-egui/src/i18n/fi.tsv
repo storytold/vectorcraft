@@ -1187,12 +1187,12 @@ lighting	Light	Valo
 	 to set spacing and orientation	 asettaaksesi välit ja suunnan
 	Apply	Käytä
 	Change Screen Mode (F)	Vaihda näyttötilaa (F)
-	Color (,)	Väri (,)
+	Color (, or Shift+,)	Väri (, tai Shift+,)
 	Draw Behind	Piirrä taakse
 	Draw Inside	Piirrä sisään
 	Draw Normal	Piirrä normaalisti
 	Expand:	Laajenna:
-	Gradient (.)	Liukuväri (.)
+	Gradient (. or Shift+.)	Liukuväri (. tai Shift+.)
 	H:	K:
 	Modify	Muokkaa
 	Navigate	Siirry
@@ -1567,6 +1567,7 @@ lighting	Light	Valo
 	Delete Guides	Poista apuviivat
 	Delete Slice	Poista siivu
 	Delete Style	Poista tyyli
+	Delete Styles	Poista tyylit
 	Delete Variables	Poista muuttujat
 	Delete View	Poista näkymä
 	Done Editing Pattern	Lopeta kuvion muokkaus
@@ -1905,7 +1906,6 @@ lighting	Light	Valo
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
-	Delete these {count} swatches and groups?	Poistetaanko nämä {count} värimallia ja ryhmää?
 	Delete “{name}”?	Poistetaanko ”{name}”?
 	Document Swatches	Asiakirjan värimallit
 	Edit or Apply Color Group	Muokkaa tai käytä väriryhmää
@@ -2213,6 +2213,13 @@ lighting	Light	Valo
 	Use Artboards	Käytä piirtoalustoja
 	Choose a folder	Valitse kansio
 	Create Sub-folders	Luo alikansiot
+	Clear Selection	Tyhjennä valinta
+	Export PDFs As:	Vie PDF-tiedostot muodossa:
+	Single File	Yksi tiedosto
+	Multiple Files	Useita tiedostoja
+	Format Presets	Muotoesiasetukset
+	Grid View	Ruudukkonäkymä
+	Selected: {n}, Total number of files to export: {m}	Valittu: {n}, vietävien tiedostojen määrä yhteensä: {m}
 	Export Asset	Vie resurssi
 	Export to:	Vie kohteeseen:
 	Format Settings	Muotoasetukset
@@ -4039,6 +4046,7 @@ imageTrace	Outline	Ääriviiva
 @plural	{n} item|{n} items	{n} kohde|{n} kohdetta
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Väritaulukko ({n} väri)|Väritaulukko ({n} väriä)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Poistetaanko tämä {n} grafiikkatyyli?|Poistetaanko nämä {n} grafiikkatyyliä?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Poistetaanko tämä {n} värimalli tai ryhmä?|Poistetaanko nämä {n} värimallia ja ryhmää?
 @plural	{n} Layer|{n} Layers	{n} taso|{n} tasoa
 @plural	{n} Object|{n} Objects	{n} objekti|{n} objektia
 @plural	{n} area highlighted|{n} areas highlighted	{n} alue korostettu|{n} aluetta korostettu
@@ -4283,6 +4291,7 @@ imageTrace	Outline	Ääriviiva
 @msg	cannot split an open path at its end point	avointa polkua ei voi jakaa sen päätepisteestä
 @msg	closing needs three anchors	sulkeminen vaatii kolme ankkuria
 @msg	check an asset to export	valitse vietävä resurssi
+@msg	check an artboard to export	valitse vietävä piirtoalue
 @msg	check a layer to export	valitse vietävä taso
 @msg	select the art to export first	valitse ensin vietävä kuvitus
 @msg	choice must be "merge" or "add", not `{choice}`	choice-arvon on oltava "merge" tai "add", ei `{choice}`
@@ -4372,6 +4381,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no document	ei asiakirjaa
 @msg	no document open	asiakirjaa ei ole auki
 @msg	no effect applied yet	tehostetta ei ole vielä käytetty
+@msg	no Pathfinder operation applied yet	polunetsimen toimintoa ei ole vielä käytetty
 @msg	no effect at index {k}	ei tehostetta indeksissä {k}
 @msg	no end record	ei loppumerkintää
 @msg	no file manager here	täällä ei ole tiedostonhallintaa
@@ -4424,6 +4434,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no such perspective grid preset	perspektiiviruudukon esiasetusta ei ole
 @msg	no such recent file	viimeisintä tiedostoa ei ole
 @msg	no such recent font	viimeisintä fonttia ei ole
+@msg	some text is hidden or locked, so its font wasn't replaced	osa tekstistä on piilotettu tai lukittu, joten sen fonttia ei korvattu
 @msg	no such saved selection	tallennettua valintaa ei ole
 @msg	no such segment	segmenttiä ei ole
 @msg	no such spine point	selkärangan pistettä ei ole
@@ -5828,3 +5839,207 @@ anchor	Points:	Pisteet:
 @msg	select open paths to close	valitse suljettavat avoimet polut
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	liian monta tai liian sotkuista polkua niiden risteyskohtien löytämiseen (enintään 10000 osaa)
 @msg	the paths have too many anchors to edit at once	poluissa on liian monta ankkuripistettä muokattavaksi kerralla
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrinen muoto -työkalu
+	Parametric Shape	Parametrinen muoto
+	Edit Parametric Shape	Muokkaa parametrista muotoa
+	Convert to Parametric Shape	Muunna parametriseksi muodoksi
+	Ring	Rengas
+	Heart	Sydän
+	Gear	Hammaspyörä
+	Speech Bubble	Puhekupla
+	Count:	Määrä:
+	Thickness:	Paksuus:
+	Inner Radius:	Sisäsäde:
+	Head:	Kärki:
+	Shaft:	Varsi:
+	Point:	Kärki:
+	Tooth Height:	Hampaan korkeus:
+	Tail:	Häntä:
+	Tip:	Kärki:
+	Open a document to draw parametric shapes.	Avaa asiakirja piirtääksesi parametrisia muotoja.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Valitse parametrinen muoto muokataksesi sitä. Ilman valintaa nämä arvot koskevat seuraavaa muotoa.
+@msg	the object is not an editable parametric shape	objekti ei ole muokattava parametrinen muoto
+@msg	select plain rectangles, ellipses or regular polygons to convert	valitse muunnettavat tavalliset suorakulmiot, ellipsit tai säännölliset monikulmiot
+@msg	the shape's numbers are out of range	muodon arvot ovat sallitun alueen ulkopuolella
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` on oltava jokin seuraavista: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` on oltava kokonaisluku 3–1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` on oltava {lo}–{hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Älykynä
+	Smart Pen Tool	Älykynätyökalu
+	Smart Pen Panel	Älykynäpaneeli
+	Next Segment	Seuraava segmentti
+	Curved	Kaareva
+	Retract Handles	Vedä kahvat sisään
+	Close or Join	Sulje tai liitä
+	Open a document to draw with the Smart Pen.	Avaa asiakirja piirtääksesi älykynällä.
+	Straight or Curved Segment	Suora tai kaareva segmentti
+@msg	the path is locked or hidden	polku on lukittu tai piilotettu
+@msg	`id` is not a path	`id` ei ole polku
+@msg	the path has no open subpath	polulla ei ole avointa alipolkua
+@msg	the subpath is closed	alipolku on suljettu
+@msg	the subpath is closed or too short to close	alipolku on suljettu tai liian lyhyt suljettavaksi
+@msg	the path is too short to remove a point from	polku on liian lyhyt pisteen poistamiseen
+@msg	the segment can't be bent that far	segmenttiä ei voi taivuttaa niin paljon
+@msg	give `{a}` and `{b}`	anna `{a}` ja `{b}`
+@msg	`t` must be from 0 to 1	`t` on oltava 0–1
+@msg	`segment` must be "straight" or "curved"	`segment` on oltava "straight" tai "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` on oltava "free", "keepAngles" tai "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` on oltava [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Valitse värityypin mukaan
+	Objects with Spot Colors	Objektit, joissa on spottivärejä
+	Objects with Color Effects	Objektit, joissa on väritehosteita
+	RGB Images	RGB-kuvat
+	CMYK Images	CMYK-kuvat
+	Grayscale Images	Harmaasävykuvat
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` on oltava spotColors, colorEffects, rgbImages, cmykImages tai grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Pisteiden väri kuvituksesta
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duotone…
+	Duotone	Duotone
+	Print Ink Fixes…	Painovärien korjaukset…
+	Print Ink Fixes	Painovärien korjaukset
+	Inks	Painovärit
+	Tone 1	Sävy 1
+	Tone 2	Sävy 2
+	Tone 3	Sävy 3
+	Tone 4	Sävy 4
+	Curve	Käyrä
+	Reset to Linear	Palauta lineaariseksi
+	Reset to Inverse	Palauta käänteiseksi
+	Skip Objects with Spot Colors	Ohita objektit, joissa on spottivärejä
+	Ink Limit	Värirajoitus
+	Exclude Pure Black	Jätä puhdas musta pois
+	Remove White Overprint	Poista valkoisen päällepainatus
+	Overprint Black	Päällepainata musta
+	Text Only	Vain teksti
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	anna `inkLimit`, `removeWhiteOverprint` tai `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Painovärien korjaukset toimivat CMYK-asiakirjoissa: valitse ensin Tiedosto › Asiakirjan väritila › CMYK-väri
+@msg	`{key}` must be 0..{max}	`{key}` on oltava 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Kulmatyökalu
+	Slide Anchor Along Path	Liu’uta ankkuripistettä polkua pitkin
+	Set Corners	Aseta kulmat
+	Remove Corners	Poista kulmat
+	Corners selected: {count}	Valittuja kulmia: {count}
+	Apply to Selected Anchors	Käytä valittuihin ankkuripisteisiin
+@msg	`radius` must be from 0 to 1000000 pt	`radius` on oltava 0–1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` on oltava luku väliltä -0.98–0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	valitse ankkuripisteet, joissa kaksi sivua kohtaa kulmassa: vain niihin voi tehdä kulman
+@msg	give `anchor`, the index of the anchor to slide	anna `anchor`, liu’utettavan ankkuripisteen indeksi
+@msg	that anchor can't slide: an end of an open path has nowhere to go	tätä ankkuripistettä ei voi liu’uttaa: avoimen polun päällä ei ole minne mennä
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Yhteisen reunan yhdistämistyökalu
+	Merge Shared Edge	Yhdistä yhteinen reuna
+	Keep Shared Points Together	Pidä yhteiset pisteet yhdessä
+	Shared Edges	Yhteiset reunat
+	Coincidence:	Yhtenevyys:
+@msg	`a` and `b` must be two different paths	`a` ja `b` on oltava kaksi eri polkua
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` on oltava 0.25–200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` on oltava 0–3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` on oltava "average", "a" tai "b"
+@msg	the paths have nothing to merge there	poluilla ei ole tässä mitään yhdistettävää
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Jaa teksti
+	Combine Point Text	Yhdistä pisteteksti
+	Join Point Text	Liitä pisteteksti
+	Remove Breaks	Poista vaihdot
+	Split Text at Cursor	Jaa teksti kohdistimen kohdalta
+	Set Alignment, Keep Position	Aseta tasaus, säilytä sijainti
+	Reset Text Transform	Palauta tekstin muunnos
+	Replace Missing Fonts…	Korvaa puuttuvat fontit…
+	Replace Missing Fonts	Korvaa puuttuvat fontit
+	Remove Line Breaks	Poista rivinvaihdot
+	Remove Paragraph Breaks	Poista kappaleenvaihdot
+	Break Text into Lines	Jaa teksti riveiksi
+	Break Text into Paragraphs	Jaa teksti kappaleiksi
+	Break Text into Words	Jaa teksti sanoiksi
+	Break Text into Glyphs	Jaa teksti merkeiksi
+	Reset Text Transform and Scale	Palauta tekstin muunnos ja skaalaus
+	Set Alignment, Keep Position:	Aseta tasaus, säilytä sijainti:
+	Break Text into:	Jaa teksti:
+	Split at Cursor	Jaa kohdistimen kohdalta
+	Reset Transform	Palauta muunnos
+	Shift-click: break into paragraphs	Vaihto-napsautus: jaa kappaleiksi
+	Alt-click: reset the horizontal scale too	Alt-napsautus: palauta myös vaakaskaalaus
+breakText	Lines	Rivit
+breakText	Words	Sanat
+breakText	Glyphs	Merkit
+@msg	Click in type with a Type tool to split it	Napsauta tekstiä tekstityökalulla jakaaksesi sen
+@msg	Too many type objects to change at once	Liian monta tekstiobjektia muutettavaksi kerralla
+@msg	Too many pieces to make at once	Liian monta osaa luotavaksi kerralla
+@msg	Select horizontal point or area type whose text fits	Valitse vaakasuora piste- tai alueteksti, jonka teksti mahtuu
+@msg	Nothing to split at the cursor	Kohdistimen kohdalla ei ole jaettavaa
+@msg	Select two or more one-line point type objects on one baseline to combine	Valitse kaksi tai useampia yksirivisiä pistetekstiobjekteja samalla perusviivalla yhdistääksesi ne
+@msg	Select two or more one-line point type objects to join	Valitse kaksi tai useampia yksirivisiä pistetekstiobjekteja liittääksesi ne
+@msg	No line breaks to remove	Ei poistettavia rivinvaihtoja
+@msg	No paragraph breaks to remove	Ei poistettavia kappaleenvaihtoja
+@msg	Too many breaks to remove at once	Liian monta vaihtoa poistettavaksi kerralla
+@msg	Select point type	Valitse pisteteksti
+@msg	The point type is aligned that way already	Pisteteksti on jo tasattu näin
+@msg	The point type has no transform to reset	Pistetekstillä ei ole palautettavaa muunnosta
+@msg	No fonts are missing	Fontteja ei puutu
+@msg	the replacement font is not available	korvaava fontti ei ole käytettävissä
+@msg	missing `align`	`align` puuttuu
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` on oltava lines, paragraphs, words tai glyphs, ei {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` on oltava "line" tai "paragraph", ei {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` on oltava "left", "center" tai "right", ei {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Polkutehosteet
+	Reverse Direction	Käännä suunta
+	Align to Corners and Ends	Tasaa kulmiin ja päihin
+	Count	Määrä
+	Max Count	Enimmäismäärä
+	Start Length	Alun pituus
+	Start Percent	Alun prosentti
+	Start Shape	Alun muoto
+	End Length	Lopun pituus
+	End Percent	Lopun prosentti
+	End Shape	Lopun muoto
+	By Count	Määrän mukaan
+	By Distance	Etäisyyden mukaan
+	Both	Molemmat
+	Shorter Than Length	Pituutta lyhyemmät
+	Dashes to Geometry	Katkoviivat geometriaksi
+	Dashes to Geometry…	Katkoviivat geometriaksi…
+	Add Anchors	Lisää ankkuripisteitä
+	Add Anchors…	Lisää ankkuripisteitä…
+	Smooth Anchors	Pyöristä ankkuripisteet
+	Smooth Anchors…	Pyöristä ankkuripisteet…
+	Simplify Anchors	Yksinkertaista ankkuripisteet
+	Simplify Anchors…	Yksinkertaista ankkuripisteet…
+	Split at Anchors	Jaa ankkuripisteistä
+	Split at Anchors…	Jaa ankkuripisteistä…
+	Extend Path…	Jatka polkua…
+	Close Path…	Sulje polku…
+	Retract Handles…	Vedä kahvat sisään…
+	Dash 1	Viiva 1
+	Gap 1	Väli 1
+	Dash 2	Viiva 2
+	Gap 2	Väli 2
+	Dash 3	Viiva 3
+	Gap 3	Väli 3
+	Dash 4	Viiva 4
+	Gap 4	Väli 4
+	Dash 5	Viiva 5
+	Gap 5	Väli 5
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Järjestelytyökalut
+	Arrange in Grid…	Järjestä ruudukkoon…
+	Arrange in Grid	Järjestä ruudukkoon
+	Swap Objects	Vaihda objektien paikat
+	Swap Objects and Sizes	Vaihda objektien paikat ja koot
+	Replace with Top Object…	Korvaa ylimmällä objektilla…
+	Replace with Top Object	Korvaa ylimmällä objektilla
+	Set Size of Each…	Aseta kunkin koko…
+	Set Size of Each	Aseta kunkin koko
+@msg	select exactly two objects	valitse täsmälleen kaksi objektia
+@msg	give `width` or `height`	anna `width` tai `height`

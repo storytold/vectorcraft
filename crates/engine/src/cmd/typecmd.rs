@@ -123,7 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -805,6 +805,8 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
+    // The fonts the styled characters are set in, for the warning.
+    let mut set = std::collections::BTreeSet::new();
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -845,6 +847,17 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
             });
             if let Some(before) = before {
                 super::textedit::protect_missing_glyphs(&before, &mut t.runs);
+            }
+            if font.is_some() || style.is_some() {
+                // All the text: every run, the one run of empty text included.
+                let styled = match range {
+                    None => t.runs.clone(),
+                    Some(r) => {
+                        let (a, b) = r.bytes(t);
+                        vectorcraft_text::edit::slice_runs(&t.runs, a, b)
+                    }
+                };
+                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
@@ -888,7 +901,11 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
+    let mut out = with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
+    if let Some(w) = super::fonts::set_font_warning(set) {
+        out["warning"] = json!(w);
+    }
+    Ok(out)
 }
 
 /// Reshape area type's frame with `f` ([`TextObject::transform_area`],

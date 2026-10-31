@@ -68,8 +68,8 @@ fn plural_french(n: u64) -> usize {
     usize::from(n > 1)
 }
 
-/// Russian and Ukrainian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
-/// `few`, everything else `many`.
+/// Russian, Ukrainian and Bosnian integer counts: 1 (but not 11) is `one`, 2–4 (but not 12–14)
+/// `few`, everything else `many` (Bosnian `other`).
 fn plural_east_slavic(n: u64) -> usize {
     match n % 100 {
         11..=14 => 2,
@@ -94,7 +94,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 26] = [
+pub static LANGUAGES: [LangInfo; 27] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
@@ -134,6 +134,16 @@ pub static LANGUAGES: [LangInfo; 26] = [
         name: "Čeština",
         source: include_str!("i18n/cs.tsv"),
         plural: plural_czech,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
+    // Bosnian (Latin script, Ijekavian): the whole interface and the status and error messages, with
+    // one/few/other plurals (the Russian rule for whole counts); every `bs-*` locale resolves here.
+    LangInfo {
+        code: "bs",
+        name: "Bosanski",
+        source: include_str!("i18n/bs.tsv"),
+        plural: plural_east_slavic,
         complete_menus: true,
         catalog: OnceLock::new(),
     },

@@ -63,7 +63,7 @@ pub use expand::{
 };
 #[cfg(test)]
 use mesh::grid_eval;
-pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
+pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
 pub use warp::{WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, warp_point};
 
 #[cfg(test)]
@@ -179,6 +179,44 @@ mod tests {
         let pts = grid_points(r, 3, 4);
         let p = grid_eval(3, 4, &pts, 0.37, 0.81);
         assert!((p.x - 37.0).abs() < 1e-6 && (p.y - 81.0).abs() < 1e-6, "{p:?}");
+    }
+
+    /// #3592: a mesh read from a file can have any number of patches, and the view any zoom, so the
+    /// quads one tessellation makes are budgeted: the subdivision per patch gives way before memory
+    /// does, and each patch stays at least one quad.
+    #[test]
+    fn a_large_mesh_tessellates_within_the_quad_budget() {
+        let mesh = |n: u32| GradientMesh::from_surface(n, n, &|u, v| Point::new(u * 300.0, v * 300.0), &|u, v| Color::rgb(u as f32, v as f32, 0.5));
+        // 3,600 patches at 32 x 32 would be 3.7 million quads.
+        let m = mesh(60);
+        let quads = m.quads(32);
+        assert!(quads.len() <= GradientMesh::MAX_QUADS, "{} quads", quads.len());
+        assert!(quads.len() >= 3600 * 4, "still finer than a quad per patch: {}", quads.len());
+        // A small mesh keeps the subdivision asked for.
+        assert_eq!(mesh(3).quads(8).len(), 9 * 64);
+        // The finest the view asks for, on a mesh of 22,500 patches, is a few quads per patch.
+        let big = mesh(150).quads(64);
+        assert!(big.len() <= GradientMesh::MAX_QUADS && big.len() >= 22_500, "{} quads", big.len());
+        // More patches than the budget has quads is malformed, as a point count that doesn't fit is.
+        let point = MeshPoint { p: Point::ZERO, color: Color::rgb(0.0, 0.0, 0.0), opacity: 1.0, handles: [Vec2::ZERO; 4] };
+        let huge = GradientMesh { rows: 2000, cols: 2000, points: vec![point; 2001 * 2001] };
+        assert!(!huge.is_valid());
+        assert!(huge.quads(1).is_empty());
+    }
+
+    /// Flat pieces of a mesh over the quad budget follow the coarser subdivision [`GradientMesh::quads`]
+    /// gives way to: each patch's pieces are its own quads', so together they cover the mesh once.
+    #[test]
+    fn a_large_meshs_pieces_follow_the_quad_budget() {
+        let m = GradientMesh::from_surface(60, 60, &|u, v| Point::new(u * 300.0, v * 300.0), &|u, v| Color::rgb(u as f32, v as f32, 0.5));
+        let area = |pts: &[Point]| {
+            let n = pts.len();
+            (0..n).map(|i| pts[i].x * pts[(i + 1) % n].y - pts[(i + 1) % n].x * pts[i].y).sum::<f64>().abs() / 2.0
+        };
+        let pieces = m.pieces(32);
+        assert!(pieces.len() >= 3600, "{} pieces", pieces.len());
+        let total: f64 = pieces.iter().map(|p| area(&p.pts)).sum();
+        assert!((total - 90_000.0).abs() < 90.0, "covered {total}");
     }
 
     /// A file's rows and columns can be anything: a point count too large to compute is no match

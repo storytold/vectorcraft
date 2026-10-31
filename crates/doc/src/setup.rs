@@ -107,14 +107,17 @@ impl Quotes {
     /// Single-quote pairs offered by Document Setup.
     pub const SINGLE_CHOICES: &[[char; 2]] = &[['‘', '’'], ['‚', '‘'], ['‚', '’'], ['’', '’'], ['‹', '›'], ['›', '‹'], ['『', '』'], ['\'', '\'']];
 
-    /// Is `c` one of these opening quotes?
+    /// Is `c` one of these opening quotes? A typographic glyph that is also a closing quote does not
+    /// count; a straight quote has no direction, so it still opens.
     fn is_open(&self, c: char) -> bool {
-        c == self.double[0] || c == self.single[0]
+        (c == self.double[0] || c == self.single[0]) && (c.is_ascii() || (c != self.double[1] && c != self.single[1]))
     }
 
     /// A quote opens after nothing, whitespace, an opening bracket, a dash or another opening quote.
-    fn opens(&self, prev: Option<char>) -> bool {
-        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || self.is_open(p))
+    /// `quote_opened` says whether `prev` is a quote this conversion just produced, and if so whether
+    /// it opened; that settles glyphs which serve as both opening and closing quote.
+    fn opens(&self, prev: Option<char>, quote_opened: Option<bool>) -> bool {
+        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || quote_opened.unwrap_or_else(|| self.is_open(p)))
     }
 
     /// `text` with straight quotes (`"` and `'`) replaced by these quotes: opening or closing by
@@ -122,11 +125,16 @@ impl Quotes {
     /// and is updated to its last character, so text can be converted in pieces.
     pub fn apply(&self, text: &str, prev: &mut Option<char>) -> String {
         let mut out = String::with_capacity(text.len());
+        let mut quote_opened = None;
         for c in text.chars() {
-            let r = match c {
-                '"' => self.double[usize::from(!self.opens(*prev))],
-                '\'' => self.single[usize::from(!self.opens(*prev))],
-                c => c,
+            quote_opened = match c {
+                '"' | '\'' => Some(self.opens(*prev, quote_opened)),
+                _ => None,
+            };
+            let r = match (c, quote_opened) {
+                ('"', Some(open)) => self.double[usize::from(!open)],
+                ('\'', Some(open)) => self.single[usize::from(!open)],
+                (c, _) => c,
             };
             out.push(r);
             *prev = Some(r);
@@ -324,6 +332,18 @@ mod tests {
         let a = Quotes::ENGLISH.apply("\"", &mut prev);
         let b = Quotes::ENGLISH.apply("\"", &mut prev);
         assert_eq!((a.as_str(), b.as_str()), ("“", "“"));
+    }
+
+    #[test]
+    fn closing_quote_equal_to_other_kinds_opening_quote_still_closes() {
+        let q = Quotes { double: ['”', '”'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘”a”’");
+        let q = Quotes { double: ['"', '"'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘\"a\"’");
+        let mut prev = None;
+        assert_eq!(q.apply("\"'a'\"", &mut prev), "\"‘a’\"");
     }
 
     #[test]

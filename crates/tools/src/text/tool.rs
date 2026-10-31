@@ -175,7 +175,7 @@ impl Tool for TypeTool {
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if let Some(out) = self.step_attribute(key, mods, a, b) {
+        if let Some(out) = self.step_attribute(key, mods, a, b, t.vertical) {
             return out;
         }
         let word = mods.cmd || mods.alt;

@@ -1147,8 +1147,9 @@ fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
 }
 
 /// Libraries panel library file `data` imported, then each kind's first item used on the rich
-/// document, moved into its first group and next to its kind's last item, the group moved and
-/// deleted and the library exported (#926).
+/// document, moved into its first group and next to its kind's last item, a colour and the
+/// selection added into that group next to the first ones, the group moved and deleted and the
+/// library exported (#926).
 fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "library.import", data, |s, r| {
         let lib = r["id"].clone();
@@ -1173,6 +1174,11 @@ fn libraries(what: &str, data: &str) -> Result<(), TestCaseError> {
                 }
             }
         }
+        // Added where the panel drops it: into the first group, next to the first colour and graphic.
+        let group = &got["groups"][0]["name"];
+        let to = json!({"library": lib, "kind": "fillColor", "color": "#123456", "group": group, "after": got["colors"][0]["name"]});
+        let _ = no_panic(s.execute("library.add", &to));
+        let _ = no_panic(s.execute("library.add", &json!({"library": lib, "kind": "graphic", "group": group, "before": got["graphics"][0]["id"]})));
         if let Some(g) = got["groups"].get(0) {
             for to in [0, 1, 1_000_000] {
                 let _ = no_panic(s.execute("library.moveGroup", &json!({"library": lib, "group": g["name"], "to": to})));

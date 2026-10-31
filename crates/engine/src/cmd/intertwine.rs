@@ -26,7 +26,7 @@ use vectorcraft_tools::intertwine::{Face, drawn_order, face_at, faces, faces_in,
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, checked_ids_param, cmd, has_selection, point_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, checked_ids_param, cmd, has_doc, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{id?: Intertwine group (default: the selected one), at?: [x,y] (the overlap area under this point, as a click picks it) | area?: [[x,y]…] (a closed polygon drawn around overlap areas: every area whose inside it encloses), order?: toggle|front|back (toggle: the object drawn right below the top comes to the front, so two objects swap), member?: id (front and back: the object to move; default: front brings the object right below the top, back sends the top one)} → {count: areas changed, top: [id of the object now on top in each area]}",
-            has_intertwine,
+            has_doc,
             arrange
         ),
     ]

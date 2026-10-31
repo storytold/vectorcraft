@@ -33,6 +33,7 @@ mod fonts;
 pub(crate) mod freeform;
 pub mod globaledit;
 pub(crate) mod gradient;
+pub mod gradpresets;
 pub(crate) mod graph;
 mod halftone;
 pub mod help;
@@ -244,6 +245,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(style::specs());
         v.extend(swatch::specs());
         v.extend(gradient::specs());
+        v.extend(gradpresets::specs());
         v.extend(opacitymask::specs());
         v.extend(layer::specs());
         v.extend(layerpanel::specs());
@@ -612,6 +614,9 @@ pub use flatten::FlattenOptions;
 
 /// A built-in or saved flattener preset ([`crate::Prefs::flattener_presets`]).
 pub use flatten::FlattenerPreset;
+
+/// A saved Gradient panel preset ([`crate::Prefs::gradient_presets`]) and a row of the Presets list.
+pub use gradpresets::{GradientPreset, GradientPresetEntry};
 
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]), and a change to the saved presets.
 pub use buildcmds::{TracePreset, TracePresetChange};

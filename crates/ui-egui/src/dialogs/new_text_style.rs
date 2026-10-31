@@ -48,13 +48,18 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// OK: make the style with the name. A name another style has, or an empty one, keeps the dialog
-/// open.
+/// open. The panel highlights the new style and scrolls it into view when it next draws.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__target").filter(|t| t.is_object()).cloned().unwrap_or_else(|| json!({}));
     params["name"] = json!(d.str("name"));
     let r = app.run(if para(d) { "paraStyle.new" } else { "charStyle.new" }, params);
-    if r.is_ok() {
+    if let Ok(v) = &r {
         app.ui.dialog = None;
+        if let Some((uid, name)) = app.session.active().and_then(|doc| v["name"].as_str().map(|name| (doc.uid, name))) {
+            let para = para(d);
+            app.ui.made_text_style.retain(|(pending_uid, pending_para, _)| *pending_uid != uid || *pending_para != para);
+            app.ui.made_text_style.push((uid, para, name.to_string()));
+        }
     }
     r
 }

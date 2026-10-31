@@ -5,8 +5,9 @@ use super::{
 
 impl Session {
     /// A session with no document open, the default preferences and the Selection tool. It also
-    /// installs the hooks the document crate calls back into: the loader and file reader of placed
-    /// documents, and where an image's effects draw its fills and strokes, for clicks.
+    /// installs the hooks the document and effects crates call back into: the loader and file reader
+    /// of placed documents, where an image's effects draw its fills and strokes, for clicks, and how
+    /// Vector Halftone's dots are sampled, for exports.
     pub fn new() -> Self {
         // Placed documents are read by the native format's loader.
         vectorcraft_doc::placed_document::set_loader(cmd::place::document::read_document);
@@ -19,6 +20,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Exports bake Vector Halftone into the dots the renderer samples.
+        vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
         vectorcraft_text::set_svg_glyph_reader(vectorcraft_svg::glyph_art);
         Self {

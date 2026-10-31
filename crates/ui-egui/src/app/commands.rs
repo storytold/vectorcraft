@@ -1,6 +1,16 @@
 use super::fonts::MAX_RECENT_FONTS;
 use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
 
+/// The last repeatable Pathfinder operation completed by a command or atomic batch.
+fn completed_pathfinder_operation<'a>(id: &'a str, params: &'a Value) -> Option<&'a str> {
+    let tracked = |id: &'a str| id.strip_prefix("object.pathfinder.").filter(|op| panels::pathfinder::operation_label(op).is_some());
+    if id == "command.batch" {
+        params.get("commands")?.as_array()?.iter().rev().find_map(|step| step.get("command").and_then(Value::as_str).and_then(tracked))
+    } else {
+        tracked(id)
+    }
+}
+
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
@@ -87,6 +97,11 @@ impl VectorcraftApp {
             && let Some(ctx) = self.ui_ctx.clone()
         {
             crate::ime::note_application_edit(self, &ctx, ime_view, ime_target, ime_before);
+        }
+        if r.is_ok()
+            && let Some(op) = completed_pathfinder_operation(id, &params)
+        {
+            self.last_pathfinder = Some(op.to_string());
         }
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
             self.publish_clipboard();

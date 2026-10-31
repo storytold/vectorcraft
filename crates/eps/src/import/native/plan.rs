@@ -70,6 +70,9 @@ pub(super) fn plan(
             let Some(Some(story)) = stories.get(k) else { continue };
             let Some(mut node) = story.node(NodeId(0), info.frame, t, to_doc) else { continue };
             let mut region = story.region(t, to_doc);
+            // The first line where the file has it, in the text document's frame (that of a
+            // copied object is its original's, as its lines are).
+            story.place_first_line(&mut node, t, to_doc);
             // Area type and type on a path in the object's own frame: the text document's frame
             // of a copied object keeps its original's path.
             frame_text_from_art(info, &mut node, &mut region);

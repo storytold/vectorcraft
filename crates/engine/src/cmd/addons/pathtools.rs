@@ -1,8 +1,16 @@
 //! Path Precision Tools (`addon.pathtools.*`), a built-in add-on: the Anchor Eraser Brush's stroke,
 //! the Extend Path tool's extension, the Measure & Inspect tool's readouts, the Anchor Inspector's
-//! anchor edits and Split / Add Points at Crossings. Its tools, panel and submenu (Object ›
-//! Plug-ins › Path Precision Tools) are the tools crate's and the UI's.
+//! anchor edits, Split / Add Points at Crossings, Slide Anchor Along Path, the Corner Tool's corners
+//! ([`corners`]), the Parametric Shape Tool's shapes ([`shape`]), and the Shared Edge Merge Tool's
+//! merges with Keep Shared Points Together ([`shared_edge`]).
+//! Its tools, panels and submenu (Object › Plug-ins › Path Precision Tools) are the tools crate's
+//! and the UI's.
 
+mod corners;
+#[cfg(test)]
+mod effect_tests;
+mod shape;
+mod shared_edge;
 #[cfg(test)]
 mod tests;
 
@@ -18,7 +26,6 @@ use super::super::pathops::Beside;
 use super::super::{
     CommandSpec, bad, checked_id, checked_ids_or_selection, cmd, finite_numbers, has_doc, has_selection, number_or, switch_or, text_param,
 };
-use super::cleanup::PT_PER_TOLERANCE;
 use crate::{EngineError, Result, Session};
 
 /// The Anchor Eraser Brush's tolerance by default (the scale Simplify Anchors (Keep Shape) uses).
@@ -37,7 +44,7 @@ const MAX_EXTEND: f64 = 1e6;
 const MAX_ADD: u64 = pt::MAX_ADDED_PER_SEGMENT as u64;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![
+    let mut v = vec![
         cmd!(
             "addon.pathtools.erase",
             "Anchor Eraser Brush",
@@ -52,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Extend Path",
             [],
             None,
-            "{id, subpath?: index (0), end: \"start\"|\"end\", length?: pt (negative shortens; never all of it), to?: [x, y] (instead of length: the length that brings the end nearest this point), mode?: \"straight\"|\"bezier\" (stretch the last segment's curve, no anchor added)|\"arc\" (along the circle the end curves on, at most half way round) (\"straight\")} lengthen an open path at an end the way it runs there, or shorten it back along itself, as one undo step → {id, length (pt)}",
+            "{id, subpath?: index (0), end: \"start\"|\"end\", length?: pt (negative shortens; never all of it), to?: [x, y] (instead of length: the length that brings the end nearest this point), mode?: \"straight\"|\"bezier\" (stretch the last segment's curve, no anchor added)|\"arc\" (along the circle the end curves on, at most half way round) (\"straight\")} lengthen an open path at an end the way it runs there, or shorten it back along itself, as one undo step; with Keep Shared Points Together on, anchors coincident with an end that moves go with it → {id, length (pt)}",
             has_doc,
             extend
         ),
@@ -70,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Anchor",
             [],
             None,
-            "{x?, y?: pt (on the page), inLength?, outLength?: pt (0 retracts), inAngle?, outAngle?: degrees counter-clockwise} move the selected anchors (with their handles) and set their handles, as one undo step: direct-selected anchors, or every anchor of a path selected whole; a smooth anchor's other handle turns with the one set → {anchors}",
+            "{x?, y?: pt (on the page), inLength?, outLength?: pt (0 retracts), inAngle?, outAngle?: degrees counter-clockwise} move the selected anchors (with their handles) and set their handles, as one undo step: direct-selected anchors, or every anchor of a path selected whole; a smooth anchor's other handle turns with the one set; with Keep Shared Points Together on, anchors coincident with one that moves go with it → {anchors}",
             has_selection,
             set_anchor
         ),
@@ -137,7 +144,20 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             crossings
         ),
-    ]
+        cmd!(
+            "addon.pathtools.slideAnchor",
+            "Slide Anchor Along Path",
+            [],
+            None,
+            "{id, subpath?: index (0), anchor: index, t: -0.98..0.98 (where to: positive, a curve parameter on the segment after the anchor; negative, back from the end of the one before)} move an anchor along its path, the segments beside it refitted so the outline stays, as one undo step; ends of open paths don't slide; with Keep Shared Points Together on, anchors coincident with it go with it → {id, strayed (pt)}",
+            has_doc,
+            slide_anchor
+        ),
+    ];
+    v.extend(shape::specs());
+    v.extend(corners::specs());
+    v.extend(shared_edge::specs());
+    v
 }
 
 /// The editable paths (not guides) under `roots`, compound path members included.
@@ -240,7 +260,7 @@ fn erase(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = paths_under(d, &roots);
     let paths: Vec<(NodeId, &PathData)> = ids.iter().filter_map(|id| Some((*id, d.node(*id)?.path_data()?))).collect();
     check_size(paths.iter().map(|(_, p)| *p), C)?;
-    let tol = if ignore { f64::INFINITY } else { tolerance * PT_PER_TOLERANCE };
+    let tol = if ignore { f64::INFINITY } else { tolerance * po::PT_PER_TOLERANCE };
     let mut removed = 0;
     let mut changed = vec![];
     for (id, path) in paths {
@@ -284,8 +304,8 @@ fn edit_whole(s: &mut Session, label: &str, changed: Vec<(NodeId, PathData)>) ->
 
 // ---------- Extend Path ----------
 
-/// The open subpath an `extend` request names: (path id, subpath index, its data).
-fn open_subpath(s: &Session, p: &Value, cmd: &str) -> Result<(NodeId, usize, SubPath)> {
+/// The subpath a request names: (path id, subpath index, its data).
+fn named_subpath(s: &Session, p: &Value, cmd: &str) -> Result<(NodeId, usize, SubPath)> {
     let id = checked_id(s, p.get("id").unwrap_or(&Value::Null), cmd)?;
     let si = usize_opt(p, "subpath", cmd)?.unwrap_or(0);
     let d = &s.doc()?.doc;
@@ -294,15 +314,36 @@ fn open_subpath(s: &Session, p: &Value, cmd: &str) -> Result<(NodeId, usize, Sub
     }
     let path = d.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(cmd, "`id` is not a path"))?;
     let sp = path.subpaths.get(si).ok_or_else(|| bad(cmd, "no such subpath"))?;
-    if sp.closed || sp.anchors.len() < 2 {
-        return Err(bad(cmd, "the subpath has no ends to extend (it is closed or a single point)"));
-    }
     Ok((id, si, sp.clone()))
+}
+
+/// Put `new` in place of the subpath `old` (from [`named_subpath`]) as one step labelled `label`
+/// (none when it is the same), with what Keep Shared Points Together moves too; the path's direct
+/// selection goes.
+fn set_subpath(s: &mut Session, label: &str, (id, si, old): (NodeId, usize, SubPath), new: SubPath) -> Result<()> {
+    if new == old {
+        return Ok(());
+    }
+    let mut np = s.doc()?.doc.node(id).and_then(|n| n.path_data()).cloned().ok_or(EngineError::NoNode(id))?;
+    if let Some(slot) = np.subpaths.get_mut(si) {
+        *slot = new;
+    }
+    let shared = shared_edge::shared_points(s, [(id, &np)])?;
+    s.edit(label, |d, sel| {
+        sel.anchors.remove(&id);
+        sel.segments.remove(&id);
+        set_path(d, id, np);
+        shared_edge::move_shared(d, shared);
+        Ok(())
+    })
 }
 
 fn extend(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.pathtools.extend";
-    let (id, si, sp) = open_subpath(s, p, C)?;
+    let (id, si, sp) = named_subpath(s, p, C)?;
+    if sp.closed || sp.anchors.len() < 2 {
+        return Err(bad(C, "the subpath has no ends to extend (it is closed or a single point)"));
+    }
     let at_start = match text_param(p, "end", C)? {
         Some("start") => true,
         Some("end") => false,
@@ -324,20 +365,24 @@ fn extend(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`length` must be a number of at most 1000000 pt either way"));
     }
     let new = pt::extend_open(&sp, at_start, length, mode).ok_or_else(|| bad(C, "the path is too short to shorten that much"))?;
-    if new != sp {
-        s.edit("Extend Path", |d, sel| {
-            let n = d.node(id).and_then(|n| n.path_data()).cloned().ok_or(EngineError::NoNode(id))?;
-            let mut np = n;
-            if let Some(slot) = np.subpaths.get_mut(si) {
-                *slot = new;
-            }
-            sel.anchors.remove(&id);
-            sel.segments.remove(&id);
-            set_path(d, id, np);
-            Ok(())
-        })?;
-    }
+    set_subpath(s, "Extend Path", (id, si, sp), new)?;
     Ok(json!({ "id": id.0, "length": length }))
+}
+
+// ---------- Slide Anchor Along Path ----------
+
+fn slide_anchor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.pathtools.slideAnchor";
+    let (id, si, sp) = named_subpath(s, p, C)?;
+    let anchor = usize_opt(p, "anchor", C)?.ok_or_else(|| bad(C, "give `anchor`, the index of the anchor to slide"))?;
+    let t = number_or(p, "t", f64::NAN, C)?;
+    if t.is_nan() || t.abs() > pt::MAX_SLIDE {
+        return Err(bad(C, "`t` must be a number from -0.98 to 0.98"));
+    }
+    let (new, strayed) =
+        pt::slide_anchor(&sp, anchor, t).ok_or_else(|| bad(C, "that anchor can't slide: an end of an open path has nowhere to go"))?;
+    set_subpath(s, "Slide Anchor Along Path", (id, si, sp), new)?;
+    Ok(json!({ "id": id.0, "strayed": strayed }))
 }
 
 // ---------- Measure & Inspect ----------
@@ -351,7 +396,7 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
     let id = checked_id(s, p.get("id").unwrap_or(&Value::Null), C)?;
     let (x, y) = (number_or(p, "x", f64::NAN, C)?, number_or(p, "y", f64::NAN, C)?);
     let tolerance = number_or(p, "tolerance", 3.0, C)?;
-    if !(x.is_finite() && y.is_finite()) || !(tolerance >= 0.0 && tolerance.is_finite()) {
+    if !(x.is_finite() && y.is_finite() && tolerance >= 0.0 && tolerance.is_finite()) {
         return Err(bad(C, "give `x` and `y` (and a `tolerance` of 0 or more)"));
     }
     let path = s.doc()?.doc.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(C, "`id` is not a path"))?;
@@ -419,10 +464,12 @@ fn edit_anchors(s: &mut Session, label: &str, cmd: &str, f: impl Fn(&mut SubPath
         }
     }
     if !changed.is_empty() {
+        let shared = shared_edge::shared_points(s, changed.iter().map(|(id, np)| (*id, np)))?;
         s.edit(label, |d, _| {
             for (id, np) in changed {
                 set_path(d, id, np);
             }
+            shared_edge::move_shared(d, shared);
             Ok(())
         })?;
     }
@@ -430,7 +477,7 @@ fn edit_anchors(s: &mut Session, label: &str, cmd: &str, f: impl Fn(&mut SubPath
 }
 
 /// A smoothing `ratio` param (default [`pt::SMOOTH_RATIO`]).
-fn ratio(p: &Value, cmd: &str) -> Result<f64> {
+pub(super) fn ratio(p: &Value, cmd: &str) -> Result<f64> {
     let r = number_or(p, "ratio", pt::SMOOTH_RATIO, cmd)?;
     let (lo, hi) = pt::SMOOTH_RATIO_RANGE;
     if !(lo..=hi).contains(&r) {
@@ -575,7 +622,7 @@ fn add_points(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "added": added }))
 }
 
-fn close(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn close(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.pathtools.close";
     let mode = match text_param(p, "mode", C)? {
         None => pt::CloseMode::Handles,

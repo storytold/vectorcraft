@@ -503,7 +503,7 @@ font-technology	Variable	Варіативні
 	Collect in New Layer	Зібрати у новий шар
 	Collect Links in a Separate Folder	Зібрати зв’язки в окрему папку
 	Color	Колір
-	Color (,)	Колір (,)
+	Color (, or Shift+,)	Колір (, або Shift+,)
 	Color Adjustments	Налаштування кольору
 	Color bars	Кольорові смуги
 	Color blindness – Deuteranopia-type	Дальтонізм - дейтеранопія
@@ -657,6 +657,13 @@ font-technology	Variable	Варіативні
 	Create Report	Створити звіт
 	Create Slice	Створити фрагмент
 	Create Sub-folders	Створити вкладені папки
+	Clear Selection	Зняти виділення
+	Export PDFs As:	Експортувати PDF як:
+	Single File	Один файл
+	Multiple Files	Кілька файлів
+	Format Presets	Набори форматів
+	Grid View	Сітка
+	Selected: {n}, Total number of files to export: {m}	Вибрано: {n}, усього файлів для експорту: {m}
 	Create Text	Створити текст
 	Create Trim Marks	Створити мітки підрізування
 	Created	Створено
@@ -741,7 +748,6 @@ font-technology	Variable	Варіативні
 	Delete the graphic style “{name}”?	Видалити графічний стиль «{name}»?
 	Delete Theme	Видалити тему
 	Delete theme	Видалити тему
-	Delete these {count} swatches and groups?	Видалити ці зразки та групи ({count})?
 	Delete these {n} graphic styles?	Видалити ці графічні стилі ({n})?
 	Delete this saved preset	Видалити цей збережений набір
 	Delete this {n} graphic style?	Видалити цей графічний стиль ({n})?
@@ -1277,7 +1283,7 @@ file-filter	Templates	Шаблони
 	GPL palettes keep solid colours only, as RGB.	Палітри GPL зберігають лише суцільні кольори RGB.
 	GPU Performance	Продуктивність GPU
 	Gradient	Градієнт
-	Gradient (.)	Градієнт (.)
+	Gradient (. or Shift+.)	Градієнт (. або Shift+.)
 	Gradient across stroke	Градієнт упоперек обведення
 	Gradient along stroke	Градієнт вздовж обведення
 	Gradient and Mesh Resolution:	Роздільна здатність градієнтів і сіток:
@@ -1424,6 +1430,7 @@ file-filter	Templates	Шаблони
 	Delete Guides	Видалити напрямні
 	Delete Slice	Видалити фрагмент
 	Delete Style	Видалити стиль
+	Delete Styles	Видалити стилі
 	Delete Variables	Видалити змінні
 	Delete View	Видалити вигляд
 	Done Editing Pattern	Завершити редагування візерунка
@@ -3718,6 +3725,7 @@ imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} елемент|{n} елементи|{n} елементів
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Таблиця кольорів ({n} колір)|Таблиця кольорів ({n} кольори)|Таблиця кольорів ({n} кольорів)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Видалити цей графічний стиль ({n})?|Видалити ці графічні стилі ({n})?|Видалити ці графічні стилі ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Видалити зразки та групи ({n})?|Видалити {n} зразки та групи?|Видалити {n} зразків і груп?
 @plural	{n} Layer|{n} Layers	{n} шар|{n} шари|{n} шарів
 @plural	{n} Object|{n} Objects	{n} об’єкт|{n} об’єкти|{n} об’єктів
 @plural	{n} area highlighted|{n} areas highlighted	Підсвічено {n} область|Підсвічено {n} області|Підсвічено {n} областей
@@ -4091,6 +4099,7 @@ axis	Both	Обидві
 @msg	cannot split an open path at its end point	не можна розділити відкритий контур у його кінцевій точці
 @msg	closing needs three anchors	для замикання потрібні три опорні точки
 @msg	check an asset to export	позначте ресурс для експорту
+@msg	check an artboard to export	позначте монтажну область для експорту
 @msg	check a layer to export	позначте шар для експорту
 @msg	select the art to export first	спочатку виділіть об’єкти для експорту
 @msg	choice must be "merge" or "add", not `{choice}`	choice має бути "merge" або "add", а не `{choice}`
@@ -4180,6 +4189,7 @@ axis	Both	Обидві
 @msg	no document	немає документа
 @msg	no document open	немає відкритого документа
 @msg	no effect applied yet	ефект ще не застосований
+@msg	no Pathfinder operation applied yet	операцію обробки контурів ще не застосовано
 @msg	no effect at index {k}	немає ефекту з індексом {k}
 @msg	no end record	немає кінцевого запису
 @msg	no file manager here	тут немає файлового менеджера
@@ -4232,6 +4242,7 @@ axis	Both	Обидві
 @msg	no such perspective grid preset	такого набору сітки перспективи немає
 @msg	no such recent file	такого останнього файлу немає
 @msg	no such recent font	такого останнього шрифту немає
+@msg	some text is hidden or locked, so its font wasn't replaced	частина тексту прихована або заблокована, тому її шрифт не замінено
 @msg	no such saved selection	такого збереженого виділення немає
 @msg	no such segment	такого сегменту немає
 @msg	no such spine point	такої точки осі немає
@@ -5394,3 +5405,210 @@ anchor	Points:	Точки:
 @msg	select open paths to close	виділіть незамкнені контури, щоб замкнути їх
 @msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	контурів забагато або вони надто заплутані, щоб знайти їхні перетини (не більше 10000 сегментів)
 @msg	the paths have too many anchors to edit at once	у контурів забагато опорних точок, щоб редагувати їх за раз
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Інструмент «Параметрична фігура»
+	Parametric Shape	Параметрична фігура
+	Edit Parametric Shape	Редагувати параметричну фігуру
+	Convert to Parametric Shape	Перетворити на параметричну фігуру
+	Ring	Кільце
+	Arrow	Стрілка
+	Cross	Хрест
+	Heart	Серце
+	Gear	Зубчасте колесо
+	Speech Bubble	Мовна бульбашка
+	Count:	Кількість:
+	Thickness:	Товщина:
+	Inner Radius:	Внутрішній радіус:
+	Head:	Наконечник:
+	Shaft:	Держак:
+	Point:	Вістря:
+	Tooth Height:	Висота зуба:
+	Tail:	Хвостик:
+	Tip:	Кінчик:
+	Open a document to draw parametric shapes.	Відкрийте документ, щоб малювати параметричні фігури.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Виділіть параметричну фігуру, щоб редагувати її. Без виділення ці значення стосуються наступної фігури.
+@msg	the object is not an editable parametric shape	об’єкт не є редагованою параметричною фігурою
+@msg	select plain rectangles, ellipses or regular polygons to convert	виділіть звичайні прямокутники, еліпси або правильні багатокутники для перетворення
+@msg	the shape's numbers are out of range	значення фігури поза допустимим діапазоном
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` має бути одним із: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` має бути цілим числом від 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` має бути від {lo} до {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Розумне перо
+	Smart Pen Tool	Інструмент «Розумне перо»
+	Smart Pen Panel	Панель «Розумне перо»
+	Next Segment	Наступний сегмент
+	Curved	Кривий
+	Retract Handles	Прибрати маркери
+	Close or Join	Замкнути або з’єднати
+	Open a document to draw with the Smart Pen.	Відкрийте документ, щоб малювати розумним пером.
+	Straight or Curved Segment	Прямий або кривий сегмент
+@msg	the path is locked or hidden	контур заблоковано або приховано
+@msg	`id` is not a path	`id` не є контуром
+@msg	the path has no open subpath	контур не має незамкненого вкладеного контуру
+@msg	the subpath is closed	вкладений контур замкнено
+@msg	the subpath is closed or too short to close	вкладений контур замкнено або він закороткий, щоб його замкнути
+@msg	the path is too short to remove a point from	контур закороткий, щоб видалити з нього точку
+@msg	the segment can't be bent that far	сегмент не можна вигнути настільки
+@msg	give `{a}` and `{b}`	укажіть `{a}` і `{b}`
+@msg	`t` must be from 0 to 1	`t` має бути від 0 до 1
+@msg	`segment` must be "straight" or "curved"	`segment` має бути "straight" або "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` має бути "free", "keepAngles" або "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` має бути [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Виділити за типом кольору
+	Objects with Spot Colors	Об’єкти з плашковими кольорами
+	Objects with Color Effects	Об’єкти з колірними ефектами
+	RGB Images	Зображення RGB
+	CMYK Images	Зображення CMYK
+	Grayscale Images	Зображення у відтінках сірого
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` має бути spotColors, colorEffects, rgbImages, cmykImages або grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Колір точок із малюнка
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Дуплекс…
+	Duotone	Дуплекс
+	Print Ink Fixes…	Виправлення друкарських фарб…
+	Print Ink Fixes	Виправлення друкарських фарб
+	Inks	Фарби
+	Tone 1	Тон 1
+	Tone 2	Тон 2
+	Tone 3	Тон 3
+	Tone 4	Тон 4
+	Curve	Крива
+	Reset to Linear	Скинути до лінійної
+	Reset to Inverse	Скинути до оберненої
+	Skip Objects with Spot Colors	Пропускати об’єкти з плашковими кольорами
+	Ink Limit	Межа фарби
+	Exclude Pure Black	Виключити чистий чорний
+	Remove White Overprint	Прибрати накладення білого
+	Overprint Black	Накладення чорного
+	Text Only	Лише текст
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` або `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Виправлення друкарських фарб працюють у документах CMYK: спершу виберіть Файл › Колірний режим документа › Колір CMYK
+@msg	`{key}` must be 0..{max}	`{key}` має бути 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Інструмент «Кути»
+	Slide Anchor Along Path	Зсунути опорну точку вздовж контуру
+	Set Corners	Задати кути
+	Remove Corners	Забрати кути
+	Corners selected: {count}	Вибрано кутів: {count}
+	Apply to Selected Anchors	Застосувати до вибраних опорних точок
+@msg	`radius` must be from 0 to 1000000 pt	`radius` має бути від 0 до 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` має бути числом від -0.98 до 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	виберіть опорні точки, де дві сторони сходяться під кутом: лише вони приймають кут
+@msg	give `anchor`, the index of the anchor to slide	вкажіть `anchor`, індекс опорної точки для зсуву
+@msg	that anchor can't slide: an end of an open path has nowhere to go	цю опорну точку не можна зсунути: кінцю відкритого контуру нікуди рухатися
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Інструмент «Об’єднання спільного краю»
+	Merge Shared Edge	Об’єднати спільний край
+	Keep Shared Points Together	Тримати спільні точки разом
+	Shared Edges	Спільні краї
+	Coincidence:	Збіг:
+@msg	`a` and `b` must be two different paths	`a` і `b` мають бути двома різними контурами
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` має бути від 0.25 до 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` має бути від 0 до 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` має бути "average", "a" або "b"
+@msg	the paths have nothing to merge there	тут у контурів немає чого об’єднувати
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Розбити текст
+	Combine Point Text	Об’єднати текст із точки
+	Join Point Text	З’єднати текст із точки
+	Remove Breaks	Видалити розриви
+	Split Text at Cursor	Розбити текст біля курсора
+	Set Alignment, Keep Position	Задати вирівнювання, зберігши положення
+	Reset Text Transform	Скинути трансформацію тексту
+	Replace Missing Fonts…	Замінити відсутні шрифти…
+	Replace Missing Fonts	Замінити відсутні шрифти
+	Remove Line Breaks	Видалити розриви рядків
+	Remove Paragraph Breaks	Видалити розриви абзаців
+	Break Text into Lines	Розбити текст на рядки
+	Break Text into Paragraphs	Розбити текст на абзаци
+	Break Text into Words	Розбити текст на слова
+	Break Text into Glyphs	Розбити текст на гліфи
+	Reset Text Transform and Scale	Скинути трансформацію та масштаб тексту
+	Set Alignment, Keep Position:	Вирівнювання зі збереженням положення:
+	Break Text into:	Розбити текст на:
+	Split at Cursor	Розбити біля курсора
+	Reset Transform	Скинути трансформацію
+	Shift-click: break into paragraphs	Shift+клацання: розбити на абзаци
+	Alt-click: reset the horizontal scale too	Alt+клацання: скинути й горизонтальний масштаб
+breakText	Lines	Рядки
+breakText	Words	Слова
+breakText	Glyphs	Гліфи
+@msg	Click in type with a Type tool to split it	Клацніть у тексті інструментом «Текст», щоб розбити його
+@msg	Too many type objects to change at once	Забагато текстових об’єктів, щоб змінити їх за раз
+@msg	Too many pieces to make at once	Забагато частин, щоб створити їх за раз
+@msg	Select horizontal point or area type whose text fits	Виділіть горизонтальний текст із точки або в області, текст якого вміщується
+@msg	Nothing to split at the cursor	Біля курсора нічого розбивати
+@msg	Select two or more one-line point type objects on one baseline to combine	Виділіть два або більше однорядкових об’єктів тексту з точки на одній базовій лінії, щоб об’єднати їх
+@msg	Select two or more one-line point type objects to join	Виділіть два або більше однорядкових об’єктів тексту з точки, щоб з’єднати їх
+@msg	No line breaks to remove	Немає розривів рядків для видалення
+@msg	No paragraph breaks to remove	Немає розривів абзаців для видалення
+@msg	Too many breaks to remove at once	Забагато розривів, щоб видалити їх за раз
+@msg	Select point type	Виділіть текст із точки
+@msg	The point type is aligned that way already	Текст із точки вже так вирівняно
+@msg	The point type has no transform to reset	Текст із точки не має трансформації для скидання
+@msg	No fonts are missing	Відсутніх шрифтів немає
+@msg	the replacement font is not available	шрифт для заміни недоступний
+@msg	missing `align`	не вказано `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` має бути lines, paragraphs, words або glyphs, а не {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` має бути "line" або "paragraph", а не {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` має бути "left", "center" або "right", а не {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Ефекти контуру
+	Reverse Direction	Змінити напрям
+	Align to Corners and Ends	Вирівняти за кутами й кінцями
+	Count	Кількість
+	Max Count	Найбільша кількість
+	Start Length	Довжина на початку
+	Start Percent	Відсотки на початку
+	Start Shape	Форма на початку
+	End Length	Довжина в кінці
+	End Percent	Відсотки в кінці
+	End Shape	Форма в кінці
+	By Count	За кількістю
+	By Distance	За відстанню
+	Both	Обидва
+	Shorter Than Length	Коротші за довжину
+	Anchors	Опорні точки
+	Dashes to Geometry	Штрихи в геометрію
+	Dashes to Geometry…	Штрихи в геометрію…
+	Add Anchors	Додати опорні точки
+	Add Anchors…	Додати опорні точки…
+	Smooth Anchors	Згладити опорні точки
+	Smooth Anchors…	Згладити опорні точки…
+	Simplify Anchors	Спростити опорні точки
+	Simplify Anchors…	Спростити опорні точки…
+	Split at Anchors	Розрізати в опорних точках
+	Split at Anchors…	Розрізати в опорних точках…
+	Extend Path…	Подовжити контур…
+	Close Path…	Замкнути контур…
+	Retract Handles…	Прибрати маркери…
+	Dash 1	Штрих 1
+	Gap 1	Проміжок 1
+	Dash 2	Штрих 2
+	Gap 2	Проміжок 2
+	Dash 3	Штрих 3
+	Gap 3	Проміжок 3
+	Dash 4	Штрих 4
+	Gap 4	Проміжок 4
+	Dash 5	Штрих 5
+	Gap 5	Проміжок 5
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Інструменти розміщення
+	Arrange in Grid…	Розмістити сіткою…
+	Arrange in Grid	Розмістити сіткою
+	Swap Objects	Поміняти об’єкти місцями
+	Swap Objects and Sizes	Поміняти об’єкти місцями та розмірами
+	Replace with Top Object…	Замінити верхнім об’єктом…
+	Replace with Top Object	Замінити верхнім об’єктом
+	Set Size of Each…	Задати розмір кожного…
+	Set Size of Each	Задати розмір кожного
+@msg	select exactly two objects	виділіть рівно два об’єкти
+@msg	give `width` or `height`	укажіть `width` або `height`

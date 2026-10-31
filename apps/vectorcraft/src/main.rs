@@ -1,7 +1,10 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>]... [--automation-write-root <dir>]...]
-//! [--in-window-menus] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//! [--in-window-menus] [--new-instance] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//!
+//! Files given while VectorCraft already runs open in that window, unless `--new-instance` is given
+//! (Windows and Linux; `single_instance`).
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
 //! macOS instead of the macOS menu bar (`mac_menu`).
@@ -45,11 +48,15 @@ mod open_documents;
 mod portal_save;
 mod prefs_dir;
 mod printing;
+#[cfg(not(target_os = "macos"))]
+mod single_instance;
 #[cfg(windows)]
 mod system_fonts;
 mod tablet;
 mod window;
 mod window_frame;
+#[cfg(windows)]
+mod windows_cores;
 mod windows_stylus;
 mod xwayland;
 
@@ -118,7 +125,9 @@ Options:
                                  (may be given more than once)
   --in-window-menus              Keep the menus inside the window on macOS
                                  (or VECTORCRAFT_IN_WINDOW_MENUS=1)
-  --version                      Print the version and exit
+  --new-instance                 Open the files in a new window even when VectorCraft
+                                 already runs (Windows and Linux)
+  --version                     Print the version and exit
   -h, --help                     Print this help and exit
 
 Without a window (converting, scripting, the MCP server), use vectorcraft-cli:
@@ -142,6 +151,7 @@ fn main() -> std::process::ExitCode {
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
     let mut files = Vec::new();
     let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
+    let mut new_instance = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
@@ -154,6 +164,7 @@ fn main() -> std::process::ExitCode {
         }
         match a.as_str() {
             "--in-window-menus" => in_window_menus = true,
+            "--new-instance" => new_instance = true,
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
                 return std::process::ExitCode::SUCCESS;
@@ -183,7 +194,19 @@ fn main() -> std::process::ExitCode {
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
+    // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
+    // the log file is attached: a launch that hands its files over leaves the running app's log be.
+    #[cfg(not(target_os = "macos"))]
+    let instance = match single_instance::start(control_port.is_some(), new_instance, &files) {
+        single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
+        single_instance::Start::Running(primary) => primary,
+    };
+    #[cfg(target_os = "macos")]
+    let _ = new_instance;
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
+    // Before the first render: the cores the process may run on.
+    #[cfg(windows)]
+    windows_cores::install();
     // Before the first font scan (the app's start): the fonts font services load (#579).
     #[cfg(windows)]
     system_fonts::install();
@@ -452,7 +475,10 @@ fn main() -> std::process::ExitCode {
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
-                let _ = in_window_menus;
+                {
+                    let _ = in_window_menus;
+                    single_instance::set_ui(&cc.egui_ctx);
+                }
                 app.services.native_input_hook = native_input_hook(&app);
                 file_access::unconfined(|| open_files(&mut app, files));
                 // The first frame is due from now (`gpu::watch_first_frame`).
@@ -473,6 +499,10 @@ fn main() -> std::process::ExitCode {
             }),
         )
     });
+    // The window is gone: later launches start their own app, including the one a graphics
+    // failure starts again below.
+    #[cfg(not(target_os = "macos"))]
+    drop(instance);
     #[cfg(feature = "wgpu")]
     let outcome = gpu::finish(outcome, &startup);
     #[cfg(not(feature = "wgpu"))]

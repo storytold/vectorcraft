@@ -329,3 +329,13 @@ fn edit_chooses_the_tool_for_the_group_of_a_selected_member() {
     assert_eq!(s.tool_id(), "intertwine");
     assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [g]);
 }
+
+#[test]
+fn arrange_with_explicit_id_works_without_active_selection() {
+    let mut s = session();
+    let (g, _, _) = intertwined(&mut s);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.doc().unwrap().selection.is_empty());
+    let out = s.execute("object.intertwine.arrange", &json!({"id": g.0, "at": [50.0, 30.0]})).unwrap();
+    assert_eq!(out["count"], 1);
+}

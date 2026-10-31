@@ -87,13 +87,14 @@ fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32) -> 
 }
 
 /// Live Paint Bucket: click fills the face under the cursor with the current fill; Shift-click
-/// paints the nearest edge with the current stroke. Clicking selected ordinary paths makes them a
-/// Live Paint group first.
+/// paints the nearest edge with the current stroke. Alt-click samples a fill or stroke into the
+/// paint defaults; Alt+Shift-click samples only the color under the pointer. Clicking selected
+/// ordinary paths without Alt makes them a Live Paint group first.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
-    /// Where the pointer last moved, and whether Shift was held.
-    at: Option<(Point, bool)>,
+    /// Where the pointer last moved, and whether Shift and Alt were held.
+    at: Option<(Point, bool, bool)>,
 }
 
 impl Default for LivePaintBucketTool {
@@ -111,12 +112,35 @@ impl Tool for LivePaintBucketTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Move => {
-                self.at = Some((p, ev.mods.shift));
-                self.hover = lp_hover(cx, Some(&mut self.cache), p, ev.mods.shift, &|id| lp_visible(cx, id));
+                self.at = Some((p, ev.mods.shift, ev.mods.alt));
+                self.hover =
+                    if ev.mods.alt { LpHover::None } else { lp_hover(cx, Some(&mut self.cache), p, ev.mods.shift, &|id| lp_visible(cx, id)) };
                 vec![]
             }
             PointerKind::Down => {
                 self.hover = LpHover::None;
+                if ev.mods.alt {
+                    if ev.mods.shift {
+                        return crate::xform::eyedropper::sample_color_at(cx, p).map_or_else(Vec::new, |color| {
+                            vec![Action::Exec("paint.sampleColor".into(), json!({ "color": crate::params::color_json(&color), "ids": [] }))]
+                        });
+                    }
+                    return crate::xform::eyedropper::sample_source(cx, p).map_or_else(Vec::new, |(source, _)| {
+                        if cx.doc.node(source).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_))) {
+                            return crate::xform::eyedropper::sample_color_at(cx, p).map_or_else(Vec::new, |color| {
+                                vec![Action::Exec(
+                                    "paint.sampleColor".into(),
+                                    json!({ "color": crate::params::color_json(&color), "stroke": false, "ids": [], "clearStroke": true }),
+                                )]
+                            });
+                        }
+                        if crate::xform::eyedropper::has_sampleable_paint(cx, source) {
+                            vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": source.0, "defaultsOnly": true }))]
+                        } else {
+                            vec![]
+                        }
+                    });
+                }
                 let point = json!([p.x, p.y]);
                 if ev.mods.shift {
                     return match lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id)) {
@@ -143,8 +167,8 @@ impl Tool for LivePaintBucketTool {
         lp_overlays(&self.hover, &self.cache, HIGHLIGHT_RED, 4.0)
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::LivePaintBucket
+    fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
+        if m.alt { Cursor::Eyedropper } else { Cursor::LivePaintBucket }
     }
 
     fn waiting(&self) -> bool {
@@ -159,8 +183,8 @@ impl Tool for LivePaintBucketTool {
         // of a Live Paint group the hover takes no map.
         loop {
             self.cache.settle(wait);
-            if let Some((p, shift)) = self.at {
-                self.hover = lp_hover(cx, Some(&mut self.cache), p, shift, &|id| lp_visible(cx, id));
+            if let Some((p, shift, alt)) = self.at {
+                self.hover = if alt { LpHover::None } else { lp_hover(cx, Some(&mut self.cache), p, shift, &|id| lp_visible(cx, id)) };
             }
             if !wait || !self.cache.waiting() {
                 break;
