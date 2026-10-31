@@ -70,7 +70,8 @@ vectorcraft-cli — VectorCraft automation
 USAGE:
   vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
-      (vectorcraft --control 7979), falling back to a headless in-process session.
+      (vectorcraft --control 7979), falling back to a headless in-process session. It authenticates
+      with the token the app wrote next to its settings (or VECTORCRAFT_CONTROL_TOKEN).
       --automation-read-root / --automation-write-root confine the files the agent's commands read
       (open, place, relink, library loads…) and write (save, export, package, library saves…) to
       DIR, links followed; each may be given more than once, a path inside any of its folders being
@@ -247,12 +248,30 @@ fn mcp(args: &[String]) -> Result<(), String> {
     } else if headless {
         Box::new(with_stores(Headless::with_document()))
     } else if let Some(addr) = connect {
-        // Explicit address: fail loudly if the app isn't there.
-        Box::new(Remote::connect(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
+        // Explicit address: fail loudly if the app isn't there or its token can't be found.
+        let token = control_token(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?;
+        Box::new(Remote::connect(&addr, Some(&token)).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
     } else {
-        match Remote::connect(DEFAULT_ADDR) {
-            Ok(r) => Box::new(r),
-            Err(_) => Box::new(with_stores(Headless::with_document())),
+        // No app (no token file, nothing listening) is the ordinary headless run and stays quiet.
+        // A token that is there but unusable, or one the app refuses, gets one line saying why the
+        // running app isn't the one being edited.
+        let note = |e: &dyn std::fmt::Display| eprintln!("vectorcraft-cli: the app on {DEFAULT_ADDR} is not used, running headless: {e}");
+        match control_token(DEFAULT_ADDR) {
+            Ok(token) => match Remote::connect(DEFAULT_ADDR, Some(&token)) {
+                Ok(r) => Box::new(r),
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        note(&e);
+                    }
+                    Box::new(with_stores(Headless::with_document()))
+                }
+            },
+            Err(e) => {
+                if control_token_present(DEFAULT_ADDR) {
+                    note(&e);
+                }
+                Box::new(with_stores(Headless::with_document()))
+            }
         }
     };
     eprintln!("vectorcraft-cli: MCP server on stdio ({})", backend.describe());
@@ -262,6 +281,23 @@ fn mcp(args: &[String]) -> Result<(), String> {
     let stdin = std::io::stdin();
     // The server reads and writes from threads of its own, so it takes the handles, not locks held here.
     Server::new(backend).serve(std::io::BufReader::new(stdin), std::io::stdout()).map_err(|e| e.to_string())
+}
+
+/// The control token of the app at `addr` (#3603): `VECTORCRAFT_CONTROL_TOKEN`, else the file
+/// `VECTORCRAFT_CONTROL_TOKEN_FILE` names, else the `control-<port>.token` the app wrote next to the
+/// settings.
+fn control_token(addr: &str) -> Result<String, String> {
+    use vectorcraft_engine::control_auth::{TOKEN_ENV, client_token};
+    let port = addr.rsplit_once(':').and_then(|(_, port)| port.parse::<u16>().ok());
+    client_token(std::env::var_os(TOKEN_ENV), None, port.and_then(prefs_dir::control_token_path))
+}
+
+/// Whether a control token for `addr` was given at all: the variable is set or the token file
+/// exists. Without either, no app has been started with `--control` on that port.
+fn control_token_present(addr: &str) -> bool {
+    use vectorcraft_engine::control_auth::TOKEN_ENV;
+    let port = addr.rsplit_once(':').and_then(|(_, port)| port.parse::<u16>().ok());
+    std::env::var_os(TOKEN_ENV).is_some_and(|v| !v.is_empty()) || port.and_then(prefs_dir::control_token_path).is_some_and(|p| p.exists())
 }
 
 fn commands() -> Result<(), String> {

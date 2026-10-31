@@ -1,5 +1,13 @@
 use super::*;
 
+/// The token the socket fixtures' server expects.
+const TOKEN: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+/// The `auth` request line with [`TOKEN`].
+fn auth_line() -> String {
+    format!("{}\n", control_auth::auth_request(TOKEN))
+}
+
 fn short_timeouts() -> ConnectionTimeouts {
     ConnectionTimeouts { idle: Duration::from_millis(150), line: Duration::from_millis(120), write: Duration::from_millis(150) }
 }
@@ -28,7 +36,7 @@ fn socket_fixture(
     let worker = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
         socket2::SockRef::from(&stream).set_send_buffer_size(4096).unwrap();
-        serve_socket(stream, timeouts, handle);
+        serve_socket(stream, timeouts, TOKEN, handle);
         finished.send(()).unwrap();
     });
     let client = TcpStream::connect(addr).unwrap();
@@ -112,7 +120,7 @@ fn trickled_control_line_has_an_absolute_deadline() {
 fn a_nonreading_control_peer_cannot_retain_the_writer() {
     let payload = "x".repeat(2 * 1024 * 1024);
     let (mut client, done, worker) = socket_fixture(short_timeouts(), move |_, _| Some(json!({"ok": true, "result": payload})));
-    client.write_all(b"{\"method\":\"large\"}\n").unwrap();
+    client.write_all(format!("{}{{\"method\":\"large\"}}\n", auth_line()).as_bytes()).unwrap();
     expect_socket_deadline(client, done, worker);
 }
 
@@ -130,6 +138,10 @@ fn persistent_control_requests_get_fresh_transport_deadlines() {
         Some(json!({"ok": true}))
     });
     let mut reader = BufReader::new(client.try_clone().unwrap());
+    client.write_all(auth_line().as_bytes()).unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap()["ok"], true, "{line}");
     for id in [1, 2] {
         // The client sends each line in one write. `writeln!` on the socket sends the JSON in many
         // small writes, and when the machine is busy, a pause of more than the line deadline between
@@ -147,9 +159,13 @@ fn persistent_control_requests_get_fresh_transport_deadlines() {
 #[test]
 fn buffered_partial_control_line_also_expires() {
     let (mut client, done, worker) = socket_fixture(line_timeouts(), |_, _| Some(json!({"ok": true})));
-    client.write_all(b"{\"id\":1,\"method\":\"inspect\"}\n{").unwrap();
+    client.write_all(format!("{}{{\"id\":1,\"method\":\"inspect\"}}\n{{", auth_line()).as_bytes()).unwrap();
+    let mut reader = BufReader::new(client.try_clone().unwrap());
     let mut line = String::new();
-    BufReader::new(client.try_clone().unwrap()).read_line(&mut line).unwrap();
+    reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap()["id"], "auth");
+    line.clear();
+    reader.read_line(&mut line).unwrap();
     assert_eq!(serde_json::from_str::<Value>(&line).unwrap()["id"], 1);
     expect_socket_deadline(client, done, worker);
 }
@@ -164,7 +180,7 @@ fn timed_out_worker_returns_its_connection_slot() {
     let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
     let (stream, _) = listener.accept().unwrap();
     let (tx, _rx) = channel();
-    let worker = spawn_connection(stream, tx, egui::Context::default(), slot, short_timeouts()).unwrap();
+    let worker = spawn_connection(stream, tx, egui::Context::default(), TOKEN.into(), slot, short_timeouts()).unwrap();
     let start = std::time::Instant::now();
     while open.load(Ordering::SeqCst) == MAX_CONNECTIONS && start.elapsed() < WAIT {
         std::thread::sleep(Duration::from_millis(10));
@@ -380,7 +396,7 @@ fn extra_connections_are_refused() {
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     let (tx, _rx) = channel::<ControlRequest>();
-    std::thread::spawn(move || accept_loop(listener, tx, egui::Context::default()));
+    std::thread::spawn(move || accept_loop(listener, tx, egui::Context::default(), TOKEN.into()));
     // Idle connections are accepted in order and held open.
     let held: Vec<TcpStream> = (0..16).map(|_| TcpStream::connect(addr).unwrap()).collect();
     let mut extra = TcpStream::connect(addr).unwrap();
@@ -402,4 +418,122 @@ fn the_control_channel_keeps_the_app_at_full_priority_on_macos() {
     assert!(options.contains(NSActivityOptions::UserInitiatedAllowingIdleSystemSleep));
     assert!(!options.contains(NSActivityOptions::IdleSystemSleepDisabled), "the channel must not keep the Mac awake");
     keep_answering();
+}
+
+/// Serve `input` on a connection that must authenticate with [`TOKEN`]; the replies and the
+/// methods that ran.
+fn run_authenticated(input: &[u8]) -> (Vec<Value>, Vec<String>) {
+    let mut out = Vec::new();
+    let mut calls = Vec::new();
+    serve_lines_authenticated(input, &mut out, TOKEN, |m, _p| {
+        calls.push(m);
+        Some(json!({"ok": true, "result": null}))
+    });
+    let replies = String::from_utf8(out).unwrap().lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).collect();
+    (replies, calls)
+}
+
+/// #3603: without the token, nothing runs: a request sent first, an `auth` without a token or
+/// with a wrong one, each gets one refusal and the connection is closed.
+#[test]
+fn a_missing_or_wrong_token_is_refused_and_closes_the_connection() {
+    let wrong = control_auth::auth_request(&"f".repeat(64));
+    let short = control_auth::auth_request("1234");
+    for first in [
+        json!({"id": 1, "method": "engine.execute", "params": {"command": "file.new"}}),
+        json!({"id": 1, "method": "auth"}),
+        json!({"id": 1, "method": "auth", "params": {"token": null}}),
+        wrong,
+        short,
+        // The right token on another method is no authentication either.
+        json!({"id": 1, "method": "ui.inspect", "params": {"token": TOKEN}}),
+    ] {
+        let input = format!("{first}\n{}{{\"method\":\"engine.execute\"}}\n", auth_line());
+        let (r, calls) = run_authenticated(input.as_bytes());
+        assert!(calls.is_empty(), "{first}: nothing may run: {calls:?}");
+        assert_eq!(r.len(), 1, "{first}: one refusal, then the connection closes: {r:?}");
+        assert_eq!(r[0]["ok"], false);
+        assert!(r[0]["error"].as_str().unwrap().starts_with("authentication required"), "{r:?}");
+    }
+}
+
+#[test]
+fn the_right_token_authenticates_the_connection() {
+    let input = format!("\n{}{{\"id\":2,\"method\":\"a\"}}\n{}{{\"id\":3,\"method\":\"b\"}}\n", auth_line(), auth_line());
+    let (r, calls) = run_authenticated(input.as_bytes());
+    assert_eq!(calls, ["a", "b"], "a repeated `auth` is not passed on as a method");
+    assert_eq!(r[0], json!({"id": "auth", "ok": true, "result": {"authenticated": true}}));
+    assert_eq!(r[1]["id"], 2);
+    assert_eq!(r[2], json!({"id": "auth", "ok": false, "error": "already authenticated"}));
+    assert_eq!(r[3]["id"], 3);
+    // Hex letters match in either case.
+    let upper = format!("{}\n{{\"method\":\"a\"}}\n", control_auth::auth_request(&TOKEN.to_uppercase()));
+    assert_eq!(run_authenticated(upper.as_bytes()).1, ["a"]);
+}
+
+/// #3603: a browser (a page's `fetch`, or one rebound to 127.0.0.1) is refused as HTTP before any
+/// token is asked for, and its body never runs, even when it carries the right token.
+#[test]
+fn an_http_request_is_refused_before_authentication() {
+    let body = format!("{}{{\"method\":\"engine.execute\"}}\n", auth_line());
+    for start in ["POST / HTTP/1.1", "GET /?x=1 HTTP/1.0", "OPTIONS * HTTP/1.1"] {
+        let http = format!("{start}\r\nHost: 127.0.0.1:7979\r\nOrigin: https://attacker.example\r\n\r\n{body}");
+        let (r, calls) = run_authenticated(http.as_bytes());
+        assert!(calls.is_empty(), "{start}: {calls:?}");
+        assert_eq!(r.len(), 1);
+        assert!(r[0]["error"].as_str().unwrap().starts_with("HTTP requests are not accepted"), "{r:?}");
+    }
+    assert!(!looks_like_http("{\"method\": \"a HTTP/1.1\"}"));
+}
+
+/// End to end over a socket: no token, then the right one on a new connection.
+#[test]
+fn a_socket_without_the_token_runs_nothing() {
+    let (mut client, done, worker) = socket_fixture(line_timeouts(), |_, _| panic!("nothing may run without the token"));
+    client.write_all(b"{\"id\":1,\"method\":\"app.save\",\"params\":{\"path\":\"/tmp/x\"}}\n").unwrap();
+    let mut text = String::new();
+    client.read_to_string(&mut text).unwrap();
+    assert!(text.contains("authentication required"), "{text}");
+    expect_socket_deadline(client, done, worker);
+
+    let (mut client, done, worker) = socket_fixture(line_timeouts(), |m, _| Some(json!({"ok": true, "result": m})));
+    client.write_all(format!("{}{{\"id\":1,\"method\":\"ui.inspect\"}}\n", auth_line()).as_bytes()).unwrap();
+    client.shutdown(std::net::Shutdown::Write).unwrap();
+    let mut text = String::new();
+    client.read_to_string(&mut text).unwrap();
+    let lines: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines, [json!({"id": "auth", "ok": true, "result": {"authenticated": true}}), json!({"id": 1, "ok": true, "result": "ui.inspect"})]);
+    expect_socket_deadline(client, done, worker);
+}
+
+#[test]
+fn a_supplied_token_is_used_and_a_generated_one_needs_a_file() {
+    let t = token_for(7979, Some(TOKEN.to_uppercase().into()), None).unwrap();
+    assert_eq!((t.token.as_str(), t.file), (TOKEN, None));
+    assert!(token_for(7979, Some("nope".into()), None).err().unwrap().contains("VECTORCRAFT_CONTROL_TOKEN"));
+    let file = std::path::PathBuf::from("control-7979.token");
+    let (a, b) = (token_for(7979, None, Some(file.clone())).unwrap(), token_for(7979, Some("".into()), Some(file.clone())).unwrap());
+    assert_eq!(a.file, Some(file));
+    assert!(control_auth::validate_token(&a.token).is_ok());
+    assert_ne!(a.token, b.token, "a fresh token per launch");
+    assert!(token_for(7979, None, None).is_err());
+}
+
+/// The server writes the token it generated, after binding, to a file only the user can read.
+#[test]
+fn the_generated_token_is_written_once_the_port_is_bound() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-control-server-token-{}", std::process::id()));
+    let path = dir.join("control.token");
+    let port = TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
+    let token = token_for(port, None, Some(path.clone())).unwrap();
+    let expected = token.token.clone();
+    let _rx = start(port, token, egui::Context::default());
+    assert_eq!(control_auth::read_token_file(&path).unwrap(), expected);
+    let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    c.set_read_timeout(Some(WAIT)).unwrap();
+    c.write_all(format!("{}\n", control_auth::auth_request(&expected)).as_bytes()).unwrap();
+    let mut line = String::new();
+    BufReader::new(c).read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap()["ok"], true, "{line}");
+    let _ = std::fs::remove_dir_all(dir);
 }

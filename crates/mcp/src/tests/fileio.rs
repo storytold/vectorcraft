@@ -117,7 +117,7 @@ fn recording_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
 fn export_is_the_same_call_in_the_app_and_headless() {
     let args = json!({"format": "png", "artboard": 1, "options": {"scale": 2, "artboard": 0, "range": "1-2"}});
     let (addr, app) = recording_app();
-    let mut remote = Remote::connect(&addr).unwrap();
+    let mut remote = Remote::connect(&addr, None).unwrap();
     assert!(!call_tool(&mut remote, "export", &args).is_error);
     drop(remote);
     let seen = app.join().unwrap();
@@ -271,7 +271,7 @@ fn save_file_warns_about_options_it_does_not_use() {
 fn save_file_is_the_same_call_in_the_app_and_headless() {
     let path = tmp("app.vectorcraft");
     let (addr, app) = recording_app();
-    let mut remote = Remote::connect(&addr).unwrap();
+    let mut remote = Remote::connect(&addr, None).unwrap();
     let args = json!({"path": path, "compress": true, "version": 3, "preview": null, "options": {"preview": true}});
     assert!(!call_tool(&mut remote, "save_file", &args).is_error);
     drop(remote);

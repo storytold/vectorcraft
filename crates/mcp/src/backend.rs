@@ -20,6 +20,9 @@ pub trait Backend {
 /// A running VectorCraft app, reached through its loopback control port.
 pub struct Remote {
     addr: String,
+    /// The app's control token, sent first on every connection (#3603); `None` for an endpoint
+    /// that asks for none.
+    token: Option<String>,
     conn: Option<(BufReader<TcpStream>, TcpStream)>,
     next_id: u64,
 }
@@ -29,11 +32,15 @@ pub struct Remote {
 /// and the connection dropped, so a faulty endpoint can't make the server buffer without bound
 /// (#1727).
 const MAX_REPLY_BYTES: usize = 256 * 1024 * 1024;
+/// Longest accepted reply to the `auth` request.
+const MAX_AUTH_REPLY_BYTES: usize = 64 * 1024;
 
 impl Remote {
-    /// Connect to `addr` (e.g. `127.0.0.1:7979`), failing fast when nothing is listening.
-    pub fn connect(addr: &str) -> std::io::Result<Self> {
-        let mut r = Self { addr: addr.to_string(), conn: None, next_id: 1 };
+    /// Connect to `addr` (e.g. `127.0.0.1:7979`), failing fast when nothing is listening or the
+    /// app refuses `token` (see [`vectorcraft_engine::control_auth::client_token`] for finding it).
+    /// Every connection, including the ones opened again later, authenticates with it first.
+    pub fn connect(addr: &str, token: Option<&str>) -> std::io::Result<Self> {
+        let mut r = Self { addr: addr.to_string(), token: token.map(str::to_string), conn: None, next_id: 1 };
         r.reconnect()?;
         Ok(r)
     }
@@ -56,14 +63,36 @@ impl Remote {
                     s.set_nodelay(true).ok();
                     // The app answers within 60 s (its own timeout); leave headroom.
                     s.set_read_timeout(Some(Duration::from_secs(90))).ok();
-                    let read = s.try_clone()?;
-                    self.conn = Some((BufReader::new(read), s));
+                    let mut read = BufReader::new(s.try_clone()?);
+                    if let Some(token) = &self.token {
+                        Self::authenticate(&mut read, &s, token)?;
+                    }
+                    self.conn = Some((read, s));
                     return Ok(());
                 }
                 Err(e) => last = e,
             }
         }
         Err(last)
+    }
+
+    /// Send the `auth` request and check the app accepted it.
+    fn authenticate(reader: &mut BufReader<TcpStream>, mut writer: &TcpStream, token: &str) -> std::io::Result<()> {
+        let line = vectorcraft_engine::control_auth::auth_request(token).to_string();
+        writer.write_all(line.as_bytes())?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
+        let mut buf = Vec::new();
+        if !crate::server::read_line_capped(reader, &mut buf, MAX_AUTH_REPLY_BYTES)? || buf.len() > MAX_AUTH_REPLY_BYTES {
+            return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "the app closed the connection without answering `auth`"));
+        }
+        let reply: Value =
+            serde_json::from_slice(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("bad reply to `auth`: {e}")))?;
+        if reply.get("ok").and_then(Value::as_bool) == Some(true) {
+            return Ok(());
+        }
+        let why = reply.get("error").and_then(Value::as_str).unwrap_or("no reason given");
+        Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("the app refused the control token: {why}")))
     }
 
     fn prepare_connection(&mut self) -> std::io::Result<()> {

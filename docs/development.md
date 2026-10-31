@@ -91,6 +91,8 @@ By default VectorCraft's own crates log at `info` and everything else at `warn`.
 | Variable | Effect |
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>`, which overrides it; a value that isn't a port from 1 to 65535 stops the app |
+| `VECTORCRAFT_CONTROL_TOKEN` | The control port's token (64 hex digits) instead of a generated one; `vectorcraft-cli mcp` sends it. See `docs/control-protocol.md` › Authentication |
+| `VECTORCRAFT_CONTROL_TOKEN_FILE` | Where the app writes its generated control token, and `vectorcraft-cli mcp` reads it, instead of `control-<port>.token` in the settings folder |
 | `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file, and no saved PDF presets or loaded ICC profiles kept (agents' test runs; also for `vectorcraft-cli`) |
 | `VECTORCRAFT_CONFIG_DIR` | The folder for the preferences and the folders next to them (`PDF Presets`, `Color Profiles`, …), for the app and `vectorcraft-cli` (see `docs/control-protocol.md`) |

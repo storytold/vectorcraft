@@ -8,7 +8,9 @@
 //!
 //! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 1 to 65535, or the app doesn't
 //! start) starts a localhost JSON-lines control server:
-//! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
+//! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`, after a first
+//! `{"method":"auth","params":{"token":…}}` with the per-launch token the app writes next to its
+//! settings (`control_server`, #3603).
 //! See `vectorcraft_ui_egui::control` for the methods. `--automation-read-root` and
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
 //! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
@@ -111,7 +113,9 @@ Opens the VectorCraft desktop app with the given files.
 
 Options:
   --control <port>               Start the localhost JSON-lines control server on <port>
-                                 (or VECTORCRAFT_CONTROL_PORT)
+                                 (or VECTORCRAFT_CONTROL_PORT); clients authenticate with
+                                 the token written to control-<port>.token next to the
+                                 settings (or set VECTORCRAFT_CONTROL_TOKEN)
   --automation-read-root <dir>   Confine the files control requests read to <dir>
                                  (may be given more than once)
   --automation-write-root <dir>  Confine the files control requests write to <dir>
@@ -180,6 +184,21 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::FAILURE;
             }
         },
+    };
+    // The control channel's key (#3603): a bad VECTORCRAFT_CONTROL_TOKEN keeps the app from starting
+    // rather than opening a port nobody can use.
+    let control_token = match control_port {
+        Some(port) => {
+            match control_server::token_for(port, std::env::var_os(vectorcraft_engine::control_auth::TOKEN_ENV), prefs_dir::control_token_path(port))
+            {
+                Ok(token) => Some(token),
+                Err(e) => {
+                    eprintln!("vectorcraft: {e}");
+                    return std::process::ExitCode::FAILURE;
+                }
+            }
+        }
+        None => None,
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
@@ -433,8 +452,8 @@ fn main() -> std::process::ExitCode {
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
                 app.custom_titlebar = custom_titlebar;
-                if let Some(port) = control_port {
-                    let rx = control_server::start(port, cc.egui_ctx.clone());
+                if let (Some(port), Some(token)) = (control_port, control_token) {
+                    let rx = control_server::start(port, token, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
                     if let Some(roots) = &roots {
                         // Everywhere the app doesn't say whose work it is (worker threads), the

@@ -1,11 +1,53 @@
 # Control protocol
 
-> **Last updated:** 2026-10-25 · **Change:** Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-10-29 · **Change:** the port requires a per-launch token, sent as the first request of every connection, and refuses HTTP requests (#3603); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
 before it starts. One JSON request per line:
 `{"id": 1, "method": "ui.inspect", "params": {}}` → `{"id": 1, "ok": true, "result": {...}}` or `{"id":1,"ok":false,"error":"..."}`.
+
+## Authentication
+
+Every connection must start with an `auth` request carrying the app's control token:
+
+```json
+{"id": "auth", "method": "auth", "params": {"token": "<64 hexadecimal digits>"}}
+```
+
+The reply is `{"id": "auth", "ok": true, "result": {"authenticated": true}}`, and the connection then
+serves requests as below. Authenticate once per connection; a later `auth` gets
+`{"ok": false, "error": "already authenticated"}` and the connection keeps serving. A first request that
+is anything else (another method, `auth` without a token or with a wrong one) gets
+`{"ok": false, "error": "authentication required: …"}` and the connection is closed, so nothing sent on it
+runs. Loopback is shared by every process and every user on the machine; the token is what keeps them,
+and sandboxed apps that may reach the network but not your files, from driving the app.
+
+**Where the token comes from.** At each launch with `--control <port>` the app makes a fresh 256-bit token
+from the system's random source and writes it to `control-<port>.token` in its settings folder
+(`$XDG_CONFIG_HOME/vectorcraft` or `~/.config/vectorcraft` on Linux, `~/Library/Application Support/VectorCraft`
+on macOS, `%APPDATA%\VectorCraft` on Windows, `VECTORCRAFT_CONFIG_DIR` when set, `VectorCraftData` in portable
+mode). On Unix the file is mode `0600`. On Windows it takes the permissions of its folder: `%APPDATA%` is
+the user's own, but a portable `VectorCraftData` folder, or a `VECTORCRAFT_CONTROL_TOKEN_FILE` path, is only as
+private as the folder it is in, so on a machine other people use, keep those somewhere only you can read
+(or don't enable the port there). The file is written
+once the port is bound, so a second app that can't bind the port leaves the first one's token alone, and the
+app says where it is on standard error:
+`vectorcraft: control server listening on 127.0.0.1:7979 (token in /home/me/.config/vectorcraft/control-7979.token)`.
+If the file can't be written, the control server doesn't start. Read it in a client:
+
+```sh
+TOKEN=$(cat ~/.config/vectorcraft/control-7979.token)
+```
+
+- `VECTORCRAFT_CONTROL_TOKEN_FILE=<path>` writes (app) and reads (`vectorcraft-cli`) the token at `<path>`
+  instead.
+- `VECTORCRAFT_CONTROL_TOKEN=<64 hex digits>` gives the app the token to use instead of a generated one
+  (nothing is written then), and gives `vectorcraft-cli` the token to send. A value that isn't 64 hexadecimal
+  digits keeps the app from starting. Prefer the file on a shared machine: other users may see a process's
+  environment.
+
+`vectorcraft-cli mcp` finds and sends the token itself (see [MCP](mcp.md)).
 
 Set `VECTORCRAFT_CONFIG_DIR` to a dedicated directory for an isolated native test profile. Preferences,
 logs, recovery and user libraries then use that root, without importing the legacy DrawCraft profile.
@@ -22,9 +64,11 @@ are optional; blank lines are skipped). Anything else gets one error reply
 nothing sent after it on that connection runs. That covers text that isn't JSON, a JSON array or number,
 an object without `method`, invalid UTF-8, and a line longer than 4 MiB. An HTTP request (for example a
 web page's cross-origin `fetch` to `127.0.0.1:<port>`) therefore can't smuggle a command in its body:
-its request line is rejected first. At most 16 connections are served at once; further ones get an error
-line and are closed. Clients that get an error reply should reconnect. The port has no authentication,
-so only enable it while you use it. Idle clients have 5 minutes to start their next line; once the
+its request line is rejected first, with `HTTP requests are not accepted: …`, before any token is asked for.
+At most 16 connections are served at once; further ones get an error
+line and are closed. Clients that get an error reply should reconnect (and authenticate again). Whoever
+holds the token can do anything the app can, including reading and writing your files unless the roots below
+confine it, so only enable the port while you use it and keep the token file private. Idle clients have 5 minutes to start their next line; once the
 first byte arrives, the complete line must arrive within an absolute 30 seconds (trickled bytes do not
 renew it). A reply has 60 seconds to be written. Expiration closes the connection and returns its slot
 (an idle connection is closed without a line, so nothing waits where the next reply would be; a line

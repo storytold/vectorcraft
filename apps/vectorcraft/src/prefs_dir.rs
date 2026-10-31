@@ -24,6 +24,16 @@ pub fn install_fonts() {
     }
 }
 
+/// The file the app started with `--control <port>` writes its control token to, next to the
+/// settings, and `vectorcraft-cli mcp` reads it from (#3603). Not a preference: kept whether or not
+/// `VECTORCRAFT_NO_PREFS` is set. `VECTORCRAFT_CONTROL_TOKEN_FILE` names another file.
+pub fn control_token_path(port: u16) -> Option<PathBuf> {
+    if let Some(file) = std::env::var_os(vectorcraft_engine::control_auth::TOKEN_FILE_ENV).filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(file));
+    }
+    Some(prefs_path_for("VectorCraft", "vectorcraft")?.parent()?.join(format!("control-{port}.token")))
+}
+
 /// The folder `name` next to the settings, for what the user keeps: none in a run without
 /// preferences (`VECTORCRAFT_NO_PREFS`), which keeps nothing.
 fn store_dir(name: &str) -> Option<PathBuf> {
