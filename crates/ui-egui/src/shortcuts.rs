@@ -158,7 +158,9 @@ pub fn runs_a_shortcut(key: &str, code: &str, modifiers: Modifiers) -> bool {
 }
 
 /// Process one frame's events against the keymap at most once per context, viewport and frame, so
-/// reruns cannot fire a shortcut or tool key twice.
+/// reruns cannot fire a shortcut or tool key twice: keymap commands, tools and panels, nudges,
+/// Delete/Backspace (left to a Layers or Appearance row that has the keys) and single-key tool
+/// shortcuts.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // One UI pass takes a frame's events. A discarded rerun and a test helper that also calls
     // `logic` see the same events again; they must not fire a shortcut or tool key twice. The
@@ -323,15 +325,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         busy_tool_keys(app, ctx, view);
         return;
     }
-    if claimed_tool_keys(app, ctx, view) {
+    // A plain Delete or Backspace after a click on a Layers or Appearance row is that panel's (it
+    // removes the highlighted rows), not a tool's (the Artboard tool's) or Edit › Clear's.
+    let rows_keys = crate::panels::rows_take_delete(ctx);
+    if claimed_tool_keys(app, ctx, view, rows_keys) {
         return;
     }
     // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
     // other text keys use the typed character below.
+    let row_key = |chord: &craft_keymap::Chord| {
+        rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
+    };
     let hits = dispatch(app, ctx, |hit| {
-        let chord = hit.trigger.chord;
+        let chord = &hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
-        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation)
+        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord))
     });
     let ran = !hits.is_empty();
     for c in hits {
@@ -343,7 +351,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if alt_type_arrows(app, ctx) {
         return;
     }
-    nudge_and_clear(app, ctx);
+    nudge_and_clear(app, ctx, rows_keys);
     single_key_shortcuts(app, ctx);
 }
 
@@ -482,8 +490,9 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
     settings_on_a_mac(app, ctx, mac(ctx));
 }
 
-/// Apply arrow-key movement and clear selected art when no text editor owns input.
-fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Apply arrow-key movement and clear selected art when no text editor owns input, unless a Layers
+/// or Appearance row has Delete/Backspace (`rows_keys`).
+fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: bool) {
     // Arrow nudges (Shift = ×10, Alt = copy).
     let arrows = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (k, dx, dy) in arrows {
@@ -493,7 +502,9 @@ fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     // Delete / Backspace clear the selection.
-    if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
+    if !rows_keys
+        && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace))
+        && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
     {
         let _ = app.run("edit.clear", json!({}));
     }
@@ -645,9 +656,11 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     }
 }
 
-/// Give keys claimed by the active tool precedence over their command shortcuts.
-fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo) -> bool {
+/// Give keys claimed by the active tool precedence over their command shortcuts, except a plain
+/// Delete or Backspace while a panel's rows have them (`rows_keys`).
+fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo, rows_keys: bool) -> bool {
     let m = ctx.input(|i| i.modifiers);
+    let rows_take = |k: Key| rows_keys && m.is_none() && matches!(k, Key::Delete | Key::Backspace);
     for (k, tk) in [
         (Key::Delete, ToolKey::Delete),
         (Key::Backspace, ToolKey::Backspace),
@@ -658,7 +671,7 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
         // The Smart Pen Tool's Tab while it draws a path (the key otherwise hides the panels).
         (Key::Tab, ToolKey::Tab),
     ] {
-        if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
+        if !rows_take(k) && ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
             let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
             // Keyboard actions can change the Artboard tool's active board too. Keep the
             // navigator aligned with its valid survivor, as pointer dispatch does.

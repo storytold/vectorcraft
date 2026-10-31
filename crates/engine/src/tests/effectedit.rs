@@ -70,6 +70,7 @@ fn effects_move_and_copy_between_the_object_and_its_items() {
     assert!(s.execute("effect.move", &json!({"from": 0, "fromItem": 1, "to": 0, "toItem": 7})).is_err());
 }
 
+/// `effect.duplicate` copies a fill's effect right after it.
 #[test]
 fn duplicate_selected_works_for_effects() {
     let (mut s, id) = session_with_rect();
@@ -78,6 +79,7 @@ fn duplicate_selected_works_for_effects() {
     assert_eq!(fx(&s, id, Some(0)), ["distort.roughen", "distort.roughen"]);
 }
 
+/// `appearance.duplicateItem` copies a fill/stroke to a given position, and `appearance.removeItem` with `indices` removes several at once.
 #[test]
 fn items_duplicate_to_a_position_and_several_remove_at_once() {
     let (mut s, id) = session_with_rect();
@@ -91,7 +93,10 @@ fn items_duplicate_to_a_position_and_several_remove_at_once() {
     // Duplicating several copies each above itself.
     run(&mut s, "appearance.duplicateItem", json!({"indices": [0, 2]}));
     assert_eq!(kinds(&s), ["fill", "fill", "fill", "stroke", "stroke", "fill"]);
-    assert!(s.execute("appearance.duplicateItem", &json!({"indices": [0, 1], "to": 3})).is_err());
+    // Several with `to` are copied as one block there (Alt-dragging highlighted rows).
+    run(&mut s, "appearance.duplicateItem", json!({"indices": [0, 1], "to": 3}));
+    assert_eq!(kinds(&s), ["fill", "fill", "fill", "fill", "fill", "stroke", "stroke", "fill"]);
+    s.execute("edit.undo", &json!({})).unwrap();
     // Removing several in one step; the active item follows.
     run(&mut s, "appearance.setActiveItem", json!({"index": 5}));
     run(&mut s, "appearance.removeItem", json!({"indices": [4, 0, 1]}));
