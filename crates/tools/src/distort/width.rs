@@ -114,7 +114,7 @@ pub fn stroke_owner(doc: &Document, id: NodeId) -> NodeId {
 
 /// The visible weighted stroke of `owner`.
 fn stroke_of(doc: &Document, owner: NodeId) -> Option<&StrokeLayer> {
-    doc.node(owner)?.appearance.stroke().filter(|s| s.visible && s.width > 0.0 && !s.paint.is_none())
+    doc.node(owner)?.appearance.stroke().filter(|s| s.visible && s.width >= 0.0 && !s.paint.is_none())
 }
 
 /// The paths a stroke owner draws: itself, or a compound path's members.
@@ -253,7 +253,7 @@ impl WidthTool {
             Mode::Width(_) => self.selected.as_ref().is_some_and(|(_, ts)| ts.len() > 1),
             Mode::Copy => false,
         };
-        several.then(|| Group { points: st.profile.as_ref().map(|p| p.points.clone()).unwrap_or_default(), moving, half: st.width / 2.0 })
+        several.then(|| Group { points: st.profile.as_ref().map(|p| p.points.clone()).unwrap_or_default(), moving, half: (st.width / 2.0).max(1e-6) })
     }
 
     /// The command previewing drag `d`.
@@ -752,5 +752,33 @@ mod tests {
             assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
             assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 250.0, mods)).is_empty(), "not on a stroked path");
         }
+    }
+
+    #[test]
+    fn drag_on_zero_width_stroke_does_not_divide_by_zero() {
+        let (mut d, id) = doc_three_points();
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().width = 0.0;
+        let s = Selection { objects: vec![id], ..Default::default() };
+        let cx = crate::testutil::cx(&d, &s, &paint());
+        let mut t = WidthTool { selected: Some((id, vec![0.0, 0.5, 1.0])), ..Default::default() };
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 200.0, Mods::default()));
+        let acts = t.pointer(&cx, &ev(PointerKind::Drag, 200.0, 220.0, Mods::default()));
+        assert!(!acts.is_empty(), "preview actions should be produced");
+        let mut checked = false;
+        for act in &acts {
+            if let Action::Preview(cmd, p) = act {
+                if cmd == "stroke.widthProfile.set" {
+                    if let Some(pts) = p.get("points").and_then(|v| v.as_array()) {
+                        for pt in pts {
+                            for num in pt.as_array().unwrap() {
+                                assert!(num.as_f64().unwrap().is_finite(), "all points must be finite: {num:?}");
+                                checked = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked, "stroke.widthProfile.set preview was validated");
     }
 }
