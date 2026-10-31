@@ -1,8 +1,9 @@
 //! Swatch libraries (Window → Swatch Libraries, the Swatches panel's library button): read-only
 //! sets of swatches the library panel shows. The built-in libraries are computed in
-//! [`vectorcraft_color::libraries`]; User Defined ones are the library files in the user library
-//! folder ([`Libraries`]), and Other Library… loads more from files. `swatch.library.add` copies
-//! swatches into the document; `swatch.library.save` writes the document's ([`palette_io`]).
+//! [`vectorcraft_color::libraries`] and the pattern libraries in [`super::patternlib`]; User
+//! Defined ones are the library files in the user library folder ([`Libraries`]), and Other
+//! Library… loads more from files. `swatch.library.add` copies swatches (and a pattern swatch's
+//! pattern) into the document; `swatch.library.save` writes the document's ([`palette_io`]).
 //! `swatch.library.copyToUser` copies a loaded library into the user library folder.
 
 use std::collections::HashSet;
@@ -13,10 +14,12 @@ use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LI
 use vectorcraft_color::palette_io::{self, PaletteFormat};
 use vectorcraft_color::recolor::Palette;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
+use vectorcraft_doc::pattern::pattern_paint;
 
 use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
+use super::patternlib;
 use super::swatch::{map_default_paints, map_swatch_links, str_list, swatch_json};
 use super::{Color, CommandSpec, Result, Session, always, bad, cmd, has_doc, switch_or, text_param};
 
@@ -27,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, category: \"builtIn\"|\"gradients\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
+            "{} → {libraries: [{id, name, category: \"builtIn\"|\"gradients\"|\"patterns\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
             always,
             list
         ),
@@ -36,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Library",
             [],
             None,
-            "{library: id or name} → {id, name, category, swatches: [{name, kind, group, global, spot, color?, hex?, gradient?}] (as swatch.list), groups: [{name, swatches: [names]}]}",
+            "{library: id or name} → {id, name, category, swatches: [{name, kind, group, global, spot, color?, hex?, gradient?, pattern?}] (as swatch.list), groups: [{name, swatches: [names]}]}",
             always,
             get
         ),
@@ -45,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\") → {library, added: [names in the document], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number → {library, added: [names in the document], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -380,7 +383,7 @@ pub(crate) fn stem(name: &str) -> &str {
 pub struct LibraryInfo {
     pub id: String,
     pub name: String,
-    /// "builtIn", "gradients", "user" or "loaded".
+    /// "builtIn", "gradients", "patterns", "user" or "loaded".
     pub category: &'static str,
 }
 
@@ -393,9 +396,9 @@ fn builtin_info((category, b): (&'static str, &BuiltinLibrary)) -> LibraryInfo {
     LibraryInfo { id: b.id.into(), name: b.name.into(), category }
 }
 
-/// Every library, in menu order: built-in, gradients, User Defined, loaded.
+/// Every library, in menu order: built-in, gradients, patterns, User Defined, loaded.
 pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
-    builtins().map(builtin_info).chain(s.swatch_libraries.infos().cloned()).collect()
+    builtins().map(builtin_info).chain(patternlib::infos()).chain(s.swatch_libraries.infos().cloned()).collect()
 }
 
 /// Library `key` (an id, or a name in any case) with its info.
@@ -405,6 +408,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary
     }
     if let Some(b) = builtins().find(|(_, b)| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
+    }
+    if let Some(found) = patternlib::library(key) {
+        return Some(found);
     }
     let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
     library(s, &id)
@@ -611,10 +617,29 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let focus = switch_or(p, "focus", true, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
-    // Swatches the document already has (same name and paint) are reused, not added again.
+    // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
+    // same pattern) are reused, not added again.
+    let patterns = patternlib::library_doc(&info.id);
     let d = &s.doc()?.doc;
-    let (existing, fresh): (Vec<_>, Vec<_>) = picked.iter().partition(|(_, w)| d.swatch(&w.name).is_some_and(|x| x.paint == w.paint));
-    let existing: Vec<String> = existing.iter().map(|(_, w)| w.name.clone()).collect();
+    let there = |w: &Swatch| match (&w.paint, &patterns) {
+        (Paint::Pattern { pattern, .. }, Some(src)) => {
+            let mut probe = (**d).clone();
+            match patternlib::import(&mut probe, src, pattern) {
+                (target, false) => patternlib::pattern_swatch(d, &target),
+                _ => None,
+            }
+        }
+        _ => d.swatch(&w.name).is_some_and(|x| x.paint == w.paint).then(|| w.name.clone()),
+    };
+    // Library name → the name of the document's swatch.
+    let mut existing: Vec<(String, String)> = vec![];
+    let mut fresh = vec![];
+    for &(group, w) in &picked {
+        match there(w) {
+            Some(name) => existing.push((w.name.clone(), name)),
+            None => fresh.push((group, w)),
+        }
+    }
     let undo_before = s.doc()?.history.undo.len();
     // Library name → the name it got in the document.
     let added: Vec<(String, String)> = if fresh.is_empty() {
@@ -627,6 +652,21 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             let before = d.swatch_groups.len();
             let mut placed: Vec<(&str, usize)> = vec![];
             for (group, w) in fresh {
+                if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
+                    // The pattern comes with its swatch; a pattern the document has without one
+                    // gets one.
+                    let (target, _) = patternlib::import(d, src, pattern);
+                    let name = match patternlib::pattern_swatch(d, &target) {
+                        Some(name) => name,
+                        None => {
+                            let name = d.free_swatch_name(&target);
+                            d.swatches.push(Swatch { name: name.clone(), paint: pattern_paint(&target), global: false, spot: false });
+                            name
+                        }
+                    };
+                    out.push((w.name.clone(), name));
+                    continue;
+                }
                 let name = d.free_swatch_name(&w.name);
                 let sw = Swatch { name: name.clone(), ..(*w).clone() };
                 match group {
@@ -652,9 +692,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(out)
         })?
     };
-    let mut out = json!({"library": info.id, "added": added.iter().map(|(_, n)| n).collect::<Vec<_>>(), "existing": existing});
+    let names = |list: &[(String, String)]| list.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>();
+    let mut out = json!({"library": info.id, "added": names(&added), "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
-        let name = added.iter().find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
+        let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
         s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");

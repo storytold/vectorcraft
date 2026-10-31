@@ -638,6 +638,86 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
     assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
 }
 
+#[test]
+fn pattern_libraries_bring_their_patterns_and_add_each_once() {
+    let mut s = session();
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let libs = list["libraries"].as_array().unwrap();
+    let categories: Vec<&str> = libs.iter().map(|l| l["category"].as_str().unwrap()).collect();
+    let first = categories.iter().position(|c| *c == "patterns").expect("a pattern library");
+    assert!(categories.iter().rposition(|c| *c == "gradients") < Some(first), "{categories:?}");
+    let geo = libs.iter().find(|l| l["id"] == "geometric-patterns").unwrap();
+    assert_eq!(geo["name"], "Geometric Patterns");
+    let got = run(&mut s, "swatch.library.get", json!({"library": "geometric patterns"}));
+    let swatches = got["swatches"].as_array().unwrap();
+    assert_eq!(swatches.len() as u64, geo["count"].as_u64().unwrap());
+    assert!(swatches.iter().all(|w| w["kind"] == "pattern" && w["pattern"] == w["name"]));
+    // Clicking a pattern adds it with its definition and fills the selection with it, one undo step.
+    let id = vectorcraft_doc::NodeId(run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let before = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "geometric-patterns", "names": ["Polka Dots"], "apply": "fill"}));
+    assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Polka Dots"]), json!("Polka Dots")));
+    assert_eq!(undo_len(&s), before + 1, "added and applied as one step");
+    let d = doc(&s);
+    let def = d.pattern("Polka Dots").expect("the pattern comes with its swatch");
+    assert!(!def.art.is_empty());
+    assert!(matches!(d.swatch("Polka Dots").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Polka Dots"));
+    assert!(matches!(d.node(id).unwrap().appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Polka Dots"));
+    // Again: nothing is added; the stroke takes the same pattern.
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let had = counts(doc(&s));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "geometric-patterns", "names": ["Polka Dots"], "apply": "stroke"}));
+    assert_eq!((r["added"].clone(), r["existing"].clone(), r["applied"].clone()), (json!([]), json!(["Polka Dots"]), json!("Polka Dots")));
+    assert_eq!(counts(doc(&s)), had);
+    assert!(matches!(doc(&s).node(id).unwrap().appearance.stroke_paint(), Paint::Pattern { pattern, .. } if pattern == "Polka Dots"));
+    // A different pattern under the name: the library's comes in numbered, with its swatch.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    s.edit("Pattern", |d, _| {
+        let dot = vectorcraft_doc::Node::path(
+            d.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0)),
+            vectorcraft_doc::Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0),
+        );
+        d.patterns.push(vectorcraft_doc::PatternDef::new("Polka Dots", vec![std::sync::Arc::new(dot)]));
+        d.swatches.push(vectorcraft_color::Swatch {
+            name: "Polka Dots".into(),
+            paint: vectorcraft_doc::pattern::pattern_paint("Polka Dots"),
+            global: false,
+            spot: false,
+        });
+        Ok(())
+    })
+    .unwrap();
+    let r = run(&mut s, "swatch.library.add", json!({"library": "geometric-patterns", "apply": "fill"}));
+    let added: Vec<&str> = r["added"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!((added.len(), added[0], r["applied"].as_str()), (swatches.len(), "Polka Dots 2", Some("Polka Dots 2")));
+    let d = doc(&s);
+    assert!(added.iter().all(|n| d.pattern(n).is_some() && d.swatch(n).is_some()), "{added:?}");
+    assert!(matches!(d.node(id).unwrap().appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Polka Dots 2"));
+    // A pattern library has no colours to limit to, and is built in.
+    assert!(s.execute("swatch.library.copyToUser", &json!({"library": "geometric-patterns"})).is_err());
+}
+
+/// The built-in pattern libraries: unique, tiling patterns with art, whose names no two libraries
+/// share.
+#[test]
+fn built_in_pattern_libraries_hold_tiling_patterns_with_unique_names() {
+    use crate::cmd::patternlib::{PATTERN_LIBRARIES, library_doc, pattern_source};
+    let mut names = std::collections::HashSet::new();
+    for b in PATTERN_LIBRARIES {
+        let d = library_doc(b.id).unwrap();
+        assert!(!d.patterns.is_empty(), "{}", b.id);
+        for p in &d.patterns {
+            assert!(names.insert(p.name.clone()), "{} is in two libraries", p.name);
+            assert!(!p.art.is_empty() && p.width() > 0.0 && p.height() > 0.0, "{}", p.name);
+            assert!(vectorcraft_render::render_pattern_swatch(&d, &p.name, 16).is_some(), "{}", p.name);
+            assert!(std::sync::Arc::ptr_eq(&pattern_source(&p.name).unwrap(), &d));
+        }
+    }
+    assert!(pattern_source("No Such Pattern").is_none());
+}
+
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {
