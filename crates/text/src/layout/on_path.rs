@@ -136,6 +136,34 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend, 
         .then_some(out)
 }
 
+/// Gravity's numerical guard: the least determinant (the sine of the angle between a glyph's
+/// horizontal and vertical edges) it gives a glyph, where the line from the path's centre runs along
+/// the path. Small enough not to change the effect anywhere it is drawable; there only to keep every
+/// coordinate finite and every glyph invertible.
+const GRAVITY_MIN_DET: f64 = 1e-3;
+
+/// Gravity's glyph space → text space for a glyph (or a block of joined glyphs) whose baseline is
+/// centred at `p` on the path, the path's direction `dir` there, its pen `at` from that centre: x
+/// along the tangent, vertical edges pointing at the path's `centre`, on the glyph's up side. None
+/// where that isn't finite (the glyph then stands as Rainbow would).
+fn gravity(p: Point, dir: Vec2, centre: Point, at: (f64, f64)) -> Option<Affine> {
+    let n = Vec2::new(dir.y, -dir.x);
+    let away = p - centre;
+    let mut up = if away.hypot() < 1e-9 { n } else { away / away.hypot() };
+    if up.dot(n) < 0.0 {
+        up = -up;
+    }
+    // A numerical guard, not a design limit: along the path the shear would flatten the glyph to
+    // nothing (a zero determinant), so its edges keep at least [`GRAVITY_MIN_DET`] between them.
+    if up.dot(n) < GRAVITY_MIN_DET {
+        let along = up - n * up.dot(n);
+        let along = if along.hypot() < 1e-12 { dir } else { along / along.hypot() };
+        up = n * GRAVITY_MIN_DET + along * (1.0 - GRAVITY_MIN_DET * GRAVITY_MIN_DET).sqrt();
+    }
+    let xf = Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * Affine::translate(at);
+    xf.as_coeffs().iter().all(|c| c.is_finite()).then_some(xf)
+}
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -395,18 +423,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             // Where the line from the centre runs nearly along the path the glyph leans far and thins:
             // that is the effect, not capped here.
             PathEffect::Gravity => {
-                let dir = block_dir;
-                let n = Vec2::new(dir.y, -dir.x);
-                let away = block_p - centre;
-                let mut up = if away.hypot() < 1e-9 { n } else { away / away.hypot() };
-                if up.dot(n) < 0.0 {
-                    up = -up;
-                }
-                // Exactly along the path it would flatten the glyph to nothing: stand it up instead.
-                if up.dot(n) < 1e-6 {
-                    up = n;
-                }
-                Affine::translate(block_p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * Affine::translate((block_x, rise))
+                gravity(block_p, block_dir, centre, (block_x, rise)).unwrap_or_else(|| Affine::translate(p.to_vec2()) * Affine::rotate(angle) * half)
             }
         };
         // The caret's baseline moves with the type.

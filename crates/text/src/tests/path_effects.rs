@@ -360,3 +360,36 @@ fn skew_bends_joined_glyphs_so_their_joins_meet() {
         assert!((a.s + a.step - b.s).abs() < 1e-6, "a gap along the path between joined glyphs: {a:?} {b:?}");
     }
 }
+
+/// Gravity stays finite where the line from the path's centre runs along the path: on a nearly flat
+/// path, an S-curve and a straight line (whose centre lies on it), every glyph's transform is
+/// finite and invertible and every glyph lies within a few type sizes of the path's bounds.
+#[test]
+fn gravity_stays_finite_on_flat_and_s_shaped_paths() {
+    let curve = |els: &[(f64, f64)]| {
+        let mut b = kurbo::BezPath::new();
+        b.move_to(els[0]);
+        b.curve_to(els[1], els[2], els[3]);
+        vectorcraft_geom::PathData::from_bezpath(&b)
+    };
+    let paths = [
+        ("nearly flat", curve(&[(0.0, 0.0), (300.0, 0.5), (600.0, -0.5), (900.0, 0.0)])),
+        ("S-curve", curve(&[(0.0, 100.0), (300.0, -200.0), (600.0, 400.0), (900.0, 100.0)])),
+        ("straight", curve(&[(0.0, 0.0), (300.0, 0.0), (600.0, 0.0), (900.0, 0.0)])),
+    ];
+    for (name, path) in &paths {
+        let b = path.bounds().unwrap_or_default().inflate(24.0 * 4.0, 24.0 * 4.0);
+        for (text, style) in texts() {
+            let (_, l) = point_and_on_path(text, style, path, PathEffect::Gravity);
+            assert!(l.bounds.x0.is_finite() && l.bounds.y1.is_finite(), "{name} {text}: {:?}", l.bounds);
+            for g in &l.glyphs {
+                assert!(g.xf.as_coeffs().iter().all(|c| c.is_finite()) && g.xf.determinant().abs() > 0.0, "{name} {text}: {:?}", g.xf);
+                if g.outline.elements().is_empty() {
+                    continue;
+                }
+                let gb = g.outline.bounding_box();
+                assert!(b.contains(gb.origin()) && b.contains(Point::new(gb.x1, gb.y1)), "{name} {text}: a glyph at {gb:?}, the path within {b:?}");
+            }
+        }
+    }
+}
