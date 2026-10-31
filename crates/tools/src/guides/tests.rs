@@ -22,6 +22,42 @@ fn snaps_to_anchor_and_alignment() {
     assert_eq!(p.y, 200.0);
 }
 
+/// #4312: a rectangle lines up with the ruler guides of `edge_rulers`, where they run along it.
+#[test]
+fn rect_snap_aligns_edges_with_ruler_guides_where_they_run() {
+    let t = Targets {
+        edge_rulers: vec![Ruler { vertical: true, pos: 300.0, span: Some((0.0, 50.0)) }, Ruler { vertical: false, pos: 90.0, span: None }],
+        ..Targets::default()
+    };
+    // Its right edge, 2 short of the vertical guide, which runs along it.
+    let (dv, ov) = t.snap_rect(Rect::new(248.0, 10.0, 298.0, 40.0), 4.0);
+    assert_eq!(dv, Vec2::new(2.0, 0.0));
+    assert!(!ov.is_empty());
+    // The guide of an artboard above it doesn't run along it; the horizontal one still pulls its bottom.
+    let (dv, _) = t.snap_rect(Rect::new(248.0, 60.0, 298.0, 88.0), 4.0);
+    assert_eq!(dv, Vec2::new(0.0, 2.0));
+    // The guide of an artboard needs the rectangle to overlap it, not only be within reach of its end.
+    let (dv, _) = t.snap_rect(Rect::new(299.0, 51.0, 349.0, 80.0), 4.0);
+    assert_eq!(dv.x, 0.0, "{dv:?}");
+    // Without them as edge guides, nothing pulls: `rulers` is for points.
+    let points_only = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
+    assert_eq!(points_only.snap_rect(Rect::new(248.0, 10.0, 298.0, 40.0), 4.0).0, Vec2::ZERO);
+}
+
+/// #4312: a Shift move along a line almost parallel to a ruler guide doesn't slide far to meet it.
+#[test]
+fn a_slide_along_a_nearly_parallel_line_ignores_a_ruler_guide_beyond_its_reach() {
+    let t = Targets { edge_rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
+    let r = Rect::new(248.0, 10.0, 298.0, 40.0);
+    // Level: the right edge is 2 short of the guide, which is the way along the line.
+    assert_eq!(t.snap_rects_along(&[r], Vec2::new(1.0, 0.0), 4.0).0, Vec2::new(2.0, 0.0));
+    // On the diagonal it is 2.8 along.
+    let (d, _) = t.snap_rects_along(&[r], Vec2::new(1.0, 1.0), 4.0);
+    assert!((d - Vec2::new(2.0, 2.0)).hypot() < 1e-9, "{d:?}");
+    // Nearly upright, it would take about 118 along the line to meet the guide.
+    assert_eq!(t.snap_rects_along(&[r], Vec2::new(0.017, 1.0), 4.0).0, Vec2::ZERO);
+}
+
 #[test]
 fn rect_snap_aligns_edges() {
     let (d, id) = doc_with_rect();
