@@ -2,6 +2,7 @@
 //! Adjoining Width Points and the render of a step.
 
 use serde_json::json;
+use vectorcraft_doc::WidthProfile;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::*;
@@ -216,16 +217,27 @@ fn new_width_point_without_adjoining_preserves_neighbours() {
 
 #[test]
 fn new_width_point_adjust_adjoining_uses_sampled_widths() {
+    let base = [(0.0, 9.0, 9.0), (0.25, 1.0, 0.0), (0.75, 3.0, 0.0), (1.0, 7.0, 7.0)];
     for indexed in [false, true] {
         let (mut s, id) = line_session();
-        s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": [[0, 9, 9], [0.25, 1, 0], [0.75, 3, 0], [1, 7, 7]]})).unwrap();
-        // At t=0.5 the old sides are 10pt and 0pt. Indexed editing of that sampled
-        // point is the existing convention: scale the nonzero side, add from zero.
+        s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": base})).unwrap();
+        // At t=0.5 the curve's sides are what a new point starts from (an indexed edit starts from
+        // the point it made there: 10pt and 0pt, half the 10pt stroke's 5pt).
+        let old = if indexed { (2.0, 0.0) } else { WidthProfile { points: base.to_vec() }.at(0.5) };
         let index = if indexed { Some(set(&mut s, json!({"id": id.0, "t": 0.5, "left": 10, "right": 0}))) } else { None };
         set(&mut s, json!({"id": id.0, "index": index, "t": 0.5, "left": 20, "right": 5, "adjustAdjoining": true}));
+        // Scale the nonzero side, add from zero (as Adjust Adjoining Width Points does).
+        let scale = |v: f64, o: f64, n: f64| if o > 1e-9 { v * n / o } else { v + n - o };
+        let (nl, nr) = (4.0, 1.0);
         assert_eq!(
             points(&s, id),
-            vec![(0.0, 9.0, 9.0), (0.25, 2.0, 1.0), (0.5, 4.0, 1.0), (0.75, 6.0, 1.0), (1.0, 7.0, 7.0)],
+            vec![
+                (0.0, 9.0, 9.0),
+                (0.25, scale(1.0, old.0, nl), scale(0.0, old.1, nr)),
+                (0.5, nl, nr),
+                (0.75, scale(3.0, old.0, nl), scale(0.0, old.1, nr)),
+                (1.0, 7.0, 7.0),
+            ],
             "only nearest neighbours change, using the sampled sides; indexed={indexed}"
         );
     }

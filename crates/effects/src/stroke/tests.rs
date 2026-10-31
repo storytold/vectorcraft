@@ -152,14 +152,15 @@ fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
-    assert!(near(lens.area().abs(), 500.0, 1e-6));
+    // The smoothed sides are cubics through the profile's samples: 0.06 pt² off the polygon.
+    assert!(near(lens.area().abs(), 2000.0 / 3.0, 0.1));
     // Each dash takes its widths from where it sits along the lens (0 → 1 → 0): the dash over
-    // 0..25 averages a quarter of the width, the one over 50..75 three quarters.
+    // 0..25 averages 5/12 of the width, the one over 50..75 11/12.
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 62.5 + 187.5, 1e-6));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 1000.0 / 3.0, 0.1));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 

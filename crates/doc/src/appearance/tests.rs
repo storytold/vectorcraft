@@ -144,8 +144,81 @@ fn strokes_without_pressure_round_trip_unchanged() {
 fn profile_interp() {
     let p = WidthProfile::lens();
     assert_eq!(p.at(0.5), (1.0, 1.0));
-    assert_eq!(p.at(0.25), (0.5, 0.5));
+    assert_eq!(p.at(0.25), (0.75, 0.75));
     assert_eq!(p.at(2.0), (0.0, 0.0));
+}
+
+/// The width runs smoothly between points: it passes through them, has one slope either side
+/// of one, and never overshoots the widths its points set.
+#[test]
+fn profile_is_smooth_between_points() {
+    let p = [(0.0, 1.0, 2.0), (0.5, 0.2, 2.0), (1.0, 1.0, 2.0)];
+    assert!((WidthProfile::at_points(&p, 0.5).0 - 0.2).abs() < 1e-12);
+    let slope = |t: f64| (WidthProfile::at_points(&p, t + 1e-6).0 - WidthProfile::at_points(&p, t - 1e-6).0) / 2e-6;
+    // A local minimum at the middle point is flat there, so the two sides agree.
+    assert!(slope(0.5).abs() < 1e-3, "{}", slope(0.5));
+    for k in 0..=100 {
+        let w = WidthProfile::at_points(&p, k as f64 / 100.0).0;
+        assert!((0.2..=1.0).contains(&w), "{w} at {k}");
+    }
+    // The side with no points of its own stays flat.
+    for k in 0..=100 {
+        assert!((WidthProfile::at_points(&p, k as f64 / 100.0).1 - 2.0).abs() < 1e-12);
+    }
+}
+
+/// A run with only two points takes its secant as both end slopes, so it stays a straight
+/// taper on each side instead of becoming a smoothstep.
+#[test]
+fn profile_two_point_runs_are_linear() {
+    let p = [(0.0, 0.0, 1.0), (1.0, 1.0, 0.0)];
+    for k in 0..=100 {
+        let t = k as f64 / 100.0;
+        let (l, r) = WidthProfile::at_points(&p, t);
+        assert!((l - t).abs() < 1e-12, "left {l} at {t}");
+        assert!((r - (1.0 - t)).abs() < 1e-12, "right {r} at {t}");
+    }
+}
+
+/// The lens's one-sided end slopes make it a parabola: at a quarter of the way it is 0.75,
+/// above the 0.5 a straight line between its points would give.
+#[test]
+fn profile_lens_is_convex() {
+    let p = WidthProfile::lens();
+    assert!((p.at(0.25).0 - 0.75).abs() < 1e-12);
+    assert!((p.at(0.75).0 - 0.75).abs() < 1e-12);
+    for k in 1..25 {
+        let t = k as f64 / 100.0;
+        assert!(p.at(t).0 > 2.0 * t, "{} at {t}", p.at(t).0);
+        assert!(p.at(1.0 - t).0 > 2.0 * t, "{} at {}", p.at(1.0 - t).0, 1.0 - t);
+    }
+}
+
+/// A step still steps, and the smooth runs either side meet it flat.
+#[test]
+fn profile_steps_stay_steps() {
+    let p = [(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (1.0, 2.0, 2.0)];
+    assert_eq!(WidthProfile::at_points(&p, 0.5), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.5 + 1e-6), (2.0, 2.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.5 - 1e-6), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.25), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.75), (2.0, 2.0));
+}
+
+/// Moving a point only reshapes the segments beside it (local influence), not the whole path.
+#[test]
+fn profile_points_only_affect_the_curve_around_them() {
+    // A monotone run, so no neighbouring slope is held flat by a local extremum.
+    let a = [(0.0, 0.0, 0.0), (0.25, 0.3, 0.3), (0.5, 0.5, 0.5), (0.75, 0.7, 0.7), (1.0, 1.0, 1.0)];
+    let mut b = a;
+    b[3] = (0.75, 0.9, 0.9);
+    // Moving p[3] changes the slopes at p[2] and p[3], so p[1] and p[4] also shape the
+    // curve: nothing before p[1] may move.
+    for k in 0..=24 {
+        let t = k as f64 / 100.0;
+        assert_eq!(WidthProfile::at_points(&a, t), WidthProfile::at_points(&b, t), "at {t}");
+    }
+    assert_ne!(WidthProfile::at_points(&a, 0.3), WidthProfile::at_points(&b, 0.3));
 }
 
 #[test]
