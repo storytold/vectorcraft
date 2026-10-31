@@ -1001,8 +1001,21 @@ pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
 }
 
 fn average(s: &mut Session, p: &Value) -> Result<Value> {
-    let t = anchor_targets(s)?;
-    let d0 = &s.doc()?.doc;
+    let st = s.doc()?;
+    let t: AnchorTargets = if st.selection.anchors.is_empty() {
+        let editable = st.doc.editable();
+        paths_in(&st.doc, &st.selection.objects)
+            .into_iter()
+            .filter(|id| editable(*id))
+            .filter_map(|id| {
+                let pd = st.doc.node(id)?.path_data()?;
+                Some((id, pd.anchors().map(|(s, a, _)| (s, a)).collect()))
+            })
+            .collect()
+    } else {
+        anchor_targets(s)?
+    };
+    let d0 = &st.doc;
     let pts: Vec<Point> = t
         .iter()
         .flat_map(|(id, v)| v.iter().filter_map(move |(si, ai)| d0.node(*id)?.path_data()?.subpaths.get(*si)?.anchors.get(*ai).map(|a| a.p)))
