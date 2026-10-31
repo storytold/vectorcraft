@@ -4066,3 +4066,56 @@ fn shape_counts_that_are_not_whole_numbers_are_errors() {
         assert!(s.execute("shape.spiral", &json!({"cx": 1, "cy": 1, "radius": 5, "segments": bad})).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn average_averages_anchors_in_selected_groups() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    let pa = path(&s, a).subpaths[0].anchors[0].p;
+    let pb = path(&s, b).subpaths[0].anchors[0].p;
+    assert!((pa.x - pb.x).abs() < 1e-6);
+    assert!((pa.y - pb.y).abs() < 1e-6);
+}
+
+#[test]
+fn average_leaves_sibling_geometry_unchanged_on_partial_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let orig_b = path(&s, b).clone();
+
+    // Select group, but add-select one anchor on descendant a
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+
+    // Average should not move b's anchors
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+    assert_eq!(path(&s, b), orig_b);
+}
+
+#[test]
+fn average_skips_locked_descendants_in_group() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let orig_b = path(&s, b).clone();
+
+    // Lock descendant b
+    s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
+
+    // Select group and run average
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("path.average", &json!({"axis": "both"})).unwrap();
+
+    // b was locked so it remains unchanged
+    assert_eq!(path(&s, b), orig_b);
+}
