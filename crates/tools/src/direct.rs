@@ -626,6 +626,13 @@ fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
 }
 
 impl Tool for DirectSelectionTool {
+    fn adjusting_corner(&self) -> Option<(NodeId, usize)> {
+        match &self.state {
+            State::Corner(c) => c.active_widget(),
+            _ => None,
+        }
+    }
+
     fn id(&self) -> &'static str {
         if self.group { "groupSelection" } else { "directSelection" }
     }

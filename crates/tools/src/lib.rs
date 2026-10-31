@@ -138,10 +138,24 @@ pub trait Tool: Send {
     fn busy(&self) -> bool {
         false
     }
-    /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer)?
+    /// Is a drag moving, scaling or rotating the selection, or adjusting a widget? The canvas
+    /// hides the bounding box except during a handle resize or rotation.
     fn transforming(&self) -> bool {
         false
+    }
+    /// Is the transforming drag a resize by a bounding-box handle? The canvas then draws the box's
+    /// outline at the changing bounds, without its handles.
+    fn resizing(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a rotation from the bounding box's rotate zone? The canvas draws
+    /// only the box's outline at the rotating bounds.
+    fn rotating(&self) -> bool {
+        false
+    }
+    /// The path and corner index of the corner widget being adjusted, if any.
+    fn adjusting_corner(&self) -> Option<(vectorcraft_doc::NodeId, usize)> {
+        None
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
     /// with a stop selected takes Delete and the arrows)?

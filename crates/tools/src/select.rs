@@ -670,6 +670,21 @@ impl Tool for SelectionTool {
         }
     }
 
+    fn resizing(&self) -> bool {
+        matches!(self.state, State::Scaling { .. })
+    }
+
+    fn rotating(&self) -> bool {
+        matches!(self.state, State::Rotating { .. })
+    }
+
+    fn adjusting_corner(&self) -> Option<(NodeId, usize)> {
+        match &self.state {
+            State::Corner(c) => c.active_widget(),
+            _ => None,
+        }
+    }
+
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.alt_hover = hovering && ev.mods.alt;

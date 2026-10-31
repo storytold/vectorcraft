@@ -143,7 +143,12 @@ impl CornerWidgets {
 
     /// The centres of the widgets that show, each with the object it belongs to.
     pub fn visible_on(&self) -> impl Iterator<Item = (NodeId, Point)> + '_ {
-        self.paths.iter().flat_map(|p| p.widgets.iter().map(move |w| (p.id, w.at)))
+        self.visible_on_corners().map(|(id, _, at)| (id, at))
+    }
+
+    /// The visible widgets with their path and uncut corner index.
+    pub fn visible_on_corners(&self) -> impl Iterator<Item = (NodeId, usize, Point)> + '_ {
+        self.paths.iter().flat_map(|p| p.widgets.iter().map(move |w| (p.id, w.corner.index, w.at)))
     }
 
     /// The corners whose widgets show, path after path: anchor indices of each path's uncut
@@ -262,6 +267,15 @@ impl CornerDrag {
     /// The drag has left the click: the corner radius is changing.
     pub fn adjusting(&self) -> bool {
         self.began
+    }
+
+    /// The widget being dragged, identified by its path and uncut corner index.
+    pub fn active_widget(&self) -> Option<(NodeId, usize)> {
+        if !self.began {
+            return None;
+        }
+        let (path, widget) = self.widget;
+        Some((self.widgets.paths.get(path)?.id, self.widgets.widget(path, widget)?.corner.index))
     }
 
     /// Start a drag when the press `ev` is on a widget of the selection (Direct Selection:
