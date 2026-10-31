@@ -600,7 +600,7 @@ fn a_click_activates_its_artboard_and_paste_in_place_goes_onto_it() {
     let view = app.view_info();
     let at = boards[2].center();
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: Default::default(), backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     let ids: Vec<vectorcraft_doc::NodeId> = app.run("edit.pasteInPlace", json!({})).unwrap()["ids"]
@@ -633,7 +633,7 @@ fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: boards[2].center(), mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.view().unwrap().artboard, 2, "the clicked artboard is the active one");
     assert_eq!(app.session.active().unwrap().selection.objects, ids, "the selection stays");
@@ -688,7 +688,7 @@ fn the_active_artboard_is_outlined_in_black() {
     let view = app.view_info();
     let shift = Mods { shift: true, ..Default::default() };
     for kind in [PointerKind::Down, PointerKind::Up] {
-        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, backquote: false, pressure: 1.0 }, view);
+        dispatch(&mut app, &PointerEvent { kind, pos: at, mods: shift, backquote: false, pressure: 1.0, pen: None }, view);
     }
     assert_eq!(app.session.tool_options()["selected"], json!([2, 1]));
     assert_eq!(edges(&mut app), active(2), "Artboard 3 is the active one of the two selected");
@@ -6311,25 +6311,30 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let mut mouse = vec![];
     let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None));
     out.textures_delta.clear();
-    // A mouse keeps its moves too, without a pressure.
-    assert_eq!(mouse, [(a, None), (b, None)], "the last move follows the normal pointer path");
-    // A macOS pen: the feed kept a pressure for each move, the last for the last.
+    // A mouse keeps its moves too, without a pressure or a pose.
+    assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
+    // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
     let feed = StylusFeed::default();
-    for p in [0.9, 0.3, 0.0, 0.5] {
-        feed.set_move(crate::stylus::PenSample { pressure: p, eraser: false });
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
     let mut samples = vec![];
     let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.3)), (b, None)], "paired from the end; a lift's 0 is no pressure");
+    assert_eq!(
+        samples,
+        [(a, Some(0.3), Some(leaning)), (b, None, Some(PenPose::default()))],
+        "paired from the end, each with its own pose; a lift's 0 is no pressure"
+    );
     let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, Some(&feed)));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, None), (b, None)], "the moves were taken: a mouse's moves again");
+    assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
     let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
     out.textures_delta.clear();
-    assert_eq!(samples, [(a, Some(0.2)), (b, Some(0.8))], "the last sample follows the normal pointer path");
+    assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
     let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None));
     out.textures_delta.clear();
@@ -6542,7 +6547,7 @@ fn pen_app() -> (VectorcraftApp, StylusFeed, egui::Context) {
 
 /// The pen turned to its eraser end, with `pressure`.
 fn eraser_end(pressure: f32) -> Option<crate::stylus::PenSample> {
-    Some(crate::stylus::PenSample { pressure, eraser: true })
+    Some(crate::stylus::PenSample { pressure, eraser: true, ..Default::default() })
 }
 
 /// #764: turning the pen to its eraser end selects the Eraser, and turning it back to the tip
@@ -6719,6 +6724,54 @@ fn the_tip_brings_back_the_perspective_grid_tool_without_showing_the_grid() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(app.session.tool_id(), "perspectiveGrid");
     assert!(!visible(&app), "the grid stays hidden");
+}
+
+/// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
+/// the tilt turned onto the page when the view is rotated; a mouse's points carry neither.
+#[test]
+fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    // A stroke at `y`, one frame per sample, with the pen held as `pose` (`None`: a mouse); the
+    // tilt x, tilt y and rotation of each of its points.
+    let stroke = |app: &mut VectorcraftApp, y: f64, pose: Option<PenPose>| -> Vec<[Option<f64>; 3]> {
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let mut at = Pos2::ZERO;
+        for (i, x) in [360.0, 400.0, 440.0].into_iter().enumerate() {
+            match pose {
+                Some(pose) => feed.set_sample(Some(crate::stylus::PenSample { pressure: 0.5, pose, ..Default::default() })),
+                None => feed.set(None),
+            }
+            at = xf.to_screen(Point::new(x, y));
+            let mut events = vec![egui::Event::PointerMoved(at)];
+            if i == 0 {
+                events.push(button(at, true));
+            }
+            frame(app, &ctx, events);
+        }
+        frame(app, &ctx, vec![button(at, false)]);
+        let (cmd, p) = app.session.journal.last().unwrap().clone();
+        assert_eq!(cmd, "path.freehand");
+        p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
+    };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+    let points = stroke(&mut app, 260.0, Some(leaning));
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
+    // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
+    // page; the barrel's rotation stays as it was.
+    app.run("view.rotate", json!({"angle": 90})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let points = stroke(&mut app, 340.0, Some(leaning));
+    let up = |p: &[Option<f64>; 3]| matches!(*p, [Some(x), Some(y), Some(r)] if x.abs() < 0.01 && (y + 30.0).abs() < 0.01 && r == 45.0);
+    assert!(!points.is_empty() && points.iter().all(up), "{points:?}");
+    let points = stroke(&mut app, 300.0, None);
+    assert!(!points.is_empty() && points.iter().all(|p| *p == [None; 3]), "a mouse: {points:?}");
 }
 
 /// #3328: every position a mouse reports within one frame reaches the Pencil, not only the

@@ -1,6 +1,6 @@
 use super::{
-    Appearance, Arc, Beside, Cap, Color, Document, EngineError, FillRule, Join, Node, NodeId, NodeKind, Paint, PathData, Point, PressureProfile,
-    Rect, Result, Selection, Session, SubPath, Value, Vec2, bad, index, json, number_or, po,
+    AngleProfile, Appearance, Arc, Beside, Cap, Color, Document, EngineError, FillRule, Join, Node, NodeId, NodeKind, Paint, PathData, Point,
+    PressureProfile, Rect, Result, Selection, Session, SubPath, Value, Vec2, bad, index, json, number_or, po,
 };
 use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
@@ -8,8 +8,25 @@ use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 /// `[[x,y]…]` or `[{x,y}…]`.
 pub(super) fn points_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Point>> {
-    Ok(samples_param(p, key, cmd)?.into_iter().map(|(pt, _)| pt).collect())
+    Ok(samples_param(p, key, cmd)?.into_iter().map(|s| s.pt).collect())
 }
+
+/// One point of a stroke, with what a pen read there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Sample {
+    pub(super) pt: Point,
+    /// Pressure, 0..1.
+    pressure: Option<f64>,
+    /// Tilt `[x, y]` in degrees, each −90..90, in document axes (x positive leaning right, y
+    /// positive leaning down the page).
+    tilt: Option<[f64; 2]>,
+    /// Barrel rotation, degrees clockwise.
+    rotation: Option<f64>,
+}
+
+/// The keys of a point's pen values, in the order a point given as an array holds them after its
+/// x and y.
+const PEN_KEYS: [&str; 4] = ["pressure", "tiltX", "tiltY", "rotation"];
 
 /// The point `[x, y, …]` or `{x, y, …}` that `v` holds, or an error when its x or y is not a finite
 /// number.
@@ -22,22 +39,31 @@ pub(super) fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
     xy.filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)).ok_or_else(|| bad(cmd, "x and y must both be numbers"))
 }
 
-/// [`points_param`] with each point's pen pressure, if it has one: `[[x,y,pressure]…]` or
-/// `[{x,y,pressure}…]` (0..1). A point whose x or y is not a number, or whose pressure is neither a
-/// number nor null, is an error.
-pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Point, Option<f64>)>> {
+/// [`points_param`] with what a pen read at each point, as far as it is given:
+/// `[[x,y,pressure,tiltX,tiltY,rotation]…]` or `[{x,y,pressure,tiltX,tiltY,rotation}…]`. Pressure
+/// is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0); rotation in
+/// degrees clockwise. A point whose x or y is not a number, or whose pressure, tilt or rotation is
+/// neither a number nor null, is an error.
+pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sample>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
-    let pts: Vec<(Point, Option<f64>)> = a
+    let pts: Vec<Sample> = a
         .iter()
         .map(|v| {
-            let pressure = match v {
-                Value::Array(xy) => xy.get(2),
-                _ => v.get("pressure"),
-            };
-            match pressure {
-                None | Some(Value::Null) | Some(Value::Number(_)) => Ok((point_entry(v, cmd)?, pressure.and_then(Value::as_f64))),
-                Some(f) => Err(bad(cmd, format!("`pressure` must be a number, not {f}"))),
+            let mut pen = [None; 4];
+            for (i, (key, slot)) in PEN_KEYS.iter().zip(&mut pen).enumerate() {
+                let given = match v {
+                    Value::Array(xy) => xy.get(i + 2),
+                    _ => v.get(*key),
+                };
+                *slot = match given {
+                    None | Some(Value::Null) => None,
+                    Some(n @ Value::Number(_)) => n.as_f64(),
+                    Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
+                };
             }
+            let [pressure, tx, ty, rotation] = pen;
+            let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0).clamp(-90.0, 90.0)));
+            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation })
         })
         .collect::<Result<_>>()?;
     if pts.is_empty() {
@@ -46,29 +72,123 @@ pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<(Poin
     Ok(pts)
 }
 
-/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
-/// its samples has one; samples without one count as full pressure, as a pen event without one.
-pub(super) fn stroke_pressure(samples: &[(Point, Option<f64>)]) -> Option<PressureProfile> {
-    if samples.iter().all(|(_, p)| p.is_none()) {
-        return None;
-    }
+/// Where each sample of a freehand stroke is along its polyline, as a fraction of its length.
+fn along(samples: &[Sample]) -> Vec<f64> {
     let mut at = 0.0;
     let mut prev: Option<Point> = None;
-    let along: Vec<(f64, f64)> = samples
+    let dist: Vec<f64> = samples
         .iter()
-        .map(|(pt, p)| {
-            at += prev.map_or(0.0, |q| q.distance(*pt));
-            prev = Some(*pt);
-            (at, p.unwrap_or(1.0))
+        .map(|s| {
+            at += prev.map_or(0.0, |q| q.distance(s.pt));
+            prev = Some(s.pt);
+            at
         })
         .collect();
-    PressureProfile::from_samples(along.into_iter().map(|(s, p)| (if at > 1e-9 { s / at } else { 0.0 }, p)))
+    dist.into_iter().map(|s| if at > 1e-9 { s / at } else { 0.0 }).collect()
+}
+
+/// The pen pressure along a freehand stroke (positions measured along its polyline), when any of
+/// its samples has one; samples without one count as full pressure, as a pen event without one.
+fn stroke_pressure(samples: &[Sample]) -> Option<PressureProfile> {
+    if samples.iter().all(|s| s.pressure.is_none()) {
+        return None;
+    }
+    PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.pressure.unwrap_or(1.0))))
+}
+
+/// A pen that leans less than this many degrees from upright leans no way in particular: its
+/// bearing is the one before it.
+const UPRIGHT: f64 = 1.0;
+
+/// How far the pen leaned from upright (0 upright to 1 flat), which way (degrees
+/// counter-clockwise on the page from the x axis) and how far its barrel turned (degrees
+/// counter-clockwise) along a freehand stroke, each when any sample has it. A sample without the
+/// tilt or the rotation that others have counts as half way over (45°) or unturned, which draws a
+/// brush's own value. The bearing of a pen within 1° of upright is the bearing before it (the
+/// first one the stroke has, at its start).
+fn stroke_pose(samples: &[Sample]) -> (Option<PressureProfile>, Option<AngleProfile>, Option<AngleProfile>) {
+    let at = along(samples);
+    // The tilt's lean as a direction on the page, and the angle from upright (as Pointer Events'
+    // tiltX and tiltY convert to an altitude and an azimuth).
+    let lean = |t: [f64; 2]| t.map(|d| d.to_radians().tan());
+    let from_upright = |t: [f64; 2]| {
+        let [x, y] = lean(t);
+        x.hypot(y).atan().to_degrees()
+    };
+    let tilt = samples.iter().any(|s| s.tilt.is_some()).then(|| {
+        let tilts = at.iter().zip(samples).map(|(t, s)| (*t, s.tilt.map_or(PressureProfile::MID, |q| from_upright(q) / 90.0)));
+        PressureProfile::from_samples(tilts)
+    });
+    let bearing = samples.iter().any(|s| s.tilt.is_some()).then(|| {
+        let leans: Vec<Option<f64>> =
+            samples.iter().map(|s| s.tilt.filter(|q| from_upright(*q) >= UPRIGHT).map(lean).map(|[x, y]| (-y).atan2(x).to_degrees())).collect();
+        let mut last = leans.iter().flatten().next().copied().unwrap_or(0.0);
+        AngleProfile::from_samples(at.iter().zip(leans).map(|(t, b)| {
+            last = b.unwrap_or(last);
+            (*t, last)
+        }))
+    });
+    let rotation = samples
+        .iter()
+        .any(|s| s.rotation.is_some())
+        .then(|| AngleProfile::from_samples(at.iter().zip(samples).map(|(t, s)| (*t, -s.rotation.unwrap_or(0.0)))));
+    (tilt.flatten(), bearing.flatten(), rotation.flatten())
+}
+
+/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing` and
+/// `rotation`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct PenRecord {
+    pressure: Option<PressureProfile>,
+    tilt: Option<PressureProfile>,
+    bearing: Option<AngleProfile>,
+    rotation: Option<AngleProfile>,
+}
+
+impl PenRecord {
+    /// What a freehand stroke's samples recorded.
+    pub(super) fn of_samples(samples: &[Sample]) -> Self {
+        let (tilt, bearing, rotation) = stroke_pose(samples);
+        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation }
+    }
+    pub(super) fn of(st: &StrokeLayer) -> Self {
+        Self { pressure: st.pressure.clone(), tilt: st.tilt.clone(), bearing: st.bearing.clone(), rotation: st.rotation.clone() }
+    }
+    pub(super) fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+    /// The record of a path `old_len` long (this one) continued at its end by a stroke
+    /// `added_len` long (`added`).
+    pub(super) fn extended(&self, old_len: f64, added: &Self, added_len: f64) -> Self {
+        Self {
+            pressure: PressureProfile::extended(self.pressure.as_ref(), old_len, added.pressure.as_ref(), added_len),
+            tilt: PressureProfile::extended(self.tilt.as_ref(), old_len, added.tilt.as_ref(), added_len),
+            bearing: AngleProfile::extended(self.bearing.as_ref(), old_len, added.bearing.as_ref(), added_len),
+            rotation: AngleProfile::extended(self.rotation.as_ref(), old_len, added.rotation.as_ref(), added_len),
+        }
+    }
+    /// The record along the path reversed.
+    pub(super) fn reversed(&self) -> Self {
+        Self {
+            pressure: self.pressure.as_ref().map(PressureProfile::reversed),
+            tilt: self.tilt.as_ref().map(PressureProfile::reversed),
+            bearing: self.bearing.as_ref().map(AngleProfile::reversed),
+            rotation: self.rotation.as_ref().map(AngleProfile::reversed),
+        }
+    }
+    /// Keep the record on stroke `st`.
+    pub(super) fn write(self, st: &mut StrokeLayer) {
+        st.pressure = self.pressure;
+        st.tilt = self.tilt;
+        st.bearing = self.bearing;
+        st.rotation = self.rotation;
+    }
 }
 
 /// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
 /// `sizeVariation` in points): the stroke's pen pressure along it and the variation, `None` for
 /// Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the size.
-pub(super) fn size_pressure(p: &Value, samples: &[(Point, Option<f64>)], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+pub(super) fn size_pressure(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
     match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
         None | Some(Ok("fixed")) => Ok(None),
         Some(Ok("pressure")) => {

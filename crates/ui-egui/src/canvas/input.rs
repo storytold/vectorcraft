@@ -1,13 +1,13 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
-    HoverContext, apply_requests, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, mods, on_canvas, pen_pressure,
-    tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    HoverContext, apply_requests, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, mods, on_canvas, pen_pose, pen_pressure,
+    pose_on_page, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
     wheel, whole_pixels, zoom_about,
 };
-use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
+use super::{Color32, Drag, Mods, PenPose, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
 /// Dispatch canvas pointer, keyboard and drop events through the active document view.
 pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
@@ -132,6 +132,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
+            pen: None,
         };
         dispatch(app, &ev, view);
     }
@@ -277,6 +278,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: pen_pressure(ui, app, true),
+            pen: pen_pose(app, &xf),
         };
         dispatch(app, &ev, view);
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
@@ -359,6 +361,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
                 mods: mods(m, space),
                 backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                 pressure: pen_pressure(ui, app, false),
+                pen: pen_pose(app, &xf),
             };
             dispatch(app, &ev, view);
             ui.data_mut(|dd| {
@@ -382,9 +385,18 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
             let mods_changed = tool_drag_mods_changed(ui, mods(m, space), backquote);
             if tool_drag_moved(ui, &xf, p, pointer) || mods_changed || !moves.is_empty() {
-                for (at, force) in moves {
+                for (at, force, pose) in moves {
                     let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
-                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure }, view);
+                    // The pose the feed kept for this move, else the latest.
+                    let pen = match pose {
+                        Some(q) => (q != PenPose::default()).then(|| pose_on_page(q, &xf)),
+                        None => pen_pose(app, &xf),
+                    };
+                    dispatch(
+                        app,
+                        &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure, pen },
+                        view,
+                    );
                 }
                 let ev = PointerEvent {
                     kind: PointerKind::Drag,
@@ -392,6 +404,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
                     mods: mods(m, space),
                     backquote,
                     pressure: pen_pressure(ui, app, false),
+                    pen: pen_pose(app, &xf),
                 };
                 dispatch(app, &ev, view);
             }
@@ -462,6 +475,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: mods(m, space),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure: pen_pressure(ui, app, false),
+                    pen: pen_pose(app, &xf),
                 };
                 dispatch(app, &ev, view);
             }
@@ -471,13 +485,14 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                 mods: mods(m, space),
                 backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                 pressure: pen_pressure(ui, app, false),
+                pen: pen_pose(app, &xf),
             };
             dispatch(app, &ev, view);
         }
         Drag::Art if on_canvas(ui, resp, p) => {
             // Came back to the canvas and released in one frame: finish the move here.
             egui::DragAndDrop::clear_payload(ui.ctx());
-            let pressure = pen_pressure(ui, app, false);
+            let (pressure, pen) = (pen_pressure(ui, app, false), pen_pose(app, &xf));
             let pos = xf.to_doc(p);
             dispatch(
                 app,
@@ -487,6 +502,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: mods(m, space),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure,
+                    pen,
                 },
                 view,
             );
@@ -498,6 +514,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: mods(m, space),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure,
+                    pen,
                 },
                 view,
             );
@@ -515,6 +532,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     mods: Mods::default(),
                     backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
                     pressure: 1.0,
+                    pen: None,
                 },
                 view,
             );
@@ -536,6 +554,7 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
+            pen: None,
         };
         let before = app.session.tool_id().to_string();
         dispatch(app, &ev, view);

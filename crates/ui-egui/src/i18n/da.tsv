@@ -2745,6 +2745,7 @@ lighting	Light	Lys
 	Total Width:	Samlet bredde:
 	Width Point Edit	Redigér breddepunkt
 	Art	Kunst
+	Bearing	Retning
 	Bristle	Borst
 	Calligraphic	Kalligrafisk
 	Dots	Prikker
@@ -2752,6 +2753,7 @@ lighting	Light	Lys
 	Pressure	Tryk
 	Random	Tilfældig
 	Scatter	Spredning
+	Tilt	Hældning
 	Color Burn	Farvebrænding
 	Color Dodge	Farveudtynding
 	Darken	Mørkere

@@ -64,6 +64,36 @@ fn paintbrush_sends_pen_pressure() {
     assert_eq!(stroke("pencil", [0.25, 0.5, 1.0]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
 }
 
+/// #764: the Paintbrush sends each point's pen tilt and barrel rotation where the pen reads
+/// them, `null` for what a point lacks; the Pencil sends plain points.
+#[test]
+fn paintbrush_sends_pen_tilt_and_rotation() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let stroke = |id: &str, pressure: f32, poses: [Option<PenPose>; 3]| {
+        let mut t = GestureTool::new(id);
+        let kinds = [PointerKind::Down, PointerKind::Drag, PointerKind::Up];
+        let mut last = vec![];
+        for ((k, x), pen) in kinds.into_iter().zip([0.0, 40.0, 80.0]).zip(poses) {
+            last = t.pointer(&cx, &PointerEvent { pressure, pen, ..PointerEvent::new(k, x, 0.0) });
+        }
+        let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
+        v["points"].clone()
+    };
+    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+    assert_eq!(
+        stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
+        json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
+    );
+    // A pen without a rotation axis, pressing fully: no pressure, the tilt alone.
+    assert_eq!(stroke("paintbrush", 1.0, [leaning(30.0, None); 3])[1], json!([40.0, 0.0, null, 30.0, -10.0, null]));
+    // A pose that reads nothing is a mouse's.
+    assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+}
+
 #[test]
 fn pencil_previews_and_commits() {
     let (d, _) = doc_with_rect();

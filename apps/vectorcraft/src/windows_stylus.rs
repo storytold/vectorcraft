@@ -22,7 +22,7 @@ use std::cell::RefCell;
 use std::sync::OnceLock;
 
 use egui::{Event, Modifiers, PointerButton, Pos2, TouchId, TouchPhase};
-use vectorcraft_ui_egui::stylus::{PenSample, StylusFeed};
+use vectorcraft_ui_egui::stylus::{PenPose, PenSample, StylusFeed};
 
 /// `POINTER_MESSAGE_FLAG_SECONDBUTTON` (`winuser.h`): in the high word of a pointer message's
 /// `wParam`, a pen in contact with its barrel button pressed.
@@ -114,7 +114,7 @@ fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool) ->
         _ if in_contact => 1.0,
         _ => 0.0,
     };
-    PenSample { pressure, eraser: pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0 }
+    PenSample { pressure, eraser: pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0, pose: PenPose::default() }
 }
 
 /// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
@@ -403,7 +403,11 @@ mod tests {
     fn a_pens_pressure_is_the_one_winit_gives_its_touch() {
         assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true).pressure, 0.5);
         assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true).pressure, 1.0);
-        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false), PenSample { pressure: 0.0, eraser: true }, "hovering");
+        assert_eq!(
+            pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false),
+            PenSample { pressure: 0.0, eraser: true, pose: PenPose::default() },
+            "hovering"
+        );
         assert_eq!(pen_sample(0, 0, 0, true).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
         assert_eq!(pen_sample(300, 0, 0, true).pressure, 1.0, "a pressure without the pressure mask is not one");
         assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true).pressure, 1.0, "as winit, which gives no force for 0");
@@ -420,7 +424,7 @@ mod tests {
 
     #[test]
     fn pen_messages_set_the_feed_and_other_pointers_clear_it() {
-        let pen = PenSample { pressure: 0.0, eraser: true };
+        let pen = PenSample { pressure: 0.0, eraser: true, pose: PenPose::default() };
         // `POINTER_MESSAGE_FLAG_INRANGE` in the high word of `wParam`, pointer 7 in the low word.
         let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
         let no_mouse = || -> bool { panic!("a pointer message is not a mouse message") };

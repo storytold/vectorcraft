@@ -1950,6 +1950,8 @@ font-technology	Variable	Променливи
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск
+	Tilt	Наклон
+	Bearing	Азимут
 	Shape:	Форма:
 	Bristle Length:	Дължина на косъма:
 	Bristle Density:	Плътност на косъмчетата:

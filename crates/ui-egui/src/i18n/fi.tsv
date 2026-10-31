@@ -2923,6 +2923,7 @@ lighting	Light	Valo
 	Total Width:	Kokonaisleveys:
 	Width Point Edit	Leveyspisteen muokkaus
 	Art	Kuvitus
+	Bearing	Suunta
 	Bristle	Harjas
 	Calligraphic	Kalligrafinen
 	Dots	Pisteet
@@ -2930,6 +2931,7 @@ lighting	Light	Valo
 	Pressure	Paine
 	Random	Satunnainen
 	Scatter	Sironta
+	Tilt	Kallistus
 	Color Burn	Värisävyn tummennus
 	Color Dodge	Värisävyn vaalennus
 	Darken	Tummenna
