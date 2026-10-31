@@ -325,14 +325,14 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         busy_tool_keys(app, ctx, view);
         return;
     }
-    if claimed_tool_keys(app, ctx, view) {
+    // A plain Delete or Backspace after a click on a Layers or Appearance row is that panel's (it
+    // removes the highlighted rows), not a tool's (the Artboard tool's) or Edit › Clear's.
+    let rows_keys = crate::panels::rows_take_delete(ctx);
+    if claimed_tool_keys(app, ctx, view, rows_keys) {
         return;
     }
     // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
-    // other text keys use the typed character below. A plain Delete or Backspace after a click on
-    // a Layers or Appearance row is that panel's (it removes the highlighted rows), not
-    // Edit › Clear's.
-    let rows_keys = crate::panels::rows_take_delete(ctx);
+    // other text keys use the typed character below.
     let row_key = |chord: &craft_keymap::Chord| {
         rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
     };
@@ -656,9 +656,11 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     }
 }
 
-/// Give keys claimed by the active tool precedence over their command shortcuts.
-fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo) -> bool {
+/// Give keys claimed by the active tool precedence over their command shortcuts, except a plain
+/// Delete or Backspace while a panel's rows have them (`rows_keys`).
+fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo, rows_keys: bool) -> bool {
     let m = ctx.input(|i| i.modifiers);
+    let rows_take = |k: Key| rows_keys && m.is_none() && matches!(k, Key::Delete | Key::Backspace);
     for (k, tk) in [
         (Key::Delete, ToolKey::Delete),
         (Key::Backspace, ToolKey::Backspace),
@@ -669,7 +671,7 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
         // The Smart Pen Tool's Tab while it draws a path (the key otherwise hides the panels).
         (Key::Tab, ToolKey::Tab),
     ] {
-        if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
+        if !rows_take(k) && ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
             let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
             // Keyboard actions can change the Artboard tool's active board too. Keep the
             // navigator aligned with its valid survivor, as pointer dispatch does.
