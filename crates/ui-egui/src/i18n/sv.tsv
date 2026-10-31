@@ -3589,6 +3589,7 @@ font-technology	Variable	Variabla
 	Zoom to Selection	Zooma till markering
 	Zoom Tool	Zoomverktyg
 	Zoom with Mouse Wheel	Zooma med mushjulet
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rulla horisontellt med Cmd/Ctrl + mushjulet
 	Scrub Numeric Fields by Dragging	Ändra numeriska fält genom att dra
 	{count} file(s) in {folder} {note}. Show the package folder?	{count} fil(er) i {folder}{note}. Visa paketmappen?
 	{count} linked file(s) not found	{count} länkad(e) fil(er) hittades inte

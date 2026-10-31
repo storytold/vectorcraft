@@ -4513,6 +4513,7 @@ font-script	Japanese	漢字
 	Zoom to Selection	縮放至選取範圍
 	Zoom Tool	縮放工具
 	Zoom with Mouse Wheel	使用滑鼠滾輪縮放
+	Scroll Sideways with Cmd/Ctrl + Wheel	使用 Cmd/Ctrl + 滾輪水平捲動
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
 	{count} file(s) in {folder} {note}. Show the package folder?	{folder} 中有 {count} 個檔案{note}。要顯示封裝資料夾嗎？
 	{count} linked file(s) not found	找不到 {count} 個連結檔案

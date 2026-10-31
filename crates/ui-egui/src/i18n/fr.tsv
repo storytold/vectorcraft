@@ -3658,6 +3658,7 @@ font-technology	Variable	Variables
 	Zoom to Selection	Zoom sur la sélection
 	Zoom Tool	Outil Zoom
 	Zoom with Mouse Wheel	Zoom avec la molette de la souris
+	Scroll Sideways with Cmd/Ctrl + Wheel	Défilement horizontal avec Cmd/Ctrl + molette
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 	{count} file(s) in {folder} {note}. Show the package folder?	{count} fichier(s) dans {folder}{note}. Afficher le dossier de l’assemblage ?
 	{count} linked file(s) not found	{count} fichier(s) lié(s) introuvable(s)

@@ -3661,6 +3661,7 @@ font-technology	Variable	Variables
 	Zoom to Selection	Zoom a la selección
 	Zoom Tool	Herramienta Zoom
 	Zoom with Mouse Wheel	Zoom con la rueda del mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Desplazar horizontalmente con Cmd/Ctrl + rueda del mouse
 	Scrub Numeric Fields by Dragging	Ajustar campos numéricos arrastrando
 	{count} file(s) in {folder} {note}. Show the package folder?	{count} archivo(s) en {folder}{note}. ¿Mostrar la carpeta del paquete?
 	{count} linked file(s) not found	No se encontraron {count} archivo(s) vinculado(s)
