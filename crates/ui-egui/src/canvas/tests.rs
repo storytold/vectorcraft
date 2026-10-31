@@ -41,8 +41,10 @@ fn rendered_rasters_become_the_same_egui_images() {
     assert!(img.pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0 && p[3] != 255), "partly covered pixels");
     let egui = egui::ColorImage::from_rgba_premultiplied([97, 61], &img.pixels);
     assert_eq!(color_image(&img), egui);
+    assert_eq!(color_image_owned(img), egui);
     let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
     assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    assert_eq!(color_image_owned(short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
 }
 
 /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
