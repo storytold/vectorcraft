@@ -149,6 +149,12 @@ fn near(a: Point, b: Point) -> bool {
     a.distance(b) < 1e-6
 }
 
+/// Whether open subpath `sp`'s two ends are at `a` and `b`, in either order (within `tol`).
+fn ends_at(sp: &vectorcraft_geom::SubPath, a: Point, b: Point, tol: f64) -> bool {
+    let (Some(f), Some(l)) = (sp.anchors.first(), sp.anchors.last()) else { return false };
+    (f.p.distance(a) < tol && l.p.distance(b) < tol) || (f.p.distance(b) < tol && l.p.distance(a) < tol)
+}
+
 fn area(pd: &PathData) -> f64 {
     vectorcraft_pathops::area(pd, FillRule::NonZero)
 }
@@ -361,7 +367,8 @@ fn pencil_redraws_the_section_of_a_selected_path_between_its_ends() {
 }
 
 /// On a closed path the stroke replaces the shorter way between where it starts and ends, and the
-/// path stays closed; a stroke that doesn't end on the path draws a new one.
+/// path stays closed; a stroke that doesn't end on the path opens it where the stroke starts and
+/// ends where the stroke does (no new path).
 #[test]
 fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     let mut s = session();
@@ -378,11 +385,12 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     }
     let top = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath()).y0;
     assert!(top < -20.0, "the dip: top {top}");
-    // Not ending on the path: a new path, the rectangle as it was.
-    let before = path(&s, id);
+    // Not ending on the path: the rectangle opens at (50, 100) and follows the stroke out.
     s.execute("path.freehand", &json!({"points": [[50, 100], [80, 150], [120, 160]], "redraw": {"id": id.0, "within": 4}})).unwrap();
-    assert_eq!(paths(&s).len(), 2);
-    assert_eq!(path(&s, id), before);
+    assert_eq!(paths(&s).len(), 1, "no new path");
+    let sp = &path(&s, id).subpaths[0];
+    assert!(!sp.closed, "the rectangle opened");
+    assert!(ends_at(sp, Point::new(50.0, 100.0), Point::new(120.0, 160.0), 1e-6), "from the opening to the stroke's end: {sp:?}");
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
 }
 
@@ -4009,6 +4017,246 @@ fn pencil_redraws_a_selected_compound_path() {
     assert_eq!(count(&s), 1, "no new path");
     assert_eq!(s.doc().unwrap().selection.objects, compound);
     assert!(members(&s)[1] != before[1], "the hole is redrawn");
+}
+
+/// A Pencil stroke that starts on a selected closed shape and is lifted away from it takes the
+/// shape with it: the shape opens where the stroke started, keeps its whole outline, fill and
+/// selection, and ends where the pen was lifted. While the stroke is drawn the shape stays as it
+/// was and the selection with it (the preview shows the stroke on its own); the release leaves no
+/// new path.
+#[test]
+fn a_stroke_lifted_away_from_a_closed_shape_opens_it_and_follows_the_stroke() {
+    let mut s = session();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let fill = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().clone();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.set_tool_option_cmd(&json!({"tool": "pencil", "values": {"editWithin": 12}})).unwrap();
+    let v = view();
+    s.select_tool("pencil", v).unwrap();
+    let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let shape = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+    let before = shape(&s);
+    // From the right edge, a little hook up and out to the right.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 150.0), v).unwrap();
+    for (x, y) in [(303.0, 140.0), (308.0, 128.0), (316.0, 118.0), (326.0, 112.0), (338.0, 110.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        assert!(shape(&s) == before, "the shape stays as it was while the stroke is drawn");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "and stays selected");
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, 338.0, 110.0), v).unwrap();
+    assert_eq!(count(&s), 1, "no new path");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id], "the shape stays selected");
+    let n = s.doc().unwrap().doc.node(id).unwrap();
+    assert_eq!(n.appearance.fill_paint(), fill, "the fill stays");
+    let sp = &n.path_data().unwrap().subpaths[0];
+    assert!(!sp.closed, "the shape opened");
+    let ps: Vec<Point> = sp.anchors.iter().map(|a| a.p).collect();
+    for corner in [(100.0, 100.0), (300.0, 100.0), (300.0, 200.0), (100.0, 200.0)] {
+        assert!(ps.iter().any(|p| near(*p, Point::new(corner.0, corner.1))), "{corner:?} kept: {ps:?}");
+    }
+    assert!(ends_at(sp, Point::new(300.0, 150.0), Point::new(338.0, 110.0), 0.5), "from the opening to where the pen was lifted: {ps:?}");
+    // The outline joins the stroke heading up, the stroke's way: next to the anchor where the
+    // stroke leaves the opening is the bottom right corner.
+    let last = ps.len() - 1;
+    let k = (1..last).find(|&i| ps[i].distance(Point::new(300.0, 150.0)) < 0.5).unwrap();
+    assert!(near(ps[k - 1], Point::new(300.0, 200.0)) || near(ps[k + 1], Point::new(300.0, 200.0)), "joins from below: {ps:?}");
+}
+
+/// On an open path, a stroke from its middle lifted away from it cuts the path there and drops the
+/// part the stroke heads along; the part behind stays and ends where the pen was lifted.
+#[test]
+fn a_stroke_lifted_away_from_an_open_path_drops_the_part_it_heads_along() {
+    for (towards_end, kept) in [(true, Point::new(100.0, 100.0)), (false, Point::new(300.0, 100.0))] {
+        let mut s = session();
+        let id = line(&mut s, 100.0, 100.0, 300.0, 100.0);
+        let dx = if towards_end { 1.0 } else { -1.0 };
+        let pts: Vec<_> = (0..8).map(|i| json!([200.0 + dx * 4.0 * f64::from(i), 100.0 - 5.0 * f64::from(i)])).collect();
+        s.execute("path.freehand", &json!({"points": pts, "redraw": {"id": id.0, "within": 4}})).unwrap();
+        assert_eq!(paths(&s).len(), 1, "no new path");
+        let sp = &path(&s, id).subpaths[0];
+        let ps: Vec<Point> = sp.anchors.iter().map(|a| a.p).collect();
+        assert!(
+            ends_at(sp, kept, Point::new(200.0 + dx * 28.0, 65.0), 0.5),
+            "towards the end {towards_end}: the part behind stays and ends where the pen was lifted: {ps:?}"
+        );
+        let dropped = Point::new(if towards_end { 300.0 } else { 100.0 }, 100.0);
+        assert!(!ps.iter().any(|p| p.distance(dropped) < 1.0), "the part ahead is dropped: {ps:?}");
+    }
+}
+
+/// A stroke that leaves a selected path and comes back to the same point adds a loop there; the
+/// path stays closed and keeps its corners.
+#[test]
+fn a_stroke_back_to_where_it_started_adds_a_loop() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+    let before = path(&s, id).subpaths[0].anchors.len();
+    let loop_pts = json!([[100, 0], [90, -15], [95, -35], [110, -38], [120, -20], [108, -8], [100, 0]]);
+    s.execute("path.freehand", &json!({"points": loop_pts, "redraw": {"id": id.0, "within": 4}})).unwrap();
+    assert_eq!(paths(&s).len(), 1, "no new path");
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed && sp.anchors.len() > before, "{sp:?}");
+    let top = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath()).y0;
+    assert!(top < -30.0, "the loop: top {top}");
+    for corner in [(0.0, 0.0), (200.0, 0.0), (200.0, 100.0), (0.0, 100.0)] {
+        assert!(sp.anchors.iter().any(|a| near(a.p, Point::new(corner.0, corner.1))), "{corner:?} kept");
+    }
+}
+
+/// On a closed path the stroke replaces the way round it heads from its start, even when that is
+/// the longer way: the shape doesn't flip to the other side as the stroke goes on.
+#[test]
+fn a_redraw_of_a_closed_path_goes_the_way_the_stroke_heads() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+    // From (20, 0) out to the left, round below the rectangle and up its right side to (180, 0).
+    let pts = json!([[20, 0], [10, -15], [-20, -10], [-25, 50], [-20, 120], [100, 125], [220, 120], [225, 50], [210, -10], [190, -12], [180, 0]]);
+    s.execute("path.freehand", &json!({"points": pts, "redraw": {"id": id.0, "within": 4}})).unwrap();
+    assert_eq!(paths(&s).len(), 1);
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed);
+    let ps: Vec<Point> = sp.anchors.iter().map(|a| a.p).collect();
+    // The rectangle's left, bottom and right sides went with the stroke; its top between 20 and
+    // 180 stays.
+    for corner in [(0.0, 0.0), (0.0, 100.0), (200.0, 100.0), (200.0, 0.0)] {
+        assert!(!ps.iter().any(|p| p.distance(Point::new(corner.0, corner.1)) < 1.0), "{corner:?} replaced: {ps:?}");
+    }
+    let b = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+    assert!(b.y1 > 115.0 && b.x0 < -15.0, "the stroke's way round: {b:?}");
+}
+
+/// A stroke lifted farther from the path than Edit selected paths within takes the path with it;
+/// one lifted within that distance joins it again, its end bent smoothly onto it.
+#[test]
+fn a_stroke_lifted_beyond_the_edit_distance_takes_the_path_along() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+    // A hook out of the right side that ends 8 pt from it.
+    let hook = json!([[200, 50], [210, 40], [222, 38], [226, 46], [222, 56], [208, 58]]);
+    s.execute("path.freehand", &json!({"points": hook, "redraw": {"id": id.0, "within": 4}})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    assert!(!sp.closed, "8 pt away with 4 pt to edit within: the shape opened");
+    let ends = [sp.anchors.first().unwrap().p, sp.anchors.last().unwrap().p];
+    assert!(ends.iter().any(|p| p.distance(Point::new(208.0, 58.0)) < 0.5), "it ends where the pen was lifted: {ends:?}");
+}
+
+/// A shape with a hole that opens keeps its outline running its own way, so the hole stays a hole.
+#[test]
+fn opening_a_shape_with_a_hole_keeps_the_hole() {
+    for heads_back in [false, true] {
+        let mut s = session();
+        let outer = rect(&mut s, 0.0, 0.0, 200.0, 200.0);
+        let hole = rect(&mut s, 50.0, 50.0, 100.0, 100.0);
+        s.execute("select.set", &json!({"ids": [outer.0, hole.0]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        let compound = s.doc().unwrap().selection.objects[0];
+        let member = |s: &Session, i: usize| s.doc().unwrap().doc.node(compound).unwrap().children().unwrap()[i].clone();
+        let (outer_id, sign) = {
+            let m = member(&s, 0);
+            (m.id, m.path_data().unwrap().subpaths[0].signed_area().signum())
+        };
+        // A hook out of the top edge, heading one way or the other along it.
+        let dx = if heads_back { -1.0 } else { 1.0 };
+        let hook: Vec<_> = (0..6).map(|i| json!([100.0 + dx * 6.0 * f64::from(i), -5.0 * f64::from(i)])).collect();
+        s.execute("path.freehand", &json!({"points": hook, "redraw": {"id": outer_id.0, "within": 4}})).unwrap();
+        let sp = member(&s, 0).path_data().unwrap().subpaths[0].clone();
+        assert!(!sp.closed, "heads back {heads_back}: opened");
+        assert_eq!(sp.signed_area().signum(), sign, "heads back {heads_back}: the outline runs its own way, the hole stays a hole");
+    }
+}
+
+/// A stroke across a shape from one point of its outline to another carves off the part it cuts
+/// across, the lobe on that side, and keeps the rest, whichever way it is drawn.
+#[test]
+fn a_stroke_across_a_shape_carves_off_the_part_it_cuts() {
+    for reversed in [false, true] {
+        let mut s = session();
+        // A wide shape with a lobe on top between x = 80 and x = 120.
+        let shape = json!([[0, 0], [80, 0], [80, -60], [120, -60], [120, 0], [300, 0], [300, 100], [0, 100]]);
+        let id = NodeId(s.execute("path.freehand", &json!({"points": shape, "closed": true, "fidelity": 0.01})).unwrap()["id"].as_u64().unwrap());
+        // Across the lobe's base, a little inside the shape.
+        let mut cut = vec![json!([70, 0]), json!([85, 8]), json!([100, 10]), json!([115, 8]), json!([130, 0])];
+        if reversed {
+            cut.reverse();
+        }
+        s.execute("path.freehand", &json!({"points": cut, "redraw": {"id": id.0, "within": 4}})).unwrap();
+        let sp = &path(&s, id).subpaths[0];
+        assert!(sp.closed, "reversed {reversed}");
+        let b = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+        assert!(b.y0 > -20.0, "reversed {reversed}: the lobe (up to y = -60) is carved off: {b:?}");
+        assert!(b.x1 > 295.0 && b.y1 > 95.0, "reversed {reversed}: the rest stays: {b:?}");
+    }
+}
+
+/// A stroke leaving an open path across it (no direction along it) drops the nearer, short side,
+/// not most of the path.
+#[test]
+fn a_stroke_leaving_an_open_path_across_it_drops_the_side_it_is_near() {
+    let mut s = session();
+    let id = line(&mut s, 100.0, 100.0, 300.0, 100.0);
+    // Straight up from x = 280, then bending towards the near end.
+    let up = json!([[280, 100], [280, 90], [281, 75], [284, 60], [290, 50]]);
+    s.execute("path.freehand", &json!({"points": up, "redraw": {"id": id.0, "within": 4}})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    assert!(ends_at(sp, Point::new(100.0, 100.0), Point::new(290.0, 50.0), 0.5), "the long side stays: {sp:?}");
+}
+
+/// A stroke drawn over an open shape's open ends, from near one end to near the other, redraws
+/// those ends along the stroke and closes the shape, whichever way it is drawn; the shape's body
+/// between stays.
+#[test]
+fn a_stroke_over_an_open_shapes_ends_closes_it_along_the_stroke() {
+    for reversed in [false, true] {
+        let mut s = session();
+        // A C open on the right: from the top right round the left to the bottom right.
+        let c: Vec<_> = (0..=30)
+            .map(|i| {
+                let a = (40.0 + 280.0 * f64::from(i) / 30.0).to_radians();
+                json!([200.0 + 100.0 * a.cos(), 200.0 - 100.0 * a.sin()])
+            })
+            .collect();
+        let id = NodeId(s.execute("path.freehand", &json!({"points": c, "fidelity": 0.5})).unwrap()["id"].as_u64().unwrap());
+        let on = |deg: f64| {
+            let a = deg.to_radians();
+            (200.0 + 100.0 * a.cos(), 200.0 - 100.0 * a.sin())
+        };
+        // From the C near its top end, out round the open side, back onto it near the bottom end.
+        let (a, b) = (on(60.0), on(300.0));
+        let mut stroke = vec![json!([a.0, a.1]), json!([290.0, 150.0]), json!([315.0, 200.0]), json!([290.0, 250.0]), json!([b.0, b.1])];
+        if reversed {
+            stroke.reverse();
+        }
+        s.execute("path.freehand", &json!({"points": stroke, "redraw": {"id": id.0, "within": 4}})).unwrap();
+        assert_eq!(paths(&s).len(), 1, "reversed {reversed}: no new path");
+        let sp = &path(&s, id).subpaths[0];
+        assert!(sp.closed, "reversed {reversed}: the shape closed");
+        let bb = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+        assert!(bb.x1 > 310.0 && bb.x0 < 105.0, "reversed {reversed}: closed along the stroke, the body kept: {bb:?}");
+        // The old ends (at 40° and 320°) are gone.
+        for deg in [40.0, 320.0] {
+            let e = on(deg);
+            assert!(!sp.anchors.iter().any(|q| q.p.distance(Point::new(e.0, e.1)) < 1.0), "reversed {reversed}: the end at {deg}° is redrawn");
+        }
+    }
+}
+
+/// A stroke that comes back near the path, within Edit selected paths within but not on it, joins
+/// it again: the shape stays one closed path, and the stroke's end bends onto it, so no anchor
+/// lies off the stroke's way back.
+#[test]
+fn a_stroke_back_near_the_path_joins_it_smoothly() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+    // A bump out of the top edge that comes back down to 10 pt above it.
+    let bump = json!([[40, 0], [45, -20], [60, -40], [80, -45], [100, -40], [115, -25], [120, -10]]);
+    s.execute("path.freehand", &json!({"points": bump, "redraw": {"id": id.0, "within": 20}})).unwrap();
+    assert_eq!(paths(&s).len(), 1);
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed, "joined again: still closed");
+    let top = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath()).y0;
+    assert!(top < -35.0, "the bump: top {top}");
 }
 
 /// With the Pencil's Live preview off, nothing is added to the document while a filled stroke is
