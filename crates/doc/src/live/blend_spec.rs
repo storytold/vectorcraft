@@ -85,37 +85,18 @@ impl BlendEaseType {
     }
 }
 
-/// Blend panel Type and Ramp, with the midpoint the 50% step sits at. Ramp is a fraction from 0
-/// (even) to 1.
+/// Blend panel Type and Ramp. Ramp is a fraction from 0 (even) to 1.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BlendEase {
     #[serde(default)]
     pub kind: BlendEaseType,
     #[serde(default, deserialize_with = "blend_ramp")]
     pub ramp: f64,
-    /// Where the blend's halfway step sits along a pair of keys (0.05-0.95, 0.5 at the middle):
-    /// the on-canvas Ease knob's place.
-    #[serde(default = "half", deserialize_with = "blend_midpoint", skip_serializing_if = "midpoint_is_half")]
-    pub midpoint: f64,
-}
-
-/// The midpoint every blend starts with.
-fn half() -> f64 {
-    0.5
-}
-
-fn midpoint_is_half(m: &f64) -> bool {
-    (*m - 0.5).abs() < 1e-9
-}
-
-fn blend_midpoint<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
-    let v = serde_json::Value::deserialize(d)?;
-    Ok(v.as_f64().filter(|n| n.is_finite()).map_or(0.5, |n| n.clamp(0.05, 0.95)))
 }
 
 impl Default for BlendEase {
     fn default() -> Self {
-        Self { kind: BlendEaseType::In, ramp: 0.0, midpoint: 0.5 }
+        Self { kind: BlendEaseType::In, ramp: 0.0 }
     }
 }
 
@@ -124,31 +105,25 @@ impl BlendEase {
         self.ramp <= 0.0
     }
 
-    /// Only the default Type, Ramp and midpoint can be omitted without losing a chosen Type at
-    /// Ramp 0.
+    /// Only the default Type and Ramp can be omitted without losing a chosen Type at Ramp 0.
     pub fn is_default(&self) -> bool {
-        self.kind == BlendEaseType::In && self.ramp == 0.0 && self.midpoint == 0.5
+        self.kind == BlendEaseType::In && self.ramp == 0.0
     }
 
-    /// A monotone polynomial distribution on each side of the midpoint, blended with even spacing
-    /// by Ramp, so `apply(0.5)` is the midpoint (where the Ease knob sits) and the ends stay put.
+    /// A monotone polynomial distribution, blended with even spacing by Ramp.
     /// Public help describes the four distributions, not their numeric curves; these curves are
     /// original.
     pub fn apply(&self, u: f64) -> f64 {
         let u = if u.is_finite() { u.clamp(0.0, 1.0) } else { 0.0 };
         let r = if self.ramp.is_finite() { self.ramp.clamp(0.0, 1.0) } else { 0.0 };
-        let m = if self.midpoint.is_finite() { self.midpoint.clamp(0.05, 0.95) } else { 0.5 };
-        let half = |v: f64| {
-            let eased = match self.kind {
-                BlendEaseType::In => v * v,
-                BlendEaseType::Out => v * (2.0 - v),
-                BlendEaseType::InOut => v * v * (3.0 - 2.0 * v),
-                BlendEaseType::OutIn if v < 0.5 => 2.0 * v * (1.0 - v),
-                BlendEaseType::OutIn => 0.5 + 2.0 * (v - 0.5) * (v - 0.5),
-            };
-            v + r * (eased - v)
+        let eased = match self.kind {
+            BlendEaseType::In => u * u,
+            BlendEaseType::Out => u * (2.0 - u),
+            BlendEaseType::InOut => u * u * (3.0 - 2.0 * u),
+            BlendEaseType::OutIn if u < 0.5 => 2.0 * u * (1.0 - u),
+            BlendEaseType::OutIn => 0.5 + 2.0 * (u - 0.5) * (u - 0.5),
         };
-        if u <= 0.5 { m * half(u / 0.5) } else { m + (1.0 - m) * half((u - 0.5) / 0.5) }
+        u + r * (eased - u)
     }
 }
 

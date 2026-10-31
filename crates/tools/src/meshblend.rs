@@ -4,8 +4,8 @@
 //!   point of a path blends from that point (`starts`). Each further click adds the object as one
 //!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
 //!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over. A selected blend
-//!   whose spine the steps follow shows Ease and Color handles on its first pair of keys: dragging
-//!   them previews `object.blend.options` (Type/Ramp and Shift), one undo step.
+//!   shows its step-count, Ease, Ramp and Colour handles on the canvas: dragging them previews
+//!   `object.blend.options` (Steps, Type/Ramp and Shift), one undo step; Escape cancels a drag.
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
 //!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
 //!   new point takes the current fill color in its own model, unless Shift); drag a mesh point,
@@ -19,7 +19,7 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
 use crate::meshedit::{MeshEdit, grid_of};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
 
@@ -166,6 +166,18 @@ impl Tool for BlendTool {
     }
     fn busy(&self) -> bool {
         self.first.is_some() || self.drag.is_some()
+    }
+    /// Escape cancels a handle drag, rolling its preview back.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape
+            && let Some(d) = self.drag.take()
+        {
+            return d.cancel();
+        }
+        vec![]
+    }
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.drag.is_some()
     }
     fn blend_handle(&self) -> Option<(NodeId, crate::blendhandles::BlendPart, Point)> {
         self.drag.as_ref().map(crate::blendhandles::BlendDrag::handle)
@@ -353,6 +365,13 @@ mod tests {
         );
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "1000")), "{:?}", t.overlays(&c));
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 142.0, -10.0));
+        // Escape cancels a drag and rolls its preview back.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 142.0, rest));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 142.0, 10.0));
+        assert!(t.blend_handle().is_some());
+        assert!(t.claims_key(&c, ToolKey::Escape));
+        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        assert!(t.blend_handle().is_none());
     }
 
     #[test]

@@ -831,10 +831,12 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
   Spine (Auto, Always, Never): Auto follows a replaced spine or Align to Path, Always eases along the straight
   lines between the keys, and Never leaves the spine off the distribution and the canvas. With a blend
   selected, the Blend tool and the Selection tool show its on-canvas handles — the step-count handle riding
-  the selection bounding box's right edge, its height the count on an exponential scale (1–100 within the box,
-  the 1000 cap half a box above it, the place kept when the box rotates), the Ease knob on the spine with a
-  linked Ramp handle above it and the Colour handle below, each drag one undo step in step with the panel,
-  hover naming a handle on a pill (`tools::blendhandles`, `canvas::tool_overlays::blend_handles_overlay`).
+  the selection bounding box's right edge, its height the count on a fixed exponential scale (1 at the bottom
+  of the box, 1000 at its top, the place kept when the box rotates), the Ease knob on the spine with a linked
+  Ramp handle beside it and the Colour handle below, each drag one undo step in step with the panel, Escape
+  cancelling it, hover naming a handle on a pill (`tools::blendhandles`,
+  `canvas::tool_overlays::blend_handles_overlay`). Blend Options carries the same controls in a compact
+  dialog.
   The four polynomial distributions are original approximations of the public description, not measured
   numeric parity. See [Blend panel overview](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html).
 

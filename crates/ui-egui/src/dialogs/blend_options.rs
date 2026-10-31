@@ -35,8 +35,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     preview: true,
-    min_width: 420.0,
-    max_width: Some(460.0),
+    min_width: 320.0,
+    max_width: Some(360.0),
     ..DialogSpec::FORM
 };
 
@@ -121,8 +121,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     if on_blend(d) {
-        // The easing rows match the Blend panel's: Type, Ramp and Midpoint move the steps between
-        // any two keys, spine or not, and Shift moves the colours on their own.
+        // The easing rows match the Blend panel's: Type and Ramp move the steps between any two
+        // keys, spine or not, and Shift moves the colours on their own.
         ui.add_space(6.0);
         widgets::label_row(ui, tl!("Type:"), LABEL_W, |ui| {
             let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
@@ -156,7 +156,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         widgets::label_row(ui, tl!("Direction:"), LABEL_W, |ui| {
             let cmd = "object.blend.reverseFrontToBack";
             let on = crate::menus::enabled(app, cmd);
-            let button = ui.add_enabled_ui(on, |ui| widgets::flat_button_icon(ui, "dc-swap", "Reverse Front to Back", ui.available_width()));
+            let button = ui.add_enabled_ui(on, |ui| widgets::flat_button_icon(ui, "dc-swap", "Reverse Front to Back", 170.0));
             if button.inner.clicked() {
                 reverse(app, d, cmd);
             }
@@ -166,8 +166,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             ui.add_space(LABEL_W);
             let cmd = "object.blend.reverseSpine";
             let on = crate::menus::enabled(app, cmd);
-            let width = ui.available_width().max(120.0);
-            if ui.add_enabled_ui(on, |ui| widgets::flat_button(ui, tl!("Reverse Spine"), width)).inner.clicked() {
+            if ui.add_enabled_ui(on, |ui| widgets::flat_button_fit(ui, tl!("Reverse Spine"), 96.0)).inner.clicked() {
                 reverse(app, d, cmd);
             }
         });

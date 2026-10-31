@@ -1159,27 +1159,22 @@ mod tests {
         use crate::live::{BlendEase, BlendEaseType as K};
         for kind in [K::In, K::Out, K::InOut, K::OutIn] {
             for ramp in [0.0, 0.5, 1.0, f64::NAN, f64::INFINITY] {
-                let e = BlendEase { kind, ramp, ..Default::default() };
+                let e = BlendEase { kind, ramp };
                 assert_eq!((e.apply(0.0), e.apply(1.0)), (0.0, 1.0));
-                assert_eq!(e.apply(0.5), 0.5);
                 let ys: Vec<f64> = (0..=100).map(|i| e.apply(i as f64 / 100.0)).collect();
                 assert!(ys.windows(2).all(|w| w[0] <= w[1]));
                 assert_eq!(e.apply(f64::NAN), 0.0);
                 if ramp == 0.0 {
                     assert_eq!(e.apply(0.25), 0.25);
+                    assert_eq!(e.apply(0.5), 0.5);
                 }
             }
         }
-        let e = |kind| BlendEase { kind, ramp: 1.0, ..Default::default() };
+        let e = |kind| BlendEase { kind, ramp: 1.0 };
         assert!(e(K::In).apply(0.25) < 0.25);
         assert!(e(K::Out).apply(0.25) > 0.25);
         assert!(e(K::InOut).apply(0.1) < 0.1 && e(K::InOut).apply(0.9) > 0.9);
         assert!(e(K::OutIn).apply(0.1) > 0.1 && e(K::OutIn).apply(0.9) < 0.9);
-        // The midpoint is where the halfway step lands, whatever the Type and Ramp.
-        let m = BlendEase { kind: K::Out, ramp: 1.0, midpoint: 0.3 };
-        assert_eq!(m.apply(0.5), 0.3);
-        assert_eq!(m.apply(0.0), 0.0);
-        assert_eq!(m.apply(1.0), 1.0);
     }
 
     #[test]
@@ -1206,16 +1201,14 @@ mod tests {
         // on either side of the midpoint the easing keeps).
         let base = BlendSpec { spacing: BlendSpacing::Steps(2), ..base };
         let (x0, p0) = mid(&base);
-        let pos =
-            BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0, ..Default::default() }, ..base.clone() };
+        let pos = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..base.clone() };
         let (x2, p2) = mid(&pos);
         assert!((x0 - x2).abs() > 1e-3 && p0 == p2, "{x0} {x2}");
         assert_eq!(mid(&pos).0, x2, "deterministic");
         // The easing moves the steps along the straight line between the keys too, with no
         // replaced spine: the step before the midpoint lands nearer the first key.
         let plain = BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() };
-        let eased =
-            BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0, ..Default::default() }, ..plain.clone() };
+        let eased = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..plain.clone() };
         assert!(mid(&eased).0 < mid(&plain).0, "eased in: {}", mid(&eased).0);
     }
 
