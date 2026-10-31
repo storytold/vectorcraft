@@ -25,7 +25,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 /// `color` (a preset's name or a hex colour) as a colour.
-fn resolve(color: &str) -> Option<Color> {
+pub(super) fn resolve(color: &str) -> Option<Color> {
     match LAYER_COLORS.iter().find(|(name, _)| name.eq_ignore_ascii_case(color.trim())) {
         Some((_, [r, g, b])) => Some(Color::rgb8(*r, *g, *b)),
         None => Color::from_hex(color),

@@ -214,6 +214,7 @@ pub fn import(bytes: &[u8], o: &ImportOptions) -> Result<Imported, String> {
     let (mut document, mut warnings) = build::Build::new(&d, o).run(layout, natural, ratio)?;
     document.units = if o.fit { unit } else { o.unit.unwrap_or(unit) };
     warnings.extend(damaged);
+    document.limit_depth_noting(&mut warnings);
     Ok(Imported { document, warnings })
 }
 

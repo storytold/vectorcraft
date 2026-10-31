@@ -6,6 +6,53 @@ use kurbo::{BezPath, ParamCurveNearest, PathEl, Point, Rect, Shape};
 
 use crate::path::{FillRule, PathData};
 
+/// Does the filled area of `path` cover all of `r` shrunk by `tol` on every side? Answered for one
+/// convex polygon (a single subpath of straight segments), which covers the rect when it contains
+/// its four corners; any other path gives `false`, so a caller treats it as not covering.
+pub fn polygon_covers_rect(path: &BezPath, r: Rect, tol: f64) -> bool {
+    let mut pts: Vec<Point> = Vec::new();
+    for (i, el) in path.elements().iter().enumerate() {
+        match *el {
+            PathEl::MoveTo(p) if i == 0 => pts.push(p),
+            PathEl::LineTo(p) if i > 0 => pts.push(p),
+            PathEl::ClosePath if i > 0 => {}
+            _ => return false,
+        }
+    }
+    if pts.len() > 1 && pts.first() == pts.last() {
+        pts.pop();
+    }
+    if pts.len() < 3 {
+        return false;
+    }
+    // Convex: every turn goes the same way (straight runs allowed).
+    let n = pts.len();
+    let mut sign = 0.0f64;
+    let mut turning = 0.0f64;
+    for i in 0..n {
+        let (a, b, c) = (pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+        let cross = (b - a).cross(c - b);
+        turning += cross.atan2((b - a).dot(c - b));
+        if cross.abs() <= 1e-9 {
+            continue;
+        }
+        if sign == 0.0 {
+            sign = cross.signum();
+        } else if cross.signum() != sign {
+            return false;
+        }
+    }
+    // A simple convex polygon turns through exactly one full revolution; a star winds more.
+    if (turning.abs() - std::f64::consts::TAU).abs() > 1e-6 {
+        return false;
+    }
+    let inner = r.inflate(-tol, -tol);
+    sign != 0.0
+        && [Point::new(inner.x0, inner.y0), Point::new(inner.x1, inner.y0), Point::new(inner.x1, inner.y1), Point::new(inner.x0, inner.y1)]
+            .into_iter()
+            .all(|c| fill_contains(path, FillRule::NonZero, c))
+}
+
 /// Is `p` inside the filled area of `path` under `rule`? Open subpaths are implicitly closed (as when filled).
 pub fn fill_contains(path: &BezPath, rule: FillRule, p: Point) -> bool {
     let w = closed(path).winding(p);
@@ -72,7 +119,8 @@ pub fn stroke_contains(path: &BezPath, width: f64, tol: f64, p: Point) -> bool {
 /// (#1103).
 pub fn intersects_rect(path: &PathData, r: Rect) -> bool {
     let Some(b) = path.bounds() else { return false };
-    if b.intersect(r).area() <= 0.0 && !(b.width() == 0.0 || b.height() == 0.0) {
+    let degenerate = |x: Rect| x.width() == 0.0 || x.height() == 0.0;
+    if b.intersect(r).area() <= 0.0 && !degenerate(b) && !degenerate(r) {
         return false;
     }
     // Any anchor inside?
@@ -93,6 +141,32 @@ pub fn intersects_rect(path: &PathData, r: Rect) -> bool {
 mod tests {
     use super::*;
     use crate::shapes;
+
+    #[test]
+    fn polygon_covers_rect_only_for_convex_polygons_around_it() {
+        let page = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let poly = |pts: &[(f64, f64)]| {
+            let mut b = BezPath::new();
+            b.move_to(pts[0]);
+            for &p in &pts[1..] {
+                b.line_to(p);
+            }
+            b.close_path();
+            b
+        };
+        assert!(polygon_covers_rect(&poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]), page, 0.01));
+        assert!(polygon_covers_rect(&poly(&[(50.0, -60.0), (160.0, 50.0), (50.0, 160.0), (-60.0, 50.0)]), page, 0.01), "turned, around it");
+        // The page's bounding box, but its corners are cut away.
+        assert!(!polygon_covers_rect(&poly(&[(50.0, 0.0), (100.0, 50.0), (50.0, 100.0), (0.0, 50.0)]), page, 0.01));
+        // Contains the corners but notches into the page: not convex.
+        assert!(!polygon_covers_rect(&poly(&[(-1.0, -1.0), (101.0, -1.0), (101.0, 101.0), (50.0, 40.0), (-1.0, 101.0)]), page, 0.01));
+        // Curves and several subpaths aren't judged.
+        assert!(!polygon_covers_rect(&kurbo::Circle::new((50.0, 50.0), 200.0).to_path(0.1), page, 0.01));
+        let mut two = poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        two.extend(poly(&[(10.0, 10.0), (20.0, 10.0), (20.0, 20.0)]));
+        assert!(!polygon_covers_rect(&two, page, 0.01));
+        assert!(!polygon_covers_rect(&BezPath::new(), page, 0.01));
+    }
 
     #[test]
     fn fill_and_stroke() {
@@ -154,6 +228,16 @@ mod tests {
         let l = shapes::line(Point::new(0.0, 0.0), Point::new(10.0, 10.0));
         assert!(intersects_rect(&l, Rect::new(4.0, 0.0, 6.0, 10.0)));
     }
+
+    #[test]
+    fn marquee_degenerate_rect() {
+        let p = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        // zero-height / zero-width marquee crossing the shape
+        assert!(intersects_rect(&p, Rect::new(-5.0, 5.0, 15.0, 5.0)));
+        assert!(intersects_rect(&p, Rect::new(5.0, -5.0, 5.0, 15.0)));
+        // zero-height marquee missing it
+        assert!(!intersects_rect(&p, Rect::new(20.0, 5.0, 30.0, 5.0)));
+    }
 }
 
 #[cfg(test)]
@@ -176,5 +260,21 @@ mod regress_tests {
         bp.curve_to(c.p1, c.p2, c.p3);
         let worst = (0..=200).map(|i| distance_to_outline(&bp, c.eval(i as f64 / 200.0))).fold(0.0, f64::max);
         assert!(worst < 1e-6, "{worst}");
+    }
+
+    #[test]
+    fn polygon_covers_rect_rejects_self_intersecting_star() {
+        let mut b = BezPath::new();
+        for k in 0..5 {
+            let a = (-90.0 + 144.0 * k as f64).to_radians();
+            let p = Point::new(100.0 * a.cos(), 100.0 * a.sin());
+            if k == 0 {
+                b.move_to(p);
+            } else {
+                b.line_to(p);
+            }
+        }
+        b.close_path();
+        assert!(!polygon_covers_rect(&b, Rect::new(-55.0, -20.0, 55.0, 78.0), 0.01));
     }
 }

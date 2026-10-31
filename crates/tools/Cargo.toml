@@ -13,6 +13,7 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-pathops = { workspace = true }
+vectorcraft-effects = { workspace = true }
 vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
@@ -20,4 +21,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true }
-vectorcraft-text = { workspace = true, features = ["test-fonts"] }
+# The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
+vectorcraft-text = { workspace = true, features = ["test-fonts", "bundled-fonts"] }

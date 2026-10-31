@@ -197,7 +197,9 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
     }
     let weights = o.reduction.weights();
     let dither = if exact { Dither::None } else { o.dither };
-    let mut indices = map(&colors, width as usize, &palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, |i| clear(&px[i]));
+    // (A width past the pixels there are would size the error rows from a number nothing checked.)
+    let mut indices =
+        map(&colors, (width as usize).min(colors.len()), &palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, |i| clear(&px[i]));
     // Drop the entries no pixel uses (fixed palettes), keeping the order.
     let mut used = [false; 256];
     for (i, &ix) in indices.iter().enumerate() {
@@ -341,9 +343,11 @@ fn median_cut(colors: impl Iterator<Item = [u8; 3]>, k: usize, r: Reduction) -> 
     let mut palette: Vec<[f32; 3]> = boxes.iter().map(|&(a, b, ..)| mean(&cells[a..b])).collect();
     // k-means: move each entry to the mean of the cells nearest to it.
     for _ in 0..3 {
+        // Centres move between passes, not within one: build the spatial index once per pass.
+        let index = PaletteIndex::new(&palette, w);
         let mut sums = vec![([0f64; 3], 0f64); palette.len()];
         for c in &cells {
-            let i = nearest(&palette, c.mean, w);
+            let i = index.nearest(c.mean);
             for ch in 0..3 {
                 sums[i].0[ch] += c.mean[ch] as f64 * c.count as f64;
             }
@@ -371,8 +375,137 @@ fn median_cut(colors: impl Iterator<Item = [u8; 3]>, k: usize, r: Reduction) -> 
     out
 }
 
-fn nearest(palette: &[[f32; 3]], c: [f32; 3], w: [f32; 3]) -> usize {
-    palette.iter().enumerate().min_by(|a, b| dist(*a.1, c, w).total_cmp(&dist(*b.1, c, w))).map_or(0, |(i, _)| i)
+/// An exact 3-D nearest-neighbour index for the weighted RGB distance used by palette export.
+///
+/// Balanced at the weighted widest axis. Every subtree carries tight channel bounds, so a
+/// branch-and-bound search skips it when even its nearest *possible* colour is farther than the
+/// best one found. Equal distances still choose the earliest palette index (as a linear scan did).
+/// For very small palettes a scan is cheaper than traversing the tree.
+struct PaletteNode {
+    index: usize,
+    lo: [f32; 3],
+    hi: [f32; 3],
+    left: Option<usize>,
+    right: Option<usize>,
+}
+
+struct PaletteIndex<'a> {
+    colors: &'a [[f32; 3]],
+    weights: [f32; 3],
+    nodes: Vec<PaletteNode>,
+    root: Option<usize>,
+}
+
+impl<'a> PaletteIndex<'a> {
+    const SCAN_CUTOFF: usize = 12;
+
+    fn new(colors: &'a [[f32; 3]], weights: [f32; 3]) -> Self {
+        let mut nodes = if colors.len() <= Self::SCAN_CUTOFF { Vec::new() } else { Vec::with_capacity(colors.len()) };
+        let root = if colors.len() <= Self::SCAN_CUTOFF {
+            None
+        } else {
+            let mut indices: Vec<usize> = (0..colors.len()).collect();
+            Self::build(colors, weights, &mut indices, &mut nodes)
+        };
+        Self { colors, weights, nodes, root }
+    }
+
+    // Median partitioning takes O(k log k) time and space for k palette entries.
+    fn build(colors: &[[f32; 3]], w: [f32; 3], ids: &mut [usize], nodes: &mut Vec<PaletteNode>) -> Option<usize> {
+        if ids.is_empty() {
+            return None;
+        }
+        let (mut lo, mut hi) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
+        for &id in ids.iter() {
+            let Some(c) = colors.get(id) else { continue };
+            for axis in 0..3 {
+                lo[axis] = lo[axis].min(c[axis]);
+                hi[axis] = hi[axis].max(c[axis]);
+            }
+        }
+        let axis = (0..3).max_by(|&a, &b| (w[a] * (hi[a] - lo[a])).total_cmp(&(w[b] * (hi[b] - lo[b])))).unwrap_or(0);
+        let mid = ids.len() / 2;
+        ids.select_nth_unstable_by(mid, |&a, &b| {
+            let ac = colors.get(a).map_or(0.0, |c| c[axis]);
+            let bc = colors.get(b).map_or(0.0, |c| c[axis]);
+            ac.total_cmp(&bc).then(a.cmp(&b))
+        });
+        let (before, rest) = ids.split_at_mut(mid);
+        let (pivot, after) = rest.split_first_mut()?;
+        let at = nodes.len();
+        nodes.push(PaletteNode { index: *pivot, lo, hi, left: None, right: None });
+        let left = Self::build(colors, w, before, nodes);
+        let right = Self::build(colors, w, after, nodes);
+        if let Some(n) = nodes.get_mut(at) {
+            n.left = left;
+            n.right = right;
+        }
+        Some(at)
+    }
+
+    // Lower bound on *the same f32 weighted squared distance* as `dist`: avoid transforming
+    // coordinates, which would change rounding and potentially break identical-palette ties.
+    fn lower_bound(&self, id: usize, c: [f32; 3]) -> f32 {
+        let Some(n) = self.nodes.get(id) else { return f32::INFINITY };
+        (0..3)
+            .map(|i| {
+                let gap = if c[i] < n.lo[i] {
+                    n.lo[i] - c[i]
+                } else if c[i] > n.hi[i] {
+                    c[i] - n.hi[i]
+                } else {
+                    0.0
+                };
+                (self.weights[i] * gap).powi(2)
+            })
+            .sum()
+    }
+
+    fn search(&self, at: usize, c: [f32; 3], best: &mut (f32, usize)) {
+        let Some(n) = self.nodes.get(at) else { return };
+        let Some(&p) = self.colors.get(n.index) else { return };
+        let d = dist(p, c, self.weights);
+        if d < best.0 || (d == best.0 && n.index < best.1) {
+            *best = (d, n.index);
+        }
+        // Search the more promising box first, tightening the bound for the second box.
+        let left = n.left.map(|id| (id, self.lower_bound(id, c)));
+        let right = n.right.map(|id| (id, self.lower_bound(id, c)));
+        match (left, right) {
+            (Some(a), Some(b)) => {
+                let (first, second) = if a.1 <= b.1 { (a, b) } else { (b, a) };
+                if first.1 <= best.0 {
+                    self.search(first.0, c, best);
+                }
+                // `<=` is essential: an equal-distance colour may have an earlier index.
+                if second.1 <= best.0 {
+                    self.search(second.0, c, best);
+                }
+            }
+            (Some(a), None) | (None, Some(a)) => {
+                if a.1 <= best.0 {
+                    self.search(a.0, c, best);
+                }
+            }
+            (None, None) => {}
+        }
+    }
+
+    fn nearest(&self, c: [f32; 3]) -> usize {
+        if self.colors.len() <= Self::SCAN_CUTOFF {
+            return self
+                .colors
+                .iter()
+                .enumerate()
+                .min_by(|a, b| dist(*a.1, c, self.weights).total_cmp(&dist(*b.1, c, self.weights)))
+                .map_or(0, |(i, _)| i);
+        }
+        let mut best = (f32::INFINITY, 0);
+        if let Some(root) = self.root {
+            self.search(root, c, &mut best);
+        }
+        best.1
+    }
 }
 
 /// The 8×8 ordered-dither threshold at (x, y), in 0..1.
@@ -398,19 +531,20 @@ fn noise(x: usize, y: usize) -> f32 {
 /// names (transparent) get index 0 and take no diffused error.
 fn map(colors: &[[u8; 3]], width: usize, palette: &[[u8; 3]], w: [f32; 3], dither: Dither, amount: f32, skip: impl Fn(usize) -> bool) -> Vec<u8> {
     let pal: Vec<[f32; 3]> = palette.iter().map(|c| c.map(f32::from)).collect();
+    let index = PaletteIndex::new(&pal, w);
     // Nearest entries by colour: exact colours without dithering, a 6-bit grid with it.
     let mut exact: HashMap<[u8; 3], u8> = HashMap::new();
     let mut grid = vec![u16::MAX; if dither == Dither::None { 0 } else { 1 << 18 }];
     let mut lookup = |c: [f32; 3]| -> u8 {
         let q = c.map(|v| v.round().clamp(0.0, 255.0) as u8);
         if grid.is_empty() {
-            return *exact.entry(q).or_insert_with(|| nearest(&pal, c, w) as u8);
+            return *exact.entry(q).or_insert_with(|| index.nearest(c) as u8);
         }
         let key = (q[0] as usize >> 2) << 12 | (q[1] as usize >> 2) << 6 | q[2] as usize >> 2;
         match grid.get(key) {
             Some(&v) if v != u16::MAX => v as u8,
             _ => {
-                let i = nearest(&pal, c, w) as u8;
+                let i = index.nearest(c) as u8;
                 if let Some(g) = grid.get_mut(key) {
                     *g = i as u16;
                 }
@@ -465,4 +599,84 @@ fn map(colors: &[[u8; 3]], width: usize, palette: &[[u8; 3]], w: [f32; 3], dithe
         }
     }
     out
+}
+
+#[cfg(test)]
+mod nearest_tests {
+    use super::*;
+
+    // The original definition, retained only as a parity oracle for the spatial index.
+    fn linear(colors: &[[f32; 3]], c: [f32; 3], w: [f32; 3]) -> usize {
+        colors.iter().enumerate().min_by(|a, b| dist(*a.1, c, w).total_cmp(&dist(*b.1, c, w))).map_or(0, |(i, _)| i)
+    }
+
+    fn next(seed: &mut u32) -> u32 {
+        *seed ^= *seed << 13;
+        *seed ^= *seed >> 17;
+        *seed ^= *seed << 5;
+        *seed
+    }
+
+    #[test]
+    fn exact_nearest_matches_linear_for_palette_sizes_and_weights() {
+        let mut seed = 0x2ab4_1017;
+        for w in [[1.0; 3], [0.55, 0.77, 0.34], [0.1, 1.0, 0.01]] {
+            for size in [0, 1, 2, 8, 12, 13, 16, 17, 32, 64, 128, 256] {
+                // Include duplicated colours, close k-means-style floating-point centres,
+                // and a wide colour gamut. Query points are fractional, as with dithering.
+                let colors: Vec<[f32; 3]> =
+                    (0..size)
+                        .map(|i| {
+                            if i % 11 == 0 {
+                                [127.0, 127.0, 127.0]
+                            } else {
+                                [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0))
+                            }
+                        })
+                        .collect();
+                let index = PaletteIndex::new(&colors, w);
+                for _ in 0..500 {
+                    let c = [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0));
+                    assert_eq!(index.nearest(c), linear(&colors, c, w), "size {size}, weights {w:?}, query {c:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn equal_distance_always_chooses_first_palette_entry() {
+        // Enough entries to exercise the tree, even when they share one bounding box.
+        let mut colors = vec![[128.0, 128.0, 128.0]; 256];
+        colors[0] = [0.0, 128.0, 128.0];
+        colors[255] = [2.0, 128.0, 128.0];
+        let index = PaletteIndex::new(&colors, [1.0; 3]);
+        assert_eq!(index.nearest([1.0, 128.0, 128.0]), 0, "equal distance to indices 0 and 255");
+        assert_eq!(index.nearest([128.0; 3]), 1, "equal among 254 identical colours");
+        let colors = vec![[10.0, 10.0, 10.0]; 256];
+        assert_eq!(PaletteIndex::new(&colors, [0.55, 0.77, 0.34]).nearest([10.0; 3]), 0);
+    }
+
+    /// Opt-in microbenchmark: compares the same nearest-neighbour queries, without image IO.
+    #[test]
+    #[ignore = "run with cargo test -p vectorcraft-render nearest_palette_benchmark --release -- --ignored --nocapture"]
+    fn nearest_palette_benchmark() {
+        use std::time::Instant;
+
+        let mut seed = 0x87bb_7641;
+        let colors: Vec<[f32; 3]> = (0..256).map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 256) as f32)).collect();
+        let queries: Vec<[f32; 3]> = (0..100_000).map(|_| [0, 1, 2].map(|_| (next(&mut seed) % 65_536) as f32 * (255.0 / 65_535.0))).collect();
+        let w = [0.55, 0.77, 0.34];
+        let start = Instant::now();
+        let baseline: Vec<_> = queries.iter().map(|&c| linear(&colors, c, w)).collect();
+        let old = start.elapsed();
+        let start = Instant::now();
+        let index = PaletteIndex::new(&colors, w);
+        let improved: Vec<_> = queries.iter().map(|&c| index.nearest(c)).collect();
+        let new = start.elapsed();
+        assert_eq!(baseline, improved);
+        eprintln!(
+            "100k nearest-colour queries, 256 entries: linear {old:?}, spatial index {new:?}, speedup {:.2}x",
+            old.as_secs_f64() / new.as_secs_f64()
+        );
+    }
 }

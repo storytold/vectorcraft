@@ -1,8 +1,8 @@
 //! Opening documents off the UI thread (desktop): a file the user asks to open (File › Open, Open
-//! Recent, the Home screen, files handed to the app) is decoded on a thread of its own while the
-//! status bar shows it, and opens in a new tab once it is ready, as it would at once: the same
-//! notes, recent files and errors. On wasm (no threads) and in unit tests it opens at once
-//! ([`available`]).
+//! Recent, the Home screen, files handed to the app) is decoded on a thread of its own, which also
+//! reads its linked files and lays out its type, while the status bar shows it, and opens in a new tab
+//! once it is ready, as it would at once: the same notes, recent files and errors. On wasm (no
+//! threads) and in unit tests it opens at once ([`available`]).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
@@ -28,23 +28,42 @@ pub struct Opening {
     pub pending: Vec<Pending>,
 }
 
+/// Is a long operation running that should show the busy cursor and status spinner (background
+/// save/export with a label, a file opening or being read for Place off the UI thread, a heavy plug-in filter, or an
+/// Image Trace)?
+pub fn long_operation_busy(app: &VectorcraftApp) -> bool {
+    app.background.jobs.iter().any(|j| !j.label.is_empty() && !j.cancelled())
+        || !app.opening.pending.is_empty()
+        || !app.plugin_runs.running.is_empty()
+        || !app.placing.pending.is_empty()
+        || !app.trace_runs.running.is_empty()
+}
+
 /// Does opening happen off the UI thread here? Not on wasm (no threads), in unit tests (they look
 /// at the document right after asking for it), or with `VECTORCRAFT_SYNC_OPEN` set.
 pub fn available() -> bool {
     !(cfg!(target_arch = "wasm32") || cfg!(test) || std::env::var_os("VECTORCRAFT_SYNC_OPEN").is_some())
 }
 
-/// Decode `bytes`, the file at `path`, on a thread of its own → `{background: true, status}`, or
-/// the bytes back when no thread could start (the caller opens the file at once).
+/// Decode `bytes`, the file at `path`, read its linked files and lay out its type on a thread of its
+/// own ([`fileio::read_for_open`]) → `{background: true, status}`, or the bytes back when no thread
+/// could start (the caller opens the file at once).
 pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Value, Vec<u8>> {
     let (tx, done) = channel();
     let bytes = Arc::new(bytes);
     let (name, file) = (path.to_string(), bytes.clone());
+    // Update Links (Preferences › File Handling) applies there as it is set now.
+    let update_links = app.session.prefs.update_links == "automatically";
+    let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
         let r = scope
-            .run(|| vectorcraft_engine::guard::catch_panic(|| fileio::read_for_open(&name, &file, &Value::Null).map_err(|e| e.to_string())))
+            .run(|| {
+                vectorcraft_engine::guard::catch_panic(|| {
+                    fileio::read_for_open(&name, &file, Some(name.clone()), &Value::Null, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                })
+            })
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
         // The file's bytes go before the document is handed over.
         drop(file);
@@ -61,8 +80,20 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     Ok(json!({ "background": true, "status": status }))
 }
 
-/// Open the files that are ready (each frame).
+/// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
+/// becomes the active one, and the dialog's OK acts on the active document (#1694: Save As
+/// options confirmed after another file had finished opening saved that file's art under the
+/// first one's name). The files wait, their status line too, until the dialog is closed. Nor while
+/// an interaction is open (a drag, a slider's preview, or a tool's preview between its clicks) or
+/// a tool is busy with a drag of its own while the pointer button is held: a document that opens
+/// cancels it. A tool that is busy while the button is not held and no interaction is open is
+/// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
+/// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
+    let s = &app.session;
+    if app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()) {
+        return;
+    }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {
         let r = match p.done.try_recv() {
@@ -84,7 +115,7 @@ pub fn poll(app: &mut VectorcraftApp) {
 
 /// Open a file read off the UI thread, as [`crate::io::open_reporting`] opens one read at once.
 fn finish(app: &mut VectorcraftApp, path: &str, r: Result<ReadFile, String>) {
-    let opened = r.and_then(|file| fileio::open_read(&mut app.session, file, Some(path.to_string())).map_err(|e| e.to_string()));
+    let opened = r.and_then(|file| fileio::open_read(&mut app.session, file).map_err(|e| e.to_string()));
     match opened {
         Ok(r) => {
             crate::io::opened(app, &r);
@@ -95,41 +126,4 @@ fn finish(app: &mut VectorcraftApp, path: &str, r: Result<ReadFile, String>) {
 }
 
 #[cfg(test)]
-mod tests {
-    use vectorcraft_engine::Session;
-
-    use super::*;
-    use crate::Services;
-
-    #[test]
-    fn a_file_read_off_the_ui_thread_opens_as_one_read_at_once() {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        let mut d = vectorcraft_doc::Document::new(120.0, 80.0);
-        d.title = "Poster".into();
-        let bytes = vectorcraft_format::save(&d, false);
-        let before = app.session.documents().len();
-        let r = start(&mut app, "/art/Poster.vectorcraft", bytes).unwrap();
-        assert_eq!(r["background"], true);
-        assert_eq!(app.ui.status, "Opening Poster.vectorcraft…");
-        let t0 = std::time::Instant::now();
-        while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
-        assert_eq!(app.session.documents().len(), before + 1);
-        assert!(!app.ui.status.starts_with("Opening"), "{}", app.ui.status);
-        let st = app.session.doc().unwrap();
-        assert_eq!((st.path.as_deref(), st.doc.artboards[0].rect.width()), (Some("/art/Poster.vectorcraft"), 120.0));
-        assert_eq!(app.ui.recent_files.first().map(String::as_str), Some("/art/Poster.vectorcraft"));
-        // A file that can't be read: reported, nothing opened, not a recent file.
-        start(&mut app, "/art/Broken.vectorcraft", b"{\"format\":\"vectorcraft\"".to_vec()).unwrap();
-        let t0 = std::time::Instant::now();
-        while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
-        assert_eq!(app.session.documents().len(), before + 1);
-        assert!(app.ui.status.starts_with("Couldn't open Broken.vectorcraft"), "{}", app.ui.status);
-        assert_ne!(app.ui.recent_files.first().map(String::as_str), Some("/art/Broken.vectorcraft"));
-    }
-}
+mod tests;

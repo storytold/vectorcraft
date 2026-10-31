@@ -89,6 +89,30 @@ fn frame_type_keeps_dimensions_alignment_and_unit_conversion() {
 }
 
 #[test]
+fn a_frame_too_short_for_its_first_line_is_made_taller_with_a_warning() {
+    // #1423: a title taller than its frame (60 pt type in a 50 pt frame) drew nothing.
+    let lines = |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines.len();
+    let title = |size: f64| import(vec![block(utf8("T"), vec![run(1, Some(attrs("Frame", "", 400, false, size)))], &[3])], true, 144.0, IDENTITY);
+    // Its baseline (at cap height) is inside the frame, its descenders hang out of it; and an
+    // 80 pt title whose capitals don't fit either.
+    for (size, warning, max) in [(120.0, "made taller so the lines show", 100.0), (160.0, "too short for their first line", 150.0)] {
+        let short = title(size);
+        let t = texts(&short.doc)[0];
+        let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
+        let b = frame.bounds().unwrap();
+        assert!((b.x0, b.y0, b.width()) == (0.0, 0.0, 100.0) && b.height() > 50.0 && b.height() < max, "{size}: taller from its top: {b:?}");
+        assert_eq!(lines(t), 1, "the line shows");
+        assert!(short.warnings.iter().any(|w| w.contains(warning)), "{size}: {:?}", short.warnings);
+    }
+    // A frame that holds its line keeps its height, and nothing is said.
+    let fits = title(20.0);
+    let t = texts(&fits.doc)[0];
+    let TextKind::Area { frame } = &t.kind else { panic!("expected area type") };
+    assert_eq!((frame.bounds().unwrap().height(), lines(t)), (50.0, 1));
+    assert!(!fits.warnings.iter().any(|w| w.contains("too short")), "{:?}", fits.warnings);
+}
+
+#[test]
 fn each_font_weight_and_italic_maps_to_the_expected_style() {
     let cases = [
         (100, "Thin"),
@@ -139,6 +163,8 @@ fn caps_and_feature_overrides_pass_through_to_editable_type() {
                             vec![(tag(b"Feat"), F::U32(u32::from_be_bytes(*b"CAP\x01"))), (tag(b"Valu"), F::I32(1))],
                             vec![(tag(b"Feat"), F::U32(u32::from_be_bytes(*b"liga"))), (tag(b"Valu"), F::I32(0))],
                             vec![(tag(b"Feat"), F::U32(u32::from_be_bytes(*b"ss01"))), (tag(b"Valu"), F::I32(1))],
+                            // Character variants aren't rendered yet (stylistic sets are, #1607).
+                            vec![(tag(b"Feat"), F::U32(u32::from_be_bytes(*b"cv01"))), (tag(b"Valu"), F::I32(1))],
                         ],
                     ),
                 )],
@@ -149,7 +175,7 @@ fn caps_and_feature_overrides_pass_through_to_editable_type() {
     let t = texts(&loaded.doc)[0];
     assert_eq!(t.runs[0].text, "Mixed");
     assert!(t.runs[0].style.all_caps);
-    assert_eq!(t.runs[0].style.features, ["-liga", "ss01"]);
+    assert_eq!(t.runs[0].style.features, ["-liga", "ss01", "cv01"]);
     assert!(loaded.warnings.iter().any(|w| w.contains("retained but not rendered")));
     let restored = vectorcraft_format::load(&vectorcraft_format::save_file(&loaded.doc)).unwrap();
     assert_eq!(texts(&restored)[0], t);

@@ -37,7 +37,7 @@ fn outline(doc: Option<&Document>, n: &Node) -> Option<Node> {
 fn with_hooks<R>(doc: Option<&Document>, f: impl FnOnce(Hooks) -> R) -> R {
     let outline = |n: &Node| outline(doc, n);
     let tiles = |name: &str, xf: Affine, region: Rect| Some(doc?.pattern(name)?.instances_in(xf, region));
-    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles) })
+    f(Hooks { outline: Some(&outline), appearance: Some(&bake_appearance), pattern: Some(&tiles), symbols: doc })
 }
 
 /// One level of evaluation of live object `n` ([`live::expand_live_hooks`]).

@@ -19,6 +19,11 @@ impl<T> Shared<T> {
     pub fn ptr_eq(a: &Self, b: &Self) -> bool {
         Arc::ptr_eq(&a.0, &b.0)
     }
+    /// A weak reference to the value: it keeps the allocation, so the value's address names it
+    /// while the reference is kept, but not the value.
+    pub fn downgrade(this: &Self) -> std::sync::Weak<T> {
+        Arc::downgrade(&this.0)
+    }
 }
 
 impl<T> std::ops::Deref for Shared<T> {

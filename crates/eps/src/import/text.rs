@@ -389,7 +389,7 @@ impl Interp<'_> {
         d.insert(Key::name("FontMatrix"), matrix_obj(Affine::scale(0.001)));
         d.insert(Key::name("FontBBox"), Obj::array(vec![Obj::Int(0), Obj::Int(-250), Obj::Int(1000), Obj::Int(1000)]));
         d.insert(Key::name("Encoding"), Obj::array(vec![Obj::name(".notdef"); 256]));
-        let font = Rc::new(std::cell::RefCell::new(d));
+        let font = DictRef::new(d);
         self.fonts.borrow_mut().insert(key, Obj::Dict(font.clone()));
         Ok(font)
     }
@@ -403,7 +403,10 @@ impl Interp<'_> {
         let f = font.borrow();
         let name = f.get(&Key::name("FontName")).and_then(Obj::text).map_or_else(|| DEFAULT_FONT.to_string(), |n| n.to_string());
         let m = f.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
-        Ok((name, m * Affine::scale(1000.0)))
+        // Type 1 glyphs are in 1000-unit space; a Type 42 font's glyph space is one unit an em
+        // (its FontMatrix, usually the identity, is already the em's).
+        let units = if f.get(&Key::name("FontType")).and_then(Obj::as_num) == Some(42.0) { 1.0 } else { 1000.0 };
+        Ok((name, m * Affine::scale(units)))
     }
 
     /// `s` (read as Latin-1) set in the current font at user point `at`: point type placed there,
@@ -486,7 +489,7 @@ fn transformed(font: &DictRef, m: Affine) -> DictRef {
     let mut d = font.borrow().clone();
     let fm = d.get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| matrix_of(&i.borrow()))).unwrap_or(Affine::scale(0.001));
     d.insert(Key::name("FontMatrix"), matrix_obj(m * fm));
-    Rc::new(std::cell::RefCell::new(d))
+    DictRef::new(d)
 }
 
 /// The character a glyph name stands for (`A`, `space`, `uni20AC`), else a bullet.
@@ -496,6 +499,7 @@ fn glyph_char(name: &str) -> char {
         return c;
     }
     if let Some(hex) = name.strip_prefix("uni").or_else(|| name.strip_prefix('u'))
+        && hex.chars().all(|c| c.is_ascii_hexdigit())
         && let Some(c) = u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
     {
         return c;
@@ -503,5 +507,18 @@ fn glyph_char(name: &str) -> char {
     match name {
         "space" => ' ',
         _ => '\u{2022}',
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glyph_char;
+
+    #[test]
+    fn glyph_char_rejects_plus_in_hex() {
+        assert_eq!(glyph_char("uni20AC"), '€');
+        assert_eq!(glyph_char("u1F600"), '\u{1F600}');
+        assert_eq!(glyph_char("uni+041"), '\u{2022}');
+        assert_eq!(glyph_char("u+41"), '\u{2022}');
     }
 }

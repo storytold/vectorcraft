@@ -42,6 +42,12 @@ pub trait PrintService {
     fn shared_print(&self) -> Option<SharedPrintFn> {
         None
     }
+    /// Whether the system turns a landscape page to fit the paper. macOS's print queues put
+    /// each page on the paper as it is, so their jobs are written upright (`file.print`'s
+    /// `forPrinter`); Windows and the browser's print dialog turn them themselves.
+    fn turns_landscape(&self) -> bool {
+        true
+    }
     /// Whether Setup… can open the system's printer settings.
     fn has_setup(&self) -> bool {
         false
@@ -58,9 +64,10 @@ pub fn printers(app: &mut VectorcraftApp) -> Value {
     json!({ "printers": printers, "service": app.services.print.is_some(), "setup": setup })
 }
 
-/// `file.print` with settings: print the active document with `settings` (over the document's)
-/// on `printer` (default: the system's default), or save the job as a PDF at `path` (else a picked
-/// file, the web downloads it) with `toFile`, a `path` or no print service. A PostScript file
+/// `file.print` with settings: print the active document with `settings` (over the document's, or
+/// over those of the print preset `preset` names) on `printer` (default: the system's default), or
+/// save the job as a PDF at `path` (else a picked file, the web downloads it) with `toFile`, a
+/// `path` or no print service. A PostScript file
 /// (`format: "postscript"` or a `.ps` path, at `level`, flattened with `flattenerPreset`) is saved
 /// the same way.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -68,7 +75,7 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let postscript = s("format").as_deref() == Some("postscript") || s("path").is_some_and(|path| fileio::extension(&path) == "ps");
     let to_file = p.get("toFile").and_then(Value::as_bool).unwrap_or(false) || s("path").is_some() || postscript;
     let mut q = json!({});
-    for k in ["settings", "format", "level", "flattenerPreset"] {
+    for k in ["preset", "settings", "format", "level", "flattenerPreset"] {
         if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
             q[k] = v.clone();
         }
@@ -89,6 +96,9 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         v["path"] = json!(path);
         v["printed"] = json!(false);
         return Ok(v);
+    }
+    if app.services.print.as_ref().is_some_and(|s| !s.turns_landscape()) {
+        q["forPrinter"] = json!(true);
     }
     let mut v = app.session.execute("file.print", &q).map_err(|e| e.to_string())?;
     let data = v.as_object_mut().and_then(|o| o.remove("dataBase64"));

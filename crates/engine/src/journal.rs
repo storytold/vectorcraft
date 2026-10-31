@@ -81,7 +81,7 @@ impl Journal {
         self.bytes += size;
         self.trim();
     }
-    /// Drop the entries from number `len` on (a cancelled undo group's).
+    /// Drop the entries from number `len` on.
     pub fn truncate(&mut self, len: usize) {
         let keep = len.saturating_sub(self.dropped);
         self.entries.truncate(keep);
@@ -89,10 +89,48 @@ impl Journal {
         self.bytes = self.sizes.iter().sum();
         self.dropped = self.dropped.min(len);
     }
+    /// Drop the entries numbered `numbers` (sorted, a number may repeat; the entries of canceled undo
+    /// groups). The entries after them are numbered down to close the gaps.
+    pub fn remove(&mut self, numbers: &[usize]) {
+        let dropped = self.dropped;
+        let gone = |i: usize| numbers.binary_search(&(dropped + i)).is_ok();
+        let mut i = 0;
+        self.entries.retain(|_| {
+            i += 1;
+            !gone(i - 1)
+        });
+        let mut i = 0;
+        self.sizes.retain(|_| {
+            i += 1;
+            !gone(i - 1)
+        });
+        self.bytes = self.sizes.iter().sum();
+        // How many of the numbers are below `n`, each counted once.
+        let below = |n: usize| {
+            let mut last = None;
+            numbers.iter().take_while(|&&m| m < n).filter(|&&m| last.replace(m) != Some(m)).count()
+        };
+        self.held = self.held.map(|h| h.saturating_sub(below(h)));
+        self.dropped = dropped.saturating_sub(below(dropped));
+    }
+    /// Put `e` in place of entry number `i`, if kept.
+    pub fn replace(&mut self, i: usize, e: JournalEntry) {
+        let Some(k) = i.checked_sub(self.dropped) else { return };
+        if let (Some(old), Some(size)) = (self.entries.get_mut(k), self.sizes.get_mut(k)) {
+            *size = entry_bytes(&e);
+            *old = e;
+            self.bytes = self.sizes.iter().sum();
+        }
+    }
     /// Keep every entry from number `from` on (a recording in progress), or stop (`None`).
     pub fn hold(&mut self, from: Option<usize>) {
         self.held = from;
         self.trim();
+    }
+    /// The number the entries are kept from ([`Journal::hold`]). [`Journal::remove`] moves it down
+    /// with the entries it numbers down.
+    pub fn held(&self) -> Option<usize> {
+        self.held
     }
 
     /// Let the oldest entries go while over the bounds (in batches: a quarter of the entry bound
@@ -193,5 +231,26 @@ mod tests {
         assert!(j.iter().count() <= Journal::MAX_ENTRIES + Journal::MAX_ENTRIES / 4);
         j.truncate(29_990);
         assert_eq!((j.len(), j.last().map(|e| e.1["dx"].clone())), (29_990, Some(json!(29_989))));
+    }
+
+    #[test]
+    fn removed_entries_leave_no_gap_in_the_numbers() {
+        let mut j = Journal::default();
+        for i in 0..30_000 {
+            j.push(("object.move".into(), json!({"dx": i})));
+        }
+        let first = j.first_kept();
+        // A recording from entry 29,500 on: the entries removed before it move its start down.
+        j.hold(Some(29_500));
+        // One entry that was let go already and two kept ones, two of them given twice.
+        j.remove(&[first - 1, first - 1, 29_000, 29_000, 29_998]);
+        assert_eq!((j.len(), j.first_kept(), j.held()), (29_997, first - 1, Some(29_498)));
+        let dx = |j: &Journal, i: usize| j.get(i).map(|e| e.1["dx"].clone());
+        assert_eq!((dx(&j, 28_998), dx(&j, 28_999)), (Some(json!(28_999)), Some(json!(29_001))));
+        assert_eq!(j.last().map(|e| e.1["dx"].clone()), Some(json!(29_999)));
+        assert_eq!(j.bytes, j.sizes.iter().sum::<usize>());
+        // A replaced entry is counted at its new size.
+        j.replace(29_000, big(0));
+        assert_eq!(j.bytes, j.iter().map(entry_bytes).sum::<usize>());
     }
 }

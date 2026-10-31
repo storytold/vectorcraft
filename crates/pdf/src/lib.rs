@@ -5,7 +5,8 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
+//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
 //!   given an output intent as the Output settings say. Hidden objects,
@@ -31,7 +32,8 @@
 //!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
 //!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
-//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]).
+//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]),
+//!   and [`file_info()`] reads its File Info (the information dictionary and the XMP packet).
 //! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
 //! - [`print()`] lays a document out on paper as File → Print does ([`PrintSettings`]) and writes
 //!   the job as a print-ready PDF: composite or one page per ink.
@@ -43,6 +45,7 @@
 mod editing;
 mod encrypt;
 mod export;
+mod file_info;
 mod forms;
 mod images;
 mod import;
@@ -64,12 +67,17 @@ mod post;
 mod presets;
 mod print;
 mod settings;
+mod streams;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
 pub use export::{export, export_with_report, page_areas};
-pub use import::{OFF_ARTBOARD_NOTE, PAST_PAGE_NOTE, import, import_with_report};
+pub use file_info::{FileInfo, file_info};
+pub use import::{
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
+    import, import_with_report, is_glyph_outlines, is_outlines_note,
+};
 pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;
@@ -86,8 +94,12 @@ pub struct PdfOptions {
     pub artboards: Option<Vec<usize>>,
     /// Document title for the metadata; `None` = the document's title.
     pub title: Option<String>,
+    /// Ask PDF viewers to display the document title instead of the file name.
+    pub display_doc_title: bool,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
+    /// Modification date as Unix seconds (UTC); `None` = the creation date.
+    pub modified: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
     /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer
@@ -122,11 +134,23 @@ pub struct ImportOptions {
     /// Optional content groups become layers (else each page is one layer, without the art
     /// that is off).
     pub layers: bool,
+    /// The file is an editor's own document (`.ai`): RGB in its `ICCBased` spaces keeps its numbers
+    /// (see `Colors::uncalibrated_rgb`). Off for PDFs, whose profiles stand.
+    pub uncalibrated_rgb: bool,
 }
 
 impl Default for ImportOptions {
     fn default() -> Self {
-        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None, text_as: TextAs::default(), layers: true }
+        Self {
+            max_pages: None,
+            artboard_gap: 36.0,
+            pages: None,
+            crop: CropTo::default(),
+            password: None,
+            text_as: TextAs::default(),
+            layers: true,
+            uncalibrated_rgb: false,
+        }
     }
 }
 
@@ -163,6 +187,13 @@ pub struct ImportReport {
     pub warnings: Vec<String>,
     /// The native document the PDF carries (written with Preserve Editing), if any.
     pub native: Option<Editing>,
+    /// Every page shows only text, over an editor's private data: that data, where it reads,
+    /// is the file's art (a file saved without its PDF part shows a notice there instead).
+    pub only_text: bool,
+    /// The size in points of a unit of the first page read's user space: the `UserUnit` the PDF
+    /// reader applies to that page (1 for a page without one). The page came in at its size in
+    /// points, its numbers times this.
+    pub user_unit: f64,
 }
 
 /// Result of an export with non-fatal warnings (features approximated or dropped).
@@ -182,6 +213,9 @@ pub enum PdfError {
     Unsupported(String),
     #[error("PDF writer error: {0}")]
     Write(String),
+    /// The caller asked for the export to stop ([`vectorcraft_doc::cancel`]).
+    #[error("cancelled")]
+    Cancelled,
     #[error("cannot read PDF: {0}")]
     Parse(String),
     #[error("the PDF has no pages")]
@@ -195,7 +229,7 @@ pub enum PdfError {
     #[error("page {0} does not exist (the PDF has {1})")]
     BadPage(usize, usize),
     #[error(
-        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG"
+        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS"
     )]
     PostScript,
     #[error(
@@ -204,65 +238,13 @@ pub enum PdfError {
     PlaceholderOnly,
 }
 
+impl From<craft_pdf::write::WriteError> for PdfError {
+    fn from(error: craft_pdf::write::WriteError) -> Self {
+        Self::Write(error.to_string())
+    }
+}
+
+#[cfg(test)]
+use tests::{import_fidelity as tests_import_fidelity, live_text as tests_live_text, stroke as tests_stroke};
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_blend;
-#[cfg(test)]
-mod tests_charstroke;
-#[cfg(test)]
-mod tests_cmykblend;
-#[cfg(test)]
-mod tests_cmykimages;
-#[cfg(test)]
-mod tests_compression;
-#[cfg(test)]
-mod tests_dashalign;
-#[cfg(test)]
-mod tests_editing;
-#[cfg(test)]
-mod tests_encrypt;
-#[cfg(test)]
-mod tests_focal;
-#[cfg(test)]
-mod tests_fx;
-#[cfg(test)]
-mod tests_import_color;
-#[cfg(test)]
-mod tests_import_fidelity;
-#[cfg(test)]
-mod tests_import_layers;
-#[cfg(test)]
-mod tests_import_lines;
-#[cfg(test)]
-mod tests_import_options;
-#[cfg(test)]
-mod tests_layers;
-#[cfg(test)]
-mod tests_live_text;
-#[cfg(test)]
-mod tests_marks;
-#[cfg(test)]
-mod tests_output;
-#[cfg(test)]
-mod tests_pdf13;
-#[cfg(test)]
-mod tests_pdfx;
-#[cfg(test)]
-mod tests_presets;
-#[cfg(test)]
-mod tests_print;
-#[cfg(test)]
-mod tests_printadvanced;
-#[cfg(test)]
-mod tests_realtext;
-#[cfg(test)]
-mod tests_settings;
-#[cfg(test)]
-mod tests_stroke;
-#[cfg(test)]
-mod tests_strokeout;
-#[cfg(test)]
-mod tests_textstroke;
-#[cfg(test)]
-mod tests_webview;

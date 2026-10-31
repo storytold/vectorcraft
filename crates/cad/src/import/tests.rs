@@ -380,6 +380,27 @@ fn solid_hatches_fill_and_pattern_hatches_outline() {
     assert!(square.appearance.fill().is_some_and(|f| !f.paint.is_none()));
 }
 
+#[test]
+fn hatch_declaring_many_absent_source_handles_parses_quickly() {
+    let base = hatch("1");
+    let at = |code: i32, from: usize| from + base[from..].iter().position(|p| p.0 == code).unwrap();
+    let first = at(92, 0);
+    let end = at(97, first) + 1;
+    let mut boundary = base[first..end].to_vec();
+    *boundary.last_mut().unwrap() = (97, "10000000");
+    let n = 300;
+    let mut e: Vec<(i32, &'static str)> = base[..first].to_vec();
+    e[at(91, 0)] = (91, "300");
+    for _ in 0..n {
+        e.extend_from_slice(&boundary);
+    }
+    e.extend_from_slice(&base[end..]);
+    let start = std::time::Instant::now();
+    let r = open(&entities(&e), &points());
+    assert!(start.elapsed() < std::time::Duration::from_millis(400), "took {:?}", start.elapsed());
+    assert_eq!(r.document.layers[0].children().unwrap().len(), 1, "{:?}", r.warnings);
+}
+
 /// A solid hatch: a loop of a line and a spline edge (`fit` its fit data, if any), followed by
 /// `source` (the loop's source-object count and handles), and a square hole.
 fn spline_edged_hatch(fit: &[(i32, &'static str)], source: &[(i32, &'static str)]) -> Vec<(i32, &'static str)> {
@@ -652,6 +673,27 @@ fn inserts_become_symbol_instances_with_their_transform() {
 }
 
 #[test]
+fn an_insert_is_measured_clicked_and_marqueed_by_its_blocks_art() {
+    let inserts = [(0, "INSERT"), (8, "Doors"), (2, "Door"), (10, "100"), (20, "50"), (41, "2"), (42, "3"), (50, "90")];
+    let doc = open(&with_door(DOOR_LINE, &inserts), &points()).document;
+    let [inst] = &leaves(&doc)[..] else { panic!() };
+    let h = height(&doc);
+    // The line, 20 units up from the insertion point: a box with no width at x 100. The 20 × 20
+    // square placed by the insert's transform would be a 60 × 40 box from x 70 to 130.
+    let b = doc.bounds_of(&[inst.id], false).unwrap();
+    assert!(close(b, Rect::new(100.0, h - 70.0, 100.0, h - 50.0), 1e-9), "{b:?}");
+    // A click 25 pt right of the line, inside that square's box, selects nothing; one on the line
+    // selects the insert.
+    let hit = |x: f64| vectorcraft_doc::hit::hit_test(&doc, Point::new(x, h - 60.0), vectorcraft_doc::hit::HitOptions::default()).map(|h| h.leaf);
+    assert_eq!(hit(125.0), None);
+    assert_eq!(hit(100.0), Some(inst.id));
+    // A marquee beside the line leaves it out; one across it takes it.
+    let marquee = |r: Rect| vectorcraft_doc::hit::marquee(&doc, r, None, false);
+    assert!(marquee(Rect::new(115.0, h - 65.0, 125.0, h - 55.0)).is_empty());
+    assert_eq!(marquee(Rect::new(90.0, h - 62.0, 110.0, h - 58.0)), vec![inst.id]);
+}
+
+#[test]
 fn by_block_colours_make_a_symbol_per_look() {
     // The block's line takes the insert's colour: red and green make two symbols; a third red
     // insert reuses the first.
@@ -689,6 +731,27 @@ fn by_block_colours_make_a_symbol_per_look() {
     let inserts = [(0, "INSERT"), (2, "Door"), (62, "1"), (10, "0"), (20, "0"), (0, "INSERT"), (2, "Door"), (62, "3"), (10, "40"), (20, "0")];
     let doc = open(&with_door(&[(0, "LINE"), (8, "Doors"), (62, "4"), (10, "5"), (20, "5"), (11, "15"), (21, "5")], &inserts), &points()).document;
     assert_eq!(doc.symbols.len(), 1);
+}
+
+#[test]
+fn many_by_block_looks_import_in_linear_time() {
+    let by_block: &[(i32, &str)] = &[(0, "LINE"), (8, "0"), (62, "0"), (10, "5"), (20, "5"), (11, "15"), (21, "5")];
+    let n = 4000;
+    let mut inserts: Vec<(i32, &'static str)> = vec![];
+    for i in 0..n {
+        let colour: &'static str = Box::leak((i + 1).to_string().into_boxed_str());
+        inserts.extend([(0, "INSERT"), (2, "Door"), (420, colour), (10, "0"), (20, "0")]);
+    }
+    let text = with_door(by_block, &inserts);
+    let start = std::time::Instant::now();
+    let doc = open(&text, &points()).document;
+    let took = start.elapsed();
+    let mut names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names.len(), n);
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), n, "names stay unique");
+    assert!(took < std::time::Duration::from_secs(4), "import took {took:?}");
 }
 
 #[test]
@@ -734,6 +797,48 @@ fn array_inserts_attributes_and_dimensions() {
     let doc = open(&drawing(&[], &[], &blocks, &dims), &points()).document;
     assert!(doc.symbols.is_empty());
     assert_eq!(bounds(&leaves(&doc)[0]).width(), 50.0);
+}
+
+#[test]
+fn nested_array_inserts_of_nothing_stop_at_the_work_budget() {
+    let block = |name: &'static str, inner: Option<&'static str>| {
+        let mut b = vec![(0, "BLOCK"), (2, name), (70, "1"), (10, "0"), (20, "0")];
+        if let Some(i) = inner {
+            b.extend([(0, "INSERT"), (2, i), (10, "0"), (20, "0"), (70, "300"), (44, "1")]);
+        }
+        b.push((0, "ENDBLK"));
+        b
+    };
+    let mut blocks = block("*A", Some("*B"));
+    blocks.extend(block("*B", Some("*C")));
+    blocks.extend(block("*C", None));
+    let top = [(0, "INSERT"), (2, "*A"), (10, "0"), (20, "0"), (70, "300"), (44, "1")];
+    let r = open(&drawing(&[], &[], &blocks, &top), &points());
+    assert!(r.warnings.iter().any(|w| w.contains("more than")), "{:?}", r.warnings);
+}
+
+#[test]
+fn an_array_of_a_large_anonymous_block_stops_at_the_path_element_budget() {
+    // A 2,000-vertex polyline in *U1, placed in a 100 × 10 array: 2,000,000 path elements when
+    // every cell is copied, twice the budget tests import with.
+    let mut owned: Vec<(i32, String)> = vec![(0, "BLOCK".into()), (2, "*U1".into()), (70, "1".into()), (10, "0".into()), (20, "0".into())];
+    owned.extend([(0, "LWPOLYLINE".into()), (90, "2000".into()), (70, "0".into())]);
+    for i in 0..2000 {
+        owned.extend([(10, i.to_string()), (20, (i % 2).to_string())]);
+    }
+    owned.push((0, "ENDBLK".into()));
+    let blocks: Vec<(i32, &str)> = owned.iter().map(|(c, v)| (*c, v.as_str())).collect();
+    let inserts = [(0, "INSERT"), (2, "*U1"), (10, "0"), (20, "0"), (70, "100"), (71, "10"), (44, "2000"), (45, "2")];
+    let r = open(&drawing(&[], &[], &blocks, &inserts), &points());
+    let mut elements = 0;
+    r.document.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            elements += path.to_bezpath().elements().len();
+        }
+    });
+    assert!(elements > 0);
+    assert!(elements <= 1_000_000, "{elements} path elements");
+    assert!(r.warnings.iter().any(|w| w.contains("path points")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -945,6 +1050,69 @@ fn drawings_the_export_writes_read_back() {
 }
 
 #[test]
+fn a_lone_segment_reads_back_from_the_line_the_export_writes() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut b = kurbo::BezPath::new();
+    b.move_to((20.0, 30.0));
+    b.line_to((120.0, 70.0));
+    let id = doc.alloc_id();
+    let black = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(0, 0, 0)), 1.0);
+    doc.insert(Some(layer), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&b), black)).unwrap();
+    for version in crate::DxfVersion::ALL.into_iter().filter(|v| v.r2000()) {
+        let opts = crate::DxfOptions { version, unit: Unit::Points, region: doc.artboards[0].rect, ..crate::DxfOptions::default() };
+        let out = crate::export(&doc, &opts).unwrap();
+        assert!(std::str::from_utf8(&out.bytes).unwrap().contains("\nLINE\n"), "{version:?}");
+        let back = open(&out.bytes, &points());
+        let art = leaves(&back.document);
+        assert_eq!(art.len(), 1, "{version:?}");
+        let path = art[0].path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1, "{version:?}");
+        assert!(!path.subpaths[0].closed, "{version:?}");
+        let shift = Affine::translate((0.0, 100.0 - height(&back.document)));
+        let points = path_points(&art[0]);
+        assert_eq!(points.len(), 17, "{version:?}: one segment");
+        let ends = [shift * points[0], shift * points[16]];
+        assert!(ends[0].distance(Point::new(20.0, 30.0)) < 1e-6 && ends[1].distance(Point::new(120.0, 70.0)) < 1e-6, "{version:?}: {ends:?}");
+    }
+}
+
+#[test]
+fn closed_control_point_splines_stay_closed_through_export_and_import() {
+    // (explicitly closed, ends where it starts): coincident endpoints alone do not close a path.
+    let cases = [(true, true), (true, false), (false, true), (false, false)];
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for (i, &(closed, returns)) in cases.iter().enumerate() {
+        let mut b = kurbo::BezPath::new();
+        b.move_to((20.0, 20.0));
+        b.curve_to((80.0, 0.0), (80.0, 80.0), (20.0, 80.0));
+        if returns {
+            b.curve_to((0.0, 80.0), (0.0, 20.0), (20.0, 20.0));
+        }
+        if closed {
+            b.close_path();
+        }
+        let id = doc.alloc_id();
+        let black = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(0, 0, 0)), 1.0);
+        doc.insert(Some(layer), i, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&b), black)).unwrap();
+    }
+    for version in crate::DxfVersion::ALL.into_iter().filter(|v| *v >= crate::DxfVersion::R13) {
+        let opts = crate::DxfOptions { version, unit: Unit::Points, region: doc.artboards[0].rect, ..crate::DxfOptions::default() };
+        let out = crate::export(&doc, &opts).unwrap();
+        let text = std::str::from_utf8(&out.bytes).unwrap();
+        assert_eq!(text.matches("\nSPLINE\n").count(), cases.len(), "{version:?}: curves are written as SPLINE entities");
+        let back = leaves(&open(&out.bytes, &points()).document);
+        assert_eq!(back.len(), cases.len(), "{version:?}");
+        for (n, &(closed, returns)) in back.iter().zip(&cases) {
+            let path = n.path_data().unwrap();
+            assert_eq!(path.subpaths.len(), 1, "{version:?}");
+            assert_eq!(path.subpaths[0].closed, closed, "{version:?}: closed {closed}, returns {returns}");
+        }
+    }
+}
+
+#[test]
 fn info_lists_layers_layouts_and_version() {
     let tables = [(0, "TABLE"), (2, "LAYER"), (0, "LAYER"), (2, "0"), (62, "7"), (0, "LAYER"), (2, "Walls"), (62, "1"), (0, "ENDTAB")];
     let i = info(&drawing(&[(9, "$ACADVER"), (1, "AC1015"), (9, "$INSUNITS"), (70, "6")], &tables, &[], LINE)).unwrap();
@@ -962,4 +1130,50 @@ fn entities_extruded_along_minus_z_are_mirrored() {
     let doc = open(&entities(&e), &points()).document;
     let b = bounds(&leaves(&doc)[0]);
     assert!((b.center().x + 50.0).abs() < 1e-6, "the centre's x is mirrored: {b:?}");
+}
+
+/// A drawing with one paper block record (handle `A`) and a LAYOUT object per name.
+fn with_layouts(names: &[String]) -> Vec<u8> {
+    let mut s = String::from(
+        "  0\nSECTION\n  2\nTABLES\n  0\nTABLE\n  2\nBLOCK_RECORD\n  0\nBLOCK_RECORD\n  5\nA\n  2\n*Paper_Space\n  0\nENDTAB\n  0\nENDSEC\n  0\nSECTION\n  2\nOBJECTS\n",
+    );
+    for n in names {
+        s.push_str(&format!("  0\nLAYOUT\n100\nAcDbLayout\n  1\n{n}\n330\nA\n"));
+    }
+    s.push_str("  0\nENDSEC\n  0\nEOF\n");
+    s.into_bytes()
+}
+
+#[test]
+fn many_paper_layouts_are_read_in_linear_time() {
+    let names: Vec<String> = (0..100_000).map(|i| format!("L{i}")).collect();
+    let bytes = with_layouts(&names);
+    let t = std::time::Instant::now();
+    let info = info(&bytes).unwrap();
+    assert_eq!(info.layouts.len(), names.len() + 1);
+    assert!(t.elapsed() < std::time::Duration::from_secs(5), "layout de-duplication is quadratic: {:?}", t.elapsed());
+}
+
+#[test]
+fn paper_layout_names_are_unique_ignoring_case() {
+    let names = ["Layout1", "LAYOUT1", "Other"].map(String::from);
+    let info = info(&with_layouts(&names)).unwrap();
+    assert_eq!(info.layouts, ["Model", "Layout1", "Other"]);
+}
+
+#[test]
+fn many_array_inserts_of_a_missing_block_stay_bounded() {
+    let one = [(0, "INSERT"), (8, "0"), (2, "NOPE"), (10, "0"), (20, "0"), (70, "100"), (71, "100"), (44, "1"), (45, "1")];
+    let e: Vec<(i32, &str)> = (0..3000).flat_map(|_| one).collect();
+    let bytes = entities(&e);
+    let text = reader::decode(&bytes);
+    let (pairs, _) = reader::pairs(&text).unwrap();
+    let d = reader::Drawing::read(&pairs);
+    let model = d.layout("Model").or(d.layouts.first()).unwrap();
+    let mut conv = entity::Converter::default();
+    let items = conv.items(&d.layout_records(model));
+    assert_eq!(items.len(), 3000);
+    let total: usize = items.iter().map(|i| if let entity::Geom::Insert(ins) = &i.geom { ins.cells.len() } else { 0 }).sum();
+    assert!(total <= 2_000_000 + 3000, "total cells materialised: {total}");
+    assert!(conv.warnings.iter().any(|w| w.contains("array inserts")), "{:?}", conv.warnings);
 }

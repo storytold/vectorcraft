@@ -58,7 +58,9 @@ pub(super) fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, 
         };
         match seg {
             PathSeg::Line(l) => push(l.p1),
-            _ => kurbo::flatten([PathEl::MoveTo(seg.start()), seg.as_path_el()], tol, |el| {
+            // Bounded per curve: a projection can blow a small curve up enough that kurbo sizes
+            // an enormous buffer from it.
+            _ => vectorcraft_geom::flatten([PathEl::MoveTo(seg.start()), seg.as_path_el()], tol, |el| {
                 if let PathEl::LineTo(p) = el {
                     push(p);
                 }

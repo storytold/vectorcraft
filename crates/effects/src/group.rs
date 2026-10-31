@@ -4,7 +4,12 @@
 //! children are the Pathfinder stack (back → front). In the shape modes (Add, Subtract, Intersect,
 //! Exclude, Minus Back) a child group acts as one shape — the union of its leaves, styled like its
 //! top leaf — as in the Pathfinder panel. The result replaces the children at render time; each
-//! result keeps the appearance of the object whose paint it takes.
+//! result keeps the appearance of the object whose paint it takes. Trap ([`crate::trap`]) keeps the
+//! children and adds its traps above them.
+//!
+//! **Compound shapes** ([`compound_shape_area`]): a compound shape draws as the one area its
+//! members' shape modes make, painted by its own appearance as a group's own fills and strokes
+//! paint its members.
 //!
 //! **Container appearance** ([`evaluate_container`]): a group's or layer's own fills and strokes
 //! paint every member's geometry, below or above the members as its contents slot says
@@ -13,12 +18,14 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeId, NodeKind, StrokeLayer};
+use serde_json::Value;
+use vectorcraft_doc::color::{Color, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeId, NodeKind, ShapeMode, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_pathops::{self as po, PathfinderOp};
 
 /// Effect ids of the Pathfinder submenu with their operation, in Illustrator's menu order.
-pub const PATHFINDER_EFFECTS: [(&str, &str, PathfinderOp); 10] = [
+pub const PATHFINDER_EFFECTS: [(&str, &str, PathfinderOp); 12] = [
     ("pathfinder.add", "Add", PathfinderOp::Unite),
     ("pathfinder.intersect", "Intersect", PathfinderOp::Intersect),
     ("pathfinder.exclude", "Exclude", PathfinderOp::Exclude),
@@ -29,6 +36,8 @@ pub const PATHFINDER_EFFECTS: [(&str, &str, PathfinderOp); 10] = [
     ("pathfinder.merge", "Merge", PathfinderOp::Merge),
     ("pathfinder.crop", "Crop", PathfinderOp::Crop),
     ("pathfinder.outline", "Outline", PathfinderOp::Outline),
+    ("pathfinder.hardMix", "Hard Mix", PathfinderOp::HardMix),
+    ("pathfinder.softMix", "Soft Mix", PathfinderOp::SoftMix),
 ];
 
 /// Is `id` an Effect → Pathfinder effect?
@@ -40,13 +49,16 @@ fn op_of(id: &str) -> Option<PathfinderOp> {
     PATHFINDER_EFFECTS.iter().find(|e| e.0 == id).map(|e| e.2)
 }
 
-/// Does `n` (a group or layer) carry a visible Pathfinder effect?
+/// Does `n` (a group or layer) carry a visible Pathfinder effect, or is it a compound shape?
 pub fn has_pathfinder(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })
-        && n.appearance.effects.iter().any(|e| e.visible && is_pathfinder(&e.id))
+    n.is_compound_shape()
+        || (matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })
+            && n.appearance.effects.iter().any(|e| e.visible && is_pathfinder(&e.id)))
 }
 
-/// Converts objects that aren't paths (e.g. text) to an outline path node, if possible.
+/// Converts objects that aren't paths (e.g. text) to outline art, if possible. The paths and
+/// compound paths in that art, at every depth of its groups, take part in the Pathfinder operation
+/// with the object's opacity and blend mode.
 pub type OutlineHook<'a> = &'a dyn Fn(&Node) -> Option<Node>;
 
 fn leaves(n: &Node, hook: Option<OutlineHook>, out: &mut Vec<Node>) {
@@ -55,14 +67,24 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, out: &mut Vec<Node>) {
     }
     match &n.kind {
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.push(n.clone()),
-        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-            for c in children {
-                leaves(c, hook, out);
+        // A compound shape takes part as its area, styled like it.
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => match compound_shape_art(n, hook) {
+            Some(art) => out.push(art),
+            None => {
+                for c in children {
+                    leaves(c, hook, out);
+                }
             }
-        }
+        },
         _ => {
-            if let Some(p) = hook.and_then(|h| h(n)) {
-                out.push(p);
+            // Every path of the outline art, at any depth, takes the object's opacity and blend
+            // mode.
+            if let Some(art) = hook.and_then(|h| h(n)) {
+                let first = out.len();
+                leaves(&art, None, out);
+                for l in out.iter_mut().skip(first) {
+                    (l.opacity, l.blend) = (n.opacity, n.blend);
+                }
             }
         }
     }
@@ -76,6 +98,63 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
         }
         _ => None,
     }
+}
+
+/// The operation that combines a compound shape's member in `mode` with the area below it.
+fn shape_op(mode: ShapeMode) -> po::BoolOp {
+    match mode {
+        ShapeMode::Add => po::BoolOp::Union,
+        ShapeMode::Subtract => po::BoolOp::Difference,
+        ShapeMode::Intersect => po::BoolOp::Intersect,
+        ShapeMode::Exclude => po::BoolOp::Xor,
+    }
+}
+
+/// The area compound shape `n` draws: each visible member's shape (a group's leaves together, type
+/// as its outlines through `hook`, open paths closed) combined with the area of the members below
+/// it by the member's shape mode; the backmost member starts the area. `None` when `n` is not a
+/// compound shape, or its members are past a live Pathfinder's budget ([`PATHFINDER_MAX_SEGMENTS`],
+/// [`PATHFINDER_MAX_OVERLAPS`]).
+pub fn compound_shape_area(n: &Node, hook: Option<OutlineHook>) -> Option<PathData> {
+    if !n.is_compound_shape() {
+        return None;
+    }
+    let mut all: Vec<Node> = vec![];
+    // Each member that has a shape: its operation and how many of the leaves are its.
+    let mut members: Vec<(po::BoolOp, usize)> = vec![];
+    for c in n.children()? {
+        let before = all.len();
+        leaves(c, hook, &mut all);
+        if all.len() > before {
+            members.push((shape_op(c.extras().shape_mode), all.len() - before));
+        }
+    }
+    if !within_budget(&all) {
+        return None;
+    }
+    if all.is_empty() {
+        return Some(PathData::default());
+    }
+    let parts: Vec<(PathData, FillRule)> = all.iter().map(|l| geometry(l).unwrap_or_default()).collect();
+    let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
+    Some(po::boolean_n(&refs, |inside| {
+        let (mut start, mut area) = (0, false);
+        for (k, (op, count)) in members.iter().enumerate() {
+            let here = inside.get(start..start + count).is_some_and(|flags| flags.contains(&true));
+            start += count;
+            area = if k == 0 { here } else { op.apply(area, here) };
+        }
+        area
+    }))
+}
+
+/// Compound shape `n` as one path of its area ([`compound_shape_area`]) with its appearance,
+/// opacity and blend mode: how it takes part in a Pathfinder operation.
+pub fn compound_shape_art(n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
+    let area = compound_shape_area(n, hook)?;
+    let mut art = Node::path(n.id, area, Appearance { items: n.appearance.items.clone(), ..Default::default() });
+    (art.opacity, art.blend) = (n.opacity, n.blend);
+    Some(art)
 }
 
 /// A result path styled like `src` (its appearance, opacity and blend mode).
@@ -92,23 +171,145 @@ fn styled(src: &Node, path: PathData, outline: bool) -> Node {
     n
 }
 
+/// Most segments a live Pathfinder effect takes in, as for the Shape Builder.
+pub const PATHFINDER_MAX_SEGMENTS: usize = po::SHAPE_BUILDER_MAX_SEGMENTS;
+
+/// Most pairs of input paths whose bounds overlap a live Pathfinder effect takes in. Crossings,
+/// and so the pieces of the result, grow with these pairs (n bars crossing n make n² crossings)
+/// and the effect runs on every draw: past this the group draws its art unprocessed (#3591).
+pub const PATHFINDER_MAX_OVERLAPS: usize = 16_384;
+
+/// Fenwick tree of counts over `n` slots, for counting the active boxes of [`within_budget`].
+struct Counts(Vec<isize>);
+
+// `isolate_lowest_one` is still unstable in Rust 1.96, and the workspace builds on 1.95 (rust-version).
+#[allow(unknown_lints, clippy::manual_isolate_lowest_one)]
+impl Counts {
+    fn add(&mut self, slot: usize, d: isize) {
+        let mut i = slot + 1;
+        while let Some(c) = self.0.get_mut(i) {
+            *c += d;
+            i += i & i.wrapping_neg();
+        }
+    }
+
+    /// Sum of the slots before `end`.
+    fn before(&self, end: usize) -> isize {
+        let (mut i, mut s) = (end.min(self.0.len().saturating_sub(1)), 0);
+        while i > 0 {
+            s += self.0.get(i).copied().unwrap_or(0);
+            i -= i & i.wrapping_neg();
+        }
+        s
+    }
+}
+
+/// Can a live Pathfinder evaluate `leaves` within [`PATHFINDER_MAX_SEGMENTS`] and
+/// [`PATHFINDER_MAX_OVERLAPS`]? The overlapping pairs of bounds are counted exactly by a sweep
+/// in x that keeps the active boxes in two Fenwick trees over their y extents, so the check costs
+/// O(n log n) however the boxes are laid out.
+fn within_budget<'a>(leaves: impl IntoIterator<Item = &'a Node>) -> bool {
+    let mut segments = 0usize;
+    let mut boxes: Vec<Rect> = vec![];
+    for l in leaves {
+        let Some((path, _)) = geometry(l) else { continue };
+        segments += path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>();
+        if segments > PATHFINDER_MAX_SEGMENTS {
+            return false;
+        }
+        boxes.extend(path.bounds());
+    }
+    let mut ys: Vec<f64> = boxes.iter().flat_map(|b| [b.y0, b.y1]).collect();
+    ys.sort_by(f64::total_cmp);
+    ys.dedup_by(|a, b| a.total_cmp(b).is_eq());
+    // Slots of the y values below `y`, and of those at or below it.
+    let below = |y: f64| ys.partition_point(|v| v.total_cmp(&y).is_lt());
+    let upto = |y: f64| ys.partition_point(|v| v.total_cmp(&y).is_le());
+    // (x, is end, box); starts sort before ends at the same x since touching boxes overlap.
+    let mut events: Vec<(f64, bool, usize)> = boxes.iter().enumerate().flat_map(|(i, b)| [(b.x0, false, i), (b.x1, true, i)]).collect();
+    events.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    // Active boxes counted by the slot of their y0 and of their y1.
+    let mut by_y0 = Counts(vec![0; ys.len() + 1]);
+    let mut by_y1 = Counts(vec![0; ys.len() + 1]);
+    let (mut active, mut overlaps) = (0isize, 0usize);
+    for (_, end, i) in events {
+        let Some(b) = boxes.get(i) else { continue };
+        if end {
+            by_y0.add(below(b.y0), -1);
+            by_y1.add(below(b.y1), -1);
+            active -= 1;
+            continue;
+        }
+        // Active boxes not entirely below b (y1 < b.y0) nor entirely above it (y0 > b.y1).
+        let above = active - by_y0.before(upto(b.y1));
+        let under = by_y1.before(below(b.y0));
+        overlaps += usize::try_from(active - above - under).unwrap_or(0);
+        if overlaps > PATHFINDER_MAX_OVERLAPS {
+            return false;
+        }
+        by_y0.add(below(b.y0), 1);
+        by_y1.add(below(b.y1), 1);
+        active += 1;
+    }
+    true
+}
+
 /// Evaluate the visible Pathfinder effects of `group` in order: the resulting child objects.
-/// `None` when the group has no Pathfinder effect.
+/// `None` when the group has no Pathfinder effect. Past the budget ([`PATHFINDER_MAX_SEGMENTS`],
+/// [`PATHFINDER_MAX_OVERLAPS`]) it returns the children as they are.
 pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Vec<Arc<Node>>> {
     if !has_pathfinder(group) {
         return None;
     }
-    let mut stack: Vec<Arc<Node>> = group.children()?.to_vec();
+    let source: &[Arc<Node>] = group.children()?;
+    let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
+        // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
+        match compound_shape_area(group, hook) {
+            Some(area) if area.is_empty() => vec![],
+            Some(area) => vec![Arc::new(Node::path(group.id, area, Appearance::default()))],
+            None => return Some(source.to_vec()),
+        }
+    } else {
+        source.to_vec()
+    };
     for e in group.appearance.effects.iter().filter(|e| e.visible) {
+        if e.id == crate::trap::TRAP {
+            let mut lv = vec![];
+            for c in &stack {
+                leaves(c, hook, &mut lv);
+            }
+            if !within_budget(&lv) {
+                return Some(source.to_vec());
+            }
+            let (ids, srcs): (Vec<NodeId>, Vec<crate::trap::TrapSource>) = lv
+                .iter()
+                .filter_map(|l| {
+                    let (path, rule) = geometry(l)?;
+                    Some((l.id, crate::trap::TrapSource { path, rule, fill: l.appearance.fill_paint() }))
+                })
+                .unzip();
+            let made = crate::trap::traps(&srcs, &crate::trap::TrapOptions::from_params(&e.params));
+            stack.extend(made.into_iter().map(|p| Arc::new(crate::trap::trap_node(ids.get(p.from).copied().unwrap_or(NodeId(0)), p))));
+            continue;
+        }
         let Some(op) = op_of(&e.id) else { continue };
         let shape_mode =
             matches!(op, PathfinderOp::Unite | PathfinderOp::MinusFront | PathfinderOp::Intersect | PathfinderOp::Exclude | PathfinderOp::MinusBack);
+        let all: Vec<Vec<Node>> = stack
+            .iter()
+            .map(|c| {
+                let mut lv = vec![];
+                leaves(c, hook, &mut lv);
+                lv
+            })
+            .collect();
+        if !within_budget(all.iter().flatten()) {
+            return Some(source.to_vec());
+        }
         // (style source, shape) per stack entry; keys index `sources`.
         let mut sources: Vec<Node> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
-        for c in &stack {
-            let mut lv = vec![];
-            leaves(c, hook, &mut lv);
+        for mut lv in all {
             if shape_mode && lv.len() > 1 {
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(geometry).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
@@ -130,13 +331,86 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
         if shapes.is_empty() {
             return Some(vec![]);
         }
-        stack = po::pathfinder(op, &shapes)
-            .into_iter()
-            .filter(|r| !r.path.is_empty())
-            .map(|r| Arc::new(styled(&sources[r.key as usize], r.path, op == PathfinderOp::Outline)))
-            .collect();
+        stack = if op == PathfinderOp::SoftMix {
+            let rate = mixing_rate(&e.params);
+            po::regions(&shapes)
+                .into_iter()
+                .filter(|r| !r.path.is_empty())
+                .map(|r| Arc::new(soft_mix_face(r.path, &r.sources, rate, &shapes, &sources)))
+                .collect()
+        } else if op == PathfinderOp::HardMix {
+            po::regions(&shapes)
+                .into_iter()
+                .filter(|r| !r.path.is_empty())
+                .map(|r| Arc::new(hard_mix_face(r.path, &r.sources, &shapes, &sources)))
+                .collect()
+        } else {
+            po::pathfinder(op, &shapes)
+                .into_iter()
+                .filter(|r| !r.path.is_empty())
+                .map(|r| Arc::new(styled(&sources[r.key as usize], r.path, op == PathfinderOp::Outline)))
+                .collect()
+        };
     }
     Some(stack)
+}
+
+fn mixing_rate(params: &Value) -> f64 {
+    params.get("mixingRate").and_then(|v| v.as_f64()).filter(|r| r.is_finite() && *r > 0.0 && *r <= 100.0).map(|r| r / 100.0).unwrap_or(0.5)
+}
+
+fn fill_cmyk(src: &Node) -> Option<[f32; 4]> {
+    let paint = src.appearance.fill_paint();
+    let color = paint.color()?;
+    let tinted = match paint {
+        Paint::Solid { tint, .. } => color.tinted(tint),
+        _ => color,
+    };
+    Some(tinted.to_cmyk())
+}
+
+/// One face of a Soft Mix: CMYK blended bottom to top at `rate`; no stroke.
+fn soft_mix_face(path: PathData, covering: &[usize], rate: f64, shapes: &[po::Shape], sources: &[Node]) -> Node {
+    let rate = rate as f32;
+    let mut cmyk: Option<[f32; 4]> = None;
+    for &si in covering {
+        let Some(ch) = fill_cmyk(&sources[shapes[si].key as usize]) else { continue };
+        cmyk = Some(match cmyk {
+            None => ch,
+            Some(acc) => {
+                let t = rate;
+                let u = 1.0 - t;
+                [acc[0] * u + ch[0] * t, acc[1] * u + ch[1] * t, acc[2] * u + ch[2] * t, acc[3] * u + ch[3] * t]
+            }
+        });
+    }
+    let fill = cmyk.map(|c| Paint::solid(Color::cmyk(c[0], c[1], c[2], c[3]))).unwrap_or(Paint::None);
+    soft_mix_styled(path, covering, shapes, sources, fill)
+}
+
+/// One face of a Hard Mix: the max of each CMYK channel over every covering shape's fill; no stroke.
+fn hard_mix_face(path: PathData, covering: &[usize], shapes: &[po::Shape], sources: &[Node]) -> Node {
+    let mut cmyk = [0.0f32; 4];
+    let mut painted = false;
+    for &si in covering {
+        let Some(ch) = fill_cmyk(&sources[shapes[si].key as usize]) else { continue };
+        for (out, v) in cmyk.iter_mut().zip(ch) {
+            *out = out.max(v);
+        }
+        painted = true;
+    }
+    let fill = if painted { Paint::solid(Color::cmyk(cmyk[0], cmyk[1], cmyk[2], cmyk[3])) } else { Paint::None };
+    soft_mix_styled(path, covering, shapes, sources, fill)
+}
+
+fn soft_mix_styled(path: PathData, covering: &[usize], shapes: &[po::Shape], sources: &[Node], fill: Paint) -> Node {
+    let top = covering.last().and_then(|&si| sources.get(shapes[si].key as usize));
+    let mut n = Node::path(top.map_or(NodeId(0), |s| s.id), path, Appearance::basic(fill, Paint::None, 0.0));
+    if let Some(src) = top {
+        n.opacity = src.opacity;
+        n.blend = src.blend;
+    }
+    n
 }
 
 fn is_container(n: &Node) -> bool {
@@ -167,33 +441,41 @@ pub fn has_container_appearance(n: &Node) -> bool {
 /// The regions a group's or layer's own fills and strokes paint, in document space, each with its
 /// fill rule: every visible member path and compound path, type as its glyph outlines and live
 /// objects evaluated; the members of a clip group or clipping layer without its clipping path.
-/// Images, symbol instances and guides add nothing.
-pub fn member_shapes(n: &Node) -> Vec<(PathData, FillRule)> {
-    fn push(n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+/// Images, symbol instances and guides add nothing. A Repeat counts the Repeats in the art of
+/// `doc`'s symbols that its instances show toward its instance budget.
+pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRule)> {
+    fn push(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
         if !n.visible {
             return;
         }
         match &n.kind {
             NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.extend(crate::reshape::leaf_geometry(n)),
+            NodeKind::Group { .. } if n.is_compound_shape() => {
+                let hook: &dyn Fn(&Node) -> Option<Node> = &crate::outline_text;
+                match compound_shape_area(n, Some(hook)) {
+                    Some(area) => out.push((area, FillRule::NonZero)),
+                    None => members(doc, n, out),
+                }
+            }
             NodeKind::Text(t) => {
                 let (_, all) = crate::reshape::glyph_outlines(t);
                 if !all.elements().is_empty() {
                     out.push((PathData::from_bezpath(&all).transformed(t.xf), FillRule::NonZero));
                 }
             }
-            NodeKind::Group { .. } | NodeKind::Layer { .. } => members(n, out),
-            _ if vectorcraft_doc::live::is_live(n) => members(&crate::reshape::outlined_members(n), out),
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => members(doc, n, out),
+            _ if vectorcraft_doc::live::is_live(n) => members(doc, &crate::reshape::outlined_members(doc, n), out),
             _ => {}
         }
     }
-    fn members(n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+    fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
         let clip = usize::from(n.clips());
         for c in n.children().into_iter().flatten().skip(clip) {
-            push(c, out);
+            push(doc, c, out);
         }
     }
     let mut out = vec![];
-    members(n, &mut out);
+    members(doc, n, &mut out);
     out
 }
 
@@ -235,8 +517,9 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
 /// reshaping all its members as one piece (the whole art's bounds as their reference box), and its
 /// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
 /// the members (after a clipping path) or above them, as its contents slot says. Its
-/// transparency, opacity mask and raster effects stay. `None` when it has none of these.
-pub fn evaluate_container(n: &Node) -> Option<Node> {
+/// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
+/// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]).
+pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if !is_container(n) {
         return None;
     }
@@ -253,14 +536,16 @@ pub fn evaluate_container(n: &Node) -> Option<Node> {
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
+        // The area is art now: drawn again, it is no compound shape of its own.
+        m.extras_mut().compound_shape = false;
     }
     if !fx.is_empty() {
-        m = crate::reshape::outlined_members(&m);
+        m = crate::reshape::outlined_members(doc, &m);
         crate::reshape::reshape_leaves(&mut m, &fx);
     }
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
     if paint {
-        let shapes = member_shapes(&m);
+        let shapes = member_shapes(doc, &m);
         let bounds = m.geometric_bounds();
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
@@ -279,62 +564,4 @@ pub fn evaluate_container(n: &Node) -> Option<Node> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_color::{Color, Paint};
-    use vectorcraft_doc::{Effect, NodeId};
-    use vectorcraft_geom::{Rect, shapes};
-
-    fn sq(id: u64, x: f64, color: Color) -> Arc<Node> {
-        Arc::new(Node::path(
-            NodeId(id),
-            shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)),
-            Appearance::basic(Paint::solid(color), Paint::None, 0.0),
-        ))
-    }
-
-    fn group_with(effect: &str) -> Node {
-        let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0))]);
-        g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({}), visible: true });
-        g
-    }
-
-    fn area(n: &Node) -> f64 {
-        po::area(n.path_data().unwrap(), FillRule::NonZero).abs()
-    }
-
-    #[test]
-    fn shape_modes_follow_the_pathfinder_panel() {
-        let add = pathfinder_children(&group_with("pathfinder.add"), None).unwrap();
-        assert_eq!(add.len(), 1);
-        assert!((area(&add[0]) - 150.0).abs() < 1e-3);
-        // Add keeps the front object's paint, Subtract the back one's.
-        assert_eq!(add[0].id, NodeId(2));
-        let sub = pathfinder_children(&group_with("pathfinder.subtract"), None).unwrap();
-        assert_eq!(sub[0].id, NodeId(1));
-        assert!((area(&sub[0]) - 50.0).abs() < 1e-3);
-        let int = pathfinder_children(&group_with("pathfinder.intersect"), None).unwrap();
-        assert!((area(&int[0]) - 50.0).abs() < 1e-3);
-        let div = pathfinder_children(&group_with("pathfinder.divide"), None).unwrap();
-        assert_eq!(div.len(), 3);
-    }
-
-    #[test]
-    fn a_random_transform_on_a_group_moves_its_members_together() {
-        let mut g = group_with("distort.transform");
-        g.appearance.effects[0].params = serde_json::json!({"moveH": 100, "moveV": 100, "random": true});
-        let art = evaluate_container(&g).unwrap();
-        let corner = |i: usize| art.children().and_then(|c| c.get(i)).and_then(|n| n.geometric_bounds()).map(|b| (b.x0, b.y0)).unwrap();
-        let (a, b) = (corner(0), corner(1));
-        assert!(a.0 > 0.0 && a.0 < 100.0, "moved by a share of the value: {a:?}");
-        assert!((b.0 - a.0 - 5.0).abs() < 1e-9 && (b.1 - a.1).abs() < 1e-9, "{a:?} {b:?}");
-    }
-
-    #[test]
-    fn hidden_effect_or_plain_group_is_untouched() {
-        let mut g = group_with("pathfinder.add");
-        g.appearance.effects[0].visible = false;
-        assert!(pathfinder_children(&g, None).is_none());
-        assert!(!has_pathfinder(&sq(1, 0.0, Color::BLACK)));
-    }
-}
+mod tests;

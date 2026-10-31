@@ -62,6 +62,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("metafile", Class::Layer(3)),
     ("plugins", Class::Layer(2)),
     ("affinity", Class::Standalone),
+    ("scriptcheck", Class::Standalone),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
@@ -80,6 +81,8 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     &["pdf", "eps"],
     &["plugins", "effects"],
     &["three-d", "effects"],
+    // Inflate cuts its surface's grid cells to the shape with Pathfinder's booleans.
+    &["pathops", "three-d"],
 ];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
@@ -92,7 +95,7 @@ fn intra_layer_allowed(from: &str, to: &str) -> bool {
 
 /// External crates that constitute a UI toolkit / windowing dependency.
 /// Entries ending in `*` are prefixes.
-pub const UI_CRATES: &[&str] = &["egui", "eframe", "winit", "egui_kittest", "craft-ui", "rfd", "bevy*"];
+pub const UI_CRATES: &[&str] = &["egui", "eframe", "winit", "egui_kittest", "craft-ui", "craft-keymap", "rfd", "bevy*"];
 
 /// First layer allowed to use UI crates.
 pub const UI_MIN_LAYER: u8 = 6;

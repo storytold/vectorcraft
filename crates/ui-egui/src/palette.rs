@@ -53,7 +53,7 @@ fn cache_key(lang: crate::i18n::Lang) -> (&'static str, u64, u64) {
 fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
     type Cached = ((&'static str, u64, u64), Arc<Vec<Entry>>);
     let key = cache_key(lang);
-    let id = egui::Id::new("palette-entries");
+    let id = egui::Id::unique("palette-entries");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
         && k == key
     {
@@ -82,30 +82,58 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let entries = entries(ctx, crate::i18n::current());
     let matches: Vec<&Entry> = entries.iter().filter(|e| q.split_whitespace().all(|w| e.haystack.contains(w))).take(14).collect();
     let mut run: Option<String> = None;
-    egui::Area::new(egui::Id::new("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
+    // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
+    // takes it, and a new query starts again from the first.
+    let sel_id = egui::Id::unique("palette-selected");
+    let (mut sel, last_q) = ctx.data(|d| d.get_temp::<(usize, String)>(sel_id)).unwrap_or_default();
+    if last_q != q {
+        sel = 0;
+    }
+    let n = matches.len();
+    if n > 0 {
+        let (down, up) =
+            ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)));
+        if down {
+            sel = (sel + 1) % n;
+        }
+        if up {
+            sel = (sel + n - 1) % n;
+        }
+        sel = sel.min(n - 1);
+    }
+    egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_width(520.0);
-            let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text(tl!("Search commands and tools…")).desired_width(500.0));
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut app.ui.palette_query)
+                    .align(egui::Align2::LEFT_CENTER)
+                    .hint_text(tl!("Search commands and tools…"))
+                    .desired_width(500.0),
+            );
             r.request_focus();
             ui.add_space(6.0);
             for (i, e) in matches.iter().enumerate() {
                 let resp = ui.add(
                     egui::Button::new(e.shown.as_str())
-                        .shortcut_text(menus::pretty_shortcut(&e.shortcut))
+                        .shortcut_text(menus::shown_shortcut(&e.shortcut))
                         .min_size(egui::vec2(500.0, 24.0))
-                        .selected(i == 0),
+                        .selected(i == sel),
                 );
+                if resp.hovered() && ui.input(|i| i.pointer.delta() != egui::Vec2::ZERO) {
+                    sel = i;
+                }
                 if resp.clicked() {
                     run = Some(e.id.clone());
                 }
             }
             if ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && let Some(first) = matches.first()
+                && let Some(e) = matches.get(sel)
             {
-                run = Some(first.id.clone());
+                run = Some(e.id.clone());
             }
         });
     });
+    ctx.data_mut(|d| d.insert_temp(sel_id, (sel, q)));
     if let Some(id) = run {
         app.ui.palette_open = false;
         if let Some(tool) = id.strip_prefix("tool:") {
@@ -169,5 +197,52 @@ mod tests {
         menus::invoke(&mut app, ids[0], json!({}));
         let st = app.session.active().unwrap();
         assert_eq!((st.selection.len(), st.selection.key), (2, None), "both objects stay selected, without a key");
+    }
+
+    /// #4864: a pick of an Asset Export command, which the palette runs with no params, opens the
+    /// Asset Export panel instead of failing on the missing params or exporting nowhere.
+    #[test]
+    fn a_pick_of_an_asset_export_command_opens_its_panel() {
+        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set"];
+        for id in ids {
+            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.ui.status.clear();
+            assert!(!crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}");
+            // Run a pick the way `show` runs it.
+            menus::invoke(&mut app, id, json!({}));
+            assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: {}", app.ui.status);
+            assert!(!app.ui.status.contains("invalid parameters"), "{id}: {}", app.ui.status);
+            // A second pick leaves the open panel open, docked or floating.
+            menus::invoke(&mut app, id, json!({}));
+            assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: picked twice");
+            app.run("window.panel.float", json!({"panel": crate::panels::asset_export::ID})).unwrap();
+            assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating");
+            menus::invoke(&mut app, id, json!({}));
+            assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating, picked again");
+        }
+    }
+
+    /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts
+    /// from the first again.
+    #[test]
+    fn arrow_keys_move_the_highlighted_result() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.ui.palette_open = true;
+        app.ui.palette_query = "zoom".into();
+        let ctx = egui::Context::default();
+        let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx())).textures_delta.clear();
+            ctx.data(|d| d.get_temp::<(usize, String)>(egui::Id::unique("palette-selected"))).unwrap().0
+        };
+        assert_eq!(frame(&mut app, vec![]), 0);
+        assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowDown)]), 1);
+        assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowUp)]), 0);
+        let last = frame(&mut app, vec![key(egui::Key::ArrowUp)]);
+        assert!(last > 1, "Up on the first result wraps to the last: {last}");
+        app.ui.palette_query = "zoom in".into();
+        assert_eq!(frame(&mut app, vec![]), 0);
     }
 }

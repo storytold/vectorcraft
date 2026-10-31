@@ -6,9 +6,9 @@
 //! carries it as the image's opacity mask ([`has_mask`]). Every other image is read as RGB by the
 //! interpreter.
 
-use hayro_syntax::Filter;
-use hayro_syntax::object::stream::ImageDecodeParams;
-use hayro_syntax::object::{Array, Dict, Name, Stream};
+use craft_pdf::syntax::Filter;
+use craft_pdf::syntax::object::stream::ImageDecodeParams;
+use craft_pdf::syntax::object::{Array, Dict, Name, Stream};
 use vectorcraft_doc::ImageBlob;
 use vectorcraft_doc::cmyk::{Inks, MAX_CMYK_PIXELS, jpeg_components};
 

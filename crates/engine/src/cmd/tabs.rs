@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeKind, TabAlign, TabStop};
 
 use super::typecmd::{TextRange, para_span, refresh_bounds, text_targets};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Tab Stops",
             ["Window", "Tabs"],
             None,
-            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches)",
+            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches)",
             has_selection,
             set
         ),
@@ -22,11 +22,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Tab Stops",
             [],
             None,
-            "{ids?, start?: byte} → {stops} of the first selected text object (its paragraph at `start`; default the first)",
+            "{ids?|id?, start?: byte} → {stops} of the first selected text object (its paragraph at `start`; default the first)",
             has_selection,
             get
         ),
-        cmd!("text.tabs.clear", "Clear All Tabs", ["Window", "Tabs"], None, "{ids?, start?: byte, end?: byte}", has_selection, |s, p| apply(
+        cmd!("text.tabs.clear", "Clear All Tabs", ["Window", "Tabs"], None, "{ids?|id?, start?: byte, end?: byte}", has_selection, |s, p| apply(
             s,
             p,
             vec![],
@@ -112,5 +112,39 @@ mod tests {
         assert!(s.execute("text.tabs.set", &json!({"stops": [{"position": 10, "align": "diagonal"}]})).is_err());
         s.execute("text.tabs.clear", &json!({})).unwrap();
         assert_eq!(s.execute("text.tabs.get", &json!({})).unwrap()["stops"], json!([]));
+    }
+
+    /// #1877: a leader set the way the Tabs panel sets it fills the tab's gap with its dots.
+    #[test]
+    fn tab_leader_fills_the_gap_with_its_characters() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "AAA\t20", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.tabs.set", &json!({"stops": [{"position": 200, "align": "left", "leader": ".", "alignOn": "."}]})).unwrap();
+        let st = s.doc().unwrap();
+        let Some(vectorcraft_doc::NodeKind::Text(t)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) else { panic!() };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let x_of = |b: usize| lay.glyphs.iter().find(|g| g.byte == b).unwrap().origin.x;
+        let (from, to) = (x_of(3), x_of(4));
+        assert!(to - from > 150.0, "{from}..{to}");
+        // Contours drawn inside the gap: only the leader's dots can be there.
+        let mut dots = 0;
+        for g in &lay.glyphs {
+            let mut contours: Vec<kurbo::BezPath> = vec![];
+            for el in g.outline.elements() {
+                match (el, contours.last_mut()) {
+                    (kurbo::PathEl::MoveTo(_), _) | (_, None) => contours.push(kurbo::BezPath::from_vec(vec![*el])),
+                    (_, Some(c)) => c.push(*el),
+                }
+            }
+            for c in contours {
+                let r = kurbo::Shape::bounding_box(&c);
+                if r.x0 > from - 1e-6 && r.x1 < to + 1e-6 {
+                    assert!(r.width() < 3.0 && r.height() < 3.0, "not a dot: {r:?}");
+                    dots += 1;
+                }
+            }
+        }
+        assert!(dots > 30, "{dots} dots in a {} pt gap", to - from);
     }
 }

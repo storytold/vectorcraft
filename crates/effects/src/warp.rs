@@ -6,12 +6,12 @@
 use serde_json::Value;
 use vectorcraft_geom::{PathData, Point, Rect};
 
-use crate::util::*;
+use crate::util::{map_nonlinear_within, num, text};
 
 pub use vectorcraft_doc::live::{WarpStyle, warp_point};
 
-/// Apply a warp to `path` using box `b`.
-pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value) -> PathData {
+/// Apply a warp to `path` using box `b`, making at most `max` anchors ([`map_nonlinear_within`]).
+pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -> PathData {
     let bend = num(p, "bend", 50.0).clamp(-100.0, 100.0) / 100.0;
     let dh = num(p, "horizontal", 0.0).clamp(-100.0, 100.0) / 100.0;
     let dv = num(p, "vertical", 0.0).clamp(-100.0, 100.0) / 100.0;
@@ -22,13 +22,13 @@ pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value) -> PathData {
     let f = |q: Point| {
         let (x, y) = ((q.x - c.x) / hw, (q.y - c.y) / hh);
         let (x2, y2) = if vertical {
-            let (a, b2) = warp_point(style, bend, dh, dv, y, x);
+            let (a, b2) = warp_point(style, bend, dh, dv, hw / hh, y, x);
             (b2, a)
         } else {
-            warp_point(style, bend, dh, dv, x, y)
+            warp_point(style, bend, dh, dv, hh / hw, x, y)
         };
         Point::new(c.x + x2 * hw, c.y + y2 * hh)
     };
     let piece = b.width().hypot(b.height()) / 24.0;
-    map_nonlinear(path, piece, f)
+    map_nonlinear_within(path, piece, max, f)
 }

@@ -41,7 +41,21 @@ pub struct OtFeatures {
     pub ordinals: bool,
     /// Swashes (`swsh`).
     pub swash: bool,
+    /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
+    /// sets, alternates, titling, proportional and lining figures, superscript and subscript.
+    pub extra: u32,
 }
+
+/// The most entries of a style's feature list read: every segment of its text reads the list again.
+const MAX_STYLE_FEATURES: usize = 256;
+
+/// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
+/// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
+/// and lining `lnum` figures, superscript `sups` and subscript `subs`.
+pub const EXTRA_FEATURES: [&str; 26] = [
+    "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs",
+];
 
 impl Default for OtFeatures {
     fn default() -> Self {
@@ -56,6 +70,7 @@ impl Default for OtFeatures {
             tabular_figures: false,
             ordinals: false,
             swash: false,
+            extra: 0,
         }
     }
 }
@@ -89,13 +104,14 @@ impl OtFeatures {
                 v.push(if on { tag.to_string() } else { format!("-{tag}") });
             }
         }
+        v.extend(EXTRA_FEATURES.iter().enumerate().filter(|(i, _)| self.extra & (1 << i) != 0).map(|(_, t)| t.to_string()));
         v
     }
 
     /// Is `tag` (optionally prefixed with `-` or `+`) one this set understands?
     pub fn known_tag(tag: &str) -> bool {
         let t = tag.trim_start_matches(['-', '+']);
-        matches!(t, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh")
+        matches!(t, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh") || EXTRA_FEATURES.contains(&t)
     }
 
     /// This set with `tags` applied on top.
@@ -116,7 +132,15 @@ impl OtFeatures {
                 "tnum" => o.tabular_figures = on,
                 "ordn" => o.ordinals = on,
                 "swsh" => o.swash = on,
-                _ => {}
+                _ => {
+                    if let Some(i) = EXTRA_FEATURES.iter().position(|e| *e == t) {
+                        if on {
+                            o.extra |= 1 << i;
+                        } else {
+                            o.extra &= !(1 << i);
+                        }
+                    }
+                }
             }
         }
         self
@@ -125,13 +149,15 @@ impl OtFeatures {
     /// The harfrust features for text in style `st`.
     pub(crate) fn resolve(&self, st: &CharStyle) -> Vec<Feature> {
         // The character's own OpenType settings override the layout-wide ones.
-        let own = self.with_tags(st.features.iter().map(String::as_str));
+        // (A style lists a few features; one with thousands, in a document, is read for the first.)
+        let listed = st.features.get(..MAX_STYLE_FEATURES).unwrap_or(&st.features);
+        let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
         if st.kerning.is_some() {
             v.push(f(b"kern", false));
         }
-        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(&st.features));
+        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
         if !liga {
             v.push(f(b"liga", false));
             v.push(f(b"clig", false));
@@ -153,6 +179,11 @@ impl OtFeatures {
         ] {
             if on {
                 v.push(f(tag, true));
+            }
+        }
+        for (i, tag) in EXTRA_FEATURES.iter().enumerate() {
+            if let (true, Ok(t)) = (s.extra & (1 << i) != 0, <[u8; 4]>::try_from(tag.as_bytes())) {
+                v.push(f(&t, true));
             }
         }
         if self.vertical {
@@ -230,6 +261,22 @@ pub fn explicit_ligatures<S: AsRef<str>>(features: &[S]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1607: stylistic sets, alternates, titling, figure styles and superscript/subscript are
+    /// known, round-trip through the stored tags and reach the shaper.
+    #[test]
+    fn extra_features_are_kept_and_shaped() {
+        for t in ["ss01", "ss20", "-ss07", "salt", "titl", "pnum", "lnum", "sups", "subs"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        assert!(!OtFeatures::known_tag("ss21"));
+        let o = OtFeatures::from_tags(["ss03", "pnum", "sups", "-liga"]);
+        assert_eq!(o.to_tags(), vec!["-liga", "ss03", "pnum", "sups"]);
+        assert_eq!(OtFeatures::from_tags(["ss03", "-ss03"]).to_tags(), Vec::<String>::new(), "turned off again");
+        let st = CharStyle { features: vec!["ss05".into(), "titl".into()], ..CharStyle::default() };
+        let tags: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
+        assert!(tags.contains(&"ss05".to_string()) && tags.contains(&"titl".to_string()), "{tags:?}");
+    }
     use crate::{FontDb, layout};
     use vectorcraft_doc::TextObject;
     use vectorcraft_geom::Point;

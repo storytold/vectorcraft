@@ -1,5 +1,5 @@
 //! TIFF, BMP and Targa export through `document.export`: the options reach the files, impossible
-//! ones are refused, and the files open again.
+//! ones are refused, and the files open again; Targa files open and place.
 
 use serde_json::{Value, json};
 
@@ -135,6 +135,152 @@ fn targa_depth_reaches_the_file() {
     }
 }
 
+/// The RGBA pixels of the image `document.open` or `file.place` stored for the first object of the
+/// active document's first layer.
+fn stored_pixels(s: &Session) -> image::RgbaImage {
+    let doc = &s.doc().unwrap().doc;
+    let im = match &doc.layers[0].children().unwrap()[0].kind {
+        vectorcraft_doc::NodeKind::Image(im) => im.clone(),
+        other => panic!("expected an image, got {other:?}"),
+    };
+    image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgba8()
+}
+
+/// A Targa header: no image id or color map, image type `kind`, `w` × `h` pixels of `depth` bits,
+/// image descriptor `descriptor`.
+fn targa_header(kind: u8, w: u16, h: u16, depth: u8, descriptor: u8) -> Vec<u8> {
+    let mut f = vec![0, 0, kind, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    f.extend(w.to_le_bytes());
+    f.extend(h.to_le_bytes());
+    f.extend([depth, descriptor]);
+    f
+}
+
+/// Targa files open and place at their pixel size with the transparency they store, by any of the
+/// four Targa extensions; copied in a file manager they paste as a bitmap; the dialogs list them.
+#[test]
+fn targa_files_open_and_place() {
+    use crate::cmd::clipboard::{PASTE_ORDER, file_flavour};
+    let mut s = session();
+    let b64 = vectorcraft_format::base64_encode;
+    // VectorCraft's own exports: the transparent corner stays transparent at 16 and 32 bits (24
+    // bits are flattened on white) and the black rectangle stays black.
+    for depth in [16, 24, 32] {
+        let tga = export(&mut s, json!({"format": "tga", "depth": depth}));
+        let r = s.execute("document.open", &json!({"name": "art.tga", "dataBase64": b64(&tga)})).unwrap();
+        assert_eq!((&r["format"], &r["warnings"]), (&json!("tga"), &json!([])), "{depth} bits: {r}");
+        assert_eq!(s.doc().unwrap().doc.artboards[0].rect.size(), vectorcraft_geom::Size::new(60.0, 40.0));
+        let px = stored_pixels(&s);
+        assert_eq!(px.dimensions(), (60, 40));
+        let corner = if depth == 24 { [255; 4] } else { [0, 0, 0, 0] };
+        assert_eq!(px.get_pixel(5, 5).0[3], corner[3], "{depth} bits: the corner's alpha");
+        if depth == 24 {
+            assert_eq!(px.get_pixel(5, 5).0, corner, "flattened on white");
+        }
+        let black = px.get_pixel(40, 20).0;
+        assert!(black[3] == 255 && black[..3].iter().all(|c| *c < 80), "{depth} bits: {black:?}");
+        // The next export starts from the session's document again.
+        s = session();
+    }
+    let tga = export(&mut s, json!({"format": "tga", "depth": 32}));
+    for name in ["art.vda", "ART.ICB", "art.vst"] {
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": b64(&tga)})).unwrap();
+        assert_eq!(r["format"], "tga", "{name}: {r}");
+    }
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.tga", "dataBase64": b64(&tga)})).unwrap();
+    assert_eq!((&r["format"], r["ids"].as_array().map(Vec::len)), (&json!("tga"), Some(1)), "{r}");
+    assert_eq!(stored_pixels(&s).get_pixel(5, 5).0[3], 0, "placed with its transparency");
+    // Copied in a file manager, a Targa file pastes as a bitmap.
+    assert_eq!(file_flavour("art.tga", &tga, &PASTE_ORDER), Some("image/x-tga"));
+    let r = s.execute("clipboard.importImage", &json!({"mime": "image/x-tga", "dataBase64": b64(&tga)})).unwrap();
+    assert_eq!((&r["count"], &r["pixelWidth"], &r["pixelHeight"]), (&json!(1), &json!(60), &json!(40)), "{r}");
+    // The dialogs list the four extensions; the desktop packaging doesn't associate them.
+    for e in ["tga", "vda", "icb", "vst"] {
+        assert!(OPEN_EXTS.contains(&e) && PLACE_EXTS.contains(&e) && UNASSOCIATED_EXTS.contains(&e), "{e}");
+    }
+    let targa = ("Targa", &["tga", "vda", "icb", "vst"][..]);
+    assert!(open_filters().any(|f| f == targa) && place_filters().any(|f| f == targa));
+}
+
+/// Targa pixels in every layout: run-length encoded rows stored top down (as the `image` crate
+/// writes them), a 16-bit file whose one attribute bit per pixel is its alpha, with runs, stored
+/// right to left and top down, 32-bit files with no attribute bits (opaque), with eight, and with
+/// each Attributes Type in an extension area, and color-mapped files whose 16-bit entries carry the
+/// attribute bit.
+#[test]
+fn targa_layouts_and_alpha_read() {
+    let src = image::RgbaImage::from_fn(3, 2, |x, y| image::Rgba([x as u8 * 100, y as u8 * 200, 50, if x == 1 { 128 } else { 255 }]));
+    let mut rle = Vec::new();
+    src.write_to(&mut std::io::Cursor::new(&mut rle), image::ImageFormat::Tga).unwrap();
+    assert_eq!((rle[2], rle[17] & 0x20), (10, 0x20), "run-length encoded true color, stored top down");
+    assert_eq!(raster_image(&rle).map(|r| image::load_from_memory(&r.blob.bytes).unwrap().to_rgba8()).unwrap(), src);
+
+    // 3 × 2, 5-5-5 color and an attribute bit, right to left (bit 4), top down (bit 5): a raw
+    // packet of red, blue and a clear pixel for the first row, then a run of green.
+    let mut f = targa_header(10, 3, 2, 16, 0x31);
+    f.push(0x02);
+    f.extend([0xfc00u16, 0x801f, 0x0000].iter().flat_map(|v| v.to_le_bytes()));
+    f.push(0x82);
+    f.extend(0x83e0u16.to_le_bytes());
+    let img = image::load_from_memory(&raster_image(&f).unwrap().blob.bytes).unwrap().to_rgba8();
+    let px = |x, y| img.get_pixel(x, y).0;
+    assert_eq!((px(2, 0), px(1, 0), px(0, 0)[3]), ([255, 0, 0, 255], [0, 0, 255, 255], 0), "the first row, right to left");
+    assert!((0..3).all(|x| px(x, 1) == [0, 255, 0, 255]), "the run");
+
+    // 2 × 1 at 32 bits with no attribute bits: the fourth byte isn't alpha, whatever it holds.
+    for fourth in [[0, 0], [0, 255]] {
+        let mut f = targa_header(2, 2, 1, 32, 0x20);
+        f.extend([10, 20, 30, fourth[0], 40, 50, 60, fourth[1]]);
+        let img = image::load_from_memory(&raster_image(&f).unwrap().blob.bytes).unwrap().to_rgba8();
+        assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([30, 20, 10, 255], [60, 50, 40, 255]), "{fourth:?}");
+    }
+    // The same with eight attribute bits: the fourth byte is alpha, also when it is 0 everywhere.
+    let mut f = targa_header(2, 2, 1, 32, 0x28);
+    f.extend([10, 20, 30, 0, 40, 50, 60, 0]);
+    let img = image::load_from_memory(&raster_image(&f).unwrap().blob.bytes).unwrap().to_rgba8();
+    assert!(img.pixels().all(|p| p.0[3] == 0));
+    // The extension area's Attributes Type: undefined data (1, 2) isn't alpha, premultiplied colors
+    // (4) are divided by their alpha, and alpha (3) or 0, the field left unset, keeps it.
+    for (kind, want) in [(0, [50, 50, 50, 128]), (1, [50, 50, 50, 255]), (2, [50, 50, 50, 255]), (3, [50, 50, 50, 128]), (4, [100, 100, 100, 128])] {
+        let mut f = targa_header(2, 1, 1, 32, 0x28);
+        f.extend([50, 50, 50, 128]);
+        let mut area = vec![0; 495];
+        area[..2].copy_from_slice(&495u16.to_le_bytes());
+        area[494] = kind;
+        let at = f.len() as u32;
+        f.extend(area);
+        f.extend(at.to_le_bytes());
+        f.extend([0; 4]);
+        f.extend(b"TRUEVISION-XFILE.\0");
+        let img = image::load_from_memory(&raster_image(&f).unwrap().blob.bytes).unwrap().to_rgba8();
+        assert_eq!(img.get_pixel(0, 0).0, want, "Attributes Type {kind}");
+    }
+
+    // Color-mapped, one attribute bit, top down: 16-bit entries 5 (clear black) and 6 (red), as a
+    // raw row of 8-bit indices and as runs.
+    for (kind, data) in [(1, vec![6, 5, 6]), (9, vec![0x80, 6, 0x00, 5, 0x80, 6])] {
+        let mut f = vec![0, 1, kind, 5, 0, 2, 0, 16, 0, 0, 0, 0, 3, 0, 1, 0, 8, 0x21];
+        f.extend([0x0000u16, 0xfc00].iter().flat_map(|v| v.to_le_bytes()));
+        f.extend(data);
+        let img = image::load_from_memory(&raster_image(&f).unwrap().blob.bytes).unwrap().to_rgba8();
+        let row: Vec<[u8; 4]> = (0..3).map(|x| img.get_pixel(x, 0).0).collect();
+        assert_eq!(row, [[255, 0, 0, 255], [0, 0, 0, 0], [255, 0, 0, 255]], "image type {kind}");
+    }
+
+    // A grayscale image the decoder could hold whose RGBA pixels pass the allowance is refused from
+    // its header.
+    let huge = targa_header(11, 32768, 32768, 8, 0);
+    let e = raster_image(&huge).err().expect("refused");
+    assert_eq!(e.to_string(), "an image of 32768 × 32768 pixels is too large to draw");
+
+    // Headers with values the specification doesn't define aren't Targa files.
+    for bad in [targa_header(2, 0, 1, 24, 0), targa_header(1, 1, 1, 8, 0), targa_header(2, 1, 1, 12, 0), targa_header(2, 1, 1, 24, 0xc0)] {
+        assert!(!super::tgaread::is_targa(&bad), "{bad:?}");
+    }
+    assert!(raster_image(b"nothing an image reader knows").is_err());
+}
+
 #[test]
 fn the_formats_are_listed_and_write_one_file_per_artboard() {
     let mut s = Session::new();
@@ -143,7 +289,7 @@ fn the_formats_are_listed_and_write_one_file_per_artboard() {
     let find = |id: &str| r["formats"].as_array().unwrap().iter().find(|f| f["id"] == id).unwrap().clone();
     let (tiff, bmp, tga) = (find("tiff"), find("bmp"), find("tga"));
     assert_eq!((tiff["write"].as_bool(), tiff["read"].as_bool()), (Some(true), Some(true)));
-    assert_eq!((bmp["write"].as_bool(), tga["write"].as_bool(), tga["read"].as_bool()), (Some(true), Some(true), Some(false)));
+    assert_eq!((bmp["write"].as_bool(), tga["write"].as_bool(), tga["read"].as_bool()), (Some(true), Some(true), Some(true)));
     for (f, keys) in [
         (&tiff, &["colorModel", "lzw", "byteOrder", "embedIcc", "ppi", "antiAlias"][..]),
         (&bmp, &["colorModel", "depth", "fileFormat", "rle", "flipRows", "reduction", "dither"]),

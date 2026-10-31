@@ -1,0 +1,41 @@
+{
+  "id": "vectorcraft",
+  "name": "VectorCraft",
+  "upgradeCode": "601C6437-08AE-4645-ADCC-27F036C2EA2F",
+  "sources": [
+    "vectorcraft.wxs"
+  ],
+  "icon": "assets/app-icon/vectorcraft.ico",
+  "localization": [
+    "vectorcraft.en-us.wxl"
+  ],
+  "extensions": [
+    "UI",
+    "Util"
+  ],
+  "payloads": [
+    "vectorcraft-cli.exe",
+    "vectorcraft.exe"
+  ],
+  "registry": [
+    [
+      "-1",
+      "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\vectorcraft.exe",
+      "",
+      "[#VectorcraftExe]"
+    ],
+    [
+      "-1",
+      "Software\\VectorCraft",
+      "InstallDir",
+      "[INSTALLFOLDER]"
+    ],
+    [
+      "-1",
+      "Software\\VectorCraft",
+      "DesktopShortcut",
+      "#1"
+    ]
+  ],
+  "mode": "dualScope"
+}

@@ -1,0 +1,261 @@
+//! The canvas draws Document Setup: the red bleed outline and the transparency grid in the
+//! document's colours and cell size, also in a rotated view; a white Background Contents hides
+//! the grid and Simulate Colored Paper tints the artboard. It also draws each artboard's Show
+//! Center Mark, Show Cross Hairs and Show Video Safe Areas (Artboard Options).
+
+use serde_json::json;
+use vectorcraft_engine::Session;
+
+use crate::theme::Tokens;
+use crate::{VectorcraftApp, canvas};
+
+/// One headless canvas frame: its shapes, the transparency grid tile uploaded in it (2 × 2
+/// pixels: the grid colours) and the grid mesh, if any.
+fn frame(app: &mut VectorcraftApp) -> (Vec<egui::Shape>, Option<Vec<egui::Color32>>, Option<egui::Mesh>) {
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
+    let tile = ctx.tex_manager().read().allocated().find(|(_, m)| m.name == canvas::TRANSPARENCY_GRID).map(|(id, _)| *id);
+    let pixels = tile.and_then(|id| out.textures_delta.set.iter().find(|(t, _)| **t == id)).and_then(|(_, deltas)| match &deltas.first()?.image {
+        egui::ImageData::Color(img) => Some(img.pixels.clone()),
+    });
+    out.textures_delta.clear();
+    let shapes: Vec<egui::Shape> = out.shapes.into_iter().map(|c| c.shape).collect();
+    let mut all = vec![];
+    flatten(&shapes, &mut all);
+    let mesh = all.into_iter().find_map(|s| match s {
+        egui::Shape::Mesh(m) if Some(m.texture_id) == tile => Some((*m).clone()),
+        _ => None,
+    });
+    (shapes, pixels, mesh)
+}
+
+fn flatten(shapes: &[egui::Shape], out: &mut Vec<egui::Shape>) {
+    for s in shapes {
+        match s {
+            egui::Shape::Vec(v) => flatten(v, out),
+            s => out.push(s.clone()),
+        }
+    }
+}
+
+/// The closed outlines drawn in `color`: their corner points.
+fn outlines(shapes: &[egui::Shape], color: egui::Color32) -> Vec<Vec<egui::Pos2>> {
+    let mut all = vec![];
+    flatten(shapes, &mut all);
+    all.into_iter()
+        .filter_map(|s| match s {
+            egui::Shape::Path(p) if p.closed && p.stroke.color == egui::epaint::ColorMode::Solid(color) => Some(p.points),
+            _ => None,
+        })
+        .collect()
+}
+
+fn app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app
+}
+
+#[test]
+fn the_bleed_draws_as_a_red_outline_around_each_artboard() {
+    let mut app = app();
+    let red = Tokens::for_brightness(Default::default()).bleed;
+    assert!(outlines(&frame(&mut app).0, red).is_empty(), "no bleed, no outline");
+    app.run("document.setup", json!({"bleed": [10, 10, 20, 20]})).unwrap();
+    let (shapes, _, _) = frame(&mut app);
+    let found = outlines(&shapes, red);
+    assert_eq!(found.len(), 1);
+    // The artboard is 200 × 100 pt; the bleed grows it by 40 × 20 pt at the fitted zoom.
+    let ab = outlines(&shapes, egui::Color32::from_gray(0)).into_iter().next().unwrap();
+    let span = |q: &[egui::Pos2]| (q[2].x - q[0].x, q[2].y - q[0].y);
+    let ((bw, bh), (aw, ah)) = (span(&found[0]), span(&ab));
+    let zoom = aw / 200.0;
+    assert!((bw - 240.0 * zoom).abs() < 0.5 && (bh - 120.0 * zoom).abs() < 0.5 && (ah - 100.0 * zoom).abs() < 0.5, "{found:?} {ab:?}");
+    // A rotated view turns the outline with the artboard.
+    app.view_mut().unwrap().rotation = 30.0;
+    let q = &outlines(&frame(&mut app).0, red)[0];
+    assert!((q[1].y - q[0].y).abs() > 10.0, "the top edge is no longer horizontal: {q:?}");
+}
+
+#[test]
+fn the_grid_takes_the_document_colours_also_rotated() {
+    let mut app = app();
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    app.run("document.setup", json!({"gridColors": ["#ff0000", "#0000ff"], "gridSize": "large"})).unwrap();
+    let (_, tile, _) = frame(&mut app);
+    let (red, blue) = (egui::Color32::from_rgb(255, 0, 0), egui::Color32::from_rgb(0, 0, 255));
+    assert_eq!(tile, Some(vec![red, blue, blue, red]));
+    // Rotated: still one textured mesh over the artboard's turned corners.
+    app.view_mut().unwrap().rotation = 45.0;
+    let m = frame(&mut app).2.expect("the grid mesh");
+    assert!((m.vertices[1].pos.y - m.vertices[0].pos.y).abs() > 10.0);
+    // Large cells are 16 screen points: the 200 pt artboard spans 200 × zoom / 32 tile repeats.
+    let zoom = app.view_mut().unwrap().zoom as f32;
+    assert!((m.vertices[1].uv.x - 200.0 * zoom / 32.0).abs() < 1e-3, "{:?}", m.vertices[1].uv);
+}
+
+/// An artboard with a background color draws its paper in that color, and with Simulate Colored
+/// Paper on in that color multiplied with the paper color; an artboard without one keeps white or
+/// the paper color. The transparency grid, while it shows, covers both.
+#[test]
+fn an_artboard_color_draws_its_paper_in_that_color() {
+    let mut app = app();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("artboard.setProps", json!({"index": 1, "color": "#336699"})).unwrap();
+    // The fill colors of the closed shapes drawn.
+    let fills = |app: &mut VectorcraftApp| {
+        let mut all = vec![];
+        flatten(&frame(app).0, &mut all);
+        all.into_iter()
+            .filter_map(|s| match s {
+                egui::Shape::Path(p) if p.closed => Some(p.fill),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let blue = egui::Color32::from_rgb(0x33, 0x66, 0x99);
+    let f = fills(&mut app);
+    assert!(f.contains(&blue) && f.contains(&egui::Color32::WHITE), "{f:?}");
+    app.run("document.setup", json!({"simulatePaper": true, "gridColors": ["#ffeecc", "#cccccc"]})).unwrap();
+    // #336699 times #ffeecc, channel by channel: 0x33 × 0xff / 255, 0x66 × 0xee / 255, 0x99 × 0xcc / 255.
+    let inked = egui::Color32::from_rgb(51, 95, 122);
+    let f = fills(&mut app);
+    assert!(f.contains(&inked) && !f.contains(&blue) && f.contains(&egui::Color32::from_rgb(0xff, 0xee, 0xcc)), "{f:?}");
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    assert!(frame(&mut app).2.is_some(), "the grid shows");
+    assert!(!fills(&mut app).contains(&inked), "the grid covers the colored artboard too");
+}
+
+/// The line segments drawn in `color`, each checked to be 1 point wide.
+fn segments(shapes: &[egui::Shape], color: egui::Color32) -> Vec<[egui::Pos2; 2]> {
+    let mut all = vec![];
+    flatten(shapes, &mut all);
+    all.into_iter()
+        .filter_map(|s| match s {
+            egui::Shape::LineSegment { points, stroke } if stroke.color == color => {
+                assert_eq!(stroke.width, 1.0);
+                Some(points)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Show Center Mark draws a cross at the artboard's center and Show Cross Hairs a line from the
+/// middle of each side through it, in the theme's artboard mark colour, 1 point wide at any zoom.
+/// Zoomed in, the cross keeps its size on screen while the cross hairs still span the artboard,
+/// and a rotated view turns both with the artboard.
+#[test]
+fn an_artboard_shows_its_center_mark_and_cross_hairs() {
+    let mut app = app();
+    let mark = Tokens::for_brightness(Default::default()).artboard_mark;
+    assert!(segments(&frame(&mut app).0, mark).is_empty(), "off by default");
+    let len = |s: &[egui::Pos2; 2]| (s[1] - s[0]).length();
+    let mid = |a: egui::Pos2, b: egui::Pos2| a + (b - a) / 2.0;
+    let close = |a: egui::Pos2, b: egui::Pos2| (a - b).length() < 0.5;
+    app.run("artboard.setProps", json!({"index": 0, "showCenterMark": true})).unwrap();
+    let (shapes, _, _) = frame(&mut app);
+    // The artboard's corners on screen: top-left, top-right, bottom-right, bottom-left.
+    let q = outlines(&shapes, egui::Color32::from_gray(0)).into_iter().next().unwrap();
+    let center = mid(q[0], q[2]);
+    let cross = segments(&shapes, mark);
+    assert_eq!(cross.len(), 2, "{cross:?}");
+    assert!(cross.iter().all(|s| close(mid(s[0], s[1]), center) && (len(s) - 12.0).abs() < 0.01), "{cross:?} at {center:?}");
+    assert!(cross.iter().any(|s| (s[0].y - s[1].y).abs() < 0.01) && cross.iter().any(|s| (s[0].x - s[1].x).abs() < 0.01), "{cross:?}");
+    app.run("artboard.setProps", json!({"index": 0, "showCenterMark": false, "showCrossHairs": true})).unwrap();
+    let hairs = segments(&frame(&mut app).0, mark);
+    assert_eq!(hairs.len(), 2, "{hairs:?}");
+    let (left, right, top, bottom) = (mid(q[0], q[3]), mid(q[1], q[2]), mid(q[0], q[1]), mid(q[3], q[2]));
+    assert!(hairs.iter().any(|s| close(s[0], left) && close(s[1], right)), "{hairs:?}");
+    assert!(hairs.iter().any(|s| close(s[0], top) && close(s[1], bottom)), "{hairs:?}");
+    // Both, zoomed in twice as far.
+    app.run("artboard.setProps", json!({"index": 0, "showCenterMark": true})).unwrap();
+    app.view_mut().unwrap().zoom *= 2.0;
+    let mut both = segments(&frame(&mut app).0, mark);
+    both.sort_by(|a, b| len(a).total_cmp(&len(b)));
+    assert_eq!(both.len(), 4, "{both:?}");
+    assert!(both[..2].iter().all(|s| (len(s) - 12.0).abs() < 0.01), "the cross keeps its size on screen: {both:?}");
+    let was = [len(&hairs[0]), len(&hairs[1])];
+    let now = [len(&both[2]), len(&both[3])];
+    assert!(was.iter().all(|w| now.iter().any(|n| (n - 2.0 * w).abs() < 0.5)), "the cross hairs span the artboard: {was:?} → {now:?}");
+    // Rotated, the cross turns with the artboard.
+    app.view_mut().unwrap().rotation = 30.0;
+    let mut turned = segments(&frame(&mut app).0, mark);
+    turned.sort_by(|a, b| len(a).total_cmp(&len(b)));
+    for s in &turned[..2] {
+        let d = s[1] - s[0];
+        assert!(d.x.abs() > 1.0 && d.y.abs() > 1.0, "not along the screen's axes: {turned:?}");
+    }
+}
+
+/// Show Video Safe Areas outlines the artboard's action-safe area 3.5% and its title-safe area 5%
+/// in from each edge (EBU R 95), in the theme's artboard mark colour, 1 point wide: only on the
+/// artboard that has it on, and turned with the view.
+#[test]
+fn an_artboard_shows_its_video_safe_areas() {
+    let mut app = app();
+    app.run("artboard.new", json!({})).unwrap();
+    let mark = Tokens::for_brightness(Default::default()).artboard_mark;
+    assert!(outlines(&frame(&mut app).0, mark).is_empty(), "off by default");
+    app.run("artboard.setProps", json!({"index": 0, "showVideoSafeAreas": true})).unwrap();
+    for rotation in [0.0, 30.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let (shapes, _, _) = frame(&mut app);
+        // Artboard 1's corners on screen: top-left, top-right, bottom-right, bottom-left (it is the
+        // active one, outlined in black).
+        let q = outlines(&shapes, egui::Color32::from_gray(0)).into_iter().next().unwrap();
+        let at = |u: f32, v: f32| q[0] + (q[1] - q[0]) * u + (q[3] - q[0]) * v;
+        let areas = outlines(&shapes, mark);
+        assert_eq!(areas.len(), 2, "two areas, on artboard 1 only: {areas:?}");
+        for (area, k) in areas.iter().zip([0.035, 0.05]) {
+            let want = [at(k, k), at(1.0 - k, k), at(1.0 - k, 1.0 - k), at(k, 1.0 - k)];
+            assert!(area.iter().zip(want).all(|(a, b)| (*a - b).length() < 0.01), "{rotation}°: {area:?}, want {want:?}");
+        }
+    }
+    let mut all = vec![];
+    flatten(&frame(&mut app).0, &mut all);
+    assert!(
+        all.iter().all(|s| !matches!(s, egui::Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(mark) && p.stroke.width != 1.0)),
+        "1 point wide"
+    );
+    app.run("artboard.setProps", json!({"index": 0, "showVideoSafeAreas": false})).unwrap();
+    assert!(outlines(&frame(&mut app).0, mark).is_empty(), "off again");
+}
+
+#[test]
+fn white_background_hides_the_grid_and_paper_tints_the_artboard() {
+    let mut app = app();
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    app.run("document.setup", json!({"backgroundContents": "white"})).unwrap();
+    assert!(frame(&mut app).2.is_none());
+    app.run("view.transparencyGrid", json!({"on": false})).unwrap();
+    app.run("document.setup", json!({"simulatePaper": true, "gridColors": ["#ffeecc", "#cccccc"]})).unwrap();
+    let mut all = vec![];
+    flatten(&frame(&mut app).0, &mut all);
+    let paper = egui::Color32::from_rgb(0xff, 0xee, 0xcc);
+    assert!(all.iter().any(|s| matches!(s, egui::Shape::Path(p) if p.fill == paper)), "the artboard shows the paper colour");
+}
+
+/// An artboard's name sits above the artboard's own top-left corner, also when a rotated view
+/// turns that corner away from the corner of its box on screen (#1095).
+#[test]
+fn an_artboard_name_stays_at_its_corner_in_a_rotated_view() {
+    let mut app = app();
+    app.run("artboard.new", json!({})).unwrap();
+    for rotation in [0.0, 60.0, -74.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let (shapes, _, _) = frame(&mut app);
+        let corner = outlines(&shapes, egui::Color32::from_gray(0))[0][0];
+        let mut all = vec![];
+        flatten(&shapes, &mut all);
+        let label = all
+            .iter()
+            .find_map(|s| match s {
+                egui::Shape::Text(t) if t.galley.text().starts_with("01 - ") => Some(t.pos + egui::vec2(0.0, t.galley.size().y + 4.0)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{rotation}°: no name"));
+        assert!((label - corner).length() < 1.0, "{rotation}°: the name ends at {label:?}, the corner is {corner:?}");
+    }
+}

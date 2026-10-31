@@ -10,7 +10,6 @@ workspace = true
 
 [dependencies]
 vectorcraft-geom = { workspace = true }
-vectorcraft-pathops = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }

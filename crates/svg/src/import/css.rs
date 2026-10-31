@@ -1,33 +1,86 @@
 //! The style cascade for the `<text>` pre-pass: `<style>` rules, the `style` attribute and
 //! presentation attributes.
 //!
-//! Selectors: type, `*`, `#id`, any number of `.class`es and `[attr]` / `[attr=value]`, combined by
-//! descendant (space) and child (`>`) combinators. Rules with other selectors (pseudo-classes,
-//! sibling combinators, namespaces) never match, and at-rule blocks (`@media`, `@font-face`…) are
+//! Selectors: type, `*`, `#id`, any number of `.class`es, `[attr]` / `[attr=value]` and `:not()` of a
+//! list of those, combined by descendant (space) and child (`>`) combinators. Rules with other
+//! selectors (other pseudo-classes, sibling combinators, namespaces) never match, and at-rule blocks (`@media`, `@font-face`…) are
 //! skipped. Precedence: `!important`, then the `style` attribute, then specificity, then source
 //! order; a presentation attribute applies only when no rule sets the property.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use usvg::roxmltree;
 
 pub(super) type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 
-/// `name: value` declarations of a block or `style` attribute, with their `!important` flag.
-fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
-    s.split(';')
+/// `name: value` declarations of a block or `style` attribute, with their `!important` flag. The
+/// `font` shorthand becomes its longhands, as usvg reads it for the rest of the drawing (#1557).
+pub(super) fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
+    split_decls(s)
+        .into_iter()
         .filter_map(|d| {
             let (k, v) = d.split_once(':')?;
             let v = v.trim();
-            let (v, important) = match v.strip_suffix("important").map(str::trim_end).and_then(|v| v.strip_suffix('!')) {
+            let stem = v.len().checked_sub("important".len()).and_then(|i| v.get(..i).zip(v.get(i..)));
+            let flagged = stem.filter(|(_, kw)| kw.eq_ignore_ascii_case("important"));
+            let (v, important) = match flagged.map(|(h, _)| h.trim_end()).and_then(|v| v.strip_suffix('!')) {
                 Some(v) => (v.trim_end(), true),
                 None => (v, false),
             };
             Some((k.trim().to_ascii_lowercase(), v.to_string(), important))
         })
+        .flat_map(|(k, v, important)| match k.as_str() {
+            "font" => font_longhands(&v).into_iter().map(|(k, v)| (k.to_string(), v, important)).collect(),
+            _ => vec![(k, v, important)],
+        })
         .collect()
+}
+
+/// Splits on the `;`s that are outside quoted strings and parentheses (`url(data:…;base64,…)`).
+fn split_decls(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let (mut start, mut depth, mut quote, mut escaped) = (0, 0usize, None::<char>, false);
+    for (i, c) in s.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+        } else {
+            match c {
+                '\'' | '"' => quote = Some(c),
+                '(' => depth += 1,
+                ')' => depth = depth.saturating_sub(1),
+                ';' if depth == 0 => {
+                    parts.push(s.get(start..i).unwrap_or_default());
+                    start = i + 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    parts.push(s.get(start..).unwrap_or_default());
+    parts
+}
+
+/// The longhands of a `font` shorthand: those it leaves out back to their initial values. None
+/// when it doesn't parse (it is then ignored, as in CSS).
+fn font_longhands(v: &str) -> Vec<(&'static str, String)> {
+    let Ok(f) = svgtypes::FontShorthand::from_str(v) else { return Vec::new() };
+    let or = |o: Option<&str>| o.unwrap_or("normal").to_string();
+    vec![
+        ("font-style", or(f.font_style)),
+        ("font-variant", or(f.font_variant)),
+        ("font-weight", or(f.font_weight)),
+        ("font-stretch", or(f.font_stretch)),
+        ("font-size", f.font_size.to_string()),
+        ("font-family", f.font_family.to_string()),
+    ]
 }
 
 /// One compound selector (`text.a.b#c[x=y]`).
@@ -37,6 +90,8 @@ struct Compound {
     id: Option<String>,
     classes: Vec<String>,
     attrs: Vec<(String, Option<String>)>,
+    /// The compounds of `:not()`s: the element must match none of them.
+    nots: Vec<Compound>,
 }
 
 impl Compound {
@@ -45,6 +100,7 @@ impl Compound {
             && self.id.as_deref().is_none_or(|id| n.attribute("id") == Some(id))
             && (self.classes.is_empty() || n.attribute("class").is_some_and(|c| self.classes.iter().all(|k| c.split_whitespace().any(|x| x == k))))
             && self.attrs.iter().all(|(a, v)| n.attribute(a.as_str()).is_some_and(|x| v.as_deref().is_none_or(|v| x == v)))
+            && !self.nots.iter().any(|c| c.matches(n))
     }
 }
 
@@ -61,9 +117,18 @@ fn is_ident(c: char) -> bool {
     c.is_alphanumeric() || c == '-' || c == '_'
 }
 
+/// How deep `:not()`s may nest (real style sheets nest one or two).
+const MAX_NOT_NESTING: usize = 8;
+
 impl Selector {
     /// `None` for selectors this cascade doesn't support (they never match).
     fn parse(s: &str) -> Option<Self> {
+        Self::parse_nested(s, 0)
+    }
+
+    /// [`Self::parse`] for a selector `nesting` `:not()`s deep: past [`MAX_NOT_NESTING`] it is not
+    /// supported, so a style sheet of `:not(:not(:not(…` can't exhaust the stack.
+    fn parse_nested(s: &str, nesting: usize) -> Option<Self> {
         fn ident(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<String> {
             let mut out = String::new();
             while let Some(&c) = chars.peek().filter(|c| is_ident(**c)) {
@@ -77,6 +142,8 @@ impl Selector {
         let mut links: Vec<bool> = vec![];
         let mut cur: Option<Compound> = None;
         let mut link: Option<bool> = None;
+        // What the `:not()`s add: the specificity of each one's most specific argument.
+        let mut not_specificity = (0, 0, 0);
         let mut chars = s.trim().chars().peekable();
         while let Some(&c) = chars.peek() {
             if c.is_whitespace() || c == '>' {
@@ -121,6 +188,37 @@ impl Selector {
                     }
                     comp.attrs.push((name.to_string(), value));
                 }
+                ':' => {
+                    chars.next();
+                    if nesting >= MAX_NOT_NESTING || !ident(&mut chars)?.eq_ignore_ascii_case("not") || chars.next() != Some('(') {
+                        return None;
+                    }
+                    let mut depth = 1;
+                    let mut arg = String::new();
+                    for c in chars.by_ref() {
+                        match c {
+                            '(' => depth += 1,
+                            ')' => depth -= 1,
+                            _ => {}
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                        arg.push(c);
+                    }
+                    if depth != 0 {
+                        return None;
+                    }
+                    // A list of compound selectors (each may hold a `:not()` of its own).
+                    let mut most = (0, 0, 0);
+                    for a in top_level_commas(&arg) {
+                        let s = Self::parse_nested(a, nesting + 1)?;
+                        let [(c, _)]: [(Compound, bool); 1] = s.parts.try_into().ok()?;
+                        most = most.max(s.specificity);
+                        comp.nots.push(c);
+                    }
+                    not_specificity = (not_specificity.0 + most.0, not_specificity.1 + most.1, not_specificity.2 + most.2);
+                }
                 c if is_ident(c) => comp.tag = Some(ident(&mut chars)?),
                 _ => return None,
             }
@@ -133,7 +231,7 @@ impl Selector {
         if comps.is_empty() {
             return None;
         }
-        let mut specificity = (0, 0, 0);
+        let mut specificity = not_specificity;
         for c in &comps {
             specificity.0 += c.id.is_some() as u32;
             specificity.1 += (c.classes.len() + c.attrs.len()) as u32;
@@ -144,8 +242,18 @@ impl Selector {
         Some(Self { parts, specificity })
     }
 
+    fn has_not(&self) -> bool {
+        self.parts.iter().any(|(c, _)| !c.nots.is_empty())
+    }
+
     fn matches(&self, n: XNode) -> bool {
-        fn go(parts: &[(Compound, bool)], n: XNode) -> bool {
+        // The result of matching a selector suffix from a node depends only on the suffix and
+        // the node, so memoize it: without this, every descendant step retries every matching
+        // ancestor and a selector whose leftmost compound never matches makes the search
+        // enumerate ancestor combinations (#1703). A suffix of `parts` is identified by its
+        // length, so (suffix length, node id) is a complete key and the visited states are
+        // bounded by parts × ancestors.
+        fn go(parts: &[(Compound, bool)], n: XNode, memo: &mut HashMap<(usize, roxmltree::NodeId), bool>) -> bool {
             let Some(((c, child), rest)) = parts.split_first() else { return true };
             if !c.matches(n) {
                 return false;
@@ -153,13 +261,19 @@ impl Selector {
             if rest.is_empty() {
                 return true;
             }
-            if *child {
-                n.parent_element().is_some_and(|p| go(rest, p))
-            } else {
-                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a))
+            let key = (rest.len(), n.id());
+            if let Some(&hit) = memo.get(&key) {
+                return hit;
             }
+            let hit = if *child {
+                n.parent_element().is_some_and(|p| go(rest, p, memo))
+            } else {
+                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a, memo))
+            };
+            memo.insert(key, hit);
+            hit
         }
-        go(&self.parts, n)
+        go(&self.parts, n, &mut HashMap::new())
     }
 }
 
@@ -168,16 +282,97 @@ struct Rule {
     decls: Rc<Vec<(String, String, bool)>>,
 }
 
+/// The rules filed under the id of their selector's rightmost compound, else under its first
+/// class, else under its type. Rules whose rightmost compound has none of these (`*`, `[x]`) are
+/// in `any`. Each list holds positions in the rule list, in source order.
+#[derive(Default)]
+struct Index {
+    ids: HashMap<String, Vec<usize>>,
+    classes: HashMap<String, Vec<usize>>,
+    tags: HashMap<String, Vec<usize>>,
+    any: Vec<usize>,
+}
+
+impl Index {
+    fn new(rules: &[Rule]) -> Self {
+        let mut index = Self::default();
+        for (i, r) in rules.iter().enumerate() {
+            let list = match r.selector.parts.first() {
+                Some((c, _)) => match (&c.id, c.classes.first(), &c.tag) {
+                    (Some(id), _, _) => index.ids.entry(id.clone()).or_default(),
+                    (None, Some(class), _) => index.classes.entry(class.clone()).or_default(),
+                    (None, None, Some(tag)) => index.tags.entry(tag.clone()).or_default(),
+                    (None, None, None) => &mut index.any,
+                },
+                None => &mut index.any,
+            };
+            list.push(i);
+        }
+        index
+    }
+
+    /// The positions of the rules to test against element `n`, each once, in source order: those
+    /// filed under its id, its classes and its type, and those in `any`.
+    fn candidates(&self, n: XNode) -> Vec<usize> {
+        let mut out = self.any.clone();
+        let mut add = |list: Option<&Vec<usize>>| out.extend(list.into_iter().flatten());
+        add(n.attribute("id").and_then(|id| self.ids.get(id)));
+        let mut seen = HashSet::new();
+        for class in n.attribute("class").into_iter().flat_map(str::split_whitespace).filter(|c| seen.insert(*c)) {
+            add(self.classes.get(class));
+        }
+        add(self.tags.get(n.tag_name().name()));
+        out.sort();
+        out
+    }
+}
+
+/// `list` split at the commas outside parentheses (those in a `:not()` stay).
+fn top_level_commas(list: &str) -> impl Iterator<Item = &str> {
+    let mut depth = 0usize;
+    list.split(move |c| {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        c == ',' && depth == 0
+    })
+}
+
 /// Rules from every `<style>` element, in source order.
 fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
-    // Drop comments.
+    // Drop comments outside strings.
     let mut text = String::with_capacity(css.len());
-    let mut rest = css;
-    while let Some(i) = rest.find("/*") {
-        text.push_str(&rest[..i]);
-        rest = rest[i + 2..].find("*/").map_or("", |j| &rest[i + 2 + j + 2..]);
+    let mut chars = css.chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    while let Some(c) = chars.next() {
+        if let Some(q) = quote {
+            text.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == q {
+                quote = None;
+            }
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+            text.push(c);
+        } else if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut prev_star = false;
+            for c in chars.by_ref() {
+                if prev_star && c == '/' {
+                    break;
+                }
+                prev_star = c == '*';
+            }
+        } else {
+            text.push(c);
+        }
     }
-    text.push_str(rest);
     let mut s = text.as_str();
     loop {
         s = s.trim_start();
@@ -213,7 +408,7 @@ fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
         }
         let close = s[open..].find('}').map_or(s.len(), |i| open + i);
         let decls = Rc::new(parse_decls(&s[open + 1..close]));
-        for sel in head.split(',') {
+        for sel in top_level_commas(head) {
             if let Some(selector) = Selector::parse(sel) {
                 out.push(Rule { selector, decls: decls.clone() });
             }
@@ -225,6 +420,7 @@ fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
 /// The cascade over one parsed document.
 pub(super) struct Styles {
     rules: Vec<Rule>,
+    index: Index,
     /// Declared properties of each element queried so far.
     cache: RefCell<HashMap<roxmltree::NodeId, Rc<HashMap<String, String>>>>,
 }
@@ -239,11 +435,17 @@ impl Styles {
             let css: String = st.children().filter_map(|c| c.text()).collect();
             parse_sheet(&css, &mut rules);
         }
-        Self { rules, cache: RefCell::default() }
+        let index = Index::new(&rules);
+        Self { rules, index, cache: RefCell::default() }
+    }
+
+    /// Do the document's style sheets have any rules?
+    pub(super) fn has_rules(&self) -> bool {
+        !self.rules.is_empty()
     }
 
     /// Properties set on `n` by rules and its `style` attribute, after the cascade.
-    fn declared(&self, n: XNode) -> Rc<HashMap<String, String>> {
+    pub(super) fn declared(&self, n: XNode) -> Rc<HashMap<String, String>> {
         if let Some(m) = self.cache.borrow().get(&n.id()) {
             return m.clone();
         }
@@ -256,7 +458,7 @@ impl Styles {
             }
         };
         let mut order = 0;
-        for r in self.rules.iter().filter(|r| r.selector.matches(n)) {
+        for r in self.index.candidates(n).into_iter().filter_map(|i| self.rules.get(i)).filter(|r| r.selector.matches(n)) {
             for (k, v, imp) in r.decls.iter() {
                 order += 1;
                 put(k, v, (*imp, false, r.selector.specificity, order));
@@ -273,6 +475,27 @@ impl Styles {
         m
     }
 
+    /// Are there rules with a `:not()` (which usvg's style sheets drop)?
+    pub(super) fn has_not_rules(&self) -> bool {
+        self.rules.iter().any(|r| r.selector.has_not())
+    }
+
+    /// The properties rules with a `:not()` set on `n`, each with its value after the cascade.
+    pub(super) fn set_by_not_rules(&self, n: XNode) -> Vec<(String, String)> {
+        let declared = self.declared(n);
+        let mut out: Vec<(String, String)> = Vec::new();
+        for r in self.rules.iter().filter(|r| r.selector.has_not() && r.selector.matches(n)) {
+            for (k, ..) in r.decls.iter() {
+                if !out.iter().any(|(o, _)| o == k)
+                    && let Some(v) = declared.get(k)
+                {
+                    out.push((k.clone(), v.clone()));
+                }
+            }
+        }
+        out
+    }
+
     /// A property specified on this element (rules and `style` beat the presentation attribute).
     pub(super) fn own(&self, n: XNode, name: &str) -> Option<String> {
         self.declared(n).get(name).cloned().or_else(|| n.attribute(name).map(|v| v.trim().to_string()))
@@ -285,72 +508,4 @@ impl Styles {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn with_doc(svg: &str, f: impl FnOnce(&roxmltree::Document, &Styles)) {
-        let doc = roxmltree::Document::parse(svg).unwrap();
-        let st = Styles::new(&doc);
-        f(&doc, &st);
-    }
-
-    fn by_id<'a, 'i>(doc: &'a roxmltree::Document<'i>, id: &str) -> XNode<'a, 'i> {
-        doc.descendants().find(|n| n.attribute("id") == Some(id)).unwrap()
-    }
-
-    #[test]
-    fn selectors_and_precedence() {
-        with_doc(
-            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>
-            /* comment { fill: red } */
-            @media print { text { fill: red } }
-            @import url(x.css);
-            text { fill: #111; font-size: 9px }
-            g text { fill: #222 }
-            g > text.a { fill: #333 }
-            .a.b { stroke: blue }
-            #t2 { fill: #444 }
-            [data-k=v] { font-weight: bold }
-            text:first-child, text ~ text { fill: red }
-            .imp { fill: #555 !important }
-            </style>
-            <text id="t0">x</text>
-            <g><text id="t1" class="a b" fill="green">x</text>
-               <g><text id="t2" class="a" style="fill:#666">x</text></g>
-               <text id="t3" class="a imp" style="fill:#777" data-k="v">x</text></g>
-            </svg>"#,
-            |doc, st| {
-                assert_eq!(st.own(by_id(doc, "t0"), "fill").as_deref(), Some("#111"));
-                assert_eq!(st.own(by_id(doc, "t1"), "fill").as_deref(), Some("#333"), "child + class beats descendant");
-                assert_eq!(st.own(by_id(doc, "t1"), "stroke").as_deref(), Some("blue"), "multiple classes");
-                assert_eq!(st.own(by_id(doc, "t2"), "fill").as_deref(), Some("#666"), "style attribute beats #id");
-                assert_eq!(st.own(by_id(doc, "t3"), "fill").as_deref(), Some("#555"), "!important beats style");
-                assert_eq!(st.own(by_id(doc, "t3"), "font-weight").as_deref(), Some("bold"));
-                assert_eq!(st.own(by_id(doc, "t2"), "stroke"), None, "`.a.b` needs both classes");
-                assert_eq!(st.prop(by_id(doc, "t2"), "font-size").as_deref(), Some("9px"));
-            },
-        );
-    }
-
-    #[test]
-    fn presentation_attributes_lose_to_rules() {
-        with_doc(
-            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>#a { fill: blue }</style><text id="a" fill="red" stroke="red">x</text></svg>"#,
-            |doc, st| {
-                assert_eq!(st.own(by_id(doc, "a"), "fill").as_deref(), Some("blue"));
-                assert_eq!(st.own(by_id(doc, "a"), "stroke").as_deref(), Some("red"));
-            },
-        );
-    }
-
-    #[test]
-    fn unsupported_selectors_are_dropped() {
-        for s in ["a + b", "a ~ b", "a:hover", "svg|text", "> a", "a >", ""] {
-            assert!(Selector::parse(s).is_none(), "{s}");
-        }
-        let s = Selector::parse("g  >  text.x#y").unwrap();
-        assert_eq!(s.specificity, (1, 1, 2));
-        assert_eq!(s.parts.len(), 2);
-        assert!(s.parts[0].1, "text must be a child of g");
-    }
-}
+mod tests;

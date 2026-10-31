@@ -37,6 +37,23 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol
 }
 
+/// #1396: a stroke wider than the shape still covers the interior and reaches half the weight past it.
+/// A thinner stroke keeps the hole in the middle.
+#[test]
+fn a_stroke_wider_than_the_shape_covers_the_interior() {
+    let circle = kurbo::Circle::new(Point::new(0.0, 0.0), 5.0).to_path(0.1);
+    let st = stroke(40.0, |_| {});
+    let outline = line_outline(&circle, &st, 40.0, 0.25);
+    let b = outline.bounding_box();
+    assert!(b.x0 < -24.0 && b.x1 > 24.0, "half the weight past the radius: {b:?}");
+    assert!(kurbo::Shape::contains(&outline, Point::ZERO), "the middle of a fat stroke is painted");
+    let thin = line_outline(&circle, &stroke(4.0, |_| {}), 4.0, 0.25);
+    assert!(!kurbo::Shape::contains(&thin, Point::ZERO), "a narrow stroke stays a ring");
+    assert!(kurbo::Shape::contains(&thin, Point::new(5.0, 0.0)));
+    let square = line_outline(&Rect::new(0.0, 0.0, 8.0, 8.0).to_path(0.1), &st, 40.0, 0.25);
+    assert!(kurbo::Shape::contains(&square, Point::new(4.0, 4.0)), "a fat stroke on a small rectangle covers it");
+}
+
 // ---------------------------------------------------------------- dashes and dots
 
 #[test]
@@ -108,6 +125,25 @@ fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
     });
     let o = line_outline(&line(0.0, 12.0), &st, 4.0, 1e-3);
     assert!(o.contains(Point::new(10.5, 0.0)), "the dot overlapping the dash end is painted");
+}
+
+#[test]
+fn expand_stroke_region_of_a_round_line_stays_compact() {
+    use std::f64::consts::PI;
+    use vectorcraft_geom::{FillRule, PathData, Point, SubPath};
+    let path = PathData::single(SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false));
+    let st = stroke(10.0, |s| s.cap = vectorcraft_doc::LineCap::Round);
+    let region = crate::stroke::outline::outline_region(&path, FillRule::NonZero, &st);
+    let anchors = region.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert!(anchors <= 8, "expand stroke should use few anchors for a round line, got {anchors}");
+    let area = region.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+    assert!(near(area, 100.0 * 10.0 + PI * 5.0 * 5.0, 1.0), "{area}");
+    // Extra colinear anchors along the spine must not multiply outline anchors (#3446).
+    let dense: Vec<Point> = (0..=20).map(|i| Point::new(i as f64 * 5.0, 50.0)).collect();
+    let dense_path = PathData::single(SubPath::polyline(&dense, false));
+    let dense_region = crate::stroke::outline::outline_region(&dense_path, FillRule::NonZero, &st);
+    let dense_anchors = dense_region.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
 }
 
 #[test]
@@ -303,4 +339,86 @@ fn degenerate_paths_and_patterns_neither_panic_nor_hang() {
         }
     }
     assert!(dash(&line(0.0, 1e-9), &dashed(&[1e-12, 1e-12], 0.0)).is_none(), "too fine to advance: solid");
+}
+
+/// Grid points within `reach` of the inside of `path` (not past an open end) that `outline`
+/// leaves unpainted.
+fn unpainted_near(path: &BezPath, outline: &BezPath, reach: f64) -> Vec<Point> {
+    let b = path.bounding_box().inflate(reach, reach);
+    let ends: Vec<Point> = if is_closed(path) { vec![] } else { path.segments().flat_map(|s| [s.start(), s.end()]).collect() };
+    let ends = [ends.first().copied(), ends.last().copied()];
+    let mut missed = Vec::new();
+    for i in 0..=60 {
+        for j in 0..=60 {
+            let p = Point::new(b.x0 + b.width() * f64::from(i) / 60.0, b.y0 + b.height() * f64::from(j) / 60.0);
+            let nearest = path
+                .segments()
+                .map(|s| (s, kurbo::ParamCurveNearest::nearest(&s, p, 1e-6)))
+                .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
+                .map(|(s, n)| (s.eval(n.t), n.distance_sq.sqrt()));
+            let Some((at, dist)) = nearest else { continue };
+            let past_end = ends.iter().flatten().any(|e| e.distance(at) < 1e-6);
+            if dist <= reach && !past_end && outline.winding(p) == 0 {
+                missed.push(p);
+            }
+        }
+    }
+    missed
+}
+
+/// #1396: whatever the weight is next to the size of the shape, every point within half the
+/// weight of the path is painted (the stroke is the path swept by a pen that wide).
+#[test]
+fn a_fat_stroke_paints_everything_within_half_its_weight() {
+    let mut shapes: Vec<(String, BezPath)> = Vec::new();
+    for r in [3.0, 6.0, 10.0, 15.0, 20.0, 24.0, 40.0] {
+        let circle = kurbo::Circle::new(Point::ZERO, r).to_path(0.01);
+        let mut ellipse = kurbo::Ellipse::new(Point::ZERO, (r, r / 2.0), 0.3).to_path(0.01);
+        ellipse.close_path();
+        let arc = BezPath::from_vec(circle.elements().iter().take(3).copied().collect());
+        let mut l = BezPath::new();
+        l.move_to((0.0, 0.0));
+        for p in [(r * 2.0, 0.0), (r * 2.0, r), (r, r), (r, r * 2.0), (0.0, r * 2.0)] {
+            l.line_to(p);
+        }
+        l.close_path();
+        let mut two = circle.clone();
+        two.extend(kurbo::Circle::new(Point::new(200.0, 0.0), 60.0).to_path(0.01).iter());
+        shapes.extend([
+            (format!("circle r={r}"), circle),
+            (format!("ellipse {r}"), ellipse),
+            (format!("rect {r}"), Rect::new(0.0, 0.0, r, r * 1.5).to_path(0.1)),
+            (format!("open arc r={r}"), arc),
+            (format!("L {r}"), l),
+            (format!("circle r={r} beside a large one"), two),
+        ]);
+    }
+    let mut failures = Vec::new();
+    for (name, path) in &shapes {
+        for join in [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel] {
+            let outline = line_outline(path, &stroke(50.0, |s| s.join = join), 50.0, 0.05);
+            // A bevel stops short of the pen's reach at a corner.
+            let reach = if join == LineJoin::Bevel { 16.0 } else { 24.5 };
+            let missed = unpainted_near(path, &outline, reach);
+            if !missed.is_empty() {
+                failures.push(format!("{name} {join:?}: {} unpainted, e.g. {:?} ({} contours)", missed.len(), missed.first(), moves(&outline)));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A stroke the shape has room for keeps its hole, also beside a subpath that has none.
+#[test]
+fn a_stroke_narrower_than_the_shape_keeps_its_hole() {
+    let mut path = kurbo::Circle::new(Point::ZERO, 30.0).to_path(0.01);
+    path.extend(kurbo::Circle::new(Point::new(200.0, 0.0), 10.0).to_path(0.01).iter());
+    for join in [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel] {
+        let outline = line_outline(&path, &stroke(50.0, |s| s.join = join), 50.0, 0.05);
+        assert_eq!(outline.winding(Point::ZERO), 0, "{join:?}: the hole of the wide ring");
+        assert_eq!(outline.winding(Point::new(4.0, 0.0)), 0, "{join:?}: up to its inner edge");
+        assert_ne!(outline.winding(Point::new(6.0, 0.0)), 0, "{join:?}");
+        assert_ne!(outline.winding(Point::new(200.0, 0.0)), 0, "{join:?}: the small circle is solid");
+        assert_eq!(moves(&outline), 3, "{join:?}: two contours for the ring, one for the blob");
+    }
 }

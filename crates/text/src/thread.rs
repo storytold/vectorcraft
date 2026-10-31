@@ -47,7 +47,8 @@ fn slice_paras(paras: &[ParaStyle], first: usize, runs: &[TextRun]) -> Vec<ParaS
 }
 
 /// How many bytes of `runs` fit in `frame` (whole lines; a following break space or paragraph
-/// break stays with the line that ends there).
+/// break stays with the line that ends there, but on a path, where a space with no room
+/// overflows as any character does, it starts the next frame).
 fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
     let mut probe = frame.clone();
     probe.runs = runs.to_vec();
@@ -57,6 +58,9 @@ fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
         return text.len();
     }
     let mut end = lay.lines.last().map_or(0, |l| l.end);
+    if lay.on_path {
+        return end;
+    }
     let bytes = text.as_bytes();
     while end < bytes.len() && bytes[end] == b' ' {
         end += 1;
@@ -67,21 +71,79 @@ fn fit(db: &FontDb, frame: &TextObject, runs: &[TextRun]) -> usize {
     end
 }
 
-/// A frame's share of a story: its runs and its paragraphs' styles (one per paragraph).
+/// A frame's share of a story: its runs, its paragraphs' styles (one per paragraph) and the
+/// numbered list paragraphs counted before its first one ([`TextObject::list_count`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Slice {
     pub runs: Vec<TextRun>,
     pub paras: Vec<ParaStyle>,
+    pub list_count: u32,
+    /// The first paragraph continues from the frame before
+    /// ([`TextObject::first_para_continues`]).
+    pub continues: bool,
+}
+
+/// The count of numbered list paragraphs after the paragraphs of `runs` (styles `paras`, one per
+/// paragraph) but the last one, counted on from `count` as the layout counts them
+/// ([`vectorcraft_doc::text::ParaList::next_marker`]). A slice's last paragraph also starts the
+/// next frame, which counts it.
+fn count_list_paragraphs(runs: &[TextRun], paras: &[ParaStyle], mut count: u32) -> u32 {
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let mut pieces: Vec<&str> = text.split('\n').collect();
+    pieces.pop();
+    for (piece, para) in pieces.iter().zip(paras) {
+        vectorcraft_doc::text::ParaList::next_marker(para.list, piece.is_empty(), &mut count);
+    }
+    count
+}
+
+/// Whether the frame after one whose share ends with byte `before` starts inside a paragraph: it
+/// does unless that byte is a paragraph break. After an empty share (`None`) it takes `was`, the
+/// mark of the frame with the empty share.
+fn continues_after(before: Option<u8>, was: bool) -> bool {
+    before.map_or(was, |b| b != b'\n')
+}
+
+/// For each of `frames` in thread order, whether its first paragraph continues from the frames
+/// before it ([`TextObject::first_para_continues`]): the text of those frames is not empty and
+/// does not end with a paragraph break.
+pub fn continued(frames: &[&TextObject]) -> Vec<bool> {
+    let mut on = false;
+    frames
+        .iter()
+        .map(|f| {
+            let this = on;
+            on = continues_after(f.runs.iter().rev().find_map(|r| r.text.bytes().last()), on);
+            this
+        })
+        .collect()
 }
 
 /// The story `runs` (with paragraph styles `paras`, one per story paragraph; empty = each
 /// frame's own) split across `frames` in order (the last frame takes any overflow). Empty slices
 /// keep one empty run carrying the style at the split, so typing there has a style. A paragraph
-/// split between frames has its style in both.
+/// split between frames has its style in both, and each slice that starts inside a paragraph is
+/// marked as continuing it ([`Slice::continues`]). Each frame's numbered list paragraphs are counted
+/// on from the frames before it. Each frame's share is measured with that mark and that count.
 pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: &[ParaStyle]) -> Vec<Slice> {
+    distribute_continuing(db, frames, runs, paras, false, 0)
+}
+
+/// [`distribute`] for `runs` that follow text before them: the first frame's share is measured,
+/// and marked, as continuing a paragraph when `continued` is set, and its numbered list paragraphs
+/// are counted on from `list_count`.
+pub fn distribute_continuing(
+    db: &FontDb,
+    frames: &[&TextObject],
+    runs: &[TextRun],
+    paras: &[ParaStyle],
+    continued: bool,
+    mut list_count: u32,
+) -> Vec<Slice> {
     let mut rest = runs.to_vec();
     let mut out = Vec::with_capacity(frames.len());
     let mut next_para = 0;
+    let mut continues = continued;
     for (i, f) in frames.iter().enumerate() {
         let first_para = next_para;
         let len = runs_len(&rest);
@@ -93,6 +155,8 @@ pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: 
             let mut probe = (*f).clone();
             probe.runs = rest.clone();
             probe.set_paragraph_styles(slice_paras(paras, first_para, &rest));
+            probe.list_count = list_count;
+            probe.first_para_continues = continues;
             fit(db, &probe, &rest)
         };
         let mut head = slice_runs(&rest, 0, n);
@@ -103,83 +167,14 @@ pub fn distribute(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: 
         rest = if tail.is_empty() { vec![TextRun { text: String::new(), style: style_at(&rest, len), inline: None }] } else { tail };
         let head_paras = slice_paras(paras, first_para, &head);
         next_para += head_paras.len().saturating_sub(1);
-        out.push(Slice { runs: head, paras: head_paras });
+        let next_count = count_list_paragraphs(&head, &head_paras, list_count);
+        let starts_continued = continues;
+        continues = continues_after(head.iter().rev().find_map(|r| r.text.bytes().last()), continues);
+        out.push(Slice { runs: head, paras: head_paras, list_count, continues: starts_continued });
+        list_count = next_count;
     }
     out
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_doc::{CharStyle, Justify, TextKind};
-    use vectorcraft_geom::{Affine, Rect, shapes};
-
-    fn frame(x: f64) -> TextObject {
-        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", CharStyle::default());
-        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(x, 0.0, x + 120.0, 60.0)) };
-        t.xf = Affine::IDENTITY;
-        t
-    }
-
-    #[test]
-    fn story_flows_across_frames_and_rejoins() {
-        let db = FontDb::global();
-        let (a, b, c) = (frame(0.0), frame(200.0), frame(400.0));
-        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6) + "\nSecond paragraph here.";
-        let story = vec![TextRun { text: text.clone(), style: CharStyle::default(), inline: None }];
-        let parts: Vec<Vec<TextRun>> = distribute(db, &[&a, &b, &c], &story, &[]).into_iter().map(|s| s.runs).collect();
-        let lens: Vec<usize> = parts.iter().map(|p| runs_len(p)).collect();
-        assert!(lens[0] > 0 && lens[1] > 0, "{lens:?}");
-        let joined: String = parts.iter().flatten().map(|r| r.text.as_str()).collect();
-        assert_eq!(joined, text, "no character lost or duplicated");
-        // Each non-last slice fits its frame.
-        for (f, p) in [&a, &b].iter().zip(&parts) {
-            let mut t = (*f).clone();
-            t.runs = p.clone();
-            assert!(!layout(db, &t).overflow);
-        }
-        // Lines never start with the break space.
-        assert!(!parts[1][0].text.starts_with(' '));
-    }
-
-    #[test]
-    fn paragraph_styles_flow_with_their_paragraphs() {
-        let db = FontDb::global();
-        let (a, b) = (frame(0.0), frame(200.0));
-        let text = "The quick brown fox jumps over the lazy dog. ".repeat(4) + "\nSecond paragraph.\nThird.";
-        let story = vec![TextRun { text, style: CharStyle::default(), inline: None }];
-        let style = |j| ParaStyle { justify: j, ..Default::default() };
-        use vectorcraft_doc::Justify::*;
-        let paras = vec![style(Left), style(Center), style(Right)];
-        let parts = distribute(db, &[&a, &b], &story, &paras);
-        assert!(!parts[0].runs.is_empty() && !parts[1].runs.is_empty());
-        // The first paragraph overflows into the second frame: it is in both, with its style.
-        let pa: Vec<Justify> = parts[0].paras.iter().map(|p| p.justify).collect();
-        let pb: Vec<Justify> = parts[1].paras.iter().map(|p| p.justify).collect();
-        assert_eq!(pa, [Left]);
-        assert_eq!(pb, [Left, Center, Right]);
-        // Joined again, the shared paragraph counts once.
-        let mut fa = a.clone();
-        fa.runs = parts[0].runs.clone();
-        fa.set_paragraph_styles(parts[0].paras.clone());
-        let mut fb = b.clone();
-        fb.runs = parts[1].runs.clone();
-        fb.set_paragraph_styles(parts[1].paras.clone());
-        assert_eq!(story_paras(&[&fa, &fb], &[]), paras);
-        // A frame whose shared first paragraph was restyled wins.
-        fb.edit_paras(Some(0..1), |p| p.justify = JustifyAll);
-        assert_eq!(story_paras(&[&fa, &fb], &[false, true])[0].justify, JustifyAll);
-        assert_eq!(story_paras(&[&fa, &fb], &[false, false])[0].justify, Left);
-    }
-
-    #[test]
-    fn short_story_leaves_later_frames_empty_with_a_style() {
-        let db = FontDb::global();
-        let (a, b) = (frame(0.0), frame(200.0));
-        let st = CharStyle { size: 20.0, ..Default::default() };
-        let parts: Vec<Vec<TextRun>> =
-            distribute(db, &[&a, &b], &[TextRun { text: "Hi".into(), style: st, inline: None }], &[]).into_iter().map(|s| s.runs).collect();
-        assert_eq!(parts[0][0].text, "Hi");
-        assert_eq!((parts[1][0].text.as_str(), parts[1][0].style.size), ("", 20.0));
-    }
-}
+mod tests;

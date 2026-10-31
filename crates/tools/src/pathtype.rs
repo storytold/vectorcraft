@@ -3,7 +3,8 @@
 //! type begins or ends along its path; dragging the centre bracket slides the type along the path
 //! (its brackets with it) and, dragged across the path, flips the type to the other side
 //! (Cmd/Ctrl held: it only slides). Each drag is one undo step of `type.pathOptions`. The tools
-//! draw the brackets from the same geometry they hit-test.
+//! draw the brackets from the same geometry they hit-test. With more than 10,000 type on a path
+//! objects selected, they neither draw nor hit-test any bracket.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, TextKind};
@@ -19,6 +20,13 @@ const DOWN_PX: f64 = 4.0;
 const FOOT_PX: f64 = 4.0;
 /// How far past the path (screen px) the centre bracket goes before the type flips.
 const FLIP_PX: f64 = 6.0;
+/// The most points the tools draw for the brackets of a selection, the same number as the canvas's
+/// limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in `crates/ui-egui/src/canvas.rs`).
+/// Past it the tools neither draw nor hit-test any bracket.
+const MAX_POINTS: usize = 100_000;
+/// The points the tools draw for one type on a path's brackets: the two ends of each of the five
+/// lines.
+const POINTS_EACH: usize = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bracket {
@@ -110,6 +118,13 @@ impl Brackets {
     }
 }
 
+/// Whether the selection holds more than [`MAX_POINTS`] / [`POINTS_EACH`] type on a path objects,
+/// in perspective or not (counting stops there).
+fn too_many(cx: &ToolContext) -> bool {
+    let on_path = |id: &&NodeId| cx.doc.node(**id).is_some_and(|n| matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, TextKind::OnPath { .. })));
+    cx.selection.objects.iter().filter(on_path).nth(MAX_POINTS / POINTS_EACH).is_some()
+}
+
 /// The selected type on a path's bracket under `p`, if any.
 fn bracket_at(cx: &ToolContext, p: Point) -> Option<(Brackets, Bracket)> {
     Brackets::of(cx).into_iter().find_map(|b| {
@@ -120,11 +135,14 @@ fn bracket_at(cx: &ToolContext, p: Point) -> Option<(Brackets, Bracket)> {
 
 /// Is `p` over a bracket of the selected type on a path?
 pub fn over_bracket(cx: &ToolContext, p: Point) -> bool {
-    bracket_at(cx, p).is_some()
+    !too_many(cx) && bracket_at(cx, p).is_some()
 }
 
 /// The brackets of the selected type on a path, in their layer's colour.
 pub fn overlays(cx: &ToolContext) -> Vec<Overlay> {
+    if too_many(cx) {
+        return vec![];
+    }
     let mut out = vec![];
     for b in Brackets::of(cx) {
         let color = cx.doc.layer_color(b.id);
@@ -149,6 +167,9 @@ pub struct BracketDrag {
 impl BracketDrag {
     /// Start a drag when the press `ev` is on a bracket of the selected type on a path.
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
+        if too_many(cx) {
+            return None;
+        }
         let (brackets, which) = bracket_at(cx, ev.pos)?;
         let grab = brackets.fraction_at(ev.pos)?;
         Some(Self { brackets, which, start: ev.pos, grab, began: false })
@@ -205,6 +226,11 @@ impl BracketDrag {
         Value::Object(m)
     }
 
+    /// The drag has left the click: the bracket is moving along the path.
+    pub fn adjusting(&self) -> bool {
+        self.began
+    }
+
     pub fn finish(self) -> Vec<Action> {
         if self.began { vec![Action::Commit] } else { vec![] }
     }
@@ -214,8 +240,8 @@ impl BracketDrag {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use crate::{Mods, PointerKind};
-    use vectorcraft_doc::Selection;
+    use crate::{Cursor, Mods, PointerKind, Tool};
+    use vectorcraft_doc::{Document, Selection};
 
     fn selected(id: NodeId) -> Selection {
         let mut s = Selection::default();
@@ -258,6 +284,50 @@ mod tests {
         let (d2, area) = doc_with_area_type();
         let s2 = selected(area);
         assert!(Brackets::of(&crate::testutil::cx(&d2, &s2, &p)).is_empty());
+    }
+
+    /// 10,000 selected type on a path objects keep their brackets (100,000 points); with one more,
+    /// the Selection and Direct Selection tools neither draw them nor start a drag or show the
+    /// bracket cursor over them.
+    #[test]
+    fn more_than_ten_thousand_type_on_a_path_objects_show_no_brackets() {
+        let (mut d, id) = doc_with_path_type();
+        let l = d.layers[0].id;
+        let kind = d.node(id).unwrap().kind.clone();
+        let mut s = selected(id);
+        let add = |d: &mut Document, s: &mut Selection, n: usize| {
+            for _ in 0..n {
+                let copy = d.alloc_id();
+                d.insert(Some(l), usize::MAX, vectorcraft_doc::Node::new(copy, kind.clone())).unwrap();
+                s.add(copy);
+            }
+        };
+        add(&mut d, &mut s, 9_999);
+        let p = paint();
+        // On the start bracket of every copy (they all lie on the same path).
+        let at = Point::new(160.0, 290.0);
+        let press = PointerEvent::new(PointerKind::Down, at.x, at.y);
+        let lines = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Line { .. })).count();
+        let tools = |cx: &ToolContext| -> Vec<(usize, Cursor)> {
+            let select = crate::select::SelectionTool::default();
+            let direct = crate::direct::DirectSelectionTool::new(false);
+            let tools: [&dyn Tool; 2] = [&select, &direct];
+            tools.iter().map(|t| (lines(&t.overlays(cx)), t.cursor(cx, at, Mods::default()))).collect()
+        };
+        {
+            let cx = cx(&d, &s, &p);
+            assert_eq!(overlays(&cx).len(), 50_000);
+            assert!(over_bracket(&cx, at) && BracketDrag::hit(&cx, &press).is_some());
+            assert_eq!(tools(&cx), vec![(50_000, Cursor::PathBracket); 2]);
+        }
+        add(&mut d, &mut s, 1);
+        let cx = cx(&d, &s, &p);
+        assert!(overlays(&cx).is_empty());
+        assert!(!over_bracket(&cx, at) && BracketDrag::hit(&cx, &press).is_none());
+        for (n, cursor) in tools(&cx) {
+            assert_eq!(n, 0);
+            assert_ne!(cursor, Cursor::PathBracket);
+        }
     }
 
     #[test]

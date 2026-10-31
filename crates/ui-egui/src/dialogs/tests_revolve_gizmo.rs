@@ -2,6 +2,7 @@
 use super::*;
 use crate::{dialogs, theme};
 use egui::{Event, Modifiers, PointerButton};
+use vectorcraft_effects::revolve_options;
 use vectorcraft_engine::Session;
 
 struct Harness {
@@ -150,8 +151,8 @@ fn free_orbit_and_light_drag_update_the_canvas_and_escape_restores_only_the_gest
     let p = light + vec2(20.0, 25.0);
     h.frame(vec![Event::PointerMoved(p)], Modifiers::NONE);
     h.release(p, Modifiers::NONE);
-    assert_ne!(h.value("lightAzimuth"), -45.0);
-    assert_ne!(h.value("lightElevation"), 45.0);
+    assert_ne!(h.value("lightRotation"), before["lightRotation"].as_f64().unwrap());
+    assert_ne!(h.value("lightHeight"), 30.0);
     h.frame(vec![escape()], Modifiers::NONE);
     assert!(h.app.ui.dialog.is_none() && !h.app.session.in_interaction());
 }
@@ -176,7 +177,7 @@ fn preview_off_has_no_gizmo_and_edge_on_rings_remain_finite() {
 
 #[test]
 fn light_rings_adjust_only_their_angle_and_snap_without_rotating_the_object() {
-    for (axis, key) in ["lightAzimuth", "lightElevation"].iter().enumerate() {
+    for (axis, key) in ["lightRotation", "lightHeight"].iter().enumerate() {
         let mut h = Harness::new();
         h.app.ui.dialog.as_mut().unwrap().fields.insert("__gizmo".into(), json!("light"));
         h.settle();
@@ -191,7 +192,7 @@ fn light_rings_adjust_only_their_angle_and_snap_without_rotating_the_object() {
         for unchanged in ["rotationX", "rotationY", "rotationZ", "lightIntensity", "ambient"] {
             assert_eq!(h.value(unchanged), before[unchanged].as_f64().unwrap());
         }
-        let other = if axis == 0 { "lightElevation" } else { "lightAzimuth" };
+        let other = if axis == 0 { "lightHeight" } else { "lightRotation" };
         assert_eq!(h.value(other), before[other].as_f64().unwrap());
         let state = h.app.session.active().unwrap();
         let node = state.doc.node(state.selection.objects[0]).unwrap();
@@ -205,7 +206,7 @@ fn light_handle_preserves_the_back_side_and_escape_cancel_and_undo_restore_chang
     let original = h.app.session.active().unwrap().interaction.as_ref().unwrap().doc.clone();
     let d = h.app.ui.dialog.as_mut().unwrap();
     d.fields.insert("__gizmo".into(), json!("light"));
-    d.fields.insert("lightAzimuth".into(), json!(135.0));
+    d.fields.insert("lightBehind".into(), json!(true));
     h.settle();
     let before = super::super::form::params(h.app.ui.dialog.as_ref().unwrap());
     let light = light_position(h.geometry(), revolve_options(&before));
@@ -213,12 +214,12 @@ fn light_handle_preserves_the_back_side_and_escape_cancel_and_undo_restore_chang
     let to = light + vec2(-15.0, 12.0);
     h.frame(vec![Event::PointerMoved(to)], Modifiers::NONE);
     assert!(revolve_options(&super::super::form::params(h.app.ui.dialog.as_ref().unwrap())).light_direction()[2] < 0.0);
-    assert_ne!(h.value("lightElevation"), 45.0);
+    assert_ne!(h.value("lightHeight"), 30.0);
     h.frame(vec![escape()], Modifiers::NONE);
     h.release(to, Modifiers::NONE);
     assert_eq!(super::super::form::params(h.app.ui.dialog.as_ref().unwrap()), before);
     let state = h.app.session.active().unwrap();
-    assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["lightAzimuth"], before["lightAzimuth"]);
+    assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["lightHeight"], before["lightHeight"]);
     // A second gesture is kept by OK, and the whole dialog is one undo step.
     let from = h.geometry().light_labels()[0].center();
     h.start(from, Modifiers::NONE);
@@ -230,7 +231,7 @@ fn light_handle_preserves_the_back_side_and_escape_cancel_and_undo_restore_chang
 }
 
 #[test]
-fn light_elevation_is_bounded_and_shading_off_disables_the_light_gizmo() {
+fn light_height_is_bounded_and_shading_off_disables_the_light_gizmo() {
     let mut h = Harness::new();
     h.app.ui.dialog.as_mut().unwrap().fields.insert("__gizmo".into(), json!("light"));
     h.settle();
@@ -238,7 +239,7 @@ fn light_elevation_is_bounded_and_shading_off_disables_the_light_gizmo() {
     h.start(from, Modifiers::NONE);
     h.frame(vec![Event::PointerMoved(from - vec2(0.0, 400.0))], Modifiers::NONE);
     h.release(from - vec2(0.0, 400.0), Modifiers::NONE);
-    assert_eq!(h.value("lightElevation"), 90.0);
+    assert_eq!(h.value("lightHeight"), 90.0);
     h.app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!(false));
     h.settle();
     let before = super::super::form::params(h.app.ui.dialog.as_ref().unwrap());
@@ -247,4 +248,35 @@ fn light_elevation_is_bounded_and_shading_off_disables_the_light_gizmo() {
     h.frame(vec![Event::PointerMoved(from + vec2(40.0, 0.0))], Modifiers::NONE);
     h.release(from + vec2(40.0, 0.0), Modifiers::NONE);
     assert_eq!(super::super::form::params(h.app.ui.dialog.as_ref().unwrap()), before);
+}
+
+#[test]
+fn selected_light_gizmo_edits_only_that_light_and_escape_restores_the_list() {
+    let mut h = Harness::new();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("__gizmo".into(), json!("light"));
+    d.fields.insert("__light".into(), json!(1));
+    d.fields.insert(
+        "lights".into(),
+        json!([
+            {"color":"#ff0000","rotation":30,"height":45,"intensity":60},
+            {"color":"#0000ff","rotation":-45,"height":30,"intensity":50}
+        ]),
+    );
+    h.settle();
+    let before = h.app.ui.dialog.as_ref().unwrap().fields["lights"].clone();
+    let g = h.geometry();
+    let p = g.light_labels()[0].center();
+    h.start(p, Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(p + vec2(60.0, 0.0))], Modifiers::NONE);
+    h.frame(vec![Event::PointerMoved(p + vec2(80.0, 0.0))], Modifiers::NONE);
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["lights"][0], before[0]);
+    assert_ne!(d.fields["lights"][1]["rotation"], before[1]["rotation"]);
+    h.frame(
+        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }],
+        Modifiers::NONE,
+    );
+    h.release(p + vec2(80.0, 0.0), Modifiers::NONE);
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["lights"], before);
 }

@@ -11,4 +11,6 @@ StartupNotify=true
 StartupWMClass=ai.storyteller.vectorcraft
 Categories=Graphics;2DGraphics;VectorGraphics;
 Keywords=vector;illustration;svg;pdf;drawing;bezier;
-MimeType=image/svg+xml;application/pdf;
+# MimeType lists the formats File › Open reads that Info.plist.in declares for macOS. The type of .ai
+# files is shared-mime-info's application/illustrator (brand-ok).
+MimeType=image/svg+xml;application/pdf;application/x-vectorcraft;image/svg+xml-compressed;application/illustrator;application/x-ai-template;image/png;image/jpeg;image/gif;image/webp;image/tiff;image/bmp;application/x-vectorcraft-template;image/vnd.dxf;image/emf;image/wmf;image/x-eps;application/x-affinity;

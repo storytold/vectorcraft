@@ -8,11 +8,30 @@ pub use kurbo::{Cap, Join};
 use linesweeper::topology::{ContourIdx, Contours};
 
 use crate::boolean::{Arrangement, DEFAULT_PRECISION, Tidy, all_contours_to_path, contours_to_path, fill_bezpath, normalize_bez};
+use crate::edit::remove_redundant_points;
 
 /// Flattening/fit tolerance handed to kurbo's stroker.
 const STROKE_TOL: f64 = 1e-3;
 
+/// Drop collinear and coincident spine vertices before stroking (#3446). Uses `tol` only for
+/// redundancy; does not simplify or refit the spine.
+fn compact_stroke_spine(bp: &BezPath, tol: f64) -> BezPath {
+    if bp.elements().is_empty() {
+        return BezPath::new();
+    }
+    let tol = if tol.is_finite() && tol > 0.0 { tol } else { STROKE_TOL };
+    remove_redundant_points(&PathData::from_bezpath(bp), tol).to_bezpath()
+}
+
 fn stroke_bez(bp: &BezPath, width: f64, cap: Cap, join: Join, miter_limit: f64) -> BezPath {
+    let spine = compact_stroke_spine(bp, STROKE_TOL);
+    let style = Stroke::new(width).with_join(join).with_caps(cap).with_miter_limit(miter_limit.max(1.0));
+    close_all(&kurbo::stroke(spine.iter(), &style, &StrokeOpts::default(), STROKE_TOL))
+}
+
+/// Like [`stroke_bez`] but without [`compact_stroke_spine`] (regression baseline in unit tests).
+#[cfg(test)]
+fn stroke_bez_without_spine_compact(bp: &BezPath, width: f64, cap: Cap, join: Join, miter_limit: f64) -> BezPath {
     let style = Stroke::new(width).with_join(join).with_caps(cap).with_miter_limit(miter_limit.max(1.0));
     close_all(&kurbo::stroke(bp.iter(), &style, &StrokeOpts::default(), STROKE_TOL))
 }
@@ -75,13 +94,15 @@ pub fn stroke_region(outlines: &[BezPath]) -> PathData {
 
 /// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
 /// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
-/// stroke of width `2|delta|` (butt caps).
+/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
+/// offset as a closed one.
 pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
     if !delta.is_finite() || path.is_empty() {
         return PathData::default();
     }
-    let closed = PathData::new(path.subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
-    let open: Vec<SubPath> = path.subpaths.iter().filter(|s| !s.closed && s.anchors.len() > 1).cloned().collect();
+    let subpaths: Vec<SubPath> = path.subpaths.iter().map(close_if_ends_meet).collect();
+    let closed = PathData::new(subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
+    let open: Vec<SubPath> = subpaths.into_iter().filter(|s| !s.closed && s.anchors.len() > 1).collect();
     let d = delta.abs();
     let fill = fill_bezpath(&closed);
     let ring = if d > 0.0 { stroke_bez(&closed.to_bezpath(), 2.0 * d, Cap::Butt, join, miter_limit) } else { BezPath::new() };
@@ -107,6 +128,23 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     }
     let keep = (0..spurious.len()).filter(|&i| !has_marked_ancestor(&c, i, &spurious)).map(ContourIdx);
     contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION))
+}
+
+/// An open subpath of three or more anchors whose last anchor lies within 1e-6 of its first (the
+/// test Object → Path → Join applies to one path) as a closed subpath: the last anchor is merged
+/// into the first, which takes its in-handle. Any other subpath is returned unchanged.
+fn close_if_ends_meet(sp: &SubPath) -> SubPath {
+    let mut sp = sp.clone();
+    if !sp.closed
+        && sp.anchors.len() > 2
+        && sp.anchors.first().zip(sp.anchors.last()).is_some_and(|(f, l)| f.p.distance(l.p) < 1e-6)
+        && let Some(last) = sp.anchors.pop()
+        && let Some(first) = sp.anchors.first_mut()
+    {
+        first.h_in = last.h_in;
+        sp.closed = true;
+    }
+    sp
 }
 
 fn has_marked_ancestor(c: &Contours, mut i: usize, marked: &[bool]) -> bool {
@@ -216,5 +254,57 @@ mod tests {
         let (before, after) = (crate::area(&path, FillRule::NonZero), crate::area(&out, FillRule::NonZero));
         assert_eq!(out.subpaths.len(), 1);
         assert!(after > before, "{before} → {after}");
+    }
+
+    fn outline_max_deviation(a: &BezPath, b: &BezPath) -> f64 {
+        use kurbo::ParamCurve;
+        use vectorcraft_geom::Point;
+        let pa = PathData::from_bezpath(a);
+        let pb = PathData::from_bezpath(b);
+        let mut worst: f64 = 0.0;
+        for (src, dst) in [(a, &pb), (b, &pa)] {
+            for seg in src.segments() {
+                for i in 0..=12 {
+                    let p = seg.eval(i as f64 / 12.0);
+                    let pt = Point::new(p.x, p.y);
+                    worst = worst.max(dst.nearest(pt).unwrap().4);
+                }
+            }
+        }
+        worst
+    }
+
+    #[test]
+    fn compact_stroke_spine_drops_colinear_points_without_moving_curved_outlines() {
+        let width = 10.0;
+        let cap = Cap::Round;
+        let join = Join::Round;
+        let miter = 4.0;
+        // Dense colinear spine: compact outline should match the uncompacted one closely.
+        let dense: Vec<vectorcraft_geom::Point> = (0..=40).map(|i| vectorcraft_geom::Point::new(i as f64 * 2.5, 50.0)).collect();
+        let dense_path = PathData::single(SubPath::polyline(&dense, false));
+        let dense_bez = dense_path.to_bezpath();
+        let compact = stroke_bez(&dense_bez, width, cap, join, miter);
+        let raw = stroke_bez_without_spine_compact(&dense_bez, width, cap, join, miter);
+        assert!(outline_max_deviation(&compact, &raw) <= 1e-3, "colinear compaction must not refit the stroke outline");
+        let sparse =
+            PathData::single(SubPath::polyline(&[vectorcraft_geom::Point::new(0.0, 50.0), vectorcraft_geom::Point::new(100.0, 50.0)], false));
+        let sparse_outline = outline_stroke(&sparse, width, cap, join, miter);
+        let compact_region = stroke_region(&[compact]);
+        assert!(
+            outline_max_deviation(&compact_region.to_bezpath(), &sparse_outline.to_bezpath()) <= 1e-3,
+            "compacted colinear spine should outline like the endpoints alone"
+        );
+        // Sampled arc: only redundant vertices are removed; outline must track the raw stroke.
+        let arc: Vec<vectorcraft_geom::Point> = (0..=32)
+            .map(|i| {
+                let t = i as f64 / 32.0 * std::f64::consts::PI;
+                vectorcraft_geom::Point::new(50.0 + 50.0 * t.cos(), 50.0 + 8.0 * t.sin())
+            })
+            .collect();
+        let arc_bez = PathData::single(SubPath::polyline(&arc, false)).to_bezpath();
+        let arc_compact = stroke_bez(&arc_bez, width, cap, join, miter);
+        let arc_raw = stroke_bez_without_spine_compact(&arc_bez, width, cap, join, miter);
+        assert!(outline_max_deviation(&arc_compact, &arc_raw) <= 1e-3, "curved spine compaction must not refit the stroke outline");
     }
 }

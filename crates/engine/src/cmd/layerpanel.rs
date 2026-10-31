@@ -9,8 +9,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
-use super::layer::{make_layer, row_roots, rows_param};
-use super::*;
+use super::layer::{NewLayers, row_roots, rows_param};
+use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, id_param, ok, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge Selected",
             ["Window", "Layers"],
             None,
-            "{ids?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. Every selected object left hidden or locked, such as one merged into a hidden or locked layer, is deselected (the key object too). One undo step → {id}",
+            "{ids?|id?} (default: the highlighted rows) merge two or more rows into the layer listed (highlighted) last: the other layers' contents and the other rows move into it, keeping their stacking order, and the emptied layers go. Every selected object left hidden or locked, such as one merged into a hidden or locked layer, is deselected (the key object too). One undo step → {id}",
             has_doc,
             merge
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Order",
             ["Window", "Layers"],
             None,
-            "{ids?} (default: the highlighted rows) reverse the stacking order of two or more rows that share a layer or group; each keeps the places the others held. One undo step",
+            "{ids?|id?} (default: the highlighted rows) reverse the stacking order of two or more rows that share a layer or group; each keeps the places the others held. One undo step",
             has_doc,
             reverse
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Template",
             ["Window", "Layers"],
             None,
-            "{ids?, on?: bool (default: toggle the first)} make layers templates (locked, dimmed, left out of print and export) or ordinary layers again (layer.setProps template) → {on}",
+            "{ids?|id?, on?: bool (default: toggle the first)} make layers templates (locked, dimmed, left out of print and export) or ordinary layers again (layer.setProps template) → {on}",
             has_doc,
             template
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Hide Others",
             ["Window", "Layers"],
             None,
-            "{ids?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
+            "{ids?|id?} hide every top-level layer but those holding the highlighted rows (else the current layer), which show. One undo step → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Visible, false, "layer.hideOthers")
         ),
@@ -96,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Others",
             ["Window", "Layers"],
             None,
-            "{ids?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
+            "{ids?|id?} turn Preview off (outline view) for every top-level layer but those holding the highlighted rows (else the current layer), which preview → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Preview, false, "layer.outlineOthers")
         ),
@@ -114,7 +114,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Lock Others",
             ["Window", "Layers"],
             None,
-            "{ids?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
+            "{ids?|id?} lock every top-level layer but those holding the highlighted rows (else the current layer), which unlock → {count}",
             has_doc,
             |s, p| others(s, p, Flag::Locked, true, "layer.lockOthers")
         ),
@@ -206,7 +206,7 @@ fn kept_layers(s: &Session, p: &Value, command: &str) -> Result<HashSet<NodeId>>
 /// on a hidden layer's eye shows just that layer (#1158).
 fn others(s: &mut Session, p: &Value, flag: Flag, v: bool, command: &str) -> Result<Value> {
     let keep = kept_layers(s, p, command)?;
-    let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, !keep.contains(&l.id) == v)).collect();
+    let changes = s.doc()?.doc.layers.iter().map(|l| (l.id, keep.contains(&l.id) != v)).collect();
     set_flag(s, changes, flag, flag.label(v))
 }
 
@@ -225,7 +225,7 @@ fn template(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(Node::is_layer)).collect();
     let Some(first) = ids.first().and_then(|id| d.node(*id)) else { return Err(bad("layer.template", "select a layer")) };
-    let on = bool_or(p, "on", !first.is_template());
+    let on = switch_or(p, "on", !first.is_template(), "layer.template")?;
     s.execute("layer.setProps", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "template": on}))?;
     Ok(json!({ "on": on }))
 }
@@ -234,28 +234,23 @@ fn template(s: &mut Session, p: &Value) -> Result<Value> {
 /// another) into layer `into`, keeping the document's stacking order, then delete the emptied
 /// layers.
 fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
+    let listed: HashSet<NodeId> = others.iter().copied().collect();
     let own: Vec<NodeId> =
-        d.node(into).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).filter(|c| !others.contains(c)).collect()).unwrap_or_default();
-    let mut moved = vec![];
+        d.node(into).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).filter(|c| !listed.contains(c)).collect()).unwrap_or_default();
+    let (mut moved, mut emptied) = (vec![], vec![]);
     for id in others {
         let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
         if n.is_layer() {
             moved.extend(n.children().into_iter().flatten().map(|c| c.id));
+            emptied.push(*id);
         } else {
             moved.push(*id);
         }
     }
     // Where everything is now: the merged layer stacks its contents in this order.
     let keys: HashMap<NodeId, Vec<usize>> = own.iter().chain(&moved).filter_map(|id| Some((*id, d.index_path(*id)?))).collect();
-    let mut taken = vec![];
-    for id in &moved {
-        taken.push(d.remove(*id)?);
-    }
-    for id in others {
-        if d.node(*id).is_some() {
-            d.remove(*id)?;
-        }
-    }
+    let taken = d.remove_many(&moved)?;
+    d.remove_many(&emptied)?;
     let ch = d.children_mut(Some(into))?;
     let mut all = std::mem::take(ch);
     all.extend(taken);
@@ -276,8 +271,19 @@ fn merge(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.len() < 2 {
         return Err(bad(C, "highlight two or more rows to merge"));
     }
-    let into =
-        ids.iter().rev().copied().find(|id| d.node(*id).is_some_and(Node::is_layer)).ok_or_else(|| bad(C, "highlight a layer to merge into"))?;
+    // The last highlighted layer that is not inside another highlighted row: with a layer and its
+    // sublayer both highlighted (Select All in the panel), the sublayer travels with its layer
+    // instead of becoming the target (#2383).
+    let roots: HashSet<NodeId> = row_roots(d, &ids).into_iter().collect();
+    let is_layer = |id: &NodeId| d.node(*id).is_some_and(Node::is_layer);
+    let into = ids
+        .iter()
+        .rev()
+        .copied()
+        .filter(is_layer)
+        .find(|id| roots.contains(id))
+        .or_else(|| ids.iter().rev().copied().find(is_layer))
+        .ok_or_else(|| bad(C, "highlight a layer to merge into"))?;
     let around = d.ancestry(into).unwrap_or_default();
     // (Rows inside the target layer merge too: only rows inside other listed rows go with those.)
     let rest: Vec<NodeId> = ids.iter().copied().filter(|id| *id != into).collect();
@@ -312,9 +318,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && l.visible && !l.is_template()).map(|l| l.id).collect();
     let hidden: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && !l.visible && !l.is_template()).map(|l| l.id).collect();
     s.edit("Flatten Artwork", |d, sel| {
-        for h in &hidden {
-            d.remove(*h)?;
-        }
+        d.remove_many(&hidden)?;
         // Hidden layers are discarded with their guides.
         d.drop_guides_of_deleted_layers(sel);
         merge_into(d, into, &others)?;
@@ -330,7 +334,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.releaseToLayers";
-    let build = bool_or(p, "build", false);
+    let build = switch_or(p, "build", false, C)?;
     let st = s.doc()?;
     let id = match id_param(p, "id") {
         Some(id) => id,
@@ -352,38 +356,41 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let new = s.edit(if build { "Release to Layers (Build)" } else { "Release to Layers (Sequence)" }, |d, sel| {
         // A group's objects go into sublayers of the layer holding it, where it was.
-        let (parent, mut index) = if group {
+        let (parent, index) = if group {
             let layer = d.layer_containing(id).ok_or(EngineError::NoNode(id))?;
             let (par, i, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             if par == Some(layer) { (layer, i) } else { (layer, usize::MAX) }
         } else {
             (id, 0)
         };
-        let mut originals = vec![];
-        for o in &objects {
-            originals.push(Arc::unwrap_or_clone(d.remove(*o)?));
-        }
+        let originals = d.remove_many(&objects)?;
         if group {
             d.remove(id)?;
         }
-        let mut new = vec![];
+        let mut names = NewLayers::of(d);
+        let mut layers = Vec::with_capacity(originals.len());
         let last = originals.len().saturating_sub(1);
         for k in 0..originals.len() {
-            let mut layer = make_layer(d, None);
-            let lid = layer.id;
-            let held: Vec<Node> = if build {
+            let mut layer = names.make(d, None);
+            let held: Vec<Arc<Node>> = if build {
                 // Copies of the objects below and itself; the top layer keeps the originals.
-                (0..=k).filter_map(|j| originals.get(j)).map(|o| if k == last { o.clone() } else { d.reid(o) }).collect()
+                (0..=k).filter_map(|j| originals.get(j)).map(|o| if k == last { o.clone() } else { Arc::new(d.reid(o)) }).collect()
             } else {
                 originals.get(k).cloned().into_iter().collect()
             };
             if let Some(ch) = layer.children_mut() {
-                ch.extend(held.into_iter().map(Arc::new));
+                ch.extend(held);
             }
-            let at = if group { index } else { index.min(d.children(Some(parent)).map_or(0, Vec::len)) };
-            d.insert(Some(parent), at, layer)?;
-            index = at.saturating_add(1);
-            new.push(lid);
+            names.add(&layer);
+            layers.push(Arc::new(layer));
+        }
+        let new: Vec<NodeId> = layers.iter().map(|l| l.id).collect();
+        let ch = d.children_mut(Some(parent))?;
+        let at = index.min(ch.len());
+        ch.splice(at..at, layers);
+        // Copied type whose layout caches `reid` dropped has them again.
+        if build {
+            super::typecmd::refresh_bounds_of(d, &new);
         }
         sel.prune(d);
         Ok(new)

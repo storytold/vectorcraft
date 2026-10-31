@@ -92,7 +92,8 @@ pub struct FolderReport {
 }
 
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
-/// reported and skipped; the others still load.
+/// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
+/// which installs only once the user agrees.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()))
@@ -114,6 +115,10 @@ pub fn load_folder_where(dir: &std::path::Path, allow: impl Fn(&std::path::Path)
             continue;
         }
         match load_file(&f, Limits::default()) {
+            // A heavy plug-in installs once the user agrees, which loading a folder doesn't ask.
+            Ok(p) if p.manifest().budget == crate::Budget::Heavy => {
+                report.failed.push((f.display().to_string(), "asks for a heavy budget, which the user allows when installing it on its own".into()));
+            }
             Ok(p) => report.loaded.push(install(p).id().to_string()),
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
         }

@@ -1,8 +1,9 @@
-//! Artboard rotation and light controls for the active Revolve dialog. Gestures edit fields;
+//! Artboard rotation and light controls for the active 3D effect dialog (Extrude & Bevel, Revolve,
+//! Inflate, Rotate). Gestures edit fields;
 //! the existing effect preview applies commands and owns OK, Cancel and undo.
 use egui::{Align2, FontId, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
 use serde_json::json;
-use vectorcraft_effects::{REVOLVE, revolve_options};
+use vectorcraft_effects::REVOLVE;
 use vectorcraft_geom::Point;
 use vectorcraft_three_d::Revolve;
 
@@ -12,7 +13,7 @@ const KEYS: [&str; 3] = ["rotationX", "rotationY", "rotationZ"];
 const SAMPLES: usize = 96;
 
 pub(crate) fn active(d: &Dialog) -> bool {
-    d.kind == "effect" && d.str("__effect") == REVOLVE
+    d.kind == "effect" && vectorcraft_effects::is_three_d(&d.str("__effect"))
 }
 
 pub(crate) fn lighting(d: &Dialog) -> bool {
@@ -29,8 +30,9 @@ pub(crate) fn hint(d: &Dialog) -> &'static str {
     }
 }
 
+/// Temp-memory key for the revolve gizmo drag state.
 fn drag_id() -> Id {
-    Id::new("revolve-gizmo-drag")
+    Id::unique("revolve-gizmo-drag")
 }
 
 pub(crate) fn dragging(ctx: &egui::Context) -> bool {
@@ -84,8 +86,10 @@ impl Geometry {
         let node = state.doc.node(*state.selection.objects.first()?)?;
         let bounds = node.geometric_bounds()?;
         let xf = Xf::new(app.canvas_rect?, app.view()?);
-        let options = revolve_options(&super::form::params(d));
-        let center = xf.to_screen(options.rotation_origin(bounds));
+        let options = super::revolve::light_options(d);
+        // Revolve turns about its axis; the others about the centre of the art's bounds.
+        let origin = if d.str("__effect") == REVOLVE { options.rotation_origin(bounds) } else { bounds.center() };
+        let center = xf.to_screen(origin);
         if !center.x.is_finite() || !center.y.is_finite() || !xf.rect.contains(center) {
             return None;
         }
@@ -140,7 +144,7 @@ impl Geometry {
         let mut best = None;
         let mut distance = 9.0;
         for (axis, ring) in self.light_rings(options).iter().enumerate() {
-            let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (-std::f32::consts::FRAC_PI_2, std::f32::consts::PI) };
+            let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (0.0, std::f32::consts::FRAC_PI_2) };
             for i in 0..SAMPLES {
                 let a = start + i as f32 * span / SAMPLES as f32;
                 let (from, to) = (self.center + ring.point(a), self.center + ring.point(a + span / SAMPLES as f32));
@@ -179,6 +183,11 @@ fn wrap(n: f64, snap: bool) -> f64 {
     (n + 180.0).rem_euclid(360.0) - 180.0
 }
 
+/// A Height, 0° to 90°, on 15° steps with Shift.
+fn snap_height(height: f64, snap: bool) -> f64 {
+    (if snap { (height / 15.0).round() * 15.0 } else { height }).clamp(0.0, 90.0)
+}
+
 pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
     let light_mode = lighting(d);
     if !d.bool("preview") || (light_mode && !d.bool("shade")) {
@@ -193,10 +202,10 @@ pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
             rect = rect.union(label.expand(2.0));
         }
     }
-    egui::Area::new(Id::new("revolve-gizmo-area")).order(egui::Order::Foreground).fixed_pos(rect.min).movable(false).show(ctx, |ui| {
+    egui::Area::new(Id::unique("revolve-gizmo-area")).order(egui::Order::Foreground).fixed_pos(rect.min).movable(false).show(ctx, |ui| {
         ui.set_clip_rect(geometry.xf.rect);
         let response = ui.allocate_rect(rect.intersect(geometry.xf.rect), Sense::drag());
-        let options = revolve_options(&super::form::params(d));
+        let options = super::revolve::light_options(d);
         let light = light_position(geometry, options);
         let hovered = response
             .hovered()
@@ -259,27 +268,21 @@ pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
                         }
                     }
                     Mode::Light => {
-                        let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
+                        let start = super::revolve::light_options(&Dialog::new("effect", serde_json::Value::Object(current.fields.clone())));
                         let projected = light_position(geometry, start) + (p - current.origin);
                         let point = geometry.xf.delta_to_doc(projected - geometry.center) * (geometry.xf.zoom / f64::from(geometry.radius * 1.4));
-                        let [azimuth, elevation] = start.light_at_on_side(Point::new(point.x, point.y));
-                        d.fields.insert("lightAzimuth".into(), json!(wrap(azimuth, snap)));
-                        d.fields.insert(
-                            "lightElevation".into(),
-                            json!((if snap { (elevation / 15.0).round() * 15.0 } else { elevation }).clamp(-90.0, 90.0)),
-                        );
+                        let [rotation, height] = start.light_at_on_side(Point::new(point.x, point.y));
+                        super::revolve::set_light_value(d, "lightRotation", json!(wrap(rotation, snap)));
+                        super::revolve::set_light_value(d, "lightHeight", json!(snap_height(height, snap)));
                     }
                     Mode::LightRing { axis } => {
                         let delta = geometry.xf.delta_to_doc(p - current.origin) * geometry.xf.zoom;
-                        let start = revolve_options(&serde_json::Value::Object(current.fields.clone()));
+                        let start = super::revolve::light_options(&Dialog::new("effect", serde_json::Value::Object(current.fields.clone())));
                         if *axis == 0 {
-                            d.fields.insert("lightAzimuth".into(), json!(wrap(start.light_azimuth + delta.x * 0.6, snap)));
+                            // Right turns the light counterclockwise, as along the ring's foot.
+                            super::revolve::set_light_value(d, "lightRotation", json!(wrap(start.light_rotation + delta.x * 0.6, snap)));
                         } else {
-                            let elevation = start.light_elevation - delta.y * 0.6;
-                            d.fields.insert(
-                                "lightElevation".into(),
-                                json!((if snap { (elevation / 15.0).round() * 15.0 } else { elevation }).clamp(-90.0, 90.0)),
-                            );
+                            super::revolve::set_light_value(d, "lightHeight", json!(snap_height(start.light_height - delta.y * 0.6, snap)));
                         }
                     }
                 }
@@ -345,7 +348,7 @@ fn paint(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Op
     painter.circle(g.center, 8.0, t.panel.gamma_multiply(0.8), Stroke::new(1.5, t.text_dim));
     painter.line_segment([g.center - vec2(4.0, 0.0), g.center + vec2(4.0, 0.0)], Stroke::new(1.0, t.text_dim));
     painter.line_segment([g.center - vec2(0.0, 4.0), g.center + vec2(0.0, 4.0)], Stroke::new(1.0, t.text_dim));
-    let options = revolve_options(&super::form::params(d));
+    let options = super::revolve::light_options(d);
     if d.bool("__showAxis") {
         painter.line_segment(options.projected_axis(g.bounds).map(|p| g.xf.to_screen(p)), Stroke::new(1.0, t.warning));
     }
@@ -363,12 +366,12 @@ fn paint(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Op
 fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, drag: Option<&Drag>) {
     let t = Tokens::get(ui.ctx());
     let painter = ui.painter();
-    let options = revolve_options(&super::form::params(d));
+    let options = super::revolve::light_options(d);
     let radius = g.radius * 1.4;
     painter.circle_stroke(g.center, radius, Stroke::new(1.0, t.text_dim.gamma_multiply(0.3)));
     let labels = g.light_labels();
     for (axis, ring) in g.light_rings(options).iter().enumerate() {
-        let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (-std::f32::consts::FRAC_PI_2, std::f32::consts::PI) };
+        let (start, span) = if axis == 0 { (0.0, std::f32::consts::TAU) } else { (0.0, std::f32::consts::FRAC_PI_2) };
         for i in 0..SAMPLES {
             let a = start + i as f32 * span / SAMPLES as f32;
             let behind = ring.depth[0] * a.cos() + ring.depth[1] * a.sin() < -0.05;
@@ -384,7 +387,7 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
         }
         let label = labels[axis];
         painter.rect_filled(label, 4.0, if active == Some(axis) { t.hover } else { t.panel });
-        let text = if axis == 0 { tl!("Direction") } else { tl!("Elevation") };
+        let text = if axis == 0 { tl!("Rotation") } else { tl!("Height") };
         painter.text(label.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.0), t.warning);
     }
     let p = light_position(g, options);
@@ -400,7 +403,13 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     painter.circle(g.center, 4.0, t.panel, Stroke::new(1.0, t.text_dim));
     // An original sun handle. A back light is hollow; the guide's back half is dashed.
     let front = options.light_direction()[2] >= 0.0;
-    painter.circle(p, 9.0, if front { t.warning } else { t.panel }, Stroke::new(2.0, t.warning));
+    let [r, green, b] = options.light_color.map(|c| (c * 255.0).round() as u8);
+    let color = egui::Color32::from_rgb(r, green, b);
+    // Keep the themed outline and rays readable even with a dark light color.
+    painter.circle(p, 9.0, if front { color } else { t.panel }, Stroke::new(2.0, t.warning));
+    if !front {
+        painter.circle_stroke(p, 5.0, Stroke::new(2.0, color));
+    }
     for i in 0..8 {
         let angle = i as f32 * std::f32::consts::TAU / 8.0;
         let direction = vec2(angle.cos(), angle.sin());
@@ -412,7 +421,9 @@ fn paint_light(ui: &egui::Ui, d: &Dialog, g: Geometry, active: Option<usize>, dr
     painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)), 3.0, t.panel);
     painter.galley(name_pos, galley, t.warning);
     if drag.is_some() {
-        let text = format!("{} {:.1}°   {} {:.1}°", tl!("Direction"), d.f64("lightAzimuth", -45.0), tl!("Elevation"), d.f64("lightElevation", 45.0));
+        let [rotation, height] = [("lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0), ("lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1)]
+            .map(|(k, v)| d.f64(k, v));
+        let text = format!("{} {rotation:.1}°   {} {height:.1}°", tl!("Rotation"), tl!("Height"));
         let galley = painter.layout_no_wrap(text, FontId::proportional(11.5), t.text_strong);
         let pos = g.center + vec2(0.0, radius + 56.0);
         painter.rect_filled(Rect::from_center_size(pos, galley.size() + vec2(12.0, 6.0)), 4.0, t.panel);

@@ -16,6 +16,7 @@ mod defaults;
 pub mod track;
 mod warp;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -284,14 +285,32 @@ pub struct ArtBrush {
     pub scale: ArtScale,
     /// Width in percent.
     pub width: f64,
+    /// How the width varies along a stroke: `None` (Fixed) always `width`; Pressure goes from
+    /// `width` at the lightest pen pressure to [`Self::width_max`] at the heaviest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_mode: Option<Variation>,
+    /// The width at the heaviest pen pressure (%), for Pressure (`width` without one).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width_max: Option<f64>,
     pub flip_along: bool,
     pub flip_across: bool,
+    /// When true, art is placed on each run between sharp corners so folds do not overlap.
+    pub overlap: bool,
     pub colorization: Colorization,
 }
 
 impl ArtBrush {
     /// The range of the width (%).
     pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
+
+    /// The widths (%) at the lightest and the heaviest pen pressure: `width` for both unless the
+    /// width follows the pressure.
+    pub fn width_range(&self) -> (f64, f64) {
+        match self.width_mode {
+            Some(Variation::Pressure) => (self.width, self.width_max.unwrap_or(self.width)),
+            _ => (self.width, self.width),
+        }
+    }
 }
 
 impl Default for ArtBrush {
@@ -301,8 +320,11 @@ impl Default for ArtBrush {
             direction: Direction::LeftToRight,
             scale: ArtScale::Stretch,
             width: 100.0,
+            width_mode: None,
+            width_max: None,
             flip_along: false,
             flip_across: false,
+            overlap: false,
             colorization: Colorization::Tints,
         }
     }
@@ -321,6 +343,44 @@ pub enum PatternFit {
     Approximate,
 }
 
+/// What a pattern brush draws at a kind of corner it has no corner art for: no tile, or a tile
+/// made from the side tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerSource {
+    /// No corner tile: the side tiles run up to the corner.
+    None,
+    /// One side tile stretched around the corner and centered on it.
+    AutoCentered,
+    /// A side tile on each side reaching into the corner, stretched so the two meet on the
+    /// corner's diagonal.
+    AutoBetween,
+    /// A side tile on each side cut on the corner's diagonal, the two meeting like a mitered frame.
+    AutoSliced,
+    /// A side tile on each side running past the corner, the two overlapping there.
+    AutoOverlap,
+}
+
+impl CornerSource {
+    pub const ALL: [CornerSource; 5] =
+        [CornerSource::None, CornerSource::AutoCentered, CornerSource::AutoBetween, CornerSource::AutoSliced, CornerSource::AutoOverlap];
+
+    /// The id in a brush definition and in `brush.options` params.
+    pub fn id(self) -> &'static str {
+        match self {
+            CornerSource::None => "none",
+            CornerSource::AutoCentered => "autoCentered",
+            CornerSource::AutoBetween => "autoBetween",
+            CornerSource::AutoSliced => "autoSliced",
+            CornerSource::AutoOverlap => "autoOverlap",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CornerSource> {
+        CornerSource::ALL.into_iter().find(|a| a.id() == s)
+    }
+}
+
 /// Pattern brush: tiles repeated along the path, with corner and end tiles.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -330,6 +390,14 @@ pub struct PatternBrush {
     pub outer_corner: Option<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inner_corner: Option<Node>,
+    /// What the outer corners take when there is no `outer_corner` art. Without art or a source,
+    /// they take the `inner_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_source: Option<CornerSource>,
+    /// What the inner corners take when there is no `inner_corner` art. Without art or a source,
+    /// they take the `outer_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inner_source: Option<CornerSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -356,6 +424,8 @@ impl Default for PatternBrush {
             side: defaults::stitch_tile(),
             outer_corner: None,
             inner_corner: None,
+            outer_source: None,
+            inner_source: None,
             start: None,
             end: None,
             scale: 100.0,
@@ -409,6 +479,8 @@ impl Bristle {
     pub const SIZE_RANGE: (f64, f64) = (0.1, 1296.0);
     pub const LENGTH_RANGE: (f64, f64) = (25.0, 300.0);
     pub const PERCENT_RANGE: (f64, f64) = (1.0, 100.0);
+    /// The most characters `brush.new` and `brush.options` take for a new bristle brush name.
+    pub const MAX_NAME_CHARS: usize = 31;
 }
 
 impl Default for Bristle {
@@ -452,6 +524,43 @@ impl Brush {
         }
     }
 
+    /// [`Brush::art`], to change (relink the resources it uses).
+    pub fn art_mut(&mut self) -> Vec<&mut Node> {
+        match &mut self.kind {
+            BrushKind::Scatter(s) => vec![&mut s.art],
+            BrushKind::Art(a) => vec![&mut a.art],
+            BrushKind::Pattern(p) => std::iter::once(&mut p.side)
+                .chain([&mut p.outer_corner, &mut p.inner_corner, &mut p.start, &mut p.end].into_iter().flatten())
+                .collect(),
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+        }
+    }
+
+    /// A brush definition from JSON (a stored library entry or a command's params), its values
+    /// kept within their ranges ([`Brush::sanitize`]). A Hue Shift colorization without a `key`
+    /// takes the color the art's fills and strokes use most (the first of [`art_colors`]), or
+    /// black when they use no solid color.
+    pub fn from_json(mut v: serde_json::Value) -> Result<Brush, serde_json::Error> {
+        let keyless = v.get("colorization").is_some_and(|c| {
+            c.get("method").and_then(serde_json::Value::as_str) == Some("hueShift") && c.get("key").is_none_or(serde_json::Value::is_null)
+        });
+        if keyless {
+            // Read the art with the colorization field left out.
+            let mut plain = v.clone();
+            if let Some(o) = plain.as_object_mut() {
+                o.remove("colorization");
+            }
+            let b: Brush = serde_json::from_value(plain)?;
+            let key = art_colors(b.art()).first().copied().unwrap_or(vectorcraft_color::Color::BLACK);
+            if let Some(c) = v.get_mut("colorization").and_then(serde_json::Value::as_object_mut) {
+                c.insert("key".into(), serde_json::to_value(key)?);
+            }
+        }
+        let mut b: Brush = serde_json::from_value(v)?;
+        b.sanitize();
+        Ok(b)
+    }
+
     /// Keep every value of the definition within its range (definitions come from files and
     /// commands, so they are untrusted): numbers are clamped, non-numbers take the default.
     pub fn sanitize(&mut self) {
@@ -477,6 +586,11 @@ impl Brush {
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
+                // The width follows the pen's pressure or stays fixed.
+                if a.width_mode != Some(Variation::Pressure) {
+                    a.width_mode = None;
+                }
+                a.width_max = a.width_max.map(|w| within(w, ArtBrush::WIDTH_RANGE, a.width));
                 if let ArtScale::BetweenGuides { start, end } = &mut a.scale {
                     *start = within(*start, (0.0, 1.0), 0.0);
                     *end = within(*end, (0.0, 1.0), 1.0);
@@ -513,14 +627,9 @@ pub fn library(doc: &Document) -> Vec<Brush> {
 }
 
 /// Parse a stored library value (malformed entries are skipped, values kept within their
-/// ranges — see [`Brush::sanitize`]).
+/// ranges; see [`Brush::from_json`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    let parse = |b: &serde_json::Value| {
-        let mut b: Brush = serde_json::from_value(b.clone()).ok()?;
-        b.sanitize();
-        Some(b)
-    };
-    v.as_array().map(|a| a.iter().filter_map(parse).collect()).unwrap_or_default()
+    v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default()
 }
 
 /// Store `lib` as the document's brush library.
@@ -557,15 +666,16 @@ fn tolerance(scale: f64) -> f64 {
     (0.02 * scale).clamp(0.01, 0.25)
 }
 
-/// Filled art for one brushed stroke along `bp`. Pieces are in document space with id 0; their
-/// appearances carry no brushes (so they never recurse). Stroke-level opacity/blend are the
-/// caller's job (`StrokeLayer::opacity`).
-pub fn stroke_pieces(brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<Node> {
+/// Filled art for one brushed stroke along `bp`, in `doc`. Pieces are in document space with id
+/// 0, and never draw a brushed stroke (so they never recurse): their own strokes carry no brush,
+/// and what they draw by name that would draw one is left out ([`leave_out_brushed`]).
+/// Stroke-level opacity/blend are the caller's job (`StrokeLayer::opacity`).
+pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<Node> {
     let w = if stroke.width > 0.0 { stroke.width } else { 1.0 };
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
-        BrushKind::Art(a) => warp::art(a, bp, w),
+        BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke.pressure.as_ref(), &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };
@@ -573,13 +683,99 @@ pub fn stroke_pieces(brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<N
     for n in &mut out {
         colorize(n, colorization, &stroke.paint);
     }
+    leave_out_brushed(doc, &mut out, &mut Known::new());
     out
+}
+
+/// A symbol (`false`) or pattern (`true`) of a document, by name: what art draws by name.
+type Named<'a> = (bool, &'a str);
+
+/// What [`draws_brushed`] found of each symbol and pattern so far.
+type Known = HashMap<(bool, String), bool>;
+
+/// The symbol an instance draws and the patterns that paint `n` (not its children).
+fn named(n: &Node) -> impl Iterator<Item = Named<'_>> {
+    let symbol = match &n.kind {
+        NodeKind::SymbolInstance { symbol, .. } => Some((false, symbol.as_str())),
+        _ => None,
+    };
+    let patterns = vectorcraft_doc::swatches::node_paints(n).filter_map(|p| match p {
+        Paint::Pattern { pattern, .. } => Some((true, pattern.as_str())),
+        _ => None,
+    });
+    symbol.into_iter().chain(patterns)
+}
+
+/// Does drawing the symbol or pattern `def` of `doc` draw a brushed stroke: in its art, or in
+/// the art of the symbols and patterns that uses (and so on)? `known`: the answers so far.
+fn draws_brushed(doc: &Document, def: Named<'_>, known: &mut Known) -> bool {
+    let key = (def.0, def.1.to_string());
+    if let Some(&answer) = known.get(&key) {
+        return answer;
+    }
+    let art = |(pattern, name): Named<'_>| -> Vec<&Node> {
+        match pattern {
+            false => doc.symbols.iter().filter(|s| s.name == name).take(1).map(|s| &*s.art).collect(),
+            true => doc.pattern(name).map(|p| p.art.iter().map(|n| &**n).collect()).unwrap_or_default(),
+        }
+    };
+    // Without recursion, each one looked at once: they may use one another without end.
+    let (mut seen, mut stack) = (std::collections::HashSet::from([key.clone()]), art(def));
+    let mut answer = false;
+    while let Some(n) = stack.pop() {
+        if has_brush(n) {
+            answer = true;
+            break;
+        }
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        for other in named(n) {
+            if seen.insert((other.0, other.1.to_string())) {
+                stack.extend(art(other));
+            }
+        }
+    }
+    known.insert(key, answer);
+    answer
+}
+
+/// Leave out of brush pieces `nodes` what they draw by name that draws a brushed stroke
+/// ([`draws_brushed`]): such an instance goes, such a pattern paint becomes no paint. A symbol or
+/// pattern holding art stroked with the brush itself would draw the brush again, without end.
+fn leave_out_brushed(doc: &Document, nodes: &mut Vec<Node>, known: &mut Known) {
+    fn walk(doc: &Document, n: &mut Node, known: &mut Known) {
+        for paint in vectorcraft_doc::swatches::node_paints_mut(n) {
+            if let Paint::Pattern { pattern, .. } = paint
+                && draws_brushed(doc, (true, pattern.as_str()), known)
+            {
+                *paint = Paint::None;
+            }
+        }
+        if let Some(children) = n.children_mut() {
+            children.retain(|c| !matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if draws_brushed(doc, (false, symbol.as_str()), known)));
+            for c in children.iter_mut() {
+                walk(doc, Arc::make_mut(c), known);
+            }
+        }
+        if n.extras().mask.is_some()
+            && let Some(mask) = n.extras_mut().mask.as_mut()
+        {
+            walk(doc, Arc::make_mut(&mut mask.art), known);
+        }
+    }
+    nodes.retain(|n| !matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if draws_brushed(doc, (false, symbol.as_str()), known)));
+    for n in nodes.iter_mut() {
+        walk(doc, n, known);
+    }
 }
 
 /// Pieces for every brushed stroke of `n` (a path or compound path), in appearance order, each
 /// with the stroke's opacity folded into the piece opacity. `None` if nothing is brushed.
 pub fn node_pieces(doc: &Document, n: &Node) -> Option<Vec<Node>> {
     let bp = node_bezpath(n)?;
+    // The library is parsed for a stroke that names a brush, not for every path.
+    if !n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if st.brush.is_some())) {
+        return None;
+    }
     let lib = library(doc);
     let mut out = vec![];
     let mut any = false;
@@ -591,7 +787,7 @@ pub fn node_pieces(doc: &Document, n: &Node) -> Option<Vec<Node>> {
             continue;
         }
         any = true;
-        for mut p in stroke_pieces(b, &bp, st) {
+        for mut p in stroke_pieces(doc, b, &bp, st) {
             p.opacity *= st.opacity;
             if st.blend != vectorcraft_color::BlendMode::Normal {
                 p.blend = st.blend;

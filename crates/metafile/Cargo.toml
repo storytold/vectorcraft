@@ -17,3 +17,7 @@ vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
+
+[dev-dependencies]
+# The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
+vectorcraft-text = { workspace = true, features = ["bundled-fonts"] }

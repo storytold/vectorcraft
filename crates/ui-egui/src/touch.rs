@@ -5,8 +5,55 @@
 //! system: `WM_POINTER` on Windows), and makes the first finger the mouse pointer too. So the first
 //! finger has pressed on the canvas by the time a second lands: that press is dropped then
 //! ([`Taps::feed`] says [`Touch::Fingers`]), and the tap undoes what came before it.
+//!
+//! Where the platform tells a pen from a finger (the web shell reads Pointer Events: an iPad with
+//! an Apple Pencil), it says which drives the pointer ([`set_source`]). Once a pen has been seen in this session,
+//! fingers only navigate: pinch, two-finger pan and the taps; a finger or a resting palm never
+//! presses a tool on the canvas.
+
+use std::cell::Cell;
 
 use egui::{Pos2, TouchId, TouchPhase};
+
+/// What drives the pointer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    /// A mouse or trackpad, or a platform that can't tell (the desktop apps).
+    #[default]
+    Mouse,
+    /// A pen (Apple Pencil, a stylus).
+    Pen,
+    /// A finger on a touch screen.
+    Finger,
+}
+
+thread_local! {
+    static SOURCE: Cell<Source> = const { Cell::new(Source::Mouse) };
+    static PEN_SEEN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The pointer's presses now come from `source`; a pen makes fingers navigate only from then on.
+pub fn set_source(source: Source) {
+    SOURCE.with(|s| s.set(source));
+    if source == Source::Pen {
+        PEN_SEEN.with(|p| p.set(true));
+    }
+}
+
+/// Set the session-only pen policy (reload starts with finger drawing enabled).
+pub fn set_pen_seen(seen: bool) {
+    PEN_SEEN.with(|p| p.set(seen));
+}
+
+/// A pen has been seen.
+pub fn pen_seen() -> bool {
+    PEN_SEEN.with(Cell::get)
+}
+
+/// The press in progress is a finger's while a pen has been seen: it navigates, it doesn't draw.
+pub(crate) fn finger_navigates_only() -> bool {
+    SOURCE.with(Cell::get) == Source::Finger && pen_seen()
+}
 
 /// How long the fingers of a tap may stay down, in seconds.
 const TAP_TIME: f64 = 0.5;
@@ -16,7 +63,8 @@ const TAP_SLOP: f32 = 16.0;
 /// What a touch event made of the gesture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Touch {
-    /// A second finger landed: the gesture isn't the first finger's press.
+    /// A finger landed while another is down: the gesture isn't the first finger's press, nor a
+    /// lifted finger's press as it lands again.
     Fingers,
     /// All fingers lifted from a tap of this many fingers (two or more).
     Tap(usize),
@@ -46,9 +94,8 @@ impl Taps {
                 if !self.down.iter().any(|(d, _)| *d == id) {
                     self.down.push((id, pos));
                 }
-                let before = self.most;
                 self.most = self.most.max(self.down.len());
-                (before < 2 && self.most >= 2).then_some(Touch::Fingers)
+                (self.down.len() >= 2).then_some(Touch::Fingers)
             }
             TouchPhase::Move => {
                 if self.down.iter().any(|(d, at)| *d == id && at.distance(pos) > TAP_SLOP) {
@@ -127,5 +174,19 @@ mod tests {
         assert_eq!(gesture(0.0, 0.9, TouchPhase::End, 2), None, "held too long");
         assert_eq!(gesture(0.0, 0.2, TouchPhase::Cancel, 2), None, "cancelled");
         assert_eq!(gesture(0.0, 0.2, TouchPhase::End, 1), None, "a pen or one finger");
+    }
+
+    #[test]
+    fn fingers_navigate_only_once_a_pen_was_seen() {
+        set_pen_seen(false);
+        set_source(Source::Finger);
+        assert!(!finger_navigates_only(), "no pen yet: a finger draws");
+        set_source(Source::Pen);
+        assert!(pen_seen() && !finger_navigates_only());
+        set_source(Source::Finger);
+        assert!(finger_navigates_only());
+        set_source(Source::Mouse);
+        assert!(!finger_navigates_only(), "a mouse still draws");
+        set_pen_seen(false);
     }
 }

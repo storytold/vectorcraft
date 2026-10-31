@@ -21,3 +21,5 @@ image = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
+vectorcraft-text = { workspace = true, features = ["bundled-fonts"] }

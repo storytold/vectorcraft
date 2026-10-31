@@ -5,20 +5,29 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
-use super::super::*;
+use super::super::{Result, Session, bad, bool_or, edit, f64_or, str_param};
 use super::encode::single_artboard;
-use super::{ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, writable, write_encoded, write_or_return};
+use super::{
+    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
+};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
     let expanded = expand_presets(s, "document.serialize", p)?;
-    let p = &*expanded;
-    let doc = &*source(s, f, p, "document.serialize")?;
-    let enc = encode_all(doc, f.id, p)?;
+    let p = with_black_output(s, &expanded);
+    let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -50,9 +59,16 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = expand_presets(s, "document.export", p)?;
-    let p = &*expanded;
-    let doc = &*source(s, f, p, "document.export")?;
-    let enc = encode_all(doc, f.id, p)?;
+    let p = with_black_output(s, &expanded);
+    let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
+    let doc = &*doc;
+    let mut q = p.clone();
+    if f.id == "pdf"
+        && let Some(o) = q.as_object_mut()
+    {
+        o.insert("_displayDocTitle".into(), json!(display_doc_title));
+    }
+    let enc = encode_all(doc, f.id, &q)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
@@ -91,22 +107,42 @@ fn selected_part(n: &Node, keep: &HashSet<NodeId>) -> Option<Node> {
 }
 
 /// `doc` with only the art over `rect` (an artboard): objects whose visual bounds miss it are left
-/// out, at any depth of layers and sublayers, and objects that reach it stay whole (the file's
-/// bounds clip them), as DXF's crop leaves them. A clipping layer keeps every object, its clipping
-/// path among them. An artboard's file then holds its own art, not a whole document of artboards.
+/// out, at any depth of layers, sublayers and groups that don't clip, unless what the renderer
+/// draws for them, their effects included ([`vectorcraft_render::effect_bounds`]), reaches it.
+/// Objects that reach it stay whole (the file's bounds clip them), as DXF's crop leaves them.
+/// Symbol instances are measured by their art, and the box of one whose art holds brushed strokes
+/// grows by as far as their brush art can paint ([`SymbolBoxes::with_brush_art`]). An object that
+/// holds a symbol instance also stays when what the canvas paints for it reaches `rect`
+/// ([`vectorcraft_render::painted_bounds`]: the effects in the symbols' art and its own effects). A
+/// clipping layer keeps every object, its clipping path among them. An artboard's file then holds
+/// its own art, not a whole document of artboards.
 pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document {
-    fn kept(n: &Arc<Node>, rect: vectorcraft_geom::Rect) -> Option<Arc<Node>> {
+    fn kept(n: &Arc<Node>, doc: &Document, symbols: &SymbolBoxes, rect: vectorcraft_geom::Rect) -> Option<Arc<Node>> {
         if matches!(n.kind, NodeKind::Layer { clip: false, .. }) {
             let mut layer = Node::clone(n);
             let children = layer.children_mut()?;
-            *children = children.iter().filter_map(|c| kept(c, rect)).collect();
+            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect)).collect();
             return Some(Arc::new(layer));
         }
+        // A group that doesn't clip keeps only its members over the artboard, so art gathered in one
+        // group across several artboards splits by artboard. Not with effects of its own: a shadow
+        // can reach in from a member outside.
+        if matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.appearance.effects.is_empty() {
+            let mut group = Node::clone(n);
+            let children = group.children_mut()?;
+            *children = children.iter().filter_map(|c| kept(c, doc, symbols, rect)).collect();
+            return (!children.is_empty()).then(|| Arc::new(group));
+        }
         let over = |b: vectorcraft_geom::Rect| b.x0 <= rect.x1 && rect.x0 <= b.x1 && b.y0 <= rect.y1 && rect.y0 <= b.y1;
-        n.visual_bounds().is_none_or(over).then(|| n.clone())
+        let mut holds_instance = false;
+        n.walk(&mut |c| holds_instance |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+        let drawn = || vectorcraft_render::effect_bounds(symbols, n).is_some_and(over);
+        let painted = || holds_instance && vectorcraft_render::painted_bounds(doc, n).is_some_and(over);
+        (n.visual_bounds_with(symbols).is_none_or(over) || drawn() || painted()).then(|| n.clone())
     }
+    let symbols = doc.symbol_boxes().with_brush_art();
     let mut d = doc.clone();
-    d.layers = doc.layers.iter().filter_map(|l| kept(l, rect)).collect();
+    d.layers = doc.layers.iter().filter_map(|l| kept(l, doc, &symbols, rect)).collect();
     d
 }
 
@@ -132,30 +168,49 @@ fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Va
 
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
-fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
+fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(Cow<'a, Document>, bool)> {
     if f.id == "txt" && bool_or(p, "selectionOnly", false) {
-        return Ok(Cow::Owned(selection(s, cmd)?.0));
+        let doc = selection(s, cmd)?.0;
+        let display_doc_title = super::has_own_title(&doc);
+        return Ok((Cow::Owned(doc), display_doc_title));
     }
-    export_source(s.doc()?, p)
+    let st = s.doc()?;
+    let doc = export_source(st, p)?;
+    let display_doc_title = super::has_own_title(&doc);
+    Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
 
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their
 /// visual bounds.
 fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::Rect)> {
+    let ids = selected_artwork(s)?;
+    isolated(&s.doc()?.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
+}
+
+/// The selected objects (their top-most selected ancestors) that are artwork: those on template
+/// layers are guides and are left out.
+pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !on_template(*id)).collect();
-    isolated(&st.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
+    Ok(ids.into_iter().filter(|id| !on_template(*id)).collect())
+}
+
+/// The crop of an export of objects `ids` of `doc` alone: the bounds the renderer measures for what
+/// it draws for them, their effects included ([`vectorcraft_render::effect_bounds`]; symbol
+/// instances are measured by their art), `None` when they have none.
+pub(crate) fn export_crop(doc: &Document, ids: &[NodeId]) -> Option<vectorcraft_geom::Rect> {
+    let symbols = doc.symbol_boxes();
+    ids.iter().filter_map(|id| vectorcraft_render::effect_bounds(&symbols, doc.node(*id)?)).reduce(|a, b| a.union(b))
 }
 
 /// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
-/// named `name`: their visual bounds (`None` when they have none).
+/// named `name`: their [`export_crop`] (`None` when they have none).
 pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
+    let bounds = export_crop(doc, ids)?;
     let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))?;
     let mut d = single_artboard(doc, bounds, name);
     let mut layer = Node::layer(d.alloc_id(), name, vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
@@ -165,8 +220,9 @@ pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Do
     Some((d, bounds))
 }
 
-/// File → Export Selection: the selected objects alone, cropped to their visual bounds. Objects on
-/// template layers are guides, not artwork, and are left out.
+/// File → Export Selection: the selected objects alone, cropped to the bounds the renderer
+/// measures for what they draw, their effects included ([`isolated`]). Objects on template layers
+/// are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
     if let Some(path) = str_param(p, "path") {
@@ -175,16 +231,16 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable(C, str_param(p, "format"), path)?;
     let expanded = expand_presets(s, C, p)?;
-    let p = &*expanded;
+    let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C)?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
-    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(p))?;
+    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
     write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings, "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
 
 /// File → Save for Office Documents: one artboard as a PNG at `ppi`, on white unless
-/// `transparent`.
+/// `transparent`, with the encoder's warnings.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
     if let Some(path) = str_param(p, "path") {
@@ -201,8 +257,9 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("no artboard {artboard} (0-based; the document has {})", doc.artboards.len())));
     }
     let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
-    let bytes = encode(doc, "png", &json!({ "ppi": ppi, "background": background, "artboard": artboard }))?;
+    let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
+    let (bytes, warnings) = encode_with_warnings(doc, "png", &opts)?;
     // The pixel size, from the PNG header.
     let side = |at: usize| bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).map_or(0, u32::from_be_bytes);
-    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20) }))
+    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20), "warnings": warnings }))
 }

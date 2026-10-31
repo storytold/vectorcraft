@@ -52,6 +52,41 @@ pub(crate) fn resample_closed(p: &[Point], step: f64) -> Option<(Vec<Point>, f64
     Some((out, total / m as f64))
 }
 
+/// An open polyline resampled at (about) `step` spacing, both ends kept; also returns the exact
+/// spacing used.
+pub(crate) fn resample_open(p: &[Point], step: f64) -> Option<(Vec<Point>, f64)> {
+    let n = p.len();
+    let (first, last) = (*p.first()?, *p.last()?);
+    if n < 2 || step.is_nan() || step <= 0.0 || !p.iter().all(|&q| finite(q)) {
+        return None;
+    }
+    let mut cum = Vec::with_capacity(n);
+    cum.push(0.0);
+    for pair in p.windows(2) {
+        cum.push(cum.last().copied().unwrap_or(0.0) + pair[0].distance(pair[1]));
+    }
+    let total = cum.last().copied().unwrap_or(0.0);
+    if total.is_nan() || total <= 0.0 {
+        return None;
+    }
+    let m = ((total / step).round() as usize).clamp(1, MAX_POINTS);
+    let mut out = Vec::with_capacity(m + 1);
+    out.push(first);
+    let mut j = 0usize;
+    for i in 1..m {
+        let s = total * i as f64 / m as f64;
+        while cum.get(j + 1).is_some_and(|&c| c < s) {
+            j += 1;
+        }
+        let (c0, c1) = (*cum.get(j)?, *cum.get(j + 1)?);
+        let t = if c1 > c0 { (s - c0) / (c1 - c0) } else { 0.0 };
+        let (a, b) = (*p.get(j)?, *p.get(j + 1)?);
+        out.push(a + (b - a) * t);
+    }
+    out.push(last);
+    Some((out, total / m as f64))
+}
+
 fn kernel(sigma: f64) -> Vec<f64> {
     let s = sigma.max(0.3);
     let r = ((3.0 * s).ceil() as i64).max(1);

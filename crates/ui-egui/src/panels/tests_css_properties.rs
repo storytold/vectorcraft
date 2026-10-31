@@ -101,3 +101,21 @@ fn copy_and_export_go_through_the_ui_commands() {
     assert!(css.contains(".rectangle {") && css.contains("background-image: url(path.png);"), "{css}");
     assert!(log[1].1.starts_with(b"\x89PNG"));
 }
+
+#[test]
+fn export_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
+    const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
+    let (mut app, log) = app();
+    app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
+    assert_eq!(app.ui.status, "Exported /tmp/site/site.css");
+    // A PNG whose header reads but whose pixel data is cut short.
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+    let r = app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
+    assert_eq!(r["warnings"], json!([WARNING]));
+    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note(s): {WARNING}"));
+    assert_eq!(log.borrow().len(), 3, "the sheet and the image's picture are still written");
+}

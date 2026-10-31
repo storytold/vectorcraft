@@ -10,7 +10,7 @@ use kurbo::{Affine, Rect};
 use serde::Serialize;
 use vectorcraft_doc::marks::outset;
 use vectorcraft_doc::range::parse_range;
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind, SymbolBoxes};
 
 use super::{Emulsion, Orientation, PrintArtboards, PrintScaling, PrintSettings};
 use crate::PdfError;
@@ -63,8 +63,9 @@ pub struct TileGrid {
 }
 
 /// Calls `f` with the bounds of each object of `n` that prints: visible, not on a template
-/// layer and not a guide (layers are already picked by the Print Layers option).
-fn printed(n: &Node, f: &mut impl FnMut(Rect)) {
+/// layer and not a guide (layers are already picked by the Print Layers option). Symbol
+/// instances are measured by their art from `symbols`.
+fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
     if !n.visible {
         return;
     }
@@ -72,31 +73,34 @@ fn printed(n: &Node, f: &mut impl FnMut(Rect)) {
         NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => {}
         NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
             for c in children {
-                printed(c, f);
+                printed(c, symbols, f);
             }
         }
         _ => {
-            if let Some(b) = n.visual_bounds() {
+            if let Some(b) = n.visual_bounds_with(symbols) {
                 f(b);
             }
         }
     }
 }
 
-/// Is there art that prints in `r`?
+/// Is there art that prints in `r`? The box of a symbol instance whose art holds brushed strokes
+/// grows by as far as their brush art can paint ([`SymbolBoxes::with_brush_art`]).
 fn has_art(doc: &Document, r: Rect) -> bool {
+    let symbols = doc.symbol_boxes().with_brush_art();
     let mut any = false;
     for l in &doc.layers {
-        printed(l, &mut |b| any |= b.intersect(r).area() > 0.0 || r.contains_rect(b));
+        printed(l, &symbols, &mut |b| any |= b.intersect(r).area() > 0.0 || r.contains_rect(b));
     }
     any
 }
 
 /// The bounds of all the art that prints.
 fn art_bounds(doc: &Document) -> Option<Rect> {
+    let symbols = doc.symbol_boxes();
     let mut all: Option<Rect> = None;
     for l in &doc.layers {
-        printed(l, &mut |b| all = Some(all.map_or(b, |a| a.union(b))));
+        printed(l, &symbols, &mut |b| all = Some(all.map_or(b, |a| a.union(b))));
     }
     all
 }

@@ -9,6 +9,8 @@ description = "VectorCraft SVG import and export"
 workspace = true
 
 [dependencies]
+# Which paths stored in documents may be opened.
+craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -33,6 +35,8 @@ skrifa = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 resvg = { version = "0.45", default-features = false }
+# usvg as a reference viewer that lays text out in a font (text_layout.rs).
+usvg = { workspace = true, features = ["text"] }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
 image = { workspace = true }

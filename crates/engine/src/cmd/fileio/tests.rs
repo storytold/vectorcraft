@@ -114,6 +114,223 @@ fn cmyk_tiffs_keep_their_inks_and_other_tiffs_become_png() {
     assert_eq!(rgb.blob.mime, "image/png");
 }
 
+/// A 3 × 2 TIFF at 150 ppi of `channels` (`extra`: their ExtraSamples values), 8 or 16 `bits` a
+/// sample, chunky or `planar`.
+fn hand_tiff(photometric: u16, bits: u16, extra: &[u16], planar: bool, channels: &[Vec<u16>]) -> Vec<u8> {
+    let t = vectorcraft_testkit::tiff::Tiff { width: 3, height: 2, photometric, bits, extra, planar, ppi: Some(150), channels };
+    vectorcraft_testkit::tiff::tiff(&t)
+}
+
+/// What Place keeps of TIFF `bytes`: the ink amounts, when it keeps them, and the pixels any image
+/// reader decodes from the stored image, as RGBA.
+fn kept(what: &str, bytes: &[u8]) -> (Option<Vec<u8>>, Vec<u8>) {
+    let r = raster_image(bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
+    assert_eq!((r.width, r.height, r.ppi), (3, 2, Some((150.0, 150.0))), "{what}");
+    assert_eq!(super::ppi::resolution(&r.blob.bytes), Some((150.0, 150.0)), "{what}: the stored image keeps the resolution");
+    let rgba = image::load_from_memory(&r.blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_rgba8().into_raw();
+    (r.blob.cmyk().map(|i| i.data), rgba)
+}
+
+/// TIFFs that store one plane per channel (PlanarConfiguration 2) read as their chunky versions do:
+/// grayscale and RGB with extra channels, and CMYK with and without them (#1466).
+#[test]
+fn planar_tiffs_read_as_their_chunky_versions() {
+    let ch = |v: [u16; 6]| v.to_vec();
+    let (gray, alpha, spot) = (ch([0, 51, 102, 153, 204, 255]), ch([255, 128, 0, 255, 64, 255]), ch([9, 8, 7, 6, 5, 4]));
+    let (r, g, b) = (ch([255, 0, 0, 10, 20, 30]), ch([0, 255, 0, 40, 50, 60]), ch([0, 0, 255, 70, 80, 90]));
+    let (c, m, y, k) = (ch([255, 0, 0, 0, 12, 200]), ch([0, 255, 0, 0, 34, 100]), ch([0, 0, 255, 0, 56, 50]), ch([0, 0, 0, 255, 78, 0]));
+    // Pixel by pixel, the samples of `px`.
+    let interleave = |px: &[&Vec<u16>]| -> Vec<u8> { (0..6).flat_map(|i| px.iter().map(move |v| v[i] as u8)).collect() };
+    let opaque = ch([255; 6]);
+    let inks = interleave(&[&c, &m, &y, &k]);
+    // (photometric, ExtraSamples, channels, the RGBA pixels when the color is gray or RGB, the inks when it is CMYK)
+    type Case = (u16, Vec<u16>, Vec<Vec<u16>>, Option<Vec<u8>>, Option<Vec<u8>>);
+    let cases: Vec<Case> = vec![
+        (1, vec![2], vec![gray.clone(), alpha.clone()], Some(interleave(&[&gray, &gray, &gray, &alpha])), None),
+        (1, vec![2, 0], vec![gray.clone(), alpha.clone(), spot.clone()], Some(interleave(&[&gray, &gray, &gray, &alpha])), None),
+        (2, vec![0], vec![r.clone(), g.clone(), b.clone(), spot.clone()], Some(interleave(&[&r, &g, &b, &opaque])), None),
+        (2, vec![2, 0], vec![r.clone(), g.clone(), b.clone(), alpha.clone(), spot.clone()], Some(interleave(&[&r, &g, &b, &alpha])), None),
+        (5, vec![], vec![c.clone(), m.clone(), y.clone(), k.clone()], None, Some(inks.clone())),
+        (5, vec![0], vec![c.clone(), m.clone(), y.clone(), k.clone(), spot.clone()], None, Some(inks.clone())),
+        (5, vec![2], vec![c.clone(), m.clone(), y.clone(), k.clone(), alpha.clone()], None, None),
+    ];
+    for (photometric, extra, channels, want_rgba, want_inks) in cases {
+        for bits in [8, 16] {
+            let wide: Vec<Vec<u16>> = channels.iter().map(|ch| ch.iter().map(|v| if bits == 16 { v * 257 } else { *v }).collect()).collect();
+            let what = format!("photometric {photometric}, extra samples {extra:?}, {bits} bits");
+            let chunky = kept(&format!("{what}, chunky"), &hand_tiff(photometric, bits, &extra, false, &wide));
+            let planar = kept(&format!("{what}, planar"), &hand_tiff(photometric, bits, &extra, true, &wide));
+            assert_eq!(planar.0, chunky.0, "{what}: planar keeps the inks chunky keeps");
+            assert_eq!(planar.0, want_inks, "{what}: the inks");
+            // A 16-bit chunky CMYK file is stored as it is, and a planar one is written again with
+            // its 8-bit inks: their RGB pixels may be a level apart.
+            let close = planar.1.len() == chunky.1.len() && planar.1.iter().zip(&chunky.1).all(|(a, b)| a.abs_diff(*b) <= 1);
+            assert!(close, "{what}: planar reads as chunky: {:?} against {:?}", planar.1, chunky.1);
+            if let Some(want) = &want_rgba {
+                assert_eq!(&planar.1, want, "{what}: the pixels");
+            }
+        }
+    }
+}
+
+/// A planar TIFF whose header claims more strips than the decoder can count (here 2^31 + 1 rows
+/// a strip each, times 5 planes) is refused as too large to draw, without a panic.
+#[test]
+fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
+    let plane = |v: u16| vec![v; 6];
+    let mut file = hand_tiff(5, 8, &[0], true, &[plane(200), plane(40), plane(10), plane(0), plane(90)]);
+    // ImageLength (the directory's second entry, its value at offset 30) and RowsPerStrip (the
+    // eighth, at offset 102).
+    file[30..34].copy_from_slice(&(1u32 << 31 | 1).to_le_bytes());
+    file[102..106].copy_from_slice(&1u32.to_le_bytes());
+    let e = raster_image(&file).err().expect("refused");
+    assert!(e.to_string().contains("an image of 3 × 2147483649 pixels is too large to draw"), "{e}");
+    assert!(load::too_large_note(&file).is_some());
+    assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
+}
+
+/// A 16-bit RGB TIFF whose samples need more than the allowance (6 bytes a pixel), though its RGBA
+/// pixels would fit, is refused as too large to draw before it is decoded.
+#[test]
+fn tiffs_whose_samples_pass_the_allowance_are_too_large() {
+    let plane = |v: u16| vec![v; 6];
+    let mut file = hand_tiff(2, 16, &[], false, &[plane(9000), plane(30_000), plane(60_000)]);
+    // The loop sets ImageWidth, ImageLength and RowsPerStrip (the first, second and eighth entries) to `side`.
+    let side = 20_000u32;
+    assert!(u64::from(side * side) * 6 > MAX_RASTER_ALLOC && u64::from(side * side) * 4 <= MAX_RASTER_ALLOC);
+    for at in [18, 30, 102] {
+        file[at..at + 4].copy_from_slice(&side.to_le_bytes());
+    }
+    let e = raster_image(&file).err().expect("refused");
+    assert_eq!(e.to_string(), "an image of 20000 × 20000 pixels is too large to draw");
+}
+
+/// A planar CMYK TIFF opens and places with its ink amounts, stored as a TIFF the image decoder
+/// reads (#1466).
+#[test]
+fn planar_cmyk_tiffs_open_and_place_with_their_inks() {
+    let inks = [vec![255u16, 0, 12, 0, 40, 9], vec![0, 255, 34, 0, 50, 8], vec![0, 0, 56, 0, 60, 7], vec![0, 0, 78, 255, 70, 6]];
+    let file = hand_tiff(5, 8, &[], true, &inks);
+    let want: Vec<u8> = (0..6).flat_map(|i| inks.iter().map(move |v| v[i] as u8)).collect();
+    assert!(image::load_from_memory(&file).is_err(), "the image decoder reads planar CMYK now");
+    let mut s = Session::new();
+    open(&mut s, "planar.tif", &file);
+    let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
+    assert_eq!(blob.cmyk().map(|i| i.data), Some(want.clone()), "Open keeps the inks");
+    let mut s = session(100.0, 100.0, 1);
+    s.execute("file.place", &json!({"name": "planar.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+    let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
+    assert_eq!(blob.cmyk().map(|i| i.data), Some(want), "Place keeps the inks");
+    assert!(image::load_from_memory(&blob.bytes).is_ok(), "the image decoder reads the stored image");
+}
+
+/// A 70 × 7 picture, `true` for black: a white row and a black row (runs past 63 take a make-up
+/// code), then runs of several lengths.
+fn fax_picture() -> Vec<Vec<bool>> {
+    (0..7).map(|y| (0..70).map(|x| if y < 2 { y == 1 } else { (x * (y + 2) / 5 + y) % 3 == 0 }).collect()).collect()
+}
+
+/// The first `rows` rows of [`fax_picture`] as a TIFF compressed with CCITT Group 3 in one strip:
+/// `compression` 2 or 3 with `t4_options`, white is zero, the highest bit of each byte first.
+fn group3_tiff(compression: u16, t4_options: u32, rows: usize) -> Vec<u8> {
+    let rows = &fax_picture()[..rows];
+    let g =
+        vectorcraft_testkit::tiff::Group3 { rows, compression, t4_options, photometric: 0, fill_order: 1, rows_per_strip: 7, tile: None, rtc: false };
+    vectorcraft_testkit::tiff::group3(&g)
+}
+
+/// 1-bit TIFFs compressed with CCITT Group 3 open and place with their pixels (#1466): Compression
+/// 2 (modified Huffman) and Compression 3 (ITU-T T.4) with one-dimensional rows or two-dimensional
+/// ones (T4Options bit 0), with and without fill bits (bit 2) and six EOLs at the end, in one strip,
+/// three strips or three 32 × 16 tiles, each byte's highest or lowest bit first (FillOrder 1 and 2),
+/// white or black as zero.
+#[test]
+fn ccitt_group3_tiffs_open_and_place_with_their_pixels() {
+    let rows = fax_picture();
+    let mut s = Session::new();
+    for (compression, t4_options, rtc) in [(2, 0, false), (3, 0, false), (3, 4, true), (3, 1, false), (3, 5, true)] {
+        for (rows_per_strip, tile) in [(7, None), (3, None), (7, Some((32, 16)))] {
+            for fill_order in [1, 2] {
+                for photometric in [0, 1] {
+                    let what = format!(
+                        "Compression {compression}, T4Options {t4_options}, {rows_per_strip} rows a strip, tiles {tile:?}, FillOrder {fill_order}, photometric {photometric}"
+                    );
+                    let g = vectorcraft_testkit::tiff::Group3 {
+                        rows: &rows,
+                        compression,
+                        t4_options,
+                        photometric,
+                        fill_order,
+                        rows_per_strip,
+                        tile,
+                        rtc,
+                    };
+                    let file = vectorcraft_testkit::tiff::group3(&g);
+                    assert!(image::load_from_memory(&file).is_err(), "{what}: the image decoder reads Group 3 now");
+                    // A black run's pixels are 1 bits, which show as black when white is zero.
+                    let want: Vec<u8> = rows.concat().iter().map(|&black| if black == (photometric == 0) { 0 } else { 255 }).collect();
+                    let pixels = |s: &Session| {
+                        let blob = &s.doc().unwrap().doc.images[&image_of(s).key];
+                        image::load_from_memory(&blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_luma8().into_raw()
+                    };
+                    open(&mut s, "fax.tif", &file);
+                    assert_eq!(pixels(&s), want, "{what}: Open");
+                    let mut placed = session(100.0, 100.0, 1);
+                    placed.execute("file.place", &json!({"name": "fax.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+                    assert_eq!(pixels(&placed), want, "{what}: Place");
+                }
+            }
+        }
+    }
+}
+
+/// A Group 3 TIFF whose pixels would take more than the decoding allowance as RGBA is refused as
+/// too large to draw, without a panic at 2^31 × 2^31 pixels too. One whose data ends inside a row,
+/// or after a whole row before the strip's last, is refused as damaged, and so is one whose tiles
+/// are wider than the allowance.
+#[test]
+fn ccitt_group3_tiffs_too_large_or_cut_short_are_refused() {
+    // ImageWidth (the directory's first entry, its value at offset 18), ImageLength (the second, at
+    // 30) and RowsPerStrip (the eighth, at 102).
+    for (width, height) in [(70u32, 1u32 << 30), (1 << 31, 1 << 31)] {
+        let mut big = group3_tiff(3, 1, 7);
+        big[18..22].copy_from_slice(&width.to_le_bytes());
+        big[30..34].copy_from_slice(&height.to_le_bytes());
+        big[102..106].copy_from_slice(&height.to_le_bytes());
+        let e = raster_image(&big).err().expect("refused");
+        assert!(e.to_string().contains(&format!("an image of {width} × {height} pixels is too large to draw")), "{e}");
+    }
+    let mut short = group3_tiff(3, 0, 7);
+    short.truncate(short.len() - 6);
+    let e = raster_image(&short).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // Compression 2 rows start at a byte, so the strip of the first six rows is where the strip of
+    // seven starts. StripByteCounts (the ninth entry, its value at offset 114) gives the six rows'.
+    let (mut seven, six) = (group3_tiff(2, 0, 7), group3_tiff(2, 0, 6));
+    seven[114..118].copy_from_slice(&six[114..118]);
+    assert_eq!(seven[30..34], 7u32.to_le_bytes(), "ImageLength");
+    assert_eq!(seven[78..82], six[78..82], "StripOffsets (the sixth entry, at offset 78)");
+    let e = raster_image(&seven).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: unexpected end of input"), "{e}");
+    // A tile wider than the allowance: TileWidth (the eighth entry, its value at offset 102).
+    let rows = fax_picture();
+    let g = vectorcraft_testkit::tiff::Group3 {
+        rows: &rows,
+        compression: 3,
+        t4_options: 1,
+        photometric: 0,
+        fill_order: 1,
+        rows_per_strip: 7,
+        tile: Some((80, 16)),
+        rtc: false,
+    };
+    let mut wide = vectorcraft_testkit::tiff::group3(&g);
+    assert_eq!(wide[102..106], 80u32.to_le_bytes(), "TileWidth");
+    wide[102..106].copy_from_slice(&u32::MAX.to_le_bytes());
+    let e = raster_image(&wide).err().expect("refused");
+    assert!(e.to_string().contains("could not decode image: arithmetic overflow"), "{e}");
+}
+
 #[test]
 fn content_beats_a_wrong_extension() {
     let png = image_bytes(2, 2, image::ImageFormat::Png);
@@ -129,7 +346,8 @@ fn templates_open_untitled() {
     let mut s = session(100.0, 100.0, 1);
     let dir = tmp_dir("tpl");
     let path = dir.join("t.vectorcraft").to_string_lossy().to_string();
-    s.execute("file.saveAsTemplate", &json!({"path": path})).unwrap();
+    // A template under a native file name still opens untitled.
+    std::fs::write(&path, b64(&s.execute("file.saveAsTemplate", &json!({})).unwrap())).unwrap();
     let r = s.execute("document.open", &json!({"path": path})).unwrap();
     assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
     assert_eq!(s.doc().unwrap().path, None);
@@ -159,10 +377,19 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        7 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF and print presets, plug-ins"
+        9 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF and print presets, shortcut sets, scripts, plug-ins"
     );
+    assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
+}
+
+#[test]
+fn library_open_filters_list_library_formats_first() {
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS).collect();
+    assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
+    assert!(filters[0].1.contains(&"ase"));
+    assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
 }
 
 /// The extensions usage texts list for export: one per writable format, each picking that format
@@ -233,6 +460,36 @@ fn formats_query_lists_readers_writers_and_options() {
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
     assert_eq!(png["options"]["scale"]["default"], 1);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
+}
+
+/// The format ids `command`'s params text lists for `format` (`a|b (default)|c (…)`, up to the
+/// first comma), sorted.
+fn listed_formats(command: &str) -> Vec<String> {
+    let params = crate::cmd::find_command(command).unwrap().params;
+    let (_, rest) = params.split_once("format?: ").unwrap_or_else(|| panic!("{command} lists no formats"));
+    let list = rest.split(',').next().unwrap_or_default();
+    let mut ids: Vec<String> = list.split('|').filter_map(|f| f.split_whitespace().next()).map(str::to_string).collect();
+    ids.sort();
+    ids
+}
+
+/// The params texts of the commands that take any writable format list exactly the formats each
+/// command writes (.ai among them).
+#[test]
+fn export_params_list_every_format_the_command_writes() {
+    let mut s = session(100.0, 80.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    for command in ["document.serialize", "document.export", "document.exportSelection"] {
+        let mut refused = vec![];
+        let mut written: Vec<String> = FORMATS
+            .iter()
+            .filter(|f| s.execute(command, &json!({"format": f.id})).map_err(|e| refused.push(format!("{}: {e}", f.id))).is_ok())
+            .map(|f| f.id.to_string())
+            .collect();
+        written.sort();
+        assert_eq!(listed_formats(command), written, "{command}; refused: {refused:?}");
+    }
 }
 
 #[test]
@@ -347,7 +604,9 @@ fn export_for_screens_one_page_per_pdf_unique_names() {
     let r = s.execute("document.exportForScreens", &json!({"range": "3", "formats": [{"format": "jpg", "scale": 0.5}]})).unwrap();
     assert_eq!(r["files"][0]["name"], "Artboard-3@0.5x.jpg");
     assert_eq!(image::load_from_memory(&b64(&r["files"][0])).unwrap().width(), 50);
-    assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "vectorcraft"}]})).is_err());
+    // A native row: each artboard as a document of its own to edit.
+    let r = s.execute("document.exportForScreens", &json!({"range": "1", "formats": [{"format": "vectorcraft"}]})).unwrap();
+    assert!(r["files"][0]["name"].as_str().unwrap().ends_with(".vectorcraft"), "{r}");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -443,6 +702,58 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
+/// values is refused before anything is written; `compress`, `version` or `preview` beside the path of a format that doesn't
+/// read it is named in the warnings.
+#[test]
+fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
+    let d = tmp_dir("save-options");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let path = d.join("both.vectorcraft").to_string_lossy().to_string();
+    for cmd in ["document.save", "file.saveAs", "file.saveCopy", "file.saveAsTemplate"] {
+        let e = s.execute(cmd, &json!({"path": path, "compress": true, "options": {"compress": false}})).unwrap_err().to_string();
+        assert!(e.contains("`compress: true` and `options.compress: false` disagree") && e.contains(&format!("`{cmd}`")), "{cmd}: {e}");
+    }
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    assert!(!d.join("both.vctemplate").exists(), "nor a template");
+    // An SVG option given in `svg: {…}` or in `options.svg` counts as given there.
+    let svg = d.join("a.svg").to_string_lossy().to_string();
+    for p in [
+        json!({"svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+        json!({"hiddenLayers": false, "options": {"svg": {"hiddenLayers": true}}}),
+        json!({"hiddenLayers": true, "svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(svg);
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("`hiddenLayers: false` and `options.hiddenLayers: true` disagree") && e.contains("`file.saveCopy`"), "{p}: {e}");
+    }
+    assert!(!std::path::Path::new(&svg).exists(), "nothing is written");
+    // Agreeing values, or one of them null, save as asked; `3` and `3.0` agree.
+    for p in [
+        json!({"compress": true, "options": {"compress": true}}),
+        json!({"compress": null, "options": {"compress": true}}),
+        json!({"compress": true, "version": 3, "options": {"compress": true, "version": 3.0}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(path);
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{p}: {r}");
+        assert_eq!(std::fs::read(&path).unwrap()[..2], [0x1f, 0x8b], "{p}");
+    }
+    // An SVG file reads none of the native options; a .ai file reads `compress` only.
+    let r = s.execute("file.saveCopy", &json!({"path": svg, "compress": true, "version": 3, "preview": null})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.contains(&"`compress` was not used: SVG files don't read it"), "{w:?}");
+    assert!(w.contains(&"`version` was not used: SVG files don't read it") && !w.iter().any(|w| w.starts_with("`preview`")), "{w:?}");
+    assert!(std::fs::read(&svg).unwrap().starts_with(b"<"), "plain SVG");
+    let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A native save whose file write fails partway (a full disk) leaves the file as it was, and no
 /// temporary file behind.
 #[test]
@@ -484,4 +795,75 @@ fn a_save_that_fails_while_streaming_leaves_the_file_as_it_was() {
         assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temporary file is left");
     }
     let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A save that fails leaves File Info's dates and the saved state alone; one that works stamps them.
+#[test]
+fn a_failed_save_does_not_stamp_the_documents_dates() {
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let before = s.doc().unwrap().doc.metadata.clone();
+    let dirty = s.doc().unwrap().is_dirty();
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    let e = save_with(&mut s, plan, |_, _| Err(EngineError::Other("disk full".into()))).unwrap_err();
+    assert_eq!(e.to_string(), "disk full");
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    // Options the encoder refuses: the same.
+    assert!(s.execute("file.saveAs", &json!({"path": "/x/y.vectorcraft", "version": 99, "modified": 12345})).is_err());
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata, before);
+    assert_eq!(st.is_dirty(), dirty);
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/y.vectorcraft", "modified": 12345})).unwrap();
+    save_with(&mut s, plan, |_, _| Ok(())).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(12345));
+    assert!(!st.is_dirty());
+    // Edited while the file is written (Background Save): the dates go on once it is, and the
+    // edit keeps the document modified.
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": "/x/z.vectorcraft", "modified": 777})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let uid = s.doc().unwrap().uid;
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(12345));
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    job.write(|_, _| Ok(())).unwrap();
+    job.complete(&mut s, uid);
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.metadata.modified, Some(777));
+    assert_eq!(st.path.as_deref(), Some("/x/z.vectorcraft"));
+    assert!(st.is_dirty());
+    // Undoing the edit is back at what the file holds.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty());
+}
+
+/// #4284: a photo whose EXIF orientation says the camera was turned places upright: its pixels
+/// turned as the orientation says, its width and height swapped. One without keeps its own bytes.
+#[test]
+fn a_photo_places_the_way_its_exif_orientation_says() {
+    // 16 × 8, red on the left half.
+    let mut rgb = image::RgbImage::from_pixel(16, 8, image::Rgb([255, 255, 255]));
+    for y in 0..8 {
+        for x in 0..8 {
+            rgb.put_pixel(x, y, image::Rgb([220, 0, 0]));
+        }
+    }
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    // An EXIF segment with Orientation 6: turn a quarter clockwise to show.
+    let exif: Vec<u8> =
+        [b"Exif\0\0".as_slice(), b"II", &[0x2a, 0, 8, 0, 0, 0], &[1, 0], &[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0], &[0, 0, 0, 0]].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let plain = raster_image(&jpg).unwrap();
+    assert_eq!((plain.width, plain.height, plain.blob.bytes.as_slice()), (16, 8, jpg.as_slice()), "a photo as taken keeps its bytes");
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height), (8, 16), "turned a quarter");
+    let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+    let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
+    assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
 }

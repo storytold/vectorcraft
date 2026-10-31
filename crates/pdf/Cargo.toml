@@ -18,23 +18,33 @@ vectorcraft-text = { workspace = true }
 skrifa = { workspace = true }
 kurbo = { workspace = true }
 thiserror = { workspace = true }
-flate2 = { workspace = true }
+flate2 = { workspace = true, features = ["zlib-rs"] }
 image = { workspace = true }
 # CMYK JPEGs (the image crate writes RGB and grey ones only).
 jpeg-encoder = { workspace = true }
-krilla = { workspace = true }
-hayro-syntax = "0.7.2"
-hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
+craft-pdf = { workspace = true }
 log = { workspace = true }
+chrono = { workspace = true }
 smallvec = "1"
+weezl = "0.2"
 serde = { workspace = true }
+# The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
+roxmltree = "0.21"
 # PDF security (encrypt.rs): pure Rust, MIT OR Apache-2.0, builds for wasm.
 aes = "0.8"
 md-5 = { version = "0.10", default-features = false }
 sha2 = { version = "0.10", default-features = false }
+# The seed of the file key, salts and IVs (encrypt.rs).
+getrandom = "0.4"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+# The browser's crypto.getRandomValues.
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 serde_json = { workspace = true }
+# `draw_text`, to write test files with live text as other writers do.
+krilla = { workspace = true, features = ["simple-text"] }

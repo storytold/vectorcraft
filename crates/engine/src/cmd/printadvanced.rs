@@ -14,7 +14,7 @@ use vectorcraft_render::{AntiAlias, RenderOptions};
 use super::fileio::pdf::pdf_error;
 use super::flatten::{FlattenOptions, FlattenerPreset, flatten_document};
 use super::menucmds::{MAX_PIXELS, unique_key};
-use super::*;
+use super::{EngineError, Result, bad};
 
 /// The flattener options of `set`'s preset (`None`: transparency prints live); an error naming
 /// `cmd` for a preset that is neither built in nor in `saved`.
@@ -30,7 +30,8 @@ pub(crate) fn flattener(cmd: &str, set: &PrintSettings, saved: &[FlattenerPreset
 
 /// `doc` as Print as Bitmap and the flattener preset of `set` print it (from `saved` presets), or
 /// `None` when neither applies. Print as Bitmap is for composite output.
-pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[FlattenerPreset]) -> Result<Option<Document>> {
+/// `rich_black`: Appearance of Black › Printing / Exporting › Output All Blacks as Rich Black.
+pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[FlattenerPreset], rich_black: bool) -> Result<Option<Document>> {
     let composite = set.output.mode == OutputMode::Composite;
     let bitmap = set.advanced.print_as_bitmap && composite;
     let flattener = flattener(cmd, set, saved)?;
@@ -39,7 +40,7 @@ pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[F
     }
     let printed = vectorcraft_pdf::printed_document(doc, set);
     if bitmap {
-        return bitmap_document(cmd, &printed, set).map(Some);
+        return bitmap_document(cmd, &printed, set, rich_black).map(Some);
     }
     let Some(mut o) = flattener else { return Ok(None) };
     // Composite overprints that were discarded or simulated aren't preserved either.
@@ -63,13 +64,13 @@ fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
 /// `doc` (as it prints) with its art replaced by one image of each printed region (an artboard
 /// with its bleed, or all the art), at the document's raster effects resolution; regions where
 /// nothing is drawn get none.
-fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings) -> Result<Document> {
+fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<Document> {
     let regions = vectorcraft_pdf::print_regions(doc, set).map_err(|e| pdf_error(cmd, e))?;
     let bleed = set.bleed.of(doc);
     let mut art = doc.clone();
     drop_guides(&mut art.layers);
     let anti_alias = if doc.raster_effects.anti_alias { AntiAlias::Art } else { AntiAlias::None };
-    let opts = RenderOptions { skip_templates: true, anti_alias, ..Default::default() };
+    let opts = RenderOptions { skip_templates: true, anti_alias, rich_black, ..Default::default() };
     let mut out = doc.clone();
     let mut renderer = vectorcraft_render::Renderer::new();
     let mut images = vec![];
@@ -95,7 +96,7 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings) -> Result<Doc
         let key = unique_key(&out, "print-bitmap");
         out.images.insert(key.clone(), ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?));
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-        let image = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() };
+        let image = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         images.push(Arc::new(Node::new(out.alloc_id(), NodeKind::Image(Box::new(image)))));
     }
     let mut layer = Node::layer(out.alloc_id(), "Bitmap", LayerColor::Preset(0));

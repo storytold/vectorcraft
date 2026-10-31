@@ -31,7 +31,7 @@ impl ExportHarness {
             ..Default::default()
         };
         let mut app = VectorcraftApp::new(Session::new(), services);
-        app.run("file.new", json!({"width": 80, "height": 60, "artboards": 80, "columns": 10, "spacing": 20})).unwrap();
+        app.run("file.new", json!({"width": 80, "height": 60, "artboards": 80})).unwrap();
         app.run("paint.setStroke", json!({"none": true})).unwrap();
         for (i, name, colour, width, height) in
             [(0, "FirstArt", "#cc2200", 11, 13), (78, "OtherArt", "#2244cc", 9, 7), (79, "LastArt", "#00aa88", 17, 19)]

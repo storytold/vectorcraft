@@ -1,5 +1,6 @@
 //! Image resolution metadata (pixels per inch): PNG `pHYs`, JPEG JFIF density or EXIF, TIFF and
-//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo. Place
+//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo, a PCX
+//! header's HDpi and VDpi. Place
 //! sizes an image by it (72 ppi when the file has none); images converted to PNG on import keep it
 //! as a `pHYs` chunk.
 
@@ -21,6 +22,8 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
         bmp(bytes)
     } else if super::psdread::is_psd(bytes) {
         super::psdread::resolution(bytes)
+    } else if super::pcxread::is_pcx(bytes) {
+        super::pcxread::resolution(bytes)
     } else {
         None
     };
@@ -218,6 +221,21 @@ mod tests {
         jpg[jfif + 7] = 2;
         jpg[jfif + 8..jfif + 10].copy_from_slice(&100u16.to_be_bytes());
         assert!(close(resolution(&jpg).unwrap(), (254.0, 240.0 * 2.54)));
+    }
+
+    /// A CMYK JPEG carries no JFIF (it describes one- and three-component images), so its
+    /// resolution is written as EXIF instead and this reader still finds it (#3084).
+    #[test]
+    fn a_cmyk_jpeg_keeps_its_resolution_without_jfif() {
+        use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+        let o = JpegOptions { color_model: ColorModel::Cmyk, ..Default::default() };
+        let jpg = jpeg::encode(&[0; 4 * 4], 2, 2, 90, Some(240.0), &o).unwrap();
+        assert!(!jpg.windows(5).any(|w| w == b"JFIF\0"), "no JFIF on a CMYK file");
+        assert_eq!(resolution(&jpg), Some((240.0, 240.0)));
+        // An RGB file still says it in JFIF, as it always did.
+        let rgb = jpeg::encode(&[0; 3 * 4], 2, 2, 90, Some(240.0), &JpegOptions::default()).unwrap();
+        assert!(rgb.windows(5).any(|w| w == b"JFIF\0"));
+        assert_eq!(resolution(&rgb), Some((240.0, 240.0)));
     }
 
     /// A little-endian TIFF/EXIF block declaring `x`/`y` resolution in `unit`.

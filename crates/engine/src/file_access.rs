@@ -2,15 +2,16 @@
 //!
 //! `vectorcraft-cli mcp --automation-read-root <dir> --automation-write-root <dir>`, and
 //! `vectorcraft --control <port>` with the same flags, confine the files an agent's commands
-//! reach. [`AutomationRoots`] holds the two folders. While they are in force, every path a command
-//! reads goes through [`check_read`] and every path it writes through [`check_write`]:
+//! reach; each flag may be given more than once (#3546). [`AutomationRoots`] holds the folders of
+//! each kind. While they are in force, every path a command reads goes through [`check_read`] and
+//! every path it writes through [`check_write`]:
 //!
 //! - The path is made absolute against the working directory, as the file system reads it. Its
 //!   links are followed: for a file that doesn't exist yet, the links of its nearest existing
 //!   folder, the rest of the path being plain names (`..` below a missing folder is refused, and so
 //!   is a link that leads nowhere).
-//! - The result must lie inside the root, compared by whole components (`/work2` isn't inside
-//!   `/work`), without regard to case on Windows.
+//! - The result must lie inside one of the roots of its kind, compared by whole components
+//!   (`/work2` isn't inside `/work`), without regard to case on Windows.
 //! - Read and write access are separate: a root given alone grants only its own kind of access.
 //!
 //! Roots are in force on a thread inside [`confine`], and in the whole process after
@@ -35,11 +36,11 @@ pub enum Access {
     Write,
 }
 
-/// The folders automation may read and write; a root left out grants no access of its kind.
+/// The folders automation may read and write; a kind with no root grants no access of its kind.
 #[derive(Debug)]
 pub struct AutomationRoots {
-    read: Option<Root>,
-    write: Option<Root>,
+    read: Vec<Root>,
+    write: Vec<Root>,
 }
 
 #[derive(Debug)]
@@ -65,47 +66,58 @@ impl Root {
 }
 
 impl AutomationRoots {
-    /// The roots `read` and `write`, which must be existing folders; `None` when neither is given
-    /// (nothing is confined then).
-    pub fn new(read: Option<&Path>, write: Option<&Path>) -> Result<Option<Arc<Self>>, String> {
-        if read.is_none() && write.is_none() {
+    /// The roots `read` and `write`, which must be existing folders (one given twice counts once);
+    /// `None` when neither kind has any (nothing is confined then).
+    pub fn new(read: &[&Path], write: &[&Path]) -> Result<Option<Arc<Self>>, String> {
+        if read.is_empty() && write.is_empty() {
             return Ok(None);
         }
-        let read = read.map(|p| Root::open(p, Access::Read)).transpose()?;
-        let write = write.map(|p| Root::open(p, Access::Write)).transpose()?;
-        Ok(Some(Arc::new(Self { read, write })))
-    }
-
-    /// The read root, absolute with its links followed.
-    pub fn read_root(&self) -> Option<&Path> {
-        self.read.as_ref().map(|r| r.shown.as_path())
-    }
-
-    /// The write root, absolute with its links followed.
-    pub fn write_root(&self) -> Option<&Path> {
-        self.write.as_ref().map(|r| r.shown.as_path())
-    }
-
-    /// May the file or folder at `path` be read (or written)? `Err` says why not.
-    pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
-        let root = match access {
-            Access::Read => self.read.as_ref(),
-            Access::Write => self.write.as_ref(),
+        let open = |paths: &[&Path], access: Access| -> Result<Vec<Root>, String> {
+            let mut roots: Vec<Root> = Vec::with_capacity(paths.len());
+            for path in paths {
+                let root = Root::open(path, access)?;
+                if !roots.iter().any(|r| r.resolved == root.resolved) {
+                    roots.push(root);
+                }
+            }
+            Ok(roots)
         };
-        let Some(Root { resolved: folder, shown }) = root else {
+        Ok(Some(Arc::new(Self { read: open(read, Access::Read)?, write: open(write, Access::Write)? })))
+    }
+
+    /// May the file or folder at `path` be read (or written)? It must lie inside one of the roots
+    /// of that kind. `Err` says why not.
+    pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        let roots = match access {
+            Access::Read => &self.read,
+            Access::Write => &self.write,
+        };
+        // The messages are spelled out whole, as the translation catalogs match them.
+        if roots.is_empty() {
             return match access {
                 Access::Read => Err(format!("automation filesystem access is not granted: read authority is absent: {path}")),
                 Access::Write => Err(format!("automation filesystem access is not granted: write authority is absent: {path}")),
             };
-        };
-        if inside(&resolve(path)?, folder) {
+        }
+        let resolved = resolve(path)?;
+        if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
             return Ok(());
         }
-        let root = shown.display();
-        match access {
-            Access::Read => Err(format!("automation path rejected: outside the read root {root}: {path}")),
-            Access::Write => Err(format!("automation path rejected: outside the write root {root}: {path}")),
+        let shown: Vec<String> = roots.iter().map(|r| r.shown.display().to_string()).collect();
+        match (shown.as_slice(), access) {
+            ([root], Access::Read) => Err(format!("automation path rejected: outside the read root {root}: {path}")),
+            ([root], Access::Write) => Err(format!("automation path rejected: outside the write root {root}: {path}")),
+            (_, Access::Read) => Err(format!("automation path rejected: outside the read roots {roots}: {path}", roots = shown.join(", "))),
+            (_, Access::Write) => Err(format!("automation path rejected: outside the write roots {roots}: {path}", roots = shown.join(", "))),
         }
+    }
+
+    /// The roots for people: `read A, B; write C` (`none` for a kind without any).
+    pub fn describe(&self) -> String {
+        let list = |roots: &[Root]| {
+            if roots.is_empty() { "none".to_string() } else { roots.iter().map(|r| r.shown.display().to_string()).collect::<Vec<_>>().join(", ") }
+        };
+        format!("read {}; write {}", list(&self.read), list(&self.write))
     }
 }
 
@@ -201,8 +213,10 @@ fn resolve(path: &str) -> Result<PathBuf, String> {
         return Err("automation path rejected: path is empty".into());
     }
     // Checked as given: making `…\NUL` absolute gives the device path `\\.\NUL` on Windows.
-    if cfg!(windows) && Path::new(path).components().any(|c| matches!(c, Component::Normal(n) if is_device_name(&n.to_string_lossy()))) {
-        return Err(format!("automation path rejected: reserved device names are not allowed: {path}"));
+    if cfg!(windows)
+        && let Some(why) = windows_name_refusal(path)
+    {
+        return Err(format!("automation path rejected: {why}: {path}"));
     }
     let absolute = std::path::absolute(path).map_err(|e| format!("automation path rejected: cannot resolve {path}: {e}"))?;
     // The names below the nearest existing folder, last first.
@@ -240,8 +254,9 @@ fn resolve(path: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Is `path` (resolved) `root` or inside it, component by component (without regard to case on
-/// Windows, whose file systems ignore it)?
+/// Is `path` (resolved) `root` or inside it, component by component (without regard to case in a
+/// Windows drive prefix only: resolved folder names have their real case, and a folder that differs
+/// in case alone may be another, on a case-sensitive Windows folder)?
 fn inside(path: &Path, root: &Path) -> bool {
     let mut path = path.components();
     root.components().all(|r| path.next().is_some_and(|p| same_component(p, r)))
@@ -251,7 +266,7 @@ fn same_component(a: Component, b: Component) -> bool {
     if a == b {
         return true;
     }
-    if !cfg!(windows) {
+    if !cfg!(windows) || !matches!((a, b), (Component::Prefix(_), Component::Prefix(_))) {
         return false;
     }
     match (a.as_os_str().to_str(), b.as_os_str().to_str()) {
@@ -261,10 +276,22 @@ fn same_component(a: Component, b: Component) -> bool {
 }
 
 /// A Windows device name (`CON`, `NUL`, `COM1`… also with an extension), which names no file.
-fn is_device_name(component: &str) -> bool {
+pub(crate) fn is_device_name(component: &str) -> bool {
     let stem = component.split('.').next().unwrap_or(component).trim_end_matches(' ').to_ascii_uppercase();
     let numbered = |prefix: &str| stem.strip_prefix(prefix).is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"));
     matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$") || numbered("COM") || numbered("LPT")
+}
+
+/// Why Windows would not take `path` as an ordinary file name, for the first of its components
+/// that is a device name, or holds a `:` (a drive letter's own colon belongs to the prefix, not to
+/// a name, so only a stream such as `x.svg:evil` has one). (Judged by name alone, so it can be
+/// tested on any platform; `resolve` applies it on Windows only.)
+fn windows_name_refusal(path: &str) -> Option<&'static str> {
+    Path::new(path).components().find_map(|c| match c {
+        Component::Normal(n) if is_device_name(&n.to_string_lossy()) => Some("reserved device names are not allowed"),
+        Component::Normal(n) if n.to_string_lossy().contains(':') => Some("alternate data streams are not allowed"),
+        _ => None,
+    })
 }
 
 #[cfg(test)]
@@ -280,7 +307,7 @@ mod tests {
         }
         std::fs::write(base.join("in/a.svg"), "<svg/>").unwrap();
         std::fs::write(base.join("outside/secret.svg"), "<svg/>").unwrap();
-        let roots = AutomationRoots::new(Some(&base.join("in")), Some(&base.join("out"))).unwrap().unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap().unwrap();
         (base, roots)
     }
 
@@ -340,18 +367,20 @@ mod tests {
     #[test]
     fn a_missing_root_is_an_error_and_none_is_no_confinement() {
         let (base, _) = folders("missing");
-        let e = AutomationRoots::new(Some(&base.join("nope")), None).unwrap_err();
+        let e = AutomationRoots::new(&[&base.join("nope")], &[]).unwrap_err();
         assert!(e.starts_with("cannot open the automation read root"), "{e}");
-        let e = AutomationRoots::new(None, Some(&base.join("in/a.svg"))).unwrap_err();
+        let e = AutomationRoots::new(&[], &[&base.join("in/a.svg")]).unwrap_err();
         assert!(
             e.starts_with("cannot open the automation write root")
                 && e.ends_with(&std::io::Error::from(std::io::ErrorKind::NotADirectory).to_string()),
             "{e}"
         );
-        assert!(AutomationRoots::new(Some(Path::new("")), None).unwrap_err().starts_with("cannot open the automation read root ``"));
-        assert!(AutomationRoots::new(None, None).unwrap().is_none());
+        assert!(AutomationRoots::new(&[Path::new("")], &[]).unwrap_err().starts_with("cannot open the automation read root ``"));
+        assert!(AutomationRoots::new(&[], &[]).unwrap().is_none());
+        // A missing folder among several is an error too.
+        assert!(AutomationRoots::new(&[&base.join("in"), &base.join("nope")], &[]).unwrap_err().starts_with("cannot open the automation read root"));
         // One root alone grants only its own access.
-        let read_only = AutomationRoots::new(Some(&base.join("in")), None).unwrap().unwrap();
+        let read_only = AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
         let e = read_only.check(&s(base.join("in/x.svg")), Access::Write).unwrap_err();
         assert!(e.contains("write authority is absent"), "{e}");
         let _ = std::fs::remove_dir_all(base);
@@ -388,8 +417,52 @@ mod tests {
         assert_eq!(roots.check(&s(base.join("in/alias/x.svg")), Access::Read), Ok(()));
         // A root given through a link is the folder it leads to.
         assert!(made(&base.join("in"), &base.join("in-link")));
-        let linked = AutomationRoots::new(Some(&base.join("in-link")), None).unwrap().unwrap();
+        let linked = AutomationRoots::new(&[&base.join("in-link")], &[]).unwrap().unwrap();
         assert_eq!(linked.check(&s(base.join("in/a.svg")), Access::Read), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// #3546: several roots of a kind: a path inside any of them passes, one inside none is
+    /// refused naming them all, and read and write stay separate.
+    #[test]
+    fn several_roots_of_a_kind_each_grant_their_access() {
+        let (base, _) = folders("several");
+        std::fs::create_dir_all(base.join("out2")).unwrap();
+        std::fs::write(base.join("in2/b.svg"), "<svg/>").unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in"), &base.join("in2")], &[&base.join("out"), &base.join("out2")]).unwrap().unwrap();
+        assert_eq!(roots.check(&s(base.join("in/a.svg")), Access::Read), Ok(()));
+        assert_eq!(roots.check(&s(base.join("in2/b.svg")), Access::Read), Ok(()));
+        let e = roots.check(&s(base.join("outside/secret.svg")), Access::Read).unwrap_err();
+        assert!(e.starts_with("automation path rejected: outside the read roots ") && e.contains(", "), "{e}");
+        assert_eq!(roots.check(&s(base.join("out/x.png")), Access::Write), Ok(()));
+        assert_eq!(roots.check(&s(base.join("out2/new/x.png")), Access::Write), Ok(()));
+        assert!(roots.check(&s(base.join("outside/x.png")), Access::Write).unwrap_err().contains("outside the write roots"));
+        // Read and write access stay separate with several roots.
+        assert!(roots.check(&s(base.join("in2/b.svg")), Access::Write).is_err());
+        assert!(roots.check(&s(base.join("out2/x.png")), Access::Read).is_err());
+        // `..` out of one root into another root's sibling is still outside.
+        let sep = std::path::MAIN_SEPARATOR;
+        let up = format!("{}{sep}..{sep}outside{sep}secret.svg", s(base.join("in2")));
+        assert!(roots.check(&up, Access::Read).is_err());
+        // A folder given twice (here once through `..`) counts once.
+        let twice = AutomationRoots::new(&[&base.join("in"), &base.join("in/sub/..")], &[]).unwrap().unwrap();
+        assert!(!twice.describe().contains(", "), "{}", twice.describe());
+        assert!(twice.describe().ends_with("; write none"), "{}", twice.describe());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A link inside one root that leads into another root of the same kind stays inside; one that
+    /// leads out of all of them is outside.
+    #[cfg(unix)]
+    #[test]
+    fn links_between_several_roots() {
+        let (base, _) = folders("several-links");
+        std::fs::write(base.join("in2/b.svg"), "<svg/>").unwrap();
+        std::os::unix::fs::symlink(base.join("in2/b.svg"), base.join("in/to-in2.svg")).unwrap();
+        std::os::unix::fs::symlink(base.join("outside/secret.svg"), base.join("in2/leak.svg")).unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in"), &base.join("in2")], &[]).unwrap().unwrap();
+        assert_eq!(roots.check(&s(base.join("in/to-in2.svg")), Access::Read), Ok(()));
+        assert!(roots.check(&s(base.join("in2/leak.svg")), Access::Read).unwrap_err().contains("outside the read roots"));
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -437,5 +510,30 @@ mod tests {
         for f in ["console", "com10", "COM0", "lpt", "a.svg", "nul-x"] {
             assert!(!is_device_name(f), "{f}");
         }
+    }
+
+    /// #3604: on Windows `x.svg:evil` writes a hidden NTFS alternate data stream of `x.svg`, which
+    /// stays inside the root yet shows in no folder listing, so a `:` in any component after the
+    /// drive is refused (a drive letter's own colon is not a component).
+    #[test]
+    fn alternate_data_streams_are_refused() {
+        for p in ["x.svg:evil", "out/x.svg:evil", "out/x.svg:evil:$DATA", "out/sub:evil/x.svg", "out/x.svg::$DATA", "out/:evil"] {
+            assert_eq!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        for p in ["x.svg", "out/x.svg", "out/a b.svg", "out/x.svg.evil", "out/NUL"] {
+            assert_ne!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        assert_eq!(windows_name_refusal("out/NUL"), Some("reserved device names are not allowed"));
+        assert_eq!(windows_name_refusal("out/x.svg"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_refuses_a_stream_inside_a_write_root() {
+        let (base, roots) = folders("streams");
+        let e = roots.check(&s(base.join("out").join("x.svg:evil")), Access::Write).unwrap_err();
+        assert!(e.contains("alternate data streams"), "{e}");
+        assert_eq!(roots.check(&s(base.join("out/x.svg")), Access::Write), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
     }
 }
