@@ -76,6 +76,24 @@ fn within_the_budget_the_step_limit_still_counts() {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
+fn the_default_budget_is_a_quarter_of_installed_memory() {
+    assert_eq!(history_budget_for(16 << 30), 4 << 30);
+    assert_eq!(history_budget_for(64 << 30), 16 << 30, "no fixed ceiling");
+    assert_eq!(history_budget_for(2 << 30), 512 << 20);
+    assert_eq!(history_budget_for(128 << 20), 64 << 20, "at least 64 MiB");
+}
+
+#[test]
+#[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
+fn the_default_budget_follows_the_installed_memory_read() {
+    // Where the memory can't be read (a sandbox that hides it), the budget is the 1 GiB fallback.
+    let memory = vectorcraft_render::physical_memory().filter(|&m| m > 0);
+    assert_eq!(default_history_budget(), memory.map_or(1 << 30, history_budget_for), "{memory:?}");
+    assert_eq!(History::default().byte_budget, default_history_budget());
+}
+
+#[test]
 fn undo_steps_keep_no_lookup_tables() {
     let mut s = session_with_rects(200);
     for _ in 0..5 {

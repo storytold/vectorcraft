@@ -20,8 +20,9 @@ use vello_cpu::color::PremulRgba8;
 
 use crate::ink::Ink;
 
-/// Largest default budget of the shared image store, in bytes; less on machines with under 8 GiB
-/// of memory (an eighth of it). [`set_image_cache_budget`] changes it.
+/// Default budget of the shared image store, in bytes, where the installed memory can't be read.
+/// Elsewhere the default is a quarter of the installed memory, and on the web it is 256 MiB.
+/// [`set_image_cache_budget`] changes it.
 pub const IMAGE_CACHE_MAX: usize = 1 << 30;
 
 /// The default budget on the web (a tab's memory is tight).
@@ -32,14 +33,14 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().map_or(IMAGE_CACHE_MAX, budget_for)
+    physical_memory().filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
 }
 
-/// The default budget on a machine with `memory` bytes installed: an eighth of it, at most
-/// [`IMAGE_CACHE_MAX`].
+/// The default budget on a machine with `memory` bytes installed: a quarter of it, and at most a
+/// quarter of the address space (on 32-bit builds).
 #[cfg(not(target_arch = "wasm32"))]
 fn budget_for(memory: u64) -> usize {
-    usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+    usize::try_from(memory / 4).unwrap_or(usize::MAX).min(usize::MAX / 4)
 }
 
 /// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
@@ -53,7 +54,7 @@ pub fn installed_memory() -> Option<u64> {
 
 /// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
 #[cfg(target_os = "linux")]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     let info = std::fs::read_to_string("/proc/meminfo").ok()?;
     let line = info.lines().find(|l| l.starts_with("MemTotal:"))?;
     let kib: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
@@ -62,14 +63,14 @@ fn physical_memory() -> Option<u64> {
 
 /// Installed memory in bytes (`GlobalMemoryStatusEx`).
 #[cfg(windows)]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     winsafe::GlobalMemoryStatusEx().ok().map(|m| m.ullTotalPhys)
 }
 
 /// Installed memory in bytes, as `sysctl` prints it (`hw.memsize` on macOS, `hw.physmem` on
 /// FreeBSD).
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
-fn physical_memory() -> Option<u64> {
+pub fn physical_memory() -> Option<u64> {
     let (sysctl, name) = if cfg!(target_os = "macos") { ("/usr/sbin/sysctl", "hw.memsize") } else { ("/sbin/sysctl", "hw.physmem") };
     let out = std::process::Command::new(sysctl).args(["-n", name]).output().ok().filter(|o| o.status.success())?;
     sysctl_bytes(&out.stdout)
@@ -81,8 +82,9 @@ fn sysctl_bytes(out: &[u8]) -> Option<u64> {
     std::str::from_utf8(out).ok()?.trim().parse().ok()
 }
 
-#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd", target_arch = "wasm32")))]
-fn physical_memory() -> Option<u64> {
+/// Installed memory in bytes: not read on other targets, the web among them.
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd")))]
+pub fn physical_memory() -> Option<u64> {
     None
 }
 
@@ -472,17 +474,29 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn default_budget_is_an_eighth_of_installed_memory_at_most_1_gib() {
-        assert_eq!(budget_for(4 << 30), 512 << 20);
-        assert_eq!(budget_for(8 << 30), IMAGE_CACHE_MAX);
-        assert_eq!(budget_for(64 << 30), IMAGE_CACHE_MAX);
+    #[cfg(target_pointer_width = "64")]
+    fn default_budget_is_a_quarter_of_installed_memory() {
+        assert_eq!(budget_for(16 << 30), 4 << 30);
+        assert_eq!(budget_for(64 << 30), 16 << 30, "no fixed ceiling");
+        assert_eq!(budget_for(2 << 30), 512 << 20);
     }
 
     #[test]
     #[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
     fn installed_memory_is_read() {
         assert!(physical_memory().is_some_and(|m| m >= 256 << 20), "{:?}", physical_memory());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn two_images_of_a_tenth_of_memory_each_stay_cached() {
+        // 16 MiB installed (16 GiB scaled down): two images of 1,600 KiB (640 × 640 pixels) take
+        // about a fifth of it.
+        let mut s = ImageStore::new(budget_for(16 << 20));
+        drop(s.insert(key("a"), Arc::new(Pixmap::new(640, 640))));
+        drop(s.insert(key("b"), Arc::new(Pixmap::new(640, 640))));
+        assert!(s.peek(&key("a")).is_some() && s.peek(&key("b")).is_some(), "neither image is decoded again");
+        assert_eq!(s.bytes(), 2 * 640 * 640 * 4);
     }
 
     #[test]
