@@ -35,6 +35,15 @@ use artboards::{ArtboardNameEdit, artboard_label, artboard_marks, artboard_name_
 use artboards::{artboard_name_field_rect, begin_artboard_name_edit, commit_artboard_name, names_an_artboard, tool_name_rect};
 use context::{context_menu, panel_drop};
 pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
+
+/// The rendering duration (in milliseconds) above which a canvas frame is offloaded to the worker.
+///
+/// On a 120 Hz display (e.g. Apple ProMotion or high-refresh PC monitor), each frame has an 8.33 ms
+/// deadline. With egui UI layout, widget rasterization, text shaping, and GPU presentation taking
+/// 2.5–4.5 ms, canvas renders exceeding 4.0 ms cannot run synchronously on the UI thread without
+/// dropping frames. Such frames are dispatched to the background worker while the main thread
+/// reprojects the current texture.
+pub const WORKER_HEAVY_MS: f64 = 4.0;
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
@@ -59,8 +68,8 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
-pub(crate) use raster::color_image;
 use raster::{changed_pixels, pixel_region, upload};
+pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
 pub use tool_overlays::HiddenChars;
@@ -271,7 +280,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
     }
-    poll_worker(app, ui, key.doc);
+    poll_worker(app, ui, &key);
     // With `waits_for_still` set (the web build, which has no render worker), a heavy document is
     // not rendered while only the view changes: the frame shown is drawn reprojected below, and the
     // first frame after the view has been still for STILL_SECS renders.
@@ -511,7 +520,7 @@ fn cache_key(
 }
 
 /// Start the render worker, and upload the frame it finished.
-fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
+fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, active_key: &CacheKey) {
     if !app.canvas.worker_started {
         app.canvas.worker_started = true;
         if std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_none() {
@@ -520,16 +529,26 @@ fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
         }
     }
     // Upload finished background renders.
+    //
+    // While an interaction is in progress (e.g. continuous dragging of an object), the document
+    // revision advances with each pointer event. To prevent the canvas from freezing until the drag
+    // ends, intermediate worker frames are accepted as long as they are newer than what is currently
+    // displayed. Once the interaction finishes, only frames matching or exceeding the settled revision
+    // are accepted, ensuring obsolete intermediate frames never overwrite the final edit.
     if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll())
-        && done.key.doc == key_doc
+        && done.key.doc == active_key.doc
     {
-        upload(app, ui.ctx(), &done.img, done.key.pixel.is_some());
-        app.canvas.key = Some(done.key);
-        app.canvas.shown = Some((done.doc, done.opts));
-        app.perf.render_ms = done.ms;
-        app.canvas.last_ms = done.ms;
-        app.canvas.moved = done.moved > 0;
-        app.canvas.from_worker = true;
+        let is_fresh = done.key.revision >= active_key.revision;
+        let is_interaction_progress = active_key.interacting && app.canvas.key.as_ref().is_none_or(|k| done.key.revision > k.revision);
+        if is_fresh || is_interaction_progress {
+            upload(app, ui.ctx(), done.img, done.key.pixel.is_some());
+            app.canvas.key = Some(done.key);
+            app.canvas.shown = Some((done.doc, done.opts));
+            app.perf.render_ms = done.ms;
+            app.canvas.last_ms = done.ms;
+            app.canvas.moved = done.moved > 0;
+            app.canvas.from_worker = true;
+        }
     }
 }
 
@@ -617,7 +636,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let same_doc = app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc);
     let settling = app.canvas.moved && !key.interacting;
     let staying = key.interacting && app.canvas.from_worker;
-    let heavy = (app.canvas.last_ms > 8.0 || settling || staying) && app.canvas.texture.is_some() && same_doc;
+    let heavy = (app.canvas.last_ms > WORKER_HEAVY_MS || settling || staying) && app.canvas.texture.is_some() && same_doc;
     let changed = changed_pixels(app, key, doc, &opts, view, w, h);
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
@@ -639,7 +658,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
-            upload(app, ui.ctx(), &img, pixel.is_some());
+            upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;

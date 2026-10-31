@@ -41,8 +41,10 @@ fn rendered_rasters_become_the_same_egui_images() {
     assert!(img.pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0 && p[3] != 255), "partly covered pixels");
     let egui = egui::ColorImage::from_rgba_premultiplied([97, 61], &img.pixels);
     assert_eq!(color_image(&img), egui);
+    assert_eq!(color_image_owned(img), egui);
     let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
     assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    assert_eq!(color_image_owned(short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
 }
 
 /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
@@ -8183,4 +8185,143 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.select_tool("selection");
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
+}
+
+/// Canvas rendering dispatches to the background worker when a frame exceeds the 4.0 ms threshold,
+/// accommodating 120 Hz display frame budgets (8.33 ms total budget with UI layout and GPU presentation).
+#[test]
+fn worker_heavy_threshold_dispatches_to_background_worker() {
+    assert_eq!(WORKER_HEAVY_MS, 4.0);
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    let (worker, jobs, _done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    app.canvas.last_ms = 4.1;
+
+    // Moving the view requires a new frame
+    app.view_mut().unwrap().center.x += 10.0;
+    let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    assert!(jobs.try_recv().is_ok(), "job submitted to background worker because last_ms was 4.1 ms");
+    assert!(app.canvas.worker.as_ref().unwrap().pending.is_some(), "worker pending reflects queued job");
+}
+
+/// While an interaction is underway, intermediate worker frames are uploaded progressively as long as
+/// they are newer than what is currently displayed, preventing drag freezes. Once the interaction ends,
+/// obsolete intermediate frames from mid-drag are discarded.
+#[test]
+fn poll_worker_accepts_intermediate_frames_during_interaction_and_discards_obsolete_settled_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    let doc = app.session.active().unwrap().doc.clone();
+    let initial_key = app.canvas.key.clone().expect("first frame initializes key");
+
+    // Case 1: Active interaction (continuous drag). Active doc has reached revision 10.
+    // Displayed canvas texture is at revision 2.
+    let mut active_key = initial_key.clone();
+    active_key.revision = 10;
+    active_key.interacting = true;
+
+    let mut displayed_key = initial_key.clone();
+    displayed_key.revision = 2;
+    app.canvas.key = Some(displayed_key);
+
+    let (worker, _jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+
+    // Worker completes revision 5 (intermediate frame from during the drag).
+    // Even though 5 < 10, 5 is newer than displayed revision 2: it MUST be accepted and uploaded.
+    let mut rev5_key = initial_key.clone();
+    rev5_key.revision = 5;
+    rev5_key.interacting = true;
+    let img5 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![200; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev5_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img5,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, &active_key));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "intermediate frame 5 is uploaded during drag");
+    assert!(app.canvas.from_worker);
+
+    // Now worker completes an older revision 3 (out of order). It is older than displayed 5, so discarded.
+    let mut rev3_key = initial_key.clone();
+    rev3_key.revision = 3;
+    let img3 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![150; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev3_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img3,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, &active_key));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "older out-of-order frame 3 is discarded");
+
+    // Case 2: Drag ends (settled). Active key has interacting = false at revision 10.
+    active_key.interacting = false;
+
+    // Worker completes revision 8 (from late in the drag, but before release).
+    // Since interaction has ended and edit has settled, revision 8 is obsolete and MUST NOT overwrite the settled state.
+    let mut rev8_key = initial_key.clone();
+    rev8_key.revision = 8;
+    let img8 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![180; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev8_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img8,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, &active_key));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "obsolete mid-drag frame 8 is discarded after drag ends");
+
+    // Finally, the settling frame at revision 10 completes: it MUST be accepted and uploaded.
+    let mut rev10_key = initial_key;
+    rev10_key.revision = 10;
+    let img10 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![255; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev10_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img10,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw, |ui| poll_worker(&mut app, ui, &active_key));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }
