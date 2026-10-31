@@ -1107,6 +1107,7 @@ font-technology	Variable	Biến thiên
 	Enable Background Export	Bật xuất nền
 	Enable Background Save	Bật lưu nền
 	Enable Contextual Task Bar	Bật thanh tác vụ theo ngữ cảnh
+	Show the Discord button in the title bar	Hiển thị nút Discord trên thanh tiêu đề
 	Enable copying of text, images and other content	Bật sao chép văn bản, ảnh và nội dung khác
 	Enable in-menu font previews	Bật xem trước phông trong menu
 	Enable Missing Glyph Protection	Bật bảo vệ glyph bị thiếu

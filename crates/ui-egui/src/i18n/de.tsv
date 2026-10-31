@@ -934,6 +934,7 @@ font-technology	Variable	Variabel
 	Enable Background Export	Export im Hintergrund aktivieren
 	Enable Background Save	Speichern im Hintergrund aktivieren
 	Enable Contextual Task Bar	Kontextbezogene Taskleiste aktivieren
+	Show the Discord button in the title bar	Discord-Schaltfläche in der Titelleiste anzeigen
 	Enable copying of text, images and other content	Kopieren von Text, Bildern und anderen Inhalten zulassen
 	Enable in-menu font previews	Schriftvorschau im Menü aktivieren
 	Enable Missing Glyph Protection	Schutz vor fehlenden Glyphen aktivieren
