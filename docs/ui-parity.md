@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (files opened from the file manager while VectorCraft runs open in its window on Windows and Linux, #4892) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (freeform gradient point color editing from the Gradient panel, #4953; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -315,6 +315,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | SVG Interactivity panel: JavaScript for each object's events and the document's linked JavaScript files, written to SVG and read back as text | done | `svgInteractivity.*`, `ui.javascriptFilesDialog` |
 | Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
 | Blend panel (30.7) | partial | Window › Blend provides Type (Ease In, Ease Out, Ease In Out, Ease Out In), Ramp 0–100% and independent color Shift, alongside the existing blend controls. Easing is disabled without a spine. Original polynomial distributions approximate the publicly documented behavior; on-canvas easing handles remain missing. [Public source](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html) |
+| Gradient panel: freeform point Color swatch | done | #4953; single-click opens the existing point popover; Points and Lines modes, isolated color edits, Undo and no-selection behavior covered by headless panel tests |
 | Gradient panel: Dither (30.0) | done | Dither box under the stops (`paint.editGradient` `dither`); dimmed behind the Stroke proxy, fills only; `panels::gradient` test |
 | Gradient panel: Method, Classic or Perceptual (30.0) | done | Method menu under the Stroke buttons for linear and radial gradients (`paint.editGradient` `method`); [public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html); `panels::gradient` test |
 | Gradient panel: Presets (30.0) | done | Presets menu by library (theme) plus Saved: applies a preset to the gradient behind the active proxy, keeping its placement, one undo step; panel menu Save Gradient Preset…, Delete Gradient Preset, Hide/Show Presets (`gradient.presets.*`); `panels::gradient` tests |
@@ -381,6 +382,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | Freeform Gradient panel: clicking the selected point's Color swatch opens its existing point editor (#4953); other points and point geometry, opacity and spread are preserved; scores and estimates unchanged |
 | 2026-10-31 | minor | A file opened from the file manager while VectorCraft runs opens as a new tab in that window, which comes to the front, on Windows and Linux (#4892); `--new-instance` opts out; scores unchanged |
 | 2026-10-31 | minor | Object › Path › Smooth: Auto-Smooth takes a shaky line to one smooth curve, and direct-selected anchors smooth only their section; scores unchanged |
 | 2026-10-31 | minor | New Document: More Settings has Save Preset beside the name, as Preset Details does, and saves its settings (#4893); scores and estimates unchanged |

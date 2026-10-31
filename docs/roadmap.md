@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (M5: supersampled exports avoid redundant opaque knockout layers; File formats: `.ai`/EPS import fidelity from a user's file audit; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (freeform gradient point color editing from the Gradient panel, #4953; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -54,7 +54,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | 2026-10-14 | minor | M12: tiny fitted contours retain islands and holes after Noise; source-generated regressions; defaults and estimates unchanged |
 | 2026-10-12 | minor | Desktop PDF spooler shared through craft-print; exact physical sizes, composed copies and Windows 7 fallback retained. Scores and remaining gaps unchanged. |
 | Draw and edit paths precisely: Pen, Curvature, Direct Selection on anchors and handles, smart guides and snapping, Pathfinder | yes | `crates/tools/src/pen.rs`, `direct.rs`, `guides.rs` and their tests; 10 exact Pathfinder booleans; [ui-parity.md](ui-parity.md). Shape Builder regions on art of thousands of segments fixed (#937's reproduced case; unconfirmed on the reporter's file), Pathfinder covers the same results | 0 |
-| Paint and style: fills and strokes, global and spot swatches, gradients, Appearance, transparency, graphic styles | yes | M3 done (92 tasks); area scores 92–97% in [target-app-parity.md](target-app-parity.md#feature-areas) | 0 |
+| Paint and style: fills and strokes, global and spot swatches, gradients, Appearance, transparency, graphic styles | yes | M3 done (92 tasks; freeform point Color swatch opens the point editor, #4953); area scores 92–97% in [target-app-parity.md](target-app-parity.md#feature-areas) | 0 |
 | Set type: point and area type, Character and Paragraph styles, threading, outlines | yes | type core 80%; styles, threading, Create Outlines and font matching tested ([type-parity.md](type-parity.md)); justification options missing (not blocking) | 0 |
 | Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; Art Optimized supersample closes ghost borders (#983 / #1037) | 0 |
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
@@ -141,6 +141,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | Freeform Gradient panel: clicking the selected point's Color swatch opens its existing point editor (#4953); other points and point geometry, opacity and spread are preserved; scores and estimates unchanged |
 | 2026-10-30 | patch | M5: opaque solid-fill knockout paths avoid redundant erase/add layers in hard-edge frames and supersampled raster export; exact-pixel regression coverage retains analytical-AA rounding and translucent knockout behavior; scores and estimates unchanged |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |

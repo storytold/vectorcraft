@@ -18,7 +18,7 @@
 //!
 //! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
 //! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
-//! (edited in the Color panel), opacity and spread, with Delete Point.
+//! (click its swatch for the point popover), opacity and spread, with Delete Point.
 //!
 //! The Presets menu lists ready-made gradients by theme (the built-in gradient libraries), then
 //! the gradients saved with the panel menu's Save Gradient Preset…; choosing one applies it to the
@@ -484,10 +484,15 @@ fn freeform_section(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
     let point = sel.map(|i| f.points[i]);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Color:"));
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+        let sense = if sel.is_some() { Sense::click() } else { Sense::hover() };
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), sense);
         let paint = point.map_or(Paint::None, |p| Paint::solid(p.color));
         widgets::swatch_tile(ui, r, &paint, false, resp.hovered());
-        resp.on_hover_text(tl!("Edit the selected point's colour in the Color panel"));
+        if resp.on_hover_text(tl!("Edit the stop")).clicked()
+            && let Some(i) = sel
+        {
+            app.ui.dialog = Some(Dialog::new("gradientStop", json!({ "index": i, "screen": [r.left(), r.bottom() + 4.0], "tab": "color" })));
+        }
         if let Some(p) = point {
             widgets::dim_label(ui, &p.color.to_hex().to_uppercase());
         }

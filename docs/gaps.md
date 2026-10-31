@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G4: PDF import finds installed fonts whose PDF names hold hyphens or a composite font's CMap; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (freeform gradient point color editing from the Gradient panel, #4953; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -451,6 +451,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   The original polynomial distributions approximate the public description. On-canvas easing handles
   and their synchronization remain missing. [Public source](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html).
 
+- **Done (#4953):** the freeform Gradient panel's Color swatch opens the selected point's existing color editor directly. Other points, geometry, opacity and spread stay unchanged; no point selected means no editor. G13 estimates unchanged.
 - **Done:** gradient Dither (30.0): the Gradient panel's Dither box (`paint.editGradient` `dither`, also in `paint.setFill`'s
   `gradient`, swatches and the native file) draws a linear or radial gradient fill as pixels with seeded noise of up to a
   colour level, which hides banding on the canvas and in raster exports; SVG and PDF exports write the fill as an image at
@@ -676,6 +677,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | Freeform Gradient panel: clicking the selected point's Color swatch opens its existing point editor (#4953); other points and point geometry, opacity and spread are preserved; scores and estimates unchanged |
 | 2026-10-31 | minor | G4: PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`. Estimate unchanged. |
 | 2026-10-31 | minor | G13: Direct Selection snaps the end of an existing straight line, dragged by its end anchor, square to straight paths and grazing curves (Smart Guides › Geometric Guides: Snap to Perpendicular and Snap to Tangent), the case the public Snap to Perpendicular and Snap to Tangent pages add to drawing with the Line Segment and Pen tools (#2530). Scores and estimates unchanged. |
 | 2026-10-31 | minor | G8: a gradient mesh read from a file is budgeted: at most about a million quads per tessellation, and a mesh with more patches than that is malformed (#3592); estimate unchanged. |

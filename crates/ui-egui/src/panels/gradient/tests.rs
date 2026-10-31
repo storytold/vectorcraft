@@ -544,6 +544,58 @@ fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
 }
 
 #[test]
+fn clicking_the_freeform_color_swatch_edits_only_the_selected_point() {
+    for mode in ["points", "lines"] {
+        let mut app = app(json!({"gradient": {"kind": "freeform"}}));
+        app.run("paint.editGradient", json!({"mode": mode})).unwrap();
+        if mode == "lines" {
+            app.run("paint.freeform.addLine", json!({"points": [0, 1, 2]})).unwrap();
+        }
+        app.select_tool("gradient");
+        app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
+        app.run("paint.freeform.setPoint", json!({"index": 1, "opacity": 0.4, "spread": 0.25})).unwrap();
+        let before = shown_points(&fill(&app)).into_owned();
+        assert_eq!(before.mode, if mode == "points" { FreeformMode::Points } else { FreeformMode::Lines });
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        let chip = p.widget_after(text_at(&texts, "Color:").expect("color label"));
+        p.click(&mut app, chip.center());
+        let d = app.ui.dialog.as_ref().expect("#4953: a single click opens the point editor");
+        assert_eq!((d.kind.as_str(), d.fields["index"].clone(), d.str("tab")), ("gradientStop", json!(1), "color".into()));
+        assert_eq!(d.fields["screen"], json!([chip.left(), chip.bottom() + 4.0]));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "opening is not an edit");
+        // Draw the actual popover, then use its supported confirmation path to change color.
+        p.frame_of(&mut app, vec![], Modifiers::NONE, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert!(app.ui.dialog.is_some(), "the popover stays open after the opening click");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff8000"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let mut expected = before.clone();
+        expected.points[1].color = Color::rgb8(255, 128, 0);
+        assert_eq!(shown_points(&fill(&app)).as_ref(), &expected, "other points, geometry, opacity, spread and mode stay unchanged");
+        assert_eq!(app.session.selected_freeform_point(), Some(1));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shown_points(&fill(&app)).as_ref(), &before, "one undo restores the original gradient");
+    }
+}
+
+#[test]
+fn clicking_the_freeform_color_swatch_without_a_selected_point_does_nothing() {
+    let mut app = app(json!({"gradient": {"kind": "freeform"}}));
+    app.run("paint.freeform.selectPoint", json!({"index": null})).unwrap();
+    let before = fill(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let chip = p.widget_after(text_at(&texts, "Color:").expect("color label"));
+    p.click(&mut app, chip.center());
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(fill(&app), before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
 fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     let mut app = app(json!({"gradient": {}}));
     app.select_tool("gradient");
