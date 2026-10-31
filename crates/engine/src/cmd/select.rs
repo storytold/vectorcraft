@@ -5,8 +5,13 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_tools::builder::is_live_paint;
 
-use super::*;
+use super::wand::{fill_of, stroke_of};
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+};
+use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -65,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object), one of two or more (the Selection tool: a click on one object of a selection of several; on the key again: no id)} the key object Align aligns to and Distribute Spacing spaces from; without `id` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members); any other id is an error that leaves the key as it was → {key} (the resulting key object, or null)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection; any other id or guide is an error that leaves the key as it was → {key, guide?} (the resulting key object, or null; guide: the key guide, left out without one)",
             has_doc,
             key
         ),
@@ -75,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Segments",
             [],
             None,
-            "{id, segments: [[subpath, segment]…]} select path segments; their endpoints move with them, Delete removes only their connections",
+            "{id, segments: [[subpath, segment]…], mode?: \"set\"|\"add\"|\"toggle\"} select path segments; their endpoints move with them, Delete removes only their connections",
             has_doc,
             segments
         ),
@@ -84,20 +89,29 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Anchors",
             [],
             None,
-            "{items: [{id, anchors}], mode?: \"set\"|\"add\"|\"toggle\"|\"subtract\" (set by default; add: true is mode add)}: toggle selects the anchors not selected and deselects the others, subtract deselects them; a path left with none leaves the selection",
+            "{items: [{id, anchors}], mode?: \"set\"|\"add\"|\"toggle\"|\"subtract\" (set by default; add: true is mode add), add?: bool (an older way to ask for mode add)}: toggle selects the anchors not selected and deselects the others, subtract deselects them; a path left with none leaves the selection",
             has_doc,
             anchors_many
+        ),
+        cmd!(
+            "select.color",
+            "Select by Color",
+            [],
+            None,
+            "{fill?: colour, stroke?: colour (as paint.setFill's color; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
+            has_doc,
+            select_color
         ),
         cmd!(
             "select.same.fillColor",
             "Fill Color",
             ["Select", "Same"],
             None,
-            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent)",
+            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
-                same(s, "select.same.fillColor", |a, b| same_paint(&a.appearance.fill_paint(), &b.appearance.fill_paint(), tint))
+                same_fill(s, "select.same.fillColor", |a, b| same_paint(&fill_of(a), &fill_of(b), tint))
             }
         ),
         cmd!(
@@ -105,30 +119,29 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Color",
             ["Select", "Same"],
             None,
-            "{} the objects stroked with the first selected object's stroke colour (tints as select.same.fillColor)",
+            "{} the objects stroked with the first selected object's stroke colour (tints and compound paths as select.same.fillColor)",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
-                same(s, "select.same.strokeColor", |a, b| same_paint(&a.appearance.stroke_paint(), &b.appearance.stroke_paint(), tint))
+                same(s, "select.same.strokeColor", |a, b| same_paint(&stroke_of(a).0, &stroke_of(b).0, tint))
             }
         ),
         cmd!("select.same.strokeWeight", "Stroke Weight", ["Select", "Same"], None, "{}", has_selection, |s, _| same(
             s,
             "select.same.strokeWeight",
-            |a, b| (a.appearance.stroke_width() - b.appearance.stroke_width()).abs() < 1e-9
+            |a, b| (stroke_weight(a) - stroke_weight(b)).abs() < 1e-9
         )),
         cmd!(
             "select.same.fillAndStroke",
             "Fill & Stroke",
             ["Select", "Same"],
             None,
-            "{} the objects with the first selected object's fill and stroke colours (tints as select.same.fillColor)",
+            "{} the objects with the first selected object's fill and stroke colours (tints, compound paths and Live Paint faces as select.same.fillColor)",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
-                same(s, "select.same.fillAndStroke", |a, b| {
-                    let (x, y) = (&a.appearance, &b.appearance);
-                    same_paint(&x.fill_paint(), &y.fill_paint(), tint) && same_paint(&x.stroke_paint(), &y.stroke_paint(), tint)
+                same_fill(s, "select.same.fillAndStroke", |a, b| {
+                    same_paint(&fill_of(a), &fill_of(b), tint) && same_paint(&stroke_of(a).0, &stroke_of(b).0, tint)
                 })
             }
         ),
@@ -170,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Graphic Style",
             ["Select", "Same"],
             None,
-            "{} the objects linked to the graphic style the first selected object is linked to",
+            "{} the objects linked to the graphic style the first selected object is linked to (compound paths as select.same.fillColor)",
             has_selection,
             same_graphic_style
         ),
@@ -179,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Attribute",
             ["Select", "Same"],
             None,
-            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill",
+            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
             has_selection,
             same_attribute
         ),
@@ -190,10 +203,11 @@ pub fn specs() -> Vec<CommandSpec> {
 /// The objects Select All takes: those of the isolated container, else of every layer (looking
 /// through sublayers, which are not objects). In isolation mode there are none while the isolated
 /// container, or a group or layer it is in, is hidden, locked or a template layer.
-fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
+pub(crate) fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
     match iso.and_then(|i| d.node(i)) {
         Some(c) if d.ancestry(c.id).is_some_and(|a| a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked && !n.is_template()))) => {
-            c.layer_art(true)
+            // A single object isolated is all there is to select.
+            if c.is_container() { c.layer_art(true) } else { vec![c.id] }
         }
         Some(_) => vec![],
         None => d.selectable_art(),
@@ -256,11 +270,18 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let i = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
+    // Symbol instances are measured by their art.
+    let symbols = st.doc.symbol_boxes();
     let ids: Vec<NodeId> = selectable(&st.doc, st.isolation)
         .into_iter()
-        .filter(|id| st.doc.node(*id).and_then(|n| n.geometric_bounds()).is_some_and(|b| b.intersect(r).area() > 0.0 || r.contains(b.center())))
+        .filter(|id| {
+            st.doc
+                .node(*id)
+                .and_then(|n| n.geometric_bounds_with(&symbols))
+                .is_some_and(|b| b.intersect(r).area() > 0.0 || vectorcraft_doc::artboard_holds(r, b.center()))
+        })
         .collect();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     ok()
@@ -351,6 +372,29 @@ fn selection_result(s: &Session) -> Result<Value> {
 
 fn key(s: &mut Session, p: &Value) -> Result<Value> {
     let id = p.get("id").map(|value| checked_id(s, value, "select.key")).transpose()?;
+    let guide = match p.get("guide").filter(|v| !v.is_null()) {
+        Some(v) => {
+            Some(v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad("select.key", "`guide` must be a guide index (guide.list)"))?)
+        }
+        None => None,
+    };
+    if let Some(g) = guide {
+        let sel = &s.doc()?.selection;
+        if id.is_some() {
+            return Err(bad("select.key", "give `id` or `guide`, not both"));
+        }
+        if !sel.guides.contains(&g) {
+            return Err(bad("select.key", format!("guide {g} is not selected")));
+        }
+        if sel.is_empty() {
+            return Err(bad("select.key", "select objects to align to the guide"));
+        }
+        s.select(|_, sel| {
+            sel.key = None;
+            sel.key_guide = Some(g);
+        })?;
+        return key_result(s);
+    }
     if let Some(id) = id {
         let st = s.doc()?;
         // A selected top-level object is the only top-level object among the selected ones of
@@ -360,8 +404,21 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad("select.key", format!("object {id} is not a selected top-level object")));
         }
     }
-    s.select(|_, sel| sel.key = id)?;
-    Ok(json!({ "key": s.doc()?.selection.key }))
+    s.select(|_, sel| {
+        sel.key = id;
+        sel.key_guide = None;
+    })?;
+    key_result(s)
+}
+
+/// `{key}`, with `guide` when a guide is the key.
+fn key_result(s: &Session) -> Result<Value> {
+    let sel = &s.doc()?.selection;
+    let mut out = json!({ "key": sel.key });
+    if let Some(g) = sel.key_guide {
+        out["guide"] = json!(g);
+    }
+    Ok(out)
 }
 
 /// `[[subpath, anchor]…]` anchor references of `cmd`: a malformed entry fails rather than being
@@ -383,22 +440,85 @@ pub(crate) fn checked_refs(v: Option<&Value>, cmd: &str) -> Result<Vec<(usize, u
         .collect()
 }
 
+fn segment_endpoints(doc: &Document, id: NodeId, refs: &BTreeSet<(usize, usize)>, cmd: &str) -> Result<BTreeSet<(usize, usize)>> {
+    let path = doc.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(cmd, "object is not a path"))?;
+    let mut endpoints = BTreeSet::new();
+    for &(si, seg) in refs {
+        let sp = path.subpaths.get(si).filter(|sp| seg < sp.segment_count()).ok_or_else(|| bad(cmd, "segment does not exist"))?;
+        let n = sp.anchors.len().max(1);
+        endpoints.extend([(si, seg), (si, (seg + 1) % n)]);
+    }
+    Ok(endpoints)
+}
+
 fn segments(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "select.segments";
     let id = checked_id(s, p.get("id").ok_or_else(|| bad(C, "missing id"))?, C)?;
     let refs: BTreeSet<_> = checked_refs(p.get("segments"), C)?.into_iter().collect();
-    let path = s.doc()?.doc.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(C, "object is not a path"))?;
-    let mut endpoints = BTreeSet::new();
-    for &(si, seg) in &refs {
-        let sp = path.subpaths.get(si).filter(|sp| seg < sp.segment_count()).ok_or_else(|| bad(C, "segment does not exist"))?;
-        endpoints.extend([(si, seg), (si, (seg + 1) % sp.anchors.len())]);
-    }
-    s.select(|_, sel| {
-        sel.clear();
-        if !refs.is_empty() {
-            sel.add(id);
-            sel.anchors.insert(id, endpoints);
-            sel.segments.insert(id, refs);
+    let mode = match str_param(p, "mode") {
+        None | Some("set") => "set",
+        Some("add") => "add",
+        Some("toggle") => "toggle",
+        Some(m) => return Err(bad(C, format!("unknown mode {m:?}"))),
+    };
+    let endpoints = segment_endpoints(&s.doc()?.doc, id, &refs, C)?;
+    s.select(|d, sel| {
+        if mode == "set" {
+            sel.clear();
+            if !refs.is_empty() {
+                sel.add(id);
+                sel.anchors.insert(id, endpoints);
+                sel.segments.insert(id, refs);
+            }
+        } else if mode == "add" {
+            if !refs.is_empty() {
+                sel.add(id);
+                sel.anchors.entry(id).or_default().extend(endpoints);
+                sel.segments.entry(id).or_default().extend(refs);
+            }
+        } else if mode == "toggle" {
+            let seg_entry = sel.segments.entry(id).or_default();
+            let mut removed_endpoints = BTreeSet::new();
+            let mut added_endpoints = BTreeSet::new();
+            let path = d.node(id).and_then(|n| n.path_data());
+            for &(si, seg) in &refs {
+                let Some(sp) = path.as_ref().and_then(|p| p.subpaths.get(si)) else { continue };
+                let n = sp.anchors.len().max(1);
+                let end1 = (si, seg);
+                let end2 = (si, (seg + 1) % n);
+                if seg_entry.contains(&(si, seg)) {
+                    seg_entry.remove(&(si, seg));
+                    removed_endpoints.insert(end1);
+                    removed_endpoints.insert(end2);
+                } else {
+                    seg_entry.insert((si, seg));
+                    added_endpoints.insert(end1);
+                    added_endpoints.insert(end2);
+                }
+            }
+            let mut surviving_seg_endpoints = BTreeSet::new();
+            for &(si, seg) in seg_entry.iter() {
+                if let Some(sp) = path.as_ref().and_then(|p| p.subpaths.get(si)) {
+                    let n = sp.anchors.len().max(1);
+                    surviving_seg_endpoints.insert((si, seg));
+                    surviving_seg_endpoints.insert((si, (seg + 1) % n));
+                }
+            }
+            let anchor_entry = sel.anchors.entry(id).or_default();
+            for pt in removed_endpoints {
+                if !surviving_seg_endpoints.contains(&pt) {
+                    anchor_entry.remove(&pt);
+                }
+            }
+            anchor_entry.extend(added_endpoints);
+            if seg_entry.is_empty() {
+                sel.segments.remove(&id);
+            }
+            if anchor_entry.is_empty() {
+                sel.remove(id);
+            } else {
+                sel.add(id);
+            }
         }
     })?;
     ok()
@@ -418,8 +538,9 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         if mode == "set" {
             sel.clear();
         }
-        // A path selected as a whole has every anchor selected: toggle and add start from them all.
-        let whole = sel.contains(id) && sel.partial(id).is_none();
+        // A path selected as a whole has every anchor selected: toggle and add start from them all,
+        // but only when no partial anchor selection is active and only on a single isolated object.
+        let whole = sel.contains(id) && sel.partial(id).is_none() && sel.anchors.is_empty() && sel.objects.len() <= 1;
         sel.add(id);
         // A segment pick's endpoints aren't selected anchors: start from none of them.
         if sel.segments.remove(&id).is_some() {
@@ -435,6 +556,9 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
             } else {
                 e.insert(r);
             }
+        }
+        if e.is_empty() {
+            sel.remove(id);
         }
     })?;
     ok()
@@ -506,22 +630,90 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Select › Same › Fill/Stroke Color: is `a` the same colour as `b`? Tints of one global or spot
 /// swatch are, unless `tint` (General › Select Same Tint %) asks for the same tint too.
-fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
+pub(crate) fn same_paint(a: &Paint, b: &Paint, tint: bool) -> bool {
     match (a, b) {
         (Paint::Solid { swatch: Some(x), tint: ta, .. }, Paint::Solid { swatch: Some(y), tint: tb, .. }) if x == y => !tint || (ta - tb).abs() < 1e-4,
         _ => a == b,
     }
 }
 
+/// Select › Same › Stroke Weight: an unpainted stroke weighs nothing, as
+/// [`vectorcraft_doc::Appearance::stroke_width`] has it.
+fn stroke_weight(n: &Node) -> f64 {
+    let (paint, width) = stroke_of(n);
+    if paint.is_none() { 0.0 } else { width }
+}
+
+/// Select by Color: the objects whose fill and stroke read as the colours given, compared as the
+/// `#rrggbb` `document.inspect` reports, so a script can pick art by colour without an object id.
+fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.color";
+    let hex = |key: &str| match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => color_value(v).map(|c| Some(c.to_hex())).ok_or_else(|| bad(C, format!("`{key}`: not a colour: {v}"))),
+    };
+    let (fill, stroke) = (hex("fill")?, hex("stroke")?);
+    if fill.is_none() && stroke.is_none() {
+        return Err(bad(C, "give `fill`, `stroke` or both"));
+    }
+    let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
+    select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+}
+
+/// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though
+/// it holds its members, and its members report none.
+fn paint_reported(d: &Document, n: &Node) -> bool {
+    let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
+    compound(n) || (!n.is_container() && !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
+}
+
+/// The object Select > Same compares the others with, and whether isolation mode is inside a
+/// compound path. The object is the first selected one, or its compound path when it is a member
+/// of one; in isolation mode inside a compound path it is the member path itself.
+fn same_reference<'a>(st: &'a DocState, cmd: &str) -> Result<(&'a Node, bool)> {
+    let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
+    let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
+    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let refn = match st.doc.parent_of(first.id).and_then(|p| st.doc.node(p)) {
+        Some(p) if !members && compound(p) => p,
+        _ => first,
+    };
+    Ok((refn, members))
+}
+
+/// Select > Same: the objects `eq` matches with the object [`same_reference`] returns, among those
+/// [`paint_reported`] accepts. A compound path matches as a whole. In isolation mode inside a
+/// compound path, its member paths are matched instead.
 fn same(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
+    same_in(s, cmd, false, eq)
+}
+
+/// Select > Same > Fill Color and Fill & Stroke: [`same`], kept to one side of a Live Paint group.
+/// From a face or edge of a Live Paint group, only the faces and edges of that group match; from
+/// any other object, no face or edge of a Live Paint group does
+/// (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/select-objects-with-same-fill-and-stroke.html>).
+fn same_fill(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
+    same_in(s, cmd, true, eq)
+}
+
+fn same_in(s: &mut Session, cmd: &str, live_paint: bool, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
-    let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
-    select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))
+    let (refn, members) = same_reference(st, cmd)?;
+    let group = live_paint_group(&st.doc, refn.id);
+    let refn = refn.clone();
+    select_where(s, cmd, &json!({}), |d, n| {
+        (!live_paint || live_paint_group(d, n.id) == group) && (if members { !n.is_container() } else { paint_reported(d, n) }) && eq(n, &refn)
+    })
+}
+
+/// The Live Paint group `id` is a face or edge of.
+fn live_paint_group(d: &Document, id: NodeId) -> Option<NodeId> {
+    d.parent_of(id).filter(|p| d.node(*p).is_some_and(is_live_paint))
 }
 
 /// Select the objects [`walk_selectable`] visits that `f` accepts (not looking inside accepted
 /// ones); Select > Reselect repeats `cmd` with `p`.
-fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
+pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let mut ids = vec![];
     walk_selectable(&st.doc, st.isolation, |n| {
@@ -533,20 +725,17 @@ fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &No
     });
     let from = st.selection.objects.clone();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
-    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone(), from));
-    Ok(json!({ "count": ids.len() }))
+    let st = s.doc_mut()?;
+    st.last_selection_cmd = Some((cmd.to_string(), p.clone(), from));
+    // The objects selected, after Lock Guides has left out guide paths.
+    Ok(json!({ "count": st.selection.objects.len() }))
 }
 
 fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
     let cmd = "select.same.graphicStyle";
     let st = s.doc()?;
-    let id = st
-        .selection
-        .objects
-        .first()
-        .and_then(|id| super::style::linked_style(&st.doc, st.doc.node(*id)?))
-        .map(|g| g.id)
-        .ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
+    let (refn, _) = same_reference(st, cmd)?;
+    let id = super::style::linked_style(&st.doc, refn).map(|g| g.id).ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
     select_where(s, cmd, &json!({}), |d, n| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
 }
 
@@ -559,9 +748,9 @@ enum Attribute {
 fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "select.same.appearanceAttribute";
     let st = s.doc()?;
-    let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let (refn, _) = same_reference(st, cmd)?;
     let ap = &refn.appearance;
-    let item = p.get("item").and_then(Value::as_u64).map(|i| i as usize).or(s.appearance_item());
+    let item = p.get("item").and_then(Value::as_u64).map(index).or(s.appearance_item());
     let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
         (Some(it), _) => Attribute::Item(it.clone()),
         (None, Some(e)) => Attribute::Effect(e.clone()),
@@ -600,6 +789,7 @@ fn by_kind(s: &mut Session, f: fn(&Node) -> bool) -> Result<Value> {
         }
         true
     });
-    s.select(|_, sel| sel.set(ids.iter().copied()))?;
-    Ok(json!({ "count": ids.len() }))
+    s.select(|_, sel| sel.set(ids))?;
+    // The objects selected, after Lock Guides has left out guide paths.
+    Ok(json!({ "count": s.doc()?.selection.objects.len() }))
 }

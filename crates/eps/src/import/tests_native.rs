@@ -2,7 +2,7 @@
 //! carries (see `native`). The files here are small ones written by hand for the tests, with the
 //! operators seen in files their users own.
 
-use vectorcraft_doc::{Document, LayerColor, Node, NodeKind};
+use vectorcraft_doc::{Document, LayerColor, Node, NodeKind, Unit};
 
 use crate::import::import;
 
@@ -34,6 +34,15 @@ fn native(layers: &str) -> String {
     )
 }
 
+/// The editing copy of a Large Canvas file (#2031): art and boxes written at 1/`scale`, declared
+/// with `%AI24_LargeCanvasScale` as Illustrator writes it. The file's page is `size × scale`
+/// points.
+fn native_large_canvas(size: f64, scale: f64, layers: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 {size} {size}\n%%HiResBoundingBox: 0 0 {size} {size}\n%AI3_Cropmarks: 0 0 {size} {size}\n%AI24_LargeCanvasScale: {scale}\n%AI5_NumLayers: 1\n{layers}%%Trailer\n"
+    )
+}
+
 /// A layer as the format writes it.
 fn layer(name: &str, visible: bool, body: &str) -> String {
     format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
@@ -62,6 +71,16 @@ fn page_square(x: u32, y: u32) -> String {
 
 fn names(d: &Document) -> Vec<String> {
     d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect()
+}
+
+#[test]
+fn native_import_keeps_ruler_units_from_editing_data() {
+    let art = layer("Art", true, &square(10, 10));
+    let native = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI5_RulerUnits: 1\n%AI5_NumLayers: 1\n{art}%%Trailer\n"
+    );
+    let r = import(&eps(&page_square(10, 10), &native)).unwrap();
+    assert_eq!(r.document.units, Unit::Millimeters);
 }
 
 fn kinds(l: &Node) -> Vec<&'static str> {
@@ -113,7 +132,7 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
         square(20, 10),
         square(30, 10),
         "*U".into(),
-        // A clipping group: its objects, then its clip path.
+        // A clipping group: its objects, then its clip path (filled, so it paints too).
         "q".into(),
         square(40, 10),
         "50 10 m 60 10 L 60 20 L 50 20 L h W f".into(),
@@ -128,11 +147,12 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
     .join("\n");
     let sub = layer("Inner", true, &square(80, 10));
     let art = native(&layer("Outer", true, &format!("{body}\n{sub}")));
-    // The page has what shows: the clip group's square is outside its clip path.
-    let page = [10, 20, 30, 80].map(|x| page_square(x, 10)).join("\n");
+    // The page has what shows: the clip group's square is outside its clip path, which paints.
+    let clip_fill = "0 0 1 0 setcmykcolor 50 10 moveto 60 10 lineto 60 20 lineto 50 20 lineto closepath fill";
+    let page = [10, 20, 30, 80].map(|x| page_square(x, 10)).join("\n") + "\n" + clip_fill;
     let r = import(&eps(&page, &art)).unwrap();
     let outer = &r.document.layers[0];
-    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[2]", "group[1]", "other"]);
+    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[3]", "group[1]", "other"]);
     let children = outer.children().unwrap();
     assert!(children[0].visible && !children[3].visible, "the hidden object is hidden, not left out");
     // The clip path comes first in its group.
@@ -170,6 +190,33 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     // The text and the path of its stroke, where the text object is (no group of their own).
     assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A point type object in the legacy format (`To` … `TO`), as an EPS saved for Illustrator 10
+/// keeps its type in the editing data: no `/AI11Text` for the page's type to go in.
+fn legacy_text(x: u32, y: u32, text: &str) -> String {
+    format!("0 To\n1 0 0 1 {x} {y} 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n({text}) Tx\nTO")
+}
+
+#[test]
+fn type_in_the_legacy_format_is_the_layers_own_and_the_page_has_text() {
+    let page = format!("{}\n0 0 0 1 setcmykcolor /Helvetica findfont 12 scalefont setfont 10 50 moveto (Hi) show", page_square(10, 10));
+    let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &legacy_text(10, 50, "Hi"))));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    assert_eq!(texts[0].plain_text(), "Hi");
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("weren't read")), "{:?}", r.warnings);
+    // Type the editing data keeps as outlines (here a stand-in, a small square where the page has
+    // more type) comes in as they are, and the import says so.
+    let page = format!("{page}\n/Helvetica findfont 4 scalefont setfont 60 20 moveto (o) show");
+    let outlines = format!("{}\n0 0 0 1 k\n60.5 20 m\n62.5 20 L\n62.5 22 L\n60.5 22 L\nf", legacy_text(10, 50, "Hi"));
+    let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &outlines)));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("1 text objects of the page are outlines on the layers")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -211,11 +258,159 @@ fn pdf_part(x: f64, y: f64) -> Document {
     d
 }
 
+/// The PDF part `d` as read in points from pages of `k` points a unit (their `UserUnit`): its
+/// pages and art `k` times as large.
+fn in_points(mut d: Document, k: f64) -> Document {
+    for layer in &mut d.layers {
+        std::sync::Arc::make_mut(layer).transform(vectorcraft_geom::Affine::scale(k), true);
+    }
+    for a in &mut d.artboards {
+        a.rect = a.rect.scale_from_origin(k);
+    }
+    d
+}
+
+/// #1479: an image larger than the editing data's reader takes would be missing from the layers,
+/// while the PDF part has it (it reads larger images): the file comes in as its PDF part, with a
+/// note saying why, rather than without the image.
+#[test]
+fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_part() {
+    let raster = |w: u32, h: u32| {
+        format!(
+            "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n\
+             [ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN"
+        )
+    };
+    // 6,000 × 6,000 pixels: past the reader's 2^25.
+    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(6000, 6000))));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("an image is too large to read from them")), "{warnings:?}");
+    assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the PDF part's art");
+    // An image the reader takes keeps the layers.
+    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(1, 1))));
+    let (_, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(read, "{warnings:?}");
+}
+
+/// A `.ai` whose layers hold a placed PDF and no text object: its PDF part draws the placed file,
+/// type and all, where the layers show the file's preview. That type is the placed file's and needs
+/// no text object, so the file comes in from its layers, the placed file where its matrix takes the
+/// canvas point of art space's origin or at the corner of its box (see
+/// `a_placed_file_at_its_boxs_corner_matches_the_page`). Type outside the placed file still needs
+/// one, and without it the file comes in as its PDF part.
+#[test]
+fn type_of_the_page_inside_a_placed_file_needs_no_text_object() {
+    // A file placed on (30, 30)–(70, 70) whose preview is 2 × 2 pixels of half-transparent black,
+    // as in `a_placed_file_at_its_boxs_corner_matches_the_page`; with the template box, the canvas
+    // point of art space's origin puts it off the page, and the box's corner on it.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(/files/pages.pdf)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let at_origin = native(&layer("Pages", true, &place));
+    let at_corner = at_origin.replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    // The PDF part: the placed file's page in 50% grey, and type at (`x`, 55).
+    let pdf = |x: f64| {
+        let mut d = Document::new(100.0, 100.0);
+        let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+        let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+        let page = Node::path(
+            d.alloc_id(),
+            rect,
+            vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() },
+        );
+        let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 55.0), "Hi", style);
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text)));
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, page).unwrap();
+        d.insert(Some(layer), 1, text).unwrap();
+        d
+    };
+    for data in [&at_origin, &at_corner] {
+        let (d, warnings, read) = crate::layered_ai(&private(data), pdf(38.0), vec![], false, false, 1.0);
+        assert!(read, "{warnings:?}");
+        assert_eq!(names(&d), ["Pages"]);
+        let mut links = vec![];
+        d.visit_images(|_, im| links.extend(im.link.as_ref().map(|l| l.path.clone())));
+        assert_eq!(links, ["/files/pages.pdf"], "{warnings:?}");
+        assert!(warnings.iter().all(|w| !w.contains("no text object")), "the type is the placed file's, not left out: {warnings:?}");
+        // Type beside the placed file is a text object's, which the layers don't have.
+        let (_, warnings, read) = crate::layered_ai(&private(data), pdf(5.0), vec![], false, false, 1.0);
+        assert!(!read, "{warnings:?}");
+        assert!(warnings.iter().any(|w| w.contains("its layers have no text objects")), "{warnings:?}");
+    }
+}
+
+/// A palette of `[None]` and White, and a color group `Inks` holding a spot color, Red ink.
+const PALETTE: &str =
+    "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n1 (Inks) 1 Pg\n0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\nPB\n%AI5_EndPalette\n";
+
+/// A `.ai` that comes in as its PDF part, whose layers can't be used, still gets the swatches and
+/// color groups of its editing data's palette in place of the defaults, and keeps the inks its PDF
+/// part's art paints with that the palette doesn't have.
+#[test]
+fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() {
+    let image = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] 6000 6000 0 Xh\n\
+         [ 1 0 0 1 0 100 ] 0 0 6000 6000 6000 6000 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN";
+    let art = native(&format!("{PALETTE}{}", layer("Texture", true, &format!("{}\n{image}", square(10, 10)))));
+    let mut part = pdf_part(10.0, 86.0);
+    let gold = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.2, 0.9, 0.1));
+    part.swatches.push(vectorcraft_color::swatch::Swatch { name: "Gold ink".into(), paint: gold, global: true, spot: true });
+    let (d, warnings, read) = crate::layered_ai(&private(&art), part, vec![], false, true, 1.0);
+    assert!(!read, "the PDF part is used: {warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White", "Gold ink"], "{warnings:?}");
+    let groups: Vec<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["Inks"]);
+    assert!(d.swatch("Red ink").is_some_and(|s| s.spot));
+}
+
+/// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
+/// pattern gets the patterns its editing data defines with the palette's pattern swatches.
+#[test]
+fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let palette =
+        "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\nPB\n%AI5_EndPalette\n";
+    let art = native(&format!("{dots}{palette}"));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White", "Dots"], "{warnings:?}");
+    assert!(matches!(&d.swatch("Dots").map(|s| &s.paint), Some(vectorcraft_color::Paint::Pattern { pattern, .. }) if pattern == "Dots"));
+    assert!(d.pattern("Dots").is_some_and(|p| !p.art.is_empty()));
+
+    // A pattern that shows an image brings the image's data with it.
+    let pic = "%AI3_BeginPattern: (Pic)\n(Pic) 0 0 4 4\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 4 0 0 4 0 4 ] 1 1 0 Xh\n\
+               [ 4 0 0 4 0 4 ] 0 0 1 1 1 1 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\nE\n%AI3_EndPattern\n";
+    let art = native(&format!("{pic}{}", palette.replace("(Dots)", "(Pic)")));
+    let (d, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    let mut keys = vec![];
+    d.visit_images(|_, im| keys.push(im.key.clone()));
+    assert_eq!(keys.len(), 1, "{warnings:?}");
+    assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
+}
+
+/// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its
+/// page with the swatches and color groups of that palette in place of the defaults.
+#[test]
+fn an_eps_that_comes_in_as_its_page_keeps_the_swatches_of_its_palette() {
+    let r = import(&eps(&page_square(10, 10), &native(PALETTE))).unwrap();
+    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    let swatches: Vec<&str> = r.document.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "White"], "{:?}", r.warnings);
+    let groups: Vec<&str> = r.document.swatch_groups.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(groups, ["Inks"]);
+}
+
 #[test]
 fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     // A square on the artboard, and one above it (the artboard is y 0 to 100 here).
     let art = native(&(layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110)) + &layer("Old", false, &square(60, 60))));
-    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec!["a note".into()], false);
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec!["a note".into()], false, false, 1.0);
     assert_eq!(names(&d), ["Jig", "Parts", "Old"], "{warnings:?}");
     assert!(read);
     assert_eq!(warnings, ["a note"], "nothing else to say");
@@ -224,28 +419,261 @@ fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     assert!(!d.layers[2].visible);
 }
 
+/// A `.ai` whose PDF part was read in points from a page of 10 points a unit (its `UserUnit`), and
+/// whose editing data has the page in those units: its layers come in at the page's size, ten
+/// times as large as the editing data has them, with stroke weights and dashes ten times as large.
+/// Editing data with the page in points comes in as it is.
+#[test]
+fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
+    // A dashed line 2 units wide on a hidden layer, which the page doesn't draw.
+    let line = "0 0 1 0 K\n2 w\n[4 2] 1 d\n10 50 m\n50 50 L\nS";
+    let art = native(&(layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110)) + &layer("Old", false, line)));
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let first = |d: &Document, l: usize| d.layers[l].children().unwrap()[0].visual_bounds().unwrap();
+    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-6);
+    let (d, w, read) = crate::layered_ai(&private(&art), page.clone(), vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Jig", "Parts", "Old"]);
+    assert_eq!(d.artboards[0].rect, vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 1000.0));
+    // The square on the artboard and the one above it, ten times as large and as far from its corner.
+    assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
+    assert!(near(first(&d, 1), [300.0, -140.0, 340.0, -100.0]), "{:?}", first(&d, 1));
+    let stroke = d.layers[2].children().unwrap()[0].appearance.stroke().cloned().unwrap();
+    let dash = stroke.dash.unwrap();
+    assert_eq!((stroke.width, dash.pattern, dash.offset), (20.0, vec![40.0, 20.0], 10.0));
+    // Read as if its page had no `UserUnit`, the editing data is for another page.
+    let (_, w, read) = crate::layered_ai(&private(&art), page.clone(), vec![], false, false, 1.0);
+    assert!(!read && w.iter().any(|w| w.contains("for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10")), "{w:?}");
+    // Editing data with the page in points.
+    let points = native(&layer("Jig", true, "0 0 1 0 k\n100 100 m\n140 100 L\n140 140 L\n100 140 L\nf")).replace(" 0 0 100 100", " 0 0 1000 1000");
+    let (d, w, read) = crate::layered_ai(&private(&points), page, vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards[0].rect, vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 1000.0));
+    assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
+}
+
+/// A PDF part read from a `UserUnit` page cropped to the art: the art's box, not the artboard, is
+/// the page in the editing data's units, so the layers are read at the page's size, with their
+/// artboard.
+#[test]
+fn a_user_unit_page_cropped_to_the_art_is_read_in_its_units() {
+    // A 50 × 50 artboard, art over 100 × 100 (its bounding box), and a page of that box at 10 pt a
+    // unit: 1000 × 1000 pt.
+    let art = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards[0].rect.size(), vectorcraft_geom::Size::new(500.0, 500.0));
+    // The square, 36 down the artboard, ten times as large and as far.
+    let b = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    assert!([b.x0 - 100.0, b.y0 - 360.0, b.x1 - 140.0, b.y1 - 400.0].iter().all(|v| v.abs() < 1e-6), "{b:?}");
+}
+
+/// A PDF part whose pages are each cropped to all of the art holds the art once a page: the type
+/// of the pages after the first is that type again, and only the first page's goes into the
+/// layers.
+#[test]
+fn type_on_the_copies_of_a_page_cropped_to_the_art_is_read_once() {
+    // A 50 × 50 artboard, art over 100 × 100, a text object with no story in the file, and two
+    // pages of the art's box in a row, 20 apart, each with the square and the type.
+    let art = native(&layer("Art", true, &(square(10, 10) + &text_object(0)))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let mut pdf = pdf_part(10.0, 86.0);
+    let mut second = pdf.artboards[0].clone();
+    (second.id, second.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(second);
+    let copy = pdf_part(130.0, 86.0).layers[0].children().unwrap()[0].as_ref().clone();
+    let layer_id = pdf.layers[0].id;
+    let id = pdf.alloc_id();
+    pdf.insert(Some(layer_id), 1, Node { id, ..copy }).unwrap();
+    for x in [30.0, 150.0] {
+        let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 40.0), "Hi", style);
+        let id = pdf.alloc_id();
+        pdf.insert(Some(layer_id), 2, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    }
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let texts = text_of(&d.layers[0]);
+    // The first page's type, where the art has it: 50 above the artboard's top.
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 30.0).abs() < 1e-6 && (f + 10.0).abs() < 1e-6, "{:?}", texts[0].xf);
+}
+
+/// A PDF saved with only the second of its two artboards has a page for that one, while its
+/// editing data keeps both: the layers are compared with the page on that artboard, and the page's
+/// type goes there.
+#[test]
+fn a_pdf_of_its_second_artboard_is_compared_on_that_artboard() {
+    // Two 100-point artboards side by side, 50 apart (art space, y up), a square on each, and a
+    // text object with no story in the file.
+    let board = |x0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    let boards = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n", board(0), board(150));
+    let art = native(&(boards + &layer("Art", true, &(square(10, 10) + "\n" + &square(180, 50) + "\n" + &text_object(0)))));
+    // The page: the second artboard, its square 30 from the left and 46 down, and the type.
+    let mut pdf = pdf_part(30.0, 46.0);
+    let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(40.0, 20.0), "Hi", style);
+    let (layer_id, id) = (pdf.layers[0].id, pdf.alloc_id());
+    pdf.insert(Some(layer_id), 1, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards.len(), 2, "both artboards are kept");
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 190.0).abs() < 1e-6 && (f - 20.0).abs() < 1e-6, "on the second artboard: {:?}", texts[0].xf);
+}
+
 #[test]
 fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let pdf = pdf_part(10.0, 86.0);
     // No editing data this reads.
-    let (d, w, read) = crate::layered_ai(b"nothing", pdf.clone(), vec![], false);
+    let (d, w, read) = crate::layered_ai(b"nothing", pdf.clone(), vec![], false, false, 1.0);
     assert_eq!(d.layers.len(), pdf.layers.len());
     assert!(w.is_empty() && !read);
-    // Editing data that isn't for this page.
-    let other = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
-    let (d, w, _) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false);
+    // Editing data that isn't for this page: neither its artboard nor its art's box is the page.
+    let other = native(&layer("Jig", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 50 50");
+    let (d, w, _) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false, false, 1.0);
     assert_eq!(names(&d), names(&pdf));
-    assert!(w.iter().any(|w| w.contains("different page")), "{w:?}");
+    assert!(w.iter().any(|w| w.contains("for a 50 × 50 pt page, the file's 100 × 100 pt page at 1:2")), "{w:?}");
+    // A page cropped to the art's box, not the artboard, is that art's page: the layers are read,
+    // with their artboard.
+    let cropped = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let (d, w, read) = crate::layered_ai(&private(&cropped), pdf.clone(), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Jig"]);
+    assert_eq!(d.artboards[0].rect.size(), vectorcraft_geom::Size::new(50.0, 50.0));
+}
+
+/// #2034: editing data for a page of another size gives both sizes in points, in an EPS's note and
+/// in a `.ai`'s.
+#[test]
+fn editing_data_for_a_page_of_another_size_names_both_sizes() {
+    let art = native(&layer("Jig", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 600 400");
+    let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap().replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 612 792");
+    let r = import(file.as_bytes()).unwrap();
+    assert_eq!(names(&r.document), ["Jig", "Layer 1"], "{:?}", r.warnings);
+    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 612 × 792 pt page): it comes in as its page, on a layer above its layers, which come in empty";
+    assert!(r.warnings.iter().any(|w| w == note), "{:?}", r.warnings);
+    // A `.ai` whose PDF part has an A4 page.
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(595.2756, 841.8898), vec![], false, false, 1.0);
+    let note = "the file's layers weren't read from its editing data (its editing data is for a 600 × 400 pt page, not the file's 595.276 × 841.89 pt page): they come from its PDF part";
+    assert!(!read && w.iter().any(|w| w == note), "{w:?}");
+}
+
+/// #2033: an EPS whose layers can't be used (here its editing data is for another page) still
+/// keeps its layer tree: the layers come in empty, in their order and with their names and
+/// options (sublayers too), and the page comes in on a layer above them, under a name none of
+/// them has.
+#[test]
+fn an_eps_whose_layers_cant_be_used_keeps_its_layer_tree() {
+    // Unlocked 0 (locked), printing 0.
+    let locked = layer("Locked", true, &layer("Sub", true, &square(20, 20))).replacen("1 1 1 1 0 0 1 0", "1 1 0 0 0 0 1 0", 1);
+    let layers = [layer("Layer 1", true, ""), locked, layer("Hidden", false, &square(50, 50))].concat();
+    let art = native(&layers).replace(" 0 0 100 100", " 0 0 600 400");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Layer 1", "Locked", "Hidden", "Layer 6"], "{:?}", r.warnings);
+    let [back, locked, hidden, page] = &d.layers[..] else { panic!("{:?}", names(d)) };
+    let options = |l: &Node| (l.visible, l.locked, matches!(l.kind, NodeKind::Layer { printable: true, .. }));
+    assert_eq!(
+        [options(back), options(locked), options(hidden), options(page)],
+        [(true, false, true), (true, true, false), (false, false, true), (true, false, true)]
+    );
+    assert!(back.children().unwrap().is_empty() && hidden.children().unwrap().is_empty());
+    let [sub] = &locked.children().unwrap()[..] else { panic!("{locked:?}") };
+    assert!(sub.name.as_deref() == Some("Sub") && sub.children().unwrap().is_empty());
+    assert_eq!(page.children().unwrap().len(), 1, "the page's square");
+    let mut ids = std::collections::BTreeSet::new();
+    d.walk(|n| assert!(ids.insert(n.id), "{:?} twice", n.id));
+    let note = "the file's layers weren't read (its editing data is for a 600 × 400 pt page, not the file's 100 × 100 pt page): it comes in as its page, on a layer above its layers, which come in empty";
+    assert!(r.warnings.iter().any(|w| w == note), "{:?}", r.warnings);
+}
+
+/// #2034: editing data whose page is the file's at another scale (a Large Canvas file without its
+/// scale, for one) gives that scale, the editing data's page to the file's.
+#[test]
+fn editing_data_for_the_page_at_another_scale_names_the_scale() {
+    let art = native(&layer("Jig", true, &square(10, 10)));
+    let note = |file: &str| {
+        let r = import(file.as_bytes()).unwrap();
+        assert_eq!(names(&r.document), ["Jig", "Layer 1"], "{:?}", r.warnings);
+        r.warnings.into_iter().find(|w| w.contains("its editing data is for")).unwrap_or_default()
+    };
+    let file = String::from_utf8(eps(&page_square(10, 10), &art)).unwrap();
+    let ten = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 1000 1000");
+    assert_eq!(
+        note(&ten),
+        "the file's layers weren't read (its editing data is for a 100 × 100 pt page, the file's 1000 × 1000 pt page at 1:10): it comes in as its page, on a layer above its layers, which come in empty"
+    );
+    let wide = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 250 250");
+    assert!(note(&wide).contains("for a 100 × 100 pt page, the file's 250 × 250 pt page at 1:2.5)"));
+    let half = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 50 50");
+    assert!(note(&half).contains("for a 100 × 100 pt page, the file's 50 × 50 pt page at 2:1)"));
+    // A scale that rounds to 1:1 isn't given.
+    let large = art.replace(" 0 0 100 100", " 0 0 2000 2000");
+    let (_, w, _) = crate::layered_ai(&private(&large), Document::new(2000.8, 2000.8), vec![], false, false, 1.0);
+    assert!(w.iter().any(|w| w.contains("for a 2000 × 2000 pt page, not the file's 2000.8 × 2000.8 pt page)")), "{w:?}");
+}
+
+/// Editing data that can't be decompressed leaves the `.ai` as its PDF part, after its notes, with a
+/// note saying why its layers weren't read, which counts as a loss.
+#[test]
+fn an_ai_file_whose_editing_data_cant_be_decompressed_says_so() {
+    let pdf = pdf_part(10.0, 86.0);
+    for (private, why) in [
+        (&b"%AI12_CompressedDataxx"[..], "its zlib compression is damaged"),
+        (b"%AI24_ZStandard_Data nothing", "its Zstandard compression is damaged"),
+    ] {
+        let (d, w, read) = crate::layered_ai(private, pdf.clone(), vec!["a note".into()], false, false, 1.0);
+        assert!(!read);
+        assert_eq!(names(&d), names(&pdf));
+        assert_eq!(w, ["a note".to_string(), format!("the file's layers weren't read from its editing data ({why}): they come from its PDF part")]);
+        assert!(crate::is_loss(&w[1]), "{w:?}");
+    }
+}
+
+/// #2031: a Large Canvas editing copy (`%AI24_LargeCanvasScale: 10`) writes its art and boxes at
+/// 1/10 scale; the import scales them back, so its layers are read instead of being rejected as
+/// another page's — with the art at the page's size. Art that doesn't match the page at that
+/// scale is still another page's.
+#[test]
+fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
+    // 10 art units for the page's 100 points: a 0.4-unit square at (5, 5) is the page's 4-point
+    // square at (50, 50).
+    let art = native_large_canvas(10.0, 10.0, &layer("Art", true, "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf"));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let b = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    assert!((b.x0 - 50.0).abs() < 1e-6 && (b.y0 - 46.0).abs() < 1e-6, "at the page's place: {b:?}");
+    assert!((b.width() - 4.0).abs() < 1e-6 && (b.height() - 4.0).abs() < 1e-6, "at the page's size: {b:?}");
+    // A declared scale the art doesn't fit still makes it another page's.
+    let art = native_large_canvas(20.0, 10.0, &layer("Art", true, &square(10, 10)));
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Layer 1"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("for a 200 × 200 pt page, the file's 100 × 100 pt page at 2:1")), "{:?}", r.warnings);
+    // A `.ai` keeps its art space: its PDF part is read at the size it declares.
+    let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read && names(&d) == ["Art"], "{w:?}");
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
-/// pages still go where its editing data puts its artboards, with their art (#1068).
+/// pages still go where its editing data puts its artboards, with their art, and keep their names (#1068).
 #[test]
 fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     // Two 100-point artboards, the second below the first (art space, y up).
     let board = |x0: i32, y0: i32| {
         format!(
-            "%_/Dictionary :\n%_{x0} {} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            "%_/Dictionary :\n%_{x0} {} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_(at {x0} {y0}) /UnicodeString (Name) ,\n%_; ,\n",
             y0 + 100,
             x0 + 100
         )
@@ -267,18 +695,29 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
     pdf.artboards.push(page);
     let squares = |d: &Document| d.layers[0].children().unwrap().iter().map(|n| n.visual_bounds().unwrap().origin()).collect::<Vec<_>>();
-    let (d, w, read) = crate::layered_ai(&private(&unread(&[(0, 0), (0, -150)])), pdf.clone(), vec![], false);
+    let (d, w, read) = crate::layered_ai(&private(&unread(&[(0, 0), (0, -150)])), pdf.clone(), vec![], false, false, 1.0);
     assert!(!read && w.iter().any(|w| w.contains("layers weren't read")), "{w:?}");
     let rects: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
     assert_eq!(rects, [vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), vectorcraft_geom::Rect::new(0.0, 150.0, 100.0, 250.0)]);
+    let board_names: Vec<_> = d.artboards.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(board_names, ["at 0 0", "at 0 -150"]);
     let moved = squares(&d);
     assert!((moved[0] - squares(&pdf)[0]).hypot() < 1e-6, "the first page's art stays: {moved:?}");
     assert!((moved[1] - vectorcraft_geom::Point::new(10.0, 160.0)).hypot() < 1e-6, "the second's goes with its page: {moved:?}");
     // Artboards that don't match the pages leave them in a row.
     for list in [&[(0, 0)][..], &[(0, 0), (0, -150), (200, 0)]] {
-        let (d, _, _) = crate::layered_ai(&private(&unread(list)), pdf.clone(), vec![], false);
+        let (d, _, _) = crate::layered_ai(&private(&unread(list)), pdf.clone(), vec![], false, false, 1.0);
         assert_eq!(d.artboards[1].rect, pdf.artboards[1].rect, "{list:?}");
+        assert_eq!(d.artboards[1].name, pdf.artboards[1].name, "{list:?}");
     }
+    // Pages read in points from a user space of 10 points a unit, with artboards in those units:
+    // the same layout, ten times as large.
+    let (d, _, read) = crate::layered_ai(&private(&unread(&[(0, 0), (0, -150)])), in_points(pdf.clone(), 10.0), vec![], false, false, 10.0);
+    assert!(!read);
+    let rects: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(rects, [vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 1000.0), vectorcraft_geom::Rect::new(0.0, 1500.0, 1000.0, 2500.0)]);
+    let moved = squares(&d);
+    assert!((moved[1] - vectorcraft_geom::Point::new(100.0, 1600.0)).hypot() < 1e-6, "the second's art goes with its page: {moved:?}");
 }
 
 #[test]
@@ -402,6 +841,70 @@ fn type_on_a_hidden_layer_comes_from_the_text_document() {
     assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
 }
 
+/// A run that sets no colour of its own takes its character style's (here `[Normal Character
+/// Style]`, black), not the text document's base attributes (here white, which hid the type).
+/// A style takes what it doesn't set from the style it is based on, and a run's own setting wins.
+#[test]
+fn type_from_the_text_document_takes_its_character_styles_attributes() {
+    let own_fill = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> ";
+    let run = |style: u8| format!("/5 {style} /6 << /0 0 /1 14.0 >>");
+    let doc = text_document(&[
+        ("Normal\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0),
+        ("Based\r", 0, (8200.0, 8170.0), (0.0, 0.0), 0.0),
+        ("Own\r", 0, (8200.0, 8160.0), (0.0, 0.0), 0.0),
+    ])
+    // The first two runs set no colour, the second of the style based on the normal one.
+    .replacen(own_fill, "", 2)
+    .replacen(&run(0), "/5 X", 1)
+    .replacen(&run(0), &run(1), 1)
+    .replacen("/5 X", &run(0), 1)
+    // The document's base attributes: grey level 1, white, with auto leading.
+    .replacen("/2 << /1 12.0 >>", "/2 << /1 12.0 /4 true /53 << /99 /SimplePaint /0 << /0 0 /1 [ 1.0 1.0 ] >> >> >>", 1)
+    // Its character styles: the normal one black with 18-point leading, and one based on it in red.
+    .replacen(
+        "/0 << /1 <<",
+        "/0 << /5 << /0 [ << /0 << /0 ([Normal Character Style]) /6 << /4 false /5 18.0 \
+         /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 0.0 0.0 0.0 ] >> >> >> >> >> \
+         << /0 << /0 (Red) /5 0 /6 << /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 1.0 0.0 0.0 ] >> >> >> >> >> ] >> /1 <<",
+        1,
+    );
+    let spare = text_object(0) + &text_object(1) + &text_object(2);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &spare)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Normal", "Based", "Own"], "{:?}", r.warnings);
+    let style = |i: usize| (texts[i].runs[0].style.fill.clone(), texts[i].runs[0].style.leading);
+    let solid = vectorcraft_color::Paint::solid;
+    use vectorcraft_color::Color;
+    assert_eq!(style(0), (solid(Color::rgb(0.0, 0.0, 0.0)), Some(18.0)), "the normal style's");
+    assert_eq!(style(1), (solid(Color::rgb(1.0, 0.0, 0.0)), Some(18.0)), "its style's colour, the leading of the one it's based on");
+    assert_eq!(style(2), (solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Some(18.0)), "the run's own colour");
+}
+
+#[test]
+fn type_from_the_text_document_keeps_its_case_setting() {
+    // Key 12 of a character style is its case: 1 Small Caps, 2 All Caps. The characters stay as
+    // typed; the setting shows them as capitals.
+    let doc = text_document(&[
+        ("hon. guest\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0),
+        ("Book Now\r", 0, (8200.0, 8170.0), (0.0, 0.0), 0.0),
+        ("plain\r", 0, (8200.0, 8160.0), (0.0, 0.0), 0.0),
+    ])
+    .replacen("/1 14.0 /53", "/1 14.0 /12 2 /53", 1)
+    .replacen("/1 14.0 /53", "/1 14.0 /12 1 /53", 1);
+    let spare = text_object(0) + &text_object(1) + &text_object(2);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &spare)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 3, "{:?}", r.warnings);
+    let case = |i: usize| texts[i].runs.iter().map(|r| (r.style.all_caps, r.style.small_caps)).collect::<Vec<_>>();
+    assert_eq!(texts[0].plain_text(), "hon. guest");
+    assert_eq!(case(0), [(true, None)]);
+    assert_eq!(texts[1].plain_text(), "Book Now");
+    assert_eq!(case(1), [(false, Some(r.document.setup.small_caps_size))]);
+    assert_eq!(case(2), [(false, None)]);
+}
+
 #[test]
 fn type_with_a_frame_it_cant_read_is_left_out_with_a_note() {
     // A story whose frame is of a kind this doesn't know isn't guessed at.
@@ -491,6 +994,232 @@ fn type_of_the_page_that_no_story_places_stays_with_the_nearest_text_object() {
     assert!(all.contains(&"Extra".to_string()), "{all:?} {:?}", r.warnings);
 }
 
+/// Page type of no text object that lies where made type is, but has other letters, is not that type:
+/// it stays, with the nearest text object.
+#[test]
+fn type_of_the_page_near_made_type_with_other_letters_stays() {
+    // "Extra" is 11.5 below the line of "Hi there", well inside the box round that line.
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show 58.5 50 moveto (Extra) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there", "Extra"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// Page type of no text object that lies where made type is and has its letters, in any case, is that
+/// type as the page draws it: the made type stays, and the page's is left out.
+#[test]
+fn type_of_the_page_with_the_letters_of_made_type_where_it_lies_is_that_type() {
+    // The page draws the line 3 points below where the story starts it, so no line of the story
+    // owns it.
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    for drawn in ["Hi there", "HI THERE", "there"] {
+        let page = format!("0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto ({drawn}) show");
+        let r = import(&eps(&page, &art)).unwrap();
+        let mut all = vec![];
+        r.document.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                all.push((t.plain_text(), t.xf.as_coeffs()[5]));
+            }
+        });
+        assert_eq!(all, [("Hi there".to_string(), 38.5)], "{drawn}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("doesn't draw") || w.contains("with another's")), "{drawn}: {:?}", r.warnings);
+    }
+}
+
+/// A right-to-left paragraph's page type has its words in the order they show, not the order they
+/// are typed (a dimension's label " 120.5 mm " is drawn "mm 120.5"): it is still that text
+/// object's type as the page draws it, not a second copy of it with the nearest text object.
+#[test]
+fn type_of_the_page_with_the_words_of_made_type_in_another_order_is_that_type() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto (there Hi) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Hi there"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// Page type of no text object that lies where the made type of two text objects is, with the
+/// letters of one of them in each of its pieces, is the type of both as the page draws it.
+#[test]
+fn type_of_the_page_with_the_letters_of_two_made_types_where_it_lies_is_their_type() {
+    // The two stories start 16.5 apart on one line, and the page draws both 3 points below it: its
+    // two pieces are one object, which no line of either story owns.
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("there\r", 0, (8216.5, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 58.5 moveto (Hi) show 75 58.5 moveto (there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push((t.plain_text(), t.xf.as_coeffs()[5]));
+        }
+    });
+    assert_eq!(all, [("Hi".to_string(), 38.5), ("there".to_string(), 38.5)], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't draw") || w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// The file's text document is trusted where the page has type where it lays type out, whatever
+/// letters that type has: its type is weighed against the page.
+#[test]
+fn page_type_where_made_type_is_trusts_the_text_document_whatever_its_letters() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 50 moveto (Extra) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let mut all = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            all.push(t.plain_text());
+        }
+    });
+    assert_eq!(all, ["Extra"], "{:?}", r.warnings);
+    // "Hi there" was made from the text document and left out because the page doesn't draw it.
+    assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
+}
+
+#[test]
+fn type_the_page_draws_of_a_text_object_on_a_hidden_layer_stays_hidden() {
+    // A file's page may draw what its layers have hidden since: story 1's type is on the page at
+    // (58.5, 30), and its text object is on a layer that doesn't show.
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Extra\r", 0, (8200.0, 8211.5), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&(layer("Art", true, &text_object(0)) + &layer("Spare", false, &text_object(1))), &doc);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show 58.5 30 moveto (Extra) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Spare"], "{:?}", r.warnings);
+    let texts = |l: usize| text_of(&r.document.layers[l]).iter().map(|t| t.plain_text()).collect::<Vec<_>>();
+    assert_eq!((texts(0), texts(1)), (vec!["Hi there".to_string()], vec!["Extra".to_string()]), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("with another's")), "{:?}", r.warnings);
+}
+
+/// The opacity and blend mode of a text object (an `Xy` before it, as a path has, or after it, as a
+/// group has, or on the look of one with an appearance) are its type's, made from the text document
+/// or taken from the page, and are applied once where the type comes with other art.
+#[test]
+fn type_keeps_the_opacity_and_blend_mode_of_its_text_object() {
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::Knockout;
+    let states = |d: &Document| {
+        let mut v = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(_) = &n.kind {
+                v.push((n.opacity, n.blend));
+            }
+        });
+        v
+    };
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n1 0.2 0 1 0 Xy\n0 0 Xd\n6 () XW\n";
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    for body in [
+        format!("1 0.2 0 0 0 Xy\n{}", text_object(0)),
+        format!("{}1 0.2 0 0 0 Xy\n", text_object(0)),
+        format!("{look}%_0 1 0 0 0 Xy\n{own}1 (Style) XW\n"),
+    ] {
+        let art = native_with_text(&layer("Art", true, &body), &doc);
+        // Made from the text document.
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        assert_eq!(states(&d), [(0.2, BlendMode::Multiply)], "{body}{notes:?}");
+        // From an EPS page, which draws it without transparency.
+        let r = import(&eps(page, &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art"], "{body}{:?}", r.warnings);
+        assert_eq!(states(&r.document), [(0.2, BlendMode::Multiply)], "{body}{:?}", r.warnings);
+    }
+    // A look with transparency that draws more than the type: the look and the type are in a group
+    // that has the transparency once, whatever state the object is read in.
+    let drawing = look.replace("U\n", &format!("{}\nU\n", square(10, 10)));
+    for reset in ["%_0 1 0 0 0 Xy\n", ""] {
+        let art = native_with_text(&layer("Art", true, &format!("{drawing}{reset}{own}1 (Style) XW\n")), &doc);
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        assert_eq!(kinds(&d.layers[0]), ["group[2]"], "{reset}{notes:?}");
+        let group = &d.layers[0].children().unwrap()[0];
+        assert_eq!((group.opacity, group.blend, group.knockout), (0.2, BlendMode::Multiply, Knockout::On), "{reset}");
+        assert_eq!(kinds(group), ["group[1]", "text"], "{reset}");
+        assert_eq!(group.children().unwrap()[0].knockout, Knockout::Neutral, "{reset}");
+        assert!(group.children().unwrap().iter().all(|p| (p.opacity, p.blend) == (1.0, BlendMode::Normal)), "{reset}");
+    }
+    // Such a group isn't the look of a text object after it, so the groups don't nest.
+    fn depth(n: &Node) -> usize {
+        1 + n.children().map_or(0, |c| c.iter().map(|c| depth(c)).max().unwrap_or(0))
+    }
+    let art = native_with_text(&layer("Art", true, &(drawing.clone() + &format!("{own}1 (Style) XW\n").repeat(50))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(depth(&d.layers[0]), 4, "{notes:?}");
+    // Made type with the page's type of no text object kept after it: a group of the two has it.
+    let art = native_with_text(&layer("Art", true, &format!("1 0.2 0 0 0 Xy\n{}", text_object(0))), &doc);
+    let r = import(&eps(&format!("{page} 58.5 30 moveto (Extra) show"), &art)).unwrap();
+    assert_eq!(kinds(&r.document.layers[0]), ["group[2]"], "{:?}", r.warnings);
+    let group = &r.document.layers[0].children().unwrap()[0];
+    assert_eq!((group.opacity, group.blend), (0.2, BlendMode::Multiply));
+    let texts: Vec<String> = text_of(group).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["Hi there", "Extra"]);
+    assert!(group.children().unwrap().iter().all(|p| (p.opacity, p.blend) == (1.0, BlendMode::Normal)));
+    // A story in a frame of a kind this doesn't know: the type that shows is the page's. An EPS page has
+    // no transparency, so its type takes its text object's.
+    let doc = doc.replace("/2 << /2 [ 1 0 0 1 0 0 ] >>", "/2 << /0 9 /2 [ 1 0 0 1 0 0 ] >>");
+    let art = native_with_text(&layer("Art", true, &format!("{}\n1 0.2 0 0 0 Xy\n{}", square(10, 10), text_object(0))), &doc);
+    let r = import(&eps(&(page_square(10, 10) + "\n" + page), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert_eq!(states(&r.document), [(0.2, BlendMode::Multiply)], "{:?}", r.warnings);
+    // A PDF part's type at its text object's transparency has it once; transparency of its own that
+    // the text object doesn't have (a fill's) stays.
+    let pdf = |state: (f32, BlendMode)| {
+        let mut pdf = pdf_part(10.0, 86.0);
+        let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(58.5, 38.5), "Hi there", style);
+        let mut text = Node::new(pdf.alloc_id(), NodeKind::Text(Box::new(text)));
+        (text.opacity, text.blend) = state;
+        let layer_id = pdf.layers[0].id;
+        pdf.insert(Some(layer_id), 1, text).unwrap();
+        pdf
+    };
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf((0.2, BlendMode::Multiply)), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(states(&d), [(0.2, BlendMode::Multiply)], "{w:?}");
+    let plain = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0))), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&plain), pdf((0.7, BlendMode::Normal)), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(states(&d), [(0.7, BlendMode::Normal)], "{w:?}");
+    // The same type with a look that draws more than it, which the page draws with the look's
+    // transparency: the group of the two has it once.
+    let art = native_with_text(&layer("Art", true, &format!("{drawing}{own}1 (Style) XW\n")), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf((0.2, BlendMode::Multiply)), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(kinds(&d.layers[0]), ["group[2]"], "{w:?}");
+    let group = &d.layers[0].children().unwrap()[0];
+    assert_eq!((group.opacity, group.blend), (0.2, BlendMode::Multiply));
+    assert_eq!(states(&d), [(1.0, BlendMode::Normal)], "{w:?}");
+    // Page type that is a text and the path of its stroke: a group of the two takes the transparency.
+    let page = format!(
+        "{}\n/Helvetica findfont 12 scalefont setfont 10 50 moveto (Hi) show\n10 50 moveto (Hi) false charpath 2 setlinewidth stroke",
+        page_square(10, 10)
+    );
+    let words = layer("Words", true, "1 0.2 0 0 0 Xy\n/AI11Text :\n0 /FreeUndo ,\n;\n");
+    let r = import(&eps(&page, &native(&(layer("Art", true, &square(10, 10)) + &words)))).unwrap();
+    let words = &r.document.layers[1];
+    assert_eq!(kinds(words), ["group[2]"], "{:?}", r.warnings);
+    let group = &words.children().unwrap()[0];
+    assert_eq!((group.opacity, group.blend), (0.2, BlendMode::Multiply));
+    assert_eq!(kinds(group), ["text", "path"]);
+    assert!(group.children().unwrap().iter().all(|p| (p.opacity, p.blend) == (1.0, BlendMode::Normal)));
+}
+
 #[test]
 fn a_commented_copy_of_a_story_that_has_a_plain_text_object_is_not_another_object() {
     // The file writes some stories twice (plain, then as comments) and others only as comments.
@@ -519,6 +1248,24 @@ fn a_shown_text_object_on_the_page_that_the_page_doesnt_draw_is_left_out() {
     });
     assert_eq!(all, ["Hi there"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("doesn't draw")), "{:?}", r.warnings);
+}
+
+/// A text object on a layer that shows and doesn't print, which the page doesn't draw, isn't taken
+/// out: it comes in from the text document, on its layer.
+#[test]
+fn a_shown_text_object_on_a_layer_that_doesnt_print_stays_on_its_layer() {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The layer's options with its fourth flag, printing, off.
+    let tips = layer("Tips", true, &text_object(0)).replace("1 1 1 1 0 0 1 0 79", "1 1 1 0 0 0 1 0 79");
+    let art = native_with_text(&(layer("Art", true, &square(10, 10)) + &tips), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Art", "Tips"], "{w:?}");
+    let tips = &d.layers[1];
+    assert!(tips.visible && matches!(tips.kind, NodeKind::Layer { printable: false, .. }));
+    let texts: Vec<String> = text_of(tips).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["Hi there"], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
 }
 
 #[test]
@@ -553,7 +1300,7 @@ fn more_text_objects_than_are_matched_leave_the_page() {
     let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
     let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &many)), &doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Back", "Spare", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("too many text objects") && crate::is_loss(w)), "{:?}", r.warnings);
 }
 
@@ -587,6 +1334,37 @@ fn an_ai_file_without_its_pdf_part_reads_its_layers_and_makes_its_type() {
     assert!(crate::ai_alone(b"%AI24_ZStandard_Data nothing").is_err());
 }
 
+/// A `.ai`'s PDF part has a page for each artboard, in a row: the type on a later page goes to
+/// its text object where the layers have that artboard, not by the first page's place.
+#[test]
+fn type_on_a_later_artboard_of_an_ai_file_goes_to_its_text_object() {
+    // Two 100-point artboards, the second 50 below the first; the type is 50 down the second
+    // (art space: (58.5, -100); the canvas centre 8191.5 is the template box's centre, (50, 50)).
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8341.5), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&(boards.to_string() + &layer("Art", true, &(square(10, 10) + &text_object(0)))), &doc);
+    // The PDF part: the second page 20 points right of the first, the type 50 down it.
+    let mut pdf = pdf_part(10.0, 86.0);
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page);
+    let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(178.5, 50.0), "Hi there", style);
+    let (id, layer_id) = (pdf.alloc_id(), pdf.layers[0].id);
+    pdf.insert(Some(layer_id), 1, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards[1].rect, vectorcraft_geom::Rect::new(0.0, 150.0, 100.0, 250.0));
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.len(), 1, "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 58.5).abs() < 1e-6 && (f - 200.0).abs() < 1e-6, "{:?}", texts[0].xf);
+    assert!(!w.iter().any(|w| w.contains("with another's") || w.contains("doesn't draw")), "{w:?}");
+}
+
 /// A global process colour (`Xk`) or a pattern fill on a sublayer no longer sends a `.ai` to its
 /// PDF part, which has only the top-level layers (#1025).
 #[test]
@@ -598,7 +1376,7 @@ fn a_global_colour_or_a_pattern_fill_keeps_the_sublayers_of_an_ai_file() {
     let patterned = "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
     let ground = layer("Ground", true, &(layer("Lawn", true, yellow) + &layer("Paving", false, patterned)));
     let art = native(&format!("{dots}{ground}"));
-    let (d, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false);
+    let (d, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
     assert_eq!(names(&d), ["Ground"], "{warnings:?}");
     let subs: Vec<_> = d.layers[0].children().unwrap().iter().map(|l| (l.name.clone().unwrap_or_default(), kinds(l))).collect();
     assert_eq!(subs, [("Lawn".to_string(), vec!["path"]), ("Paving".to_string(), vec!["path"])]);
@@ -614,14 +1392,56 @@ fn a_global_colour_or_a_pattern_fill_keeps_the_sublayers_of_an_ai_file() {
     assert!(matches!(&fill, Some(vectorcraft_color::Paint::Pattern { pattern, .. }) if pattern == "Dots"), "{fill:?}");
 }
 
+/// A `.ai` whose PDF part is older than its editing copy draws less than its layers: trusted, the
+/// layers are used anyway, and the difference is noted.
+#[test]
+fn a_trusted_editing_copy_is_used_where_it_draws_differently_from_the_pdf_part() {
+    let extra = "0 0 1 0 k\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
+    let art = native(&layer("Back", true, &(square(10, 10) + "\n" + extra)));
+    let (d, w, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert_ne!(names(&d), ["Back"], "untrusted, the PDF part is used: {w:?}");
+    let (d, w, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert_eq!(names(&d), ["Back"], "{w:?}");
+    assert_eq!(d.layers[0].children().unwrap().len(), 2);
+    assert!(w.iter().any(|w| w.contains("differs from the page's") && w.contains("all the same")), "{w:?}");
+}
+
 #[test]
 fn an_object_the_page_doesnt_draw_makes_the_file_come_in_as_its_page() {
     // A 20-point square that the page doesn't draw: 4% of the page, and an object all the same.
     let extra = "0 0 1 0 k\n50 50 m\n70 50 L\n70 70 L\n50 70 L\nf";
     let art = native(&layer("Back", true, &(square(10, 10) + "\n" + extra)));
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Back", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read") && w.contains("differs from the page's")), "{:?}", r.warnings);
+}
+
+/// The page sets "Hi there" in pieces, and the layers lay the line out again as one: the page and
+/// the layers differ only where the type is.
+fn page_in_pieces_and_layers(art: &str) -> Vec<u8> {
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi) show 70 61.5 moveto (there) show";
+    eps(page, &native_with_text(&layer("Art", true, &format!("{art}{}", text_object(0))), &doc))
+}
+
+#[test]
+fn type_laid_out_again_is_noted_as_type_and_not_as_art_the_layers_dont_describe() {
+    let r = import(&page_in_pieces_and_layers("")).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("the type on the layers differs from the file's own page")), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("brush strokes")), "{:?}", r.warnings);
+}
+
+#[test]
+fn art_the_page_doesnt_draw_is_noted_with_its_own_share_and_not_the_types() {
+    // A bar of 0.5 × 80 points that the page doesn't draw, too thin to be refused as an object: 0.4% of
+    // the page, away from the type.
+    let bar = "0 0 0 1 k\n20 10 m\n20.5 10 L\n20.5 90 L\n20 90 L\nf\n";
+    let r = import(&page_in_pieces_and_layers(bar)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let notes: Vec<&String> = r.warnings.iter().filter(|w| w.contains("differs from the file's own page")).collect();
+    assert_eq!(notes.len(), 1, "{:?}", r.warnings);
+    assert!(notes[0].starts_with("the art on the layers differs from the file's own page in about 0.4% of it (brush strokes"), "{notes:?}");
 }
 
 /// An EPS whose page is its art's box `[x0 y0 x1 y1]` (not its artboard, 0 0 100 100), drawing
@@ -644,7 +1464,7 @@ fn art_the_layers_print_outside_an_eps_page_of_its_art_makes_it_come_in_as_its_p
     let file = |far: &str| eps_of_art([10, 10, 14, 14], &page_square(10, 10), &(layer("Art", true, &square(10, 10)) + far));
     // A square the layers print far from it: the page would have it.
     let r = import(&file(&layer("Far", true, &square(80, 80)))).unwrap();
-    assert_eq!(names(&r.document), ["Layer 1"], "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Art", "Far", "Layer 1"], "{:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("layers weren't read")), "{:?}", r.warnings);
     // Hidden, or on a layer that doesn't print, the page doesn't have it.
     let r = import(&file(&layer("Far", false, &square(80, 80)))).unwrap();
@@ -683,12 +1503,12 @@ fn type_asked_for_as_outlines_leaves_a_file_whose_type_shows_as_its_pdf_part() {
     let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
     // Type that shows: the PDF part's outlines are its type, which the text objects can't hold.
     let shown = native_with_text(&layer("Art", true, &(square(10, 10) + "\n" + &text_object(0))), &doc);
-    let (d, w, _) = crate::layered_ai(&private(&shown), pdf_part(10.0, 86.0), vec![], true);
+    let (d, w, _) = crate::layered_ai(&private(&shown), pdf_part(10.0, 86.0), vec![], true, false, 1.0);
     assert_eq!(names(&d), ["Layer 1"], "{w:?}");
     assert!(w.iter().any(|w| w.contains("layers weren't read") && w.contains("outlines")), "{w:?}");
     // Type only on a hidden layer: the layers come in.
     let hidden = native_with_text(&(layer("Art", true, &square(10, 10)) + &layer("Notes", false, &text_object(0))), &doc);
-    let (d, w, _) = crate::layered_ai(&private(&hidden), pdf_part(10.0, 86.0), vec![], true);
+    let (d, w, _) = crate::layered_ai(&private(&hidden), pdf_part(10.0, 86.0), vec![], true, false, 1.0);
     assert_eq!(names(&d), ["Art", "Notes"], "{w:?}");
 }
 
@@ -767,6 +1587,84 @@ fn area_type_and_type_on_a_path_come_from_the_text_document() {
     assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
 }
 
+/// A story of `text` on frame 0 whose layout sets glyphs `advance` wide round the outside of a
+/// circle of radius `radius`, the circle's length between their centres `fraction` of an advance.
+fn round_story(text: &str, advance: f64, radius: f64, fraction: f64) -> String {
+    let n = text.chars().count();
+    let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![]);
+    for i in 0..=n {
+        // From the circle's left, clockwise on the canvas (y down), feet towards its centre.
+        let angle = std::f64::consts::PI + i as f64 * advance * fraction / radius;
+        let along = (-angle.sin(), angle.cos());
+        xs.push(radius * angle.cos() - along.0 * advance * 0.5);
+        ys.push(radius * angle.sin() - along.1 * advance * 0.5);
+        matrices.push(format!("{} {} {} {} 0 0", along.0, along.1, -along.1, along.0));
+        ends.push(i as f64 * advance);
+    }
+    let nums = |v: &[f64]| v.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(" ");
+    format!(
+        "<< /0 << /0 ({text}) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 {n} >> ] >> \
+         /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /1 12.0 >> >> >> /1 {n} >> ] >> >> /1 << /0 [ << /0 0 >> ] \
+         /2 [ << /99 /PC /6 [ << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >> ] >> ] >> >>",
+        nums(&xs),
+        nums(&ys),
+        matrices.join(" "),
+        nums(&ends)
+    )
+}
+
+/// The file closes type up round the outside of a curve (its layout puts the glyphs' centres
+/// closer than their advances), though the frame has no spacing of its own: the type comes in
+/// spaced as the layout is, not at its advances, so it doesn't run on past where the page ends it.
+#[test]
+fn type_round_a_circle_is_spaced_as_the_file_lays_it_out() {
+    // A circle of radius 40 round the middle of the page, in four cubics from its right, clockwise
+    // on the page; the type from its left, over the top, round almost all of it.
+    let k = 40.0 * 0.552_284_75;
+    let points = [
+        (90.0, 50.0),
+        (90.0, 50.0 - k),
+        (50.0 + k, 10.0),
+        (50.0, 10.0),
+        (50.0 - k, 10.0),
+        (10.0, 50.0 - k),
+        (10.0, 50.0),
+        (10.0, 50.0 + k),
+        (50.0 - k, 90.0),
+        (50.0, 90.0),
+        (50.0 + k, 90.0),
+        (90.0, 50.0 + k),
+        (90.0, 50.0),
+    ];
+    let all: Vec<(f64, f64)> = points.iter().map(|(x, y)| canvas(*x, *y)).collect();
+    let segment = |i: usize| (0..4).map(|j| format!("{} {}", all[i * 3 + j].0, all[i * 3 + j].1)).collect::<Vec<_>>().join(" ");
+    let frame =
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 2 /6 [ 2.0 5.99 ] >> >> >>", (0..4).map(segment).collect::<Vec<_>>().join(" "));
+    // Glyphs 5 apart, their centres 5 × 40/48 apart round the circle: spaced 8 above the path.
+    let doc = document_of(&[frame], &[round_story("abcdefgh", 5.0, 40.0, 40.0 / 48.0)]);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }), "{:?}", t.kind);
+    assert!((t.path_spacing - 8.0).abs() < 0.05, "{}", t.path_spacing);
+    // Laid out, the glyphs' centres are 40/48 of their advances apart round the circle.
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let centres: Vec<(f64, f64)> = layout
+        .glyphs
+        .iter()
+        .map(|g| (g.origin.x + g.angle.cos() * g.advance * 0.5 - 50.0, g.origin.y + g.angle.sin() * g.advance * 0.5 - 50.0, g.advance))
+        .map(|(x, y, a)| (y.atan2(x), a))
+        .collect();
+    assert_eq!(centres.len(), 8);
+    for w in centres.windows(2) {
+        let turn = (w[1].0 - w[0].0 + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+        let ratio = turn.abs() * 40.0 / ((w[0].1 + w[1].1) * 0.5);
+        assert!((ratio - 40.0 / 48.0).abs() < 0.01, "{ratio}");
+    }
+}
+
 #[test]
 fn threaded_area_type_flows_through_its_frames() {
     let frames = [
@@ -823,4 +1721,260 @@ fn a_copied_area_type_object_is_framed_where_its_own_art_path_is() {
     // Art y 50..70 is 30..50 down the 100 pt page.
     let b = frame.bounds().unwrap();
     assert!((b.x0 - 30.0).abs() < 1e-6 && (b.y0 - 30.0).abs() < 1e-6 && (b.x1 - 80.0).abs() < 1e-6 && (b.y1 - 50.0).abs() < 1e-6, "{b:?}");
+}
+
+/// A raster print page can carry a fully vector editing copy. The legacy mesh has no
+/// opacity operand and its vector mask hides half of it: ignoring either loses this import.
+#[test]
+fn raster_print_page_recovers_legacy_mesh_vector_mask_and_editable_curve() {
+    let mesh = "/Mesh X!\n%_/DeviceRGB /CS X#\n\
+        %_[0 0 1 20 20 20 30 1 30 20 1] /N X#\n\
+        %_[0 0 1 20 60 30 60 1 20 50 1] /N X#\n\
+        %_[0 0 1 60 60 60 50 1 50 60 1] /N X#\n\
+        %_[0 0 1 60 20 50 20 1 60 30 1] /N X#\n%_/E X#\n/End X!\n";
+    let mask = "%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_1 g\n%_20 20 m\n%_20 60 L\n%_40 60 L\n%_40 20 L\n%_f\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let curve = "0 1 1 0 1 0 0 Xa\n70 20 m\n70 50 90 50 90 20 c\nf\n";
+    let data = native(&layer("Editable", true, &format!("u\n{mesh}{mask}{curve}U\n")));
+    let samples = ("0000ff".repeat(20) + &"ffffff".repeat(20)).repeat(40);
+    let page = format!(
+        "gsave 20 20 translate 40 40 scale /DeviceRGB setcolorspace \
+        << /ImageType 1 /Width 40 /Height 40 /BitsPerComponent 8 /Decode [0 1 0 1 0 1] \
+        /ImageMatrix [40 0 0 -40 0 40] /DataSource <{samples}> >> image grestore \
+        1 0 0 setrgbcolor 70 20 moveto 70 50 90 50 90 20 curveto closepath fill"
+    );
+    // Use AI9's zlib container, too, rather than only the newer Zstandard test helper.
+    use std::io::Write as _;
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(data.as_bytes()).unwrap();
+    let packed = ascii85(&encoder.finish().unwrap());
+    let file = format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n{page}\nshowpage\n%%EOF\n%AI9_PrivateDataBegin\n%AI9_DataStream\n%{packed}\n%AI9_PrivateDataEnd\n"
+    );
+    let r = import(file.as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Editable"]);
+    let group = &r.document.layers[0].children().unwrap()[0];
+    let a = group.children().unwrap();
+    assert_eq!(a.len(), 2);
+    assert!(matches!(a[0].kind, NodeKind::Mesh(_)));
+    assert!(a[0].extras().mask.is_some());
+    let NodeKind::Path { path, .. } = &a[1].kind else { panic!("editable path") };
+    assert_eq!(path.anchor_count(), 2);
+    assert_ne!(path.subpaths[0].anchors[0].h_out, path.subpaths[0].anchors[0].p);
+    assert_ne!(a[0].id, a[1].id);
+    // The normal EPS path remains available explicitly.
+    let page = crate::import_with(file.as_bytes(), false).unwrap();
+    assert!(matches!(page.document.layers[0].children().unwrap()[0].kind, NodeKind::Image(_)));
+    // A wrong editing copy must still fail the page comparison.
+    let wrong = file.replace("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 120 100");
+    let r = import(wrong.as_bytes()).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("for a 100 × 100 pt page, not the file's 120 × 100 pt page")), "{:?}", r.warnings);
+}
+
+#[test]
+fn envelope_options_keep_the_source_text_hidden_under_its_outlined_appearance() {
+    let doc = text_document(&[("CHONKYCATS\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let slot: String = text_object(0).lines().map(|line| format!("%_{line}\n")).collect();
+    let envelope =
+        format!("%_/ArtDictionary :\n%_1 /Int (AIDeformOptionsKey) ,\n%_198 /Real (AIDeformArtHeightKey) ,\n%_X=\n%_0 Ae\n%_u\n{slot}%_U\n%_;\n");
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{envelope}", square(10, 10))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert_eq!(kinds(&r.document.layers[0]), ["path", "text"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push((t.plain_text(), n.visible));
+        }
+    });
+    assert_eq!(texts, [("CHONKYCATS".to_string(), false)], "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// An art style section with style `Comic`: a white fill offset and repeated by Transform under a
+/// red fill with its own blend mode, the characters at the bottom.
+fn comic_style() -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let fill = |paint: &str| basic("Fill Style Filter", &format!("/FillStyle : 0 O\n{paint}\n0 1 0 0 0 Xy\n0 1 Xd\n/Def ;\n (FillStyle) ,\n"));
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let rim = compound(
+        "Chain Style Filter",
+        &[
+            basic("Adobe Offset Path", "3 /Real (ofst) ,\n0 /Int (jntp) ,\n"),
+            fill("0 0 0 0 1 1 1 Xa"),
+            basic("Adobe Transform", "6 /Int (numCopies) ,\n1 /Real (moveH_Pts) ,\n"),
+        ],
+    );
+    let red = compound(
+        "Chain Style Filter",
+        &[fill("0 1 1 0 1 0 0 Xa"), basic("Blend Style Filter", "/BlendStyle : 1 0.5 0 0 0 Xy\n/Def ;\n (BlendStyle) ,\n")],
+    );
+    let stack = compound("Stack Style Filter", &[red, rim, basic("Conduit Filter", "")]);
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Comic) /Name ,\n/ActiveStyle :\n{}%AI9_EndArtStyles\n", compound("Chain Style Filter", &[stack]))
+}
+
+#[test]
+fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
+    // GUARDS: a style of more than one fill (or with effects on a fill) left the type as its drawn look,
+    // outlines that can't be retyped (comic lettering made with Illustrator's Appearance panel).
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::AppearanceItem;
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The look: the style's drawing round where the type lies (its anchor is at (58.5, 61.5)).
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(comic_style() + &layer("Art", true, &format!("{look}{own}1 (Comic) XW\n"))), &doc);
+    let check = |d: &Document, notes: &[String]| {
+        let mut texts = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                texts.push((t.plain_text(), n.appearance.clone()));
+            }
+        });
+        let [(text, a)] = texts.as_slice() else { panic!("{texts:?} {notes:?}") };
+        assert_eq!(text, "Bang");
+        // Bottom first: the white rim with its effects, then the red fill at half opacity, multiplied.
+        let [AppearanceItem::Fill(rim), AppearanceItem::Fill(red)] = a.items.as_slice() else { panic!("{a:?}") };
+        assert_eq!(rim.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["path.offsetPath", "distort.transform"]);
+        assert_eq!((red.blend, red.opacity), (BlendMode::Multiply, 0.5));
+        assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+    };
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    check(&d, &notes);
+    // From an EPS whose page draws Illustrator's rendering of the style (here, its look's rectangle):
+    // the layers are used all the same, the style's area not being held to look like the page.
+    let page = "0 0 1 0 setcmykcolor 54 56 moveto 100 56 lineto 100 80 lineto 54 80 lineto closepath fill";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    check(&r.document, &r.warnings);
+}
+
+#[test]
+fn point_type_without_a_matrix_is_placed_by_its_layout() {
+    // GUARDS: Illustrator 24 leaves an unturned, unscaled point type's matrix out of its frame; such
+    // stories weren't read, and the type was left out.
+    let with = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let without = with.replace("/2 << /2 [ 1 0 0 1 0 0 ] >>", "/2 << >>");
+    assert_ne!(with, without);
+    let place = |doc: &str| {
+        let art = native_with_text(&layer("Spare", false, &text_object(0)), doc);
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        let texts = text_of(&d.layers[0]);
+        assert_eq!(texts.len(), 1, "{notes:?}");
+        (texts[0].plain_text(), texts[0].xf)
+    };
+    assert_eq!(place(&without), place(&with));
+}
+
+/// A placed file is put where its matrix takes the canvas point of art space's origin (the
+/// centre of `%AI3_TemplateBox` on the canvas); many files put it at the corner of the box it is
+/// written with instead. When the layers don't draw as the page with the first, the second is
+/// tried.
+#[test]
+fn a_placed_file_at_its_boxs_corner_matches_the_page() {
+    // A 2 × 2 preview of half-transparent black (premultiplied ARGB), of a file whose box is
+    // 8000 8000 8040 8040 on the canvas: 40 × 40 units, which the matrix takes to (30, 70)–(70,
+    // 30) in art space, a square at (30, 30)–(70, 70) on the 100 × 100 page. The template box's
+    // canvas point (8091.5, 8241.5) would put it off the page.
+    let pixel = "\x7f\0\0\0";
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(photo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        pixel.repeat(4)
+    );
+    let data = native(&layer("Jig", true, &place)).replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    // The page: the square in 50% grey, as the PDF part draws the image.
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Jig"]);
+    let image = &d.layers[0].children().unwrap()[0];
+    assert!(matches!(image.kind, NodeKind::Image(_)), "{:?}", image.kind);
+    let b = image.geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+}
+
+#[test]
+fn a_small_placed_file_goes_where_it_draws_closer_to_the_page() {
+    // A 2 × 2 placed file (a small logo on a large page) whose box corner the matrix takes to
+    // (30, 30)–(32, 32), as the page draws it. The template box's canvas point puts it at
+    // (10, 10)–(12, 12): on the page too, and small enough that the layers pass the comparison
+    // there all the same.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8002 8002 4 4 0\n(logo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let data = native(&layer("Jig", true, &place)).replace("%AI5_NumLayers", "%AI3_TemplateBox: 211.5 -211.5 211.5 -211.5\n%AI5_NumLayers");
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 32.0, 32.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let b = d.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 32.0, b.y1 - 32.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+}
+
+#[test]
+fn text_a_placed_file_covers_only_at_its_first_placement_is_kept() {
+    const OPAQUE: &str = "<opaque>";
+    // An opaque black 2 × 2 preview of a file whose box corner the matrix takes to (30, 30)–(70,
+    // 70), as the page draws it. The template box's canvas point puts it 10 to the left instead,
+    // over the 8 pt text object "Hi" at (21, 48): there the text can't be seen, and the page has
+    // no type for it (it draws it as outlines), so the text looks like type the app doesn't draw.
+    // The layers then differ from the page by little more than `compare` allows, so that is
+    // weighed. With the file at its box's corner the text shows, as the page has it.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(photo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        OPAQUE.repeat(4)
+    );
+    // Canvas centre 8191.5 is the template box's centre (201.5, -191.5): the anchor (8011, 7952) is
+    // (21, 48) in art space.
+    let document = text_document(&[("Hi\r", 0, (8011.0, 7952.0), (0.0, 0.0), 0.0)]).replace("/1 14.0", "/1 8.0");
+    let data = native_with_text(&layer("Art", true, &(text_object(0) + &place)), &document)
+        .replace("%AI3_TemplateBox: 50 50 50 50", "%AI3_TemplateBox: 201.5 -191.5 201.5 -191.5");
+    // The page (y down): the image's black square, and the type's outlines, a magenta box where
+    // its glyphs are.
+    let mut page = Document::new(100.0, 100.0);
+    let l = page.layers[0].id;
+    for (rect, color) in [
+        (vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0), vectorcraft_color::Color::BLACK),
+        (vectorcraft_geom::Rect::new(21.5, 46.5, 28.0, 52.0), vectorcraft_color::Color::Cmyk { c: 0.0, m: 1.0, y: 0.0, k: 0.0 }),
+    ] {
+        let id = page.alloc_id();
+        let fill = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(color));
+        let n = Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(rect),
+            vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(fill)], ..Default::default() },
+        );
+        page.insert(Some(l), 0, n).unwrap();
+    }
+    // The preview's pixels are opaque black (ARGB `ff 00 00 00`), bytes a `str` can't hold.
+    let bytes =
+        data.replace(OPAQUE, "\u{1}").into_bytes().into_iter().flat_map(|b| if b == 1 { vec![0xff, 0, 0, 0] } else { vec![b] }).collect::<Vec<u8>>();
+    let private =
+        [b"%AI24_ZStandard_Data".as_slice(), &ruzstd::encoding::compress_to_vec(&bytes[..], ruzstd::encoding::CompressionLevel::Fastest)].concat();
+    let (d, w, read) = crate::layered_ai(&private, page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let art = d.layers[0].children().unwrap();
+    let image = art.iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("the image");
+    let b = image.geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+    assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
 }

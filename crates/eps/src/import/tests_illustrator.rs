@@ -121,6 +121,60 @@ fn a_postscript_ai_whose_layers_cant_be_read_says_why() {
     assert!(e.contains("`Adobe_packedarray`") && e.contains("its layers couldn't be read either") && e.contains("`frobnicate`"), "{e}");
 }
 
+/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
+/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
+/// (hyphen control). These keep no geometry, so the reader drops them rather than failing the
+/// file the way it did before — the symptom seen on Illustrator 6/8 EPS files whose
+/// `Adobe_level2_AI5` program can't be run.
+#[test]
+fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
+    let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
+        %_ 0 XL\n36 0 Xb\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+    // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
+    // on a hidden one), beside the square so the layer is never empty.
+    let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
+    let r = import(src.as_bytes()).unwrap();
+    assert!(!r.preview, "read through the layers, not a fallback preview");
+    assert!(!r.warnings.iter().any(|w| w.contains("doesn't know") || w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
+/// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
+/// no prolog and no layers, the paths unpainted (`n` closes, `N` doesn't), a compound path of two.
+const PATHS_ONLY: &str = "%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: an image editor\n%%BoundingBox: 0 0 200 100\n\
+    %AI3_Cropmarks: 0 0 200 100\n%%EndComments\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n\
+    %%Note: Outline\n10 10 m\n100 10 L\n50 80 60 90 10 10 C\nn\n\
+    *u\n20 20 m\n30 20 L\nN\n40 40 m\n50 50 L\n60 40 L\nn\n*U\n%%PageTrailer\n%%Trailer\n%%EOF\n";
+
+#[test]
+fn an_illustrator_3_file_without_layers_opens_its_paths_on_one_layer() {
+    let r = import(PATHS_ONLY.as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 1);
+    assert_eq!(d.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 100.0));
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2);
+    // Art space has y up: (10, 10) is 10 above the artboard's bottom.
+    let NodeKind::Path { path, .. } = &art[0].kind else { panic!("{:?}", art[0].kind) };
+    let ends: Vec<_> = path.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!(ends, [(10.0, 90.0), (100.0, 90.0)]);
+    assert!(path.subpaths[0].closed);
+    assert!(art[0].appearance.items.is_empty(), "unpainted");
+    let NodeKind::Compound { children, .. } = &art[1].kind else { panic!("{:?}", art[1].kind) };
+    let closed: Vec<_> = children.iter().map(|c| if let NodeKind::Path { path, .. } = &c.kind { path.is_closed() } else { false }).collect();
+    assert_eq!(closed, [false, true]);
+    assert_eq!(art[1].geometric_bounds(), Some(Rect::new(20.0, 50.0, 60.0, 80.0)));
+}
+
+/// The same program in a file that doesn't say it is in Illustrator's format is PostScript whose
+/// operators the reader doesn't know: it is still refused.
+#[test]
+fn the_same_program_in_other_postscript_is_still_refused() {
+    let other = PATHS_ONLY.replace("%AI3_Cropmarks: 0 0 200 100\n", "");
+    let e = import(other.as_bytes()).unwrap_err();
+    assert!(e.contains("it uses `m`") && !e.contains("layers"), "{e}");
+}
+
 /// The editing text of a newer file saved as PostScript (no prolog at all, a non-printing setup):
 /// it opens with its sublayers.
 #[test]

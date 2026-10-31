@@ -14,10 +14,13 @@ vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
 tiff = { workspace = true }
+# 1-bit TIFFs compressed with CCITT Group 3 (Compression 2 and 3).
+hayro-ccitt = { workspace = true }
 zune-jpeg = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 jpeg-encoder = { workspace = true }

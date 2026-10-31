@@ -1,24 +1,30 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
-use hayro_syntax::object::{Dict, Stream};
-use hayro_syntax::page::Page;
-use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
+use std::collections::{HashMap, HashSet};
+
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft_pdf::syntax::page::Page;
+use craft_pdf::syntax::xref::XRef;
+use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
+use crate::import_color::{direct, items, readable, values};
+use crate::streams::{Refusal, Refused, refused};
 use crate::{Choice, CropTo, ImportOptions, PdfError};
 
 /// What `info` tells about one page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PageInfo {
-    /// The page's size in points as viewers show it (its crop box, rotated).
+    /// The page's size in points as viewers show it (its crop box, rotated, times the `UserUnit`
+    /// the PDF reader applies to the page).
     pub width: f64,
     pub height: f64,
     /// The page's rotation in degrees (0, 90, 180 or 270).
     pub rotation: u16,
-    /// Every box but Bounding, in PDF user space (y up), clipped to the media box. A missing
-    /// bleed, trim or art box is the crop box.
+    /// Every box but Bounding, in PDF user space (y up), clipped to the media box, times the same
+    /// `UserUnit` (in points, as the size). A missing bleed, trim or art box is the crop box.
     pub boxes: Vec<(CropTo, Rect)>,
 }
 
@@ -33,27 +39,237 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
+/// The application's stricter refusal policy for functions and colour spaces built on one
+/// another (a function stitching functions together, an indexed space on an alternate).
+/// The shared interpreter also has function depth and node budgets; this preflight rejects
+/// cyclic or excessively linked objects before interpretation. Files usually have two or three.
+const MAX_LINKS: usize = 16;
+
+/// The application's calculator-procedure depth policy, layered over the shared reader's limits.
+const MAX_PROCEDURES: usize = 64;
+
+/// What the function or colour space `o` is built on: the functions a stitching function joins;
+/// the base, alternate and tint of a colour space; the alternate of a colour profile. Nothing for
+/// any other object.
+fn links<'a>(o: &Object<'a>, xref: &'a XRef) -> Vec<MaybeRef<Object<'a>>> {
+    const SPACES: [&[u8]; 6] = [b"Indexed", b"I", b"Separation", b"DeviceN", b"Pattern", b"ICCBased"];
+    if let Object::Array(a) = o {
+        let mut items = items(a);
+        let kind = match items.next() {
+            Some(MaybeRef::NotRef(Object::Name(n))) => Some(n),
+            Some(MaybeRef::Ref(r)) => xref.get::<Name<'a>>(r.into()),
+            _ => None,
+        };
+        return if kind.is_some_and(|n| SPACES.contains(&n.as_ref())) { items.collect() } else { vec![] };
+    }
+    let Some((d, _)) = dict_or_stream(o) else { return vec![] };
+    let functions = d.get::<Array<'a>>(b"Functions").map(|a| items(&a).collect::<Vec<_>>()).unwrap_or_default();
+    functions.into_iter().chain(d.get_raw::<Object<'a>>(b"Alternate")).collect()
+}
+
+/// How many of its kind the function or colour space `o` is built on, one on the next (0 for any
+/// other object); `None` past `room`, or when it is built on itself. `known`: the objects looked
+/// at so far (`None` while one is being looked at, too). One `None` refuses the file, so that an
+/// object is `None` only for the room there was where it was first met doesn't matter.
+fn built_on<'a>(o: MaybeRef<Object<'a>>, xref: &'a XRef, known: &mut HashMap<ObjectIdentifier, Option<usize>>, room: usize) -> Option<usize> {
+    let (id, o) = match o {
+        MaybeRef::Ref(r) => {
+            let id = ObjectIdentifier::from(r);
+            if let Some(found) = known.get(&id) {
+                return *found;
+            }
+            let Some(o) = xref.get::<Object<'a>>(id) else { return Some(0) };
+            known.insert(id, None);
+            (Some(id), o)
+        }
+        MaybeRef::NotRef(o) => (None, o),
+    };
+    let links = links(&o, xref);
+    let most = match room.checked_sub(1) {
+        _ if links.is_empty() => Some(0),
+        Some(room) => links.into_iter().try_fold(0, |most, on| built_on(on, xref, known, room).map(|n| most.max(n + 1))),
+        None => None,
+    };
+    // (What it is built on may be known already, and deeper than there is room for here.)
+    let most = most.filter(|n| *n <= room);
+    if let Some(id) = id {
+        known.insert(id, most);
+    }
+    most
+}
+
+/// Is `o` a calculator function whose procedures nest deeper than [`MAX_PROCEDURES`]?
+fn procedures_too_deep(o: &Object<'_>) -> bool {
+    let Object::Stream(s) = o else { return false };
+    if s.dict().get::<u8>(b"FunctionType") != Some(4) {
+        return false;
+    }
+    let Ok(program) = s.decoded() else { return false };
+    let mut depth = 0usize;
+    program.iter().any(|c| {
+        match c {
+            b'{' => depth += 1,
+            b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        depth > MAX_PROCEDURES
+    })
+}
+
+/// The error of a file with an object or cross-reference stream the reader would fail on as it
+/// opens the file ([`crate::streams::unsafe_file_streams`]); [`stream_note`] names any other.
+const STREAM_NOTE: &str = "a stream in it would decode to more than 256 MB, or its decode parameters can't be applied";
+
+/// The error of a file with functions or color spaces built on one another past [`MAX_LINKS`]
+/// (or on themselves), or a calculator function nested past [`MAX_PROCEDURES`].
+const NESTED_NOTE: &str = "its functions or colour spaces are built on one another without end";
+
+/// The error of a file with an array whose items can't all be read (a damaged file).
+const UNREADABLE_NOTE: &str = "an array in it is damaged and can't be read";
+
+/// Why `pdf` is refused, if it is: a stream the reader would fail on ([`stream_note`]), or
+/// functions, color spaces or calculator procedures nested too deep ([`NESTED_NOTE`]). Every
+/// object is looked at, and every array, dictionary and stream written inside one, wherever it
+/// is used from: the interpreter builds functions and color spaces from resources, shadings,
+/// images, patterns, masks and graphics states alike.
+fn hostile(pdf: &Pdf) -> Option<String> {
+    let xref = pdf.xref();
+    let mut known = HashMap::new();
+    // The objects of the file, then what each holds directly (64 deep at most: the reader's cap).
+    let mut pending: Vec<Object<'_>> = pdf.objects().into_iter().collect();
+    while let Some(o) = pending.pop() {
+        // A stream's own checks come first: a calculator function is decoded below.
+        if let Object::Stream(s) = &o
+            && let Some(r) = refused(s)
+        {
+            return Some(stream_note(pdf, s, r));
+        }
+        if procedures_too_deep(&o) || built_on(MaybeRef::NotRef(o.clone()), xref, &mut known, MAX_LINKS).is_none() {
+            return Some(NESTED_NOTE.into());
+        }
+        match &o {
+            // An array with an item that can't be read can't be looked at whole, and the
+            // interpreter would still read its leading items: the file is refused.
+            Object::Array(a) if !readable(a) => return Some(UNREADABLE_NOTE.into()),
+            Object::Array(a) => pending.extend(items(a).filter_map(direct)),
+            _ => pending.extend(dict_or_stream(&o).into_iter().flat_map(|(d, _)| values(d)).filter_map(direct)),
+        }
+    }
+    None
+}
+
+/// The error of a file with the stream `s` the reader would fail on, as [`refused`] says why:
+/// which object it is and what it holds, so a report of a file that can't be shared still says
+/// which stream it is (#4366).
+fn stream_note(pdf: &Pdf, s: &Stream<'_>, r: Refusal) -> String {
+    let id = s.obj_id();
+    // A stream written inside another object goes by that object; 0 is a stream the reader can't
+    // place.
+    let object = (id.obj_number > 0).then(|| format!("object {}", id.obj_number));
+    let what = match (r.inline_image, object) {
+        (true, Some(object)) => format!("an inline image in the content of {object}"),
+        (true, None) => "an inline image in it".to_string(),
+        (false, Some(object)) => format!("{} ({object})", stream_kind(pdf, id, s.dict())),
+        (false, None) => stream_kind(pdf, id, s.dict()),
+    };
+    match r.why {
+        Refused::TooBig(most) => format!("{what} would decode to more than {}", decoded_size(most)),
+        Refused::Parameters => format!("{what} has decode parameters that can't be applied"),
+    }
+}
+
+/// What the stream `id` with dictionary `dict` holds, for [`stream_note`]: an image (and its size
+/// in pixels), a form, a page's content, the editing data an `.ai` keeps in its first page's
+/// `PieceInfo`, or another stream.
+fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
+    let subtype = dict.get::<Name<'_>>(b"Subtype");
+    let subtype_is = |v: &[u8]| subtype.as_ref().is_some_and(|n| n.as_ref() == v);
+    if subtype_is(b"Image") {
+        let side = |key: &[u8]| dict.get::<u32>(key).unwrap_or(0);
+        return format!("an image of {} × {} px in it", side(b"Width"), side(b"Height"));
+    }
+    if subtype_is(b"Form") {
+        return "a form in it".to_string();
+    }
+    let is = |m: Option<MaybeRef<Object<'_>>>| matches!(m, Some(MaybeRef::Ref(r)) if ObjectIdentifier::from(r) == id);
+    let pages = pdf.pages();
+    // `Contents` is a stream or an array of them, the array in the page or an object of its own.
+    // Each object is read once however many pages share it, so a file can't make this quadratic.
+    let mut read = HashSet::new();
+    let content = pages.iter().any(|page| match page.raw().get_raw::<Object<'_>>(b"Contents") {
+        Some(MaybeRef::NotRef(Object::Array(a))) => items(&a).any(|m| is(Some(m))),
+        Some(MaybeRef::Ref(r)) => {
+            let at = ObjectIdentifier::from(r);
+            read.insert(at) && page.raw().get::<Array<'_>>(b"Contents").map_or(at == id, |a| items(&a).any(|m| is(Some(m))))
+        }
+        _ => false,
+    });
+    if content {
+        return "a page's content in it".to_string();
+    }
+    let private = pages.first().and_then(|p| p.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"));
+    if private.is_some_and(|d| d.entries().any(|(key, m)| key.as_ref().starts_with(b"AI") && is(Some(m)))) {
+        return "its editing data".to_string();
+    }
+    "a stream in it".to_string()
+}
+
+/// `bytes` for a message, in whole megabytes, or gigabytes when it is a whole number of them.
+fn decoded_size(bytes: usize) -> String {
+    const GB: usize = 1 << 30;
+    if bytes >= GB && bytes.is_multiple_of(GB) { format!("{} GB", bytes / GB) } else { format!("{} MB", bytes >> 20) }
+}
+
 /// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
 /// password opens a file too.
+///
+/// What a hostile file nests or loops is the shared reader's to refuse (it reads arrays and
+/// dictionaries 64 deep and no deeper, wherever they are: the file's text, an object stream, the
+/// content of a page, form, pattern or glyph; and follows a page tree or a chain of object streams
+/// once). What it reads beyond that is left out, as an object it can't read. The application also
+/// rejects overly linked functions and colour spaces, oversized streams and unsupported
+/// predictors before interpretation ([`hostile`], [`crate::streams`]), retaining its stricter
+/// refusal policy alongside the shared backend's bounded decoding and construction.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
+    open_with_options(bytes, password, &open_options())
+}
+
+/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
+/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
+pub(crate) fn open_options() -> craft_pdf::OpenOptions {
+    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+}
+
+pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
+    if crate::streams::unsafe_file_streams(bytes) {
+        return Err(PdfError::Parse(STREAM_NOTE.into()));
+    }
     let password = password.unwrap_or_default();
-    let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
+    let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
     read(password)
         .or_else(|e| match e {
             // The reader takes only the open password of RC4 and 128-bit AES files: the
             // permissions password gives it.
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if !password.is_empty() => {
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
                 crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
             }
             e => Err(e),
         })
         .map_err(|e| match e {
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
-            LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
-            e => PdfError::Parse(format!("{e:?}")),
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
+                PdfError::NeedsPassword
+            }
+            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
+            e => PdfError::Parse(e.to_string()),
+        })
+        // Twice: looking at every object makes the reader repair a damaged table of objects (once
+        // only), and the objects are other ones after that.
+        .and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
+            Some(why) => Err(PdfError::Parse(why)),
+            None => Ok(pdf),
         })
 }
 
@@ -67,12 +283,13 @@ pub fn info(bytes: &[u8], password: Option<&str>) -> Result<PdfInfo, PdfError> {
         .map(|page| {
             let (w, h) = page.render_dimensions();
             let rotation = match page.rotation() {
-                hayro_syntax::page::Rotation::None => 0,
-                hayro_syntax::page::Rotation::Horizontal => 90,
-                hayro_syntax::page::Rotation::Flipped => 180,
-                hayro_syntax::page::Rotation::FlippedHorizontal => 270,
+                craft_pdf::syntax::page::Rotation::None => 0,
+                craft_pdf::syntax::page::Rotation::Horizontal => 90,
+                craft_pdf::syntax::page::Rotation::Flipped => 180,
+                craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
-            let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c))).collect();
+            let unit = f64::from(page.user_unit());
+            let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c).scale_from_origin(unit))).collect();
             PageInfo { width: w as f64, height: h as f64, rotation, boxes }
         })
         .collect();
@@ -99,7 +316,7 @@ pub(crate) fn picked(opts: &ImportOptions, count: usize) -> Result<Vec<usize>, P
     Ok(v)
 }
 
-fn rect(r: hayro_syntax::object::Rect) -> Rect {
+fn rect(r: craft_pdf::syntax::object::Rect) -> Rect {
     Rect::new(r.x0, r.y0, r.x1, r.y1).abs()
 }
 
@@ -116,7 +333,7 @@ pub(crate) fn page_box(page: &Page<'_>, which: CropTo) -> Rect {
         CropTo::Trim => b"TrimBox",
         CropTo::Art => b"ArtBox",
     };
-    page.raw().get::<hayro_syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
+    page.raw().get::<craft_pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
 }
 
 /// Where `page` draws on its artboard: the page transform (PDF user space → y-down page space
@@ -197,6 +414,14 @@ pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
     piece_info_has(page, &[b"AIPrivateData"])
 }
 
+/// Does `page` state where its art is: an art, trim or bleed box (ISO 32000-1 §14.11.2, the
+/// extent of the page's meaningful content and of the finished page)? A page written from an
+/// artboard has them; the notice a file saved without its PDF part shows instead of its art is
+/// the same page whatever the document, with no art to state the place of.
+pub(crate) fn states_art(page: &Page<'_>) -> bool {
+    [&b"ArtBox"[..], b"TrimBox", b"BleedBox"].iter().any(|k| page.raw().get::<[f32; 4]>(*k).is_some())
+}
+
 /// Does `page`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
 fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
     fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32) -> bool {
@@ -206,4 +431,15 @@ fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
             })
     }
     page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn decoded_sizes_read_in_whole_units() {
+        assert_eq!(super::decoded_size(256 << 20), "256 MB");
+        assert_eq!(super::decoded_size(418 << 20), "418 MB");
+        assert_eq!(super::decoded_size(1 << 30), "1 GB");
+        assert_eq!(super::decoded_size((1 << 30) + (1 << 20)), "1025 MB");
+    }
 }

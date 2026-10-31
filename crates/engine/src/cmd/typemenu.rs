@@ -7,7 +7,9 @@ use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, Te
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, find_command, has_clipboard, has_doc, has_selection, ids_param, str_param, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -16,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change Case",
             ["Type", "Change Case"],
             None,
-            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?} → {ids}",
+            "{case: \"upper\"|\"lower\"|\"title\"|\"sentence\", ids?|id?} → {ids}",
             has_selection,
             change_case
         ),
@@ -34,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Area Type",
             ["Type"],
             None,
-            "{ids?} point type → area type framed by its current layout bounds → {ids}",
+            "{ids?|id?} point type → area type framed by its current layout bounds → {ids}",
             has_selection,
             to_area
         ),
@@ -43,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?} area type → point type; soft line wraps become line breaks → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks, and a frame of threaded text leaves its thread with the text it holds → {ids}",
             has_selection,
             to_point
         ),
@@ -52,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -61,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill with Placeholder Text",
             ["Type"],
             None,
-            "{ids?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
+            "{ids?|id?} replace selected text with placeholder text (area type is filled to its frame) → {ids}",
             has_selection,
             fill_placeholder
         ),
@@ -70,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string, ids?|id?: object ids (default: the selection)} append to the selected text objects",
             has_selection,
             insert_char
         ),
@@ -160,6 +162,13 @@ fn edit_runs<S: Default>(s: &mut Session, label: &str, ids: &[NodeId], f: impl F
 
 // ---------- Change Case ----------
 
+/// Does `c` take a capital at the start of a word or sentence? Georgian has no word capitals:
+/// Mtavruli is a separate all-caps style, so title and sentence case leave Mkhedruli (and turn
+/// Mtavruli back into) lower case. Upper case still gives Mtavruli, as Unicode defines it.
+fn capitalizes(c: char) -> bool {
+    !matches!(c, '\u{10D0}'..='\u{10FF}' | '\u{1C90}'..='\u{1CBF}')
+}
+
 #[derive(Default)]
 struct CaseState {
     /// Previous character (across runs).
@@ -187,7 +196,7 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
                 "upper" | "uppercase" => out.extend(c.to_uppercase()),
                 "lower" | "lowercase" => out.extend(c.to_lowercase()),
                 "title" => {
-                    if st.prev.is_none_or(|p| p.is_whitespace() || matches!(p, '-' | '(' | '"' | '“' | '/')) {
+                    if capitalizes(c) && st.prev.is_none_or(|p| p.is_whitespace() || matches!(p, '-' | '(' | '"' | '“' | '/')) {
                         out.extend(c.to_uppercase())
                     } else {
                         out.extend(c.to_lowercase())
@@ -195,7 +204,11 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 _ => {
                     if c.is_alphabetic() && st.sentence {
-                        out.extend(c.to_uppercase());
+                        if capitalizes(c) {
+                            out.extend(c.to_uppercase());
+                        } else {
+                            out.extend(c.to_lowercase());
+                        }
                         st.sentence = false;
                     } else {
                         out.extend(c.to_lowercase());
@@ -318,6 +331,8 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let TextKind::Area { frame } = &t.kind else { continue };
             let fb = frame.bounds().unwrap_or_default();
+            // Point type is in no thread: its first paragraph starts in it.
+            t.first_para_continues = false;
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
@@ -509,7 +524,9 @@ pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
         TextKind::Area { frame } => {
             let b = frame.bounds().unwrap_or_default();
             let chars_per_line = (b.width() / (style.size * 0.5)).max(1.0);
-            let lines = (b.height() / style.effective_leading()).max(1.0);
+            // The first paragraph's Auto Leading sets the leading of Auto type (a leading of 0
+            // counts as a tenth of a point a line).
+            let lines = (b.height() / t.para_at(0).effective_leading(&style).max(0.1)).max(1.0);
             let want = (chars_per_line * lines) as usize;
             let mut out = String::new();
             for (i, w) in PLACEHOLDER.split(' ').cycle().enumerate() {
@@ -635,9 +652,10 @@ pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bo
 
 fn all_texts(d: &Document) -> Vec<NodeId> {
     let mut v = vec![];
+    let locks = d.locked_artboards();
     for l in d.layers.iter().filter(|l| l.visible && !l.locked) {
         l.walk(&mut |n| {
-            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked {
+            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked && !locks.holds_id(n.id) {
                 v.push(n.id);
             }
         });
@@ -665,16 +683,39 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     if total == 0 {
         return Ok(json!({ "count": 0 }));
     }
-    edit_runs::<()>(s, "Replace", &ids, |text, _| {
-        let mut out = String::with_capacity(text.len());
-        let mut last = 0;
-        for (a, b) in find_all(text, &find, mc, ww) {
-            out.push_str(&text[last..a]);
-            out.push_str(&rep);
-            last = b;
+    super::overprint::edit_counted(s, "Replace", |d| {
+        let mut changed = 0;
+        for id in &ids {
+            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // Matches as (run, start, end) with offsets inside the run. Inline graphics are art, not
+            // characters to rewrite.
+            let mut hits = vec![];
+            let mut base = 0;
+            for (ri, r) in t.runs.iter().enumerate() {
+                if r.inline.is_none() {
+                    for (a, b) in find_all(&r.text, &find, mc, ww) {
+                        if r.text.get(a..b) != Some(rep.as_str()) {
+                            hits.push((ri, base + a, base + b, a, b));
+                        }
+                    }
+                }
+                base += r.text.len();
+            }
+            if hits.is_empty() {
+                continue;
+            }
+            // Last match first, so the offsets of earlier ones stay valid. The paragraph styles follow
+            // each edit, as `text.editRange` does.
+            for (ri, ta, tb, a, b) in hits.into_iter().rev() {
+                t.splice_paras(ta, tb, &rep);
+                if let Some(r) = t.runs.get_mut(ri) {
+                    r.text.replace_range(a..b, &rep);
+                }
+            }
+            changed += 1;
+            refresh_bounds(t);
         }
-        out.push_str(&text[last..]);
-        out
+        Ok(changed)
     })?;
     Ok(json!({ "count": total }))
 }

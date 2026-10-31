@@ -18,7 +18,8 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, inputs: |_| &["path"], ..DialogSpec::FORM };
 
 /// Resolution presets (pixels per inch).
 pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
@@ -143,9 +144,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("__otherPpi".into(), json!(i == 3));
             }
             if preset.is_none()
-                && let Some(v) = widgets::plain_field(ui, "ro-ppi-other", ppi, " ppi", 0, 80.0)
+                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, " ppi", 0, 80.0)
             {
-                d.fields.insert("ppi".into(), json!(v.round().clamp(1.0, 4608.0)));
+                d.fields.insert("ppi".into(), json!(v));
             }
         });
         ui.end_row();
@@ -239,7 +240,7 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, 
     label(ui, tl!("Quality:"));
     let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
     ui.horizontal(|ui| {
-        if ui.add(egui::Slider::new(&mut q, 0..=10)).changed() {
+        if widgets::slider(ui, egui::Slider::new(&mut q, 0..=10)).changed() {
             d.fields.insert("quality".into(), json!(u32::from(q) * 10));
         }
         label(ui, QUALITY_BANDS[q as usize]);

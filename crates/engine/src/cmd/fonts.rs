@@ -3,12 +3,15 @@
 //! available (the bundled and installed ones) and rescanning the installed fonts.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_color::Paint;
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextRun};
+use vectorcraft_geom::Rect;
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -26,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style) → {runs}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); text that is hidden or locked, in a hidden or locked group or layer, or on a locked artboard keeps its font → {runs, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -35,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?} select the text objects using the font → {count}",
+            "{family, style?} select the text objects using the font that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard → {count}",
             has_doc,
             select_font
         ),
@@ -44,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Font List",
             [],
             None,
-            "{family?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names]} (upright styles by weight, then italics; an error when the family isn't available)",
+            "{family?, style?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), each the family's English (canonical) name for `text.setStyle` and documents (without the system's hidden families, whose names start with a dot; they still resolve by name). Preferences › Type › Show Font Names in English only changes the UI menu labels, not this list; with family: {family, styles: [names] (upright styles by weight, then italics; an error when the family isn't available), axes: [{tag, name, min, default, max, value, hidden}] (a variable font's variation axes, the Character panel's Variable Font sliders, with `value` the setting of `style`, else of the first style; empty for a static font; `hidden`: the font asks for the axis not to be shown)}",
             always,
             font_list
         ),
@@ -53,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refresh Font List",
             [],
             None,
-            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
+            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it, and text in a family that was removed redraws in the fallback font (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
             always,
             rescan
         ),
@@ -98,6 +101,12 @@ pub(super) fn font_label((family, style, version): &UsedFont) -> String {
 
 /// The fonts (family, style, version) of the type in the layers and symbols of `d`.
 pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
+    art_fonts(d, &[])
+}
+
+/// The fonts (family, style, version) of the type in the layers and symbols of `d` and in `art`
+/// (art read from a file, its resources in `d`).
+pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
@@ -108,27 +117,254 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     for s in &d.symbols {
         s.art.walk(&mut add);
     }
+    for n in art {
+        n.walk(&mut add);
+    }
     fonts
 }
 
+/// The type of `d` that prints on pages showing `areas` (document space): the fonts (family, style,
+/// version) it is set in, and the ids of the area type and type on a path among the objects of the
+/// document whose text doesn't fit (not those in the art of symbols, opacity masks, patterns,
+/// brushes or placed documents).
+/// The type that prints is visible type on `layers` (the layers that print) but not on a template
+/// layer (of area type and type on a path that don't fit, the runs that their layout draws),
+/// where what it paints ([`vectorcraft_render::painted_bounds`], its effects applied) meets an area
+/// inside the clipping paths around it, the type in the opacity masks and patterns of the objects
+/// that print and in the pieces their brushes draw, and the type of the symbols that their
+/// instances and inline graphics show.
+/// The objects of a blend, envelope, repeat or compound path, or of a layer or group with effects,
+/// fills or strokes of its own, are taken with it when what it paints meets an area, and so is the
+/// art of a placed document (`d` as [`Document::with_placed_art`] gives it, for that art's
+/// resources).
+pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> (BTreeSet<UsedFont>, BTreeSet<NodeId>) {
+    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    for l in layers {
+        walk.node(l, Some(areas));
+    }
+    (walk.fonts, walk.overflow)
+}
+
+/// The warning of an export that draws `layers` of `d` over `areas` (document space; `None`: the
+/// whole of them) about the area type and type on a path that it draws and whose text doesn't fit,
+/// found as [`printed_type`] finds them for Print: visible objects of the document that aren't on
+/// a template layer.
+pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas: Option<&[Rect]>) -> Option<String> {
+    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    for l in layers {
+        walk.node(l, areas);
+    }
+    let overflow: Vec<NodeId> = walk.overflow.into_iter().collect();
+    super::typecmd::export_overflow_warning(&overflow)
+}
+
+/// The walk of [`printed_type`].
+struct Printed<'a> {
+    d: &'a Document,
+    /// Whether the walk is among the objects of the document, not in art drawn for one.
+    own: bool,
+    fonts: BTreeSet<UsedFont>,
+    /// The objects of the document whose text doesn't fit.
+    overflow: BTreeSet<NodeId>,
+    /// The symbols and patterns whose art was walked.
+    symbols: BTreeSet<String>,
+    patterns: BTreeSet<String>,
+}
+
+impl Printed<'_> {
+    /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
+    /// while [`Printed::own`] is set: those whose bounds meet one of `areas`, or with `None` (in the
+    /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
+    /// object) all of them but those outside the clipping path of a clip group.
+    fn node(&mut self, n: &Node, areas: Option<&[Rect]>) {
+        if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+            return;
+        }
+        // A layer or group with effects, fills or strokes of its own prints where they paint (moved,
+        // shadowed…), drawn from its members' shapes.
+        let moved = vectorcraft_render::effects::has_container_appearance(n);
+        let open = !moved && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. });
+        if let Some(a) = areas
+            && !open
+            && !self.meets(n, a)
+        {
+            return;
+        }
+        // The art that its opacity mask, pattern paints and brushed strokes draw.
+        let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
+        let (runs, overflows) = match &n.kind {
+            NodeKind::Text(t) => drawn_runs(t),
+            _ => (vec![], false),
+        };
+        let items: Vec<&AppearanceItem> =
+            n.appearance.items.iter().filter(|i| i.visible() && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)).collect();
+        let patterns: Vec<&str> = items
+            .iter()
+            .map(|i| i.paint())
+            .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
+            .filter_map(|p| match p {
+                Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
+                _ => None,
+            })
+            .collect();
+        let brushed = vectorcraft_brush::has_brush(n);
+        if (mask.is_some() || !patterns.is_empty() || brushed) && areas.is_none_or(|a| !open || self.meets(n, a)) {
+            if let Some(m) = mask {
+                self.art(&m.art);
+            }
+            let d = self.d;
+            for name in patterns {
+                if self.patterns.insert(name.to_string())
+                    && let Some(p) = d.pattern(name)
+                {
+                    for art in &p.art {
+                        self.art(art);
+                    }
+                }
+            }
+            // The pieces its brushes draw along the path (art and pattern brushes leave type out).
+            if brushed {
+                for piece in vectorcraft_brush::node_pieces(d, n).unwrap_or_default() {
+                    self.art(&piece);
+                }
+            }
+        }
+        match &n.kind {
+            NodeKind::Text(_) => {
+                if overflows && self.own {
+                    self.overflow.insert(n.id);
+                }
+                for r in runs {
+                    self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    // Inline graphics draw their symbols' art.
+                    if let Some(art) = &r.inline {
+                        self.symbol(&art.symbol);
+                    }
+                }
+            }
+            NodeKind::SymbolInstance { symbol, .. } => self.symbol(symbol),
+            NodeKind::PlacedDocument(p) => {
+                for art in p.art(n) {
+                    self.art(&art);
+                }
+            }
+            NodeKind::Layer { children, clip, .. } | NodeKind::Group { children, clip } if !moved => {
+                // Each object prints where it lies, inside the clipping path of a clip group.
+                let clipped = match (clip, areas) {
+                    (false, _) => None,
+                    (true, Some(a)) => Some(self.clip(n, a)),
+                    (true, None) => vectorcraft_render::painted_bounds(self.d, n).map(|c| vec![c]),
+                };
+                for c in children {
+                    self.node(c, clipped.as_deref().or(areas));
+                }
+            }
+            _ => {
+                for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+                    self.node(c, None);
+                }
+            }
+        }
+    }
+
+    /// Adds the fonts of symbol `name`'s art, the first time it is shown.
+    fn symbol(&mut self, name: &str) {
+        let d = self.d;
+        if self.symbols.insert(name.to_string())
+            && let Some(s) = d.symbols.iter().find(|s| s.name == name)
+        {
+            self.art(&s.art);
+        }
+    }
+
+    /// Adds the fonts of `art`, drawn for an object of the document but not one of its objects (the
+    /// art of a symbol, opacity mask, pattern or placed document, or a brush piece), with
+    /// [`Printed::node`]'s `None`.
+    fn art(&mut self, art: &Node) {
+        let own = std::mem::replace(&mut self.own, false);
+        self.node(art, None);
+        self.own = own;
+    }
+
+    /// Whether what `n` paints, its effects applied, meets one of `areas`.
+    fn meets(&self, n: &Node, areas: &[Rect]) -> bool {
+        vectorcraft_render::painted_bounds(self.d, n).is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
+    }
+
+    /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
+    fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
+        let Some(c) = vectorcraft_render::painted_bounds(self.d, n) else { return areas.to_vec() };
+        areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
+    }
+}
+
+/// The runs of `t` that print, and whether its text doesn't fit: all of them, or of area type and
+/// type on a path that don't fit, the runs that their layout draws glyphs or inline graphics of.
+fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
+    let drawn: Option<BTreeSet<usize>> = (!matches!(t.kind, TextKind::Point))
+        .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t))
+        .filter(|lay| lay.overflow)
+        .map(|lay| lay.glyphs.iter().map(|g| g.run).chain(lay.inlines.iter().map(|i| i.run)).collect());
+    let runs = t.runs.iter().enumerate().filter(|(i, _)| drawn.as_ref().is_none_or(|d| d.contains(i))).map(|(_, r)| r).collect();
+    (runs, drawn.is_some())
+}
+
 /// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
-/// families that aren't available: their type is drawn in the fallback font, not the font it names.
+/// families that aren't available (their type is drawn in the fallback font, not the font it
+/// names) or styles that its family doesn't have (the closest style is drawn).
 pub(super) fn substitution_warning(d: &Document) -> Option<String> {
+    substitution_warning_of(used_fonts(d))
+}
+
+/// [`substitution_warning`] for type set in `fonts`.
+pub(super) fn substitution_warning_of(fonts: BTreeSet<UsedFont>) -> Option<String> {
+    substitutions(fonts, ("were written", "was drawn"))
+}
+
+/// The font (family, style, version) of character style `st`.
+pub(super) fn font_of(st: &vectorcraft_doc::CharStyle) -> UsedFont {
+    (st.font_family.clone(), st.font_style.clone(), st.font_version.clone())
+}
+
+/// What `text.create`, `text.setStyle`, `text.setRangeStyle` and `text.replaceFont` say when the
+/// fonts they set type in (`fonts`) don't draw it: the family isn't available (the fallback font
+/// is drawn) or doesn't have that style (its closest style is drawn). `None` when all draw it.
+pub(super) fn set_font_warning(fonts: BTreeSet<UsedFont>) -> Option<String> {
+    substitutions(fonts, ("are drawn", "is drawn"))
+}
+
+/// The warning for type set in `fonts`, with the verbs `written` and `drawn` (an export's are
+/// `were written` and `was drawn`).
+fn substitutions(fonts: BTreeSet<UsedFont>, (written, drawn): (&str, &str)) -> Option<String> {
     let db = vectorcraft_text::FontDb::global();
-    let mut missing: Vec<String> = used_fonts(d)
-        .into_iter()
-        .filter(|(family, style, _)| db.resolve(family, style).is_none_or(|(_, m)| m == vectorcraft_text::FontMatch::Missing))
-        .map(|(family, _, _)| family)
-        .collect();
+    let mut missing: Vec<String> = Vec::new();
+    let mut styles: BTreeSet<String> = BTreeSet::new();
+    for (family, style, _) in fonts {
+        match db.resolve(&family, &style) {
+            None | Some((_, vectorcraft_text::FontMatch::Missing)) => missing.push(family),
+            Some((face, vectorcraft_text::FontMatch::Style)) => {
+                styles.insert(format!("{family} {style} {drawn} in {} {}", face.family, face.style));
+            }
+            Some(_) => {}
+        }
+    }
     // Sorted by family: its styles and versions are neighbours.
     missing.dedup();
-    (!missing.is_empty()).then(|| {
-        format!(
-            "fonts that aren't available were written in the fallback font, {}: {} (install them, or replace them with Find Font)",
+    let mut parts = Vec::new();
+    if !missing.is_empty() {
+        parts.push(format!(
+            "fonts that aren't available {written} in the fallback font, {}: {} (install them, or replace them with Find Font)",
             vectorcraft_text::FALLBACK_FAMILY,
             missing.join(", ")
-        )
-    })
+        ));
+    }
+    if !styles.is_empty() {
+        parts.push(format!(
+            "font styles that aren't available {written} in the closest style: {} (pick a style the family has)",
+            styles.into_iter().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 fn text(d: &Document, id: NodeId) -> Option<&vectorcraft_doc::TextObject> {
@@ -196,10 +432,20 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => f.family.clone(),
         _ => return Err(bad(C, format!("font family `{tf}` is not available"))),
     };
-    let ids = scope(s, bool_or(p, "selectionOnly", false))?;
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
     };
+    // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
+    // group or layer, or on a locked artboard. The text left in the font is counted.
+    let (ids, skipped) = {
+        let d = &s.doc()?.doc;
+        let editable = d.editable();
+        let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, bool_or(p, "selectionOnly", false))?.into_iter().partition(|id| editable(*id));
+        let skipped = other.into_iter().filter(|id| text(d, *id).is_some_and(|t| t.runs.iter().any(|r| matches(&r.style)))).count();
+        (ids, skipped)
+    };
+    // The fonts the replaced runs are set in, for the warning.
+    let mut set = BTreeSet::new();
     let n = s.edit("Replace Font", |d, _| {
         let mut n = 0;
         for id in &ids {
@@ -214,8 +460,10 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                         .unwrap_or_else(|| r.style.font_style.clone());
                     r.style.font_family = tf.clone();
                     r.style.font_style = style;
-                    // Another font: none of the old one's versions.
+                    // Another font: none of the old one's versions or Variable Font settings.
                     r.style.font_version = None;
+                    r.style.font_axes.clear();
+                    set.insert(font_of(&r.style));
                     changed = true;
                     n += 1;
                 }
@@ -227,24 +475,42 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(n)
     })?;
-    Ok(json!({ "runs": n }))
+    let mut out = json!({ "runs": n });
+    let mut warnings = Vec::new();
+    if skipped > 0 {
+        out["skipped"] = json!(skipped);
+        warnings.push(REPLACE_SKIPPED.to_string());
+    }
+    warnings.extend(set_font_warning(set));
+    if !warnings.is_empty() {
+        out["warning"] = json!(warnings.join("; "));
+    }
+    Ok(out)
 }
+
+/// What Replace Font says when it left text in the font that it can't reach.
+const REPLACE_SKIPPED: &str = "some text is hidden or locked, so its font wasn't replaced";
 
 fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let family = str_param(p, "family").ok_or_else(|| bad("select.font", "missing `family`"))?.to_string();
     let style = str_param(p, "style").map(str::to_string);
     let ids = scope(s, false)?;
     let d = &s.doc()?.doc;
+    // Only text the Selection tool can reach: not hidden or locked, in a hidden or locked group
+    // or layer, or on a locked artboard.
+    let editable = d.editable();
     let hits: Vec<NodeId> = ids
         .into_iter()
         .filter(|id| {
-            text(d, *id).is_some_and(|t| {
-                t.runs.iter().any(|r| {
-                    r.style.font_family.eq_ignore_ascii_case(&family) && style.as_ref().is_none_or(|x| r.style.font_style.eq_ignore_ascii_case(x))
+            editable(*id)
+                && text(d, *id).is_some_and(|t| {
+                    t.runs.iter().any(|r| {
+                        r.style.font_family.eq_ignore_ascii_case(&family) && style.as_ref().is_none_or(|x| r.style.font_style.eq_ignore_ascii_case(x))
+                    })
                 })
-            })
         })
         .collect();
+    drop(editable);
     let n = hits.len();
     s.select(|_, sel| sel.set(hits))?;
     Ok(json!({ "count": n }))
@@ -259,7 +525,23 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
             }
             // The name as the font spells it.
             let name = db.family_list().iter().find(|f| f.eq_ignore_ascii_case(family)).cloned().unwrap_or_else(|| family.to_string());
-            Ok(json!({ "family": name, "styles": db.styles(family) }))
+            let styles = db.styles(family);
+            let style = str_param(p, "style").map(str::to_string).or_else(|| styles.first().cloned()).unwrap_or_else(|| "Regular".into());
+            let axes: Vec<Value> = db
+                .face(family, &style)
+                .map(|face| {
+                    let axes = face.axes();
+                    axes.iter()
+                        .map(|a| {
+                            json!({
+                                "tag": String::from_utf8_lossy(&a.tag), "name": a.name, "min": a.min, "default": a.default, "max": a.max,
+                                "value": face.axis_value(a.tag).unwrap_or(a.default), "hidden": a.hidden,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(json!({ "family": name, "styles": styles, "axes": axes }))
         }
         None => Ok(json!({ "families": *db.menu_family_list() })),
     }
@@ -281,16 +563,14 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
             }
         });
         if !texts.is_empty() {
-            let saved = !d.is_dirty();
-            let doc = std::sync::Arc::make_mut(&mut d.doc);
-            for id in texts {
-                if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
-                    refresh_bounds(t);
+            d.change_unsaved(|doc| {
+                let doc = std::sync::Arc::make_mut(doc);
+                for id in texts {
+                    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+                        refresh_bounds(t);
+                    }
                 }
-            }
-            if saved {
-                d.mark_saved();
-            }
+            });
         }
         d.revision += 1;
     }
@@ -335,6 +615,117 @@ mod tests {
         assert!(s.execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Nope"}})).is_err());
         let _ = a;
     }
+
+    /// Select Text by Font leaves out hidden and locked text, and text inside a hidden or locked
+    /// group or layer. Text on a visible, unlocked template layer is selected.
+    #[test]
+    fn select_font_skips_hidden_and_locked_text() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32, font: &str| {
+            s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": font})).unwrap()["id"].as_u64().unwrap()
+        };
+        let mut ids = vec![];
+        for y in [20, 40, 60, 80, 100] {
+            ids.push(text(&mut s, y, "Source Serif 4"));
+        }
+        // Inter is used only by hidden or locked text.
+        let only_hidden = text(&mut s, 120, "Inter");
+        for (id, group, cmd) in [
+            (ids[1], false, "object.hide"),
+            (ids[2], false, "object.lock"),
+            (ids[3], true, "object.hide"),
+            (ids[4], true, "object.lock"),
+            (only_hidden, false, "object.hide"),
+        ] {
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            if group {
+                s.execute("object.group", &json!({})).unwrap();
+            }
+            s.execute(cmd, &json!({})).unwrap();
+        }
+        let mut layer_text = |props: &[Value]| {
+            let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+            let id = text(&mut s, 140, "Source Serif 4");
+            for p in props {
+                let mut p = p.clone();
+                p["id"] = json!(layer);
+                s.execute("layer.setProps", &p).unwrap();
+            }
+            id
+        };
+        layer_text(&[json!({"visible": false})]);
+        layer_text(&[json!({"locked": true})]);
+        // Template on locks the layer; unlocking it makes its text selectable again.
+        let template = layer_text(&[json!({"template": true}), json!({"locked": false})]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 2);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(ids[0]), NodeId(template)]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
+        assert!(s.doc().unwrap().selection.objects.is_empty());
+    }
+
+    /// Replace Font leaves hidden and locked text in its font, and text inside a hidden or locked
+    /// group or layer, and says so. Text on a visible, unlocked template layer is changed.
+    #[test]
+    fn replace_font_skips_hidden_and_locked_text() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32| {
+            s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap()
+        };
+        let mut ids = vec![];
+        for y in [20, 40, 60, 80, 100] {
+            ids.push(text(&mut s, y));
+        }
+        for (id, group, cmd) in
+            [(ids[1], false, "object.hide"), (ids[2], false, "object.lock"), (ids[3], true, "object.hide"), (ids[4], true, "object.lock")]
+        {
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            if group {
+                s.execute("object.group", &json!({})).unwrap();
+            }
+            s.execute(cmd, &json!({})).unwrap();
+        }
+        let mut layer_text = |props: &[Value]| {
+            let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+            let id = text(&mut s, 140);
+            for p in props {
+                let mut p = p.clone();
+                p["id"] = json!(layer);
+                s.execute("layer.setProps", &p).unwrap();
+            }
+            id
+        };
+        ids.push(layer_text(&[json!({"visible": false})]));
+        ids.push(layer_text(&[json!({"locked": true})]));
+        // Template on locks the layer; unlocking it makes its text editable again.
+        let template = layer_text(&[json!({"template": true}), json!({"locked": false})]);
+        let family = |s: &Session, id: u64| text_family(s, id);
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r["runs"], 2, "{r}");
+        assert_eq!(r["skipped"], 6, "{r}");
+        assert_eq!(r["warning"], REPLACE_SKIPPED, "{r}");
+        assert_eq!(family(&s, ids[0]), "Source Sans 3");
+        assert_eq!(family(&s, template), "Source Sans 3");
+        for id in &ids[1..] {
+            assert_eq!(family(&s, *id), "Source Serif 4", "object {id}");
+        }
+        // The font stays in the document's list while the skipped text uses it.
+        let fams: Vec<String> =
+            s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().map(|f| f["family"].as_str().unwrap().to_string()).collect();
+        assert_eq!(fams, ["Source Sans 3", "Source Serif 4"]);
+        // Only skipped text left: nothing changes, and the warning says why.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!((r["runs"].clone(), r["skipped"].clone(), r["warning"].clone()), (json!(0), json!(6), json!(REPLACE_SKIPPED)), "{r}");
+        // A plain replacement carries no warning.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
+        assert_eq!(r, json!({"runs": 2}));
+    }
+
+    /// The font family of text object `id`'s first run.
+    fn text_family(s: &Session, id: u64) -> String {
+        text(&s.doc().unwrap().doc, NodeId(id)).unwrap().runs[0].style.font_family.clone()
+    }
 }
 
 #[cfg(test)]
@@ -374,6 +765,58 @@ mod open_tests {
         s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Ab 雅楽", "font": "Inter"})).unwrap();
         let inter = s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().find(|f| f["family"] == "Inter").cloned().unwrap();
         assert_eq!(inter["missingGlyphs"], 2, "雅 and 楽 come from a fallback font: {inter}");
+    }
+
+    #[test]
+    fn export_warns_when_a_style_is_drawn_in_another_style() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
+        let out = s.execute("document.export", &json!({"format": "pdf"})).unwrap();
+        let warnings = out["warnings"].to_string();
+        assert!(warnings.contains("Source Sans 3 Black Wide was drawn in Source Sans 3"), "{out}");
+    }
+
+    #[test]
+    fn setting_type_in_a_font_it_cant_draw_warns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let warning = |out: &Value| out["warning"].as_str().map(str::to_string);
+        let made = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
+        assert!(warning(&made).is_some_and(|w| w.contains("Source Sans 3 Black Wide is drawn in Source Sans 3")), "{made}");
+        let gone = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Gone", "font": "No Such Font Family"})).unwrap();
+        let w = warning(&gone).unwrap_or_default();
+        assert!(w.contains("No Such Font Family") && w.contains(vectorcraft_text::FALLBACK_FAMILY), "{gone}");
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Fine", "font": "Source Sans 3", "style": "Semibold"})).unwrap();
+        assert_eq!(warning(&plain), None, "{plain}");
+        let id = plain["id"].as_u64().unwrap();
+        let set = s.execute("text.setStyle", &json!({"ids": [id], "style": "Black Wide"})).unwrap();
+        assert!(warning(&set).is_some_and(|w| w.contains("Source Sans 3 Black Wide is drawn in Source Sans 3")), "{set}");
+        let back = s.execute("text.setStyle", &json!({"ids": [id], "style": "Bold"})).unwrap();
+        assert_eq!(warning(&back), None, "{back}");
+        // Only the font the command set: the other objects' substitutes aren't its to report.
+        let size = s.execute("text.setStyle", &json!({"ids": [id], "size": 30})).unwrap();
+        assert_eq!(warning(&size), None, "{size}");
+        // Only the characters the command styles: with "Fi" in Black Wide, styling "ne" doesn't warn.
+        let first = s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "style": "Black Wide"})).unwrap();
+        assert!(warning(&first).is_some_and(|w| w.contains("Source Sans 3 Black Wide is drawn in Source Sans 3")), "{first}");
+        let rest = s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": 4, "font": "Source Sans 3"})).unwrap();
+        assert_eq!(warning(&rest), None, "{rest}");
+        let range = s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "font": "No Such Font Family"})).unwrap();
+        assert!(warning(&range).is_some_and(|w| w.contains("No Such Font Family")), "{range}");
+        let replaced = s
+            .execute(
+                "text.replaceFont",
+                &json!({"from": {"family": "No Such Font Family"}, "to": {"family": "Source Sans 3", "style": "Black Wide"}}),
+            )
+            .unwrap();
+        assert!(warning(&replaced).is_some_and(|w| w.contains("Source Sans 3 Black Wide is drawn in Source Sans 3")), "{replaced}");
+        // Empty type: the font set is the one the next characters typed get.
+        let empty = s.execute("text.create", &json!({"x": 10, "y": 140, "text": ""})).unwrap()["id"].as_u64().unwrap();
+        let set = s.execute("text.setStyle", &json!({"ids": [empty], "style": "Black Wide"})).unwrap();
+        assert!(warning(&set).is_some_and(|w| w.contains("Black Wide")), "{set}");
+        let range = s.execute("text.setRangeStyle", &json!({"id": empty, "font": "No Such Font Family"})).unwrap();
+        assert!(warning(&range).is_some_and(|w| w.contains("No Such Font Family")), "{range}");
     }
 
     #[test]

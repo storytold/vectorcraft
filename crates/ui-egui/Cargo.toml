@@ -8,8 +8,20 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 [lints]
 workspace = true
 
+[features]
+default = ["bundled-fonts", "interface-fonts"]
+# The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`. Off, for
+# an embedder that supplies every document font at run time (`vectorcraft_text::FontDb::add_font`);
+# the interface's own faces are `interface-fonts`.
+bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
+# The interface's own faces (theme.rs: Inter, Source Sans 3, JetBrains Mono, about 2 MB). Off, the
+# panels and dialogs draw in egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓);
+# `theme::install_fonts` binds their families either way.
+interface-fonts = []
+
 [dependencies]
 craft-ui = { workspace = true }
+craft-keymap = { workspace = true, features = ["egui"] }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -26,16 +38,39 @@ vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
 vectorcraft-eps = { workspace = true }
 vectorcraft-format = { workspace = true }
-egui = { workspace = true }
+egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_emoji_fonts"] }
+# With egui's `bytemuck`: copies rendered rasters into egui images whole (`canvas::color_image`).
+# `default_fonts`: egui 0.37 makes its bundled faces opt-in, and a dependency's dev-features do not
+# reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
+# without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
+bytemuck = "1"
 egui_extras = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
+# Floating panels open in OS windows of their own on the desktop; on the web they stay in the page.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+craft-ui = { workspace = true, features = ["native-windows"] }
+craft-update = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
+# MIT OR Apache-2.0 and already in the build through eframe.
+web-time = "1"
+
+# The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
+# user owns it (src/dialogs/save_for_web.rs). Already in Cargo.lock (tempfile), so this adds no
+# new crate.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["std", "process"] }
+
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 vectorcraft-testkit = { workspace = true }
+# A variable font built in code (no font file is committed).
+vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 wat = { workspace = true }
 
 [build-dependencies]

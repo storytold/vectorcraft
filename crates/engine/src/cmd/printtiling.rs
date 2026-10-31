@@ -5,12 +5,12 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Point, Rect};
 use vectorcraft_pdf::{TileOrigin, TilingPage};
 
 use super::fileio::pdf::pdf_error;
 use super::print::{settings, to_json};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, index};
 
 const SET: &str = "print.tiling.set";
 
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Tiling",
             [],
             None,
-            "{origin: [x, y] (document point: the top-left corner of the first page's imageable area), artboard? (0-based: the artboard it is measured from; default the printed artboard containing origin, else the first; ignored with artboards: ignore)} | {reset: true} place the printed pages as the Print Tiling tool does, saved with the print settings (tileOrigin: {placed, x, y}, from the artboard's top-left corner; it replaces the placement, and tiles start there), as one undo step; reset → the placement places them again → {tileOrigin}",
+            "{origin: [x, y] (document point: the top-left corner of the first page's imageable area), artboard? (0-based: the artboard it is measured from; default the printed artboard containing origin, its edges included, else the first; ignored with artboards: ignore)} | {reset: true} place the printed pages as the Print Tiling tool does, saved with the print settings (tileOrigin: {placed, x, y}, from the artboard's top-left corner; it replaces the placement, and tiles start there), as one undo step; reset → the placement places them again → {tileOrigin}",
             has_doc,
             set_origin
         ),
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Tiling Pages",
             [],
             None,
-            "{settings?: {…print.setup settings} (over the document's)} the pages as View → Show Print Tiling draws them, from print.preview's layout → {tileOrigin, pages: [{artboard (0-based; null with artboards ignored), number (1-based tile across then down, or page), printed (tiles outside tileRange don't), page: [x0, y0, x1, y1] (the paper's edge), imageable: [x0, y0, x1, y1] (inside the unprintable margin)}] (document space; every tile when tiling, else each page once)}",
+            "{settings?: {…settings of print.setup} (over the document's)} the pages as View → Show Print Tiling draws them, from print.preview's layout → {tileOrigin, pages: [{artboard (0-based; null with artboards ignored), number (1-based tile across then down, or page), printed (tiles outside tileRange don't), page: [x0, y0, x1, y1] (the paper's edge), imageable: [x0, y0, x1, y1] (inside the unprintable margin)}] (document space; every tile when tiling, else each page once)}",
             has_doc,
             tiling
         ),
@@ -77,6 +77,13 @@ fn point(p: &Value, key: &str) -> Option<Point> {
     Some(Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))
 }
 
+/// The first of the print `regions` holding `at`: one that holds it inside or on its left or top
+/// edge, else one that holds it on its right or bottom edge or within a millionth of a point
+/// outside an edge (the edges `Document::art_on_artboard` counts).
+fn region_holding(regions: &[(Option<usize>, Rect)], at: Point) -> Option<&(Option<usize>, Rect)> {
+    regions.iter().find(|(_, r)| r.contains(at)).or_else(|| regions.iter().find(|(_, r)| vectorcraft_doc::artboard_holds(*r, at)))
+}
+
 fn set_origin(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let current = settings(SET, doc, &json!({}))?;
@@ -89,10 +96,10 @@ fn set_origin(s: &mut Session, p: &Value) -> Result<Value> {
         let regions = vectorcraft_pdf::print_regions(doc, &set).map_err(|e| pdf_error(SET, e))?;
         let picked = match p.get("artboard").filter(|v| !v.is_null()) {
             Some(v) => {
-                let i = v.as_u64().ok_or_else(|| bad(SET, "artboard must be a 0-based index"))? as usize;
+                let i = v.as_u64().map(index).ok_or_else(|| bad(SET, "artboard must be a 0-based index"))?;
                 regions.iter().find(|(a, _)| a.is_none() || *a == Some(i)).ok_or_else(|| bad(SET, format!("artboard {i} doesn't print")))?
             }
-            None => regions.iter().find(|(_, r)| r.contains(at)).or(regions.first()).ok_or_else(|| bad(SET, "nothing prints"))?,
+            None => region_holding(&regions, at).or(regions.first()).ok_or_else(|| bad(SET, "nothing prints"))?,
         };
         let corner = picked.1.origin();
         TileOrigin { placed: true, x: at.x - corner.x, y: at.y - corner.y }

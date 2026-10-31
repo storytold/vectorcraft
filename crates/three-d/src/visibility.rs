@@ -4,12 +4,16 @@
 
 use vectorcraft_geom::{PathData, Point, Rect, SubPath};
 
-use crate::{Face, MAX_FACES};
+use crate::{Face, MAX_FACES, ShadeGradient};
+#[path = "visibility_parts.rs"]
+mod parts;
 
 const GRID: usize = 32;
 const MAX_GRID_REFS: usize = 2_000_000;
 const MAX_WORK: usize = 16_000_000;
-const MAX_FRAGMENTS: usize = 256;
+// Curved boundaries may begin with several convex pieces. Their total work and
+// anchors still share the global limits used for ordinary projected faces.
+const MAX_FRAGMENTS: usize = 1024;
 const MAX_OUTPUT_POINTS: usize = 262_144;
 
 /// The visible portions of one source face, with its original shading and paint order.
@@ -18,6 +22,10 @@ pub struct VisibleFace {
     pub path: PathData,
     pub brightness: f64,
     pub depth: f64,
+    pub gradient: Option<ShadeGradient>,
+    pub illumination: [f64; 3],
+    pub light_gradient: Option<crate::LightGradient>,
+    pub rgb_gradient: Option<crate::RgbGradient>,
 }
 
 struct Polygon {
@@ -81,6 +89,34 @@ fn subtract(points: Vec<Point>, cover: &Polygon, epsilon: f64, work: &mut usize)
     if !overlaps(bounds(&points), cover.bounds) {
         return Ok(vec![points]);
     }
+    // Bounding boxes of neighbouring curved pieces overlap even when the pieces
+    // only share an edge. Reject separated convex polygons before cutting them,
+    // so irrelevant covers cannot subdivide a face into hundreds of fragments.
+    let mut separated = false;
+    'edges: for (polygon, other) in [(&cover.points, &points), (&points, &cover.points)] {
+        for (a, b) in polygon.iter().zip(polygon.iter().cycle().skip(1)).take(polygon.len()) {
+            *work += other.len();
+            if *work > MAX_WORK {
+                return Err("Revolve visibility exceeds its geometry work limit".into());
+            }
+            if other.iter().all(|p| (*b - *a).cross(*p - *a) <= epsilon * b.distance(*a)) {
+                separated = true;
+                break 'edges;
+            }
+        }
+    }
+    if separated {
+        return Ok(vec![points]);
+    }
+    if cover
+        .points
+        .iter()
+        .zip(cover.points.iter().cycle().skip(1))
+        .take(cover.points.len())
+        .all(|(a, b)| points.iter().all(|p| (*b - *a).cross(*p - *a) >= -epsilon * b.distance(*a)))
+    {
+        return Ok(vec![]);
+    }
     let mut remaining = points;
     let mut visible = vec![];
     for (a, b) in cover.points.iter().zip(cover.points.iter().cycle().skip(1)).take(cover.points.len()) {
@@ -138,13 +174,30 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
     if faces.len() > MAX_FACES {
         return Err("Too many Revolve faces for visibility evaluation".into());
     }
+    let count = |n: usize, len: usize| n.checked_add(len).filter(|&n| n <= MAX_OUTPUT_POINTS).ok_or("Revolve visibility has too many input anchors");
+    faces.iter().map(|f| f.points.len()).try_fold(0, count)?;
+    faces.iter().filter_map(|f| f.visibility_pieces.as_ref()).flatten().map(Vec::len).try_fold(0, count)?;
+    faces.iter().filter_map(|f| f.outline.as_ref()).flat_map(|p| &p.subpaths).map(|p| p.anchors.len()).try_fold(0, count)?;
     if faces.iter().any(|f| {
-        f.points.len() > 4
+        f.points.len() > 1026
             || !f.brightness.is_finite()
+            || f.illumination.iter().any(|v| !v.is_finite())
+            || f.light_gradient.is_some_and(|g| !g.is_finite())
+            || f.rgb_gradient.is_some_and(|g| !g.is_finite())
             || !f.depth.is_finite()
+            || f.gradient.is_some_and(|g| [g.start.x, g.start.y, g.end.x, g.end.y, g.brightness[0], g.brightness[1]].iter().any(|v| !v.is_finite()))
             || f.points.iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs().max(p.y.abs()) > 1e8)
+            || f.visibility_pieces.as_ref().is_some_and(|pieces| {
+                pieces.iter().any(|p| p.len() > 1026 || p.iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs().max(p.y.abs()) > 1e8))
+            })
+            || f.outline.as_ref().is_some_and(|p| {
+                p.subpaths
+                    .iter()
+                    .flat_map(|s| &s.anchors)
+                    .any(|a| [a.p, a.h_in, a.h_out].iter().any(|p| !p.x.is_finite() || !p.y.is_finite() || p.x.abs().max(p.y.abs()) > 1e8))
+            })
     }) {
-        return Err("Revolve visibility requires finite projected convex faces".into());
+        return Err("Revolve visibility requires finite projected faces".into());
     }
     let all = faces.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>();
     let total = bounds(&all);
@@ -152,33 +205,27 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
         return Ok(vec![]);
     }
     let epsilon = (total.width().max(total.height()) * 1e-10).clamp(1e-8, 1e-3);
-    let polygons: Vec<_> = faces
+    let mut work = 0;
+    let polygons: Vec<Vec<Polygon>> = faces
         .iter()
-        .map(|f| {
-            let points = clean(f.points.clone(), epsilon);
-            Polygon { bounds: bounds(&points), points }
-        })
-        .collect();
-    // Generated quads are convex. Validate the public helper rather than accepting concave
-    // callers and silently deleting geometry they can see.
-    for p in &polygons {
-        if p.points.iter().enumerate().any(|(i, a)| {
-            let Some(b) = p.points.get((i + 1) % p.points.len()) else { return false };
-            let Some(c) = p.points.get((i + 2) % p.points.len()) else { return false };
-            (*b - *a).cross(*c - *b) < -epsilon * b.distance(*a).max(1.0)
-        }) {
-            return Err("Revolve visibility requires convex projected faces".into());
-        }
-    }
+        .map(|f| Ok(parts::pieces(f, epsilon, &mut work)?.into_iter().map(|points| Polygon { bounds: bounds(&points), points }).collect()))
+        .collect::<Result<_, String>>()?;
+    let covers: Vec<_> = polygons.iter().flatten().collect();
     let mut index = Index { cells: vec![vec![]; GRID * GRID], bounds: total, refs: 0 };
-    let mut seen = vec![usize::MAX; faces.len()];
-    let (mut out, mut work, mut output_points) = (vec![], 0, 0);
-    for (source, (face, polygon)) in faces.iter().zip(&polygons).enumerate().rev() {
-        if polygon.points.is_empty() {
+    let mut seen = vec![usize::MAX; covers.len()];
+    let (mut out, mut output_points) = (vec![], 0);
+    let mut cover_end = covers.len();
+    for (source, (face, pieces)) in faces.iter().zip(&polygons).enumerate().rev() {
+        let cover_start = cover_end.saturating_sub(pieces.len());
+        let source_covers = cover_start..cover_end;
+        cover_end = cover_start;
+        if pieces.is_empty() {
             continue;
         }
-        let mut fragments = vec![polygon.points.clone()];
-        'covers: for tile in index.tiles(polygon.bounds) {
+        let source_bounds = bounds(&face.points);
+        let mut fragments: Vec<_> = pieces.iter().map(|p| p.points.clone()).collect();
+        let mut clipped = false;
+        'covers: for tile in index.tiles(source_bounds) {
             for &candidate in index.cells.get(tile).into_iter().flatten() {
                 work += 1;
                 if work > MAX_WORK {
@@ -188,16 +235,17 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
                     && *mark != source
                 {
                     *mark = source;
-                    if let Some(cover) = polygons.get(candidate)
-                        && overlaps(polygon.bounds, cover.bounds)
+                    if let Some(cover) = covers.get(candidate)
+                        && overlaps(source_bounds, cover.bounds)
                     {
                         let mut remaining = vec![];
-                        for fragment in fragments {
-                            remaining.extend(subtract(fragment, cover, epsilon, &mut work)?);
+                        for fragment in &fragments {
+                            remaining.extend(subtract(fragment.clone(), cover, epsilon, &mut work)?);
                             if remaining.len() > MAX_FRAGMENTS {
                                 return Err("Revolve visibility creates too many fragments".into());
                             }
                         }
+                        clipped |= remaining != fragments;
                         fragments = remaining;
                         if fragments.is_empty() {
                             break 'covers;
@@ -213,11 +261,23 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
         if output_points > MAX_OUTPUT_POINTS {
             return Err("Revolve visibility creates too many vector anchors".into());
         }
-        let path = PathData::new(fragments.into_iter().map(|p| SubPath::polyline(&p, true)).collect());
-        out.push(VisibleFace { path, brightness: face.brightness, depth: face.depth });
+        let path = if !clipped { face.path() } else { PathData::new(fragments.into_iter().map(|p| SubPath::polyline(&p, true)).collect()) };
+        out.push(VisibleFace {
+            path,
+            brightness: face.brightness,
+            depth: face.depth,
+            gradient: face.gradient,
+            illumination: face.illumination,
+            light_gradient: face.light_gradient,
+            rgb_gradient: face.rgb_gradient,
+        });
         // A completely covered face need not occupy the grid. Its coverage already belongs
         // to nearer faces; this keeps repeated overlapping surfaces bounded in practice.
-        index.insert(polygon.bounds, source)?;
+        for candidate in source_covers {
+            if let Some(cover) = covers.get(candidate) {
+                index.insert(cover.bounds, candidate)?;
+            }
+        }
     }
     out.reverse();
     Ok(out)
@@ -234,6 +294,13 @@ mod tests {
             points: vec![Point::new(rect.x0, rect.y0), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)],
             depth: brightness,
             brightness,
+            gradient: None,
+            illumination: [brightness; 3],
+            light_gradient: None,
+            rgb_gradient: None,
+            outline: None,
+            cap: false,
+            visibility_pieces: None,
         }
     }
 
@@ -290,7 +357,7 @@ mod tests {
                     rotation_x: -32.0,
                     rotation_y: 24.0,
                     rotation_z: 19.0,
-                    perspective: 0.7,
+                    perspective: crate::perspective_from_strength(0.7),
                     ..Default::default()
                 };
                 let faces = revolve(&path, path.bounds().unwrap(), options).unwrap();

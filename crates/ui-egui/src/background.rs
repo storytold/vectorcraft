@@ -6,9 +6,11 @@
 //! It needs a thread-safe writer from the host ([`crate::Services::write_shared`], desktop);
 //! without one (the web, which downloads) the work runs at once, as with the preference off.
 
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fileio::progress::Progress;
 use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
@@ -45,11 +47,27 @@ struct Task {
 /// A job in progress.
 pub struct Job {
     id: u64,
-    /// What the status bar shows ("Saving Poster.vectorcraft").
+    /// What the status bar and `ui.inspect` show ("Saving Poster.vectorcraft"); empty for work they
+    /// don't show.
     pub label: String,
     /// The document the job reads (`DocState::uid`), if any.
     pub doc: Option<u64>,
+    /// How far an export has got, and its Cancel ([`crate::export_progress`] shows it).
+    pub progress: Option<Arc<Progress>>,
+    /// Continue in Background: the progress dialog no longer shows this job.
+    pub hidden: bool,
     then: Then,
+}
+
+impl Job {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Was the job cancelled (it writes nothing more; its result is still on its way)?
+    pub fn cancelled(&self) -> bool {
+        self.progress.as_ref().is_some_and(|p| p.cancelled())
+    }
 }
 
 /// The worker and the jobs it has not finished.
@@ -59,6 +77,8 @@ pub struct Background {
     /// Jobs in the order they were started (the worker runs them in that order).
     pub jobs: Vec<Job>,
     next_id: u64,
+    /// Work started while this is set runs at once, whatever the preferences ([`in_foreground`]).
+    foreground: bool,
 }
 
 impl Background {
@@ -92,11 +112,32 @@ impl Background {
     pub fn busy_with(&self, uid: u64) -> bool {
         self.jobs.iter().any(|j| j.doc == Some(uid))
     }
+
+    /// Cancel every export in progress → how many there were.
+    pub fn cancel_exports(&mut self) -> usize {
+        let mut n = 0;
+        for p in self.jobs.iter().filter(|j| !j.cancelled()).filter_map(|j| j.progress.as_ref()) {
+            p.cancel();
+            n += 1;
+        }
+        n
+    }
+
+    /// Hide the exports in progress from the progress dialog (they go on) → how many there were.
+    pub fn hide_exports(&mut self) -> usize {
+        let mut n = 0;
+        for j in self.jobs.iter_mut().filter(|j| j.progress.is_some() && !j.hidden && !j.cancelled()) {
+            j.hidden = true;
+            n += 1;
+        }
+        n
+    }
 }
 
 /// Run `work` on a worker thread when `enabled` and the host can write from one, else now; `then`
 /// gets its result on the UI thread. → `then`'s result, or `{background: true, status}` while the
-/// work runs (the status bar shows `label`).
+/// work runs (the status bar shows `label`). With an empty `label` neither the status bar nor
+/// `ui.inspect` shows the work, and the reply has no `status`.
 pub fn run(
     app: &mut VectorcraftApp,
     enabled: bool,
@@ -105,8 +146,22 @@ pub fn run(
     work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
     then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
+    run_with_progress(app, enabled, label, doc, None, work, then)
+}
+
+/// [`run`] for work that reports to `progress` (an export): the progress dialog shows it while it
+/// runs in the background, with Cancel.
+pub fn run_with_progress(
+    app: &mut VectorcraftApp,
+    enabled: bool,
+    label: String,
+    doc: Option<u64>,
+    progress: Option<Arc<Progress>>,
+    work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let mut work: Work = Box::new(work);
-    let shared = app.services.write_shared.clone().filter(|_| enabled && app.services.download.is_none());
+    let shared = app.services.write_shared.clone().filter(|_| enabled && !app.background.foreground && app.services.download.is_none());
     if let Some(write) = shared {
         let id = app.background.next_id;
         if let Some(tx) = app.background.worker() {
@@ -114,7 +169,10 @@ pub fn run(
                 Ok(()) => {
                     let bg = &mut app.background;
                     bg.next_id += 1;
-                    bg.jobs.push(Job { id, label: label.clone(), doc, then: Box::new(then) });
+                    bg.jobs.push(Job { id, label: label.clone(), doc, progress, hidden: false, then: Box::new(then) });
+                    if label.is_empty() {
+                        return Ok(json!({ "background": true }));
+                    }
                     let status = format!("{label}…");
                     app.status(status.clone());
                     return Ok(json!({ "background": true, "status": status }));
@@ -132,6 +190,18 @@ pub fn run(
     then(app, r)
 }
 
+/// Run `f` with every save and export it starts written at once, as with the preferences off, so
+/// its result is the written file or the error (a control client's `wait: true`). The jobs already
+/// running finish first, so none of them writes over its files afterwards.
+pub fn in_foreground<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp) -> T) -> T {
+    wait_all(app);
+    let was = std::mem::replace(&mut app.background.foreground, true);
+    // A panic caught further up (a control request's guard) still turns the setting back.
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(app)));
+    app.background.foreground = was;
+    r.unwrap_or_else(|e| std::panic::resume_unwind(e))
+}
+
 /// Apply the results that arrived (each frame).
 pub fn poll(app: &mut VectorcraftApp) {
     while let Some(done) = app.background.worker.as_ref().and_then(|(_, rx)| rx.try_recv().ok()) {
@@ -142,7 +212,13 @@ pub fn poll(app: &mut VectorcraftApp) {
 /// Wait for every job and apply its result (before quitting, closing a document, or another save
 /// of a document a job is reading).
 pub fn wait_all(app: &mut VectorcraftApp) {
-    while !app.background.jobs.is_empty() {
+    wait_until(app, |_| false);
+}
+
+/// Apply the jobs' results as they arrive (in the order the jobs were started) until `ready` holds
+/// or no job is left.
+pub fn wait_until(app: &mut VectorcraftApp, ready: impl Fn(&VectorcraftApp) -> bool) {
+    while !ready(app) && !app.background.jobs.is_empty() {
         let Some(done) = app.background.worker.as_ref().and_then(|(_, rx)| rx.recv().ok()) else {
             // The worker is gone: its jobs can't finish.
             for job in std::mem::take(&mut app.background.jobs) {

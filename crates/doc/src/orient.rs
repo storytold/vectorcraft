@@ -5,7 +5,7 @@
 
 use vectorcraft_geom::{Affine, Point, Rect, Vec2, normalize_deg, union_opt};
 
-use crate::{Document, Node, NodeId, NodeKind};
+use crate::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 /// Angles closer than this (degrees) are the same.
 const EPS_DEG: f64 = 1e-6;
@@ -86,11 +86,12 @@ pub fn transformed_angle(angle: f64, a: Affine) -> f64 {
 
 impl Node {
     /// Bounds of this object as `a` would place it (geometric, or `visual` with its strokes),
-    /// without changing it.
-    pub fn bounds_in(&self, a: Affine, visual: bool) -> Option<Rect> {
+    /// without changing it, symbol instances measured by their art from `symbols`
+    /// ([`Node::geometric_bounds_with`]).
+    pub fn bounds_in(&self, symbols: &SymbolBoxes, a: Affine, visual: bool) -> Option<Rect> {
         match &self.kind {
-            NodeKind::Group { children, clip: false } => {
-                let b = children.iter().fold(None, |acc, c| union_opt(acc, c.bounds_in(a, visual)));
+            NodeKind::Group { clip: false, .. } => {
+                let b = self.editing_children().iter().fold(None, |acc, c| union_opt(acc, c.bounds_in(symbols, a, visual)));
                 // The group's own strokes paint around its members (as in `visual_bounds`).
                 let o = if visual { self.appearance.outset() } else { 0.0 };
                 b.map(|b| b.inflate(o, o))
@@ -98,12 +99,12 @@ impl Node {
             NodeKind::Group { children, clip: true } => {
                 let clip = children.first()?;
                 let stroked = matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_));
-                clip.bounds_in(a, visual && stroked)
+                clip.bounds_in(symbols, a, visual && stroked)
             }
             _ => {
                 let mut n = self.clone();
                 n.transform(a, false);
-                if visual { n.visual_bounds() } else { n.geometric_bounds() }
+                if visual { n.visual_bounds_with(symbols) } else { n.geometric_bounds_with(symbols) }
             }
         }
     }
@@ -117,14 +118,16 @@ impl Document {
         if angles.all(|a| normalize_deg(a - first).abs() <= EPS_DEG) { first } else { 0.0 }
     }
     /// The bounding box of `ids` square to their shared angle ([`Document::bbox_angle`]):
-    /// geometric bounds, or `visual` with their strokes.
+    /// geometric bounds, or `visual` with their strokes, symbol instances measured by their art
+    /// ([`Document::bounds_of`]).
     pub fn oriented_bounds(&self, ids: &[NodeId], visual: bool) -> Option<OrientedBox> {
         let angle = self.bbox_angle(ids);
         if angle == 0.0 {
             return self.bounds_of(ids, visual).map(OrientedBox::aligned);
         }
         let to_local = OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse();
-        let rect = ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| union_opt(acc, n.bounds_in(to_local, visual)))?;
+        let symbols = self.symbol_boxes();
+        let rect = ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| union_opt(acc, n.bounds_in(&symbols, to_local, visual)))?;
         Some(OrientedBox { angle, rect })
     }
 }
@@ -191,5 +194,20 @@ mod tests {
         d.insert(Some(l), 1, Node::group(g, vec![])).unwrap();
         d.move_node(id, Some(g), 0).unwrap();
         assert_eq!(d.oriented_bounds(&[g], false).unwrap().angle, 0.0);
+    }
+
+    #[test]
+    fn oriented_bounds_hug_a_rotated_symbol_instances_art() {
+        let mut d = Document::new(500.0, 500.0);
+        let bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 10.0)), Appearance::default_art());
+        d.symbols.push(crate::Symbol { name: "Bar".into(), art: std::sync::Arc::new(bar) });
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::translate((100.0, 100.0)) })).unwrap();
+        let c = Point::new(120.0, 105.0);
+        d.node_mut(id).unwrap().transform(Affine::translate(c.to_vec2()) * rot(30.0) * Affine::translate(-c.to_vec2()), false);
+        let b = d.oriented_bounds(&[id], false).unwrap();
+        assert!(close(b.angle, 30.0));
+        assert!(close(b.rect.width(), 40.0) && close(b.rect.height(), 10.0), "the bar, not the 20 × 20 square: {b:?}");
+        assert!(b.center().distance(c) < 1e-9);
     }
 }

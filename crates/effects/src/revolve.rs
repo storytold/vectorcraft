@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, LineJoin, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{PathData, Rect};
 use vectorcraft_three_d::{Edge, Revolve};
 
@@ -11,6 +11,24 @@ use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
 pub const REVOLVE: &str = "threeD.revolve";
+
+/// Most bytes the copies of the object's paint in the faces may take together. Each face and the
+/// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
+/// thousands of faces took gigabytes; past this the source path is drawn.
+const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// About the bytes one copy of `paint` takes.
+fn paint_bytes(paint: &Paint) -> usize {
+    use std::mem::size_of;
+    use vectorcraft_doc::color::{FreeformPoint, GradientStop};
+    let own = size_of::<Paint>();
+    let Paint::Gradient(g) = paint else { return own };
+    let freeform = g
+        .freeform
+        .as_ref()
+        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+}
 
 fn visible(fx: &[Effect]) -> bool {
     fx.iter().any(|e| e.visible && e.id == REVOLVE)
@@ -29,19 +47,26 @@ pub fn revolve_options(p: &Value) -> Revolve {
         rotation_x: num(p, "rotationX", 0.0),
         rotation_y: num(p, "rotationY", 0.0),
         rotation_z: num(p, "rotationZ", 0.0),
-        perspective: num(p, "perspective", 0.0) / 100.0,
+        perspective: num(p, "perspectiveAngle", 0.0),
         segments: num(p, "segments", 64.0).clamp(8.0, 128.0) as usize,
-        light_azimuth: num(p, "lightAzimuth", -45.0),
-        light_elevation: num(p, "lightElevation", 45.0),
+        light_rotation: num(p, "lightRotation", vectorcraft_three_d::DEFAULT_LIGHT.0),
+        light_height: num(p, "lightHeight", vectorcraft_three_d::DEFAULT_LIGHT.1),
+        light_behind: flag(p, "lightBehind", false),
+        light_color: crate::lighting::light_color(p),
+        lights: crate::lighting::lights(p),
         light_intensity: num(p, "lightIntensity", 80.0) / 100.0,
+        light_softness: num(p, "lightSoftness", 0.0) / 100.0,
         ambient: num(p, "ambient", 25.0) / 100.0,
         shade: flag(p, "shade", true),
+        smooth_shading: true,
+        cap_ends: flag(p, "cap", true),
     }
 }
 
 /// Validate before a command mutates the document. Loading external files is still bounded
 /// by the evaluator; unsupported source kinds remain unchanged when rendered.
 pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
+    crate::lighting::validate(p)?;
     let path = profile(n).ok_or("Revolve currently requires a path or compound path. Select a profile drawn with the Pen tool.")?;
     let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
     if !path.subpaths.iter().any(|sp| sp.anchors.len() >= 2) {
@@ -49,6 +74,9 @@ pub fn validate_revolve(n: &Node, p: &Value) -> Result<(), String> {
     }
     if p.get("edge").is_some_and(|v| v.as_str() != Some("left") && v.as_str() != Some("right")) {
         return Err("Revolve edge must be left or right".into());
+    }
+    if p.get("cap").is_some_and(|v| v.as_bool().is_none()) {
+        return Err("Revolve cap must be a boolean".into());
     }
     vectorcraft_three_d::revolve(&path, b, revolve_options(p)).map(|_| ())
 }
@@ -80,7 +108,13 @@ fn surface(
     let b = path.bounds()?;
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
-    let faces = vectorcraft_three_d::revolve(path, b, revolve_options(&merged_params(REVOLVE, &fx.params))).ok()?;
+    let options = revolve_options(&merged_params(REVOLVE, &fx.params));
+    let colored = options.light_color != [1.0; 3] || options.lights.is_some();
+    let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
+    // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
+    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+        return None;
+    }
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
     // failure also retains the complete surface rather than losing any of the user's art.
@@ -93,22 +127,52 @@ fn surface(
     .then(|| vectorcraft_three_d::visible_faces(&faces).ok())
     .flatten();
     let faces = visible.unwrap_or_else(|| {
-        faces.into_iter().map(|f| vectorcraft_three_d::VisibleFace { path: f.path(), brightness: f.brightness, depth: f.depth }).collect()
+        faces
+            .into_iter()
+            .map(|f| vectorcraft_three_d::VisibleFace {
+                path: f.path(),
+                brightness: f.brightness,
+                depth: f.depth,
+                gradient: f.gradient,
+                illumination: f.illumination,
+                light_gradient: f.light_gradient,
+                rgb_gradient: f.rgb_gradient,
+            })
+            .collect()
     });
     let children = faces
         .into_iter()
         .map(|face| {
+            if let Some(g) = face.rgb_gradient
+                && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
+            {
+                return Arc::new(crate::lighting::rgb_gradient_art(n.id, &face.path, &paint, g));
+            }
+            if let (true, Paint::Gradient(_), Some(g)) = (colored, &paint, face.light_gradient) {
+                return Arc::new(crate::lighting::gradient_art(n.id, &face.path, &paint, g));
+            }
             let mut fill = FillLayer::new(paint.clone());
             let mut items = vec![];
             if let Some(c) = paint.color() {
                 let [r, g, b] = c.to_rgb();
-                let s = face.brightness as f32;
-                fill.paint = Paint::solid(Color::rgb(r * s, g * s, b * s));
+                let color = |s: f64| Color::rgb(r * s as f32, g * s as f32, b * s as f32);
+                fill.paint = if colored {
+                    face.light_gradient
+                        .map_or_else(|| Paint::solid(crate::lighting::shade(c, face.illumination)), |g| crate::lighting::smooth_paint(g, c))
+                } else {
+                    face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0))
+                };
                 items.push(AppearanceItem::Fill(fill));
+            } else if colored && matches!(paint, Paint::Gradient(_)) {
+                items = crate::lighting::fills(&paint, face.illumination, face.brightness, true);
             } else {
                 items.push(AppearanceItem::Fill(fill));
                 let mut shadow = FillLayer::new(Paint::solid(Color::BLACK));
-                shadow.opacity = (1.0 - face.brightness) as f32;
+                if let Some(g) = face.gradient {
+                    shadow.paint = shading_paint(g, |_| Color::BLACK, |s| (1.0 - s) as f32);
+                } else {
+                    shadow.opacity = (1.0 - face.brightness) as f32;
+                }
                 items.push(AppearanceItem::Fill(shadow));
             }
             // Independently antialiased adjacent polygons otherwise leave a hairline grid.
@@ -119,6 +183,9 @@ fn surface(
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
                     let mut edge = StrokeLayer::new(fill.paint.clone(), 0.75);
+                    // Acute face corners must stay within the overlap width. Miter joins
+                    // amplify this seam stroke into visible spikes along the silhouette.
+                    edge.join = LineJoin::Round;
                     edge.opacity = fill.opacity;
                     vec![item, AppearanceItem::Stroke(edge)]
                 })
@@ -130,6 +197,15 @@ fn surface(
     group.opacity = opacity;
     group.blend = blend;
     Some(group)
+}
+
+fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> Color, opacity: impl Fn(f64) -> f32) -> Paint {
+    use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops =
+        g.brightness.into_iter().enumerate().map(|(i, s)| GradientStop { opacity: opacity(s), ..GradientStop::new(i as f32, color(s)) }).collect();
+    let mut paint = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    paint.geom = Some(GradientGeom { start: g.start, end: g.end, aspect: 1.0, focal: None });
+    Paint::Gradient(Box::new(paint))
 }
 
 fn paint_of(item: &AppearanceItem) -> (Paint, f32, vectorcraft_doc::color::BlendMode) {
@@ -220,6 +296,85 @@ mod tests {
     }
     fn fx() -> Effect {
         crate::new_effect(REVOLVE, &json!({})).unwrap()
+    }
+    #[test]
+    fn seam_strokes_stay_within_half_a_stroke_width_of_each_face() {
+        use kurbo::Shape;
+        for shade in [false, true] {
+            for angle in [110.0, 360.0] {
+                let mut n = profile_node();
+                n.appearance.effects.push(
+                    crate::new_effect(
+                        REVOLVE,
+                        &json!({
+                            "offset":20,"rotationX":-18,"segments":24,"cap":true,
+                            "shade":shade,"angle":angle
+                        }),
+                    )
+                    .unwrap(),
+                );
+                for art in [revolve_art(&n).unwrap(), expand_revolve_art(&n).unwrap()] {
+                    let mut checked = 0;
+                    art.walk(&mut |face| {
+                        let Some(path) = face.path_data() else { return };
+                        for item in &face.appearance.items {
+                            let AppearanceItem::Stroke(stroke) = item else { continue };
+                            let bounds = path.bounds().unwrap().inflate(stroke.width / 2.0 + 0.005, stroke.width / 2.0 + 0.005);
+                            let ink = crate::stroke::line_outline(&path.to_bezpath(), stroke, stroke.width, 0.001).bounding_box();
+                            assert!(
+                                bounds.contains_rect(ink),
+                                "seam protrudes beyond its overlap: {ink:?}, {bounds:?}, shade {shade}, sweep {angle}"
+                            );
+                            checked += 1;
+                        }
+                    });
+                    assert!(checked > 20);
+                }
+            }
+        }
+    }
+    #[test]
+    fn smooth_shading_is_automatic_and_non_solid_paints_keep_their_base_paint() {
+        let mut n = profile_node();
+        n.appearance.effects.push(fx());
+        assert!(!n.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
+        let smooth = revolve_art(&n).unwrap();
+        assert!(
+            smooth.children().unwrap()[0].children().unwrap().iter().any(|face| {
+                matches!(face.appearance.items.first(), Some(AppearanceItem::Fill(fill)) if matches!(fill.paint, Paint::Gradient(_)))
+            })
+        );
+        n.appearance.effects[0].params["smoothShading"] = json!(false);
+        assert_eq!(revolve_art(&n), Some(smooth.clone()));
+        n.appearance.effects[0].params["smoothShading"] = json!(true);
+        assert_eq!(revolve_art(&n), Some(smooth));
+        use vectorcraft_doc::color::{Gradient, GradientPaint};
+        let base = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        n.appearance.set_fill(base.clone());
+        let art = revolve_art(&n).unwrap();
+        let faces = art.children().unwrap()[0].children().unwrap();
+        assert!(faces.iter().all(|f| matches!(f.appearance.items.first(), Some(AppearanceItem::Fill(fill)) if fill.paint == base)));
+        assert!(faces.iter().any(|f| f.appearance.items.iter().any(|item| {
+            matches!(item, AppearanceItem::Fill(fill) if matches!(&fill.paint, Paint::Gradient(g) if g.gradient.stops.iter().all(|s| s.color == Color::BLACK) && g.gradient.stops[0].opacity != g.gradient.stops[1].opacity))
+        })));
+        assert_eq!(expand_revolve_art(&n), Some(art), "unknown paint opacity keeps complete surfaces");
+    }
+    #[test]
+    fn missing_cap_parameter_defaults_on_and_explicit_false_restores_open_ends() {
+        let mut n = profile_node();
+        let mut effect = fx();
+        effect.params["offset"] = json!(20);
+        effect.params["rotationX"] = json!(-35);
+        effect.params.as_object_mut().unwrap().remove("cap");
+        n.appearance.effects.push(effect);
+        let capped = revolve_art(&n).unwrap();
+        n.appearance.effects[0].params["cap"] = json!(false);
+        let uncapped = revolve_art(&n).unwrap();
+        assert_ne!(uncapped, capped);
+        n.appearance.effects[0].params["cap"] = json!(true);
+        assert_eq!(revolve_art(&n), Some(capped));
+        n.appearance.effects[0].params["cap"] = json!(false);
+        assert_eq!(revolve_art(&n), Some(uncapped));
     }
     #[test]
     fn source_stays_editable_surface_moves_and_hidden_effect_restores_it() {

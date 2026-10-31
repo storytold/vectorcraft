@@ -1,14 +1,22 @@
-//! A portable surface-of-revolution evaluator. No windowing, GPU or document dependencies.
+//! Portable 3D effect geometry: Revolve, Extrude & Bevel, Inflate and Rotate. No windowing, GPU or
+//! document dependencies.
 //!
-//! Open profiles generate uncapped surfaces. Faces are projected and sorted back to front,
-//! then flat shaded. This vector preview uses a painter's algorithm, not a depth buffer:
+//! Open profiles optionally close their circular ends with caps. Faces are projected and sorted back to front,
+//! then flat or smoothly shaded with vector gradients. This preview uses a painter's algorithm, not a depth buffer:
 //! intersecting profiles can have ambiguous visibility and are not solid modelling inputs.
 #![forbid(unsafe_code)]
 
+mod solid;
 mod visibility;
+pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, inflate_together, plane};
 pub use visibility::{VisibleFace, visible_faces};
+mod shading;
+pub use shading::{LightGradient, RgbGradient, ShadeGradient};
+mod lights;
+pub use lights::{Light, Lights, MAX_LIGHTS};
+mod caps;
 
-use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect};
+use vectorcraft_geom::{BezPath, ParamCurve, PathData, Point, Rect, Vec2, kurbo::ParamCurveDeriv};
 
 /// Resource limits shared by desktop, CLI and browser evaluation.
 const MAX_PROFILE_POINTS: usize = 1024;
@@ -41,7 +49,7 @@ pub enum Edge {
     Right,
 }
 
-/// All angles are degrees; offset is in document points, lighting values are 0..1.
+/// All angles are degrees; offset is in document points, lighting values are 0..1 (ambient 0..2).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Revolve {
     pub angle: f64,
@@ -50,16 +58,37 @@ pub struct Revolve {
     pub rotation_x: f64,
     pub rotation_y: f64,
     pub rotation_z: f64,
-    /// Perspective strength, 0 for orthographic projection, up to 1.
+    /// Perspective, 0° (none) to 160°: see [`eye_distance`].
     pub perspective: f64,
     /// Radial subdivisions for a full turn, clamped to 8..128.
     pub segments: usize,
-    pub light_azimuth: f64,
-    pub light_elevation: f64,
+    /// The light's Rotation, −180° to 180°: round the object on the page, 0° on its right and
+    /// counterclockwise.
+    pub light_rotation: f64,
+    /// The light's Height, 0° to 90°: from beside the object (0°) to straight in front of it.
+    pub light_height: f64,
+    /// The light is behind the object (Move light to the back of object) rather than in front.
+    pub light_behind: bool,
+    /// Opaque RGB light color, each channel 0..1. Ambient light stays neutral.
+    pub light_color: [f64; 3],
     pub light_intensity: f64,
+    /// Softness, 0 (a sharp fall-off) to 1: how far round the object the light reaches.
+    pub light_softness: f64,
+    /// Explicit light list. None retains the earlier single-light parameters exactly.
+    pub lights: Option<Lights>,
+    /// Ambient Light, 0 to 2.
     pub ambient: f64,
     pub shade: bool,
+    /// Interpolate profile normals using vector gradients. Enabled by default.
+    pub smooth_shading: bool,
+    /// Close circular endpoint rings of open profiles. Partial sweeps get sectors;
+    /// the angular cut sides are left open. Enabled by default.
+    pub cap_ends: bool,
 }
+
+/// The default light's Rotation and Height: the light of the earlier default direction (45° to the
+/// left of the eye and 45° up), to the left of and above the object, 30° in front of it.
+pub const DEFAULT_LIGHT: (f64, f64) = (125.264_389_682_754_65, 30.0);
 
 impl Default for Revolve {
     fn default() -> Self {
@@ -72,13 +101,109 @@ impl Default for Revolve {
             rotation_z: 0.0,
             perspective: 0.0,
             segments: 64,
-            light_azimuth: -45.0,
-            light_elevation: 45.0,
+            light_rotation: DEFAULT_LIGHT.0,
+            light_height: DEFAULT_LIGHT.1,
+            light_behind: false,
+            light_color: [1.0; 3],
             light_intensity: 0.8,
+            light_softness: 0.0,
+            lights: None,
             ambient: 0.25,
             shade: true,
+            smooth_shading: true,
+            cap_ends: true,
         }
     }
+}
+
+/// The widest documented Perspective.
+pub const MAX_PERSPECTIVE: f64 = 160.0;
+
+/// How far the eye is from the centre of an object of half size `size`, for a Perspective of
+/// `angle` degrees: from where a sphere of √3 × `size` about the centre (the box around the object
+/// fits inside it) fills that angle of the view. 0° is no perspective (`None`, the eye infinitely
+/// far); at 160° the eye is just outside the sphere, so never inside the object.
+fn eye_distance(angle: f64, size: f64) -> Option<f64> {
+    let angle = finite(angle, 0.0, 0.0, MAX_PERSPECTIVE);
+    (angle > 0.0).then(|| 3f64.sqrt() * size / (angle / 2.0).to_radians().sin())
+}
+
+/// The scale of a view-space point `z` in front of the object's centre plane, for an eye at
+/// `eye`: 1 without perspective. Parts reaching past the eye's sphere (a wide outward bevel at a
+/// wide angle) are held just in front of the eye rather than turned inside out.
+fn perspective_scale(eye: Option<f64>, z: f64) -> f64 {
+    eye.map_or(1.0, |e| e / (e - z).max(e * 1e-3))
+}
+
+/// The Perspective angle that shows exactly what the earlier 0–1 perspective strength did (files
+/// from before the angle). The strength put the eye at 4 × the object's half size / strength, so
+/// sin(angle / 2) = √3 × strength / 4: full strength is about 51°.
+pub fn perspective_from_strength(strength: f64) -> f64 {
+    let s = finite(strength, 0.0, 0.0, 1.0);
+    2.0 * (3f64.sqrt() * s / 4.0).asin().to_degrees()
+}
+
+/// The Rotation, Height and side of the light an earlier effect set by its azimuth (degrees round
+/// the vertical axis, 0° at the eye) and elevation (degrees up): the same direction, so it lights
+/// the object exactly as before.
+pub fn light_from_azimuth_elevation(azimuth: f64, elevation: f64) -> (f64, f64, bool) {
+    let (azimuth, elevation) = (finite(azimuth, -45.0, -360.0, 360.0), finite(elevation, 45.0, -90.0, 90.0));
+    let (sl, cl) = elevation.to_radians().sin_cos();
+    let (sa, ca) = azimuth.to_radians().sin_cos();
+    let [x, y, z] = [cl * sa, -sl, cl * ca];
+    // Straight in front or behind, any Rotation is the same light.
+    let rotation = if x.hypot(y) < 1e-12 { 0.0 } else { (-y).atan2(x).to_degrees() + 0.0 };
+    (rotation, z.abs().min(1.0).asin().to_degrees(), z < 0.0)
+}
+
+/// How bright a face with unit normal `n` is under the light `l` (both in view space): the ambient
+/// light plus the light's intensity where it reaches. Without softness the light falls off with
+/// the cosine to nothing at 90°; softness wraps it further round the object, at 100 % to nothing
+/// only straight away from it. Never brighter than the art's own colour.
+fn brightness(o: &Revolve, n: V3, l: V3) -> f64 {
+    if !o.shade {
+        return 1.0;
+    }
+    if o.lights.is_some() {
+        let rgb = illumination(o, n, l);
+        return (rgb[0] + rgb[1] + rgb[2]) / 3.0;
+    }
+    let s = o.light_softness;
+    let lit = ((n.dot(l) + s) / (1.0 + s)).max(0.0);
+    (o.ambient + o.light_intensity * lit).clamp(0.0, 1.0)
+}
+
+fn direct_light(o: &Revolve, n: V3, l: V3) -> f64 {
+    o.light_intensity * ((n.dot(l) + o.light_softness) / (1.0 + o.light_softness)).max(0.0)
+}
+
+fn illumination(o: &Revolve, n: V3, l: V3) -> [f64; 3] {
+    if !o.shade {
+        return [1.0; 3];
+    }
+    if o.lights.is_some() {
+        return unclipped_illumination(o, n, l).map(|v| v.clamp(0.0, 1.0));
+    }
+    let direct = direct_light(o, n, l);
+    o.light_color.map(|c| (o.ambient + direct * c).clamp(0.0, 1.0))
+}
+
+fn unclipped_illumination(o: &Revolve, n: V3, legacy_light: V3) -> [f64; 3] {
+    let mut rgb = [o.ambient; 3];
+    if let Some(lights) = o.lights {
+        for light in lights.iter() {
+            let direct = light.direct(n);
+            for (out, color) in rgb.iter_mut().zip(light.color) {
+                *out += direct * color;
+            }
+        }
+    } else {
+        let direct = direct_light(o, n, legacy_light);
+        for (out, color) in rgb.iter_mut().zip(o.light_color) {
+            *out += direct * color;
+        }
+    }
+    rgb
 }
 
 fn finite(v: f64, fallback: f64, min: f64, max: f64) -> f64 {
@@ -124,10 +249,10 @@ impl Revolve {
         };
         let center_y = bounds.center().y;
         let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
-        let distance = 4.0 * radius.max(bounds.height().abs()).max(1.0);
+        let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
         [bounds.y0, bounds.y1].map(|y| {
             let v = o.rotate(V3(0.0, y - center_y, 0.0));
-            let factor = distance / (distance - v.2 * o.perspective);
+            let factor = perspective_scale(eye, v.2);
             Point::new(axis + v.0 * factor, center_y + v.1 * factor)
         })
     }
@@ -135,39 +260,31 @@ impl Revolve {
     /// Directional light in view space, shared by shading and interactive guides.
     pub fn light_direction(self) -> [f64; 3] {
         let o = self.sanitized();
-        let (sl, cl) = o.light_elevation.to_radians().sin_cos();
-        let (sa, ca) = o.light_azimuth.to_radians().sin_cos();
-        [cl * sa, -sl, cl * ca]
+        let (sr, cr) = o.light_rotation.to_radians().sin_cos();
+        let (sh, ch) = o.light_height.to_radians().sin_cos();
+        [ch * cr, -ch * sr, if o.light_behind { -sh } else { sh }]
     }
 
     /// Light-direction orbits as (centre, cosine basis, sine basis), in view space.
-    /// The first changes azimuth at the current elevation. The second changes elevation
-    /// at the current azimuth. The meridian's valid parameter range is -90..90 degrees.
+    /// The first changes the Rotation at the current Height: a circle on the page. The second
+    /// changes the Height at the current Rotation; its parameter runs 0..90 degrees.
     pub fn light_orbits(self) -> [[[f64; 3]; 3]; 2] {
         let o = self.sanitized();
-        let (se, ce) = o.light_elevation.to_radians().sin_cos();
-        let (sa, ca) = o.light_azimuth.to_radians().sin_cos();
-        [[[0.0, -se, 0.0], [0.0, 0.0, ce], [ce, 0.0, 0.0]], [[0.0, 0.0, 0.0], [sa, 0.0, ca], [0.0, -1.0, 0.0]]]
+        let (sr, cr) = o.light_rotation.to_radians().sin_cos();
+        let (sh, ch) = o.light_height.to_radians().sin_cos();
+        let side = if o.light_behind { -1.0 } else { 1.0 };
+        [[[0.0, 0.0, side * sh], [ch, 0.0, 0.0], [0.0, -ch, 0.0]], [[0.0, 0.0, 0.0], [cr, -sr, 0.0], [0.0, 0.0, side]]]
     }
 
-    /// Move a light on its current hemisphere, preserving the azimuth at the poles.
-    /// A light behind the object stays behind when its projected handle is dragged.
+    /// The Rotation and Height of a light dragged to `point` on the page (in units of the light
+    /// guide's radius, y down), on the side it is already on: the further out, the lower. At the
+    /// centre the Rotation is kept.
     pub fn light_at_on_side(self, point: Point) -> [f64; 2] {
         let o = self.sanitized();
         let point = Point::new(finite(point.x, 0.0, -1e8, 1e8), finite(point.y, 0.0, -1e8, 1e8));
-        let length = point.x.hypot(point.y).max(1.0);
-        let (x, y) = (point.x / length, point.y / length);
-        let z = (1.0 - x * x - y * y).max(0.0).sqrt().copysign(o.light_direction()[2]);
-        let azimuth = if x.hypot(z) < 1e-9 { o.light_azimuth } else { x.atan2(z).to_degrees() };
-        [azimuth, (-y).clamp(-1.0, 1.0).asin().to_degrees()]
-    }
-
-    /// A dragged light position on the front hemisphere, in normalized view coordinates.
-    pub fn light_at(point: Point) -> [f64; 2] {
-        let length = point.x.hypot(point.y).max(1.0);
-        let (x, y) = (point.x / length, point.y / length);
-        let z = (1.0 - x * x - y * y).max(0.0).sqrt();
-        [x.atan2(z).to_degrees(), (-y).clamp(-1.0, 1.0).asin().to_degrees()]
+        let r = point.x.hypot(point.y);
+        let rotation = if r < 1e-9 { o.light_rotation } else { (-point.y).atan2(point.x).to_degrees() };
+        [rotation, r.min(1.0).acos().to_degrees()]
     }
 
     fn sanitized(self) -> Self {
@@ -177,12 +294,14 @@ impl Revolve {
             rotation_x: finite(self.rotation_x, 0.0, -360.0, 360.0),
             rotation_y: finite(self.rotation_y, 0.0, -360.0, 360.0),
             rotation_z: finite(self.rotation_z, 0.0, -360.0, 360.0),
-            perspective: finite(self.perspective, 0.0, 0.0, 1.0),
+            perspective: finite(self.perspective, 0.0, 0.0, MAX_PERSPECTIVE),
             segments: self.segments.clamp(8, 128),
-            light_azimuth: finite(self.light_azimuth, -45.0, -360.0, 360.0),
-            light_elevation: finite(self.light_elevation, 45.0, -90.0, 90.0),
+            light_rotation: (finite(self.light_rotation, DEFAULT_LIGHT.0, -1e6, 1e6) + 180.0).rem_euclid(360.0) - 180.0,
+            light_height: finite(self.light_height, DEFAULT_LIGHT.1, 0.0, 90.0),
             light_intensity: finite(self.light_intensity, 0.8, 0.0, 1.0),
-            ambient: finite(self.ambient, 0.25, 0.0, 1.0),
+            light_softness: finite(self.light_softness, 0.0, 0.0, 1.0),
+            light_color: self.light_color.map(|c| finite(c, 1.0, 0.0, 1.0)),
+            ambient: finite(self.ambient, 0.25, 0.0, 2.0),
             ..self
         }
     }
@@ -196,16 +315,31 @@ impl Revolve {
     }
 }
 
-/// One opaque vector polygon, already projected. Brightness multiplies the source colour.
+/// One projected vector face. Brightness multiplies the source colour; an optional
+/// gradient replaces that constant brightness for a smoothly shaded triangle.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Face {
     pub points: Vec<Point>,
     pub depth: f64,
     pub brightness: f64,
+    pub gradient: Option<ShadeGradient>,
+    /// RGB illumination and its unclipped smooth ramp, independent of the legacy white ramp.
+    pub illumination: [f64; 3],
+    pub light_gradient: Option<LightGradient>,
+    pub rgb_gradient: Option<RgbGradient>,
+    /// Curved vector boundary; points remain a bounded visibility approximation.
+    pub outline: Option<PathData>,
+    /// A single endpoint disk or sector, with its axis centre first in points.
+    pub cap: bool,
+    /// Bounded radial strips for a body face joining two curved endpoint rings.
+    pub visibility_pieces: Option<Vec<Vec<Point>>>,
 }
 
 impl Face {
     pub fn path(&self) -> PathData {
+        if let Some(path) = &self.outline {
+            return path.clone();
+        }
         let mut bp = BezPath::new();
         if let Some(first) = self.points.first() {
             bp.move_to(*first);
@@ -216,6 +350,98 @@ impl Face {
         }
         PathData::from_bezpath(&bp)
     }
+}
+
+/// Body faces and a cap's planar seed use identical two-sided shading and projection.
+fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Point, eye: Option<f64>, light: V3) -> Result<Option<Face>, String> {
+    let Some(first) = vertices.first() else { return Ok(None) };
+    // A triangle fan also handles a quad whose first edge lies on the axis.
+    let mut normal = vertices
+        .get(1..)
+        .unwrap_or_default()
+        .windows(2)
+        .filter_map(|pair| {
+            let [a, b] = pair else { return None };
+            Some(a.sub(*first).cross(b.sub(*first)).unit())
+        })
+        .find(|n| n.dot(*n) >= 0.5)
+        .unwrap_or_default();
+    if normal.dot(normal) < 0.5 {
+        return Ok(None);
+    }
+    // Profiles may run up or down. Shade the visible side of this two-sided surface.
+    if normal.2 < 0.0 {
+        normal = V3(-normal.0, -normal.1, -normal.2);
+    }
+    let flat_brightness = brightness(&o, normal, light);
+    let points: Vec<_> = vertices
+        .iter()
+        .map(|v| {
+            let factor = perspective_scale(eye, v.2);
+            Point::new(origin.x + v.0 * factor, origin.y + v.1 * factor)
+        })
+        .collect();
+    if points.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+        return Err("Revolve projection is not finite".into());
+    }
+    let area = points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .take(points.len())
+        .map(|(a, b)| (a.x - origin.x) * (b.y - origin.y) - (b.x - origin.x) * (a.y - origin.y))
+        .sum::<f64>();
+    if area.abs() < 1e-10 {
+        return Ok(None);
+    }
+    let (brightness, gradient) = if let Some(normals) = normals {
+        let values: Vec<_> = normals
+            .iter()
+            .map(|n| {
+                let n = if n.dot(normal) < 0.0 { V3(-n.0, -n.1, -n.2) } else { *n };
+                brightness(&o, n, light)
+            })
+            .collect();
+        let brightness = if values.is_empty() { flat_brightness } else { values.iter().sum::<f64>() / values.len() as f64 };
+        (brightness, ShadeGradient::triangle(&points, &values))
+    } else {
+        (flat_brightness, None)
+    };
+    let (illumination, light_gradient) = if let Some(normals) = normals {
+        let normals: Vec<_> = normals.iter().map(|n| if n.dot(normal) < 0.0 { V3(-n.0, -n.1, -n.2) } else { *n }).collect();
+        let mut rgb = [0.0; 3];
+        for n in &normals {
+            for (out, value) in rgb.iter_mut().zip(illumination(&o, *n, light)) {
+                *out += value;
+            }
+        }
+        let rgb = if normals.is_empty() { illumination(&o, normal, light) } else { rgb.map(|v| v / normals.len() as f64) };
+        let ramp = if o.shade && o.lights.is_none() && o.light_color != [1.0; 3] {
+            let values: Vec<_> = normals.iter().map(|n| direct_light(&o, *n, light)).collect();
+            ShadeGradient::triangle(&points, &values).map(|diffuse| LightGradient { diffuse, ambient: o.ambient, color: o.light_color })
+        } else {
+            None
+        };
+        (rgb, ramp)
+    } else {
+        (illumination(&o, normal, light), None)
+    };
+    let rgb_gradient = normals.filter(|_| o.shade && o.lights.is_some()).and_then(|normals| {
+        let values: Vec<_> =
+            normals.iter().map(|n| unclipped_illumination(&o, if n.dot(normal) < 0.0 { V3(-n.0, -n.1, -n.2) } else { *n }, light)).collect();
+        RgbGradient::triangle(&points, &values)
+    });
+    Ok(Some(Face {
+        points,
+        depth: vertices.iter().map(|v| v.2).sum::<f64>() / vertices.len() as f64,
+        brightness,
+        gradient,
+        illumination,
+        light_gradient,
+        rgb_gradient,
+        outline: None,
+        cap: false,
+        visibility_pieces: None,
+    }))
 }
 
 /// Evaluate a profile in document space. All subpaths share one axis from `bounds`.
@@ -231,15 +457,37 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
     };
     let center_y = (bounds.y0 + bounds.y1) * 0.5;
     let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
-    let distance = 4.0 * radius.max(bounds.height().abs()).max(1.0);
+    let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
     let steps = ((o.segments as f64 * o.angle / 360.0).ceil() as usize).max(1);
     let sweep = o.angle.to_radians();
+    let smooth = o.shade && o.smooth_shading;
     let [lx, ly, lz] = o.light_direction();
     let light = V3(lx, ly, lz);
     let mut faces = Vec::new();
+    let vertex = |p: Point, step: usize| {
+        let (s, c) = (sweep * step as f64 / steps as f64).sin_cos();
+        o.rotate(V3((p.x - axis) * c, p.y - center_y, (p.x - axis) * s))
+    };
+    let normal = |tangent: Vec2, step: usize| {
+        let (s, c) = (sweep * step as f64 / steps as f64).sin_cos();
+        o.rotate(V3(tangent.y * c, -tangent.x, tangent.y * s).unit())
+    };
+    let mut mesh_cost = 0;
+    let mut emit = |face: Option<Face>, cost: usize| -> Result<(), String> {
+        if let Some(face) = face {
+            faces.push(face);
+            mesh_cost += cost;
+            if mesh_cost > MAX_FACES {
+                return Err("Revolve surface is too complex; reduce Segments or simplify the profile".into());
+            }
+        }
+        Ok(())
+    };
     let mut count = 0;
+    let mut curve_budget = 0;
     for sp in &path.subpaths {
         let mut profile = Vec::new();
+        let mut tangents = Vec::new();
         if let Some(first) = sp.anchors.first() {
             profile.push(first.p);
             count += 1;
@@ -256,60 +504,86 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
             let curve = sp.segment(i);
             let samples = if sp.segment_is_line(i) { 1 } else { 16 };
             for k in 1..=samples {
-                profile.push(curve.eval(k as f64 / samples as f64));
+                let t0 = (k - 1) as f64 / samples as f64;
+                let t1 = k as f64 / samples as f64;
+                let b = curve.eval(t1);
+                let tangent = |t: f64| {
+                    if !smooth {
+                        return Vec2::ZERO;
+                    }
+                    let a = curve.eval(t0);
+                    if samples == 1 {
+                        return b - a;
+                    }
+                    let d = curve.deriv();
+                    let v = d.eval(t).to_vec2();
+                    if v.hypot2() > 1e-20 {
+                        return v;
+                    }
+                    // Repeated endpoint handles still have a one-sided curve tangent.
+                    let v = d.eval(t.clamp(1e-7, 1.0 - 1e-7)).to_vec2();
+                    if v.hypot2() > 1e-20 { v } else { b - a }
+                };
+                tangents.push([tangent(t0), tangent(t1)]);
+                profile.push(b);
                 count += 1;
                 if count > MAX_PROFILE_POINTS {
                     return Err("Revolve profile is too complex".into());
                 }
             }
         }
-        for pair in profile.windows(2) {
+        let ends = o.cap_ends && !sp.closed && profile.len() >= 2 && profile.first().zip(profile.last()).is_some_and(|(a, b)| a.distance(*b) > 1e-10);
+        let mut rings = [None, None];
+        if ends {
+            for (ring, end) in rings.iter_mut().zip([profile.first(), profile.last()]) {
+                if let Some(end) = end
+                    && (end.x - axis).abs() > 1e-10
+                {
+                    *ring = Some(caps::Ring::new(*end, bounds, o, steps, &mut curve_budget)?);
+                }
+            }
+        }
+        for (i, (pair, [ta, tb])) in profile.windows(2).zip(tangents).enumerate() {
             let [a, b] = pair else { continue };
             if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
                 return Err("Revolve profile contains invalid coordinates".into());
             }
             for j in 0..steps {
-                let vertex = |p: Point, step: usize| {
-                    let (s, c) = (sweep * step as f64 / steps as f64).sin_cos();
-                    o.rotate(V3((p.x - axis) * c, p.y - center_y, (p.x - axis) * s))
+                let [v0, v1, v2, v3] = [vertex(*a, j), vertex(*b, j), vertex(*b, j + 1), vertex(*a, j + 1)];
+                let first = (i == 0).then(|| rings.first().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
+                let last = (i + 2 == profile.len()).then(|| rings.last().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
+                let projected = |vertices: &[V3], normals: Option<&[V3]>, edges: &[(usize, &caps::RingArc, bool)]| {
+                    let mut face = project_face(vertices, normals, o, Point::new(axis, center_y), eye, light)?;
+                    if let Some(face) = &mut face {
+                        caps::curve_edges(face, edges);
+                    }
+                    Ok::<_, String>(face)
                 };
-                let vertices = [vertex(*a, j), vertex(*b, j), vertex(*b, j + 1), vertex(*a, j + 1)];
-                // The diagonal gives a nonzero normal even when one profile endpoint is on-axis.
-                let mut normal = vertices[1].sub(vertices[0]).cross(vertices[2].sub(vertices[0])).unit();
-                if normal.dot(normal) < 0.5 {
-                    normal = vertices[2].sub(vertices[0]).cross(vertices[3].sub(vertices[0])).unit();
+                if smooth {
+                    let [n0, n1, n2, n3] = [normal(ta, j), normal(tb, j), normal(tb, j + 1), normal(ta, j + 1)];
+                    emit(projected(&[v0, v1, v2], Some(&[n0, n1, n2]), &last.map(|arc| (1, arc, false)).into_iter().collect::<Vec<_>>())?, 1)?;
+                    emit(projected(&[v0, v2, v3], Some(&[n0, n2, n3]), &first.map(|arc| (2, arc, true)).into_iter().collect::<Vec<_>>())?, 1)?;
+                } else {
+                    let edges: Vec<_> = last.map(|arc| (1, arc, false)).into_iter().chain(first.map(|arc| (3, arc, true))).collect();
+                    emit(projected(&[v0, v1, v2, v3], None, &edges)?, 1)?;
                 }
-                if normal.dot(normal) < 0.5 {
-                    continue;
-                }
-                // Profiles may run up or down. Shade the visible side of this two-sided surface.
-                if normal.2 < 0.0 {
-                    normal = V3(-normal.0, -normal.1, -normal.2);
-                }
-                let brightness = if o.shade { (o.ambient + o.light_intensity * normal.dot(light).max(0.0)).clamp(0.0, 1.0) } else { 1.0 };
-                let points: Vec<_> = vertices
-                    .iter()
-                    .map(|v| {
-                        let factor = distance / (distance - v.2 * o.perspective);
-                        Point::new(axis + v.0 * factor, center_y + v.1 * factor)
-                    })
-                    .collect();
-                if points.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
-                    return Err("Revolve projection is not finite".into());
-                }
-                let area = points
-                    .iter()
-                    .zip(points.iter().cycle().skip(1))
-                    .take(4)
-                    .map(|(a, b)| (a.x - axis) * (b.y - center_y) - (b.x - axis) * (a.y - center_y))
-                    .sum::<f64>();
-                if area.abs() < 1e-10 {
-                    continue;
-                }
-                faces.push(Face { points, depth: vertices.iter().map(|v| v.2).sum::<f64>() / 4.0, brightness });
-                if faces.len() > MAX_FACES {
-                    return Err("Revolve surface is too complex; reduce Segments or simplify the profile".into());
-                }
+            }
+        }
+        for (index, ring) in rings.iter().enumerate().filter_map(|(i, r)| r.as_ref().map(|r| (i, r))) {
+            let neighbours =
+                if index == 0 { profile.first().zip(profile.get(1)) } else { profile.last().zip(profile.get(profile.len().saturating_sub(2))) };
+            if let Some((end, neighbour)) = neighbours {
+                let dy = end.y - neighbour.y;
+                let outward = if dy.abs() > 1e-10 {
+                    dy.signum()
+                } else if end.y < center_y {
+                    -1.0
+                } else {
+                    1.0
+                };
+                // Keep the original tessellation work budget, even though each cap
+                // now produces only one curved vector face.
+                emit(ring.face(bounds, o, light, outward)?, steps)?;
             }
         }
     }
@@ -318,102 +592,4 @@ pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Fa
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn light_orbits_and_handle_projection_match_the_shading_direction_on_both_sides() {
-        for azimuth in [-170.0f64, -45.0, 0.0, 83.0, 167.0] {
-            for elevation in [-85.0f64, -30.0, 0.0, 45.0, 90.0] {
-                let o = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..Default::default() };
-                let direction = o.light_direction();
-                for ([center, u, v], angle) in o.light_orbits().into_iter().zip([azimuth, elevation]) {
-                    let (s, c) = angle.to_radians().sin_cos();
-                    for i in 0..3 {
-                        assert!((center[i] + u[i] * c + v[i] * s - direction[i]).abs() < 1e-12);
-                    }
-                }
-                let [a, e] = o.light_at_on_side(Point::new(direction[0], direction[1]));
-                assert!((a - azimuth).abs() < 1e-9 && (e - elevation).abs() < 1e-9, "{azimuth}, {elevation} -> {a}, {e}");
-            }
-        }
-        let o = Revolve { light_azimuth: 135.0, ..Default::default() };
-        let [azimuth, elevation] = o.light_at_on_side(Point::new(0.3, -0.4));
-        let [x, y, z] = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..o }.light_direction();
-        assert!((x - 0.3).abs() < 1e-12 && (y + 0.4).abs() < 1e-12 && z < 0.0);
-        let [a, e] = o.light_at_on_side(Point::new(f64::NAN, f64::INFINITY));
-        assert!(a.is_finite() && e.is_finite());
-    }
-
-    #[test]
-    fn ring_axes_match_euler_parameter_rotation_and_origin_stays_fixed() {
-        let o = Revolve { rotation_x: 27.0, rotation_y: -39.0, rotation_z: 53.0, ..Default::default() };
-        let seed = V3(0.3, -0.5, 0.7);
-        let before = o.rotate(seed);
-        let planes = o.rotation_planes();
-        for (axis, [u, v]) in planes.iter().enumerate() {
-            let normal = V3(u[0], u[1], u[2]).cross(V3(v[0], v[1], v[2]));
-            assert!((normal.dot(normal) - 1.0).abs() < 1e-12);
-            let mut changed = o;
-            match axis {
-                0 => changed.rotation_x += 0.0001,
-                1 => changed.rotation_y += 0.0001,
-                _ => changed.rotation_z += 0.0001,
-            }
-            let actual = changed.rotate(seed).sub(before);
-            let expected = normal.cross(before);
-            let step = 0.0001f64.to_radians();
-            for (a, b) in [(actual.0 / step, expected.0), (actual.1 / step, expected.1), (actual.2 / step, expected.2)] {
-                assert!((a - b).abs() < 1e-5);
-            }
-        }
-        assert_eq!(Revolve { edge: Edge::Right, offset: 12.0, ..o }.rotation_origin(Rect::new(20.0, 30.0, 80.0, 100.0)), Point::new(92.0, 65.0));
-    }
-    #[test]
-    fn guides_match_projection_and_dragged_light_matches_shading_direction() {
-        let o = Revolve { rotation_x: 0.0, rotation_y: 0.0, rotation_z: 0.0, offset: 10.0, ..Default::default() };
-        assert_eq!(o.view_axes(), [Point::new(1.0, 0.0), Point::new(0.0, 1.0), Point::new(0.0, 0.0)]);
-        assert_eq!(o.projected_axis(Rect::new(20.0, 30.0, 80.0, 100.0)), [Point::new(10.0, 30.0), Point::new(10.0, 100.0)]);
-        let [azimuth, elevation] = Revolve::light_at(Point::new(0.3, -0.4));
-        let [x, y, z] = Revolve { light_azimuth: azimuth, light_elevation: elevation, ..o }.light_direction();
-        assert!((x - 0.3).abs() < 1e-9 && (y + 0.4).abs() < 1e-9 && z > 0.0);
-        let [azimuth, elevation] = Revolve::light_at(Point::new(2.0, -2.0));
-        assert!(azimuth.is_finite() && elevation.is_finite() && elevation.abs() <= 90.0);
-    }
-    fn cylinder() -> (PathData, Rect) {
-        let mut bp = BezPath::new();
-        bp.move_to((40.0, 10.0));
-        bp.line_to((40.0, 90.0));
-        (PathData::from_bezpath(&bp), Rect::new(0.0, 10.0, 40.0, 90.0))
-    }
-    #[test]
-    fn cylinder_has_expected_silhouette_depth_order_and_shading() {
-        let (p, b) = cylinder();
-        let faces = revolve(&p, b, Revolve { rotation_x: 0.0, rotation_y: 0.0, ..Default::default() }).unwrap();
-        let points: Vec<_> = faces.iter().flat_map(|f| &f.points).collect();
-        assert!((points.iter().map(|p| p.x).fold(f64::INFINITY, f64::min) + 40.0).abs() < 1e-6);
-        assert!((points.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max) - 40.0).abs() < 1e-6);
-        assert!(faces.windows(2).all(|w| w[0].depth <= w[1].depth));
-        assert!(faces.iter().any(|f| f.brightness > 0.8) && faces.iter().any(|f| f.brightness < 0.4));
-    }
-    #[test]
-    fn edge_offset_sweep_and_rotation_change_the_surface() {
-        let (p, b) = cylinder();
-        let base = revolve(&p, b, Revolve::default()).unwrap();
-        for o in [
-            Revolve { edge: Edge::Right, offset: 20.0, ..Default::default() },
-            Revolve { angle: 120.0, ..Default::default() },
-            Revolve { rotation_z: 60.0, perspective: 0.8, ..Default::default() },
-        ] {
-            assert_ne!(base, revolve(&p, b, o).unwrap());
-        }
-        assert!(revolve(&p, b, Revolve { angle: 0.0, ..Default::default() }).unwrap().is_empty());
-    }
-    #[test]
-    fn malformed_and_degenerate_inputs_are_bounded() {
-        let (p, b) = cylinder();
-        let f = revolve(&p, b, Revolve { segments: usize::MAX, angle: f64::NAN, offset: f64::INFINITY, ..Default::default() }).unwrap();
-        assert!(f.len() <= 128);
-        assert!(revolve(&p, Rect::new(f64::NAN, 0.0, 1.0, 1.0), Revolve::default()).is_err());
-        assert!(revolve(&PathData::default(), b, Revolve::default()).unwrap().is_empty());
-    }
-}
+mod tests;

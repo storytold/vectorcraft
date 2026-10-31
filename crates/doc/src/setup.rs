@@ -107,14 +107,17 @@ impl Quotes {
     /// Single-quote pairs offered by Document Setup.
     pub const SINGLE_CHOICES: &[[char; 2]] = &[['‘', '’'], ['‚', '‘'], ['‚', '’'], ['’', '’'], ['‹', '›'], ['›', '‹'], ['『', '』'], ['\'', '\'']];
 
-    /// Is `c` one of these opening quotes?
+    /// Is `c` one of these opening quotes? A typographic glyph that is also a closing quote does not
+    /// count; a straight quote has no direction, so it still opens.
     fn is_open(&self, c: char) -> bool {
-        c == self.double[0] || c == self.single[0]
+        (c == self.double[0] || c == self.single[0]) && (c.is_ascii() || (c != self.double[1] && c != self.single[1]))
     }
 
     /// A quote opens after nothing, whitespace, an opening bracket, a dash or another opening quote.
-    fn opens(&self, prev: Option<char>) -> bool {
-        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || self.is_open(p))
+    /// `quote_opened` says whether `prev` is a quote this conversion just produced, and if so whether
+    /// it opened; that settles glyphs which serve as both opening and closing quote.
+    fn opens(&self, prev: Option<char>, quote_opened: Option<bool>) -> bool {
+        prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || quote_opened.unwrap_or_else(|| self.is_open(p)))
     }
 
     /// `text` with straight quotes (`"` and `'`) replaced by these quotes: opening or closing by
@@ -122,11 +125,16 @@ impl Quotes {
     /// and is updated to its last character, so text can be converted in pieces.
     pub fn apply(&self, text: &str, prev: &mut Option<char>) -> String {
         let mut out = String::with_capacity(text.len());
+        let mut quote_opened = None;
         for c in text.chars() {
-            let r = match c {
-                '"' => self.double[usize::from(!self.opens(*prev))],
-                '\'' => self.single[usize::from(!self.opens(*prev))],
-                c => c,
+            quote_opened = match c {
+                '"' | '\'' => Some(self.opens(*prev, quote_opened)),
+                _ => None,
+            };
+            let r = match (c, quote_opened) {
+                ('"', Some(open)) => self.double[usize::from(!open)],
+                ('\'', Some(open)) => self.single[usize::from(!open)],
+                (c, _) => c,
             };
             out.push(r);
             *prev = Some(r);
@@ -145,6 +153,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("French", Quotes { double: ['«', '»'], single: ['‹', '›'] }),
     ("Italian", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Spanish", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
+    ("Catalan", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Portuguese", Quotes { double: ['«', '»'], single: ['‘', '’'] }),
     ("Dutch", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Danish", Quotes { double: ['»', '«'], single: ['›', '‹'] }),
@@ -154,6 +163,7 @@ pub const LANGUAGES: &[(&str, Quotes)] = &[
     ("Polish", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    ("Turkish", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
     ("Japanese", Quotes { double: ['「', '」'], single: ['『', '』'] }),
     ("Chinese", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
 ];
@@ -192,6 +202,16 @@ impl Background {
 
 /// Largest bleed on any side, in points (1 inch).
 pub const MAX_BLEED: f64 = 72.0;
+/// Largest superscript or subscript size, and the farthest its baseline moves either way, in
+/// percent of the font size.
+pub const MAX_SCRIPT: f64 = 500.0;
+/// Largest synthesized small capitals size, in percent of the font size.
+pub const MAX_SMALL_CAPS: f64 = 200.0;
+
+/// Returns `bleed` with each side kept to 0–[`MAX_BLEED`] points; a side that isn't finite becomes 0.
+pub fn bleed_in_range(bleed: [f64; 4]) -> [f64; 4] {
+    bleed.map(|b| if b.is_finite() { b.clamp(0.0, MAX_BLEED) } else { 0.0 })
+}
 
 /// File → Document Setup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -201,7 +221,8 @@ pub struct DocSetup {
     pub bleed: [f64; 4],
     /// Show Images in Outline Mode.
     pub outline_images: bool,
-    /// Highlight text whose font is missing (drawn in a substitute font).
+    /// The Highlight Substituted Fonts value older builds kept in Document Setup. Files keep it as
+    /// they were saved; the screen follows Preferences › Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
     /// Highlight glyphs the font lacks (drawn from a fallback font).
     pub highlight_substituted_glyphs: bool,
@@ -228,6 +249,11 @@ pub struct DocSetup {
     pub export_text: ExportText,
     /// Background Contents chosen in New Document.
     pub background: Background,
+    /// Character panel menu › System Layout: every text object advances by whole points. Off by
+    /// default and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
+    #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
+    pub system_layout: bool,
 }
 
 impl Default for DocSetup {
@@ -250,6 +276,7 @@ impl Default for DocSetup {
             small_caps_size: 70.0,
             export_text: ExportText::Editable,
             background: Background::Transparent,
+            system_layout: false,
         }
     }
 }
@@ -274,6 +301,18 @@ impl DocSetup {
     pub fn flattener(&self) -> &str {
         self.flattener_preset.as_deref().unwrap_or(DEFAULT_FLATTENER)
     }
+    /// Moves the bleed and the type proportions into the ranges Document Setup takes, each to the
+    /// nearer end: the bleed by [`bleed_in_range`], superscript and subscript sizes to
+    /// 1–[`MAX_SCRIPT`] and positions to ±[`MAX_SCRIPT`], the small caps size to
+    /// 1–[`MAX_SMALL_CAPS`].
+    pub fn keep_in_range(&mut self) {
+        self.bleed = bleed_in_range(self.bleed);
+        for m in [&mut self.superscript, &mut self.subscript] {
+            m.size = m.size.clamp(1.0, MAX_SCRIPT);
+            m.position = m.position.clamp(-MAX_SCRIPT, MAX_SCRIPT);
+        }
+        self.small_caps_size = self.small_caps_size.clamp(1.0, MAX_SMALL_CAPS);
+    }
 }
 
 #[cfg(test)]
@@ -293,6 +332,18 @@ mod tests {
         let a = Quotes::ENGLISH.apply("\"", &mut prev);
         let b = Quotes::ENGLISH.apply("\"", &mut prev);
         assert_eq!((a.as_str(), b.as_str()), ("“", "“"));
+    }
+
+    #[test]
+    fn closing_quote_equal_to_other_kinds_opening_quote_still_closes() {
+        let q = Quotes { double: ['”', '”'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘”a”’");
+        let q = Quotes { double: ['"', '"'], single: ['‘', '’'] };
+        let mut prev = None;
+        assert_eq!(q.apply("'\"a\"'", &mut prev), "‘\"a\"’");
+        let mut prev = None;
+        assert_eq!(q.apply("\"'a'\"", &mut prev), "\"‘a’\"");
     }
 
     #[test]

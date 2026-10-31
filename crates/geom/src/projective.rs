@@ -40,7 +40,8 @@ impl Homography {
         [m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]]
     }
 
-    /// Map a point; `None` when it lands on or beyond the horizon (w ≤ 0).
+    /// Map a point; `None` when it lands on or beyond the horizon (w ≤ 0), or when it does not map
+    /// to a finite page point.
     pub fn apply(&self, p: Point) -> Option<Point> {
         let m = &self.0;
         let x = m[0][0] * p.x + m[0][1] * p.y + m[0][2];
@@ -49,7 +50,8 @@ impl Homography {
         if w <= 1e-9 || !x.is_finite() || !y.is_finite() {
             return None;
         }
-        Some(Point::new(x / w, y / w))
+        let q = Point::new(x / w, y / w);
+        q.is_finite().then_some(q)
     }
 
     pub fn det(&self) -> f64 {
@@ -58,7 +60,8 @@ impl Homography {
             + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
     }
 
-    /// Inverse.
+    /// Inverse; `None` when the map is not invertible or its inverse has an entry that is not
+    /// finite.
     pub fn inverse(&self) -> Option<Self> {
         let m = &self.0;
         let d = self.det();
@@ -77,6 +80,9 @@ impl Homography {
                 out[r][k] = v / d;
             }
         }
+        if out.iter().flatten().any(|v| !v.is_finite()) {
+            return None;
+        }
         // H⁻¹·(x, y, 1) = (u, v, 1)/w_H, so points in front of the camera keep w > 0.
         Some(Self(out))
     }
@@ -94,16 +100,51 @@ impl Homography {
     }
 
     /// `self` seen through `a`: the map `a ∘ self ∘ a⁻¹` (what `self` becomes when everything it
-    /// maps from and to is moved by `a`). `None` when `a` isn't invertible.
+    /// maps from and to is moved by `a`). When the product overflows, every entry is formed with
+    /// its powers of two kept apart, and the product is returned divided by the largest magnitude
+    /// in its `w` row (the same map, with a `w` row whose largest entry is 1). `None` when `a`
+    /// isn't invertible, or when the product overflows and the result at that scale has an entry
+    /// that is not finite or is not invertible.
     pub fn conjugated(&self, a: Affine) -> Option<Self> {
         if a.determinant().abs() < 1e-15 {
             return None;
         }
-        Some(Self::from_affine(a).then_after(self).then_after(&Self::from_affine(a.inverse())))
+        let (to, from) = (Self::from_affine(a), Self::from_affine(a.inverse()));
+        let c = to.then_after(self).then_after(&from);
+        if c.is_finite() {
+            return Some(c);
+        }
+        // Each entry of the product is a sum of nine terms to[r][i]·self[i][j]·from[j][k]. Every
+        // factor is split into a mantissa and a power of two, so each term is a mantissa product
+        // and an exponent sum, and the whole product is scaled by one power of two at the end.
+        let split = |h: &Self| h.0.map(|row| row.map(frexp));
+        let (t, s, f) = (split(&to), split(self), split(&from));
+        let term = |r: usize, i: usize, j: usize, k: usize| {
+            let (a, b, c) = (t[r][i], s[i][j], f[j][k]);
+            (a.0 * b.0 * c.0, a.1 + b.1 + c.1)
+        };
+        let ijk = (0..27).map(|n| (n / 9, n / 3 % 3, n % 3));
+        let e = ijk.map(|(i, j, k)| term(2, i, j, k)).filter(|(m, _)| *m != 0.0).map(|(_, e)| e).max()?;
+        let mut c = [[0.0; 3]; 3];
+        for (r, row) in c.iter_mut().enumerate() {
+            for (k, v) in row.iter_mut().enumerate() {
+                *v = (0..9).map(|n| term(r, n / 3, n % 3, k)).map(|(m, x)| ldexp(m, x - e)).sum();
+            }
+        }
+        let k = c[2].iter().fold(0.0_f64, |k, v| k.max(v.abs()));
+        if k <= 0.0 {
+            return None;
+        }
+        let c = Self(c.map(|row| row.map(|v| v / k)));
+        (c.is_finite() && c.det().abs() > 1e-15).then_some(c)
+    }
+
+    fn is_finite(&self) -> bool {
+        self.0.iter().flatten().all(|v| v.is_finite())
     }
 
     /// The affine map that matches `self` to first order at `p` (its derivative there), `None`
-    /// beyond the horizon.
+    /// beyond the horizon or when the derivative is not finite.
     pub fn affine_at(&self, p: Point) -> Option<Affine> {
         let m = &self.0;
         let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
@@ -111,7 +152,8 @@ impl Homography {
         // d(x/w) = (dx − (x/w)·dw) / w, and the same for y.
         let j = |r: usize, c: usize| (m[r][c] - [q.x, q.y][r] * m[2][c]) / w;
         let lin = Affine::new([j(0, 0), j(1, 0), j(0, 1), j(1, 1), 0.0, 0.0]);
-        Some(Affine::translate(q.to_vec2()) * lin * Affine::translate(-p.to_vec2()))
+        let out = Affine::translate(q.to_vec2()) * lin * Affine::translate(-p.to_vec2());
+        out.is_finite().then_some(out)
     }
 
     /// The bounding box of the image of `r` (lines stay lines: its corners bound it), `None` when
@@ -125,6 +167,36 @@ impl Homography {
         }
         out
     }
+}
+
+/// `v` as `m·2^e` with `0.5 ≤ |m| < 1`; 0, infinities and NaN come back as `(v, 0)`.
+fn frexp(v: f64) -> (f64, i32) {
+    if v == 0.0 || !v.is_finite() {
+        return (v, 0);
+    }
+    // A subnormal is scaled into the normal range first.
+    let (v, bias) = if v.abs() < f64::MIN_POSITIVE { (v * pow2(64), -64) } else { (v, 0) };
+    let bits = v.to_bits();
+    let e = ((bits >> 52) & 0x7ff) as i32 - 1022;
+    (f64::from_bits((bits & !(0x7ff << 52)) | (1022 << 52)), e + bias)
+}
+
+/// `m·2^e`, multiplied in steps of powers of two that are each within the normal range.
+fn ldexp(mut m: f64, mut e: i32) -> f64 {
+    while e > 1023 && m.is_finite() {
+        m *= pow2(1023);
+        e -= 1023;
+    }
+    while e < -1022 && m != 0.0 {
+        m *= pow2(-1022);
+        e += 1022;
+    }
+    m * pow2(e.clamp(-1022, 1023))
+}
+
+/// `2^e` for `-1022 ≤ e ≤ 1023`.
+fn pow2(e: i32) -> f64 {
+    f64::from_bits(((e + 1023) as u64) << 52)
 }
 
 #[cfg(test)]
@@ -173,6 +245,93 @@ mod tests {
             let exact = h().apply(p + d).unwrap();
             assert!((a * (p + d)).distance(exact) < 1e-7, "{d:?}");
         }
+    }
+
+    #[test]
+    fn a_point_that_overflows_maps_to_nothing() {
+        // w = 1e-8 is in front of the horizon, but 1e305 / 1e-8 overflows.
+        let near = Homography([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1e-8]]);
+        assert_eq!(near.apply(Point::new(1e305, 0.0)), None);
+        assert_eq!(near.apply(Point::new(0.0, -1e305)), None);
+        assert_eq!(near.map_rect_bbox(Rect::new(0.0, 0.0, 1e305, 1.0)), None);
+        assert!(near.apply(Point::new(2.0, 3.0)).unwrap().distance(Point::new(2e8, 3e8)) < 1e-6);
+        // A NaN w is not caught by the horizon test.
+        let nan = Homography([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, f64::NAN]]);
+        assert_eq!(nan.apply(Point::new(1.0, 1.0)), None);
+    }
+
+    #[test]
+    fn an_inverse_that_overflows_is_none() {
+        let big = Homography([[1e300, 0.0, 0.0], [0.0, 1e300, 0.0], [0.0, 0.0, 1e-310]]);
+        assert_eq!(big.inverse(), None);
+        assert!(h().inverse().is_some());
+    }
+
+    #[test]
+    fn a_derivative_that_overflows_is_none() {
+        // The point maps to 1e300, but the derivative there is 1e302 / 1e-8.
+        let steep = Homography([[1e302, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1e-8]]);
+        let p = Point::new(1e-10, 0.0);
+        assert!(steep.apply(p).is_some());
+        assert_eq!(steep.affine_at(p), None);
+    }
+
+    #[test]
+    fn a_conjugate_that_overflows_is_scaled_down() {
+        // A move by 10, scaled by 1e307: seen through a scale by 10 it moves by 100, but the
+        // product's corner entry is 1e309.
+        let big = Homography([[1e307, 0.0, 1e308], [0.0, 1e307, 0.0], [0.0, 0.0, 1e307]]);
+        let t = Affine::scale(10.0);
+        let c = big.conjugated(t).unwrap();
+        assert!(c.is_finite());
+        assert_eq!(c.0[2], [0.0, 0.0, 1.0]);
+        assert_eq!(Homography::from_array(c.to_array()), Some(c));
+        for p in [Point::new(3.0, 7.0), Point::new(-4.0, 1.5)] {
+            assert!(c.apply(t * p).unwrap().distance(t * big.apply(p).unwrap()) < 1e-9);
+            assert!(c.apply(p).unwrap().distance(p + kurbo::Vec2::new(100.0, 0.0)) < 1e-9);
+        }
+        // A move by 1 scaled by 1e307, seen through a scale by 1e7: a move by 1e7, whose
+        // determinant is 1 at a w row of 1 but 1e-21 at a largest entry of 1.
+        let one = Homography([[1e307, 0.0, 1e307], [0.0, 1e307, 0.0], [0.0, 0.0, 1e307]]);
+        assert!(Homography::from_array(one.to_array()).is_some());
+        let c = one.conjugated(Affine::scale(1e7)).unwrap();
+        assert_eq!(Homography::from_array(c.to_array()), Some(c));
+        let p = Point::new(3.0, -2.0);
+        assert!(c.apply(p).unwrap().distance(p + kurbo::Vec2::new(1e7, 0.0)) < 1e-6);
+        // A scale by 1e10 seen through a scale by 1e10: still a scale by 1e10, which every point
+        // reaches only when w is not left at 1e-10.
+        let wide = Homography([[1e300, 0.0, 0.0], [0.0, 1e300, 0.0], [0.0, 0.0, 1e290]]);
+        let c = wide.conjugated(Affine::scale(1e10)).unwrap();
+        assert_eq!(Homography::from_array(c.to_array()), Some(c));
+        for p in [Point::new(1.0, 2.0), Point::new(-5.0, 0.5)] {
+            assert!(c.apply(p).unwrap().distance(Point::new(p.x * 1e10, p.y * 1e10)) < 1e-3);
+        }
+        // A scale by 2 seen through a move by 1e308: p goes to 2p - 1e308, though the product's
+        // corner entry is 2 * -1e308 + 1e308 and the moves scaled to a largest entry of 1 leave
+        // their w rows at 1e-308.
+        let two = Homography([[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 1.0]]);
+        let c = two.conjugated(Affine::translate((1e308, 0.0))).unwrap();
+        let want = [2.0, 0.0, -1e308, 0.0, 2.0, 0.0, 0.0, 0.0, 1.0];
+        for (v, w) in c.to_array().iter().zip(want) {
+            assert!((v - w).abs() <= 1e-9 * w.abs().max(1.0), "{c:?}");
+        }
+        assert_eq!(Homography::from_array(c.to_array()), Some(c));
+        // A scale by (1e160, 1e-160) seen through the same scale is itself, though the product's
+        // first entry is 1e320 and a scale to a largest entry of 1 takes its second to 1e-480.
+        let thin = Homography([[1e160, 0.0, 0.0], [0.0, 1e-160, 0.0], [0.0, 0.0, 1.0]]);
+        assert!(Homography::from_array(thin.to_array()).is_some());
+        let c = thin.conjugated(Affine::scale_non_uniform(1e160, 1e-160)).unwrap();
+        for (v, w) in c.to_array().iter().zip(thin.to_array()) {
+            assert!((v - w).abs() <= 1e-9 * w.abs(), "{c:?}");
+        }
+        assert_eq!(Homography::from_array(c.to_array()), Some(c));
+        // A move by 1e200 seen through a scale by 1e150 sends every point to about (1e350, 0),
+        // which no invertible map of finite numbers draws.
+        let far = Homography([[1.0, 0.0, 1e200], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+        assert_eq!(far.conjugated(Affine::scale(1e150)), None);
+        assert!(far.conjugated(Affine::scale(2.0)).is_some());
+        // A product that does not overflow is kept as it is.
+        assert_eq!(far.conjugated(Affine::scale(2.0)).unwrap().0[0][2], 2e200);
     }
 
     #[test]

@@ -66,6 +66,8 @@ pub(super) struct Obj {
     pub entries: Vec<(Option<String>, Vec<V>)>,
     /// Values closed without a key.
     pub content: Vec<V>,
+    /// Vector art enclosed by `X=` … `X+` in an opacity-mask dictionary.
+    pub art: Option<std::sync::Arc<vectorcraft_doc::Node>>,
 }
 
 impl Obj {
@@ -123,46 +125,9 @@ pub(super) fn close(o: &mut Obj, stack: &mut Vec<V>, base: usize) {
     }
 }
 
-/// An object name from its XML id (`AI10_ArtUID`): `_` stands for a space and `_xHH_` for a
-/// character; ids made unique end with `_` and 20 or more digits.
+/// An object name from its XML id (`AI10_ArtUID`).
 pub(super) fn xml_name(id: &str) -> String {
-    let id = strip_unique(id);
-    let mut out = String::with_capacity(id.len());
-    let mut rest = id;
-    while let Some(c) = rest.chars().next() {
-        if c == '_' {
-            if let Some((ch, n)) = escaped(rest) {
-                out.push(ch);
-                rest = rest.get(n..).unwrap_or_default();
-                continue;
-            }
-            out.push(' ');
-        } else {
-            out.push(c);
-        }
-        rest = rest.get(c.len_utf8()..).unwrap_or_default();
-    }
-    out
-}
-
-/// `_xHHHH_` at the start of `s`: the character and the escape's length.
-fn escaped(s: &str) -> Option<(char, usize)> {
-    let body = s.strip_prefix("_x")?;
-    let end = body.find('_')?;
-    let hex = body.get(..end)?;
-    if hex.is_empty() || hex.len() > 6 {
-        return None;
-    }
-    let c = char::from_u32(u32::from_str_radix(hex, 16).ok()?)?;
-    Some((c, end + 3))
-}
-
-/// `id` without the `_000…_` suffix that makes it unique.
-fn strip_unique(id: &str) -> &str {
-    let Some(body) = id.strip_suffix('_') else { return id };
-    let Some(at) = body.rfind('_') else { return id };
-    let digits = body.get(at + 1..).unwrap_or_default();
-    if digits.len() >= 20 && digits.bytes().all(|b| b.is_ascii_digit()) { body.get(..at).unwrap_or(id) } else { id }
+    vectorcraft_doc::xml_id::to_object_name(id)
 }
 
 #[cfg(test)]

@@ -21,8 +21,9 @@ pub const KIND: &str = "newSwatch";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("New Swatch").into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
 
-/// Open New Swatch for the active paint: a spot colour with `spot`, going into colour `group`.
-pub fn open(app: &mut VectorcraftApp, spot: bool, group: Option<&str>) -> Result<Value, String> {
+/// Open New Swatch for the active paint, going into color `group`. A color opens as a spot color
+/// with `spot`, and as a global process color with `global` alone.
+pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&str>) -> Result<Value, String> {
     let paint = crate::panels::active_paint(app);
     let name = app.session.active().ok_or("no document open")?.doc.new_swatch_name(&paint);
     let mut fields = match &paint {
@@ -30,10 +31,10 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, group: Option<&str>) -> Result
             json!({"__paint": crate::panels::paint_params(&paint), "group": group.unwrap_or_default()})
         }
         Paint::Solid { color, .. } => {
-            json!({"color": color, "mode": mode_id(Mode::of(color)), "spot": spot, "global": spot, "group": group.unwrap_or_default()})
+            json!({"color": color, "mode": mode_id(Mode::of(color)), "spot": spot, "global": spot || global, "group": group.unwrap_or_default()})
         }
         Paint::None => return Err("pick a colour, gradient or pattern to save as a swatch".into()),
-        other => json!({"__paint": crate::panels::paint_params(other)}),
+        other => json!({"__paint": crate::panels::swatch_paint_params(other)}),
     };
     fields["name"] = json!(name);
     fields["__auto"] = json!(name);
@@ -92,7 +93,7 @@ mod tests {
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
         app.run("paint.setFill", json!({"swatch": "Ink", "tint": 40})).unwrap();
-        open(&mut app, false, None).unwrap();
+        open(&mut app, false, false, None).unwrap();
         let d = app.ui.dialog.clone().unwrap();
         assert_eq!(params(&d), json!({"name": "Ink 40%", "swatch": "Ink", "tint": 40.0}));
         run_and_close(&mut app, "swatch.new", params(&d)).unwrap();

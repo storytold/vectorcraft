@@ -4,7 +4,7 @@
 
 use egui::{Color32, Ui, vec2};
 
-use crate::theme::{self, Tokens};
+use crate::theme::Tokens;
 use crate::{VectorcraftApp, icons};
 
 /// The title-bar Discord control's width (the app bar drops it when space runs out).
@@ -84,7 +84,7 @@ mod tests {
         assert_eq!(v["url"], "https://discord.gg/artcraft");
         assert_eq!(opened.lock().unwrap().len(), 4);
         let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
+        crate::theme::install_fonts(&ctx);
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| links(&mut app, ui));
         out.textures_delta.clear();
     }

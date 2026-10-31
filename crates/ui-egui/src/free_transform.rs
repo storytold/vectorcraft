@@ -37,7 +37,7 @@ fn modes() -> [(&'static str, Glyph, &'static str); 3] {
 
 /// Where the widget was last drawn (none while it isn't shown).
 pub(crate) fn rect(ctx: &egui::Context) -> Option<Rect> {
-    let id = egui::Id::new(TOOL);
+    let id = egui::Id::unique(TOOL);
     ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
 }
 
@@ -52,7 +52,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &Ui, canvas: Rect) {
     let mode = opts["mode"].as_str().unwrap_or("free").to_string();
     let constrain = opts["constrain"].as_bool().unwrap_or(false);
     let mut set: Option<(&str, Value)> = None;
-    egui::Area::new(egui::Id::new(TOOL)).order(egui::Order::Middle).fixed_pos(canvas.min + vec2(10.0, 10.0)).show(ui.ctx(), |ui| {
+    egui::Area::new(egui::Id::unique(TOOL)).order(egui::Order::Middle).fixed_pos(canvas.min + vec2(10.0, 10.0)).show(ui.ctx(), |ui| {
         egui::Frame::NONE
             .fill(t.panel)
             .stroke(Stroke::new(1.0, t.button_border))

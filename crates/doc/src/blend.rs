@@ -33,13 +33,7 @@ use crate::text::TextObject;
 
 /// Interpolate two colours in their shared model (display RGB when the models differ).
 pub fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
-    let l = |x: f32, y: f32| x + (y - x) * t;
-    match (*a, *b) {
-        (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => Color::cmyk(l(c, c2), l(m, m2), l(y, y2), l(k, k2)),
-        (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(k, k2)),
-        (Color::Lab { l: l1, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => Color::lab(l(l1, l2), l(a, a2), l(b, b2)),
-        _ => a.lerp(b, t),
-    }
+    a.lerp_keep_model(b, t)
 }
 
 fn lerp_f32(x: f32, y: f32, t: f32) -> f32 {
@@ -50,13 +44,43 @@ fn lerp_f64(x: f64, y: f64, t: f64) -> f64 {
     x + (y - x) * t
 }
 
-fn solid_gradient(c: Color, like: &Gradient) -> Gradient {
+/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`).
+fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) -> Gradient {
     let mut g = like.clone();
     for s in &mut g.stops {
         s.color = c;
         s.opacity = 1.0;
+        s.swatch = swatch.map(str::to_string);
+        s.tint = tint;
     }
     g
+}
+
+/// The swatch and tint `g` paints at `t`: a stop's own link, or the shared swatch of the two stops
+/// around `t` at the tint between theirs (unlinked when they differ), as [`Gradient::sample_with`] walks.
+fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
+    let stops = &g.stops;
+    let link = |s: &GradientStop| (s.swatch.clone(), s.tint);
+    let Some(first) = stops.first() else { return (None, 1.0) };
+    if t <= first.offset {
+        return link(first);
+    }
+    for w in stops.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if t <= b.offset {
+            let span = (b.offset - a.offset).max(1e-6);
+            let u = (t - a.offset) / span;
+            let m = a.midpoint.clamp(0.01, 0.99);
+            let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
+            return match (&a.swatch, &b.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v)),
+                _ if v <= 0.0 => link(a),
+                _ if v >= 1.0 => link(b),
+                _ => (None, 1.0),
+            };
+        }
+    }
+    stops.last().map_or((None, 1.0), link)
 }
 
 /// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
@@ -65,8 +89,9 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
     out.stops = offsets
         .iter()
         .map(|&o| {
-            let (color, opacity) = g.sample_with(o, lerp_color);
-            GradientStop { opacity, ..GradientStop::new(o, color) }
+            let (color, opacity) = g.sample_keep_model(o);
+            let (swatch, tint) = link_at(g, o);
+            GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
         })
         .collect();
     out
@@ -112,10 +137,19 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
         .stops
         .iter()
         .zip(&gb.stops)
-        .map(|(sa, sb)| GradientStop {
-            opacity: lerp_f32(sa.opacity, sb.opacity, t),
-            midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
-            ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
+        .map(|(sa, sb)| {
+            // Stops on two tints of one swatch stay linked to it, as solids do (#3234).
+            let (swatch, tint) = match (&sa.swatch, &sb.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t)),
+                _ => (None, 1.0),
+            };
+            GradientStop {
+                opacity: lerp_f32(sa.opacity, sb.opacity, t),
+                midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
+                swatch,
+                tint,
+                ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
+            }
         })
         .collect();
     out.angle = a.angle + (b.angle - a.angle) * t as f64;
@@ -137,17 +171,21 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
 /// solid↔gradient; otherwise switch halfway.
 pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
     match (a, b) {
+        // Two tints of one swatch blend into tints of that swatch (a spot stays a spot on export).
+        (Paint::Solid { color: x, swatch: Some(sa), tint: ta }, Paint::Solid { color: y, swatch: Some(sb), tint: tb }) if sa == sb => {
+            Paint::Solid { color: lerp_color(x, y, t), swatch: Some(sa.clone()), tint: lerp_f32(*ta, *tb, t) }
+        }
         (Paint::Solid { color: x, .. }, Paint::Solid { color: y, .. }) => Paint::solid(lerp_color(x, y, t)),
         (Paint::Gradient(ga), Paint::Gradient(gb)) => match lerp_gradient(ga, gb, t) {
             Some(g) => Paint::Gradient(Box::new(g)),
             None => (if t < 0.5 { a } else { b }).clone(),
         },
-        (Paint::Solid { color, .. }, Paint::Gradient(g)) => {
-            let ga = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
+        (Paint::Solid { color, swatch, tint }, Paint::Gradient(g)) => {
+            let ga = GradientPaint { gradient: solid_gradient(*color, swatch.as_deref(), *tint, &g.gradient), ..(**g).clone() };
             Paint::Gradient(Box::new(lerp_gradient(&ga, g, t).unwrap_or_else(|| (**g).clone())))
         }
-        (Paint::Gradient(g), Paint::Solid { color, .. }) => {
-            let gb = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
+        (Paint::Gradient(g), Paint::Solid { color, swatch, tint }) => {
+            let gb = GradientPaint { gradient: solid_gradient(*color, swatch.as_deref(), *tint, &g.gradient), ..(**g).clone() };
             Paint::Gradient(Box::new(lerp_gradient(g, &gb, t).unwrap_or_else(|| (**g).clone())))
         }
         _ => (if t < 0.5 { a } else { b }).clone(),
@@ -158,7 +196,11 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
 /// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
 fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
     let solid_like = |d: &Dash| Dash {
-        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        // An odd pattern repeats twice per period, so pair up the doubled one to keep every gap closed.
+        pattern: if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() }
+            .chunks(2)
+            .flat_map(|c| [c.iter().sum::<f64>(), 0.0])
+            .collect(),
         offset: d.offset,
         align_corners: d.align_corners,
     };
@@ -541,11 +583,18 @@ impl Lerp {
 
     /// The object at `t` (0 = `a`, 1 = `b`), with id 0.
     pub fn at(&self, t: f64) -> Node {
+        self.at_eased(t, t)
+    }
+
+    /// The object whose shape is at `t` and whose colours (fills, strokes, opacity, mesh and text
+    /// colours) are at `tc`: a blend with its colours eased apart from its spacing.
+    pub fn at_eased(&self, t: f64, tc: f64) -> Node {
         let (a, b) = (&self.a, &self.b);
         let base = if t < 0.5 { a } else { b };
         let mut n = match &self.shape {
             Shape::Group { children, clip } => {
-                let mut g = Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at(t))).collect(), clip: *clip });
+                let mut g =
+                    Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at_eased(t, tc))).collect(), clip: *clip });
                 g.isolate = base.isolate;
                 g.knockout = base.knockout;
                 g
@@ -555,8 +604,8 @@ impl Lerp {
                 if let (NodeKind::Mesh(m), NodeKind::Mesh(ma), NodeKind::Mesh(mb)) = (&mut n.kind, &a.kind, &b.kind) {
                     for ((p, x), y) in m.points.iter_mut().zip(&ma.points).zip(&mb.points) {
                         p.p = x.p.lerp(y.p, t);
-                        p.color = lerp_color(&x.color, &y.color, t as f32);
-                        p.opacity = lerp_f32(x.opacity, y.opacity, t as f32);
+                        p.color = lerp_color(&x.color, &y.color, tc as f32);
+                        p.opacity = lerp_f32(x.opacity, y.opacity, tc as f32);
                         for h in 0..4 {
                             p.handles[h] = x.handles[h].lerp(y.handles[h], t);
                         }
@@ -582,7 +631,7 @@ impl Lerp {
             Shape::Placed => {
                 let mut n = base.clone();
                 match (&mut n.kind, &a.kind, &b.kind) {
-                    (NodeKind::Text(o), NodeKind::Text(x), NodeKind::Text(y)) => lerp_text(o, x, y, t),
+                    (NodeKind::Text(o), NodeKind::Text(x), NodeKind::Text(y)) => lerp_text(o, x, y, t, tc),
                     (NodeKind::SymbolInstance { xf: o, .. }, NodeKind::SymbolInstance { xf: x, .. }, NodeKind::SymbolInstance { xf: y, .. }) => {
                         *o = lerp_affine(*x, *y, t)
                     }
@@ -619,8 +668,8 @@ impl Lerp {
             }
         };
         n.id = NodeId(0);
-        n.appearance = lerp_appearance(&a.appearance, &b.appearance, t).into();
-        n.opacity = lerp_f32(a.opacity, b.opacity, t as f32);
+        n.appearance = lerp_appearance(&a.appearance, &b.appearance, tc).into();
+        n.opacity = lerp_f32(a.opacity, b.opacity, tc as f32);
         n.blend = base.blend;
         n.visible = true;
         n.locked = false;
@@ -650,7 +699,7 @@ fn compound(path: PathData, rule: FillRule, counts: &[usize], total: usize) -> N
 /// Interpolate text `x` → `y` into `o` (a copy of the nearer): the transform by its parts, an
 /// area frame anchor by anchor, and each run's colours, stroke weight and size from the runs at
 /// the same place (by character) of both.
-fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
+fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64, tc: f64) {
     o.xf = lerp_affine(x.xf, y.xf, t);
     if let (crate::text::TextKind::Area { frame: f }, crate::text::TextKind::Area { frame: fx }, crate::text::TextKind::Area { frame: fy }) =
         (&mut o.kind, &x.kind, &y.kind)
@@ -672,7 +721,7 @@ fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
     }
     let total: usize = o.runs.iter().map(|r| r.text.chars().count()).sum::<usize>().max(1);
     let mut start = 0usize;
-    let tf = t as f32;
+    let tf = tc as f32;
     let mut resized = false;
     for r in &mut o.runs {
         let len = r.text.chars().count();
@@ -1014,13 +1063,146 @@ pub fn steps_knockout_shows(steps: &[Arc<Node>]) -> bool {
     !steps.iter().all(|c| paints_opaquely(c))
 }
 
-/// Evaluate a blend: the keys and generated steps in paint order.
+/// Most steps a blend makes in all, the steps of the blends inside its keys and steps included.
+/// Each step of a blend whose keys are blends is a copy of one of them, which makes its own steps
+/// when drawn, so nesting multiplies the step counts capped pair by pair: five levels of 15 steps
+/// are 1.3 million steps from a 23 KB file, 3.4 GB to draw (#3579). Past it, a blend makes
+/// proportionally fewer steps between each pair of keys ([`fit_steps`]).
+pub const MAX_BLEND_STEPS: usize = 100_000;
+
+/// The steps between each pair of keys, as the blend's spacing asks for them.
+fn requested_steps(keys: &[Arc<Node>], spec: &BlendSpec, rail: Option<&Rail>) -> Vec<usize> {
+    keys.windows(2)
+        .enumerate()
+        .map(|(i, w)| match w {
+            [a, b] => blend_step_count(a, b, spec.spacing, rail.map_or_else(|| center_of(a).distance(center_of(b)), |r| r.len(i))),
+            _ => 0,
+        })
+        .collect()
+}
+
+/// Most steps `spacing` makes between two keys, whatever their size and distance
+/// ([`blend_step_count`]'s clamps).
+fn most_steps(spacing: BlendSpacing) -> usize {
+    match spacing {
+        BlendSpacing::Steps(n) => n.clamp(1, 1000) as usize,
+        BlendSpacing::Distance(_) => 1000,
+        BlendSpacing::SmoothColor => 256,
+    }
+}
+
+/// `want` steps between each pair of keys, fewer where they would make more than
+/// [`MAX_BLEND_STEPS`] in all with `keys` steps already made by the keys and `each[i]` made by
+/// one step of pair `i` (itself and what the blends in it make): every pair keeps the same share
+/// of its steps, rounded down, and none when the keys alone fill the budget.
+fn fit_steps(want: &[usize], each: &[usize], keys: usize) -> Vec<usize> {
+    let room = MAX_BLEND_STEPS.saturating_sub(keys) as u128;
+    let demand = want.iter().zip(each).map(|(&n, &c)| n as u128 * c as u128).fold(0u128, u128::saturating_add);
+    if demand <= room {
+        return want.to_vec();
+    }
+    // `demand` is more than `room`, so it isn't 0, and each share is below `n`.
+    want.iter().map(|&n| usize::try_from(n as u128 * room / demand).unwrap_or(0)).collect()
+}
+
+/// Counts the steps blends make in all ([`MAX_BLEND_STEPS`]), each object counted once by its
+/// address while the count runs.
+#[derive(Default)]
+struct StepCount {
+    known: std::collections::HashMap<(usize, bool), usize>,
+}
+
+impl StepCount {
+    /// Steps the blends in `n` make in all when drawn, each keeping to [`MAX_BLEND_STEPS`].
+    /// `copy`: `n` is part of a blend's step, a copy moved and scaled into place. A blend spaced
+    /// by distance (or by distance where the colours match) makes more steps scaled up, so a
+    /// copy counts the most its spacing can make between each pair, an upper bound for any scale.
+    fn node(&mut self, n: &Node, copy: bool) -> usize {
+        let at = (std::ptr::from_ref(n) as usize, copy);
+        if let Some(&known) = self.known.get(&at) {
+            return known;
+        }
+        let count = match &n.kind {
+            NodeKind::Blend { children, spec } if copy => self.most(children, spec),
+            NodeKind::Blend { children, spec } => self.blend(children, spec, Rail::new(children, spec).as_ref()).1,
+            // Each instance draws the source again.
+            NodeKind::Repeat(r) => r.instances(None).saturating_mul(self.nodes(&r.source, copy)),
+            _ => self.nodes(n.children().map_or(&[], Vec::as_slice), copy),
+        };
+        self.known.insert(at, count);
+        count
+    }
+
+    fn nodes(&mut self, nodes: &[Arc<Node>], copy: bool) -> usize {
+        nodes.iter().map(|c| self.node(c, copy)).fold(0, usize::saturating_add)
+    }
+
+    /// What one step between keys `a` and `b` makes: itself and the steps of the blends in it.
+    /// Groups pair their children as [`Lerp::new`] does; anything else is a copy of the nearer key.
+    fn step(&mut self, a: &Node, b: &Node) -> usize {
+        let inner = match (&a.kind, &b.kind) {
+            (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 })
+                if k1 == k2 && !(*k1 && ca.len() != cb.len()) =>
+            {
+                (0..ca.len().max(cb.len()))
+                    .map(|i| match (ca.get(i), cb.get(i)) {
+                        (Some(x), Some(y)) => self.step(x, y).saturating_sub(1),
+                        (Some(x), None) | (None, Some(x)) => self.node(x, true),
+                        (None, None) => 0,
+                    })
+                    .fold(0, usize::saturating_add)
+            }
+            _ => self.node(a, true).max(self.node(b, true)),
+        };
+        inner.saturating_add(1)
+    }
+
+    /// What each step between each pair of `keys` makes ([`Self::step`]).
+    fn steps(&mut self, keys: &[Arc<Node>]) -> Vec<usize> {
+        keys.windows(2)
+            .map(|w| match w {
+                [a, b] => self.step(a, b),
+                _ => 1,
+            })
+            .collect()
+    }
+
+    /// The steps between each pair of keys a blend makes ([`fit_steps`]), and the steps it makes
+    /// in all, its keys' included.
+    fn blend(&mut self, keys: &[Arc<Node>], spec: &BlendSpec, rail: Option<&Rail>) -> (Vec<usize>, usize) {
+        let inside = self.nodes(keys, false);
+        let each = self.steps(keys);
+        let kept = fit_steps(&requested_steps(keys, spec, rail), &each, inside);
+        let total = kept.iter().zip(&each).map(|(&n, &c)| n.saturating_mul(c)).fold(inside, usize::saturating_add);
+        (kept, total)
+    }
+
+    /// The most steps a copy of a blend makes in all, at any scale: what [`Self::blend`] counts
+    /// with [`most_steps`] between each pair, before rounding.
+    fn most(&mut self, keys: &[Arc<Node>], spec: &BlendSpec) -> usize {
+        let inside = self.nodes(keys, true);
+        let each = self.steps(keys);
+        let demand = each.iter().map(|&c| c.saturating_mul(most_steps(spec.spacing))).fold(0, usize::saturating_add);
+        inside.saturating_add(demand.min(MAX_BLEND_STEPS.saturating_sub(inside)))
+    }
+}
+
+/// How many steps `keys` blended with `spec` make between each pair of keys: as many as the
+/// spacing asks for, fewer when they and the steps of the blends nested in them would pass
+/// [`MAX_BLEND_STEPS`] ([`blend_expand`] makes these).
+pub fn blend_steps(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<usize> {
+    StepCount::default().blend(keys, spec, Rail::new(keys, spec).as_ref()).0
+}
+
+/// Evaluate a blend: the keys and generated steps in paint order. The steps keep to
+/// [`MAX_BLEND_STEPS`] in all ([`blend_steps`]).
 pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
     let k = keys.len();
     if k < 2 {
         return keys.iter().map(|n| (**n).clone()).collect();
     }
     let rail = Rail::new(keys, spec);
+    let (counts, _) = StepCount::default().blend(keys, spec, rail.as_ref());
     let mut out = Vec::new();
     for (i, a) in keys.iter().enumerate() {
         let mut key = (**a).clone();
@@ -1029,12 +1211,13 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         }
         out.push(key);
         let Some(b) = keys.get(i + 1) else { break };
-        let len = rail.as_ref().map_or_else(|| center_of(a).distance(center_of(b)), |r| r.len(i));
-        let n = blend_step_count(a, b, spec.spacing, len);
+        let n = counts.get(i).copied().unwrap_or(0);
         let lerp = Lerp::new(a, b, (spec.start(i), spec.start(i + 1)));
         for j in 1..=n {
-            let t = j as f64 / (n + 1) as f64;
-            let mut s = lerp.at(t);
+            // Even position of the step, then where the easing puts its shape and its colours.
+            let u = j as f64 / (n + 1) as f64;
+            let (t, tc) = (if rail.is_some() { spec.ease.apply(u) } else { u }, spec.color_position(u));
+            let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);
             }
@@ -1097,6 +1280,55 @@ mod tests {
     }
 
     #[test]
+    fn easing_keeps_the_ends_and_stays_monotone() {
+        use crate::live::{BlendEase, BlendEaseType as K};
+        for kind in [K::In, K::Out, K::InOut, K::OutIn] {
+            for ramp in [0.0, 0.5, 1.0, f64::NAN, f64::INFINITY] {
+                let e = BlendEase { kind, ramp };
+                assert_eq!((e.apply(0.0), e.apply(1.0)), (0.0, 1.0));
+                let ys: Vec<f64> = (0..=100).map(|i| e.apply(i as f64 / 100.0)).collect();
+                assert!(ys.windows(2).all(|w| w[0] <= w[1]));
+                assert_eq!(e.apply(f64::NAN), 0.0);
+                if ramp == 0.0 {
+                    assert_eq!(e.apply(0.25), 0.25);
+                }
+            }
+        }
+        let e = |kind| BlendEase { kind, ramp: 1.0 };
+        assert!(e(K::In).apply(0.25) < 0.25);
+        assert!(e(K::Out).apply(0.25) > 0.25);
+        assert!(e(K::InOut).apply(0.25) < 0.25 && e(K::InOut).apply(0.75) > 0.75);
+        assert!(e(K::OutIn).apply(0.25) > 0.25 && e(K::OutIn).apply(0.75) < 0.75);
+    }
+
+    #[test]
+    fn colour_easing_moves_colours_apart_from_positions() {
+        let rect = |x: f64, c: Color| {
+            let mut n = Node::path(NodeId(1), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default());
+            n.appearance = Appearance::basic(Paint::solid(c), Paint::None, 0.0).into();
+            Arc::new(n)
+        };
+        let keys = vec![rect(0.0, Color::BLACK), rect(100.0, Color::WHITE)];
+        let mid = |spec: &BlendSpec| {
+            let out = blend_expand(&keys, spec);
+            let n = &out[1];
+            (n.geometric_bounds().unwrap().x0, n.appearance.fill_paint())
+        };
+        // Position easing runs along a spine: Align to Path gives the blend one.
+        let base = BlendSpec { spacing: BlendSpacing::Steps(1), orientation: BlendOrientation::AlignToPath, ..Default::default() };
+        let (x0, p0) = mid(&base);
+        // Colour easing alone leaves the position and moves the colour.
+        let colour = BlendSpec { color_shift: 50.0, ..base.clone() };
+        let (x1, p1) = mid(&colour);
+        assert!((x0 - x1).abs() < 1e-9 && p0 != p1);
+        // Position easing alone leaves the colour and moves the position.
+        let pos = BlendSpec { ease: crate::live::BlendEase { kind: crate::live::BlendEaseType::In, ramp: 1.0 }, ..base.clone() };
+        let (x2, p2) = mid(&pos);
+        assert!((x0 - x2).abs() > 1e-3 && p0 == p2);
+        assert_eq!(mid(&pos).0, x2, "deterministic");
+    }
+
+    #[test]
     fn affine_lerp_turns_the_short_way() {
         let x = Affine::rotate(170f64.to_radians());
         let y = Affine::rotate(-170f64.to_radians());
@@ -1118,6 +1350,56 @@ mod tests {
         // Clicked start points win over the automatic match.
         let pair = PathPair::new(&a, &b, (Some(0), Some(0)));
         assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
+    }
+
+    #[test]
+    fn blend_between_tints_of_one_swatch_keeps_the_link() {
+        let tinted = |tint: f32| Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint), swatch: Some("Spot".into()), tint };
+        let Paint::Solid { swatch, tint, .. } = lerp_paint(&tinted(0.2), &tinted(1.0), 0.5) else { panic!() };
+        assert_eq!(swatch.as_deref(), Some("Spot"));
+        assert!((tint - 0.6).abs() < 1e-6, "{tint}");
+        let other = Paint::Solid { color: Color::BLACK, swatch: Some("Other".into()), tint: 1.0 };
+        assert!(matches!(lerp_paint(&tinted(0.2), &other, 0.5), Paint::Solid { swatch: None, .. }));
+
+        // Gradient stops on tints of one swatch stay linked too; a process solid unlinks them.
+        let spot_gradient = |tint: f32| {
+            let mut stop = GradientStop::new(0.0, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+            stop.swatch = Some("Spot".into());
+            stop.tint = tint;
+            let stops = vec![stop.clone(), GradientStop { offset: 1.0, ..stop }];
+            Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })))
+        };
+        let Paint::Gradient(m) = lerp_paint(&spot_gradient(0.2), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot") && (s.tint - 0.6).abs() < 1e-6), "{:?}", m.gradient.stops);
+        let Paint::Gradient(m) = lerp_paint(&tinted(0.2), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot") && (s.tint - 0.6).abs() < 1e-6), "{:?}", m.gradient.stops);
+        let Paint::Gradient(m) = lerp_paint(&Paint::solid(Color::BLACK), &spot_gradient(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    #[test]
+    fn resampled_gradient_stops_keep_the_swatch_link() {
+        let spot = |offset: f32, tint: f32| {
+            let mut stop = GradientStop::new(offset, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+            stop.swatch = Some("Spot".into());
+            stop.tint = tint;
+            stop
+        };
+        let paint = |stops: Vec<GradientStop>| Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })));
+        let two = paint(vec![spot(0.0, 0.2), spot(1.0, 1.0)]);
+        let three = paint(vec![spot(0.0, 0.2), spot(0.5, 0.6), spot(1.0, 1.0)]);
+        let Paint::Gradient(m) = lerp_paint(&two, &three, 0.5) else { panic!() };
+        assert_eq!(m.gradient.stops.len(), 3);
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        let tints: Vec<f32> = m.gradient.stops.iter().map(|s| s.tint).collect();
+        assert!((tints[1] - 0.6).abs() < 1e-6 && (tints[2] - 1.0).abs() < 1e-6, "{tints:?}");
+
+        // Spot on one side, process on the other: the stops are unlinked.
+        let mut plain = spot(0.5, 1.0);
+        plain.swatch = None;
+        let mixed = paint(vec![spot(0.0, 1.0), plain, spot(1.0, 1.0)]);
+        let Paint::Gradient(m) = lerp_paint(&two, &mixed, 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().any(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
     }
 
     #[test]
@@ -1146,6 +1428,12 @@ mod tests {
     }
 
     #[test]
+    fn odd_dash_blends_to_solid_with_closed_gaps() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![2.0, 3.0, 4.0], ..Default::default() }), None, 1.0).unwrap();
+        assert!(d.pattern.iter().skip(1).step_by(2).all(|g| *g == 0.0), "{:?}", d.pattern);
+    }
+
+    #[test]
     fn copied_steps_get_new_members() {
         let rect = |x: f64| Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default()));
         let a = Node::new(NodeId(1), NodeKind::Group { children: vec![rect(0.0), rect(20.0)], clip: true });
@@ -1154,5 +1442,129 @@ mod tests {
         let mut ids = vec![];
         mid.walk(&mut |n| ids.push(n.id));
         assert!(ids.iter().all(|i| *i == NodeId(0)), "{ids:?}");
+    }
+
+    /// A blend of `a` and `b` spaced by `spacing`.
+    fn blend_of(a: Node, b: Node, spacing: BlendSpacing) -> Node {
+        let spec = BlendSpec { spacing, ..Default::default() };
+        Node::new(NodeId(1), NodeKind::Blend { children: vec![Arc::new(a), Arc::new(b)], spec: Box::new(spec) })
+    }
+
+    /// A blend's keys and options.
+    fn blend_parts(n: &Node) -> Option<(&Vec<Arc<Node>>, &BlendSpec)> {
+        match &n.kind {
+            NodeKind::Blend { children, spec } => Some((children, spec)),
+            _ => None,
+        }
+    }
+
+    /// A square of side `side` at (`x`, `y`).
+    fn square(x: f64, y: f64, side: f64) -> Node {
+        Node::path(NodeId(1), shapes::rectangle(Rect::new(x, y, x + side, y + side)), Appearance::default())
+    }
+
+    /// `levels` of blends of 15 steps whose keys are the blends a level down (#3579's input).
+    fn nested(levels: u32, x: f64) -> Node {
+        if levels == 0 {
+            return square(x, 0.0, 4.0);
+        }
+        let w = 40.0 * f64::from(levels);
+        blend_of(nested(levels - 1, x), nested(levels - 1, x + w), BlendSpacing::Steps(15))
+    }
+
+    /// The steps drawing `n` makes in all, each blend evaluated as the renderer does: one level at
+    /// a time, the blends in its keys and steps evaluated again.
+    fn drawn_steps(n: &Node) -> usize {
+        match &n.kind {
+            NodeKind::Blend { children, spec } => {
+                let out = blend_expand(children, spec);
+                out.len() - children.len() + out.iter().map(drawn_steps).sum::<usize>()
+            }
+            _ => n.children().map_or(0, |c| c.iter().map(|c| drawn_steps(c)).sum()),
+        }
+    }
+
+    /// Steps `levels` of [`nested`] blends of 15 steps make in all: each level its 15 steps,
+    /// and again the steps of the level below in each key and each step.
+    fn nested_steps(levels: u32) -> usize {
+        (17usize.pow(levels) - 1) * 15 / 16
+    }
+
+    /// #3579: blends whose keys are blends draw their steps again in every step above them. Five
+    /// levels of 15 steps made 1.3 million steps from a 23 KB file. Now a blend makes fewer steps
+    /// where they would pass `MAX_BLEND_STEPS`, and none where its keys already fill it, so each
+    /// level past that adds only what its keys draw.
+    #[test]
+    fn nested_blends_keep_to_the_step_budget() {
+        assert_eq!(nested_steps(5), 1_331_115);
+        let four = nested_steps(4);
+        assert!(four < MAX_BLEND_STEPS && 2 * four > MAX_BLEND_STEPS);
+        let five = nested(5, 0.0);
+        let (children, spec) = blend_parts(&five).unwrap();
+        assert_eq!(blend_steps(children, spec), vec![0]);
+        assert_eq!(drawn_steps(&five), 2 * four);
+        assert_eq!(drawn_steps(&nested(6, 0.0)), 4 * four);
+        // A blend whose keys leave room keeps the same share of its steps between each pair.
+        let mut three = nested(3, 0.0);
+        if let NodeKind::Blend { spec, .. } = &mut three.kind {
+            spec.spacing = BlendSpacing::Steps(1000);
+        }
+        let (children, spec) = blend_parts(&three).unwrap();
+        let inside = 2 * nested_steps(2);
+        let each = 1 + nested_steps(2);
+        let kept = (MAX_BLEND_STEPS - inside) * 1000 / (1000 * each);
+        assert_eq!(blend_steps(children, spec), vec![kept]);
+        let drawn = drawn_steps(&three);
+        assert_eq!(drawn, inside + kept * each);
+        assert!(drawn <= MAX_BLEND_STEPS && drawn > MAX_BLEND_STEPS - each, "{drawn}");
+    }
+
+    /// Nested blends within the budget make every step their spacing asks for, as before.
+    #[test]
+    fn nested_blends_within_the_budget_draw_every_step() {
+        for levels in 1..=4 {
+            let n = nested(levels, 0.0);
+            let (children, spec) = blend_parts(&n).unwrap();
+            assert_eq!(blend_steps(children, spec), vec![15]);
+            assert_eq!(drawn_steps(&n), nested_steps(levels), "{levels}");
+        }
+        // The keys, then 15 steps, then the last key, each a blend whose keys moved with it.
+        let two = nested(2, 0.0);
+        let (children, spec) = blend_parts(&two).unwrap();
+        let out = blend_expand(children, spec);
+        assert_eq!(out.len(), 17);
+        assert_eq!(out[0], *children[0]);
+        assert!(out.iter().all(|s| matches!(s.kind, NodeKind::Blend { .. })));
+        assert_eq!(out[8].geometric_bounds(), children[0].geometric_bounds().map(|b| b + Vec2::new(40.0, 0.0)));
+    }
+
+    /// A blend spaced by distance makes more steps scaled up, so a step's copy of one counts the
+    /// most its spacing can make. Here a tiny blend of one step is blended with a large blend of
+    /// one step: copies of the tiny one, scaled up toward the large one's size, make up to 1000
+    /// steps each, which neither key's own count shows.
+    #[test]
+    fn scaled_copies_of_blends_spaced_by_distance_keep_to_the_budget() {
+        let tiny = blend_of(square(0.0, 0.0, 1.0), square(2.0, 0.0, 1.0), BlendSpacing::Distance(1.0));
+        let large = blend_of(square(0.0, 100.0, 1000.0), square(2000.0, 100.0, 1000.0), BlendSpacing::Steps(1));
+        assert_eq!((drawn_steps(&tiny), drawn_steps(&large)), (1, 1));
+        let n = blend_of(tiny, large, BlendSpacing::Steps(1000));
+        let (children, spec) = blend_parts(&n).unwrap();
+        let steps = blend_steps(children, spec);
+        assert!(steps[0] < 1000, "{steps:?}");
+        let drawn = drawn_steps(&n);
+        assert!(drawn <= MAX_BLEND_STEPS && drawn > 1000, "{drawn}");
+    }
+
+    /// A flat blend of many keys shares the budget evenly between its pairs.
+    #[test]
+    fn many_keys_share_the_step_budget() {
+        let keys: Vec<Arc<Node>> = (0..300).map(|i| key(f64::from(i) * 20.0)).collect();
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() };
+        let steps = blend_steps(&keys, &spec);
+        assert!(steps.iter().all(|&n| n == MAX_BLEND_STEPS * 1000 / (299 * 1000)), "{:?}", &steps[..3]);
+        assert_eq!(blend_expand(&keys, &spec).len(), 300 + steps.iter().sum::<usize>());
+        // Within the budget, every step stays.
+        assert_eq!(blend_steps(&keys[..50], &spec), vec![1000; 49]);
+        assert_eq!(fit_steps(&[10, 20], &[1, 1], MAX_BLEND_STEPS), vec![0, 0]);
     }
 }

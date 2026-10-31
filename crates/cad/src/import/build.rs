@@ -3,7 +3,7 @@
 //! dimensions, as groups), and colours, lineweights, linetypes and transparency resolved through
 //! layers and blocks.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -23,12 +23,17 @@ const PT_PER_MM: f64 = 72.0 / 25.4;
 const THINNEST: f64 = 0.25;
 /// The most objects an import makes.
 const MAX_NODES: usize = 2_000_000;
+/// The most block visits (one per insert copy) an import makes, whatever they produce.
+const MAX_VISITS: usize = 10_000_000;
+/// The most path elements an import makes (blocks drawn as art are copied for every placement).
+const MAX_ELEMENTS: usize = if cfg!(test) { 1_000_000 } else { 4_000_000 };
 /// How far from the origin art may lie (points): the canvas.
 pub(crate) const MAX_EXTENT: f64 = 4.0e6;
 
 const NESTED: &str = "blocks nested more than 8 deep, or inside themselves, are left out";
 const XREFS: &str = "blocks referencing other drawings (external references) are left out";
 const TOO_MANY: &str = "the drawing has more than 2,000,000 objects: the rest are left out";
+const TOO_MANY_POINTS: &str = "the drawing has more than 4,000,000 path points: the rest are left out";
 
 /// What a block's art takes from the insert that places it: its colour, lineweight, linetype
 /// and opacity where the art says "by block", and its layer for art on layer 0.
@@ -52,6 +57,9 @@ pub(crate) struct Build<'d, 'a> {
     sensitive: HashMap<String, bool>,
     /// Symbol names by block and what it inherits (`None`: the block has no art).
     symbols: HashMap<(String, Inherit), Option<String>>,
+    /// Names of the symbols made so far, and the next suffix to try for each label.
+    symbol_names: HashSet<String>,
+    next_suffix: HashMap<String, usize>,
     /// Blocks being drawn, outermost first.
     stack: Vec<String>,
     /// Document space per drawing unit, and its symbols' (no translation).
@@ -60,6 +68,9 @@ pub(crate) struct Build<'d, 'a> {
     /// Lineweights are multiplied by this.
     lw_scale: f64,
     nodes: usize,
+    visits: usize,
+    /// Path elements made so far.
+    elements: usize,
     warnings: Vec<String>,
 }
 
@@ -108,11 +119,15 @@ impl<'d, 'a> Build<'d, 'a> {
             bounds: HashMap::new(),
             sensitive: HashMap::new(),
             symbols: HashMap::new(),
+            symbol_names: HashSet::new(),
+            next_suffix: HashMap::new(),
             stack: vec![],
             map: Affine::IDENTITY,
             symbol_map: Affine::IDENTITY,
             lw_scale: 1.0,
             nodes: 0,
+            visits: 0,
+            elements: 0,
             warnings: vec![],
         }
     }
@@ -362,7 +377,8 @@ impl<'d, 'a> Build<'d, 'a> {
         let k = self.d.header.ltscale * p.ltscale * scale;
         // Dashes (positive), gaps (negative) and dots (0), merged into dash, gap, dash, gap…
         let mut out: Vec<f64> = vec![];
-        for v in pattern {
+        // (A linetype has a few elements; every path keeps its own copy of the dashes.)
+        for v in pattern.iter().take(64) {
             let dash = *v >= 0.0;
             let len = v.abs() * k;
             match out.len().is_multiple_of(2) {
@@ -442,6 +458,12 @@ impl<'d, 'a> Build<'d, 'a> {
     }
 
     fn path(&mut self, bp: &BezPath, fill: bool, width: f64, p: &Props, map: Affine, inh: &Inherit) -> Option<Node> {
+        let n = bp.elements().len();
+        if self.elements.saturating_add(n) > MAX_ELEMENTS {
+            self.warn(TOO_MANY_POINTS);
+            return None;
+        }
+        self.elements += n;
         let mut bp = bp.clone();
         bp.apply_affine(map);
         super::curve::bounds(&bp)?;
@@ -473,7 +495,14 @@ impl<'d, 'a> Build<'d, 'a> {
         let path = PathData::from_bezpath(&bp);
         let kind = |path: PathData| NodeKind::Path { path, rule, live: None, clipping: false, guide: false };
         let mut n = if path.subpaths.len() > 1 {
-            // Several loops (a hatch with islands) paint as one compound path.
+            // Several loops (a hatch with islands) paint as one compound path. Each loop is an
+            // object of its own, so it counts against the node limit like any other (`item`
+            // counts the compound path itself).
+            if self.nodes.saturating_add(path.subpaths.len()) >= MAX_NODES {
+                self.warn(TOO_MANY);
+                return None;
+            }
+            self.nodes += path.subpaths.len();
             let children = path
                 .subpaths
                 .into_iter()
@@ -552,6 +581,13 @@ impl<'d, 'a> Build<'d, 'a> {
 
     /// The art of block `name` drawn by `map`, as one object.
     fn art(&mut self, name: &str, map: Affine, inh: &Inherit, depth: u32) -> Option<Node> {
+        self.visits += 1;
+        if self.visits > MAX_VISITS {
+            if self.visits == MAX_VISITS + 1 {
+                self.warn(TOO_MANY);
+            }
+            return None;
+        }
         let items = self.block(name)?;
         if !self.enter(name, depth) {
             return None;
@@ -584,7 +620,8 @@ impl<'d, 'a> Build<'d, 'a> {
         let art = self.art(name, map, &key.1, depth);
         let made = art.map(|art| {
             let label = self.d.blocks.get(name).map_or(name, |b| b.name.as_str());
-            let symbol = unique(label, |n| self.doc.symbols.iter().any(|s| s.name == n));
+            let symbol = unique(label, &mut self.next_suffix, &self.symbol_names);
+            self.symbol_names.insert(symbol.clone());
             self.doc.symbols.push(Symbol { name: symbol.clone(), art: Arc::new(art) });
             symbol
         });
@@ -611,10 +648,17 @@ fn rgb_color([r, g, b]: [u8; 3]) -> Color {
     Color::rgb8(r, g, b)
 }
 
-/// `base`, or `base 2`, `base 3`… when taken.
-fn unique(base: &str, taken: impl Fn(&str) -> bool) -> String {
-    if !taken(base) {
+/// `base`, or `base 2`, `base 3`… when taken; `next` remembers where each base left off.
+fn unique(base: &str, next: &mut HashMap<String, usize>, taken: &HashSet<String>) -> String {
+    if !taken.contains(base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+    let i = next.entry(base.to_string()).or_insert(2);
+    loop {
+        let name = format!("{base} {i}");
+        *i += 1;
+        if !taken.contains(&name) {
+            return name;
+        }
+    }
 }

@@ -14,6 +14,7 @@ mod access;
 pub mod container;
 mod geometry;
 pub mod model;
+pub mod overlay;
 pub mod paint;
 pub mod preview;
 mod raster;

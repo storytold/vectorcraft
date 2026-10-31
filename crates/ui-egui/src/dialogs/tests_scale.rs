@@ -15,7 +15,7 @@ fn prompt(app: &mut VectorcraftApp, ctx: &egui::Context, physical: egui::Vec2, z
         let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
         ctx.run_ui(input, |ui| show(app, ui.ctx())).textures_delta.clear();
     }
-    let rect = ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", crate::unsaved::KIND)))).unwrap();
+    let rect = ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", crate::unsaved::KIND)))).unwrap();
     (rect, screen)
 }
 

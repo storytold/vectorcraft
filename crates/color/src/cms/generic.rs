@@ -171,9 +171,25 @@ impl GenericCmyk {
         xyz_to_lab(self.to_xyz(cmyk))
     }
 
-    /// Display sRGB: media-relative (paper shows as white) or absolute (simulate paper colour).
-    pub fn to_srgb(&self, cmyk: [f32; 4], absolute: bool) -> [f32; 3] {
-        xyz_to_srgb(if absolute { self.to_xyz(cmyk) } else { self.to_xyz_rel(cmyk) })
+    /// Display XYZ: media-relative (paper shows as white) or absolute (simulate paper colour).
+    /// With `bpc` (media-relative only) the press black displays as black, undoing the
+    /// compensation [`Self::gamut_map`] applies on the way in, so sRGB black separated to the
+    /// darkest rich black shows as black again.
+    pub fn display_xyz(&self, cmyk: [f32; 4], absolute: bool, bpc: bool) -> [f32; 3] {
+        if absolute {
+            return self.to_xyz(cmyk);
+        }
+        let x = self.to_xyz_rel(cmyk);
+        if !bpc {
+            return x;
+        }
+        let bp = self.black_rel;
+        [0, 1, 2].map(|i| ((x[i] - bp[i]) / (1.0 - bp[i] / D50[i])).max(0.0))
+    }
+
+    /// Display sRGB, see [`Self::display_xyz`].
+    pub fn to_srgb(&self, cmyk: [f32; 4], absolute: bool, bpc: bool) -> [f32; 3] {
+        xyz_to_srgb(self.display_xyz(cmyk, absolute, bpc))
     }
 
     /// Lab of the darkest printable black (media-relative).
@@ -425,11 +441,12 @@ impl GenericCmyk {
         self.from_lab(srgb_to_lab(rgb), intent, bpc)
     }
 
-    /// ΔE2000 between an sRGB colour and its best (relative colorimetric) reproduction.
-    pub fn gamut_error(&self, src: Lab) -> f32 {
-        let target = self.gamut_map(src, Intent::RelativeColorimetric, false);
+    /// ΔE2000 between a colour and its best (relative colorimetric) reproduction as it displays
+    /// (with `bpc`, the press black showing as black).
+    pub fn gamut_error(&self, src: Lab, bpc: bool) -> f32 {
+        let target = self.gamut_map(src, Intent::RelativeColorimetric, bpc);
         let cmyk = self.separate(target);
-        delta_e2000(self.to_lab_rel(cmyk), target)
+        delta_e2000(xyz_to_lab(self.display_xyz(cmyk, false, bpc)), src)
     }
 }
 

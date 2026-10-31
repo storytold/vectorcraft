@@ -39,7 +39,7 @@ impl Tool for PrintTilingTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
-                let hit = cx.doc.artboards.iter().position(|a| a.rect.contains(ev.pos));
+                let hit = cx.doc.artboard_holding(ev.pos, false);
                 self.drag = Some((hit, hit.and_then(|i| cx.doc.artboards.get(i)).map(|a| a.rect)));
                 (self.began, self.last) = (false, ev.pos);
                 vec![]
@@ -79,7 +79,7 @@ impl Tool for PrintTilingTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match self.drag {
             // How far the corner is from the artboard's.
-            Some((_, Some(r))) if self.began => {
+            Some((_, Some(r))) if self.began && cx.measurement_labels => {
                 vec![Overlay::Measure { p: self.last, text: cx.offset_label(self.last.x - r.x0, self.last.y - r.y0) }]
             }
             _ => vec![],
@@ -87,7 +87,7 @@ impl Tool for PrintTilingTool {
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Crosshair
+        Cursor::PrintTiling
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
@@ -98,7 +98,7 @@ impl Tool for PrintTilingTool {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
     use vectorcraft_doc::Selection;
 
     use super::*;
@@ -122,6 +122,8 @@ mod tests {
         let a = t.pointer(&c, &ev(PointerKind::Drag, 2.0, 497.0));
         assert_eq!(a, vec![Action::Preview("print.tiling.set".into(), json!({"origin": [0.0, 500.0], "artboard": 0}))]);
         assert!(matches!(t.overlays(&c).as_slice(), [Overlay::Measure { .. }]));
+        let quiet = ToolContext { measurement_labels: false, ..cx(&d, &s, &pd) };
+        assert!(t.overlays(&quiet).is_empty());
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 2.0, 497.0)), vec![Action::Commit]);
         assert!(!t.busy());
         // A click alone changes nothing; a double click resets.
@@ -133,5 +135,32 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Drag, 20.0, 20.0));
         assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
         assert_eq!(crate::create("printTiling").id(), "printTiling");
+    }
+
+    #[test]
+    fn a_press_on_an_artboards_right_or_bottom_edge_drags_from_that_artboard() {
+        // Artboard 0 is (0, 0) to (500, 500). Artboard 1 is (500, 0) to (800, 200), and its left edge lies on artboard 0's right edge.
+        let (mut d, _) = doc_with_rect();
+        let mut ab = d.artboards[0].clone();
+        ab.rect = Rect::new(500.0, 0.0, 800.0, 200.0);
+        d.artboards.push(ab);
+        let (s, pd) = (Selection::default(), paint());
+        let c = cx(&d, &s, &pd);
+        // What a drag to 3 pt up and left of a press at (x, y) previews: the corner snaps to the
+        // edges of the artboard the press picked.
+        let drag = |x: f64, y: f64| {
+            let mut t = PrintTilingTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, x, y));
+            t.pointer(&c, &ev(PointerKind::Drag, x - 3.0, y - 3.0)).pop()
+        };
+        let preview =
+            |origin: [f64; 2], artboard: Value| Some(Action::Preview("print.tiling.set".into(), json!({ "origin": origin, "artboard": artboard })));
+        assert_eq!(drag(800.0, 100.0), preview([800.0, 97.0], json!(1)), "artboard 1's right edge");
+        assert_eq!(drag(650.0, 200.0), preview([647.0, 200.0], json!(1)), "artboard 1's bottom edge");
+        assert_eq!(drag(800.0, 200.0), preview([800.0, 200.0], json!(1)), "artboard 1's bottom right corner");
+        assert_eq!(drag(300.0, 500.0), preview([297.0, 500.0], json!(0)), "artboard 0's bottom edge");
+        assert_eq!(drag(500.0, 100.0), preview([500.0, 97.0], json!(1)), "the shared edge: the artboard to its right");
+        assert_eq!(drag(800.0 + 1e-9, 100.0), preview([800.0, 97.0], json!(1)), "roundoff past the edge");
+        assert_eq!(drag(800.001, 100.0), preview([800.001 - 3.0, 97.0], Value::Null), "beyond the edge");
     }
 }

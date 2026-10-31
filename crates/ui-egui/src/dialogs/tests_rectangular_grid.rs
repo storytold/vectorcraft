@@ -85,11 +85,17 @@ fn assert_path(path: &PathData, expected: &[Point], closed: bool) {
     }
 }
 
-/// Independent coordinate oracle: counts mean interior dividers, plus one closed outer frame.
+/// Independent coordinate oracle: one closed outer frame at the bottom, then the interior
+/// dividers the counts mean.
 fn assert_grid(app: &VectorcraftApp, id: NodeId, bounds: Rect, rows: u32, columns: u32) {
     let paths = paths(app, id);
     assert_eq!(paths.len(), (rows + columns + 1) as usize);
     let mut remaining = paths.iter();
+    assert_path(
+        remaining.next().unwrap(),
+        &[Point::new(bounds.x0, bounds.y0), Point::new(bounds.x1, bounds.y0), Point::new(bounds.x1, bounds.y1), Point::new(bounds.x0, bounds.y1)],
+        true,
+    );
     for i in 1..=rows {
         let y = bounds.y0 + bounds.height() * f64::from(i) / f64::from(rows + 1);
         assert_path(remaining.next().unwrap(), &[Point::new(bounds.x0, y), Point::new(bounds.x1, y)], false);
@@ -98,11 +104,6 @@ fn assert_grid(app: &VectorcraftApp, id: NodeId, bounds: Rect, rows: u32, column
         let x = bounds.x0 + bounds.width() * f64::from(i) / f64::from(columns + 1);
         assert_path(remaining.next().unwrap(), &[Point::new(x, bounds.y0), Point::new(x, bounds.y1)], false);
     }
-    assert_path(
-        remaining.next().unwrap(),
-        &[Point::new(bounds.x0, bounds.y0), Point::new(bounds.x1, bounds.y0), Point::new(bounds.x1, bounds.y1), Point::new(bounds.x0, bounds.y1)],
-        true,
-    );
     assert!(remaining.next().is_none());
 }
 
@@ -159,6 +160,31 @@ fn key_frame(app: &mut VectorcraftApp, key: egui::Key) {
 }
 
 #[test]
+fn rectangular_grid_reference_locator_reanchors_to_the_click() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    set(&mut app, "reference", json!(4));
+    super::shapes::grid_pin_to_anchor(app.ui.dialog.as_mut().unwrap());
+    assert_eq!((field(&app, "x"), field(&app, "y")), (json!(50.0), json!(50.0)));
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 150.0, 150.0), 5, 5);
+}
+
+/// #1377: OK uses the bounding box after a reference-point resize (`artboard_rect` keeps the
+/// center pinned when width doubles).
+#[test]
+fn rectangular_grid_reference_point_pins_center_when_width_changes() {
+    let mut app = app();
+    click(&mut app, Point::new(100.0, 100.0));
+    assert_eq!(field(&app, "reference"), json!(0));
+    for (key, value) in [("reference", json!(4)), ("x", json!(50.0)), ("y", json!(50.0)), ("width", json!(200)), ("height", json!(100))] {
+        set(&mut app, key, value);
+    }
+    let id = confirm(&mut app);
+    assert_grid(&app, id, Rect::new(50.0, 50.0, 250.0, 150.0), 5, 5);
+}
+
+#[test]
 fn rectangular_grid_canvas_click_opens_registered_dialog_with_saved_counts_and_point_defaults() {
     let mut app = app();
     saved_counts(&mut app, 7, 3);
@@ -196,7 +222,8 @@ fn rectangular_grid_creates_exact_dividers_as_one_undo_redo_step() {
     assert_eq!(app.session.doc().unwrap().doc, before.doc);
     assert_eq!(app.session.doc().unwrap().selection.objects, before.selected);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
-    assert_eq!(app.session.tool_options_of(KIND), json!({"rows": 2, "columns": 3}), "undo does not undo the saved tool settings");
+    let saved = json!({"rows": 2, "columns": 3, "rowSkew": 0.0, "columnSkew": 0.0, "frame": true, "fill": false, "width": 120.0, "height": 60.0, "reference": 0});
+    assert_eq!(app.session.tool_options_of(KIND), saved, "undo does not undo the saved tool settings");
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, created);
     assert_grid(&app, id, Rect::new(125.0, 75.0, 245.0, 135.0), 2, 3);
@@ -273,16 +300,16 @@ fn rectangular_grid_perspective_click_projects_each_anchor_and_is_one_undo_step(
     values(&mut app, json!(96), json!(54), json!(1), json!(2));
     let id = confirm(&mut app);
     let expected = [
+        vec![at, Point::new(at.x + 96.0, at.y), Point::new(at.x + 96.0, at.y + 54.0), Point::new(at.x, at.y + 54.0)],
         vec![Point::new(at.x, at.y + 27.0), Point::new(at.x + 96.0, at.y + 27.0)],
         vec![Point::new(at.x + 32.0, at.y), Point::new(at.x + 32.0, at.y + 54.0)],
         vec![Point::new(at.x + 64.0, at.y), Point::new(at.x + 64.0, at.y + 54.0)],
-        vec![at, Point::new(at.x + 96.0, at.y), Point::new(at.x + 96.0, at.y + 54.0), Point::new(at.x, at.y + 54.0)],
     ];
     let actual = paths(&app, id);
     assert_eq!(actual.len(), expected.len());
     for (index, (path, points)) in actual.iter().zip(expected).enumerate() {
         let projected: Vec<Point> = points.into_iter().map(|p| map.apply(p).unwrap()).collect();
-        assert_path(path, &projected, index == 3);
+        assert_path(path, &projected, index == 0);
     }
     let state = app.session.doc().unwrap();
     assert_eq!(PerspectiveGrid::effective(&state.doc).attachment_of(&state.doc, id), Some((Plane::Right, 0.0)));
@@ -310,4 +337,64 @@ fn rectangular_grid_failed_creation_does_not_save_counts() {
     assert!(super::confirm(&mut app).is_err());
     assert_eq!(app.session.tool_options_of(KIND), before.options);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
+}
+
+/// #1377: the dialog shows the tool's stored skews (sliders under their divider counts) and
+/// switches; OK draws with them and stores them, and the next drag uses them too.
+#[test]
+fn rectangular_grid_dialog_edits_skews_frame_and_fill() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    app.run("tool.setOption", json!({"tool": KIND, "values": {"rowSkew": 100, "frame": false}})).unwrap();
+    click(&mut app, Point::new(10.0, 20.0));
+    assert_eq!((field(&app, "rowSkew"), field(&app, "columnSkew")), (json!(100.0), json!(0.0)));
+    assert_eq!((field(&app, "frame"), field(&app, "fill")), (json!(false), json!(false)));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::show(app, ui.ctx()));
+    let labels = [
+        "Horizontal Dividers:",
+        "Skew:",
+        "Bottom",
+        "Top",
+        "Vertical Dividers:",
+        "Skew:",
+        "Left",
+        "Right",
+        "Use Outside Rectangle As Frame",
+        "Fill Grid",
+    ];
+    let mut from = 0;
+    for label in labels {
+        from += text[from..].find(&format!("{label}\n")).unwrap_or_else(|| panic!("no {label:?} in order in {text}")) + label.len();
+    }
+    assert!(!text.contains("Row Skew") && !text.contains("false"), "the skews and switches aren't plain fields: {text}");
+    values(&mut app, json!(100), json!(100), json!(3), json!(1));
+    set(&mut app, "columnSkew", json!("-250"));
+    set(&mut app, "fill", json!(true));
+    let id = confirm(&mut app);
+    let paths = paths(&app, id);
+    // No frame: four sides, then the dividers, crowded toward the top (100 %: 1/16, 1/4 and 9/16 down).
+    assert_eq!(paths.len(), 8);
+    assert!(paths.iter().all(|p| !p.is_closed()));
+    for (path, y) in paths[4..7].iter().zip([6.25, 25.0, 56.25]) {
+        assert_path(path, &[Point::new(10.0, 20.0 + y), Point::new(110.0, 20.0 + y)], false);
+    }
+    let x = paths[7].subpaths[0].anchors[0].p.x;
+    assert!(x > 10.0 && x < 30.0, "toward the left: {x}");
+    let saved = json!({"rows": 3, "columns": 1, "rowSkew": 100.0, "columnSkew": -250.0, "frame": false, "fill": true, "width": 100.0, "height": 100.0, "reference": 0});
+    assert_eq!(app.session.tool_options_of(KIND), saved);
+    // A drag draws with the same options.
+    pointer(&mut app, PointerKind::Down, Point::new(300.0, 300.0));
+    pointer(&mut app, PointerKind::Drag, Point::new(400.0, 400.0));
+    pointer(&mut app, PointerKind::Up, Point::new(400.0, 400.0));
+    let dragged = app.session.doc().unwrap().selection.objects[0];
+    assert_ne!(dragged, id);
+    let doc = &app.session.doc().unwrap().doc;
+    let offset =
+        |id: NodeId| doc.node(id).unwrap().children().unwrap().iter().map(|n| n.path_data().unwrap().subpaths[0].anchors[0].p).collect::<Vec<_>>();
+    for (a, b) in offset(id).iter().zip(offset(dragged)) {
+        assert!((b.x - a.x - 290.0).abs() < 1e-9 && (b.y - a.y - 280.0).abs() < 1e-9, "{a:?} {b:?}");
+    }
+    assert!(
+        doc.node(dragged).unwrap().children().unwrap().iter().all(|n| n.appearance.fill().is_some_and(|f| f.paint != vectorcraft_color::Paint::None))
+    );
 }

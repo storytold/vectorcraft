@@ -8,7 +8,7 @@ use vectorcraft_pdf::PrintSettings;
 
 use super::fileio::pdf::changed;
 use super::print::settings_over;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, str_param, unique_name};
 
 /// The built-in preset's name.
 pub const DEFAULT_PRESET: &str = "[Default]";
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Print Preset",
             [],
             None,
-            "{name?: (default: a new \"Print Preset N\"), newName?: rename it, preset?: the preset to start from (default: the saved preset `name`, else [Default]), settings?: {…print.setup settings} (over it)} create or change a saved preset ([Default] is protected) → {name, created, settings}",
+            "{name?: (default: a new \"Print Preset N\"), newName?: rename it, preset?: the preset to start from (default: the saved preset `name`, else [Default]), settings?: {…settings of print.setup} (over it)} create or change a saved preset ([Default] is protected) → {name, created, settings}",
             always,
             save
         ),

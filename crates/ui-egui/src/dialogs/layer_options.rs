@@ -33,9 +33,10 @@ fn color_field(c: LayerColor) -> String {
 }
 
 /// The fields for `n` (a layer or any other row).
-fn fields_of(n: &Node) -> serde_json::Map<String, Value> {
+/// `xml_id`: Preferences › Units › Identify Objects By › XML ID.
+fn fields_of(n: &Node, xml_id: bool) -> serde_json::Map<String, Value> {
     let mut f = serde_json::Map::new();
-    f.insert("name".into(), json!(n.display_name()));
+    f.insert("name".into(), json!(n.identify_label(xml_id)));
     f.insert("visible".into(), json!(n.visible));
     f.insert("locked".into(), json!(n.locked));
     f.insert("layer".into(), json!(n.is_layer()));
@@ -70,7 +71,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
     };
     let first = ids.first().and_then(|id| st.doc.node(*id)).ok_or("no such layer or object")?;
-    let mut f = fields_of(first);
+    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+    let mut f = fields_of(first, xml_id);
     f.insert("ids".into(), json!(ids.iter().map(|i| i.0).collect::<Vec<_>>()));
     f.insert("mode".into(), json!("edit"));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
@@ -93,8 +95,10 @@ pub fn open_new(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let sublayer = p.get("sublayer").and_then(Value::as_bool).unwrap_or(false);
     let color = LayerColor::Preset((layers.len() % LAYER_COLORS.len()) as u8);
+    let name = format!("Layer {i}");
+    let name = if app.session.prefs.identify_objects_by == "xmlId" { vectorcraft_doc::xml_id::from_object_name(&name) } else { name };
     let fields = json!({
-        "mode": if sublayer { "newSublayer" } else { "new" }, "layer": true, "name": format!("Layer {i}"), "color": color_field(color),
+        "mode": if sublayer { "newSublayer" } else { "new" }, "layer": true, "name": name, "color": color_field(color),
         "template": false, "locked": false, "visible": true, "printable": true, "preview": true, "dimImages": false, "dimPercent": 50,
     });
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -118,10 +122,10 @@ const CHIP: egui::Vec2 = egui::vec2(16.0, 10.0);
 fn color_dropdown(ui: &mut egui::Ui, shown: &str) -> Option<usize> {
     let border = crate::theme::Tokens::get(ui.ctx()).input_border;
     let rows = LAYER_COLORS.iter().map(|(n, c)| (*n, Some(*c))).chain([("Custom", None)]);
-    widgets::combo(ui, "layer-color", tl!(shown), 140.0, false, |ui| {
+    widgets::combo(ui, "layer-color", tl!(shown), 140.0, |ui| {
         let mut chosen = None;
         for (i, (name, rgb)) in rows.enumerate() {
-            let chip = ui.id().with(("layer-color-chip", i));
+            let chip = egui::IdSalt::new(("layer-color-chip", i));
             let r = egui::Button::selectable(name == shown, (egui::Atom::custom(chip, CHIP), tl!(name))).atom_ui(ui);
             if let (Some(rect), Some([cr, cg, cb])) = (r.rect(chip), rgb) {
                 ui.painter().rect_filled(rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));

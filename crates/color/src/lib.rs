@@ -16,7 +16,7 @@ pub mod swatch;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};
-pub use gradient::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+pub use gradient::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientStop};
 pub use libraries::SwatchLibrary;
 pub use swatch::{Swatch, SwatchGroup, default_swatches};
 
@@ -111,6 +111,16 @@ impl Color {
     pub fn out_of_gamut(&self) -> bool {
         cms::active().out_of_gamut(self)
     }
+    /// The colour exactly, as a key: its model and its components' bits (colours that only look
+    /// alike, as a grey and the same RGB grey, differ).
+    pub fn key(&self) -> [u32; 5] {
+        match *self {
+            Color::Rgb { r, g, b } => [0, r.to_bits(), g.to_bits(), b.to_bits(), 0],
+            Color::Cmyk { c, m, y, k } => [1, c.to_bits(), m.to_bits(), y.to_bits(), k.to_bits()],
+            Color::Gray { k } => [2, k.to_bits(), 0, 0, 0],
+            Color::Lab { l, a, b } => [3, l.to_bits(), a.to_bits(), b.to_bits(), 0],
+        }
+    }
     pub fn to_rgba8(&self, alpha: f32) -> [u8; 4] {
         let [r, g, b] = self.to_rgb();
         let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -146,6 +156,8 @@ impl Color {
         } else {
             60.0 * ((r - g) / d + 4.0)
         };
+        // f32 rounding in rem_euclid can yield exactly 360; wrap back to 0.
+        let h = if h >= 360.0 { 0.0 } else { h };
         let s = if max <= 0.0 { 0.0 } else { d / max };
         [h, s, max]
     }
@@ -181,6 +193,10 @@ impl Color {
             _ => {}
         }
         let h = s.strip_prefix('#').unwrap_or(s);
+        // `from_str_radix` accepts a leading `+`, so check the digits first.
+        if !h.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
         let p = |i: usize, n: usize| u8::from_str_radix(h.get(i..i + n)?, 16).ok();
         match h.len() {
             3 => Some(Color::rgb8(p(0, 1)? * 17, p(1, 1)? * 17, p(2, 1)? * 17)),
@@ -236,6 +252,17 @@ impl Color {
         let a = self.to_rgb();
         let b = other.to_rgb();
         Color::rgb(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
+    }
+    /// Linear interpolation in the model both colors share when it is CMYK, Gray or Lab, else in
+    /// display RGB ([`Color::lerp`]).
+    pub fn lerp_keep_model(&self, other: &Color, t: f32) -> Color {
+        let l = |x: f32, y: f32| x + (y - x) * t;
+        match (*self, *other) {
+            (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => Color::cmyk(l(c, c2), l(m, m2), l(y, y2), l(k, k2)),
+            (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(k, k2)),
+            (Color::Lab { l: l1, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => Color::lab(l(l1, l2), l(a, a2), l(b, b2)),
+            _ => self.lerp(other, t),
+        }
     }
     /// The colour model this colour is authored in.
     pub fn model(&self) -> cms::Model {
@@ -363,6 +390,18 @@ impl Paint {
             _ => None,
         }
     }
+    /// This stroke paint as the fill of the stroke's outline, so the outline looks as the stroke
+    /// did: without dither, which strokes ignore ([`GradientPaint::draws_as_pixels`]).
+    pub fn stroke_as_fill(&self) -> Paint {
+        match self {
+            Paint::Gradient(g) if g.gradient.dither => {
+                let mut g = g.clone();
+                g.gradient.dither = false;
+                Paint::Gradient(g)
+            }
+            p => p.clone(),
+        }
+    }
     /// The Registration colour: 100% of every ink, linked to [`swatch::REGISTRATION`].
     pub fn registration() -> Self {
         Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(swatch::REGISTRATION.into()), tint: 1.0 }
@@ -383,7 +422,9 @@ impl Paint {
     }
     /// Apply `f` to the colours of this paint that can link to a swatch (a solid colour, each
     /// gradient stop) with their link and tint; `f` returns true when it changed them. A colour
-    /// left without a link gets tint 1. Returns whether anything changed.
+    /// left without a link gets tint 1. A freeform gradient's points, which it draws from, go
+    /// through `f` too, as unlinked colours (a link `f` gives them is dropped). Returns whether
+    /// anything changed.
     pub fn map_links(&mut self, f: &mut dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool) -> bool {
         let mut one = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| {
             let changed = f(c, link, tint);
@@ -394,7 +435,12 @@ impl Paint {
         };
         match self {
             Paint::Solid { color, swatch, tint } => one(color, swatch, tint),
-            Paint::Gradient(g) => g.gradient.stops.iter_mut().fold(false, |ch, s| one(&mut s.color, &mut s.swatch, &mut s.tint) | ch),
+            Paint::Gradient(g) => {
+                let stops = g.gradient.stops.iter_mut().fold(false, |ch, s| one(&mut s.color, &mut s.swatch, &mut s.tint) | ch);
+                let points =
+                    g.freeform.iter_mut().flat_map(|ff| ff.points.iter_mut()).fold(false, |ch, p| one(&mut p.color, &mut None, &mut 1.0) | ch);
+                stops | points
+            }
             _ => false,
         }
     }
@@ -405,11 +451,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hue_below_360() {
+        let h = Color::Rgb { r: 1.0, g: 0.0, b: 1e-7 }.to_hsb()[0];
+        assert!((0.0..360.0).contains(&h), "hue {h}");
+    }
+
+    #[test]
     fn hex_roundtrip() {
         let c = Color::from_hex("#ff8000").unwrap();
         assert_eq!(c.to_hex(), "#ff8000");
         assert_eq!(Color::from_hex("#fff").unwrap().to_hex(), "#ffffff");
         assert_eq!(Color::from_hex("zz"), None);
+    }
+
+    #[test]
+    fn hex_rejects_sign_characters() {
+        for bad in ["#+1+2+3", "+f+f+f", "#-1-2-3", "#+12+34+56", "#+f+f+f+f", "#12345+"] {
+            assert_eq!(Color::from_hex(bad), None, "{bad}");
+        }
+        assert_eq!(Color::from_hex("#123"), Color::from_hex("#112233"));
     }
 
     #[test]

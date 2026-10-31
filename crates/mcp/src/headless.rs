@@ -7,6 +7,7 @@ use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_engine::{Session, UiRequest, ViewInfo};
 use vectorcraft_geom::Point;
 use vectorcraft_render::Renderer;
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, TOOL_GROUPS, ToolKey};
 
 use crate::backend::Backend;
@@ -35,9 +36,9 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "file.save",
         "Save",
-        "{path?, format?, options?, svg?: {…SVG options}} = document.save: .vectorcraft, .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
+        "{…as document.save} = document.save {path?, format?, options?, svg?: {…SVG options}}: .vectorcraft, .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
     ),
-    ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
+    ("file.export", "Export…", "{…as document.export} = document.export {path?, format?, artboard?, range?, scale?, …} (no path → dataBase64)"),
     (
         "file.exportForScreens",
         "Export for Screens…",
@@ -47,7 +48,7 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "tool.setOption",
         "Tool Option",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them); kept options last across tool switches",
+        "{key?, value? | values?: {key: value…}, tool?: id (default: the active tool)} → the tool's options (`{}` reads them); kept options last across tool switches",
     ),
 ];
 
@@ -79,6 +80,7 @@ fn tool_key(name: &str) -> Option<ToolKey> {
         "[" | "bracketleft" | "openbracket" => ToolKey::BracketLeft,
         "]" | "bracketright" | "closebracket" => ToolKey::BracketRight,
         "tab" => ToolKey::Tab,
+        k if k.len() == 1 && k.bytes().all(|b| b.is_ascii_lowercase()) => ToolKey::Letter(k.chars().next()?),
         k if k.len() == 1 => ToolKey::Digit(k.parse().ok()?),
         _ => return None,
     })
@@ -125,6 +127,12 @@ impl Headless {
     }
 
     fn exec(&mut self, id: &str, params: &Value) -> Result<Value, String> {
+        // A key the command's description doesn't name is an error, not a default (#1442).
+        match HOST_COMMANDS.iter().find(|c| c.0 == id) {
+            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params),
+            None => self.session.check_params(id, params),
+        }
+        .map_err(|e| e.to_string())?;
         match id {
             "file.open" => self.open(params),
             "file.save" => self.save(params),
@@ -161,6 +169,10 @@ impl Headless {
                 }
                 UiRequest::Dialog(k, p) => out.push(json!({"dialog": k, "params": p})),
                 UiRequest::Status(msg) => out.push(json!({"status": msg})),
+                // The place cursor's file, placed at once.
+                UiRequest::Place(p) => {
+                    self.session.execute("file.place", &p).map_err(|e| e.to_string())?;
+                }
             }
         }
         Ok(())
@@ -180,9 +192,16 @@ impl Headless {
             let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
             let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
             let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base);
-            let ev = PointerEvent { kind, pos: Point::new(x, y), mods, pressure: PointerEvent::json_pressure(e) };
+            let backquote =
+                e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
+            let ev = PointerEvent { kind, pos: Point::new(x, y), mods, backquote, pressure: PointerEvent::json_pressure(e) };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
+            // With no frames to show the highlight in later, a hover waits for the work the tool
+            // runs on another thread.
+            if kind == PointerKind::Move && self.session.tool_waiting() {
+                self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+            }
             let hold = PointerEvent::json_hold(e);
             if hold > 0.0 {
                 let reqs = self.session.tool_tick(hold, self.view).map_err(|e| e.to_string())?;
@@ -198,7 +217,14 @@ impl Headless {
         let key = s(p, "key").ok_or("missing `key`")?;
         let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
         let mods = Mods { shift: b("shift"), alt: b("alt"), cmd: b("cmd"), ctrl: b("ctrl"), ..Mods::default() };
-        let tk = tool_key(key);
+        // A letter reaches the tool only when the tool claims it without Cmd, Ctrl or Alt (E while
+        // a selection marquee is dragged); otherwise it is a shortcut.
+        let mut tk = tool_key(key);
+        if let Some(k @ ToolKey::Letter(_)) = tk
+            && (mods.cmd || mods.ctrl || mods.alt || !self.session.tool_claims_key(k, self.view))
+        {
+            tk = None;
+        }
         // A busy tool (pen path in progress, shape being dragged) gets its keys first, as do keys
         // the tool claims (the Gradient tool's selected stop takes Delete and the arrows).
         if let Some(k) = tk
@@ -238,7 +264,13 @@ impl Headless {
         let r = doc.artboards.get(idx).map(|a| a.rect).ok_or("no such artboard")?;
         let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
         vectorcraft_render::raster_size(r, scale)?;
-        let img = self.renderer.render_region(&doc, r, scale, true);
+        // Rendered with the options of a PNG export on white, so its pixels are the exported file's.
+        // `traceViews: true` draws Image Trace objects as their View shows them, as the canvas does.
+        let mut opts = RasterExportOptions { background: Some([255; 3]), ..Default::default() }.render_options(RasterFormat::Png);
+        opts.trace_views = p.get("traceViews").and_then(Value::as_bool) == Some(true);
+        let img = self.renderer.render_region_with(&doc, r, scale, &opts);
+        // A cancelled render stops drawing: the picture is not whole and is not written.
+        vectorcraft_engine::cancel::check().map_err(|e| e.to_string())?;
         let png = img.to_png()?;
         let mut out = json!({"width": img.width, "height": img.height});
         match s(p, "path") {
@@ -259,7 +291,8 @@ impl Headless {
     /// `app.open {path}`: any readable file as a new active document (`document.open`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
-        self.session.execute("document.open", &json!({"path": path})).map_err(|e| e.to_string())
+        let roots = self.roots.clone();
+        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &json!({"path": path}))).map_err(|e| e.to_string())
     }
 
     /// `app.save {path?, format?, options?}`: `document.save` (by default the document's own path and
@@ -269,12 +302,14 @@ impl Headless {
         if s(p, "path").is_none() && st.path.is_none() {
             return Err("missing `path` (document was never saved)".into());
         }
-        self.session.execute("document.save", p).map_err(|e| e.to_string())
+        let roots = self.roots.clone();
+        file_access::confine(roots.as_ref(), || self.session.execute("document.save", p)).map_err(|e| e.to_string())
     }
 
     /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
-        self.session.execute("document.export", p).map_err(|e| e.to_string())
+        let roots = self.roots.clone();
+        file_access::confine(roots.as_ref(), || self.session.execute("document.export", p)).map_err(|e| e.to_string())
     }
 }
 

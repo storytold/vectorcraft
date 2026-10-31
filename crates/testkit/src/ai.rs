@@ -1,13 +1,21 @@
 //! Hand-written Illustrator editing data (the format `vectorcraft_eps`'s reader documents) and the
 //! EPS, `.ai` and PDF files that carry it, for import tests. Nothing here comes from files another
-//! app wrote, except the key names that [`pdf`] uses.
+//! app wrote, except the key names that [`pdf`] uses and the XML node keys of [`variable_library`].
 
 /// Editing data of a `width` × `height` page: header comments (the art's bounding box and the crop
 /// marks are the page), `body` (setup and layers), the trailer.
 pub fn editing_data(width: f64, height: f64, body: &str) -> String {
+    editing_data_in([0.0, 0.0, width, height], [0.0, 0.0, width, height], body)
+}
+
+/// [`editing_data`] whose art's bounding box (`x0 y0 x1 y1`, art space) is `art` and whose
+/// artboard (the crop marks) is `board`.
+pub fn editing_data_in(art: [f64; 4], board: [f64; 4], body: &str) -> String {
+    let [a0, a1, a2, a3] = art;
+    let [b0, b1, b2, b3] = board;
     format!(
-        "{PS_HEADER}\n%%Creator: VectorCraft tests\n%%BoundingBox: 0 0 {width} {height}\n%%HiResBoundingBox: 0 0 {width} {height}\n\
-         %AI5_FileFormat 14.0\n%AI3_Cropmarks: 0 0 {width} {height}\n%%EndComments\n\
+        "{PS_HEADER}\n%%Creator: VectorCraft tests\n%%BoundingBox: {a0} {a1} {a2} {a3}\n%%HiResBoundingBox: {a0} {a1} {a2} {a3}\n\
+         %AI5_FileFormat 14.0\n%AI3_Cropmarks: {b0} {b1} {b2} {b3}\n%%EndComments\n\
          %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n"
     )
 }
@@ -30,6 +38,43 @@ pub fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> String {
 /// `name` given to the object before it (its XML id).
 pub fn named(name: &str) -> String {
     format!("%_/ArtDictionary :\n%_/XMLUID : ({}) ; (AI10_ArtUID) ,\n%_;\n%_\n", name.replace(' ', "_"))
+}
+
+/// The document data with a variable library: a `/Document` dictionary whose `Recorded` dictionary
+/// holds the library's XML document as XML nodes (`/XMLNode`) under `#document`. The library has
+/// one variable set, the text variables `variables` and the data sets `data_sets`, each with a `p`
+/// element for every variable.
+pub fn variable_library(variables: &[&str], data_sets: &[&str]) -> String {
+    // A node: its name, value and type (1 an element, 2 an attribute, 3 text, 9 the document), its
+    // children and its attributes.
+    fn node(kind: u8, name: &str, value: &str, attributes: &[(&str, &str)], children: &[String]) -> String {
+        let attributes: String = attributes.iter().map(|(k, v)| node(2, k, v, &[], &[node(3, "#text", v, &[], &[])])).collect();
+        format!(
+            "%_/XMLNode :\n%_({name}) /String (xmlnode-nodename) ,\n%_({value}) /String (xmlnode-nodevalue) ,\n%_{kind} /Int (xmlnode-nodetype) ,\n\
+             %_/Array :\n{}%_; (xmlnode-children) ,\n%_/Array :\n{attributes}%_; (xmlnode-attributes) ,\n%_;\n",
+            children.concat()
+        )
+    }
+    let element = |name: &str, attributes: &[(&str, &str)], children: &[String]| node(1, name, "", attributes, children);
+    let declared: Vec<String> = variables.iter().map(|v| element("variable", &[("varName", v), ("trait", "textcontent")], &[])).collect();
+    let sets: Vec<String> = data_sets
+        .iter()
+        .map(|d| {
+            let values: Vec<String> =
+                variables.iter().map(|v| element(v, &[], &[element("p", &[], &[node(3, "#text", &format!("{d} {v}"), &[], &[])])])).collect();
+            element("v:sampleDataSet", &[("dataSetName", d)], &values)
+        })
+        .collect();
+    let set = element(
+        "variableSet",
+        &[("varSetName", "binding1"), ("locked", "none")],
+        &[element("variables", &[], &declared), element("v:sampleDataSets", &[("xmlns", "&ns_custom;"), ("xmlns:v", "&ns_vars;")], &sets)],
+    );
+    let library = element("metadata", &[], &[element("variableSets", &[("xmlns", "&ns_vars;")], &[set])]);
+    format!(
+        "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n{}%_; (#document) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
+        node(9, "#document", "", &[], &[library])
+    )
 }
 
 /// A document of 200 × 100 pt with a bit of everything the reader reads. A layer `Art` that shows:
@@ -104,7 +149,12 @@ pub fn eps(data: &[u8], page: &str) -> Vec<u8> {
 /// `private` (the private data streams' contents, such as `%AI12_CompressedData` and zlib data) in
 /// two streams.
 pub fn ai(private: &[u8], page: &str) -> Vec<u8> {
-    with_private(private, page, "AIPrivateData")
+    ai_with(private, page, "")
+}
+
+/// [`ai`] with more entries in the page dictionary (`/ArtBox [0 0 200 100]`).
+pub fn ai_with(private: &[u8], page: &str, entries: &str) -> Vec<u8> {
+    with_private(private, page, "AIPrivateData", entries)
 }
 
 /// A PDF saved with Illustrator's editing data: [`ai`]'s file with the two streams under
@@ -112,11 +162,12 @@ pub fn ai(private: &[u8], page: &str) -> Vec<u8> {
 /// #868, and nothing else of that file is used; ExifTool's PDF tag table lists them too
 /// (<https://exiftool.org/TagNames/PDF.html>).
 pub fn pdf(private: &[u8], page: &str) -> Vec<u8> {
-    with_private(private, page, "AIPDFPrivateData")
+    with_private(private, page, "AIPDFPrivateData", "")
 }
 
-/// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2`.
-fn with_private(private: &[u8], page: &str, key: &str) -> Vec<u8> {
+/// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2` and
+/// `entries` more in the page dictionary.
+fn with_private(private: &[u8], page: &str, key: &str, entries: &str) -> Vec<u8> {
     let (first, second) = private.split_at(private.len() / 2);
     let stream = |part: &[u8]| {
         let mut s = format!("<< /Length {} >>\nstream\n", part.len()).into_bytes();
@@ -128,7 +179,7 @@ fn with_private(private: &[u8], page: &str, key: &str) -> Vec<u8> {
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R \
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] {entries} /Contents 4 0 R \
              /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> \
              /PieceInfo << /{PIECE} << /Private << /{key}1 5 0 R /{key}2 6 0 R /NumBlock 2 >> >> >> >>"
         )

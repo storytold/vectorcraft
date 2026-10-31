@@ -365,7 +365,7 @@ pub fn mac_layout(app: &VectorcraftApp, bar: &MenuBar, lang: Lang) -> Layout {
 /// with the `interfaceLanguage` preference checked.
 fn language_node(app: &VectorcraftApp, lang: Lang) -> Node {
     let mut children = vec![Node::Item(native_item(app, "Automatic", "app.language", json!({"lang": "auto"}))), Node::Separator];
-    children.extend(Lang::all().map(|l| Node::Item(native_item(app, l.name(), "app.language", json!({"lang": l.code()})))));
+    children.extend(Lang::for_picker().into_iter().map(|l| Node::Item(native_item(app, l.name(), "app.language", json!({"lang": l.code()})))));
     Node::Submenu { label: tr(lang, "Language").into(), children }
 }
 
@@ -560,12 +560,14 @@ pub fn run(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Bring the native menu up to date when anything it shows may have changed: a command ran, the
 /// document, its history or selection changed, the user clicked or pressed a key. Reading the rows
-/// asks every command whether it is enabled, so frames that only animate or scroll skip it.
+/// asks every command whether it is enabled, so frames that only animate or scroll skip it, and so
+/// do the previews of an open interaction (the steps of a move, scale or shape drag, a dialog's
+/// preview), whose new revisions [`state_hash`] leaves out.
 pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(menu) = app.services.native_menu.as_ref() else { return };
     let input = ctx
         .input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. } | egui::Event::PointerButton { pressed: false, .. })));
-    let state = state_hash(app, input.then_some(app.frame));
+    let state = state_hash(app, input.then_some(app.host_iteration));
     if menu.state == Some(state) && !menu.dirty {
         return;
     }
@@ -585,7 +587,10 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
 /// its revision (edits, selection and view changes), history and clipboard, the language,
 /// shortcuts, plug-ins and an open file dialog. `input` forces a change on frames with a click or
-/// a key press, which covers what the hash doesn't list (panels shown, a tool picked).
+/// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
+/// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
+/// preview, or a typing session), the revision, which each of its previews changes, is left out:
+/// the hash changes as the interaction begins and as it ends.
 fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
@@ -593,7 +598,8 @@ fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let s = &app.session;
     (s.journal.len(), s.active_index(), s.clipboard.is_empty(), s.tool_composing()).hash(&mut h);
     if let Some(d) = s.active() {
-        (d.uid, d.revision, d.history.undo.len(), d.history.redo.len(), d.transparency_grid, d.print_tiling).hash(&mut h);
+        let revision = d.interaction.is_none().then_some(d.revision);
+        (d.uid, revision, d.history.undo.len(), d.history.redo.len(), d.transparency_grid, d.print_tiling).hash(&mut h);
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);

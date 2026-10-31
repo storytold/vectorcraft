@@ -123,7 +123,7 @@ fn edit(ctx: &egui::Context, t: &ColorTheme) {
 fn add_draft_to_swatches(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let d = draft(app, ctx);
     let name = if d.name.trim().is_empty() { "Color Theme" } else { d.name.trim() };
-    app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors) })).ok();
+    app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors), "keepModel": true })).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -164,7 +164,10 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(k) = w.pressed {
         d.sel = k;
     }
-    if let Some((k, hsb)) = w.moved {
+    if let Some((k, set)) = w.moved
+        && let Some(cur) = d.colors.get(k).map(Color::to_hsb)
+    {
+        let hsb = [0, 1, 2].map(|n| set[n].unwrap_or(cur[n]));
         move_on_wheel(&mut d.colors, k, hsb, d.rule.is_some());
     }
     ui.add_space(8.0);
@@ -173,7 +176,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cw = row.width() / THEME_SIZE as f32;
     for (i, c) in d.colors.iter().enumerate() {
         let r = Rect::from_min_size(row.min + vec2(i as f32 * cw, 0.0), vec2(cw - 3.0, row.height()));
-        let resp = ui.interact(r, ui.id().with(("ct-chip", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("ct-chip", i)), Sense::click());
         ui.painter().rect_filled(r, 2.0, c32(c));
         ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
         if i == d.sel {
@@ -186,7 +189,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         let hex = d.colors.get(d.sel).map(|c| c.to_hex().trim_start_matches('#').to_string()).unwrap_or_default();
-        if let Some(c) = widgets::hex_field(ui, "ct-hex", &hex).and_then(|h| Color::from_hex(&h)) {
+        if let Some(c) = widgets::hex_field_named(ui, "ct-hex", Some(tl!("Color")), &hex).and_then(|h| Color::from_hex(&h)) {
             d.set_selected(c);
         }
         let current = active_paint(app).color();
@@ -199,7 +202,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
-        if let Some(n) = widgets::text_field(ui, "ct-name", Some(&d.name), ui.available_width() - 4.0, 1) {
+        if let Some(n) = widgets::text_field_named(ui, "ct-name", Some(tl!("Name:")), Some(&d.name), ui.available_width() - 4.0, 1) {
             d.name = n;
         }
     });
@@ -212,7 +215,9 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => tl!("Save theme to My Themes").into(),
         };
         // The tip is translated around the theme's name, not looked up whole.
-        if widgets::icon_button(ui, "save", "", false, 24.0).on_hover_text(tip).clicked() {
+        let resp = widgets::icon_button(ui, "save", "", false, 24.0);
+        resp.widget_info(|| widgets::icon_button_info(ui.is_enabled(), false, &tip));
+        if resp.on_hover_text(tip).clicked() {
             save(app, &ctx);
         }
         let doc = app.session.active().is_some();
@@ -245,7 +250,7 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
             egui::ScrollArea::vertical().id_salt("ct-list").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
                 for th in &app.session.prefs.color_themes {
                     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
-                    let resp = ui.interact(r, ui.id().with(("ct-theme", &th.name)), Sense::click());
+                    let resp = ui.interact(r, ui.scope_id().with(("ct-theme", &th.name)), Sense::click());
                     let selected = pick.as_deref() == Some(th.name.as_str());
                     if selected {
                         ui.painter().rect_filled(r, 0.0, t.row_selected);
@@ -368,6 +373,15 @@ mod tests {
         &app.session.prefs.color_themes
     }
 
+    /// Screen readers name the Save button by its tool tip.
+    #[test]
+    fn screen_readers_name_the_save_button() {
+        use crate::widgets::accessibility_tests::{role_and_state, tree};
+        let mut app = app();
+        let shown = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&shown, "Save theme to My Themes"), (egui::accesskit::Role::Button, None));
+    }
+
     #[test]
     fn create_save_edit_and_resave_a_theme() {
         let mut app = app();
@@ -438,5 +452,23 @@ mod tests {
         assert_eq!(draft(&app, &ctx).editing, None);
         assert_eq!(picked(&app, &ctx), None);
         frame(&mut app, &ctx);
+    }
+
+    /// In a CMYK document the theme being made goes to Swatches with its colors in their own model.
+    #[test]
+    fn the_theme_being_made_keeps_its_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx);
+        app.run("colorTheme.save", json!({"color": "#2266aa", "rule": "complementary", "name": "Harbor"})).unwrap();
+        frame(&mut app, &ctx);
+        edit_saved(&app, &ctx, "Harbor");
+        let colors = draft(&app, &ctx).colors;
+        assert!(colors.iter().all(|c| matches!(c, Color::Rgb { .. })), "{colors:?}");
+        add_draft_to_swatches(&mut app, &ctx);
+        let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
+        assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
     }
 }

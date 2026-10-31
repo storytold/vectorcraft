@@ -7,7 +7,7 @@ use vectorcraft_doc::{Document, InlineArt, NodeId, NodeKind, TextRun};
 use vectorcraft_text::edit;
 
 use super::typecmd::refresh_bounds;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
@@ -89,6 +89,8 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
         let style = edit::insertion_style(&t.runs, a, b);
         let caret = edit::replace_range_styled(&mut t.runs, a, b, &[TextRun::inline(art, style)]);
+        // The inline character is one plain-text byte range: ruby over it follows the text.
+        t.ruby_after_replace(a, b, vectorcraft_doc::text::INLINE_CHAR.len_utf8());
         refresh_bounds(t);
         Ok(caret)
     })?;

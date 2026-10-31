@@ -1,5 +1,9 @@
 //! Print presets in the UI: the Print dialog's preset list and Save Preset…, and Edit → Print
-//! Presets (New…, Edit…, Delete, Import…, Export…) with its preset editor.
+//! Presets (New…, Edit…, Delete, Import…, Export…) with its preset editor, and `file.print` with
+//! a preset's name.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -7,7 +11,7 @@ use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
 
 use super::print::{KIND, PRESET_KIND, SECTIONS};
 use super::print_presets::{self, Action};
-use crate::{VectorcraftApp, theme};
+use crate::{Services, VectorcraftApp, theme};
 
 fn frame(app: &mut VectorcraftApp) {
     let ctx = egui::Context::default();
@@ -75,6 +79,22 @@ fn the_print_dialog_saves_and_loads_presets() {
     set(&mut app, "__savePresetAs", json!("[Default]"));
     assert!(super::confirm(&mut app).is_err());
     assert_eq!(app.session.prefs.print_presets.len(), 1);
+}
+
+#[test]
+fn file_print_with_params_prints_a_preset_by_name() {
+    let written: Rc<RefCell<Vec<Vec<u8>>>> = Rc::default();
+    let w = written.clone();
+    let write = move |_: &str, b: &[u8]| {
+        w.borrow_mut().push(b.to_vec());
+        Ok(())
+    };
+    let mut app = VectorcraftApp::new(Session::new(), Services { write: Some(Box::new(write)), ..Default::default() });
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 4})).unwrap();
+    app.run("print.presets.save", json!({"name": "Sheet", "settings": {"artboards": "range", "range": "4"}})).unwrap();
+    let r = app.run("file.print", json!({"path": "/tmp/sheet.pdf", "preset": "Sheet"})).unwrap();
+    assert_eq!(r["pages"], 1, "{r}");
+    assert_eq!(vectorcraft_pdf::info(&written.borrow()[0], None).unwrap().pages.len(), 1);
 }
 
 #[test]

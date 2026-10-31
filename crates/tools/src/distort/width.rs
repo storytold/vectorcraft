@@ -6,12 +6,15 @@
 //! a width point's centre slides it along the path; Alt-dragging the centre slides a copy; dropping
 //! either onto another width point makes a discontinuous point (the width steps there). Shift-click
 //! adds width points to the selection (or takes them out), and dragging one of several selected
-//! points moves or widens them all. Double-clicking a width point opens Width Point Edit (the
-//! `widthPoint` dialog). Delete/Backspace removes the selected width points.
+//! points moves or widens them all. Double-clicking a stroke opens Width Point Edit (the
+//! `widthPoint` dialog), editing a hit point or creating one on confirmation. Delete/Backspace
+//! removes the selected width points.
 //!
 //! Gestures preview `stroke.widthPoint.set {id, t, left, right, index?}` (side widths in points),
 //! `stroke.widthPoint.copy {id, index, t}` or, for several points, `stroke.widthProfile.set {ids,
 //! points}`, and commit on release; Delete runs `stroke.widthPoint.remove {id, indices}`.
+//!
+//! Escape deselects the selected width points and sends no command.
 //!
 //! A compound path's stroke is the compound's: its members are edited through it, and the width
 //! points show on every subpath of the stroke (one profile runs along each). The cursor says what a
@@ -136,8 +139,9 @@ pub fn sides_at(st: &StrokeLayer, t: f64) -> (f64, f64) {
 impl WidthTool {
     /// The stroked path nearest to `p` within reach (stroke half-width + a few pixels).
     fn spot_at(cx: &ToolContext, p: Point) -> Option<Spot> {
+        let editable = cx.doc.editable();
         let consider = |id: NodeId| -> Option<(f64, Spot)> {
-            if !cx.doc.is_editable(id) {
+            if !editable(id) {
                 return None;
             }
             let n = cx.doc.node(id)?;
@@ -296,9 +300,12 @@ impl Tool for WidthTool {
             }
             PointerKind::DoubleClick => {
                 let Some(spot) = Self::spot_at(cx, p) else { return vec![] };
-                let Some((w, _)) = Self::hit(cx, &spot, p) else { return vec![] };
+                let Some((w, _)) = Self::hit(cx, &spot, p) else {
+                    self.selected = Some((spot.owner, vec![spot.t]));
+                    return vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "t": spot.t}))];
+                };
                 self.selected = Some((spot.owner, vec![w.t]));
-                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index}))]
+                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index, "adjustAdjoining": ev.mods.shift}))]
             }
             PointerKind::Down => {
                 let Some(spot) = Self::spot_at(cx, p) else {
@@ -386,14 +393,19 @@ impl Tool for WidthTool {
             },
         }
     }
-    /// Delete/Backspace remove the selected width points; with none selected they are the
-    /// shortcut's (Clear deletes the selected objects).
+    /// Delete/Backspace remove the selected width points and Escape deselects them; with none
+    /// selected the keys do what they do with other tools (Clear deletes the selected objects, and
+    /// Escape leaves isolation mode, for one).
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Delete | ToolKey::Backspace)
+        matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Escape)
             && self.drag.is_none()
             && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty())
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.drag.is_none() {
+            self.selected = None;
+            return vec![];
+        }
         if !matches!(key, ToolKey::Delete | ToolKey::Backspace) {
             return vec![];
         }
@@ -431,7 +443,9 @@ impl Tool for WidthTool {
             let q = d.spot.p;
             out.push(Overlay::Line { a: q + d.spot.n * d.left, b: q - d.spot.n * d.right, color: BLUE, dashed: false });
             out.push(Overlay::Path { path: diamond(q, r), color: BLUE, width: 2.0, dashed: false });
-            out.push(Overlay::Measure { p: q + d.spot.n * (d.left + r * 3.0), text: format!("W: {}", cx.stroke_unit.readout(d.left + d.right)) });
+            if cx.measurement_labels {
+                out.push(Overlay::Measure { p: q + d.spot.n * (d.left + r * 3.0), text: format!("W: {}", cx.stroke_unit.readout(d.left + d.right)) });
+            }
         } else if let Some(h) = &self.hover {
             out.push(Overlay::Line { a: h.p + h.n * h.left, b: h.p - h.n * h.right, color: BLUE, dashed: true });
             out.push(Overlay::Path { path: diamond(h.p, r), color: BLUE, width: 1.0, dashed: false });
@@ -644,6 +658,40 @@ mod tests {
     }
 
     #[test]
+    fn escape_deselects_the_width_points() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        // With nothing selected the tool leaves Escape to the app.
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        // Select the points at t = 0.25 and 0.75: Escape is the tool's and deselects both, sending
+        // nothing to the document.
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, shift));
+        t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0, shift));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        t.pointer(&c, &ev(PointerKind::Move, 200.0, 202.0, none));
+        let thick = |t: &WidthTool| t.overlays(&c).iter().filter(|o| matches!(o, Overlay::Path { width, .. } if *width > 2.0)).count();
+        assert_eq!(thick(&t), 2, "the two selected diamonds are drawn selected");
+        assert!(t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Escape, none).is_empty());
+        assert!(t.selected_indices(&c, id).is_empty());
+        assert_eq!(thick(&t), 0, "no diamond is drawn selected");
+        // Delete then removes nothing, and Escape is the app's again.
+        assert!(!t.claims_key(&c, ToolKey::Delete) && !t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Delete, none).is_empty());
+        // During a drag the dragged point stays selected.
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Drag, 210.0, 200.0, none));
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        t.key(&c, ToolKey::Escape, none);
+        assert!(t.selected.is_some());
+    }
+
+    #[test]
     fn width_points_show_on_every_subpath() {
         let (d, c, _) = doc_compound();
         let (s, p) = (Selection { objects: vec![c], ..Default::default() }, paint());
@@ -694,9 +742,15 @@ mod tests {
         let (d, id) = doc_three_points();
         let (s, p) = (Selection::default(), paint());
         let c = cx(&d, &s, &p);
-        let mut t = WidthTool::default();
-        let acts = t.pointer(&c, &ev(PointerKind::DoubleClick, 200.0, 195.0, Mods::default()));
-        assert_eq!(acts, vec![Action::Dialog("widthPoint".into(), json!({"id": id.0, "index": 2}))]);
-        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 200.0, Mods::default())).is_empty(), "not on a width point");
+        for shift in [false, true] {
+            let mut t = WidthTool::default();
+            let mods = Mods { shift, ..Default::default() };
+            let acts = t.pointer(&c, &ev(PointerKind::DoubleClick, 200.0, 195.0, mods));
+            let [Action::Dialog(kind, p)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+            assert_eq!(kind, "widthPoint");
+            assert_eq!((&p["id"], &p["index"]), (&json!(id.0), &json!(2)));
+            assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
+            assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 250.0, mods)).is_empty(), "not on a stroked path");
+        }
     }
 }

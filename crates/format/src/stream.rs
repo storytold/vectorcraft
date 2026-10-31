@@ -66,7 +66,8 @@ impl<W: Write> Write for Out<W> {
 const OUT_CHUNK: usize = 64 << 10;
 
 /// A gzip stream, written as [`flate2::write::GzEncoder`] at the default level writes it (the
-/// same header, and the same bytes for a file without compressed images), except that data which
+/// same header and the same data; the deflate blocks are the same too where flate2 deflates with
+/// miniz_oxide, not with zlib-rs, which writes them by how the data is fed), except that data which
 /// is compressed already ([`Gz::packed`]) is stored as it is: the default level spends a second
 /// or more per photo on it for next to nothing, and makes it slower to unpack. Where the level
 /// changes the deflate blocks so far end with a sync flush and a fresh compressor writes on,

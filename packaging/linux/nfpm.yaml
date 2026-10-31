@@ -45,9 +45,11 @@ overrides:
     # Require 64-bit library capabilities, not distro-specific package names. nfpm
     # does not scan ELF dependencies; declare the direct runtimes and glibc floor
     # as well as the libraries loaded at runtime. Release RPMs are amd64/arm64.
+    # The glibc floor names libm because the binaries' GLIBC_2.35 symbols (hypot, hypotf) are
+    # libm's: RHEL 9's glibc 2.34 provides libc.so.6(GLIBC_2.35) through backports, but not this.
     depends:
-      - libc.so.6(GLIBC_2.35)(64bit)
-      - libm.so.6()(64bit)
+      - libc.so.6()(64bit)
+      - libm.so.6(GLIBC_2.35)(64bit)
       - libgcc_s.so.1()(64bit)
       - libxkbcommon.so.0()(64bit)
       - (libvulkan.so.1()(64bit) or libEGL.so.1()(64bit))

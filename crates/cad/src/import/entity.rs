@@ -17,6 +17,8 @@ const DESCENT: f64 = 0.3;
 const LINE_SPACING: f64 = 5.0 / 3.0;
 /// The most copies one array insert (MINSERT) makes.
 const MAX_CELLS: i64 = 10_000;
+/// The most copies all the array inserts of a file make together.
+const MAX_TOTAL_CELLS: i64 = 2_000_000;
 /// Art farther than this from the origin (drawing units) is damaged data, left out.
 const MAX_COORD: f64 = 1e12;
 /// How far fit and aligned text may be squeezed or stretched to span their two points: at width
@@ -184,12 +186,15 @@ pub(crate) struct Converter {
     /// Entity types left out, with how many.
     pub skipped: BTreeMap<String, usize>,
     pub warnings: Vec<String>,
+    /// Array insert copies made so far, against [`MAX_TOTAL_CELLS`].
+    cells: i64,
 }
 
 const PATTERN_HATCH: &str = "pattern hatches come in as their boundaries";
 const GRADIENT_HATCH: &str = "gradient hatches are filled with their first colour";
 const MESHES: &str = "3D polygon meshes and polyface meshes are left out";
 const BIG_ARRAY: &str = "array inserts are limited to 10,000 copies each";
+const MANY_ARRAYS: &str = "array inserts are limited to 2,000,000 copies in all";
 const FAR_AWAY: &str = "entities with coordinates out of range are left out";
 
 impl Converter {
@@ -294,6 +299,15 @@ impl Converter {
         } else {
             (cols, rows)
         };
+        // Past the file-wide budget, each insert keeps only its first copy.
+        let left = (MAX_TOTAL_CELLS - self.cells).max(1);
+        let (cols, rows) = if cols * rows > left {
+            self.warn(MANY_ARRAYS);
+            (cols.min(left), (left / cols.min(left)).max(1).min(rows))
+        } else {
+            (cols, rows)
+        };
+        self.cells = self.cells.saturating_add(cols * rows);
         let cells = (0..rows)
             .flat_map(|r| (0..cols).map(move |c| (r, c)))
             .map(|(r, c)| place * Affine::translate((c as f64 * cs, r as f64 * rs)) * Affine::scale_non_uniform(sx, sy))
@@ -536,7 +550,9 @@ fn boundary(c: &mut Cursor<'_, '_>) -> Option<BezPath> {
     // The boundary objects it was made from.
     if let Some(n) = c.count(97) {
         for _ in 0..n {
-            c.opt(330);
+            if c.opt(330).is_none() {
+                break;
+            }
         }
     }
     Some(bp)

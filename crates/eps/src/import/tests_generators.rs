@@ -733,11 +733,67 @@ fn masked_images_in_every_interleaving() {
 #[test]
 fn errors_name_the_operator_and_the_procedures() {
     let r = read("{ 1 (a) add } stopped pop 0 0 10 10 rectfill /inner { 1 (a) add } def /outer { inner } def outer");
-    assert!(r.warnings[0].contains("(typecheck in `add`), in `inner` in `outer`"), "{:?}", r.warnings);
+    assert!(r.warnings[0].contains("(typecheck in `add`; a value has the wrong type for the operator), in `inner` in `outer`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill /p { frobnicate } def p");
     assert!(r.warnings[0].contains("it uses `frobnicate`, which VectorCraft's PostScript reader doesn't know, in `p`"), "{:?}", r.warnings);
     let r = read("0 0 10 10 rectfill 0 0 moveto (x) cvn moveto");
     assert!(r.warnings[0].contains("typecheck in `moveto`: a number"), "{:?}", r.warnings);
+}
+
+/// The warning for a file read only up to an error says what the error's name means in the
+/// reader, after the name, which stays as PostScript spells it.
+#[test]
+fn errors_say_what_the_postscript_error_means() {
+    for (program, want) in [
+        ("1 (a) add", "(typecheck in `add`; a value has the wrong type for the operator)"),
+        ("[1 2] 5 get", "(rangecheck in `get`; a value is outside the range the operator takes)"),
+        ("add", "(stackunderflow in `add`; the operator needs more values than the stack holds)"),
+        ("1 0 div", "(undefinedresult in `div`; a calculation has no result, as in a division by zero)"),
+        ("newpath 10 10 lineto", "(nocurrentpoint in `lineto`; the path has no point to continue from)"),
+        ("cleartomark", "(unmatchedmark in `cleartomark`; the operator looks for a mark on the stack and finds none)"),
+        ("save dup restore restore", "(invalidrestore in `restore`; the program restores a saved state that was already restored)"),
+        ("(x) (r) file", "(invalidfileaccess in `file`; the program opens a file, which the reader can't do)"),
+        ("(x) run", "(undefinedfilename in `run`; the program runs, deletes or renames a file, which the reader can't do)"),
+        ("/Nope /ProcSet findresource", "(undefinedresource in `findresource`: Nope; the program asks for a resource that isn't defined)"),
+        ("<12", "(syntaxerror in `<`; part of the program isn't valid PostScript text)"),
+    ] {
+        let r = read(&format!("0 0 10 10 rectfill {program}"));
+        assert!(r.warnings[0].contains(want), "{program}: {:?}", r.warnings);
+    }
+}
+
+/// Every PostScript error the reader raises has a meaning in [`crate::POSTSCRIPT_ERRORS`] but
+/// `undefined`, which the warning words on its own.
+#[test]
+fn every_postscript_error_the_reader_raises_has_a_meaning() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("import");
+    let mut raised = std::collections::BTreeSet::new();
+    let mut stack = vec![dir];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !name.ends_with(".rs") || name.starts_with("tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for marker in ["Ps(\"", "ps_err(\""] {
+                for (at, _) in text.match_indices(marker) {
+                    let rest = &text[at + marker.len()..];
+                    raised.insert(rest[..rest.find('"').unwrap()].to_string());
+                }
+            }
+        }
+    }
+    assert!(raised.len() >= 15 && raised.contains("typecheck"), "{raised:?}");
+    let missing: Vec<_> = raised.iter().filter(|n| *n != "undefined" && !crate::POSTSCRIPT_ERRORS.iter().any(|(e, _)| e == n)).collect();
+    assert!(missing.is_empty(), "no meaning for {missing:?}");
+    let unused: Vec<_> = crate::POSTSCRIPT_ERRORS.iter().filter(|(e, _)| !raised.contains(*e)).collect();
+    assert!(unused.is_empty(), "never raised: {unused:?}");
 }
 
 /// Operators programs use to probe the interpreter or measure things: file `status`, `token`,
@@ -920,10 +976,12 @@ fn gradients_stitched_from_linear_pieces_keep_or_sample_their_stops() {
              /Functions [ {pieces} {{ F }} repeat ] /Bounds [ 1 1 {bounds} {{ {pieces} div }} for ] >> >> shfill"
         )
     };
-    // A few pieces: the bounds are kept exactly as stops (three bounds -> five stops with the ends).
-    assert_eq!(stitch_stops(&stitched(3)), vec![0.0, 0.25, 0.5, 0.75, 1.0]);
-    // At the cap (1024 bounds, 1025 pieces) the 1024 bounds and the two ends are all kept.
-    assert_eq!(stitch_stops(&stitched(1024)).len(), 1026);
+    // A few pieces: the bounds are kept exactly as stops. Each piece runs from 0 to 1, so at every
+    // bound the colour jumps: two stops there (three bounds -> eight stops with the ends).
+    assert_eq!(stitch_stops(&stitched(3)), vec![0.0, 0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1.0]);
+    // At the cap (1024 bounds, 1025 pieces) the 1024 bounds (two stops each) and the two ends are
+    // all kept.
+    assert_eq!(stitch_stops(&stitched(1024)).len(), 2 * 1024 + 2);
     // One past it (1025 bounds, 1026 pieces) the function is sampled instead.
     assert_eq!(stitch_stops(&stitched(1025)).len(), 33);
 }
@@ -1051,4 +1109,20 @@ fn restore_puts_dictionaries_back() {
     // `cachestatus` gives a device's cache sizes; its last, the most bytes one cached glyph may
     // take, is positive (chapter 8), and programs divide by it.
     super::tests::check("cachestatus 7 1 roll 6 { pop } repeat 0 gt");
+}
+
+/// #3567: what a `filter` decodes counts against the memory budget, not just its input. A
+/// small string that inflates to 16 MiB, decoded over and over (each result dropped), ends
+/// the program; a single one does not.
+#[test]
+fn filter_output_counts_against_the_memory_budget() {
+    fn hex(data: &[u8]) -> String {
+        data.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    let z = hex(&deflate(&vec![0u8; 16 << 20]));
+    let once = import(&file("t", &format!("/z <{z}> def z /FlateDecode filter pop 0 0 1 1 rectfill"))).unwrap();
+    assert!(once.warnings.iter().all(|w| !w.contains("memory")), "{:?}", once.warnings);
+    let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
+    let Err(err) = many else { panic!("the budget ends the program") };
+    assert!(err.contains("too much memory"), "{err}");
 }

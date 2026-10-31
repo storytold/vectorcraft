@@ -29,6 +29,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     discard: Some("Ignore"),
     min_width: 380.0,
     max_width: Some(460.0),
+    inputs: |_| &["searchFolder"],
     ..DialogSpec::FORM
 };
 
@@ -172,7 +173,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let path = match d.str("path") {
             p if !p.is_empty() => p,
             _ => {
-                let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::place_filters().collect(), ..Default::default() };
+                let pick =
+                    crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
                 crate::picks::open(app, &pick).ok_or("cancelled")?
             }
         };

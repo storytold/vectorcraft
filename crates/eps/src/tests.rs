@@ -150,7 +150,7 @@ fn gradient_doc(kind: GradientKind) -> Document {
         GradientStop::new(0.4, Color::rgb(1.0, 1.0, 0.0)),
         GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
     ];
-    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind, stops })));
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops))));
     doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)])
 }
 
@@ -268,6 +268,7 @@ fn png_doc() -> Document {
         xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
         link: None,
         placement: Default::default(),
+        pixels: None,
     };
     let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
     let layer = d.layers[0].id;
@@ -345,6 +346,11 @@ fn run_length_and_ascii85_round_trip() {
     assert_eq!(ps::ascii85(b"Man "), "9jqo^~>\n");
     assert_eq!(ps::ascii85(&[0, 0, 0, 0]), "z~>\n");
     assert!(ps::ascii85_decode("9jqo^").is_none(), "no end marker");
+    // #1715: the result is bounded while it is made, not by the length of the text.
+    assert_eq!(ps::ascii85_decode_within("zz~>", 8), Some(vec![0; 8]));
+    assert!(ps::ascii85_decode_within("zzz~>", 8).is_none(), "three `z` are 12 bytes");
+    assert!(ps::ascii85_decode_within("zz9jqo^~>", 8).is_none());
+    assert!(ps::ascii85_decode_within(&format!("{}~>", "z".repeat(1 << 16)), 1 << 10).is_none());
     assert!(ps::ascii85_decode("9jqo^v~>").is_none(), "not base 85");
     assert_eq!(ps::num(1.0 / 3.0), "0.3333");
     assert_eq!((ps::num(-0.00001), ps::num(f64::NAN), ps::num(2.5)), ("0".into(), "0".into(), "2.5".into()));
@@ -441,6 +447,36 @@ fn clipping_groups_clip_and_hidden_or_template_art_is_left_out() {
 }
 
 #[test]
+fn an_instance_whose_art_reaches_the_region_is_written() {
+    // The symbol's red rectangle, (100, 100) to (140, 140), drawn from (-50, -50): on the artboard,
+    // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
+    let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    assert!(page.contains("1 0 0 rg"), "{page}");
+}
+
+#[test]
+fn an_instance_whose_brush_art_reaches_the_region_is_written() {
+    // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt red stroke painted by a 20 pt
+    // round nib. Drawn from (-5, 0), the line lies left of the artboard, and the nib paints 10 pt
+    // either side of it, onto the artboard.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) })]);
+    let mut lib = vectorcraft_brush::library(&d);
+    let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+        panic!("the 3 pt. Round brush")
+    };
+    c.size = 20.0;
+    vectorcraft_brush::store(&mut d, &lib);
+    let mut art = path(&mut d, shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0);
+    art.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    assert!(page.contains("1 0 0 rg"), "{page}");
+}
+
+#[test]
 fn level_preview_and_overprint_ids_read_back() {
     for l in Level::ALL {
         assert_eq!(Level::from_id(l.id()), Some(l));
@@ -463,4 +499,62 @@ fn a_rich_document_is_well_formed_at_both_levels() {
             assert!(page.lines().count() > 50, "{page}");
         }
     }
+}
+
+/// A colour bitmap glyph (emoji) is written as an image where it sits; the type's fill doesn't
+/// paint it.
+#[test]
+fn colour_bitmap_glyphs_are_images() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(false).unwrap());
+    let d = doc_with(|d| {
+        let st = CharStyle { font_family: colour_bitmap_family(false).into(), size: 32.0, ..CharStyle::default() };
+        vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), &COLOUR_CHAR.to_string(), st))))]
+    });
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    checked_page(&ps);
+    assert!(ps.contains("/Width 16 /Height 16"), "{ps}");
+    // One em (32 pt) square, its top 24 pt above the baseline (12 of 16 px), 4 pt right of the
+    // origin (2 px), in text space.
+    assert!(ps.contains("[32 0 0 32 4 -24] cm"), "{ps}");
+}
+
+#[test]
+fn colr_glyphs_are_vector_art() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colr_family, colr_font};
+    vectorcraft_text::FontDb::global().add_font(colr_font(false).unwrap());
+    let d = doc_with(|d| {
+        let fill = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+        let st = CharStyle { font_family: colr_family(false).into(), size: 32.0, fill, ..CharStyle::default() };
+        vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), &COLOUR_CHAR.to_string(), st))))]
+    });
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    checked_page(&ps);
+    assert!(!ps.contains("/Width"), "no image: {ps}");
+    assert!(ps.contains("1 0 0 rg"), "the red layer: {ps}");
+    assert!(ps.contains("0 0 1 rg"), "the foreground layer in the fill: {ps}");
+}
+
+/// Ruby (furigana) is written with its base text, as the canvas draws it: one more `m` per contour
+/// of the reading's glyphs.
+#[test]
+fn ruby_is_written_with_its_type() {
+    use vectorcraft_doc::{CharStyle, RubySpan, TextObject};
+    let typed = |ruby: bool| {
+        let mut t = TextObject::point(Point::new(20.0, 100.0), "AB", CharStyle { size: 30.0, ..CharStyle::default() });
+        if ruby {
+            t.ruby = vec![RubySpan::new(0, 2, "xyz")];
+        }
+        t
+    };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &typed(true));
+    let reading = lay.ruby.iter().flat_map(|g| g.outline.elements()).filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+    assert!(reading >= 3, "the reading has ink: {reading}");
+    let moves = |ruby: bool| {
+        let d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::Text(Box::new(typed(ruby))))]);
+        page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
+    };
+    assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
 }

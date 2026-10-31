@@ -46,6 +46,20 @@ impl Handle {
             _ => (true, true),
         }
     }
+    /// The handle's point in the 9-point reference grid (row-major from the top-left, 4 the center)
+    /// that `object.setBounds` takes as `reference`.
+    pub fn reference(self) -> usize {
+        match self {
+            Handle::TopLeft => 0,
+            Handle::Top => 1,
+            Handle::TopRight => 2,
+            Handle::Left => 3,
+            Handle::Right => 5,
+            Handle::BottomLeft => 6,
+            Handle::Bottom => 7,
+            Handle::BottomRight => 8,
+        }
+    }
 }
 
 /// Handle under `p` (within `tol` document units).
@@ -77,9 +91,11 @@ pub fn scale_for_drag(r: Rect, handle: Handle, p: Point, proportional: bool, fro
     let mut sy = if ay && d0.y.abs() > 1e-9 { d1.y / d0.y } else { 1.0 };
     if proportional {
         if handle.is_corner() {
-            let s = if sx.abs() > sy.abs() { sx } else { sy };
-            sx = s.abs() * sx.signum();
-            sy = s.abs() * sy.signum();
+            // Follow the axis the pointer moved further along (a drag along one axis must still
+            // resize), and mirror both axes together when it crosses the origin.
+            let s = if (sx - 1.0).abs() >= (sy - 1.0).abs() { sx } else { sy };
+            sx = s;
+            sy = s;
         } else if ax {
             sy = sx.abs();
         } else {
@@ -103,10 +119,12 @@ pub fn rotate_for_drag(center: Point, from: Point, to: Point, snap: bool) -> (Af
     (Affine::translate(center.to_vec2()) * Affine::rotate(a) * Affine::translate(-center.to_vec2()), -a.to_degrees())
 }
 
-/// Move constrained to 45° multiples when `shift`.
-pub fn move_delta(from: Point, to: Point, shift: bool) -> Vec2 {
+/// Move constrained to 45° multiples when `shift`, counted from `base` degrees (General ›
+/// Constrain Angle, [`crate::ToolContext::constrain_angle`]): Shift holds a drag to the rotated x
+/// and y axes and their diagonals.
+pub fn move_delta(from: Point, to: Point, shift: bool, base: f64) -> Vec2 {
     let d = to - from;
-    if shift { vectorcraft_geom::constrain_angle(d, 45.0) } else { d }
+    if shift { vectorcraft_geom::constrain_angle_from(d, 45.0, base) } else { d }
 }
 
 #[cfg(test)]
@@ -122,6 +140,9 @@ mod tests {
         assert_eq!(Handle::Top.opposite(), Handle::Bottom);
         assert_eq!(hit_handle(R, Point::new(99.0, 24.0), 3.0), Some(Handle::Right));
         assert_eq!(hit_handle(R, Point::new(50.0, 25.0), 3.0), None);
+        for h in Handle::ALL {
+            assert_eq!(vectorcraft_geom::reference_point(R, h.reference()), h.pos(R), "{h:?}");
+        }
     }
 
     #[test]
@@ -130,6 +151,25 @@ mod tests {
         assert_eq!(a.transform_rect_bbox(R), Rect::new(0.0, 0.0, 200.0, 50.0));
         let a = scale_for_drag(R, Handle::BottomRight, Point::new(200.0, 50.0), true, false);
         assert_eq!(a.transform_rect_bbox(R), Rect::new(0.0, 0.0, 200.0, 100.0));
+    }
+
+    #[test]
+    fn proportional_corner_follows_a_drag_along_one_axis() {
+        let scale = |p: Point, from_center: bool| {
+            let a = scale_for_drag(R, Handle::BottomRight, p, true, from_center).as_coeffs();
+            (a[0], a[3])
+        };
+        for from_center in [false, true] {
+            let o = if from_center { R.center() } else { Point::new(0.0, 0.0) };
+            let (hx, hy) = (100.0 - o.x, 50.0 - o.y);
+            // Horizontal drag, then vertical drag: the size follows the pointer, uniformly.
+            for (t, want) in [(0.5, 0.5), (0.25, 0.25), (-0.5, -0.5), (-1.0, -1.0)] {
+                for p in [Point::new(o.x + hx * t, 50.0), Point::new(100.0, o.y + hy * t)] {
+                    let (sx, sy) = scale(p, from_center);
+                    assert!((sx - want).abs() < 1e-9 && (sy - want).abs() < 1e-9, "{p:?} center={from_center}: got ({sx}, {sy}), want {want}");
+                }
+            }
+        }
     }
 
     #[test]

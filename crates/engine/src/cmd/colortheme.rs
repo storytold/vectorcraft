@@ -9,7 +9,7 @@ use vectorcraft_color::harmony::{Harmony, THEME_SIZE};
 use vectorcraft_color::recolor::ColorKey;
 use vectorcraft_tools::params::color_json;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, cmd, color_value, has_doc, str_param};
 
 /// A saved colour theme ([`crate::Prefs::color_themes`]).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Theme",
             ["Window", "Color Themes"],
             None,
-            "{colors: [1–5 colours] | color + rule (a harmony rule id or label, see color.harmony: its 5-colour theme from that base colour, base first), rule?: the rule it was made with, name?: (default \"Theme N\"), replace?: a saved theme's name (overwrite that theme in place, e.g. after editing it; it may be renamed)} save a colour theme to the local theme library (the preferences) → {name, count: themes saved}",
+            "{colors: [1–5 colours] | color + rule (a harmony rule id or label, see color.harmony: its 5-colour theme from that base colour, base first), rule?: the rule it was made with, name?: (default \"Theme N\"), replace?: a saved theme's name (overwrite that theme in place, e.g. after editing it; it may be renamed), color?: one colour (as colors: [colour])} save a colour theme to the local theme library (the preferences) → {name, count: themes saved}",
             always,
             save
         ),
@@ -142,7 +142,8 @@ fn add_to_swatches(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "colorTheme.addToSwatches";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
     let t = &s.prefs.color_themes[find(s, name, C)?];
-    let params = json!({ "name": t.name, "colors": t.colors.iter().map(color_json).collect::<Vec<_>>() });
+    // The theme's colors keep their model, in a CMYK document too.
+    let params = json!({ "name": t.name, "colors": t.colors.iter().map(color_json).collect::<Vec<_>>(), "keepModel": true });
     let r = s.execute("swatch.newGroup", &params)?;
     Ok(json!({ "name": r["name"], "swatches": r["swatches"] }))
 }

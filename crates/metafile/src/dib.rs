@@ -13,6 +13,11 @@ const MAX_PIXELS: u64 = 1 << 24;
 /// Most pixels along a side, and in all, of a bitmap the reader decodes.
 const MAX_READ_SIDE: u32 = 1 << 15;
 const MAX_READ_PIXELS: u64 = 1 << 26;
+/// Most pixels the bitmaps of one file may decode to together (four of the largest one), so a small
+/// file of many image records can't cost minutes of decoding (#3600).
+pub(crate) const MAX_FILE_PIXELS: u64 = 1 << 28;
+/// What [`decode`] says of a bitmap past what is left of the file's budget.
+pub(crate) const OVER_BUDGET: &str = "the bitmaps hold more pixels than one file may";
 
 const BI_RGB: u32 = 0;
 const BI_BITFIELDS: u32 = 3;
@@ -136,8 +141,16 @@ fn channel(v: u32, mask: u32) -> u8 {
     ((x * 255 + max / 2) / max.max(1)).min(255) as u8
 }
 
-/// Read a DIB from its BITMAPINFO (`bmi`: the header and colour table) and pixel `bits`.
-pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha) -> Result<Rgba, String> {
+/// Take a bitmap of `w` × `h` from what is `left` of the file's budget, before it is decoded.
+fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
+    let n = u64::from(w) * u64::from(h);
+    *left = left.checked_sub(n).ok_or(OVER_BUDGET)?;
+    Ok(())
+}
+
+/// Read a DIB from its BITMAPINFO (`bmi`: the header and colour table) and pixel `bits`, taking its
+/// pixels from what is `left` of the file's budget ([`MAX_FILE_PIXELS`]).
+pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha, left: &mut u64) -> Result<Rgba, String> {
     let bad = || "a bitmap is damaged".to_string();
     let mut r = Reader::new(bmi);
     let size = r.u32().ok_or_else(bad)?;
@@ -161,11 +174,13 @@ pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha) -> Result<Rgba, Stri
         return Err(bad());
     };
     if compression == BI_JPEG || compression == BI_PNG {
-        let img = image::load_from_memory(bits).map_err(|_| bad())?.to_rgba8();
-        let (w, h) = img.dimensions();
+        // The size comes from the image header, so an over-limit bitmap is refused before any pixels are decoded.
+        let (w, h) = image::ImageReader::new(Cursor::new(bits)).with_guessed_format().map_err(|_| bad())?.into_dimensions().map_err(|_| bad())?;
         if w > MAX_READ_SIDE || h > MAX_READ_SIDE || u64::from(w) * u64::from(h) > MAX_READ_PIXELS {
             return Err("a bitmap is too large to read".into());
         }
+        charge(w, h, left)?;
+        let img = image::load_from_memory(bits).map_err(|_| bad())?.to_rgba8();
         return Ok(Rgba { width: w, height: h, pixels: img.into_raw() });
     }
     if compression != BI_RGB && compression != BI_BITFIELDS {
@@ -209,6 +224,7 @@ pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha) -> Result<Rgba, Stri
     if bits.len() < row.checked_mul(h as usize).ok_or_else(bad)? {
         return Err(bad());
     }
+    charge(w, h, left)?;
     let (mr, mg, mb, ma) = match (masks, bpp) {
         (Some([r, g, b, a]), _) => (r, g, b, a),
         (None, 16) => (0x7c00, 0x03e0, 0x001f, 0),
@@ -287,6 +303,42 @@ mod tests {
         Rgba { width: 3, height: 2, pixels }
     }
 
+    /// A whole file's budget.
+    fn budget() -> u64 {
+        MAX_FILE_PIXELS
+    }
+
+    /// A BITMAPINFOHEADER of an embedded PNG.
+    fn png_header() -> Vec<u8> {
+        let mut bmi = vec![0u8; 40];
+        bmi[..4].copy_from_slice(&40u32.to_le_bytes());
+        bmi[16..20].copy_from_slice(&BI_PNG.to_le_bytes());
+        bmi
+    }
+
+    #[test]
+    fn oversized_png_is_refused_from_its_header() {
+        // A width over the limit in the IHDR chunk: decoding the pixels would fail with a different error.
+        let png = crate::tests::png_claiming(MAX_READ_SIDE + 1, 1);
+        let err = decode(&png_header(), &png, Alpha::Ignore, &mut budget()).unwrap_err();
+        assert_eq!(err, "a bitmap is too large to read");
+    }
+
+    #[test]
+    fn bitmaps_share_the_file_budget() {
+        // #3600: each bitmap is charged before it is decoded, and one past what is left is refused.
+        let (bmi, bits) = rgb24(&sample(), 1.0);
+        let mut left = 6 + 5;
+        assert!(decode(&bmi, &bits, Alpha::Ignore, &mut left).is_ok());
+        assert_eq!(left, 5);
+        assert_eq!(decode(&bmi, &bits, Alpha::Ignore, &mut left).unwrap_err(), OVER_BUDGET);
+        assert_eq!(left, 5, "a refused bitmap costs nothing");
+        // An embedded PNG is charged from its header, so one past the budget is never decoded.
+        let mut left = (1 << 20) - 1;
+        let png = crate::tests::png_claiming(1 << 10, 1 << 10);
+        assert_eq!(decode(&png_header(), &png, Alpha::Ignore, &mut left).unwrap_err(), OVER_BUDGET);
+    }
+
     #[test]
     fn rgb24_is_bottom_up_bgr_over_white() {
         let (bmi, bits) = rgb24(&sample(), 1.0);
@@ -314,7 +366,7 @@ mod tests {
         assert_eq!(bmi.len(), 40);
         // Rows of 9 bytes padded to 12.
         assert_eq!(bits.len(), 24);
-        let back = decode(&bmi, &bits, Alpha::Ignore).unwrap();
+        let back = decode(&bmi, &bits, Alpha::Ignore, &mut budget()).unwrap();
         assert_eq!((back.width, back.height), (3, 2));
         assert_eq!(&back.pixels[..12], &[255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255]);
         // Half-transparent black over white is mid grey; transparent is white.
@@ -325,12 +377,12 @@ mod tests {
     #[test]
     fn bgra32_round_trips_with_alpha() {
         let (bmi, bits) = bgra32(&sample(), 1.0);
-        let back = decode(&bmi, &bits, Alpha::Premultiplied).unwrap();
+        let back = decode(&bmi, &bits, Alpha::Premultiplied, &mut budget()).unwrap();
         assert_eq!(&back.pixels[..12], &sample().pixels[..12]);
         assert_eq!(back.pixels[15], 128);
         assert_eq!(back.pixels[19], 0);
         // Read as StretchDIBits does, alpha is ignored.
-        assert!(decode(&bmi, &bits, Alpha::Ignore).unwrap().opaque());
+        assert!(decode(&bmi, &bits, Alpha::Ignore, &mut budget()).unwrap().opaque());
     }
 
     #[test]
@@ -338,13 +390,13 @@ mod tests {
         // A 1-bit 2 × 1 bitmap: black then white.
         let mut bmi = header(2, 1, 1, 4);
         bmi.extend_from_slice(&[0, 0, 0, 0, 255, 255, 255, 0]);
-        let back = decode(&bmi, &[0b0100_0000, 0, 0, 0], Alpha::Ignore).unwrap();
+        let back = decode(&bmi, &[0b0100_0000, 0, 0, 0], Alpha::Ignore, &mut budget()).unwrap();
         assert_eq!(back.pixels, vec![0, 0, 0, 255, 255, 255, 255, 255]);
         // Too few bits, a silly size, an unknown depth: errors, no panic.
-        assert!(decode(&bmi, &[0], Alpha::Ignore).is_err());
-        assert!(decode(&header(1 << 20, 1 << 20, 24, 0), &[], Alpha::Ignore).is_err());
-        assert!(decode(&header(1, 1, 7, 0), &[0; 4], Alpha::Ignore).is_err());
-        assert!(decode(&[1, 2], &[], Alpha::Ignore).is_err());
+        assert!(decode(&bmi, &[0], Alpha::Ignore, &mut budget()).is_err());
+        assert!(decode(&header(1 << 20, 1 << 20, 24, 0), &[], Alpha::Ignore, &mut budget()).is_err());
+        assert!(decode(&header(1, 1, 7, 0), &[0; 4], Alpha::Ignore, &mut budget()).is_err());
+        assert!(decode(&[1, 2], &[], Alpha::Ignore, &mut budget()).is_err());
     }
 
     #[test]

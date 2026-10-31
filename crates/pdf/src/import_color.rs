@@ -5,14 +5,18 @@
 //! hayro-interpret keeps a colour's space and components private: their `Debug` form is the only
 //! public view, so [`Colors`] reads that (`tests_import_color.rs` pins the format). Ink names
 //! aren't in it at all: they come from the file's Separation and DeviceN arrays, found by their
-//! tint transform.
+//! tint transform. Where spaces of inks with other names have the same tint transform, the names
+//! that the page's walk ([`crate::import_scan`]) finds for each path and run of text pick one.
 
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Write as _};
 
-use hayro_interpret::Function;
-use hayro_interpret::color::ColorSpace;
-use hayro_syntax::Pdf;
-use hayro_syntax::object::{Array, MaybeRef, Name, Object, Stream};
+use craft_pdf::interpret::Function;
+use craft_pdf::interpret::color::ColorSpace;
+use craft_pdf::syntax::Pdf;
+use craft_pdf::syntax::object::array::FlexArrayIter;
+use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
+use craft_pdf::syntax::reader::{Reader, ReaderExt};
 use smallvec::SmallVec;
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Paint, Swatch};
@@ -90,6 +94,8 @@ struct Ink {
 pub(crate) enum Space {
     Gray,
     Rgb,
+    /// An `ICCBased` RGB space whose numbers are taken as they are (see `Colors::uncalibrated_rgb`).
+    IccRgb,
     Cmyk,
     /// A Separation or DeviceN space (index into `Colors::spaces`).
     Inks(usize),
@@ -113,12 +119,19 @@ pub(crate) struct Colors<'p> {
     taken: Vec<String>,
     scanned: bool,
     spaces: Vec<InkSpace>,
+    /// The colorant names of the spaces that have the kind, colorant count and tint transform of a
+    /// space of other inks ([`Colors::tied`]; found once).
+    tied: Option<HashSet<Vec<String>>>,
     inks: Vec<Ink>,
     /// Process colours painted in CMYK and in RGB (or anything converted to it).
     cmyk: usize,
     rgb: usize,
     /// A DeviceN colour mixed several inks (imported as RGB).
     pub mixed: bool,
+    /// RGB colours in an `ICCBased` space keep their numbers instead of going through the profile:
+    /// on for an editor's own document (`.ai`), so its art keeps the RGB numbers the file has; off
+    /// for PDFs, whose profiles stand.
+    pub uncalibrated_rgb: bool,
 }
 
 /// `v`'s `Debug` text, or `None` past [`DEBUG_LIMIT`] (formatting stops there).
@@ -152,14 +165,15 @@ pub(crate) fn split_color(t: &str) -> Option<(&str, Vec<f32>)> {
 
 impl<'p> Colors<'p> {
     pub fn new(pdf: &'p Pdf, taken: Vec<String>) -> Self {
-        Self { pdf, taken, scanned: false, spaces: vec![], inks: vec![], cmyk: 0, rgb: 0, mixed: false }
+        Self { pdf, taken, scanned: false, spaces: vec![], tied: None, inks: vec![], cmyk: 0, rgb: 0, mixed: false, uncalibrated_rgb: false }
     }
 
-    /// A solid colour in its own model; `None`: use its RGB.
-    pub fn solid(&mut self, c: &hayro_interpret::color::Color) -> Option<Native> {
+    /// A solid color in its own model; `None`: use its RGB. `inks`: the colorant names of the
+    /// space the page's walk found it painted in ([`Colors::space_of`]).
+    pub fn solid(&mut self, c: &craft_pdf::interpret::color::Color, inks: Option<&[String]>) -> Option<Native> {
         let mapped = debug_text(c).and_then(|t| {
             let (space, comps) = split_color(&t)?;
-            let space = self.space_of(space, comps.len());
+            let space = self.space_of(space, comps.len(), inks);
             Some((space, comps))
         });
         let (space, comps) = mapped.unwrap_or((Space::Other, vec![]));
@@ -167,9 +181,10 @@ impl<'p> Colors<'p> {
         self.native(space, &comps)
     }
 
-    /// The space shading colours are in, for [`Colors::native`]; `n`: its component count.
-    pub fn shading_space(&mut self, cs: &ColorSpace, n: usize) -> Space {
-        let space = debug_text(cs).map_or(Space::Other, |t| self.space_of(&t, n));
+    /// The space shading colors are in, for [`Colors::native`]; `n`: its component count. `inks`
+    /// as for [`Colors::solid`].
+    pub fn shading_space(&mut self, cs: &ColorSpace, n: usize, inks: Option<&[String]>) -> Space {
+        let space = debug_text(cs).map_or(Space::Other, |t| self.space_of(&t, n, inks));
         self.count(space);
         space
     }
@@ -178,7 +193,7 @@ impl<'p> Colors<'p> {
     fn count(&mut self, space: Space) {
         match space {
             Space::Cmyk => self.cmyk += 1,
-            Space::Rgb | Space::Other => self.rgb += 1,
+            Space::Rgb | Space::IccRgb | Space::Other => self.rgb += 1,
             Space::Gray | Space::Inks(_) => {}
         }
     }
@@ -193,22 +208,29 @@ impl<'p> Colors<'p> {
         self.inks.iter().filter(|i| i.used).map(|i| Swatch { name: i.name.clone(), paint: Paint::solid(i.color), global: true, spot: true })
     }
 
-    /// The space a `ColorSpace(…)` `Debug` text names, with `n` components.
-    pub(crate) fn space_of(&mut self, text: &str, n: usize) -> Space {
+    /// The space a `ColorSpace(…)` `Debug` text names, with `n` components. `inks`: the colorant
+    /// names of the space the page's walk found the color painted in; of the spaces whose tint
+    /// transform matches, the one with these names is taken.
+    pub(crate) fn space_of(&mut self, text: &str, n: usize, inks: Option<&[String]>) -> Space {
         let inner = text.strip_prefix("ColorSpace(").unwrap_or(text);
         let kind = inner.split(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default();
         match (kind, n) {
             ("DeviceGray" | "ICCBased", 1) => Space::Gray,
             ("DeviceRgb", 3) => Space::Rgb,
+            ("ICCBased", 3) if self.uncalibrated_rgb => Space::IccRgb,
             ("DeviceCmyk" | "ICCBased", 4) => Space::Cmyk,
             ("Separation", 1) | ("DeviceN", _) => {
                 self.scan();
                 let device_n = kind == "DeviceN";
-                let mut found =
-                    self.spaces.iter().enumerate().filter(|(_, s)| s.device_n == device_n && s.colorants.len() == n && inner.contains(&s.key));
+                let like = |s: &InkSpace| s.device_n == device_n && s.colorants.len() == n && inner.contains(&s.key);
+                if let Some(i) = inks.and_then(|names| self.spaces.iter().position(|s| like(s) && s.names == names)) {
+                    return Space::Inks(i);
+                }
+                let mut found = self.spaces.iter().enumerate().filter(|(_, s)| like(s));
                 match found.next() {
                     // Spaces of other inks with the same alternate and tint transform look the
-                    // same here: which inks this colour uses can't be told.
+                    // same here: without names from the walk, which inks this color uses can't be
+                    // told.
                     Some((i, first)) if found.all(|(_, s)| s.names == first.names) => Space::Inks(i),
                     _ => Space::Other,
                 }
@@ -217,12 +239,33 @@ impl<'p> Colors<'p> {
         }
     }
 
+    /// Whether a space of inks `names` has the kind, colorant count and tint transform of a space
+    /// of other inks. [`Colors::space_of`] tells such spaces apart only by the names from the
+    /// page's walk.
+    pub fn tied(&mut self, names: &[String]) -> bool {
+        self.scan();
+        let spaces = &self.spaces;
+        let tied = self.tied.get_or_insert_with(|| {
+            let mut first: HashMap<(bool, usize, &str), &Vec<String>> = HashMap::new();
+            let mut tied = HashSet::new();
+            for s in spaces {
+                let f = *first.entry((s.device_n, s.colorants.len(), s.key.as_str())).or_insert(&s.names);
+                if *f != s.names {
+                    tied.extend([f.clone(), s.names.clone()]);
+                }
+            }
+            tied
+        });
+        tied.contains(names)
+    }
+
     /// Components `comps` of `space` in their own model; `None`: use their RGB.
     pub fn native(&mut self, space: Space, comps: &[f32]) -> Option<Native> {
         let c = |i: usize| round3(comps.get(i).copied().unwrap_or(0.0).clamp(0.0, 1.0));
         match space {
             Space::Gray => Some(Native::plain(Color::gray(round3(1.0 - c(0))))),
             Space::Cmyk => Some(Native::plain(Color::cmyk(c(0), c(1), c(2), c(3)))),
+            Space::IccRgb => Some(Native::plain(Color::rgb(c(0), c(1), c(2)))),
             Space::Rgb | Space::Other => None,
             Space::Inks(i) => self.inks_color(i, comps),
         }
@@ -258,6 +301,9 @@ impl<'p> Colors<'p> {
         let process = cmyk.iter().any(|v| *v > 0.0);
         let (c, t) = match (ink, first_ink) {
             (Some(_), _) if several || process => {
+                // The color can't link to one swatch, but each ink it paints with is still a
+                // spot swatch.
+                self.mark_inks(Space::Inks(space), comps);
                 self.mixed = true;
                 return None;
             }
@@ -274,6 +320,24 @@ impl<'p> Colors<'p> {
                 Some(Native { color: ink.color.tinted(t), link: Some((ink.name.clone(), t)) })
             }
             _ => Some(Native { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), link: Some((REGISTRATION.to_string(), t)) }),
+        }
+    }
+
+    /// Mark each ink that components `comps` of `space` paint with (a tint above 0) as used, so it
+    /// becomes a spot swatch; nothing for a space with a colorant that can't be read.
+    pub fn mark_inks(&mut self, space: Space, comps: &[f32]) {
+        let Space::Inks(i) = space else { return };
+        let Some(s) = self.spaces.get(i) else { return };
+        if s.colorants.iter().any(|c| matches!(c, Colorant::Unknown)) {
+            return;
+        }
+        for (c, t) in s.colorants.iter().zip(comps) {
+            if let Colorant::Ink(k) = *c
+                && round3(t.clamp(0.0, 1.0)) > 0.0
+                && let Some(ink) = self.inks.get_mut(k)
+            {
+                ink.used = true;
+            }
         }
     }
 
@@ -296,12 +360,12 @@ impl<'p> Colors<'p> {
         match o {
             Object::Array(a) => {
                 self.ink_space(&a);
-                for item in a.raw_iter().filter_map(direct) {
+                for item in items(&a).filter_map(direct) {
                     self.visit(item, depth + 1);
                 }
             }
             Object::Dict(d) => {
-                for (_, v) in d.entries() {
+                for v in values(&d) {
                     if let Some(v) = direct(v) {
                         self.visit(v, depth + 1);
                     }
@@ -315,20 +379,12 @@ impl<'p> Colors<'p> {
     /// Record `a` when it is a `[/Separation name alt tint]` or `[/DeviceN [names] alt tint …]` space.
     fn ink_space(&mut self, a: &Array<'_>) -> Option<()> {
         let mut it = a.flex_iter();
-        let device_n = match it.next::<Name<'_>>()?.as_str() {
-            "Separation" => false,
-            "DeviceN" => true,
-            _ => return None,
-        };
-        let names: Vec<String> = if device_n {
-            it.next::<Array<'_>>()?.iter::<Name<'_>>().map(|n| n.as_str().to_string()).collect()
-        } else {
-            vec![it.next::<Name<'_>>()?.as_str().to_string()]
-        };
+        let (device_n, names) = ink_names(&mut it)?;
         let alt = alt_model(&it.next::<Object<'_>>()?);
         let tint = Function::new(&it.next::<Object<'_>>()?)?;
         let key = debug_text(&tint)?;
-        if names.is_empty() || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
+        // (PDF's limit is 32 colorants; each gets a vector of that length below.)
+        if names.is_empty() || names.len() > MAX_COLORANTS || self.spaces.iter().any(|s| s.key == key && s.device_n == device_n && s.names == names) {
             return None;
         }
         let colorants = names
@@ -370,12 +426,57 @@ impl<'p> Colors<'p> {
     }
 }
 
+/// The colorant names of a `[/Separation name …]` or `[/DeviceN [names] …]` color space, read from
+/// `it` (the items of its array), and whether it is a DeviceN one; `None` for other spaces.
+pub(crate) fn ink_names(it: &mut FlexArrayIter<'_>) -> Option<(bool, Vec<String>)> {
+    let device_n = match it.next::<Name<'_>>()?.as_str() {
+        "Separation" => false,
+        "DeviceN" => true,
+        _ => return None,
+    };
+    let names = if device_n {
+        it.next::<Array<'_>>()?.iter::<Name<'_>>().map(|n| n.as_str().to_string()).collect()
+    } else {
+        vec![it.next::<Name<'_>>()?.as_str().to_string()]
+    };
+    Some((device_n, names))
+}
+
 /// An object written in place (references are visited as objects of their own).
-fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
+/// Can every item of `a` be read? Not in a damaged file, and hayro's own iterator over the items
+/// unwraps each read and panics there.
+///
+/// The items are read without the array's context. That reading fails wherever the array's own
+/// would (a string it can't decrypt is kept as it is either way; a stream whose `/Length` it can't
+/// follow falls back to finding `endstream`, as the array's reading does when its length is wrong).
+pub(crate) fn readable(a: &Array<'_>) -> bool {
+    let mut r = Reader::new(a.data());
+    std::iter::from_fn(|| {
+        r.skip_white_spaces_and_comments();
+        (!r.at_end()).then(|| r.read_without_context::<MaybeRef<Object<'_>>>().is_some())
+    })
+    .all(|read| read)
+}
+
+/// The items of `a`, or none when one of them can't be read ([`readable`]). A file with such an
+/// array is refused before it is imported ([`crate::pages`]), so that none never hides what the
+/// interpreter would still read of it (its leading items).
+pub(crate) fn items<'a>(a: &Array<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> + use<'a> {
+    readable(a).then(|| a.raw_iter()).into_iter().flatten()
+}
+
+pub(crate) fn direct(m: MaybeRef<Object<'_>>) -> Option<Object<'_>> {
     match m {
         MaybeRef::NotRef(o) => Some(o),
         MaybeRef::Ref(_) => None,
     }
+}
+
+/// The values of `d` that the reader can parse, sorted by key as `Dict::entries` sorts them.
+pub(crate) fn values<'a>(d: &Dict<'a>) -> impl Iterator<Item = MaybeRef<Object<'a>>> {
+    let mut keys: Vec<Name<'a>> = d.keys().collect();
+    keys.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    keys.into_iter().filter_map(|k| d.get_raw::<Object<'a>>(k.as_ref()))
 }
 
 fn alt_model(o: &Object<'_>) -> Option<Alt> {
@@ -423,7 +524,7 @@ fn lab_profile(profile: &Stream<'_>) -> bool {
     let mut head = vec![];
     match profile.filters().as_slice() {
         [] => head.extend(raw.iter().take(20)),
-        [hayro_syntax::Filter::FlateDecode] => {
+        [craft_pdf::syntax::Filter::FlateDecode] => {
             let _ = flate2::read::ZlibDecoder::new(&*raw).take(20).read_to_end(&mut head); // a damaged profile reads as not Lab
         }
         _ => return false,
@@ -442,3 +543,6 @@ fn alt_color(alt: Alt, v: &[f32]) -> Option<Color> {
         Alt::Lab => Color::lab(round3(c(0)?.clamp(0.0, 100.0)), round3(c(1)?.clamp(-128.0, 127.0)), round3(c(2)?.clamp(-128.0, 127.0))),
     })
 }
+
+/// The most colorants of a DeviceN space read.
+const MAX_COLORANTS: usize = 64;
