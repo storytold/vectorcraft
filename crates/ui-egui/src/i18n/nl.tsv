@@ -4,9 +4,45 @@
 # Clean-room: written from the meaning of VectorCraft's English labels in neutral, international
 # Dutch, using the feature names Dutch speakers of vector illustration software know. No other
 # localisation was copied. Labels use sentence case (only the first word capitalised).
+	11 or 12 digits	11 of 12 cijfers
+	12 or 13 digits	12 of 13 cijfers
+	6 or 8 digits	6 of 8 cijfers
+	7 or 8 digits	7 of 8 cijfers
+	an even number of digits	een even aantal cijfers
+	any text	alle tekst
+	ASCII	ASCII
+	Barcode	Streepjescode
+	Barcode Options	Streepjescode-opties
+	Barcodes	Streepjescodes
+	Check	Controleren
+	Check Barcode	Streepjescode controleren
+	Codes:	Codes:
+	Content	Inhoud
+	Create Batch	Batch aanmaken
+	Data:	Gegevens:
+	digits, A–Z and - . $ / + % and space	cijfers, A–Z en - . $ / + % en spatie
+	digits, with or without the (01) application identifier	cijfers, met of zonder de toepassingsidentificatie (01)
+	Document Default	Documentstandaard
+	Drawn:	Getekend:
+	Error Correction:	Foutcorrectie:
+	Gap:	Tussenruimte:
+	Human Readable Line	Leesbare regel
+	Install OCR-B for the standard digits.	Installeer OCR-B voor de standaardcijfers.
+	Magnification:	Vergroting:
+	Mask:	Masker:
+	Max per Row:	Max. per rij:
+	Module:	Module:
 	New Design	Nieuw ontwerp
 	Delete Design	Ontwerp verwijderen
+	No fonts are installed.	Er zijn geen lettertypen geïnstalleerd.
+	No line in the box is a code this type can carry.	Geen enkele regel in het vak is een code die dit type kan bevatten.
+	One code a line, each a whole value of the type above.	Eén code per regel, elk een volledige waarde van het type hierboven.
+	Outline the digits	Cijfers omzetten naar contouren
 	Paste Design	Ontwerp plakken
+	printable ASCII	afdrukbare ASCII
+	printable ASCII, upper case and control characters	afdrukbare ASCII, hoofdletters en stuurtekens
+	QR Code	QR-code
+	Quiet Zone:	Stille zone:
 	Select Unused	Ongebruikte selecteren
 	Glowing Edges…	Gloeiende randen…
 	About VectorCraft	Over VectorCraft
@@ -130,6 +166,10 @@
 	Start from VectorCraft Defaults	Beginnen met de standaardinstellingen van VectorCraft
 	Add to the Current Shortcuts	Toevoegen aan de huidige sneltoetsen
 	Remember My Choices	Mijn keuzes onthouden
+	Update	Bijwerken
+	Valid:	Geldig:
+	White background box	Wit achtergrondkader
+	Width Ratio:	Breedteverhouding:
 	{ready} of {total} ready	{ready} van {total} klaar
 	The file is too large to read in full, so only its first part is listed.	Het bestand is te groot om volledig te lezen, dus alleen het eerste deel ervan wordt weergegeven.
 	Report copied	Rapport gekopieerd

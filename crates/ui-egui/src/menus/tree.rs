@@ -624,6 +624,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Artboards", "artboards"),
                 panel("Asset Export", crate::panels::asset_export::ID),
                 panel("Attributes", "attributes"),
+                panel("Barcode", crate::panels::barcode::ID),
                 panel("Blend", crate::panels::blend::ID),
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
