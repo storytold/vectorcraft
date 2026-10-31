@@ -153,7 +153,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
         if hresp.hovered() { t.text_strong } else { t.text },
     );
-    let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::drag());
+    // Not focusable (`Sense::drag()` is): only the pointer drags the grip, so Tab does not stop on it.
+    let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::DRAG);
     for k in 0..6 {
         ui.painter().line_segment(
             [pos2(grip.center().x - 9.0, grip.top() + 1.5 + k as f32 * 0.6), pos2(grip.center().x + 9.0, grip.top() + 1.5 + k as f32 * 0.6)],
@@ -631,7 +632,8 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
         } else {
             bar
         };
-        let resp = ui.interact(grip, bar_id(key), Sense::drag());
+        // Not focusable (`Sense::drag()` is): only the pointer drags the bar, so Tab does not stop on it.
+        let resp = ui.interact(grip, bar_id(key), Sense::DRAG);
         let half = (grip.height() / 2.0 - 3.0).clamp(0.0, 9.0);
         for k in 0..3 {
             let x = grip.center().x - 2.0 + k as f32 * 2.0;

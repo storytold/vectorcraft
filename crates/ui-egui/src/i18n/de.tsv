@@ -192,7 +192,7 @@ font-technology	Variable	Variabel
 	Apply Paragraph Style	Absatzformat anwenden
 	Apply SVG Filter…	SVG-Filter anwenden…
 	Apply to All	Auf alle anwenden
-	Apply to All ({count} more missing)	Auf alle anwenden ({count} weitere fehlen)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Auf alle anwenden ({n} weitere fehlt)|Auf alle anwenden ({n} weitere fehlen)
 	Arc	Bogen
 	Arc Lower…	Bogen unten…
 	Arc Tool	Bogen-Werkzeug
@@ -729,6 +729,12 @@ font-technology	Variable	Variabel
 	Delete Stop	Farbstopp löschen
 	Delete Swatch	Farbfeld löschen
 	Delete Symbol	Symbol löschen
+	Delete the selected symbol?	Ausgewähltes Symbol löschen?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Mindestens eines der Symbole wird verwendet und kann erst gelöscht werden, wenn seine Instanzen umgewandelt oder gelöscht wurden.
+	Expand Instances	Instanzen umwandeln
+	Delete Instances	Instanzen löschen
+	Yes	Ja
+	No	Nein
 	Delete Tab	Tabulator löschen
 	Delete the graphic style “{name}”?	Grafikstil „{name}“ löschen?
 	Delete Theme	Thema löschen
@@ -894,7 +900,7 @@ font-technology	Variable	Variabel
 	Edit Symbol	Symbol bearbeiten
 	Edit Text	Text bearbeiten
 	Edit the applied effect, or add another one?	Den angewendeten Effekt bearbeiten oder einen weiteren hinzufügen?
-	Edit the selected point's colour in the Color panel	Die Farbe des ausgewählten Punkts im Bedienfeld „Farbe“ bearbeiten
+	Edit the point	Punkt bearbeiten
 	Edit the stop	Farbstopp bearbeiten
 	Edit Theme	Thema bearbeiten
 	Edit theme	Thema bearbeiten
@@ -1619,7 +1625,7 @@ file-filter	Templates	Vorlagen
 	Keep the pasted color as a new swatch with a numbered name.	Die eingefügte Farbe als neues Farbfeld mit nummeriertem Namen behalten.
 	Keep this row's colors (exclude)	Farben dieser Zeile beibehalten (ausschließen)
 	Keep:	Beibehalten:
-	Kerning (0 = Auto)	Kerning (0 = Auto)
+	Kerning	Kerning
 	Keyboard Increment	Schritte per Tastatur
 	Keyboard Shortcut Conflicts	Konflikte bei Tastaturbefehlen
 	Keyboard Shortcut Set	Tastaturbefehlssatz
@@ -2166,6 +2172,7 @@ file-filter	Templates	Vorlagen
 	Open the URL in the web browser	Die URL im Webbrowser öffnen
 	Opened with {} note(s): {}	Mit {} Hinweis(en) geöffnet: {}
 	Open…	Öffnen…
+	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
@@ -2223,7 +2230,7 @@ file-filter	Templates	Vorlagen
 	Package	Verpacken
 	Package collects a saved document with its linked files and fonts.	„Verpacken“ sammelt ein gespeichertes Dokument mit seinen verknüpften Dateien und Schriften.
 	Package created	Paket erstellt
-	Packaged {n} file(s) in {folder} {note}	{n} Datei(en) in {folder} verpackt{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} Datei in {folder} verpackt {note}|{n} Dateien in {folder} verpackt {note}
 	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
 	Package…	Verpacken…
 	Page	Seite
@@ -2413,6 +2420,15 @@ mark-style	Japanese	Japanisch
 	Arabic	Arabisch
 	Hindi	Hindi
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengalisch
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Oriya
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
 	Proportional Oldstyle	Proportionale Mediävalziffern
 	Pucker & Bloat…	Zusammenziehen und aufblasen…
 	Pucker Tool	Zusammenziehen-Werkzeug
@@ -2547,9 +2563,11 @@ mark-style	Japanese	Japanisch
 	Stop	Stoppen
 	Searching…	Suche läuft…
 	Not found	Nicht gefunden
-	{folders} folder(s) and {files} file(s) searched	{folders} Ordner und {files} Datei(en) durchsucht
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner
-	{count} folder(s) or file(s) couldn't be read	{count} Ordner oder Datei(en) konnten nicht gelesen werden
+	{folders} and {files} searched	{folders} und {files} durchsucht
+@plural	{n} folder|{n} folders	{n} Ordner|{n} Ordner
+@plural	{n} file|{n} files	{n} Datei|{n} Dateien
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	{n} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner|{n} Ordner übersprungen, etwa Ordner anderer Apps und des Systems sowie versteckte Ordner
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} Ordner oder Datei konnte nicht gelesen werden|{n} Ordner oder Dateien konnten nicht gelesen werden
 	The search stopped at its limit: search a smaller folder.	Die Suche hat ihr Limit erreicht: Durchsuchen Sie einen kleineren Ordner.
 	Copy only fonts you own or are licensed to install.	Kopieren Sie nur Schriften, die Ihnen gehören oder für deren Installation Sie eine Lizenz haben.
 	VectorCraft copies the fonts to {folder}.	VectorCraft kopiert die Schriften nach {folder}.
@@ -2951,6 +2969,7 @@ mark-style	Japanese	Japanisch
 	Shape Mode	Formmodus
 	Shape Modes:	Formmodi:
 	Shape Properties:	Formeigenschaften:
+	Shape Properties	Formeigenschaften
 	Shaper Tool	Shaper-Werkzeug
 	Shapes	Formen
 	Shear	Verbiegen
@@ -3583,12 +3602,12 @@ effect	Points	Punkte
 	Zoom Tool	Zoom-Werkzeug
 	Zoom with Mouse Wheel	Mit Mausrad zoomen
 	Scrub Numeric Fields by Dragging	Zahlenfelder durch Ziehen ändern
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} Datei(en) in {folder} {note}. Paketordner anzeigen?
-	{count} linked file(s) not found	{count} verknüpfte Datei(en) nicht gefunden
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} Datei in {folder} {note}. Paketordner anzeigen?|{n} Dateien in {folder} {note}. Paketordner anzeigen?
+@plural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
 	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} verknüpfte(s) Bild(er) wurde(n) seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
-	{count} more rules: Export writes every one.	{count} weitere Regeln: Der Export schreibt alle.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} verknüpftes Bild wurde seit dem Speichern dieses Dokuments geändert. Die neue Version anzeigen?|{n} verknüpfte Bilder wurden seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} weitere Regel: Der Export schreibt sie.|{n} weitere Regeln: Der Export schreibt alle.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} unbenanntes Objekt ausgelassen: Benennen Sie es oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.|{n} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
 	{effect} is already applied	{effect} ist bereits angewendet
 	{format} Options	{format}-Optionen
 	{kind} Gradient	Verlauf ({kind})
@@ -3611,6 +3630,7 @@ imageTrace	Outline	Kontur
 @plural	{n} item|{n} items	{n} Element|{n} Elemente
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Farbtabelle ({n} Farbe)|Farbtabelle ({n} Farben)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Diesen {n} Grafikstil löschen?|Diese {n} Grafikstile löschen?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Diesen {n} Pinsel löschen?|Diese {n} Pinsel löschen?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	{n} Farbfeld oder Gruppe löschen?|Diese {n} Farbfelder und Gruppen löschen?
 @plural	{n} Layer|{n} Layers	{n} Ebene|{n} Ebenen
 @plural	{n} Object|{n} Objects	{n} Objekt|{n} Objekte
@@ -3755,6 +3775,7 @@ theme	Appearance	Erscheinungsbild
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
 @msg	select some type first	wählen Sie zuerst Text aus
+@msg	kerning must be a number, "auto", or "optical"	Kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
 @msg	the selection has no gradient stroke	die Auswahl hat keinen Konturverlauf
 @msg	the selection has no pattern fill	die Auswahl hat kein Flächenmuster
@@ -3836,7 +3857,7 @@ theme	Appearance	Erscheinungsbild
 @msg	PDF settings are not an object	die PDF-Einstellungen sind kein Objekt
 @msg	PDF security settings are not an object	die PDF-Sicherheitseinstellungen sind kein Objekt
 @msg	PDF writer error: {0}	Fehler beim Schreiben der PDF-Datei: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	{n} Datei(en) in {folder} verpackt{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} Datei in {folder} verpackt ({note})|{n} Dateien in {folder} verpackt ({note})
 @msg	Packaged {n} file(s){note}	{n} Datei(en) verpackt{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
 @msg	Release Guides: no guides	Hilfslinien zurückwandeln: keine Hilfslinien
@@ -4570,7 +4591,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Imported library {name}	Bibliothek {name} importiert
 # Linked files changed on disk.
 	Update Changed Links	Geänderte Verknüpfungen aktualisieren
-	{count} linked image(s) changed on disk. Show the new versions?	{count} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert. Neue Versionen anzeigen?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} verknüpftes Bild wurde auf dem Datenträger geändert. Neue Version anzeigen?|{n} verknüpfte Bilder wurden auf dem Datenträger geändert. Neue Versionen anzeigen?
 @msg	Updated {_1} linked file(s) changed on disk	{_1} auf dem Datenträger geänderte verknüpfte Datei(en) aktualisiert
 # Window: the system's title bar (Windows, Linux).
 	System Title Bar	Systemtitelleiste
@@ -4630,6 +4651,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the PCX file is cut short	die PCX-Datei ist unvollständig
 @msg	the PCX file's header is damaged	der Dateikopf der PCX-Datei ist beschädigt
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-Dateien mit {bits}-Bit-Pixeln in {planes} Ebenen können nicht gelesen werden
+@msg	the JPEG 2000 file can't be read	die JPEG-2000-Datei kann nicht gelesen werden
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	die JPEG-2000-Datei enthält einen nicht unterstützten Farbraum oder JPX-Inhalt
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
@@ -5160,13 +5183,13 @@ effect	Soft	Weich
 	Slope:	Steigung:
 axis	X Axis	X-Achse
 axis	Y Axis	Y-Achse
-@msg	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
-@msg	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
-@msg	Packaged {n} file(s)	{n} Datei(en) verpackt
-	Packaged {n} file(s)	{n} Datei(en) verpackt
-	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
-	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} Datei(en) in {folder}. Paketordner anzeigen?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} Datei in {folder} verpackt|{n} Dateien in {folder} verpackt
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} Datei verpackt {note}|{n} Dateien verpackt {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} Datei verpackt|{n} Dateien verpackt
+@plural	Packaged {n} file|Packaged {n} files	{n} Datei verpackt|{n} Dateien verpackt
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} Datei in {folder} verpackt|{n} Dateien in {folder} verpackt
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} Datei verpackt {note}|{n} Dateien verpackt {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} Datei in {folder}. Paketordner anzeigen?|{n} Dateien in {folder}. Paketordner anzeigen?
 	Clockwise	Im Uhrzeigersinn
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Feines Rauschen verbirgt Streifen in der Verlaufsfläche
@@ -5201,7 +5224,7 @@ axis	Y Axis	Y-Achse
 	Include Objects On Canvas	Objekte auf der Leinwand einschließen
 	Result(s): {count}	Ergebnis(se): {count}
 @msg	select one object	wählen Sie ein Objekt aus
-@msg	Global Edit works on paths, compound paths and symbol instances	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden und Symbolinstanzen
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
 	Add to Symbols	Zu Symbolen hinzufügen
@@ -5453,6 +5476,11 @@ anchor	Points:	Punkte:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Punktfarbe aus Grafik
+	Basic Character Formats	Grundlegende Zeichenformate
+	Case	Großschreibung
+@msg	{label} must be a number	{label} muss eine Zahl sein
+@msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
+@msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Duplex…
@@ -5545,6 +5573,11 @@ breakText	Glyphs	Glyphen
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` muss lines, paragraphs, words oder glyphs sein, nicht {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` muss "line" oder "paragraph" sein, nicht {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` muss "left", "center" oder "right" sein, nicht {other}
+	File + Number	Datei + Nummer
+	File + Data Set Name	Datei + Datensatzname
+	Data Set Name	Datensatzname
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` muss `fileNumber`, `fileDataSetName` oder `dataSetName` sein
+@msg	no free data set file name in destination folder	Kein freier Dateiname für den Datensatz im Zielordner
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Pfadeffekte
@@ -5586,6 +5619,12 @@ breakText	Glyphs	Glyphen
 	Gap 4	Lücke 4
 	Dash 5	Strich 5
 	Gap 5	Lücke 5
+@msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
+@msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
+@msg	no pattern named `{choice}`	kein Muster mit dem Namen `{choice}`
+	Delete the selected brushes?	Ausgewählte Pinsel löschen?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
+	Remove Strokes	Konturen entfernen
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…
@@ -5598,3 +5637,37 @@ breakText	Glyphs	Glyphen
 	Set Size of Each	Größe einzeln festlegen
 @msg	select exactly two objects	wählen Sie genau zwei Objekte aus
 @msg	give `width` or `height`	geben Sie `width` oder `height` an
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Überlappende Objekte gruppieren
+@msg	too many objects selected (at most 20000)	zu viele Objekte ausgewählt (höchstens 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	In Striche aufteilen…
+	Divide into Dashes	In Striche aufteilen
+	Dash:	Strich:
+	Gap:	Abstand:
+	Fit to Corners and Ends	An Ecken und Enden anpassen
+	Remove Gaps	Lücken entfernen
+@msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
+@msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Dokumentwerkzeuge
+	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
+@msg	there is no clock here	hier gibt es keine Uhr
+@msg	there is no clock here: give `time` (Unix seconds)	hier gibt es keine Uhr: geben Sie `time` an (Unix-Sekunden)
+@msg	the document has never been saved: give `folder`	das Dokument wurde nie gespeichert: geben Sie `folder` an
+@msg	every numbered name for the copy is taken	alle nummerierten Namen für die Kopie sind vergeben
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Neue Symbole aus Ebenen
+	Convert Layers to Symbols	Ebenen in Symbole umwandeln
+@msg	{id} is no top-level layer	{id} ist keine Ebene der obersten Stufe
+	Marathi	Marathi
+	Gujarati	Gujarati
+	Bengali	Bengalisch
+	Punjabi	Punjabi
+	Tamil	Tamil
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malayalam
+	Odia	Oriya
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})

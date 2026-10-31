@@ -44,6 +44,11 @@ pub struct NodeExtras {
     /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
     /// filled non-zero) where this object is drawn over the group's other members.
     pub intertwine: Option<Box<PathData>>,
+    /// Object › Intertwine: as a member of an Intertwine group, the areas (document coordinates,
+    /// filled non-zero) where this object is drawn over members that are themselves drawn over
+    /// others there. Item `k` is the area of tier `k + 2`; [`NodeExtras::intertwine`] is tier 1
+    /// (see [`crate::intertwine`]).
+    pub intertwine_tiers: Vec<PathData>,
     /// Live Paint group: its Gap Options (Object › Live Paint › Gap Options; `None`: the defaults).
     pub live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
     /// Object › Objects on Path: the group's path and the objects attached to it (see
@@ -76,6 +81,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     perspective: None,
     dimension: None,
     intertwine: None,
+    intertwine_tiers: Vec::new(),
     live_paint_gaps: None,
     objects_on_path: None,
     colorize: None,

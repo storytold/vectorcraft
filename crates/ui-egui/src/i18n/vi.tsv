@@ -235,7 +235,7 @@ font-technology	Variable	Biến thiên
 	Apply Paragraph Style	Áp dụng kiểu đoạn văn
 	Apply SVG Filter…	Áp dụng bộ lọc SVG…
 	Apply to All	Áp dụng cho tất cả
-	Apply to All ({count} more missing)	Áp dụng cho tất cả ({count} còn thiếu)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Áp dụng cho tất cả ({n} còn thiếu)
 	Approximate path	Đường dẫn xấp xỉ
 	Arabic	Ả Rập
 	Arc	Cung
@@ -870,6 +870,12 @@ font-technology	Variable	Biến thiên
 	Delete Stop	Xóa điểm dừng
 	Delete Swatch	Xóa mẫu màu
 	Delete Symbol	Xóa ký hiệu
+	Delete the selected symbol?	Xóa ký hiệu đã chọn?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Một hoặc nhiều ký hiệu đang được sử dụng và không thể xóa cho đến khi các thực thể của chúng được mở rộng hoặc xóa.
+	Expand Instances	Mở rộng thực thể
+	Delete Instances	Xóa thực thể
+	Yes	Có
+	No	Không
 	Delete Tab	Xóa tab
 	Delete the graphic style “{name}”?	Xóa kiểu đồ họa “{name}”?
 	Delete the library “{name}”?	Xóa thư viện “{name}”?
@@ -1065,7 +1071,7 @@ font-technology	Variable	Biến thiên
 	Edit Symbol	Chỉnh sửa ký hiệu
 	Edit Text	Chỉnh sửa văn bản
 	Edit the applied effect, or add another one?	Chỉnh sửa hiệu ứng đã áp dụng, hay thêm hiệu ứng mới?
-	Edit the selected point's colour in the Color panel	Chỉnh sửa màu của điểm đã chọn trong bảng Màu
+	Edit the point	Chỉnh sửa điểm
 	Edit the stop	Chỉnh sửa điểm dừng
 	Edit Theme	Chỉnh sửa bộ màu
 	Edit theme	Chỉnh sửa bộ màu
@@ -1246,6 +1252,15 @@ font-technology	Variable	Biến thiên
 	Eyedropper: click the art to sample the stop's colour	Ống hút màu: bấm vào tác phẩm để lấy mẫu màu điểm dừng
 	Eyedropper: click the art to sample the key color	Ống hút màu: bấm vào tác phẩm để lấy mẫu màu chủ
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengali
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Odia
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
 	Favorites	Yêu thích
 	Feather…	Làm mờ dần…
 	Feet	Feet
@@ -1618,7 +1633,8 @@ file-filter	Templates	Mẫu
 	Highlight Substituted Fonts	Đánh dấu phông thay thế
 	Highlight Substituted Glyphs	Đánh dấu Glyph bị thay thế
 	Highlight Variable	Đánh dấu biến
-	Hindi	Hindi
+	Hindi	Tiếng Hindi
+digits	Hindi	Hindi
 	History	Lịch sử
 	History Options…	Tùy chọn lịch sử…
 	Step Backward	Lùi một bước
@@ -1916,8 +1932,8 @@ file-filter	Templates	Mẫu
 	Keep this row's colors (exclude)	Giữ màu của hàng này (loại trừ)
 	Keep visible surfaces only when expanding	Chỉ giữ bề mặt hiển thị khi mở rộng
 	Keep:	Giữ:
-	Kerning (0 = Auto)	Kerning (0 = Tự động)
 	Key Color:	Màu chủ:
+	Kerning	Kerning
 	Keyboard Increment	Bước nhảy bàn phím
 	Keyboard Shortcut Conflicts	Xung đột phím tắt
 	Keyboard Shortcut Set	Bộ phím tắt
@@ -2493,6 +2509,7 @@ file-filter	Templates	Mẫu
 	“{name}” already exists. Replace it?	“{name}” đã tồn tại. Thay thế tệp này?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Tên trong bảng lưu là “{typed}”, và VectorCraft đã thêm phần mở rộng của loại tệp. Thay thế tệp sẽ ghi đè nội dung của tệp.
 	Open…	Mở…
+	Optical	Quang học
 	Optical Margin Alignment	Căn lề quang học
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
@@ -2555,7 +2572,7 @@ file-filter	Templates	Mẫu
 	Package	Gói
 	Package collects a saved document with its linked files and fonts.	Gói thu thập tài liệu đã lưu cùng tệp liên kết và phông chữ.
 	Package created	Đã tạo gói
-	Packaged {n} file(s) in {folder} {note}	Đã đóng gói {n} tệp trong {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Đã đóng gói {n} tệp trong {folder} {note}
 	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 	Package…	Gói…
 	Page	Trang
@@ -3340,6 +3357,7 @@ mark-style	Japanese	Kiểu Nhật
 	Shape Mode	Chế độ hình dạng
 	Shape Modes:	Chế độ hình dạng:
 	Shape Properties:	Thuộc tính hình dạng:
+	Shape Properties	Thuộc tính hình dạng
 	Shape:	Hình dạng:
 	Shaper	Tạo hình
 	Shaper Tool	Công cụ Tạo hình
@@ -4059,16 +4077,18 @@ mark-style	Japanese	Kiểu Nhật
 	Zoom to Selection	Thu phóng đến vùng chọn
 	Zoom Tool	Công cụ thu phóng
 	Zoom with Mouse Wheel	Thu phóng bằng con lăn chuột
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} tệp trong {folder}{note}. Hiện thư mục gói?
-	{count} folder(s) or file(s) couldn't be read	{count} thư mục hoặc tệp không thể đọc được
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {count} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn
-	{count} linked file(s) not found	Không tìm thấy {count} tệp liên kết
-	{count} linked image(s) changed on disk. Show the new versions?	{count} ảnh liên kết đã thay đổi trên đĩa. Hiện phiên bản mới?
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} ảnh liên kết đã thay đổi kể từ khi lưu tài liệu. Hiện phiên bản mới?
-	{count} more rules: Export writes every one.	Còn {count} quy tắc nữa: Xuất sẽ ghi tất cả.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} đối tượng chưa đặt tên bị bỏ qua: hãy đặt tên hoặc bật Đối tượng chưa đặt tên trong menu bảng.
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tệp trong {folder} {note}. Hiện thư mục gói?
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} thư mục hoặc tệp không thể đọc được
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {n} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn
+@plural	{n} linked file not found|{n} linked files not found	Không tìm thấy {n} tệp liên kết
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} ảnh liên kết đã thay đổi trên đĩa. Hiện phiên bản mới?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} ảnh liên kết đã thay đổi kể từ khi lưu tài liệu. Hiện phiên bản mới?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Còn {n} quy tắc nữa: Xuất sẽ ghi tất cả.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} đối tượng chưa đặt tên bị bỏ qua: hãy đặt tên hoặc bật Đối tượng chưa đặt tên trong menu bảng.
 	{effect} is already applied	{effect} đã được áp dụng
-	{folders} folder(s) and {files} file(s) searched	Đã tìm kiếm {folders} thư mục và {files} tệp
+	{folders} and {files} searched	Đã tìm kiếm {folders} và {files}
+@plural	{n} folder|{n} folders	{n} thư mục
+@plural	{n} file|{n} files	{n} tệp
 	{format} Options	Tùy chọn {format}
 	{kind} Gradient	Chuyển sắc {kind}
 gradient-kind	Radial	Hướng tâm
@@ -4090,6 +4110,7 @@ gradient-kind	Radial	Hướng tâm
 imageTrace	Outline	Đường viền
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Bảng màu ({n} màu)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Xóa {n} kiểu đồ họa này?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Xóa {n} cọ này?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Xóa {n} mẫu màu và nhóm này?
 @plural	{n} area highlighted|{n} areas highlighted	{n} vùng được tô sáng
 @plural	{n} color|{n} colors	{n} màu
@@ -4595,7 +4616,7 @@ theme	Appearance	Giao diện
 @msg	Opened with {_1} note(s): {_2}	Đã mở với {_1} ghi chú: {_2}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
-@msg	Packaged {n} file(s) in {folder} {note}	Đã đóng gói {n} tệp trong {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
 @msg	Packaged {n} file(s){note}	Đã đóng gói {n} tệp{note}
 @msg	page size {w} × {h}	kích thước trang {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	trang {0} không tồn tại (PDF có {1} trang)
@@ -4688,6 +4709,7 @@ theme	Appearance	Giao diện
 @msg	select paths or anchor points	chọn đường dẫn hoặc điểm neo
 @msg	select paths to join	hãy chọn đường dẫn để nối
 @msg	select some type first	hãy chọn chữ trước
+@msg	kerning must be a number, "auto", or "optical"	Kerning phải là số, “auto” hoặc “optical”
 @msg	the selection has no gradient fill	vùng chọn không có tô chuyển sắc
 @msg	the selection has no gradient stroke	vùng chọn không có nét chuyển sắc
 @msg	the selection has no pattern fill	vùng chọn không có tô họa tiết
@@ -4791,6 +4813,8 @@ theme	Appearance	Giao diện
 @msg	the PCX file is cut short	tệp PCX bị cắt ngắn
 @msg	the PCX file's header is damaged	phần đầu của tệp PCX bị hỏng
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	tệp PCX có điểm ảnh {bits}-bit trong {planes} mặt phẳng không thể đọc được
+@msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
 @msg	the scale is not a usable number	tỷ lệ không phải là số dùng được
@@ -5176,13 +5200,13 @@ theme	Appearance	Giao diện
 	Slope:	Độ dốc:
 axis	X Axis	Trục X
 axis	Y Axis	Trục Y
-@msg	Packaged {n} file(s) in {folder}	Đã đóng gói {n} tệp trong {folder}
-@msg	Packaged {n} file(s) {note}	Đã đóng gói {n} tệp {note}
-@msg	Packaged {n} file(s)	Đã đóng gói {n} tệp
-	Packaged {n} file(s)	Đã đóng gói {n} tệp
-	Packaged {n} file(s) in {folder}	Đã đóng gói {n} tệp trong {folder}
-	Packaged {n} file(s) {note}	Đã đóng gói {n} tệp {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} tệp trong {folder}. Hiện thư mục gói?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Đã đóng gói {n} tệp trong {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Đã đóng gói {n} tệp {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Đã đóng gói {n} tệp
+@plural	Packaged {n} file|Packaged {n} files	Đã đóng gói {n} tệp
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Đã đóng gói {n} tệp trong {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Đã đóng gói {n} tệp {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} tệp trong {folder}. Hiện thư mục gói?
 	Clockwise	Theo chiều kim đồng hồ
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Nhiễu mịn che dải màu trong vùng tô chuyển sắc
@@ -5217,7 +5241,7 @@ axis	Y Axis	Trục Y
 	Include Objects On Canvas	Bao gồm đối tượng trên vùng vẽ
 	Result(s): {count}	Kết quả: {count}
 @msg	select one object	hãy chọn một đối tượng
-@msg	Global Edit works on paths, compound paths and symbol instances	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp và phiên bản biểu tượng
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu
@@ -5469,6 +5493,11 @@ anchor	Points:	Điểm:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Màu chấm theo tác phẩm
+	Basic Character Formats	Định dạng ký tự cơ bản
+	Case	Chữ hoa và chữ thường
+@msg	{label} must be a number	{label} phải là một số
+@msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
+@msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Hai tông…
@@ -5561,6 +5590,11 @@ breakText	Glyphs	Glyph
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` phải là lines, paragraphs, words hoặc glyphs, không phải {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` phải là "line" hoặc "paragraph", không phải {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` phải là "left", "center" hoặc "right", không phải {other}
+	File + Number	Tệp + số
+	File + Data Set Name	Tệp + tên tập dữ liệu
+	Data Set Name	Tên tập dữ liệu
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` phải là `fileNumber`, `fileDataSetName` hoặc `dataSetName`
+@msg	no free data set file name in destination folder	Không có tên tệp tập dữ liệu còn trống trong thư mục đích
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Hiệu ứng đường dẫn
@@ -5602,6 +5636,12 @@ breakText	Glyphs	Glyph
 	Gap 4	Khoảng hở 4
 	Dash 5	Nét 5
 	Gap 5	Khoảng hở 5
+@msg	You must choose a side pattern.	Bạn phải chọn mẫu bên.
+@msg	invalid pattern tile choice	lựa chọn ô mẫu không hợp lệ
+@msg	no pattern named `{choice}`	không có mẫu tên `{choice}`
+	Delete the selected brushes?	Xóa các cọ đã chọn?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
+	Remove Strokes	Gỡ nét
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
 	Arrange in Grid…	Sắp xếp theo lưới…
@@ -5614,3 +5654,37 @@ breakText	Glyphs	Glyph
 	Set Size of Each	Đặt kích thước từng cái
 @msg	select exactly two objects	hãy chọn đúng hai đối tượng
 @msg	give `width` or `height`	hãy cho `width` hoặc `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Nhóm các đối tượng chồng lên nhau
+@msg	too many objects selected (at most 20000)	chọn quá nhiều đối tượng (tối đa 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Chia thành nét đứt…
+	Divide into Dashes	Chia thành nét đứt
+	Dash:	Gạch ngang:
+	Gap:	Khoảng hở:
+	Fit to Corners and Ends	Khớp với góc và đầu mút
+	Remove Gaps	Gỡ các khoảng hở
+@msg	that makes too many pieces (at most 100000): make the dashes longer	như vậy tạo ra quá nhiều mảnh (tối đa 100000): hãy kéo dài nét
+@msg	select paths, or segments, to divide	chọn các đường dẫn hoặc đoạn để chia
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Công cụ tài liệu
+	Save a Timestamped Copy	Lưu bản sao có ngày giờ
+@msg	there is no clock here	ở đây không có đồng hồ
+@msg	there is no clock here: give `time` (Unix seconds)	ở đây không có đồng hồ: hãy cho `time` (giây Unix)
+@msg	the document has never been saved: give `folder`	tài liệu chưa từng được lưu: hãy cho `folder`
+@msg	every numbered name for the copy is taken	mọi tên đánh số cho bản sao đều đã dùng
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Ký hiệu mới từ các lớp
+	Convert Layers to Symbols	Chuyển các lớp thành ký hiệu
+@msg	{id} is no top-level layer	{id} không phải là lớp cấp cao nhất
+	Marathi	Tiếng Marathi
+	Gujarati	Tiếng Gujarati
+	Bengali	Tiếng Bengali
+	Punjabi	Tiếng Punjab
+	Tamil	Tiếng Tamil
+	Telugu	Tiếng Telugu
+	Kannada	Tiếng Kannada
+	Malayalam	Tiếng Malayalam
+	Odia	Tiếng Odia
+	Urdu	Tiếng Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} trở lên (phiên bản {n})

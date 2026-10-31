@@ -263,22 +263,25 @@ pub fn contributors_ui(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let counts = crate::i18n::fmt(tl!("{people} contributors · {commits} commits"), &[("people", &people), ("commits", &commits)]);
     ui.label(RichText::new(counts).small().weak());
     ui.separator();
-    egui::ScrollArea::both().max_height(SCROLL_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
-        if list.is_empty() {
-            ui.label(tl!("No contributor data was built into this copy."));
-        } else if v.table {
-            table(app, ui, &list, &mut v);
-        } else {
-            ui.horizontal_wrapped(|ui| {
-                for (i, c) in list.iter().enumerate() {
-                    if i > 0 {
-                        ui.label(RichText::new("·").weak());
+    if v.table && !list.is_empty() {
+        // The table scrolls its rows under its header itself, and sideways as a whole.
+        egui::ScrollArea::horizontal().auto_shrink([false, true]).show(ui, |ui| table(app, ui, &list, &mut v));
+    } else {
+        egui::ScrollArea::both().max_height(SCROLL_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
+            if list.is_empty() {
+                ui.label(tl!("No contributor data was built into this copy."));
+            } else {
+                ui.horizontal_wrapped(|ui| {
+                    for (i, c) in list.iter().enumerate() {
+                        if i > 0 {
+                            ui.label(RichText::new("·").weak());
+                        }
+                        link(app, ui, c, v.names);
                     }
-                    link(app, ui, c, v.names);
-                }
-            });
-        }
-    });
+                });
+            }
+        });
+    }
     ui.data_mut(|d| d.insert_temp(id, v));
 }
 
@@ -291,34 +294,55 @@ fn link(app: &mut VectorcraftApp, ui: &mut egui::Ui, c: &Contributor, names: Nam
     r
 }
 
+/// The contributors as a table whose header row, the sort buttons, stays above the rows as they
+/// scroll (#4944).
 fn table(app: &mut VectorcraftApp, ui: &mut egui::Ui, list: &[&Contributor], v: &mut View) {
-    egui::Grid::new("credits_table").striped(true).num_columns(SortKey::ALL.len()).show(ui, |ui| {
-        for k in SortKey::ALL {
-            let arrow = if v.key == k { if v.ascending { " ▲" } else { " ▼" } } else { "" };
-            if ui.button(RichText::new(format!("{}{arrow}", k.label().1)).strong()).on_hover_text(k.label().0).clicked() {
-                if v.key == k {
-                    v.ascending = !v.ascending;
-                } else {
-                    v.key = k;
-                    v.ascending = k.default_ascending();
-                }
+    let (row, names) = (ui.spacing().interact_size.y, v.names);
+    egui_extras::TableBuilder::new(ui)
+        .id_salt("credits_table")
+        .striped(true)
+        .columns(egui_extras::Column::auto(), SortKey::ALL.len())
+        .max_scroll_height(SCROLL_HEIGHT - row)
+        .header(row, |mut header| {
+            for k in SortKey::ALL {
+                header.col(|ui| {
+                    let arrow = if v.key == k { if v.ascending { " ▲" } else { " ▼" } } else { "" };
+                    if ui.button(RichText::new(format!("{}{arrow}", k.label().1)).strong()).on_hover_text(k.label().0).clicked() {
+                        if v.key == k {
+                            v.ascending = !v.ascending;
+                        } else {
+                            v.key = k;
+                            v.ascending = k.default_ascending();
+                        }
+                    }
+                });
             }
-        }
-        ui.end_row();
-        for c in list {
-            link(app, ui, c, v.names);
-            ui.label(group(c.prs));
-            ui.label(group(c.commits));
-            ui.label(group(c.lines_added));
-            ui.label(group(c.lines_deleted));
-            ui.label(signed(c.lines_delta()));
-            ui.label(group(c.binary_added));
-            ui.label(group(c.binary_deleted));
-            ui.label(day(c.first_commit));
-            ui.label(day(c.last_commit));
-            ui.end_row();
-        }
-    });
+        })
+        .body(|mut body| {
+            for c in list {
+                body.row(row, |mut r| {
+                    r.col(|ui| {
+                        link(app, ui, c, names);
+                    });
+                    let cells = [
+                        group(c.prs),
+                        group(c.commits),
+                        group(c.lines_added),
+                        group(c.lines_deleted),
+                        signed(c.lines_delta()),
+                        group(c.binary_added),
+                        group(c.binary_deleted),
+                        day(c.first_commit).to_string(),
+                        day(c.last_commit).to_string(),
+                    ];
+                    for text in cells {
+                        r.col(|ui| {
+                            ui.label(text);
+                        });
+                    }
+                });
+            }
+        });
 }
 
 /// About ▸ Models: AI models credited in Co-Authored-By trailers.
@@ -422,5 +446,52 @@ mod tests {
         assert_eq!(signed(-1000), "−1,000");
         assert_eq!(day("2026-10-07T18:45:23Z"), "2026-10-07");
         assert_eq!(day(""), "—");
+    }
+
+    /// #4944: in the table, the header row (the sort buttons) stays put while the rows scroll
+    /// under it.
+    #[test]
+    fn the_table_header_stays_above_scrolling_rows() {
+        let first = sorted(CONTRIBUTORS, NameMode::Username, SortKey::FirstCommit, true).first().map(|c| c.name(NameMode::Username)).unwrap();
+        assert!(CONTRIBUTORS.len() > 30, "enough rows to scroll");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("credits_view"), View { table: true, ..View::default() }));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut time = 0.0;
+        // Where the frame painted `text`, if it did.
+        let mut frame = |events: Vec<egui::Event>, find: &[&str]| {
+            time += 0.1;
+            let input = egui::RawInput { events, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                ui.set_width(660.0);
+                contributors_ui(&mut app, ui);
+            });
+            out.textures_delta.clear();
+            let at = |text: &str| {
+                out.shapes.iter().find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos),
+                    _ => None,
+                })
+            };
+            find.iter().map(|t| at(t)).collect::<Vec<_>>()
+        };
+        frame(vec![], &[]);
+        let before = frame(vec![], &["PRs", &first]);
+        let (Some(header), Some(row)) = (before[0], before[1]) else { panic!("header and first row painted: {before:?}") };
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -200.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        frame(vec![egui::Event::PointerMoved(row + egui::vec2(4.0, 4.0)), wheel], &[]);
+        let mut after = vec![];
+        for _ in 0..10 {
+            after = frame(vec![], &["PRs", &first]);
+        }
+        assert_eq!(after[0], Some(header), "the header stays where it was");
+        assert!(after[1].is_none_or(|p| p.y < row.y), "the rows scrolled: {:?} from {row:?}", after[1]);
     }
 }

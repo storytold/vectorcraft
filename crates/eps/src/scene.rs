@@ -119,6 +119,8 @@ pub(crate) struct Scene<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Image keys → what draws them (`None`: left out).
     images: HashMap<String, Option<Arc<String>>>,
+    /// The source key and solid paint together identify a colorized encoding.
+    colorized_images: HashMap<(String, String), Option<Arc<String>>>,
     /// Symbols and brush art being written inside one another.
     nest: u32,
 }
@@ -137,6 +139,7 @@ impl<'a> Scene<'a> {
             warnings: vec![],
             brushes: None,
             images: HashMap::new(),
+            colorized_images: HashMap::new(),
             nest: 0,
         }
     }
@@ -297,7 +300,15 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(&im.key, self.doc.image_blob(im), im.width, im.height, im.xf),
+            NodeKind::Image(im) => {
+                let blob = self.doc.image_blob(im);
+                match n.extras().colorize.as_deref() {
+                    Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
+                        self.colorized_image(&im.key, blob, im.width, im.height, im.xf, p);
+                    }
+                    _ => self.image(&im.key, blob, im.width, im.height, im.xf),
+                }
+            }
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
@@ -884,6 +895,149 @@ impl<'a> Scene<'a> {
         if let Some(e) = encoded {
             self.place_image(&e, place);
         }
+    }
+
+    /// Gray coverage in the selected process or Separation ink. Binary coverage is a stencil;
+    /// continuous coverage leaves zero pixels untouched at Level 3 and writes them as paper at Level 2.
+    fn colorized_image(&mut self, key: &str, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, paint: &Paint) {
+        let place = xf * Affine::scale_non_uniform(f64::from(width.max(1)), f64::from(height.max(1)));
+        if !invertible(place) {
+            return;
+        }
+        let cache = (key.to_string(), format!("{paint:?}"));
+        let encoded = match self.colorized_images.get(&cache) {
+            Some(e) => e.clone(),
+            None => {
+                let e = self.encode_colorized(blob, paint).map(Arc::new);
+                self.colorized_images.insert(cache, e.clone());
+                e
+            }
+        };
+        if let Some(e) = encoded {
+            self.place_image(&e, place);
+        }
+    }
+
+    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint) -> Option<String> {
+        let Some((w, h, coverage)) = blob.and_then(ImageBlob::coverage) else {
+            self.warn(UNDECODED);
+            return None;
+        };
+        if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
+            self.warn(LARGE_IMAGE);
+            return None;
+        }
+        let Paint::Solid { color, swatch, tint } = paint else { return None };
+        let ink = self.solid(color, swatch.as_deref(), *tint);
+        let binary = coverage.iter().all(|&v| v == 0 || v == 255);
+        let clear = coverage.contains(&0);
+        if coverage.iter().any(|&v| v > 0 && v < 255) {
+            self.warn(IMAGE_PARTLY);
+        }
+        let keyed = !binary && clear && self.o.level == Level::Three;
+        if !binary && clear && !keyed {
+            self.warn(IMAGE_ALPHA_L2);
+        }
+        // Zero tint is uncommon for covered spot pixels; process uses the same rare key as
+        // ordinary images. Nudge a covered collision so only clear pixels match the mask.
+        let key = match ink {
+            Ink::Spot { .. } => [0, 0, 0, 0],
+            Ink::Process(Space::Gray, ..) => [0, 0, 0, 0],
+            Ink::Process(..) => [255, 0, 255, 0],
+        };
+        let mut data = Vec::new();
+        if binary {
+            let stride = (w as usize).div_ceil(8);
+            data.resize(stride.saturating_mul(h as usize), 0);
+            for (i, &v) in coverage.iter().enumerate() {
+                if v == 255
+                    && let Some(byte) = data.get_mut((i / w as usize) * stride + (i % w as usize) / 8)
+                {
+                    *byte |= 0x80 >> (i % w as usize % 8);
+                }
+            }
+        } else {
+            for &v in &coverage {
+                if v == 0 && keyed {
+                    let n = match ink {
+                        Ink::Spot { .. } => 1,
+                        Ink::Process(space, ..) => space.n(),
+                    };
+                    data.extend(key.iter().take(n));
+                    continue;
+                }
+                let a = f32::from(v) / 255.0;
+                match ink {
+                    Ink::Spot { tint, .. } => {
+                        let mut sample = (255.0 * tint * a).round() as u8;
+                        if keyed && sample == key[0] {
+                            sample = 1;
+                        }
+                        data.push(sample);
+                    }
+                    Ink::Process(space, components) => {
+                        let paper = if space == Space::Cmyk { 0.0 } else { 1.0 };
+                        let n = space.n();
+                        let mut samples = [0; 4];
+                        for (sample, &component) in samples.iter_mut().zip(components.iter()).take(n) {
+                            *sample = (255.0 * (paper + (component - paper) * a)).round() as u8;
+                        }
+                        if keyed && samples.iter().take(n).eq(key.iter().take(n)) {
+                            samples[if n > 1 { 1 } else { 0 }] = 1;
+                        }
+                        data.extend(samples.iter().take(n));
+                    }
+                }
+            }
+        }
+        let (filter, encoded) = match self.o.level {
+            Level::Three => ("/FlateDecode", ps::deflate(&data)),
+            Level::Two => {
+                let mut rl = Vec::new();
+                ps::packbits(&data, &mut rl);
+                rl.push(128);
+                ("/RunLengthDecode", rl)
+            }
+        };
+        let mut out = String::new();
+        if binary {
+            // imagemask takes its current ink from the graphics state.
+            out.push_str(&self.ink_code(ink));
+        } else {
+            match ink {
+                Ink::Spot { space, .. } => {
+                    let _ = writeln!(out, "VCsp{space} setcolorspace");
+                }
+                Ink::Process(space, ..) => {
+                    let _ = writeln!(out, "{} setcolorspace", space.name());
+                }
+            }
+        }
+        let n = match ink {
+            Ink::Spot { .. } => 1,
+            Ink::Process(space, ..) => space.n(),
+        };
+        let decode = if binary { "1 0".to_string() } else { "0 1 ".repeat(n).trim_end().to_string() };
+        let _ = write!(
+            out,
+            "{{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent {} /Decode [{decode}] /ImageMatrix [{w} 0 0 {h} 0 0]",
+            if keyed { 4 } else { 1 },
+            if binary { 1 } else { 8 },
+        );
+        if keyed {
+            let mask: Vec<String> = key.iter().take(n).map(|v| format!("{v} {v}")).collect();
+            let _ = write!(out, " /MaskColor [{}]", mask.join(" "));
+        }
+        let _ = writeln!(out, "\n/DataSource VCsrc {filter} filter >> {}\nVCsrc flushfile }} exec", if binary { "imagemask" } else { "image" });
+        out.push_str(&ps::ascii85(&encoded));
+        Some(out)
+    }
+
+    /// Ink-setting operators in the cached stencil body, built with the same path as solid fills.
+    fn ink_code(&mut self, ink: Ink) -> String {
+        let body = std::mem::take(&mut self.body);
+        self.set_ink(ink);
+        std::mem::replace(&mut self.body, body)
     }
 
     /// Image `blob` as RGBA pixels; `None` (with a warning) when it can't be written.

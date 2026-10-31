@@ -4,6 +4,7 @@
 
 mod basic_shapes;
 mod blend_export;
+mod colorized_images;
 mod colour_glyphs;
 mod container_export;
 mod css_rules;

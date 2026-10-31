@@ -1,6 +1,6 @@
 //! Arrange Tools in the interface: its submenu (Object › Plug-ins › Arrange Tools); the dialogs of
 //! Arrange in Grid, Replace with Top Object and Set Size of Each, which preview on the canvas and
-//! run their `addon.arrange.*` command on OK; and Zoom to Selection ([`ZOOM`]), which fits the
+//! run their `addon.arrange.*` command on OK; Group Overlapping Objects; and Zoom to Selection ([`ZOOM`]), which fits the
 //! active view to the selection.
 
 use egui::Ui;
@@ -38,6 +38,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
         Item::Cmd("Replace with Top Object…", "addon.arrange.replace", Value::Null),
         Item::Cmd("Set Size of Each…", "addon.arrange.size", Value::Null),
+        Item::Cmd("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
         Item::Sep,
         Item::Cmd("Zoom to Selection", ZOOM, json!({})),
     ]

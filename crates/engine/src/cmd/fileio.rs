@@ -33,6 +33,7 @@ pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+mod jp2read;
 mod metafile;
 mod naming;
 mod native;
@@ -74,6 +75,7 @@ pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
+pub(crate) use save::save as save_document;
 pub use save::{
     SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, export_folder, reads_option as save_reads_option,
     remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, template_filters, templates_dialog_folder,
@@ -193,6 +195,8 @@ mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
 
+#[cfg(test)]
+mod tests_jp2read;
 #[cfg(test)]
 mod tests_pcxread;
 

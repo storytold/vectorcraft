@@ -6,7 +6,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind, Unit, WidthProfile};
 use vectorcraft_engine::cmd::newdoc;
 
-use super::{corner_radius_row, first_selected, pstate, set_pstate};
+use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
@@ -798,15 +798,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
     {
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => corner_radius_row(app, ui, &n, "radius"),
-            vectorcraft_doc::LiveShape::Polygon { .. } => super::transform::polygon_rows(app, ui, &n, live, "props-polygon"),
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                super::transform::pie_rows(app, ui, *pie, "props-pie");
-            }
-            _ => {}
-        }
+        super::transform::live_shape_rows(app, ui, &n, live, "props", false);
     }
 }
 

@@ -674,3 +674,77 @@ fn the_slide_tool_previews_and_commits_one_step() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(at(&s), Point::new(200.0, 100.0));
 }
+
+fn ids(v: &Value) -> Vec<NodeId> {
+    v["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+#[test]
+fn divide_into_dashes_cuts_a_path_into_open_pieces_keeping_its_look() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    // 30 + 10 + 30 + 10 + 20: the gaps are left empty.
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (3, json!(3)));
+    let st = s.doc().unwrap();
+    let spans: Vec<(f64, f64)> = pieces.iter().map(|id| path(&s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect();
+    let want = [(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)];
+    assert!(spans.iter().zip(want).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6), "{spans:?}");
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.stroke_width() == 3.0), "the stroke stays");
+    assert_eq!(st.selection.objects, pieces);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, l).anchor_count(), 2);
+    // Kept gaps; fitted 25s with no gap.
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10, "removeGaps": false})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (5, json!(3)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "fit": true})).unwrap();
+    let spans: Vec<f64> = ids(&r).iter().map(|id| path(&s, *id).bounds().unwrap().width()).collect();
+    assert_eq!(spans.len(), 3);
+    assert!(spans.iter().all(|w| (w - 100.0 / 3.0).abs() < 1e-6), "{spans:?}");
+}
+
+#[test]
+fn divide_into_dashes_divides_only_the_selected_segments() {
+    let mut s = session();
+    let u = line(&mut s, &[(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)], false);
+    // The middle side, between anchors 1 and 2.
+    select_anchors(&mut s, u, &[1, 2]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 10})).unwrap();
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (6, json!(4)), "the first side, four dashes, the last side");
+    assert_eq!(path(&s, pieces[0]).bounds().unwrap().width(), 40.0);
+    let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, pieces, "in the path's place, in order");
+}
+
+#[test]
+fn divide_into_dashes_refuses_bad_params_and_too_many_pieces() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    select(&mut s, &[l]);
+    refuses(
+        &mut s,
+        "addon.pathtools.divideDashes",
+        &[
+            json!({"dash": 0}),
+            json!({"dash": -5}),
+            json!({"dash": 1e308}),
+            json!({"dash": "10"}),
+            json!({"gap": -1}),
+            json!({"gap": 2e6}),
+            json!({"fit": "yes"}),
+            json!({"removeGaps": 1}),
+            json!({"dash": 0.5}),
+        ],
+    );
+    // 200000 pieces refused above; 1000 is fine.
+    assert_eq!(s.execute("addon.pathtools.divideDashes", &json!({"dash": 100})).unwrap()["dashes"], json!(1000));
+    s.execute("select.none", &json!({})).unwrap();
+    refuses(&mut s, "addon.pathtools.divideDashes", &[json!({})]);
+}

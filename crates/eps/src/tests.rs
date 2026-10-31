@@ -331,6 +331,187 @@ fn unpack(data: &[u8]) -> Vec<u8> {
     out
 }
 
+fn colorized_doc(gray: Vec<u8>, paint: Option<Paint>) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    d.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    let mut png = Vec::new();
+    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(gray.len() as u32, 1, gray).unwrap())
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("gray".into(), ImageBlob::png(png));
+    let im = ImageObject {
+        key: "gray".into(),
+        width: 3,
+        height: 1,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.extras_mut().colorize = paint.map(Box::new);
+    d.insert(d.default_layer(), 0, n).unwrap();
+    d
+}
+
+fn one_bit_blob() -> ImageBlob {
+    // Uncompressed two-pixel TIFF, BlackIsZero; black then white.
+    let entries: [(u16, u16, u32); 9] =
+        [(256, 3, 2), (257, 3, 1), (258, 3, 1), (259, 3, 1), (262, 3, 1), (273, 4, 122), (277, 3, 1), (278, 3, 1), (279, 4, 1)];
+    let mut bytes = b"II*\0".to_vec();
+    bytes.extend_from_slice(&8u32.to_le_bytes());
+    bytes.extend_from_slice(&9u16.to_le_bytes());
+    for (tag, kind, value) in entries {
+        bytes.extend_from_slice(&tag.to_le_bytes());
+        bytes.extend_from_slice(&kind.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.push(0b0100_0000);
+    ImageBlob::new("image/tiff", bytes)
+}
+
+fn colorized_samples(d: &Document, level: Level) -> (String, Vec<u8>, Vec<String>) {
+    let out = export(d, &EpsOptions { level, ..opts(d) }, None, None).unwrap();
+    let ps = text(&out);
+    checked_page(&ps);
+    let encoded = image_data(&ps);
+    let samples = if level == Level::Three { ps::inflate(&encoded, 1 << 20).unwrap() } else { unpack(&encoded) };
+    (ps, samples, out.warnings)
+}
+
+#[test]
+fn binary_colorized_images_are_ink_stencils_at_both_levels() {
+    for (paint, setup) in [
+        (Paint::solid(Color::rgb8(255, 0, 0)), "1 0 0 rg"),
+        (Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 0.5 }, "VCsp0 setcolorspace 0.5 setcolor"),
+        (Paint::registration(), "VCsp0 setcolorspace 1 setcolor"),
+    ] {
+        let d = colorized_doc(vec![0, 255, 0], Some(paint.clone()));
+        for level in [Level::Two, Level::Three] {
+            let (ps, samples, warnings) = colorized_samples(&d, level);
+            assert!(ps.contains("imagemask") && ps.contains("/BitsPerComponent 1 /Decode [1 0]"), "{ps}");
+            assert!(ps.contains(setup), "{ps}");
+            assert_eq!(samples, vec![0b1010_0000]);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            assert!(ps.contains(if level == Level::Two { "/RunLengthDecode" } else { "/FlateDecode" }));
+            if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+                assert!(ps.contains("/Separation"));
+            }
+            if paint.is_registration() {
+                assert!(ps.contains("/All /DeviceCMYK"));
+                assert!(dsc(&ps, "DocumentCustomColors").is_none());
+            } else if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+                assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Ink)"));
+            }
+        }
+    }
+}
+
+#[test]
+fn one_bit_source_uses_the_same_stencil_coverage() {
+    let mut d = colorized_doc(vec![0, 255, 255], Some(Paint::solid(Color::rgb8(0, 0, 255))));
+    d.images.insert("gray".into(), one_bit_blob());
+    let id = d.layers[0].children().unwrap()[0].id;
+    if let NodeKind::Image(im) = &mut d.node_mut(id).unwrap().kind {
+        im.width = 2;
+    }
+    assert!(d.images["gray"].gray_source().unwrap().one_bit);
+    let (_, samples, warnings) = colorized_samples(&d, Level::Three);
+    assert_eq!(samples, vec![0b1000_0000]);
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn one_source_with_two_spot_tints_writes_two_inks() {
+    let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = colorized_doc(vec![0, 255, 0], Some(first));
+    let mut n = (*d.layers[0].children().unwrap()[0]).clone();
+    n.id = d.alloc_id();
+    n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+    d.insert(d.default_layer(), 1, n).unwrap();
+    let ps = page_of(&d, &opts(&d));
+    assert!(ps.contains("VCsp0 setcolorspace 1 setcolor") && ps.contains("VCsp0 setcolorspace 0.5 setcolor"), "{ps}");
+    assert_eq!(ps.matches("imagemask").count(), 2);
+}
+
+#[test]
+fn gray_colorized_ramp_scales_process_and_spot_inks_over_paper() {
+    for level in [Level::Two, Level::Three] {
+        let process = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::rgb8(255, 0, 0))));
+        let (ps, pixels, warnings) = colorized_samples(&process, level);
+        assert!(ps.contains("/DeviceRGB setcolorspace") && !ps.contains("imagemask"));
+        if level == Level::Three {
+            assert!(ps.contains("/ImageType 4") && ps.contains("/MaskColor [255 255 0 0 255 255]"));
+            assert_eq!(pixels, vec![255, 0, 0, 255, 128, 128, 255, 0, 255]);
+            assert_eq!(warnings, vec!["partly transparent image pixels are written over white"]);
+        } else {
+            assert!(ps.contains("/ImageType 1") && !ps.contains("/MaskColor"));
+            assert_eq!(pixels, vec![255, 0, 0, 255, 128, 128, 255, 255, 255]);
+            assert_eq!(
+                warnings,
+                vec![
+                    "partly transparent image pixels are written over white",
+                    "transparent image pixels are written white at PostScript Level 2 (Level 3 masks them out)"
+                ]
+            );
+        }
+
+        let gray = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::gray(0.5))));
+        let (ps, pixels, warnings) = colorized_samples(&gray, level);
+        assert!(ps.contains("/DeviceGray setcolorspace"));
+        assert_eq!(pixels, if level == Level::Three { vec![128, 192, 0] } else { vec![128, 192, 255] });
+        assert_eq!(ps.contains("/MaskColor [0 0]"), level == Level::Three);
+        assert_eq!(warnings.len(), if level == Level::Three { 1 } else { 2 });
+
+        let spot = colorized_doc(vec![0, 128, 255], Some(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+        let (ps, pixels, warnings) = colorized_samples(&spot, level);
+        assert!(ps.contains("/Separation (Ink) cvn") && ps.contains("VCsp0 setcolorspace"));
+        assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Ink)"));
+        assert_eq!(pixels, vec![128, 64, 0]);
+        assert_eq!(ps.contains("/MaskColor [0 0]"), level == Level::Three);
+        assert_eq!(warnings.len(), if level == Level::Three { 1 } else { 2 });
+
+        let mut cmyk = process.clone();
+        cmyk.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+        let (ps, pixels, _) = colorized_samples(&cmyk, level);
+        assert!(ps.contains("/DeviceCMYK setcolorspace"));
+        assert_eq!(pixels.len(), 12);
+        assert_eq!(&pixels[8..], if level == Level::Three { &[255, 0, 255, 0][..] } else { &[0, 0, 0, 0][..] });
+    }
+}
+
+#[test]
+fn continuous_colorized_coverage_without_clear_pixels_only_warns_for_midtones() {
+    let d = colorized_doc(vec![0, 128, 254], Some(Paint::solid(Color::rgb8(255, 0, 255))));
+    for level in [Level::Two, Level::Three] {
+        let (ps, pixels, warnings) = colorized_samples(&d, level);
+        assert!(ps.contains("/ImageType 1") && !ps.contains("/MaskColor"));
+        assert_eq!(&pixels[..3], &[255, 0, 255]);
+        assert_eq!(warnings, vec!["partly transparent image pixels are written over white"]);
+    }
+    let d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::rgb8(255, 0, 255))));
+    let (ps, pixels, _) = colorized_samples(&d, Level::Three);
+    assert!(ps.contains("/MaskColor [255 255 0 0 255 255]"));
+    assert_eq!(&pixels[..3], &[255, 1, 255]);
+    assert_eq!(&pixels[6..], &[255, 0, 255]);
+}
+
+#[test]
+fn uncolorized_image_stays_on_original_eps_path() {
+    let d = colorized_doc(vec![0, 128, 255], None);
+    let ps = page_of(&d, &opts(&d));
+    assert!(!ps.contains("imagemask") && ps.contains("/ImageType 1"));
+    let patterned = colorized_doc(vec![0, 128, 255], Some(Paint::Pattern { pattern: "missing".into(), xf: Affine::IDENTITY }));
+    assert_eq!(page_of(&patterned, &opts(&patterned)), ps);
+    let mut color = png_doc();
+    let original = page_of(&color, &opts(&color));
+    let id = color.layers[0].children().unwrap()[0].id;
+    color.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+    assert_eq!(page_of(&color, &opts(&color)), original);
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();

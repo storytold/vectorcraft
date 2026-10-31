@@ -7,12 +7,13 @@
 //! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
 //! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
-//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A `.ai` file's Version comes
-//! first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file per artboard), which takes
-//! only Transparent Images (`transparentImages`), Hidden Objects (`hiddenObjects`: a hidden layer,
-//! omitted or made visible), Text (`outlineText`: editable or outlines) and, with several
-//! artboards, a picker of the artboards to save (thumbnails to check, field `boards`, saved as
-//! `range`).
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A native file's Version is a
+//! menu of the versions VectorCraft writes (`version`, named by the releases that read each). A
+//! `.ai` file's Version comes first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file
+//! per artboard), which takes only Transparent Images (`transparentImages`), Hidden Objects
+//! (`hiddenObjects`: a hidden layer, omitted or made visible), Text (`outlineText`: editable or
+//! outlines) and, with several artboards, a picker of the artboards to save (thumbnails to check,
+//! field `boards`, saved as `range`).
 
 use std::sync::OnceLock;
 
@@ -342,6 +343,10 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         ui.end_row();
         return;
     }
+    if o.name == "version" && o.ty == "integer" {
+        native_version(ui, d, o);
+        return;
+    }
     if o.name == "transparentImages" {
         ui.label(egui::RichText::new(tl!("Transparent Images:")).color(t.text_dim)).on_hover_text(o.description);
         let choices = [tl!("Flatten"), tl!("Omit")];
@@ -379,7 +384,9 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
     if o.ty == "boolean" {
         ui.label("");
         let on = value.as_bool().unwrap_or(false);
-        if widgets::check_tip(ui, label.trim_end_matches(':'), on, true, o.description) {
+        // Versions older than compression read only plain files.
+        let enabled = o.name != "compress" || !uncompressed(d);
+        if widgets::check_tip(ui, label.trim_end_matches(':'), on && enabled, enabled, o.description) {
             d.fields.insert(o.name.into(), json!(!on));
         }
         ui.end_row();
@@ -410,6 +417,43 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         }
     }
     ui.end_row();
+}
+
+/// The native versions VectorCraft writes, newest first, each with the first release that reads
+/// it (the format version each release tag writes: 2 in 0.1, 3 from 0.2, 4 from 0.8).
+const NATIVE_VERSIONS: [(u32, &str); 4] = [(4, "0.8"), (3, "0.2"), (2, "0.1"), (1, "0.1")];
+
+/// A native file's Version (#4931): a menu of the versions VectorCraft writes, named by the
+/// releases that read them, so a version it can't write can't be chosen. A version without
+/// compression turns Use Compression off.
+fn native_version(ui: &mut egui::Ui, d: &mut Dialog, o: &FormatOption) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(tl!("Version:")).color(t.text_dim)).on_hover_text(o.description);
+    let names: Vec<String> = NATIVE_VERSIONS
+        .iter()
+        .map(|(n, release)| crate::i18n::fmt(tl!("VectorCraft {release} and later (version {n})"), &[("release", release), ("n", &n.to_string())]))
+        .collect();
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    let at = NATIVE_VERSIONS.iter().position(|(n, _)| *n == native_version_of(d)).unwrap_or(0);
+    if let Some(i) = widgets::dropdown_names(ui, ("save-option", o.name), names.get(at).copied().unwrap_or_default(), &names, 254.0)
+        && let Some((n, _)) = NATIVE_VERSIONS.get(i)
+    {
+        d.fields.insert(o.name.into(), json!(n));
+        if *n < vectorcraft_format::COMPRESSED_SINCE {
+            d.fields.insert("compress".into(), json!(false));
+        }
+    }
+    ui.end_row();
+}
+
+/// The native version the dialog will write (the current one unless chosen).
+fn native_version_of(d: &Dialog) -> u32 {
+    d.fields.get("version").and_then(Value::as_u64).and_then(|v| u32::try_from(v).ok()).unwrap_or(vectorcraft_format::VERSION)
+}
+
+/// Is a native file to be saved in a version that can't be compressed?
+fn uncompressed(d: &Dialog) -> bool {
+    native_version_of(d) < vectorcraft_format::COMPRESSED_SINCE
 }
 
 /// Web Save As: another format brings its own options and file extension.
@@ -444,6 +488,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         .iter()
         .filter_map(|o| d.fields.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), v.clone())))
         .collect();
+    if uncompressed(d) {
+        // Use Compression shows off there, whatever it held before.
+        options.remove("compress");
+    }
     if legacy_ai(d) {
         // The artboards checked in the picker (all of them: no range).
         options.remove("range");

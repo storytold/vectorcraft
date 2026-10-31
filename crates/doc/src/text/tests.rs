@@ -60,6 +60,51 @@ fn digits_map_between_the_numeral_systems() {
     assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
 }
 
+/// Each Indic numeral system draws 0–9 (and the Arabic-Indic sets) as the ten digits of its
+/// script's block; every system saves under its id, which reads back, and other names are refused.
+#[test]
+fn indic_digits_map_to_their_scripts_block() {
+    let map = |d: Digits, s: &str| -> String { s.chars().map(|c| d.map(c)).collect() };
+    for (d, zero) in [
+        (Digits::Devanagari, 0x966),
+        (Digits::Bengali, 0x9E6),
+        (Digits::Gurmukhi, 0xA66),
+        (Digits::Gujarati, 0xAE6),
+        (Digits::Odia, 0xB66),
+        (Digits::Tamil, 0xBE6),
+        (Digits::Telugu, 0xC66),
+        (Digits::Kannada, 0xCE6),
+        (Digits::Malayalam, 0xD66),
+    ] {
+        let block: String = (zero..zero + 10).map(|u| char::from_u32(u).unwrap()).collect();
+        assert!(block.chars().all(char::is_numeric), "{d:?}: {block}");
+        for s in ["0123456789", "٠١٢٣٤٥٦٧٨٩", "۰۱۲۳۴۵۶۷۸۹"] {
+            assert_eq!(map(d, s), block, "{d:?}");
+        }
+        assert_eq!(map(d, "a-Z ٪"), "a-Z ٪");
+    }
+    assert_eq!(map(Digits::Devanagari, "page 12"), "page १२");
+    for d in Digits::ALL {
+        assert_eq!(serde_json::to_value(d).unwrap(), d.id());
+        assert_eq!(serde_json::from_value::<Digits>(d.id().into()).unwrap(), d);
+        assert_eq!(Digits::from_id(d.id()), Some(d));
+    }
+    assert_eq!(Digits::from_id("roman"), None);
+    assert!(serde_json::from_value::<Digits>("roman".into()).is_err());
+}
+
+/// Language is saved only when set; styles written before it existed read as the default.
+#[test]
+fn language_is_saved_only_when_set() {
+    let st = CharStyle::default();
+    let old = serde_json::to_value(&st).unwrap();
+    assert!(old.get("language").is_none());
+    assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().language, None);
+    let turkish = CharStyle { language: Some("tr".into()), ..CharStyle::default() };
+    assert_eq!(serde_json::to_value(&turkish).unwrap()["language"], "tr");
+    assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&turkish).unwrap()).unwrap(), turkish);
+}
+
 /// Auto leading follows the paragraph's Auto Leading; a set leading doesn't.
 #[test]
 fn paragraph_effective_leading_follows_auto_leading() {

@@ -134,6 +134,25 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "symbols": list, "current": current_symbol(d).or_else(|| symbol_names(d).into_iter().next()) }))
 }
 
+/// Store `art` ([`normalize`]d, of natural size `size`) as symbol `name`, which becomes the
+/// current symbol.
+pub(crate) fn store_symbol(d: &mut Document, art: &Node, name: &str, size: (f64, f64)) {
+    let art = d.reid(art);
+    d.symbols.push(Symbol { name: name.into(), art: Arc::new(art) });
+    set_natural_size(d, name, Some(size));
+    d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+}
+
+/// Replace the root nodes `ids` with one instance of symbol `name` (already stored) placed by
+/// `xf`. Frames of threaded text among them leave their threads with the text they show. Returns
+/// the instance's id.
+pub(crate) fn instance_in_place(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
+    let threaded = crate::cmd::threads::frames(d);
+    let id = replace_with_instance(d, ids, name, xf)?;
+    crate::cmd::threads::leave_threads(d, &threaded);
+    Ok(id)
+}
+
 /// Replace the root nodes `ids` with one instance of `name` (art already stored). Returns the id.
 fn replace_with_instance(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
     let top = *ids.last().ok_or_else(|| EngineError::Other("nothing selected".into()))?;
@@ -163,17 +182,11 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
-        let art = d.reid(&art);
-        d.symbols.push(Symbol { name: name.clone(), art: Arc::new(art) });
-        set_natural_size(d, &name, Some(size));
+        store_symbol(d, &art, &name, size);
         d.set_symbol_registration(&name, reg);
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
-        d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
-        let threaded = crate::cmd::threads::frames(d);
-        let id = replace_with_instance(d, &ids, &name, place)?;
-        // Frames of threaded text in the symbol leave their threads with the text they show.
-        crate::cmd::threads::leave_threads(d, &threaded);
+        let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
         Ok(id)
     })?;
@@ -370,10 +383,7 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         let reg = d.symbol_registration(&name);
-        let threaded = crate::cmd::threads::frames(d);
-        let id = replace_with_instance(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
-        // Frames of threaded text in the symbol leave their threads with the text they show.
-        crate::cmd::threads::leave_threads(d, &threaded);
+        let id = instance_in_place(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
         sel.set([id]);
         Ok(id)
     })?;

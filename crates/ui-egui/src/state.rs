@@ -357,6 +357,13 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub context_locked: Option<(u64, Vec<vectorcraft_doc::NodeId>)>,
+    /// What the last right-click on the canvas with the Intertwine tool arranges, with the
+    /// document's `uid`: the Intertwine group, the point and the object nearest to it where three
+    /// or more objects overlap ([`vectorcraft_tools::intertwine::menu_target`]). The context menu
+    /// lists Bring to Front, Bring Forward, Send Backward and Send to Back for that object while it
+    /// is open. Not saved.
+    #[serde(skip)]
+    pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -833,6 +840,7 @@ impl Default for UiState {
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
             context_locked: None,
+            context_intertwine: None,
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),

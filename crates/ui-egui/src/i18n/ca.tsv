@@ -320,7 +320,7 @@
 	Apply Paragraph Style	Aplica l’estil de paràgraf
 	Apply SVG Filter…	Aplica el filtre SVG…
 	Apply to All	Aplica-ho a tot
-	Apply to All ({count} more missing)	Aplica-ho a tot ({count} més que falten)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Aplica-ho a tot ({n} més que falta)|Aplica-ho a tot ({n} més que falten)
 	Apply {name}	Aplica {name}
 	Approximate path	Aproxima el traçat
 	Arabic	Àrab
@@ -1052,6 +1052,12 @@
 	Delete Styles	Suprimeix els estils
 	Delete Swatch	Suprimeix la mostra
 	Delete Symbol	Suprimeix el símbol
+	Delete the selected symbol?	Voleu suprimir el símbol seleccionat?
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Un o més dels símbols estan en ús i no es poden suprimir fins que se n’expandeixin o se’n suprimeixin les instàncies.
+	Expand Instances	Expandeix les instàncies
+	Delete Instances	Suprimeix les instàncies
+	Yes	Sí
+	No	No
 	Delete Tab	Suprimeix la tabulació
 	Delete the graphic style “{name}”?	Voleu suprimir l’estil gràfic “{name}”?
 	Delete the library “{name}”?	Voleu suprimir la biblioteca “{name}”?
@@ -1303,7 +1309,7 @@
 	Edit Symbol	Edita el símbol
 	Edit Text	Edita el text
 	Edit the applied effect, or add another one?	Vols editar l’efecte aplicat o afegir-ne un altre?
-	Edit the selected point's colour in the Color panel	Edita el color del punt seleccionat al panell Color
+	Edit the point	Edita el punt
 	Edit the stop	Edita la parada
 	Edit Theme	Edita el tema
 	Edit theme	Edita el tema
@@ -1482,6 +1488,15 @@
 	Eyedropper: click the art to sample the key color	Comptagotes: fes clic a l’art per mostrejar el color clau
 	Eyedropper: click the art to sample the stop's colour	Comptagotes: fes clic a l’art per mostrejar el color de la parada
 	Farsi	Persa
+digits	Devanagari	Devanagari
+digits	Bengali	Bengalí
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Oriya
+digits	Tamil	Tàmil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malaiàlam
 	Favorites	Preferits
 	Feather	Ploma
 	Feather…	Ploma…
@@ -2040,8 +2055,8 @@
 	Keep visible surfaces only when expanding	Conserva només les superfícies visibles en expandir
 	Keep:	Conserva:
 	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Manté el document editable: VectorCraft reobre el PDF sense perdre res. Per a fitxers que editaràs de nou.
-	Kerning (0 = Auto)	Kerning (0 = automàtic)
 	Key Color:	Color clau:
+	Kerning	Kerning
 	Keyboard Increment	Increment de teclat
 	Keyboard Shortcut Conflicts	Conflictes de dreceres de teclat
 	Keyboard Shortcut Set	Conjunt de dreceres de teclat
@@ -2734,6 +2749,7 @@
 	Opens files in other apps	Obre fitxers en altres aplicacions
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
+	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
@@ -2805,10 +2821,10 @@
 	Package	Empaqueta
 	Package collects a saved document with its linked files and fonts.	L’empaquetatge recull un document desat amb els fitxers enllaçats i els tipus de lletra.
 	Package created	Empaquetatge creat
-	Packaged {n} file(s)	S’han empaquetat {n} fitxers
-	Packaged {n} file(s) in {folder}	S’han empaquetat {n} fitxers a {folder}
-	Packaged {n} file(s) in {folder} {note}	S’han empaquetat {n} fitxers a {folder} {note}
-	Packaged {n} file(s) {note}	S’han empaquetat {n} fitxers {note}
+@plural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	S’ha empaquetat {n} fitxer a {folder} {note}|S’han empaquetat {n} fitxers a {folder} {note}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
 	Packaged {n} file(s){note}	S’han empaquetat {n} fitxers{note}
 	Package…	Empaqueta…
 	Page	Pàgina
@@ -3747,6 +3763,7 @@
 	Shape Mode	Mode de forma
 	Shape Modes:	Modes de forma:
 	Shape Properties:	Propietats de la forma:
+	Shape Properties	Propietats de la forma
 	Shape:	Forma:
 	Shaper	Shaper
 	Shaper Tool	Eina Shaper
@@ -4645,19 +4662,21 @@
 	Zoom to Selection	Amplia a la selecció
 	Zoom Tool	Eina de zoom
 	Zoom with Mouse Wheel	Zoom amb la roda del ratolí
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} fitxer(s) a {folder} {note}. Voleu mostrar la carpeta del paquet?
-	{count} file(s) in {folder}. Show the package folder?	{count} fitxer(s) a {folder}. Voleu mostrar la carpeta del paquet?
-	{count} folder(s) or file(s) couldn't be read	No s’han pogut llegir {count} carpeta(es) o fitxer(s)
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	S’han omès {count} carpeta(es), com ara les d’altres aplicacions, les del sistema i les ocultes
-	{count} linked file(s) not found	No s’han trobat {count} fitxer(s) enllaçat(s)
-	{count} linked image(s) changed on disk. Show the new versions?	{count} imatge(s) enllaçada(es) han canviat al disc. Voleu mostrar les versions noves?
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} imatge(s) enllaçada(es) han canviat des que es va desar aquest document. Voleu mostrar les versions noves?
-	{count} more rules: Export writes every one.	{count} regles més: l’exportació les escriu totes.
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fitxer a {folder} {note}. Voleu mostrar la carpeta del paquet?|{n} fitxers a {folder} {note}. Voleu mostrar la carpeta del paquet?
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} fitxer a {folder}. Voleu mostrar la carpeta del paquet?|{n} fitxers a {folder}. Voleu mostrar la carpeta del paquet?
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	No s’ha pogut llegir {n} carpeta o fitxer|No s’han pogut llegir {n} carpetes o fitxers
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	S’ha omès {n} carpeta, com ara les d’altres aplicacions, les del sistema i les ocultes|S’han omès {n} carpetes, com ara les d’altres aplicacions, les del sistema i les ocultes
+@plural	{n} linked file not found|{n} linked files not found	No s’ha trobat {n} fitxer enllaçat|No s’han trobat {n} fitxers enllaçats
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} imatge enllaçada ha canviat al disc. Voleu mostrar la versió nova?|{n} imatges enllaçades han canviat al disc. Voleu mostrar les versions noves?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} imatge enllaçada ha canviat des que es va desar aquest document. Voleu mostrar la versió nova?|{n} imatges enllaçades han canviat des que es va desar aquest document. Voleu mostrar les versions noves?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} regla més: l’exportació l’escriu.|{n} regles més: l’exportació les escriu totes.
 	{count} of {total} artboards	{count} de {total} taulers
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	S’han omès {count} objectes sense nom: poseu-los un nom o activeu Objectes sense nom al menú del panell.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	S’ha omès {n} objecte sense nom: poseu-li un nom o activeu Objectes sense nom al menú del panell.|S’han omès {n} objectes sense nom: poseu-los un nom o activeu Objectes sense nom al menú del panell.
 	{effect} is already applied	{effect} ja està aplicat
 	{file}, line {line}	{file}, línia {line}
-	{folders} folder(s) and {files} file(s) searched	S’han cercat {folders} carpeta(es) i {files} fitxer(s)
+	{folders} and {files} searched	S’han cercat {folders} i {files}
+@plural	{n} folder|{n} folders	{n} carpeta|{n} carpetes
+@plural	{n} file|{n} files	{n} fitxer|{n} fitxers
 	{format} Options	Opcions de {format}
 	{kind} Gradient	Degradat {kind}
 	{kind} Style Options…	Opcions d’estil de {kind}…
@@ -4684,6 +4703,7 @@
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	coincideix amb {n} drecera per defecte|coincideix amb {n} dreceres per defecte
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Taula de colors ({n} color)|Taula de colors ({n} colors)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Voleu suprimir aquest {n} estil gràfic?|Voleu suprimir aquests {n} estils gràfics?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Voleu suprimir aquest {n} pinzell?|Voleu suprimir aquests {n} pinzells?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Voleu suprimir aquesta {n} mostra o grup?|Voleu suprimir aquestes {n} mostres i grups?
 @plural	{n} area highlighted|{n} areas highlighted	{n} àrea ressaltada|{n} àrees ressaltades
 @plural	{n} color|{n} colors	{n} color|{n} colors
@@ -4984,7 +5004,7 @@
 @msg	give only one of onto, below and above	doneu només un de onto, below i above
 @msg	give the path `id`	doneu l’`id` del traçat
 @msg	give the path `id` and the width point `index`	doneu el `id` del traçat i l’`index` del punt d’amplada
-@msg	Global Edit works on paths, compound paths and symbol instances	L’edició global funciona amb traçats, traçats compostos i instàncies de símbol
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	L’edició global funciona amb traçats, traçats compostos, instàncies de símbol i grups d’aquests objectes
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	el degradat «{name}» no està definit al fitxer: en lloc seu es fa servir un color pla
 @msg	group must be true or false	group ha de ser true o false
 @msg	guides are locked	les guies estan bloquejades
@@ -5247,10 +5267,10 @@
 @msg	Opened with {_1} note(s): {_2}	Obert amb {_1} nota(es): {_2}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
-@msg	Packaged {n} file(s)	Empaquetat {n} fitxer(s)
-@msg	Packaged {n} file(s) in {folder}	Empaquetats {n} fitxer(s) a {folder}
-@msg	Packaged {n} file(s) in {folder} {note}	Empaquetats {n} fitxer(s) a {folder} {note}
-@msg	Packaged {n} file(s) {note}	Empaquetats {n} fitxer(s) {note}
+@msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	S’ha empaquetat {n} fitxer a {folder}|S’han empaquetat {n} fitxers a {folder}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	S’ha empaquetat {n} fitxer a {folder} ({note})|S’han empaquetat {n} fitxers a {folder} ({note})
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	S’ha empaquetat {n} fitxer {note}|S’han empaquetat {n} fitxers {note}
 @msg	Packaged {n} file(s){note}	Empaquetats {n} fitxer(s){note}
 @msg	Packaging {_1}	Empaquetant {_1}
 @msg	page size {w} × {h}	mida de pàgina {w} × {h}
@@ -5346,6 +5366,7 @@
 @msg	select paths or anchor points	selecciona traçats o punts d’ancoratge
 @msg	select paths to join	selecciona traçats per unir
 @msg	select some type first	selecciona text primer
+@msg	kerning must be a number, "auto", or "optical"	El kerning ha de ser un nombre, «auto» o «optical»
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecciona text o fes clic dins del text amb l’eina de text per inserir glifs
 @msg	select the art to export first	selecciona primer la il·lustració que vols exportar
 @msg	select the art to repeat	selecciona la il·lustració que vols repetir
@@ -5859,6 +5880,11 @@ anchor	Points:	Punts:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Color dels punts de la il·lustració
+	Basic Character Formats	Formats bàsics de caràcters
+	Case	Majúscules i minúscules
+@msg	{label} must be a number	{label} ha de ser un nombre
+@msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
+@msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Bitò…
@@ -5951,6 +5977,11 @@ breakText	Glyphs	Glifs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+	File + Number	Fitxer + número
+	File + Data Set Name	Fitxer + nom del conjunt de dades
+	Data Set Name	Nom del conjunt de dades
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` ha de ser `fileNumber`, `fileDataSetName` o `dataSetName`
+@msg	no free data set file name in destination folder	No hi ha cap nom de fitxer de conjunt de dades lliure a la carpeta de destinació
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Efectes de traçat
@@ -5991,6 +6022,14 @@ breakText	Glyphs	Glifs
 	Gap 4	Separació 4
 	Dash 5	Guió 5
 	Gap 5	Separació 5
+@msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible
+@msg	You must choose a side pattern.	Heu de triar un patró lateral.
+@msg	invalid pattern tile choice	opció de mosaic de patró no vàlida
+@msg	no pattern named `{choice}`	no hi ha cap patró anomenat `{choice}`
+	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
+	Remove Strokes	Elimina els traços
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…
@@ -6003,3 +6042,37 @@ breakText	Glyphs	Glifs
 	Set Size of Each	Defineix la mida de cadascun
 @msg	select exactly two objects	selecciona exactament dos objectes
 @msg	give `width` or `height`	indica `width` o `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Agrupa els objectes superposats
+@msg	too many objects selected (at most 20000)	s’han seleccionat massa objectes (com a màxim 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Divideix en guions…
+	Divide into Dashes	Divideix en guions
+	Dash:	Guió:
+	Gap:	Separació:
+	Fit to Corners and Ends	Ajusta a les cantonades i els extrems
+	Remove Gaps	Elimina les separacions
+@msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
+@msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Eines del document
+	Save a Timestamped Copy	Desa una còpia amb data i hora
+@msg	there is no clock here	aquí no hi ha rellotge
+@msg	there is no clock here: give `time` (Unix seconds)	aquí no hi ha rellotge: indiqueu `time` (segons Unix)
+@msg	the document has never been saved: give `folder`	el document no s’ha desat mai: indiqueu `folder`
+@msg	every numbered name for the copy is taken	tots els noms numerats per a la còpia estan ocupats
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Símbols nous a partir de les capes
+	Convert Layers to Symbols	Converteix les capes en símbols
+@msg	{id} is no top-level layer	{id} no és una capa de primer nivell
+	Marathi	Marathi
+	Gujarati	Gujarati
+	Bengali	Bengalí
+	Punjabi	Panjabi
+	Tamil	Tàmil
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malaiàlam
+	Odia	Oriya
+	Urdu	Urdú
+	VectorCraft {release} and later (version {n})	VectorCraft {release} i posteriors (versió {n})

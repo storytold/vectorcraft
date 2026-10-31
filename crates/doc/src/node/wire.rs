@@ -46,6 +46,7 @@ impl Serialize for Node {
             e.perspective.is_none(),
             e.dimension.is_none(),
             e.intertwine.is_none(),
+            e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
             e.objects_on_path.is_none(),
             e.colorize.is_none(),
@@ -85,6 +86,7 @@ impl Serialize for Node {
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
         field!("intertwine", &e.intertwine);
+        field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
         field!("objects_on_path", &e.objects_on_path);
         field!("colorize", &e.colorize);
@@ -123,11 +125,39 @@ pub fn with_node_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
 /// each counts once, and the id usually comes first, before the node's children are read.
 fn counted_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<NodeId, D::Error> {
     let id = NodeId::deserialize(d)?;
+    count_one()?;
+    Ok(id)
+}
+
+/// Count one object against [`with_node_budget`].
+fn count_one<E: serde::de::Error>() -> Result<(), E> {
     if let Some((left, max)) = NODES_LEFT.get() {
-        let left = left.checked_sub(1).ok_or_else(|| serde::de::Error::custom(format!("the document has more than {max} objects")))?;
+        let left = left.checked_sub(1).ok_or_else(|| E::custom(format!("the document has more than {max} objects")))?;
         NODES_LEFT.set(Some((left, max)));
     }
-    Ok(id)
+    Ok(())
+}
+
+/// A member's Intertwine areas of tier 2 and up, each counting against [`with_node_budget`] as
+/// an object does: a compressed file of repeated empty areas stays small while they take memory
+/// once read.
+fn counted_tiers<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<PathData>, D::Error> {
+    struct Tiers;
+    impl<'de> serde::de::Visitor<'de> for Tiers {
+        type Value = Vec<PathData>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list of areas")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<PathData>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(area) = seq.next_element::<PathData>()? {
+                count_one()?;
+                out.push(area);
+            }
+            Ok(out)
+        }
+    }
+    d.deserialize_seq(Tiers)
 }
 
 /// How a [`Node`] is read: the flat field list of the file format. Fields move into the node
@@ -186,6 +216,8 @@ pub(super) struct NodeWire {
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
     intertwine: Option<Box<PathData>>,
+    #[serde(default, deserialize_with = "counted_tiers")]
+    intertwine_tiers: Vec<PathData>,
     #[serde(default)]
     live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
     #[serde(default)]
@@ -215,6 +247,7 @@ impl From<NodeWire> for Node {
             perspective: w.perspective,
             dimension: w.dimension,
             intertwine: w.intertwine,
+            intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
             objects_on_path: w.objects_on_path,
             colorize: w.colorize,

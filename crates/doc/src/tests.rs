@@ -389,6 +389,18 @@ fn char_position_round_trips() {
 }
 
 #[test]
+fn optical_kerning_round_trips_and_old_style_defaults_to_auto() {
+    let st = CharStyle { optical_kerning: true, kerning: Some(120.0), ..CharStyle::default() };
+    let value = serde_json::to_value(&st).unwrap();
+    assert_eq!(value["opticalKerning"], true);
+    assert_eq!(serde_json::from_value::<CharStyle>(value.clone()).unwrap(), st);
+    let mut old = value;
+    old.as_object_mut().unwrap().remove("opticalKerning");
+    assert!(!serde_json::from_value::<CharStyle>(old).unwrap().optical_kerning);
+    assert!(serde_json::to_value(CharStyle::default()).unwrap().get("opticalKerning").is_none());
+}
+
+#[test]
 fn units() {
     assert_eq!(Unit::Inches.parse("1"), Some(72.0));
     assert_eq!(Unit::Points.parse("1in"), Some(72.0));

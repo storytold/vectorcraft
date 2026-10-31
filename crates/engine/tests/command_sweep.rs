@@ -588,6 +588,16 @@ fn structured_junk() {
         ("addon.arrange.replace", json!({"fit": "bounds", "scaleStrokes": true})),
         ("addon.arrange.size", json!({"width": 1e6, "height": 0.001, "reference": 8, "scaleStrokes": true})),
         ("addon.arrange.size", json!({"width": 0.001, "proportional": true, "reference": u64::MAX})),
+        ("addon.arrange.groupOverlapping", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
+        ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
+        ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        // Refused before anything is written: no format of that name, a time that is no time.
+        ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
+        ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
+        ("addon.document.symbolsFromLayers", json!({"layers": "x", "replace": 3})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [1e308, -1, null, u64::MAX], "replace": true})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [], "replace": true})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),

@@ -187,7 +187,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "view.preciseCursors",
-        "Precise Cursors",
+        "Use Precise Cursors",
         "",
         "{} toggle General › Use Precise Cursors: the drawing tools' pointers become a crosshair → true when on",
     ),
@@ -656,6 +656,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Graphic Style Options…",
         "",
         "{name?} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`): for style `name` OK renames it (graphicStyle.rename); without, OK makes a new style of that name from the selection (graphicStyle.new)",
+    ),
+    (
+        "ui.charStyleOptions",
+        "Character Style Options",
+        "",
+        "{name} open Character Style Options (dialog `charStyleOptions`); OK runs charStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+    ),
+    (
+        "ui.charStyleOptions.resetPanel",
+        "Reset Panel",
+        "",
+        "{} clear the Basic Character Formats settings in the open Character Style Options or New Character Style dialog; available only on that section",
     ),
     (
         "ui.newCharStyle",

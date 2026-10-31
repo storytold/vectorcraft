@@ -484,6 +484,23 @@ fn objects_are_read_within_the_node_budget() {
     assert!(with_node_budget(3, read).is_ok());
 }
 
+/// An Intertwine member's areas of tier 2 and up are written and read back, and each one counts
+/// against [`with_node_budget`] as an object does, so a file of many empty areas is refused.
+#[test]
+fn intertwine_tiers_are_read_within_the_node_budget() {
+    let mut n = Node::group(NodeId(1), vec![]);
+    let area = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    n.extras_mut().intertwine_tiers = vec![PathData::default(), area];
+    let json = serde_json::to_string(&n).unwrap();
+    assert!(json.contains("\"intertwine_tiers\""), "{json}");
+    let read = || serde_json::from_str::<Node>(&json);
+    assert_eq!(with_node_budget(3, read).unwrap(), n, "the object and its two areas fit a budget of three");
+    let why = with_node_budget(2, read).unwrap_err().to_string();
+    assert!(why.contains("more than 2 objects"), "{why}");
+    let plain = serde_json::to_string(&Node::group(NodeId(1), vec![])).unwrap();
+    assert!(!plain.contains("intertwine_tiers"), "an object without tiers writes none: {plain}");
+}
+
 /// #3587: fields read before an object's `type` are buffered value by value within
 /// [`with_buffered_value_budget`], each counted once: a group read back from the buffer buffers
 /// its own fields again without counting them twice. VectorCraft writes `type` first, which
