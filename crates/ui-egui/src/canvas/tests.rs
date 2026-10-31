@@ -8192,3 +8192,109 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
 }
+
+/// Finished worker renders are uploaded whenever they are not older than what is currently
+/// displayed on screen. During continuous edit streams (drag previews, held arrow nudges, or
+/// command bursts) where the document revision advances every frame, intermediate worker frames
+/// are uploaded progressively to prevent the canvas from freezing. Obsolete frames older than what
+/// is already displayed are discarded.
+#[test]
+fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    let doc = app.session.active().unwrap().doc.clone();
+    let initial_key = app.canvas.key.clone().expect("first frame initializes key");
+    let key_doc = initial_key.doc;
+
+    // Displayed canvas texture is initially at revision 2.
+    let mut displayed_key = initial_key.clone();
+    displayed_key.revision = 2;
+    app.canvas.key = Some(displayed_key);
+
+    let (worker, _jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+
+    // Worker completes revision 5 (intermediate frame from an edit stream).
+    // It is newer than displayed revision 2: it MUST be accepted and uploaded.
+    let mut rev5_key = initial_key.clone();
+    rev5_key.revision = 5;
+    let img5 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![200; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev5_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img5,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "intermediate frame 5 is uploaded");
+    assert!(app.canvas.from_worker);
+
+    // Worker completes an older revision 3 (out of order). It is older than displayed 5, so discarded.
+    let mut rev3_key = initial_key.clone();
+    rev3_key.revision = 3;
+    let img3 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![150; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev3_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img3,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 5, "older out-of-order frame 3 is discarded");
+
+    // Worker completes another intermediate revision 8. Newer than displayed 5, so uploaded.
+    let mut rev8_key = initial_key.clone();
+    rev8_key.revision = 8;
+    let img8 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![180; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev8_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img8,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw.clone(), |ui| poll_worker(&mut app, ui, key_doc));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 8, "newer frame 8 is uploaded");
+
+    // Finally, the settling frame at revision 10 completes: it is accepted and uploaded.
+    let mut rev10_key = initial_key;
+    rev10_key.revision = 10;
+    let img10 = vectorcraft_render::Rendered { width: 10, height: 10, pixels: vec![255; 400] };
+    done_tx
+        .send(crate::render_worker::Done {
+            key: rev10_key,
+            doc: doc.clone(),
+            opts: vectorcraft_render::RenderOptions::default(),
+            img: img10,
+            ms: 2.5,
+            moved: 0,
+        })
+        .unwrap();
+
+    let mut out = ctx.run_ui(raw, |ui| poll_worker(&mut app, ui, key_doc));
+    out.textures_delta.clear();
+    assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
+}
