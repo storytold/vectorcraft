@@ -128,6 +128,7 @@ impl VectorcraftApp {
             #[cfg(not(target_arch = "wasm32"))]
             font_install_check_at: f64::NEG_INFINITY,
             paste_chord: Default::default(),
+            previous_shortcut_modifiers: egui::ViewportIdMap::default(),
             // Held keys repeat their command (Cmd+= keeps zooming in).
             dispatcher: craft_keymap::egui::Dispatcher::new().with_repeat(true),
             background: Default::default(),

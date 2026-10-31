@@ -64,7 +64,7 @@ fn a_paste_takes_the_command_of_the_v_chord_held() {
     // What isn't text: only the key's release is reported, with the chord's modifiers.
     let mut chord = shortcuts::PasteChord::default();
     let release = Event::Key { key: Key::V, physical_key: None, pressed: false, repeat: false, modifiers: cmd | Modifiers::SHIFT };
-    assert_eq!(chord.textless_paste(&[release]), Some(cmd | Modifiers::SHIFT));
+    assert_eq!(chord.textless_paste(&[release]), Some((Key::V, cmd | Modifiers::SHIFT)));
 }
 
 #[test]

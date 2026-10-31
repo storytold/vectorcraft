@@ -169,6 +169,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !crate::take_frame_once(&mut app.shortcuts_frames, frame) {
         return;
     }
+    let previous_modifiers = app.previous_shortcut_modifiers.insert(ctx.viewport_id(), ctx.input(|i| i.modifiers)).unwrap_or_default();
     ctx.input(|i| crate::shortcut_editor::note_backtick_text(&i.events));
     if !(ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT) {
         crate::ime::controls_without_editor(app, ctx);
@@ -177,7 +178,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Taken before anything returns, so a press in a field or a dialog ends a pair of Escapes.
     let mut escape_pair = escape_press(ctx);
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
-    let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
+    let chord_events = grid_chord_events(app, ctx, previous_modifiers);
+    let textless_paste = app.paste_chord.textless_paste(&chord_events);
     // A numeric field being scrubbed has the keyboard: Escape cancels the drag.
     if crate::scrub::phase(ctx) != crate::scrub::Phase::Idle {
         crate::ime::controls_without_editor(app, ctx);
@@ -318,6 +320,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     crate::ime::controls_without_editor(app, ctx);
+    if busy {
+        grid_command_letters(app, ctx, view, previous_modifiers);
+    }
+    let textless_paste = grid_textless_paste(app, busy, view, textless_paste);
     handle_clipboard(app, ctx, textless_paste);
     if busy {
         busy_tool_keys(app, ctx, view);
@@ -326,8 +332,20 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if claimed_tool_keys(app, ctx, view) {
         return;
     }
-    // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
-    // other text keys use the typed character below.
+    let ran = dispatch_command_shortcuts(app, ctx);
+    if settings_on_a_mac(app, ctx, mac(ctx)) || ran {
+        return;
+    }
+    if alt_type_arrows(app, ctx) {
+        return;
+    }
+    nudge_and_clear(app, ctx);
+    single_key_shortcuts(app, ctx);
+}
+
+/// Run command, panel and tool chords, using typed text for plain text keys.
+fn dispatch_command_shortcuts(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    // A bound shifted punctuation chord uses its key press; other text keys use the typed character.
     let hits = dispatch(app, ctx, |hit| {
         let chord = hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
@@ -337,14 +355,136 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     for c in hits {
         run_hit(app, ctx, &c);
     }
-    if settings_on_a_mac(app, ctx, mac(ctx)) || ran {
+    ran
+}
+
+/// Let the paste guard track clipboard events claimed by a dragging grid.
+fn grid_chord_events(app: &mut VectorcraftApp, ctx: &egui::Context, previous_modifiers: Modifiers) -> Vec<egui::Event> {
+    let grid_claims_v = app.session.tool_busy()
+        && matches!(app.session.tool_id(), "rectangularGrid" | "polarGrid")
+        && app.session.tool_claims_key(ToolKey::Letter('v'), app.view_info());
+    ctx.input(|i| {
+        let clipboard_modifiers = clipboard_event_modifiers(&i.events, previous_modifiers);
+        i.events
+            .iter()
+            .enumerate()
+            .map(|(index, event)| {
+                let modifiers = clipboard_modifiers.get(index).copied().flatten().unwrap_or_default();
+                if grid_claims_v
+                    && (modifiers.command || modifiers.ctrl)
+                    && !modifiers.alt
+                    && matches!(event, egui::Event::Paste(_) | egui::Event::PasteImage(_))
+                {
+                    // The matching paste key release clears this guard, even when the key is not V.
+                    egui::Event::Paste(String::new())
+                } else {
+                    event.clone()
+                }
+            })
+            .collect()
+    })
+}
+
+/// Suppress a clipboard paste triggered by a key release during a grid drag.
+fn grid_textless_paste(app: &mut VectorcraftApp, busy: bool, view: ViewInfo, textless_paste: Option<(Key, Modifiers)>) -> Option<Modifiers> {
+    textless_paste.and_then(|(key, modifiers)| {
+        if key == Key::V
+            && (modifiers.command || modifiers.ctrl)
+            && !modifiers.alt
+            && busy
+            && matches!(app.session.tool_id(), "rectangularGrid" | "polarGrid")
+            && app.session.tool_claims_key(ToolKey::Letter('v'), view)
+        {
+            let requests = app.session.tool_key(ToolKey::Letter('v'), Mods::default(), view);
+            crate::canvas::apply_requests(app, requests);
+            None
+        } else {
+            Some(modifiers)
+        }
+    })
+}
+
+/// Send command-modified grid letters to a dragging grid and consume any clipboard event from
+/// the same press before clipboard commands run.
+fn grid_command_letters(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo, previous_modifiers: Modifiers) {
+    if !matches!(app.session.tool_id(), "rectangularGrid" | "polarGrid") {
         return;
     }
-    if alt_type_arrows(app, ctx) {
+    let events = ctx.input(|i| i.events.clone());
+    let mut claimed = |c| app.session.tool_claims_key(ToolKey::Letter(c), view);
+    let key_letters: Vec<char> = events
+        .iter()
+        .filter_map(|e| match e {
+            egui::Event::Key { key, pressed: true, repeat: false, modifiers, .. } if (modifiers.command || modifiers.ctrl) && !modifiers.alt => {
+                letter_of(*key).filter(|c| matches!(c, 'f' | 'v' | 'x' | 'c') && claimed(*c))
+            }
+            _ => None,
+        })
+        .collect();
+    let mut letters = key_letters.clone();
+    let mut claimed_clipboard = vec![];
+    for (index, modifiers) in clipboard_event_modifiers(&events, previous_modifiers).into_iter().enumerate() {
+        let Some(modifiers) = modifiers else { continue };
+        let Some(event) = events.get(index) else { continue };
+        let c = match event {
+            egui::Event::Paste(_) | egui::Event::PasteImage(_) => Some('v'),
+            egui::Event::Copy => Some('c'),
+            egui::Event::Cut => Some('x'),
+            _ => None,
+        };
+        if let Some(c) = c
+            && (modifiers.command || modifiers.ctrl)
+            && !modifiers.alt
+            && claimed(c)
+        {
+            claimed_clipboard.push(index);
+            if !letters.contains(&c) {
+                letters.push(c);
+            }
+        }
+    }
+    if letters.is_empty() {
         return;
     }
-    nudge_and_clear(app, ctx);
-    single_key_shortcuts(app, ctx);
+    ctx.input_mut(|i| {
+        let mut index = 0;
+        i.events.retain(|e| {
+            let claimed = claimed_clipboard.contains(&index);
+            index += 1;
+            if claimed {
+                return false;
+            }
+            match e {
+                egui::Event::Key { key, pressed: true, repeat: false, modifiers, .. } if (modifiers.command || modifiers.ctrl) && !modifiers.alt => {
+                    !letter_of(*key).is_some_and(|c| letters.contains(&c))
+                }
+                _ => true,
+            }
+        });
+    });
+    for c in letters {
+        let _ = app.session.tool_key(ToolKey::Letter(c), Mods::default(), view);
+    }
+}
+
+/// The modifiers at each clipboard event, updated by modifier changes and key events in order.
+fn clipboard_event_modifiers(events: &[egui::Event], previous: Modifiers) -> Vec<Option<Modifiers>> {
+    let mut current = previous;
+    events
+        .iter()
+        .map(|event| match event {
+            egui::Event::ModifiersChanged(modifiers) => {
+                current = *modifiers;
+                None
+            }
+            egui::Event::Key { modifiers, .. } => {
+                current = *modifiers;
+                None
+            }
+            egui::Event::Paste(_) | egui::Event::PasteImage(_) | egui::Event::Copy | egui::Event::Cut => Some(current),
+            _ => None,
+        })
+        .collect()
 }
 
 fn remember_escape_pair(ctx: &egui::Context, key: Key, escape_pair: Option<bool>) {

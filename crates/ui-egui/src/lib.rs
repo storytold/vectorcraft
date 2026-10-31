@@ -221,6 +221,8 @@ pub struct VectorcraftApp {
     font_install_check_at: f64,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
+    /// Final keyboard modifiers from each viewport's previous shortcut input frame.
+    pub(crate) previous_shortcut_modifiers: egui::ViewportIdMap<egui::Modifiers>,
     /// Runs the frame's key presses against the keymap ([`shortcuts::handle`]).
     pub(crate) dispatcher: craft_keymap::egui::Dispatcher,
     /// Saves and exports running in the background (Preferences → File Handling).

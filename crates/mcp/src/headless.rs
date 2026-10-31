@@ -217,11 +217,13 @@ impl Headless {
         let key = s(p, "key").ok_or("missing `key`")?;
         let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
         let mods = Mods { shift: b("shift"), alt: b("alt"), cmd: b("cmd"), ctrl: b("ctrl"), ..Mods::default() };
-        // A letter reaches the tool only when the tool claims it without Cmd, Ctrl or Alt (E while
-        // a selection marquee is dragged); otherwise it is a shortcut.
+        // A claimed grid letter reaches a dragging grid with Cmd or Ctrl; other claimed letters
+        // reach their tools without Cmd, Ctrl or Alt.
         let mut tk = tool_key(key);
         if let Some(k @ ToolKey::Letter(_)) = tk
-            && (mods.cmd || mods.ctrl || mods.alt || !self.session.tool_claims_key(k, self.view))
+            && (mods.alt
+                || !self.session.tool_claims_key(k, self.view)
+                || ((mods.cmd || mods.ctrl) && !matches!(self.session.tool_id(), "rectangularGrid" | "polarGrid")))
         {
             tk = None;
         }

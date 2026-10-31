@@ -845,6 +845,258 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
 }
 
+/// Grid letters change the stored skews once per press while a polar grid is dragged, including
+/// command chords that egui reports as clipboard events.
+#[test]
+fn grid_drag_letters_take_plain_shift_and_command_presses_without_clipboard_actions() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.session.execute("select.all", &json!({})).unwrap();
+    let selected = app.session.active().unwrap().selection.objects.len();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let child_count = app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let skews = |app: &VectorcraftApp| (app.session.tool_options()["radialSkew"].clone(), app.session.tool_options()["concentricSkew"].clone());
+    frame(&mut app, press(Key::V, Modifiers::NONE));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::F, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(0.0), json!(0.0)));
+    frame(&mut app, press(Key::V, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(-10.0)));
+    frame(&mut app, press(Key::C, Modifiers::SHIFT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    frame(&mut app, press(Key::X, Modifiers::ALT));
+    assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
+    let command = command_key();
+    for (key, suffix, expected) in [
+        (Key::V, egui::Event::Paste("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>".into()), (20.0, 0.0)),
+        (Key::X, egui::Event::Cut, (20.0, -10.0)),
+        (Key::C, egui::Event::Copy, (20.0, 0.0)),
+    ] {
+        let mut events = press(key, command);
+        events.push(suffix.clone());
+        frame(&mut app, events);
+        assert_eq!(skews(&app), (json!(expected.0), json!(expected.1)), "{key:?}");
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), selected, "{key:?} changed selection");
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), child_count, "{key:?} changed document");
+        assert!(app.session.clipboard.is_empty(), "{key:?} changed clipboard");
+    }
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), egui::Event::Paste("<svg/>".into())]);
+    assert_eq!(skews(&app), (json!(30.0), json!(0.0)), "clipboard-only V changes skew once");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), egui::Event::Cut]);
+    assert_eq!(skews(&app), (json!(30.0), json!(-10.0)), "clipboard-only X changes skew once");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), egui::Event::Copy]);
+    assert_eq!(skews(&app), (json!(30.0), json!(0.0)), "clipboard-only C changes skew once");
+    frame(&mut app, press(Key::F, command));
+    assert_eq!(skews(&app), (json!(20.0), json!(0.0)), "command F changes skew");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    assert_eq!(skews(&app), (json!(20.0), json!(0.0)), "the options stay after release");
+    app.session.execute("select.all", &json!({})).unwrap();
+    let mut copy = press(Key::C, command);
+    copy.push(egui::Event::Copy);
+    frame(&mut app, copy);
+    assert!(!app.session.clipboard.is_empty(), "the clipboard chord works after the drag");
+}
+
+/// A clipboard event keeps the chord modifiers that were held before a release in the same frame.
+#[test]
+fn grid_drag_paste_before_command_release_changes_skew_without_pasting() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command_key())]);
+    frame(
+        &mut app,
+        vec![
+            egui::Event::Paste("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>".into()),
+            egui::Event::ModifiersChanged(Modifiers::NONE),
+        ],
+    );
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0));
+    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), count);
+}
+
+/// A frame in another viewport does not change the modifiers remembered for a root grid drag.
+#[test]
+fn grid_drag_paste_uses_previous_modifiers_from_root_viewport() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let ctx = egui::Context::default();
+    let aux = egui::ViewportId::from_hash_of("grid-drag-aux");
+    let run = |app: &mut VectorcraftApp, viewport, events| {
+        let mut raw = egui::RawInput { viewport_id: viewport, events, ..Default::default() };
+        raw.viewports.entry(viewport).or_default();
+        let mut out = ctx.run_ui(raw, |ui| handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    run(&mut app, egui::ViewportId::ROOT, vec![egui::Event::ModifiersChanged(command_key())]);
+    run(&mut app, aux, vec![]);
+    run(
+        &mut app,
+        egui::ViewportId::ROOT,
+        vec![
+            egui::Event::Paste("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>".into()),
+            egui::Event::ModifiersChanged(Modifiers::NONE),
+        ],
+    );
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0));
+    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), count);
+}
+
+/// A command V key press supplies the modifiers for the Paste event that follows it.
+#[test]
+fn grid_drag_key_press_before_paste_changes_skew_without_pasting() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    frame(&mut app, vec![]);
+    let mut events = vec![egui::Event::Key { key: Key::V, physical_key: Some(Key::V), pressed: true, repeat: false, modifiers: command_key() }];
+    events.push(egui::Event::Paste("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>".into()));
+    frame(&mut app, events);
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0));
+    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), count);
+}
+
+/// Copy before the command release changes the concentric skew without copying the selection.
+#[test]
+fn grid_drag_copy_before_command_release_changes_skew_without_copying() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.session.execute("select.all", &json!({})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command_key())]);
+    frame(&mut app, vec![egui::Event::Copy, egui::Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(app.session.tool_options()["concentricSkew"], json!(10.0));
+    assert!(app.session.clipboard.is_empty());
+}
+
+/// A Paste event after command release still adds its SVG object during the drag.
+#[test]
+fn grid_drag_paste_after_command_release_remains_a_paste() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let mut events = press(Key::V, command_key());
+    events.push(egui::Event::ModifiersChanged(Modifiers::NONE));
+    events.push(egui::Event::Paste("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>".into()));
+    frame(&mut app, events);
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0));
+    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), count + 1);
+}
+
+/// A claimed V press cannot paste when its release arrives after the grid gesture ends.
+#[test]
+fn grid_drag_claimed_v_release_after_pointer_up_does_not_paste() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let command = command_key();
+    let image = egui::Event::PasteImage(std::sync::Arc::new(egui::ColorImage::filled([1, 1], egui::Color32::BLUE)));
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), image]);
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0));
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    let release = egui::Event::Key { key: Key::V, physical_key: Some(Key::V), pressed: false, repeat: false, modifiers: command };
+    assert_eq!(app.paste_chord.textless_paste(&[release]), None);
+}
+
+/// A dedicated Paste key release clears a claimed clipboard event before a later image paste.
+#[test]
+fn grid_drag_paste_key_release_does_not_block_later_v_image_paste() {
+    use vectorcraft_engine::cmd::clipboard::PNG;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut app, board) = crate::tests_sysclip::app();
+    crate::tests_sysclip::copy_elsewhere(&board, vec![(PNG, crate::tests_sysclip::blue_png())]);
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let initial = count(&app);
+    let command = command_key();
+    let release = |key| egui::Event::Key { key, physical_key: Some(key), pressed: false, repeat: false, modifiers: command };
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), egui::Event::Paste("<svg/>".into()), release(Key::Paste)]);
+    assert_eq!(count(&app), initial, "the grid claims the clipboard event");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+    assert_eq!(app.paste_chord.clone().textless_paste(&[release(Key::V)]), Some((Key::V, command)));
+    frame(&mut app, vec![release(Key::V)]);
+    assert_eq!(count(&app), initial + 1, "the later image paste adds its object");
+}
+
+/// A reported V press and paste leave no guard after the V release.
+#[test]
+fn grid_drag_reported_v_release_clears_paste_guard() {
+    let command = command_key();
+    let release = egui::Event::Key { key: Key::V, physical_key: Some(Key::V), pressed: false, repeat: false, modifiers: command };
+    let mut chord = paste::PasteChord::default();
+    let mut events = press(Key::V, command);
+    events.push(egui::Event::Paste(String::new()));
+    events.push(release.clone());
+    assert_eq!(chord.textless_paste(&events), None);
+    assert_eq!(chord.textless_paste(&[release]), Some((Key::V, command)));
+}
+
+/// A grid takes command V while dedicated Paste and Alt+command V still paste images.
+#[test]
+fn grid_drag_only_suppresses_claimed_v_textless_paste() {
+    use vectorcraft_engine::cmd::clipboard::PNG;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut app, board) = crate::tests_sysclip::app();
+    crate::tests_sysclip::copy_elsewhere(&board, vec![(PNG, crate::tests_sysclip::blue_png())]);
+    app.select_tool("polarGrid");
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
+    let initial = count(&app);
+    let release = |key, modifiers| egui::Event::Key { key, physical_key: Some(key), pressed: false, repeat: false, modifiers };
+    let command = command_key();
+    frame(&mut app, vec![egui::Event::ModifiersChanged(command), release(Key::V, command)]);
+    assert_eq!(count(&app), initial, "the grid takes command V");
+    assert_eq!(app.session.tool_options()["radialSkew"], json!(10.0), "a release-only command V changes the grid skew once");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::NONE), release(Key::Paste, Modifiers::NONE)]);
+    assert_eq!(count(&app), initial + 1, "the Paste key pastes while the grid is dragged");
+    let alt_command = command | Modifiers::ALT;
+    frame(&mut app, vec![egui::Event::ModifiersChanged(alt_command), release(Key::V, alt_command)]);
+    assert_eq!(count(&app), initial + 2, "Alt+command V pastes while the grid is dragged");
+}
+
 /// A press of `key` with `m` held.
 fn press(key: Key, m: Modifiers) -> Vec<egui::Event> {
     vec![egui::Event::ModifiersChanged(m), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: m }]

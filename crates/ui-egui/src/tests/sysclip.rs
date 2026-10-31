@@ -17,7 +17,7 @@ use crate::{Services, SystemClipboard, VectorcraftApp, background, menus};
 
 /// The fake clipboard's contents: what the app wrote, or what "another app" copied.
 #[derive(Default)]
-pub(super) struct Board {
+pub(crate) struct Board {
     flavours: Vec<Flavour>,
     ours: bool,
     /// How many times the app wrote it.
@@ -52,7 +52,7 @@ impl SystemClipboard for Fake {
 }
 
 /// An app with a document and a fake system clipboard, the view centred on (250, 180).
-pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
+pub(crate) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
     let board = Rc::new(RefCell::new(Board::default()));
     let services = Services { system_clipboard: Some(Box::new(Fake(board.clone()))), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
@@ -63,7 +63,7 @@ pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 }
 
 /// Another app copies `flavours`.
-pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
+pub(crate) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.borrow_mut();
     *b = Board { flavours, ours: false, writes: b.writes };
