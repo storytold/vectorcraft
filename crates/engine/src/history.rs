@@ -19,6 +19,14 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// A number no other step takes ([`History::step`]).
+    serial: u64,
+}
+
+/// The next [`HistoryEntry::serial`]: 1 for the first step made, so 0 never names a step.
+fn next_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -45,7 +53,7 @@ impl HistoryEntry {
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
         let (bytes, next_bytes) = doc.retained_bytes_each(next);
-        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None, serial: next_serial() }
     }
 
     /// The template and name the step's label was made from, while the label is still the one
@@ -66,7 +74,16 @@ impl HistoryEntry {
             return Self::kept(label, doc, selection, now);
         }
         doc.drop_lookup_cache();
-        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize, named: None }
+        HistoryEntry {
+            label,
+            doc,
+            selection,
+            bytes: costs.next_bytes,
+            next_bytes: costs.bytes,
+            next: Arc::as_ptr(now) as usize,
+            named: None,
+            serial: next_serial(),
+        }
     }
 
     /// The figures [`HistoryEntry::turned`] reuses.
@@ -109,6 +126,13 @@ impl History {
     /// Roughly the memory the steps keep of their own ([`HistoryEntry::bytes`]).
     pub fn bytes(&self) -> usize {
         self.undo.iter().chain(&self.redo).map(|e| e.bytes).sum()
+    }
+
+    /// Which step the document is at: the newest undo step and the next redo step, by numbers no
+    /// other step takes (0 for none). Every new step, Undo and Redo changes it; an edit merged into
+    /// the newest step (an undo group) and a selection change do not.
+    pub fn step(&self) -> (u64, u64) {
+        (self.undo.last().map_or(0, |e| e.serial), self.redo.last().map_or(0, |e| e.serial))
     }
 
     /// Let the oldest steps go while over the step limit or the memory budget: undo steps first

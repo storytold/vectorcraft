@@ -60,6 +60,10 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The active document (its uid) and its [`History::step`] when the tool last handled a pointer
+    /// event or drew its overlays: when they differ at the next one, the tool is told first
+    /// ([`vectorcraft_tools::Tool::history_moved`]). None until the first.
+    pub(crate) tool_step: Option<(u64, (u64, u64))>,
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
