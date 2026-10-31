@@ -99,6 +99,25 @@ pub(crate) fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> 
     IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(n))
 }
 
+/// One level of evaluation of a live object in a document, as the canvas draws it: type in an
+/// envelope as its distorted glyph outlines, symbol instances as their art. Effects are evaluated
+/// above this crate, so the engine registers one with [`set_live_art`].
+pub type LiveArt = fn(Option<&Document>, &Node) -> Vec<Node>;
+
+static LIVE_ART: OnceLock<LiveArt> = OnceLock::new();
+
+/// Register how a live object's art is evaluated for clicks (the first registration stays).
+pub fn set_live_art(f: LiveArt) {
+    // Already set: the same engine, registered by another session.
+    let _ = LIVE_ART.set(f);
+}
+
+/// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
+/// nothing is registered.
+fn live_art(doc: &Document, n: &Node) -> Vec<Node> {
+    LIVE_ART.get().map_or_else(|| crate::live::expand_live(n), |f| f(Some(doc), n))
+}
+
 /// Topmost editable object under `p`.
 pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
     hit_test_skipping(doc, p, opt, &|_| false, true)
@@ -611,8 +630,17 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
                 AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
             })
         }
-        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
+        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } => {
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+        }
+        // A blend or an envelope is hit within its bounds, and outside them where its evaluated
+        // art paints: a blend's keys and steps on a spine can reach past the keys and the spine,
+        // and the strokes of an envelope's distorted contents past its bounds.
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
+            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+                return Some(HitKind::Bounds);
+            }
+            live_art(symbols.document(), n).iter().find_map(|g| hit_any(g, p, opt, symbols))
         }
         NodeKind::Repeat(r) => r.expand(Some(symbols.document())).iter().find_map(|g| hit_any(g, p, opt, symbols)),
         NodeKind::Mesh(m) => {
@@ -650,8 +678,18 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
 
 /// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]).
 fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    // Hidden art does not hit.
+    if !n.visible {
+        return None;
+    }
     match &n.kind {
-        NodeKind::Group { children, .. } => children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols)),
+        // A clip group only hits inside its clipping path.
+        NodeKind::Group { children, clip } => {
+            if *clip && children.first().is_some_and(|c| !clip_contains(c, p)) {
+                return None;
+            }
+            children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols))
+        }
         _ => hit_leaf(n, p, opt, symbols),
     }
 }

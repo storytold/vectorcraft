@@ -20,6 +20,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them.
+        vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live);
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
