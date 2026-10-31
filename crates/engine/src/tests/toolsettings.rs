@@ -96,3 +96,38 @@ fn options_are_saved_with_the_preferences() {
     t.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(t.prefs.tool_settings["polygon"]["sides"], json!(9));
 }
+
+/// The Fidelity an Alt smoothing drag uses on a selected path.
+fn alt_smooth_fidelity(s: &mut Session) -> Option<f64> {
+    use vectorcraft_tools::{Action, Mods, PointerEvent, PointerKind};
+    let mods = Mods { alt: true, ..Default::default() };
+    let mut last = vec![];
+    for (kind, x, y) in [(PointerKind::Down, 50.0, 150.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 250.0, 160.0)] {
+        let ev = PointerEvent { mods, ..PointerEvent::new(kind, x, y) };
+        last = s.with_tool_cx(ViewInfo::default(), |t, cx| t.pointer(cx, &ev));
+    }
+    last.iter().find_map(|a| match a {
+        Action::Exec(c, v) if c == "path.smoothRegion" => v["fidelity"].as_f64(),
+        _ => None,
+    })
+}
+
+/// Alt switches Pencil, Paintbrush and Blob Brush to Smooth, using Smooth Tool Options' stored Fidelity.
+#[test]
+fn alt_smoothing_takes_the_smooth_tools_fidelity() {
+    for id in ["pencil", "paintbrush", "blobBrush"] {
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        select(&mut s, "smooth");
+        s.set_tool_option("fidelity", &json!(6));
+        select(&mut s, id);
+        if id == "pencil" {
+            s.set_tool_option("altSmooth", &json!(true));
+        }
+        s.set_tool_option("fidelity", &json!(3));
+        assert_eq!(alt_smooth_fidelity(&mut s), Some(6.0), "{id}");
+        s.set_tool_option_cmd(&json!({"tool": "smooth", "key": "fidelity", "value": 9})).unwrap();
+        assert_eq!(alt_smooth_fidelity(&mut s), Some(9.0), "{id}");
+        assert_eq!(s.tool_options()["fidelity"], json!(3.0), "{id}");
+    }
+}

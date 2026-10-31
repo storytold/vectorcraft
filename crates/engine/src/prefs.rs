@@ -216,6 +216,11 @@ pub struct Prefs {
     /// `imageTrace.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub trace_presets: Vec<cmd::TracePreset>,
+    /// Gradient panel › Presets: the user's saved gradients (the built-in presets aren't stored).
+    /// A local library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `gradient.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -448,6 +453,7 @@ impl Default for Prefs {
             glyph_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
+            gradient_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,

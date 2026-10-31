@@ -147,6 +147,7 @@ impl Session {
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
         use vectorcraft_tools::catalog::{edits_anchors, is_selection_tool};
@@ -155,6 +156,9 @@ impl Session {
         }
         if id == "directSelection" && mods.cmd && mods.alt {
             return Some("groupSelection");
+        }
+        if id == "perspectiveSelection" && mods.cmd && mods.alt {
+            return None;
         }
         if is_selection_tool(id) {
             return None;
@@ -215,6 +219,12 @@ impl Session {
                     t.set_option(k, v);
                 }
             }
+        }
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+        {
+            t.set_option("smoothFidelity", v);
         }
     }
 
@@ -623,7 +633,8 @@ impl Session {
 
     /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
     /// stored for when it is chosen, and the active tool takes those it shares with it (the
-    /// Liquify tools' Global Brush Dimensions). Returns the tool's options.
+    /// Liquify tools' Global Brush Dimensions, the Smooth tool's Fidelity for Pencil, Paintbrush
+    /// and Blob Brush Alt smoothing). Returns the tool's options.
     pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
@@ -743,8 +754,9 @@ impl Session {
                 Action::Begin(label) => self.begin_interaction(&label)?,
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
-                    // params and apply them once on Commit instead of every move.
-                    if !self.prefs.real_time_drawing {
+                    // params and apply them once on Commit instead of every move. A ruler guide
+                    // being dragged still shows: the guide is all there is to see (#4646).
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {

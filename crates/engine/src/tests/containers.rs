@@ -336,7 +336,7 @@ fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!(hidden.matches("<path").count() + 1, shown.matches("<path").count(), "{hidden}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&hidden) + 1, vectorcraft_testkit::svg_shapes(&shown), "{hidden}");
     // Expand Appearance keeps the type's opacity and visibility on its outlines.
     run(&mut s, "select.set", json!({"ids": [g.0]}));
     run(&mut s, "effect.expandAppearance", json!({}));
@@ -355,5 +355,5 @@ fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!((shown.matches("<path").count(), hidden.matches("<path").count()), (1, 0), "{hidden}");
+    assert_eq!((vectorcraft_testkit::svg_shapes(&shown), vectorcraft_testkit::svg_shapes(&hidden)), (1, 0), "{hidden}");
 }

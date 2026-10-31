@@ -282,6 +282,20 @@ impl ToolContext<'_> {
     pub fn star_radii_label(&self, outer: f64, inner: f64) -> String {
         format!("R1: {}\nR2: {}", self.len(outer), self.len(inner))
     }
+    /// The move an arrow key nudges by: General › Keyboard Increment (ten times with Shift),
+    /// along General › Constrain Angle's axes; `None` for other keys.
+    pub fn arrow_nudge(&self, key: crate::ToolKey, mods: crate::Mods) -> Option<Vec2> {
+        use crate::ToolKey;
+        let step = self.keyboard_increment * if mods.shift { 10.0 } else { 1.0 };
+        let d = match key {
+            ToolKey::Left => Point::new(-step, 0.0),
+            ToolKey::Right => Point::new(step, 0.0),
+            ToolKey::Up => Point::new(0.0, -step),
+            ToolKey::Down => Point::new(0.0, step),
+            _ => return None,
+        };
+        Some(vectorcraft_geom::constrain_axes(self.constrain_angle).map_or(d, |axes| axes * d).to_vec2())
+    }
     /// A move label: `dX: …` over `dY: …`.
     pub fn offset_label(&self, dx: f64, dy: f64) -> String {
         format!("dX: {}\ndY: {}", self.len(dx), self.len(dy))

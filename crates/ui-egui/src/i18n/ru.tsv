@@ -507,7 +507,7 @@ font-technology	Variable	Вариативные
 	Collect in New Layer	Собрать в новый слой
 	Collect Links in a Separate Folder	Собрать связи в отдельную папку
 	Color	Цвет
-	Color (,)	Цвет (,)
+	Color (, or <)	Цвет (, или <)
 	Color Adjustments	Настройки цвета
 	Color bars	Цветные полосы
 	Color blindness – Deuteranopia-type	Дальтонизм — дейтеранопия
@@ -1281,7 +1281,7 @@ file-filter	Templates	Шаблоны
 	GPL palettes keep solid colours only, as RGB.	Палитры GPL сохраняют только сплошные цвета в RGB.
 	GPU Performance	Производительность GPU
 	Gradient	Градиент
-	Gradient (.)	Градиент (.)
+	Gradient (. or >)	Градиент (. или >)
 	Gradient across stroke	Градиент поперёк обводки
 	Gradient along stroke	Градиент вдоль обводки
 	Gradient and Mesh Resolution:	Разрешение градиентов и сеток:
@@ -1428,6 +1428,7 @@ file-filter	Templates	Шаблоны
 	Delete Guides	Удалить направляющие
 	Delete Slice	Удалить фрагмент
 	Delete Style	Удалить стиль
+	Delete Styles	Удалить стили
 	Delete Variables	Удалить переменные
 	Delete View	Удалить вид
 	Done Editing Pattern	Завершить редактирование узора
@@ -1938,6 +1939,7 @@ file-filter	Templates	Шаблоны
 	Move in Perspective	Переместить в перспективе
 	Move Locked and Hidden Artwork with Artboard	Перемещать заблокированный и скрытый рисунок вместе с монтажной областью
 	Move Mesh Point	Переместить точку сетки
+	Move Mesh Points	Переместить точки сетки
 	Move Plane	Переместить плоскость
 	Move Plane to Match Object	Переместить плоскость по объекту
 	Move Rows	Переместить строки
@@ -2667,6 +2669,7 @@ mark-style	Japanese	Японский
 	Repeat Tab	Повторить табуляцию
 	Repeat {name}	Повторить {name}
 	Replace	Заменить
+	Replace:	Заменить:
 	Replace Font	Заменить шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замените его другим файлом или игнорируйте: его изображения продолжат показывать предварительный просмотр, сохранённый с документом.
 	Replace Spine	Заменить остов
@@ -4190,6 +4193,7 @@ axis	Both	Оба
 @msg	no document	нет документа
 @msg	no document open	нет открытого документа
 @msg	no effect applied yet	эффект ещё не применён
+@msg	no Pathfinder operation applied yet	операция обработки контуров ещё не применена
 @msg	no effect at index {k}	нет эффекта с индексом {k}
 @msg	no end record	нет конечной записи
 @msg	no file manager here	здесь нет файлового менеджера
@@ -5671,3 +5675,295 @@ theme	Appearance	Оформление
 	Glyph Bounds	Границы глифа
 	Proximity Guides	Направляющие близости
 	Angular Guides	Угловые направляющие
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Усреднить и соединить…
+	Average & Join	Усреднить и соединить
+anchor	Points:	Точки:
+@msg	select two open path ends, or two open paths, to average and join	выделите два конца открытых контуров или два открытых контура для усреднения и соединения
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Очистка графики
+	Simplify Anchors (Keep Shape)…	Упростить опорные точки (сохранить форму)…
+	Health Check	Проверка состояния
+	Show Issue	Показать проблему
+	Fix All Issues	Исправить все проблемы
+	Fix Issues	Исправить проблемы
+	Deep Ungroup…	Разгруппировать все уровни…
+	Rejoin Path Pieces…	Соединить части контуров…
+	Document Health Check	Проверка состояния документа
+	Check Selection	Проверить выделение
+	Check Document	Проверить документ
+	No issues found.	Проблем не найдено.
+	Changed since the last check.	Изменено после последней проверки.
+	Fix Selected	Исправить выбранные
+	Fix All	Исправить все
+	Issues fixed: {count}	Исправлено проблем: {count}
+	Open a document to check it for issues.	Откройте документ, чтобы проверить его на проблемы.
+	Empty Text	Пустой текст
+	Unpainted Objects	Объекты без заливки и обводки
+	Zero-Opacity Objects	Объекты с нулевой непрозрачностью
+	Duplicate Objects	Дублирующиеся объекты
+	Off-Artboard Art	Графика за пределами монтажных областей
+	Duplicate Anchors	Дублирующиеся опорные точки
+	Tiny Handles	Крошечные маркеры
+	Collinear Anchors	Коллинеарные опорные точки
+	Nearly Coincident Anchors	Почти совпадающие опорные точки
+	Nearly Closed Paths	Почти замкнутые контуры
+	Filled Open Paths	Открытые контуры с заливкой
+	Needless Clipping Groups	Лишние группы обрезки
+	Needless Compound Paths	Лишние составные контуры
+	Needless Groups	Лишние группы
+	Empty Artboards	Пустые монтажные области
+	Protect Corners	Защищать углы
+	Gap	Зазор
+	Include Clip Groups	Включить группы обрезки
+@msg	`tolerance` must be from 1 to 100	`tolerance` должно быть от 1 до 100
+@msg	`gap` must be from 0 to 6 pt	`gap` должно быть от 0 до 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Упростить опорные точки: у контуров слишком много опорных точек, чтобы упростить их за один раз
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Соединить части контуров: слишком много контуров, чтобы соединить их за один раз
+@msg	None of these issues are left: check again	Ни одной из этих проблем больше нет: проверьте снова
+@msg	`kinds` must be a list of issue kinds	`kinds` должно быть списком видов проблем
+@msg	missing `kind`	не указан `kind`
+	Simplify Anchors (Keep Shape)	Упростить опорные точки (сохранить форму)
+	Deep Ungroup	Разгруппировать все уровни
+	Rejoin Path Pieces	Соединить части контуров
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Цветовые эффекты
+	Color Effects Panel	Панель «Цветовые эффекты»
+	Exposure	Экспозиция
+	Exposure…	Экспозиция…
+	Desaturate	Обесцветить
+	Adjustment	Коррекция
+	Add as Effect	Добавить как эффект
+	Apply as Filter	Применить как фильтр
+	Select objects to adjust their colors.	Выделите объекты, чтобы настроить их цвета.
+	Brightness/Contrast	Яркость/контраст
+	Hue/Saturation	Оттенок/насыщенность
+	Temperature/Tint	Температура/оттенок
+@msg	`{id}` is not a colour adjustment	`{id}` не является цветокоррекцией
+@msg	missing `effect`	отсутствует `effect`
+@msg	`params` must be an object	`params` должно быть объектом
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Инструменты точной правки контуров
+	Anchor Eraser Brush	Кисть-ластик опорных точек
+	Extend Path Tool	Инструмент «Продление контура»
+	Measure & Inspect Tool	Инструмент «Измерение и анализ»
+	Anchor Inspector	Инспектор опорных точек
+	Add Points at Crossings	Добавить точки на пересечениях
+	Split at Crossings	Разрезать на пересечениях
+	Extend Path	Продлить контур
+	Measure & Inspect	Измерение и анализ
+	Set Anchor	Задать опорную точку
+	Make Smooth	Сделать гладкой
+	Make Corner	Сделать угловой
+	Equalize Handles	Выровнять длину маркеров
+	Remove Points, Keep Shape	Убрать точки, сохранить форму
+	Add Points to Segments…	Добавить точки в сегменты…
+	Add Points to Segments	Добавить точки в сегменты
+	Open a document to edit its anchor points.	Откройте документ, чтобы править его опорные точки.
+	Anchors selected: {count}	Выбрано опорных точек: {count}
+	Direct-select anchor points to edit them.	Выделите опорные точки напрямую, чтобы править их.
+	In:	Вход:
+	Out:	Выход:
+	Add Points	Добавить точки
+	Points per segment	Точек на сегмент
+	Close Path:	Замкнуть контур:
+	Keep Handles	Сохранить маркеры
+	Straight	Прямой
+	Stretch Curve	Растянуть кривую
+@msg	direct-select the anchor points to remove	выделите напрямую опорные точки, которые нужно убрать
+@msg	select segments, or paths, to add points to	выделите сегменты или контуры, в которые нужно добавить точки
+@msg	select open paths to close	выделите незамкнутые контуры, чтобы замкнуть их
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	контуров слишком много или они слишком запутаны, чтобы найти их пересечения (не более 10000 сегментов)
+@msg	the paths have too many anchors to edit at once	у контуров слишком много опорных точек, чтобы править их за раз
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Инструмент «Параметрическая фигура»
+	Parametric Shape	Параметрическая фигура
+	Edit Parametric Shape	Изменить параметрическую фигуру
+	Convert to Parametric Shape	Преобразовать в параметрическую фигуру
+	Ring	Кольцо
+	Heart	Сердце
+	Gear	Шестерёнка
+	Speech Bubble	Речевой пузырь
+	Count:	Количество:
+	Thickness:	Толщина:
+	Inner Radius:	Внутренний радиус:
+	Head:	Наконечник:
+	Shaft:	Древко:
+	Point:	Острие:
+	Tooth Height:	Высота зуба:
+	Tail:	Хвостик:
+	Tip:	Кончик:
+	Open a document to draw parametric shapes.	Откройте документ, чтобы рисовать параметрические фигуры.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Выделите параметрическую фигуру, чтобы править её. Без выделения эти значения применяются к следующей фигуре.
+@msg	the object is not an editable parametric shape	объект не является редактируемой параметрической фигурой
+@msg	select plain rectangles, ellipses or regular polygons to convert	выделите обычные прямоугольники, эллипсы или правильные многоугольники для преобразования
+@msg	the shape's numbers are out of range	значения фигуры вне допустимого диапазона
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` должно быть одним из: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` должно быть целым числом от 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` должно быть от {lo} до {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Умное перо
+	Smart Pen Tool	Инструмент «Умное перо»
+	Smart Pen Panel	Панель «Умное перо»
+	Next Segment	Следующий сегмент
+	Curved	Кривой
+	Retract Handles	Убрать маркеры
+	Close or Join	Замкнуть или соединить
+	Open a document to draw with the Smart Pen.	Откройте документ, чтобы рисовать умным пером.
+	Straight or Curved Segment	Прямой или кривой сегмент
+@msg	the path is locked or hidden	контур заблокирован или скрыт
+@msg	`id` is not a path	`id` не является контуром
+@msg	the path has no open subpath	у контура нет незамкнутого вложенного контура
+@msg	the subpath is closed	вложенный контур замкнут
+@msg	the subpath is closed or too short to close	вложенный контур замкнут или слишком короток, чтобы его замкнуть
+@msg	the path is too short to remove a point from	контур слишком короток, чтобы удалить из него точку
+@msg	the segment can't be bent that far	сегмент нельзя изогнуть настолько
+@msg	give `{a}` and `{b}`	укажите `{a}` и `{b}`
+@msg	`t` must be from 0 to 1	`t` должно быть от 0 до 1
+@msg	`segment` must be "straight" or "curved"	`segment` должно быть "straight" или "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` должно быть "free", "keepAngles" или "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` должно быть [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Выделить по типу цвета
+	Objects with Spot Colors	Объекты с плашечными цветами
+	Objects with Color Effects	Объекты с цветовыми эффектами
+	RGB Images	Изображения RGB
+	CMYK Images	Изображения CMYK
+	Grayscale Images	Изображения в оттенках серого
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` должен быть spotColors, colorEffects, rgbImages, cmykImages или grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Цвет точек из рисунка
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Дуплекс…
+	Duotone	Дуплекс
+	Print Ink Fixes…	Исправления печатных красок…
+	Print Ink Fixes	Исправления печатных красок
+	Inks	Краски
+	Tone 1	Тон 1
+	Tone 2	Тон 2
+	Tone 3	Тон 3
+	Tone 4	Тон 4
+	Curve	Кривая
+	Reset to Linear	Сбросить на линейную
+	Reset to Inverse	Сбросить на обратную
+	Skip Objects with Spot Colors	Пропускать объекты с плашечными цветами
+	Ink Limit	Предел краски
+	Exclude Pure Black	Исключить чистый чёрный
+	Remove White Overprint	Убрать наложение белого
+	Overprint Black	Наложение чёрного
+	Text Only	Только текст
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Исправления печатных красок работают в документах CMYK: сначала выберите Файл › Цветовой режим документа › Цвет CMYK
+@msg	`{key}` must be 0..{max}	`{key}` должен быть 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Инструмент «Углы»
+	Slide Anchor Along Path	Сдвинуть опорную точку вдоль контура
+	Set Corners	Задать углы
+	Remove Corners	Убрать углы
+	Corners selected: {count}	Выбрано углов: {count}
+	Apply to Selected Anchors	Применить к выбранным опорным точкам
+@msg	`radius` must be from 0 to 1000000 pt	`radius` должен быть от 0 до 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` должен быть числом от -0.98 до 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	выберите опорные точки, где две стороны сходятся под углом: только они принимают угол
+@msg	give `anchor`, the index of the anchor to slide	укажите `anchor`, индекс опорной точки для сдвига
+@msg	that anchor can't slide: an end of an open path has nowhere to go	эту опорную точку нельзя сдвинуть: концу открытого контура некуда двигаться
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Инструмент «Слияние общего края»
+	Merge Shared Edge	Объединить общий край
+	Keep Shared Points Together	Держать общие точки вместе
+	Shared Edges	Общие края
+	Coincidence:	Совпадение:
+@msg	`a` and `b` must be two different paths	`a` и `b` должны быть двумя разными контурами
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` должно быть от 0.25 до 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` должно быть от 0 до 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` должно быть "average", "a" или "b"
+@msg	the paths have nothing to merge there	здесь у контуров нечего объединять
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Разбить текст
+	Combine Point Text	Объединить текст из точки
+	Remove Breaks	Удалить разрывы
+	Split Text at Cursor	Разбить текст у курсора
+	Set Alignment, Keep Position	Задать выравнивание, сохранив положение
+	Reset Text Transform	Сбросить трансформацию текста
+	Replace Missing Fonts…	Заменить отсутствующие шрифты…
+	Replace Missing Fonts	Заменить отсутствующие шрифты
+	Remove Line Breaks	Удалить разрывы строк
+	Remove Paragraph Breaks	Удалить разрывы абзацев
+	Break Text into Lines	Разбить текст на строки
+	Break Text into Paragraphs	Разбить текст на абзацы
+	Break Text into Words	Разбить текст на слова
+	Break Text into Glyphs	Разбить текст на глифы
+	Reset Text Transform and Scale	Сбросить трансформацию и масштаб текста
+	Set Alignment, Keep Position:	Выравнивание с сохранением положения:
+	Break Text into:	Разбить текст на:
+	Split at Cursor	Разбить у курсора
+	Reset Transform	Сбросить трансформацию
+	Shift-click: break into paragraphs	Shift+щелчок: разбить на абзацы
+	Alt-click: reset the horizontal scale too	Alt+щелчок: сбросить и масштаб по горизонтали
+breakText	Lines	Строки
+breakText	Words	Слова
+breakText	Glyphs	Глифы
+@msg	Click in type with a Type tool to split it	Щёлкните в тексте инструментом «Текст», чтобы разбить его
+@msg	Too many type objects to change at once	Слишком много текстовых объектов для изменения за один раз
+@msg	Too many pieces to make at once	Слишком много частей для создания за один раз
+@msg	Select horizontal point or area type whose text fits	Выделите горизонтальный текст из точки или в области, текст которого помещается
+@msg	Nothing to split at the cursor	У курсора нечего разбивать
+@msg	Select two or more one-line point type objects on one baseline to combine	Выделите два или более однострочных объекта текста из точки на одной базовой линии, чтобы объединить их
+@msg	No line breaks to remove	Нет разрывов строк для удаления
+@msg	No paragraph breaks to remove	Нет разрывов абзацев для удаления
+@msg	Too many breaks to remove at once	Слишком много разрывов для удаления за один раз
+@msg	Select point type	Выделите текст из точки
+@msg	The point type is aligned that way already	Текст из точки уже так выровнен
+@msg	The point type has no transform to reset	У текста из точки нет трансформации для сброса
+@msg	No fonts are missing	Отсутствующих шрифтов нет
+@msg	the replacement font is not available	шрифт для замены недоступен
+@msg	missing `align`	не указан `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` должен быть lines, paragraphs, words или glyphs, а не {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` должен быть "line" или "paragraph", а не {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` должен быть "left", "center" или "right", а не {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Эффекты контура
+	Reverse Direction	Обратить направление
+	Align to Corners and Ends	Выровнять по углам и концам
+	Count	Количество
+	Max Count	Наибольшее количество
+	Start Length	Длина в начале
+	Start Percent	Проценты в начале
+	Start Shape	Форма в начале
+	End Length	Длина в конце
+	End Percent	Проценты в конце
+	End Shape	Форма в конце
+	By Count	По количеству
+	By Distance	По расстоянию
+	Both	Оба
+	Shorter Than Length	Короче длины
+	Dashes to Geometry	Штрихи в геометрию
+	Dashes to Geometry…	Штрихи в геометрию…
+	Add Anchors	Добавить опорные точки
+	Add Anchors…	Добавить опорные точки…
+	Smooth Anchors	Сгладить опорные точки
+	Smooth Anchors…	Сгладить опорные точки…
+	Simplify Anchors	Упростить опорные точки
+	Simplify Anchors…	Упростить опорные точки…
+	Split at Anchors	Разрезать в опорных точках
+	Split at Anchors…	Разрезать в опорных точках…
+	Extend Path…	Продлить контур…
+	Close Path…	Замкнуть контур…
+	Retract Handles…	Убрать маркеры…
+	Dash 1	Штрих 1
+	Gap 1	Зазор 1
+	Dash 2	Штрих 2
+	Gap 2	Зазор 2
+	Dash 3	Штрих 3
+	Gap 3	Зазор 3
+	Dash 4	Штрих 4
+	Gap 4	Зазор 4
+	Dash 5	Штрих 5
+	Gap 5	Зазор 5

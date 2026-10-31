@@ -1127,12 +1127,12 @@ lighting	Light	Cahaya
 	 to set spacing and orientation	 untuk mengatur jarak dan orientasi
 	Apply	Terapkan
 	Change Screen Mode (F)	Ganti mode layar (F)
-	Color (,)	Warna (,)
+	Color (, or <)	Warna (, atau <)
 	Draw Behind	Gambar di belakang
 	Draw Inside	Gambar di dalam
 	Draw Normal	Gambar normal
 	Expand:	Perluas:
-	Gradient (.)	Gradien (.)
+	Gradient (. or >)	Gradien (. atau >)
 	H:	H:
 	Modify	Ubah
 	Navigate	Navigasi
@@ -3072,6 +3072,7 @@ theme	Appearance	Tampilan
 	Make Envelope	Buat envelope
 	Move Envelope Mesh Point	Pindahkan titik mesh envelope
 	Move Mesh Point	Pindahkan titik mesh
+	Move Mesh Points	Pindahkan titik-titik mesh
 	Move Spine Point	Pindahkan titik spine
 	Reshape Spine Segment	Bentuk ulang segmen spine
 	Reset with Mesh	Atur ulang dengan mesh
@@ -3536,6 +3537,7 @@ axis	Both	Keduanya
 	Set Text	Atur teks
 	Insert Character	Sisipkan karakter
 	Replace	Ganti
+	Replace:	Ganti:
 	Type on a Path Options	Opsi teks pada jalur
 	Highlight Variable	Sorot variabel
 	New Variable	Variabel baru
@@ -4149,6 +4151,7 @@ imageTrace	Outline	Kontur
 @msg	no document	tidak ada dokumen
 @msg	no document open	tidak ada dokumen yang terbuka
 @msg	no effect applied yet	belum ada efek yang diterapkan
+@msg	no Pathfinder operation applied yet	belum ada operasi Pathfinder yang diterapkan
 @msg	no effect at index {k}	tidak ada efek pada indeks {k}
 @msg	no end record	tidak ada rekaman akhir
 @msg	no file manager here	tidak ada pengelola file di sini
@@ -5328,6 +5331,7 @@ swatch	Bright Violet	Violet cerah
 	Delete Guides	Hapus semua panduan
 	Delete Slice	Hapus slice
 	Delete Style	Hapus gaya
+	Delete Styles	Hapus gaya
 	Delete Variables	Hapus variabel
 	Delete View	Hapus tampilan
 	Done Editing Pattern	Selesai mengedit pola
@@ -5598,3 +5602,295 @@ axis	Y Axis	Sumbu Y
 	Glyph Bounds	Batas glif
 	Proximity Guides	Panduan kedekatan
 	Angular Guides	Panduan sudut
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Rata-rata dan sambungkan…
+	Average & Join	Rata-rata dan sambungkan
+anchor	Points:	Titik:
+@msg	select two open path ends, or two open paths, to average and join	pilih dua ujung jalur terbuka, atau dua jalur terbuka, untuk dirata-ratakan dan disambungkan
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Pembersihan karya
+	Simplify Anchors (Keep Shape)…	Sederhanakan titik jangkar (pertahankan bentuk)…
+	Health Check	Pemeriksaan kesehatan
+	Show Issue	Tampilkan masalah
+	Fix All Issues	Perbaiki semua masalah
+	Fix Issues	Perbaiki masalah
+	Deep Ungroup…	Buka grup di semua tingkat…
+	Rejoin Path Pieces…	Sambungkan kembali potongan jalur…
+	Document Health Check	Pemeriksaan kesehatan dokumen
+	Check Selection	Periksa seleksi
+	Check Document	Periksa dokumen
+	No issues found.	Tidak ada masalah yang ditemukan.
+	Changed since the last check.	Berubah sejak pemeriksaan terakhir.
+	Fix Selected	Perbaiki yang dipilih
+	Fix All	Perbaiki semua
+	Issues fixed: {count}	Masalah diperbaiki: {count}
+	Open a document to check it for issues.	Buka dokumen untuk memeriksa masalahnya.
+	Empty Text	Teks kosong
+	Unpainted Objects	Objek tanpa warna
+	Zero-Opacity Objects	Objek dengan opasitas nol
+	Duplicate Objects	Objek duplikat
+	Off-Artboard Art	Karya di luar artboard
+	Duplicate Anchors	Titik jangkar duplikat
+	Tiny Handles	Pegangan sangat kecil
+	Collinear Anchors	Titik jangkar segaris
+	Nearly Coincident Anchors	Titik jangkar yang hampir berimpit
+	Nearly Closed Paths	Jalur yang hampir tertutup
+	Filled Open Paths	Jalur terbuka berisi
+	Needless Clipping Groups	Grup kliping yang tidak perlu
+	Needless Compound Paths	Jalur majemuk yang tidak perlu
+	Needless Groups	Grup yang tidak perlu
+	Empty Artboards	Artboard kosong
+	Protect Corners	Lindungi sudut
+	Gap	Celah
+	Include Clip Groups	Sertakan grup kliping
+@msg	`tolerance` must be from 1 to 100	`tolerance` harus antara 1 dan 100
+@msg	`gap` must be from 0 to 6 pt	`gap` harus antara 0 dan 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Sederhanakan titik jangkar: jalur memiliki terlalu banyak titik jangkar untuk disederhanakan sekaligus
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Sambungkan kembali potongan jalur: terlalu banyak jalur untuk disambungkan sekaligus
+@msg	None of these issues are left: check again	Tidak ada lagi masalah ini yang tersisa: periksa lagi
+@msg	`kinds` must be a list of issue kinds	`kinds` harus berupa daftar jenis masalah
+@msg	missing `kind`	`kind` tidak ada
+	Simplify Anchors (Keep Shape)	Sederhanakan titik jangkar (pertahankan bentuk)
+	Deep Ungroup	Buka grup di semua tingkat
+	Rejoin Path Pieces	Sambungkan kembali potongan jalur
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Efek Warna
+	Color Effects Panel	Panel Efek Warna
+	Exposure	Eksposur
+	Exposure…	Eksposur…
+	Desaturate	Hilangkan Saturasi
+	Adjustment	Penyesuaian
+	Add as Effect	Tambahkan sebagai Efek
+	Apply as Filter	Terapkan sebagai Filter
+	Select objects to adjust their colors.	Pilih objek untuk menyesuaikan warnanya.
+	Brightness/Contrast	Kecerahan/kontras
+	Hue/Saturation	Rona/saturasi
+	Temperature/Tint	Suhu/tint
+@msg	`{id}` is not a colour adjustment	`{id}` bukan penyesuaian warna
+@msg	missing `effect`	`effect` tidak ada
+@msg	`params` must be an object	`params` harus berupa objek
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Alat presisi jalur
+	Anchor Eraser Brush	Kuas penghapus titik jangkar
+	Extend Path Tool	Alat perpanjang jalur
+	Measure & Inspect Tool	Alat ukur dan periksa
+	Anchor Inspector	Pemeriksa titik jangkar
+	Add Points at Crossings	Tambahkan titik di persilangan
+	Split at Crossings	Pisahkan di persilangan
+	Extend Path	Perpanjang jalur
+	Measure & Inspect	Ukur dan periksa
+	Set Anchor	Atur titik jangkar
+	Make Smooth	Jadikan halus
+	Make Corner	Jadikan sudut
+	Equalize Handles	Samakan pegangan
+	Remove Points, Keep Shape	Hapus titik, pertahankan bentuk
+	Add Points to Segments…	Tambahkan titik ke segmen…
+	Add Points to Segments	Tambahkan titik ke segmen
+	Open a document to edit its anchor points.	Buka dokumen untuk menyunting titik jangkarnya.
+	Anchors selected: {count}	Titik jangkar terpilih: {count}
+	Direct-select anchor points to edit them.	Pilih langsung titik jangkar untuk menyuntingnya.
+	In:	Masuk:
+	Out:	Keluar:
+	Add Points	Tambahkan titik
+	Points per segment	Titik per segmen
+	Close Path:	Tutup jalur:
+	Keep Handles	Pertahankan pegangan
+	Straight	Lurus
+	Stretch Curve	Regangkan kurva
+@msg	direct-select the anchor points to remove	pilih langsung titik jangkar yang akan dihapus
+@msg	select segments, or paths, to add points to	pilih segmen, atau jalur, untuk ditambahi titik
+@msg	select open paths to close	pilih jalur terbuka untuk ditutup
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	jalur terlalu banyak atau terlalu kusut untuk menemukan persilangannya (paling banyak 10000 segmen)
+@msg	the paths have too many anchors to edit at once	jalur memiliki terlalu banyak titik jangkar untuk disunting sekaligus
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Alat bentuk parametrik
+	Parametric Shape	Bentuk parametrik
+	Edit Parametric Shape	Sunting bentuk parametrik
+	Convert to Parametric Shape	Ubah menjadi bentuk parametrik
+	Ring	Cincin
+	Heart	Hati
+	Gear	Roda gigi
+	Speech Bubble	Balon ucapan
+	Count:	Jumlah:
+	Thickness:	Ketebalan:
+	Inner Radius:	Jari-jari dalam:
+	Head:	Kepala:
+	Shaft:	Batang:
+	Point:	Ujung:
+	Tooth Height:	Tinggi gigi:
+	Tail:	Ekor:
+	Tip:	Ujung:
+	Open a document to draw parametric shapes.	Buka dokumen untuk menggambar bentuk parametrik.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Pilih bentuk parametrik untuk menyuntingnya. Tanpa pilihan, nilai ini berlaku untuk bentuk berikutnya.
+@msg	the object is not an editable parametric shape	objek bukan bentuk parametrik yang dapat disunting
+@msg	select plain rectangles, ellipses or regular polygons to convert	pilih persegi panjang, elips, atau poligon beraturan biasa untuk diubah
+@msg	the shape's numbers are out of range	nilai bentuk berada di luar rentang
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` harus salah satu dari: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` harus bilangan bulat dari 3 sampai 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` harus antara {lo} dan {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Pena pintar
+	Smart Pen Tool	Alat pena pintar
+	Smart Pen Panel	Panel pena pintar
+	Next Segment	Segmen berikutnya
+	Curved	Lengkung
+	Retract Handles	Tarik masuk pegangan
+	Close or Join	Tutup atau sambungkan
+	Open a document to draw with the Smart Pen.	Buka dokumen untuk menggambar dengan pena pintar.
+	Straight or Curved Segment	Segmen lurus atau lengkung
+@msg	the path is locked or hidden	jalur terkunci atau tersembunyi
+@msg	`id` is not a path	`id` bukan jalur
+@msg	the path has no open subpath	jalur tidak punya subjalur terbuka
+@msg	the subpath is closed	subjalur sudah tertutup
+@msg	the subpath is closed or too short to close	subjalur sudah tertutup atau terlalu pendek untuk ditutup
+@msg	the path is too short to remove a point from	jalur terlalu pendek untuk dihapus titiknya
+@msg	the segment can't be bent that far	segmen tidak dapat dibengkokkan sejauh itu
+@msg	give `{a}` and `{b}`	berikan `{a}` dan `{b}`
+@msg	`t` must be from 0 to 1	`t` harus antara 0 dan 1
+@msg	`segment` must be "straight" or "curved"	`segment` harus "straight" atau "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` harus "free", "keepAngles" atau "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` harus [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Pilih menurut Jenis Warna
+	Objects with Spot Colors	Objek dengan Warna Spot
+	Objects with Color Effects	Objek dengan Efek Warna
+	RGB Images	Gambar RGB
+	CMYK Images	Gambar CMYK
+	Grayscale Images	Gambar Skala Abu-abu
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` harus spotColors, colorEffects, rgbImages, cmykImages, atau grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Warna titik dari karya seni
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duotone…
+	Duotone	Duotone
+	Print Ink Fixes…	Perbaikan Tinta Cetak…
+	Print Ink Fixes	Perbaikan Tinta Cetak
+	Inks	Tinta
+	Tone 1	Nada 1
+	Tone 2	Nada 2
+	Tone 3	Nada 3
+	Tone 4	Nada 4
+	Curve	Kurva
+	Reset to Linear	Atur ulang ke linear
+	Reset to Inverse	Atur ulang ke terbalik
+	Skip Objects with Spot Colors	Lewati objek dengan warna spot
+	Ink Limit	Batas tinta
+	Exclude Pure Black	Kecualikan hitam murni
+	Remove White Overprint	Hapus overprint putih
+	Overprint Black	Overprint hitam
+	Text Only	Hanya teks
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	berikan `inkLimit`, `removeWhiteOverprint`, atau `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Perbaikan Tinta Cetak bekerja pada dokumen CMYK: pilih dulu Berkas › Mode warna dokumen › Warna CMYK
+@msg	`{key}` must be 0..{max}	`{key}` harus 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Alat sudut
+	Slide Anchor Along Path	Geser titik jangkar sepanjang jalur
+	Set Corners	Atur sudut
+	Remove Corners	Hapus sudut
+	Corners selected: {count}	Sudut terpilih: {count}
+	Apply to Selected Anchors	Terapkan ke titik jangkar terpilih
+@msg	`radius` must be from 0 to 1000000 pt	`radius` harus dari 0 sampai 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` harus berupa angka dari -0.98 sampai 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	pilih titik jangkar tempat dua sisi bertemu membentuk sudut: hanya titik itu yang dapat diberi sudut
+@msg	give `anchor`, the index of the anchor to slide	berikan `anchor`, indeks titik jangkar yang akan digeser
+@msg	that anchor can't slide: an end of an open path has nowhere to go	titik jangkar itu tidak dapat digeser: ujung jalur terbuka tidak punya arah tujuan
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Alat gabung tepi bersama
+	Merge Shared Edge	Gabungkan tepi bersama
+	Keep Shared Points Together	Jaga titik bersama tetap menyatu
+	Shared Edges	Tepi bersama
+	Coincidence:	Kesamaan posisi:
+@msg	`a` and `b` must be two different paths	`a` dan `b` harus dua jalur yang berbeda
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` harus dari 0.25 hingga 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` harus dari 0 hingga 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` harus "average", "a" atau "b"
+@msg	the paths have nothing to merge there	tidak ada yang dapat digabungkan dari jalur di sini
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Pisahkan teks
+	Combine Point Text	Gabungkan teks titik
+	Remove Breaks	Hapus pemisah
+	Split Text at Cursor	Pisahkan teks di kursor
+	Set Alignment, Keep Position	Atur perataan, pertahankan posisi
+	Reset Text Transform	Atur ulang transformasi teks
+	Replace Missing Fonts…	Ganti font yang hilang…
+	Replace Missing Fonts	Ganti font yang hilang
+	Remove Line Breaks	Hapus putus baris
+	Remove Paragraph Breaks	Hapus putus paragraf
+	Break Text into Lines	Pisahkan teks menjadi baris
+	Break Text into Paragraphs	Pisahkan teks menjadi paragraf
+	Break Text into Words	Pisahkan teks menjadi kata
+	Break Text into Glyphs	Pisahkan teks menjadi glif
+	Reset Text Transform and Scale	Atur ulang transformasi dan skala teks
+	Set Alignment, Keep Position:	Atur perataan, pertahankan posisi:
+	Break Text into:	Pisahkan teks menjadi:
+	Split at Cursor	Pisahkan di kursor
+	Reset Transform	Atur ulang transformasi
+	Shift-click: break into paragraphs	Shift+klik: pisahkan menjadi paragraf
+	Alt-click: reset the horizontal scale too	Alt+klik: atur ulang juga skala horizontal
+breakText	Lines	Baris
+breakText	Words	Kata
+breakText	Glyphs	Glif
+@msg	Click in type with a Type tool to split it	Klik di dalam teks dengan alat teks untuk memisahkannya
+@msg	Too many type objects to change at once	Terlalu banyak objek teks untuk diubah sekaligus
+@msg	Too many pieces to make at once	Terlalu banyak bagian untuk dibuat sekaligus
+@msg	Select horizontal point or area type whose text fits	Pilih teks titik atau teks area horizontal yang teksnya muat
+@msg	Nothing to split at the cursor	Tidak ada yang dapat dipisahkan di kursor
+@msg	Select two or more one-line point type objects on one baseline to combine	Pilih dua atau lebih objek teks titik satu baris pada satu garis dasar untuk menggabungkannya
+@msg	No line breaks to remove	Tidak ada putus baris untuk dihapus
+@msg	No paragraph breaks to remove	Tidak ada putus paragraf untuk dihapus
+@msg	Too many breaks to remove at once	Terlalu banyak pemisah untuk dihapus sekaligus
+@msg	Select point type	Pilih teks titik
+@msg	The point type is aligned that way already	Teks titik sudah diratakan seperti itu
+@msg	The point type has no transform to reset	Teks titik tidak memiliki transformasi untuk diatur ulang
+@msg	No fonts are missing	Tidak ada font yang hilang
+@msg	the replacement font is not available	font pengganti tidak tersedia
+@msg	missing `align`	`align` tidak ada
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` harus lines, paragraphs, words, atau glyphs, bukan {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` harus "line" atau "paragraph", bukan {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` harus "left", "center", atau "right", bukan {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Efek jalur
+	Reverse Direction	Balikkan arah
+	Align to Corners and Ends	Sejajarkan ke sudut dan ujung
+	Count	Jumlah
+	Max Count	Jumlah maksimum
+	Start Length	Panjang awal
+	Start Percent	Persen awal
+	Start Shape	Bentuk awal
+	End Length	Panjang akhir
+	End Percent	Persen akhir
+	End Shape	Bentuk akhir
+	By Count	Menurut jumlah
+	By Distance	Menurut jarak
+	Both	Keduanya
+	Shorter Than Length	Lebih pendek dari panjang
+	Dashes to Geometry	Garis putus ke geometri
+	Dashes to Geometry…	Garis putus ke geometri…
+	Add Anchors	Tambahkan titik jangkar
+	Add Anchors…	Tambahkan titik jangkar…
+	Smooth Anchors	Haluskan titik jangkar
+	Smooth Anchors…	Haluskan titik jangkar…
+	Simplify Anchors	Sederhanakan titik jangkar
+	Simplify Anchors…	Sederhanakan titik jangkar…
+	Split at Anchors	Pisahkan di titik jangkar
+	Split at Anchors…	Pisahkan di titik jangkar…
+	Extend Path…	Perpanjang jalur…
+	Close Path…	Tutup jalur…
+	Retract Handles…	Tarik masuk pegangan…
+	Dash 1	Garis 1
+	Gap 1	Jarak 1
+	Dash 2	Garis 2
+	Gap 2	Jarak 2
+	Dash 3	Garis 3
+	Gap 3	Jarak 3
+	Dash 4	Garis 4
+	Gap 4	Jarak 4
+	Dash 5	Garis 5
+	Gap 5	Jarak 5

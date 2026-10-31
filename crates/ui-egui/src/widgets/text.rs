@@ -87,6 +87,16 @@ fn dialog_open_flag() -> egui::Id {
     egui::Id::unique("dialog-open")
 }
 
+/// The flag that tells the dialog runner a field rejected an invalid commit on Enter in this frame.
+pub(crate) fn dialog_reject_commit_flag() -> egui::Id {
+    egui::Id::unique("dialog-reject-commit")
+}
+
+/// Suppress confirming an open dialog on Enter during this frame when an invalid value was committed.
+pub(crate) fn reject_dialog_commit(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(dialog_reject_commit_flag(), true));
+}
+
 /// The app sets this at the start of each frame: while a dialog is open, Shift+Enter in a field
 /// applies its value and confirms the dialog as Enter does ([`shift_enter_keeps_focus`]).
 pub(crate) fn set_dialog_open(ctx: &egui::Context, open: bool) {
@@ -237,7 +247,20 @@ pub(super) fn recessed_text(
         .allocate_ui_with_layout(vec2(width, height), layout, |ui| {
             ui.set_min_size(vec2(width, height));
             let rect = ui.max_rect();
-            ui.painter().rect(rect, 5.0, t.input, Stroke::new(1.0, if editing { t.accent } else { t.input_border }), StrokeKind::Inside);
+            let now = ui.input(|i| i.time);
+            let flash_end = ui.data(|d| d.get_temp::<f64>(id.with("invalid-flash")));
+            let invalid = flash_end.is_some_and(|end| now <= end);
+            if invalid {
+                ui.ctx().request_repaint();
+            }
+            let stroke = if invalid {
+                Stroke::new(1.5, t.accent_strong)
+            } else if editing {
+                Stroke::new(1.0, t.accent)
+            } else {
+                Stroke::new(1.0, t.input_border)
+            };
+            ui.painter().rect(rect, 5.0, t.input, stroke, StrokeKind::Inside);
             let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
@@ -267,7 +290,9 @@ pub(super) fn recessed_text(
         d.insert_temp(id, buf.clone());
         d.insert_temp(focus_id, focused);
     });
-    let commit = resp.lost_focus() || kept;
+    // Plain Enter only: Ctrl/Cmd+Enter keeps editing a field that takes it (X and Y in Transform).
+    let enter_commit = rows == 1 && editing && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none());
+    let commit = resp.lost_focus() || kept || enter_commit;
     (buf, commit, resp, rect)
 }
 

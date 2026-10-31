@@ -6,6 +6,7 @@
 //! anchors. See the crate README for the API overview.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod boolean;
 mod budget;
 mod edit;

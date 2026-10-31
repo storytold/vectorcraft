@@ -454,6 +454,7 @@ impl<'a> Reader<'a> {
             hidden_unread: self.hidden_unread,
             slot_names: self.slot_names,
             restyled: self.restyled,
+            placed_elsewhere: self.placed_elsewhere,
             warnings,
         })
     }

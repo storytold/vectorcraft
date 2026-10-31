@@ -708,7 +708,7 @@
 	Collect in New Layer	Recull en una capa nova
 	Collect Links in a Separate Folder	Recull els enllaços en una carpeta a part
 	Color	Color
-	Color (,)	Color (,)
+	Color (, or <)	Color (, o <)
 	Color Adjustments	Ajustos de color
 	Color bars	Barres de color
 	Color blindness – Deuteranopia-type	Daltonisme – tipus deuteranòpsia
@@ -1042,6 +1042,7 @@
 	Delete Spine Point	Suprimeix el punt de l’espina
 	Delete Stop	Suprimeix la parada
 	Delete Style	Suprimeix l’estil
+	Delete Styles	Suprimeix els estils
 	Delete Swatch	Suprimeix la mostra
 	Delete Symbol	Suprimeix el símbol
 	Delete Tab	Suprimeix la tabulació
@@ -1690,7 +1691,7 @@
 	GPU Performance	Rendiment de la GPU
 	Grab bag	Calaix de sastre
 	Gradient	Degradat
-	Gradient (.)	Degradat (.)
+	Gradient (. or >)	Degradat (. o >)
 	Gradient across stroke	Degradat transversal al traç
 	Gradient along stroke	Degradat al llarg del traç
 	Gradient and Mesh Resolution:	Resolució de degradat i malla:
@@ -2419,6 +2420,7 @@
 	Move Library Item to Group	Mou l’element de la biblioteca al grup
 	Move Locked and Hidden Artwork with Artboard	Mou la il·lustració bloquejada i oculta amb el tauler
 	Move Mesh Point	Mou el punt de malla
+	Move Mesh Points	Mou els punts de malla
 	Move Panel	Mou el panell
 	Move Plane	Mou el pla
 	Move Plane and Copy Objects	Mou el pla i copia els objectes
@@ -3284,6 +3286,7 @@
 	Repeat {name}	Repeteix {name}
 	Repeating	Repetició
 	Replace	Reemplaça
+	Replace:	Reemplaça:
 	Replace Font	Reemplaça el tipus de lletra
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplaça’l per un altre fitxer o ignora’l: les seves imatges continuaran mostrant la previsualització desada amb el document.
 	Replace Spine	Reemplaça l’espina
@@ -5102,6 +5105,7 @@
 @msg	no document	no hi ha document
 @msg	no document open	no hi ha cap document obert
 @msg	no effect applied yet	encara no s’ha aplicat cap efecte
+@msg	no Pathfinder operation applied yet	encara no s’ha aplicat cap operació del Cercador de traçats
 @msg	no effect at index {k}	no hi ha cap efecte a l’índex {k}
 @msg	no empty artboards to delete	no hi ha taulers buits per suprimir
 @msg	no end record	no hi ha registre final
@@ -5684,3 +5688,295 @@ theme	Appearance	Aparença
 	Glyph Bounds	Límits del glif
 	Proximity Guides	Guies de proximitat
 	Angular Guides	Guies angulars
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Mitjana i unió…
+	Average & Join	Mitjana i unió
+anchor	Points:	Punts:
+@msg	select two open path ends, or two open paths, to average and join	selecciona dos extrems de traçats oberts, o dos traçats oberts, per fer-ne la mitjana i unir-los
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Neteja de l’art
+	Simplify Anchors (Keep Shape)…	Simplifica els punts d’ancoratge (mantén la forma)…
+	Health Check	Revisió de l’estat
+	Show Issue	Mostra el problema
+	Fix All Issues	Corregeix tots els problemes
+	Fix Issues	Corregeix els problemes
+	Deep Ungroup…	Desagrupa tots els nivells…
+	Rejoin Path Pieces…	Torna a unir els trossos de traçat…
+	Document Health Check	Revisió de l’estat del document
+	Check Selection	Revisa la selecció
+	Check Document	Revisa el document
+	No issues found.	No s’ha trobat cap problema.
+	Changed since the last check.	Ha canviat des de l’última revisió.
+	Fix Selected	Corregeix els seleccionats
+	Fix All	Corregeix-ho tot
+	Issues fixed: {count}	Problemes corregits: {count}
+	Open a document to check it for issues.	Obriu un document per revisar-ne els problemes.
+	Empty Text	Text buit
+	Unpainted Objects	Objectes sense pintura
+	Zero-Opacity Objects	Objectes amb opacitat zero
+	Duplicate Objects	Objectes duplicats
+	Off-Artboard Art	Art fora dels taulers
+	Duplicate Anchors	Punts d’ancoratge duplicats
+	Tiny Handles	Nanses minúscules
+	Collinear Anchors	Punts d’ancoratge col·lineals
+	Nearly Coincident Anchors	Punts d’ancoratge gairebé coincidents
+	Nearly Closed Paths	Traçats gairebé tancats
+	Filled Open Paths	Traçats oberts amb emplenament
+	Needless Clipping Groups	Grups de retall innecessaris
+	Needless Compound Paths	Traçats compostos innecessaris
+	Needless Groups	Grups innecessaris
+	Empty Artboards	Taulers buits
+	Protect Corners	Protegeix les cantonades
+	Gap	Separació
+	Include Clip Groups	Inclou els grups de retall
+@msg	`tolerance` must be from 1 to 100	`tolerance` ha d’estar entre 1 i 100
+@msg	`gap` must be from 0 to 6 pt	`gap` ha d’estar entre 0 i 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Simplifica els punts d’ancoratge: els traçats tenen massa punts d’ancoratge per simplificar-los d’un cop
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Torna a unir els trossos de traçat: massa traçats per unir-los d’un cop
+@msg	None of these issues are left: check again	Ja no queda cap d’aquests problemes: torneu a revisar
+@msg	`kinds` must be a list of issue kinds	`kinds` ha de ser una llista de tipus de problema
+@msg	missing `kind`	falta `kind`
+	Simplify Anchors (Keep Shape)	Simplifica els punts d’ancoratge (mantén la forma)
+	Deep Ungroup	Desagrupa tots els nivells
+	Rejoin Path Pieces	Torna a unir els trossos de traçat
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Efectes de color
+	Color Effects Panel	Tauler Efectes de color
+	Exposure	Exposició
+	Exposure…	Exposició…
+	Desaturate	Dessaturar
+	Adjustment	Ajust
+	Add as Effect	Afegeix com a efecte
+	Apply as Filter	Aplica com a filtre
+	Select objects to adjust their colors.	Seleccioneu objectes per ajustar-ne els colors.
+	Brightness/Contrast	Lluentor/Contrast
+	Hue/Saturation	To/saturació
+	Temperature/Tint	Temperatura/To
+@msg	`{id}` is not a colour adjustment	`{id}` no és un ajust de color
+@msg	missing `effect`	falta `effect`
+@msg	`params` must be an object	`params` ha de ser un objecte
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Eines de precisió de traçats
+	Anchor Eraser Brush	Pinzell esborrador de punts d’ancoratge
+	Extend Path Tool	Eina d’allargar el traçat
+	Measure & Inspect Tool	Eina de mesurar i inspeccionar
+	Anchor Inspector	Inspector de punts d’ancoratge
+	Add Points at Crossings	Afegeix punts als encreuaments
+	Split at Crossings	Divideix als encreuaments
+	Extend Path	Allarga el traçat
+	Measure & Inspect	Mesura i inspecciona
+	Set Anchor	Defineix el punt d’ancoratge
+	Make Smooth	Fes-lo suau
+	Make Corner	Fes-lo vèrtex
+	Equalize Handles	Iguala les nanses
+	Remove Points, Keep Shape	Elimina punts, mantén la forma
+	Add Points to Segments…	Afegeix punts als segments…
+	Add Points to Segments	Afegeix punts als segments
+	Open a document to edit its anchor points.	Obriu un document per editar-ne els punts d’ancoratge.
+	Anchors selected: {count}	Punts d’ancoratge seleccionats: {count}
+	Direct-select anchor points to edit them.	Seleccioneu directament punts d’ancoratge per editar-los.
+	In:	Entrada:
+	Out:	Sortida:
+	Add Points	Afegeix punts
+	Points per segment	Punts per segment
+	Close Path:	Tanca el traçat:
+	Keep Handles	Mantén les nanses
+	Straight	Recte
+	Stretch Curve	Estira la corba
+@msg	direct-select the anchor points to remove	seleccioneu directament els punts d’ancoratge que voleu eliminar
+@msg	select segments, or paths, to add points to	seleccioneu segments, o traçats, als quals afegir punts
+@msg	select open paths to close	seleccioneu traçats oberts per tancar-los
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	massa traçats, o massa enredats, per trobar-ne els encreuaments (10000 segments com a màxim)
+@msg	the paths have too many anchors to edit at once	els traçats tenen massa punts d’ancoratge per editar-los alhora
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Eina de forma paramètrica
+	Parametric Shape	Forma paramètrica
+	Edit Parametric Shape	Edita la forma paramètrica
+	Convert to Parametric Shape	Converteix en forma paramètrica
+	Ring	Anell
+	Heart	Cor
+	Gear	Engranatge
+	Speech Bubble	Bafarada
+	Count:	Nombre:
+	Thickness:	Gruix:
+	Inner Radius:	Radi interior:
+	Head:	Cap:
+	Shaft:	Tija:
+	Point:	Punta:
+	Tooth Height:	Alçada de la dent:
+	Tail:	Cua:
+	Tip:	Punta:
+	Open a document to draw parametric shapes.	Obriu un document per dibuixar formes paramètriques.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Seleccioneu una forma paramètrica per editar-la. Sense cap selecció, aquests valors s’apliquen a la forma següent.
+@msg	the object is not an editable parametric shape	l’objecte no és una forma paramètrica editable
+@msg	select plain rectangles, ellipses or regular polygons to convert	seleccioneu rectangles, el·lipses o polígons regulars simples per convertir-los
+@msg	the shape's numbers are out of range	els valors de la forma són fora de l’interval
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` ha de ser un de: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` ha de ser un nombre enter de 3 a 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` ha de ser de {lo} a {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Ploma intel·ligent
+	Smart Pen Tool	Eina de ploma intel·ligent
+	Smart Pen Panel	Tauler de ploma intel·ligent
+	Next Segment	Segment següent
+	Curved	Corbat
+	Retract Handles	Retrau les nanses
+	Close or Join	Tanca o uneix
+	Open a document to draw with the Smart Pen.	Obriu un document per dibuixar amb la ploma intel·ligent.
+	Straight or Curved Segment	Segment recte o corbat
+@msg	the path is locked or hidden	el traçat està bloquejat o ocult
+@msg	`id` is not a path	`id` no és un traçat
+@msg	the path has no open subpath	el traçat no té cap subtraçat obert
+@msg	the subpath is closed	el subtraçat és tancat
+@msg	the subpath is closed or too short to close	el subtraçat és tancat o massa curt per tancar-lo
+@msg	the path is too short to remove a point from	el traçat és massa curt per treure’n un punt
+@msg	the segment can't be bent that far	el segment no es pot corbar tant
+@msg	give `{a}` and `{b}`	indiqueu `{a}` i `{b}`
+@msg	`t` must be from 0 to 1	`t` ha de ser de 0 a 1
+@msg	`segment` must be "straight" or "curved"	`segment` ha de ser "straight" o "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` ha de ser "free", "keepAngles" o "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` ha de ser [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Selecciona per tipus de color
+	Objects with Spot Colors	Objectes amb colors directes
+	Objects with Color Effects	Objectes amb efectes de color
+	RGB Images	Imatges RGB
+	CMYK Images	Imatges CMYK
+	Grayscale Images	Imatges en escala de grisos
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` ha de ser spotColors, colorEffects, rgbImages, cmykImages o grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Color dels punts de la il·lustració
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Bitò…
+	Duotone	Bitò
+	Print Ink Fixes…	Correccions de tinta per a impressió…
+	Print Ink Fixes	Correccions de tinta per a impressió
+	Inks	Tintes
+	Tone 1	To 1
+	Tone 2	To 2
+	Tone 3	To 3
+	Tone 4	To 4
+	Curve	Corba
+	Reset to Linear	Restableix a lineal
+	Reset to Inverse	Restableix a invertida
+	Skip Objects with Spot Colors	Omet els objectes amb colors directes
+	Ink Limit	Límit de tinta
+	Exclude Pure Black	Exclou el negre pur
+	Remove White Overprint	Elimina la sobreimpressió del blanc
+	Overprint Black	Sobreimpressió del negre
+	Text Only	Només text
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	indiqueu `inkLimit`, `removeWhiteOverprint` o `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Les correccions de tinta per a impressió funcionen en documents CMYK: trieu primer Fitxer › Mode de color del document › Color CMYK
+@msg	`{key}` must be 0..{max}	`{key}` ha de ser 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Eina de cantonades
+	Slide Anchor Along Path	Llisca l’ancoratge pel traçat
+	Set Corners	Defineix les cantonades
+	Remove Corners	Elimina les cantonades
+	Corners selected: {count}	Cantonades seleccionades: {count}
+	Apply to Selected Anchors	Aplica als punts d’ancoratge seleccionats
+@msg	`radius` must be from 0 to 1000000 pt	`radius` ha de ser de 0 a 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` ha de ser un nombre de -0.98 a 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	trieu punts d’ancoratge on dos costats es troben formant un angle: només aquests admeten una cantonada
+@msg	give `anchor`, the index of the anchor to slide	indiqueu `anchor`, l’índex del punt d’ancoratge que voleu lliscar
+@msg	that anchor can't slide: an end of an open path has nowhere to go	aquest punt d’ancoratge no pot lliscar: l’extrem d’un traçat obert no té on anar
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Eina de fusió de vores compartides
+	Merge Shared Edge	Fusiona la vora compartida
+	Keep Shared Points Together	Mantén junts els punts compartits
+	Shared Edges	Vores compartides
+	Coincidence:	Coincidència:
+@msg	`a` and `b` must be two different paths	`a` i `b` han de ser dos traçats diferents
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` ha de ser de 0.25 a 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` ha de ser de 0 a 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` ha de ser "average", "a" o "b"
+@msg	the paths have nothing to merge there	els traçats no tenen res a fusionar aquí
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Divideix el text
+	Combine Point Text	Combina el text de punt
+	Remove Breaks	Elimina els salts
+	Split Text at Cursor	Divideix el text al cursor
+	Set Alignment, Keep Position	Defineix l’alineació i manté la posició
+	Reset Text Transform	Restableix la transformació del text
+	Replace Missing Fonts…	Reemplaça els tipus de lletra que falten…
+	Replace Missing Fonts	Reemplaça els tipus de lletra que falten
+	Remove Line Breaks	Elimina els salts de línia
+	Remove Paragraph Breaks	Elimina els salts de paràgraf
+	Break Text into Lines	Divideix el text en línies
+	Break Text into Paragraphs	Divideix el text en paràgrafs
+	Break Text into Words	Divideix el text en paraules
+	Break Text into Glyphs	Divideix el text en glifs
+	Reset Text Transform and Scale	Restableix la transformació i l’escala del text
+	Set Alignment, Keep Position:	Defineix l’alineació i manté la posició:
+	Break Text into:	Divideix el text en:
+	Split at Cursor	Divideix al cursor
+	Reset Transform	Restableix la transformació
+	Shift-click: break into paragraphs	Maj+clic: divideix en paràgrafs
+	Alt-click: reset the horizontal scale too	Alt-clic: restableix també l’escala horitzontal
+breakText	Lines	Línies
+breakText	Words	Paraules
+breakText	Glyphs	Glifs
+@msg	Click in type with a Type tool to split it	Feu clic en un text amb una eina de text per dividir-lo
+@msg	Too many type objects to change at once	Massa objectes de text per canviar-los alhora
+@msg	Too many pieces to make at once	Massa peces per crear-les alhora
+@msg	Select horizontal point or area type whose text fits	Seleccioneu text de punt o d’àrea horitzontal el text del qual hi càpiga
+@msg	Nothing to split at the cursor	No hi ha res a dividir al cursor
+@msg	Select two or more one-line point type objects on one baseline to combine	Seleccioneu dos o més objectes de text de punt d’una línia sobre una mateixa línia de base per combinar-los
+@msg	No line breaks to remove	No hi ha salts de línia per eliminar
+@msg	No paragraph breaks to remove	No hi ha salts de paràgraf per eliminar
+@msg	Too many breaks to remove at once	Massa salts per eliminar-los alhora
+@msg	Select point type	Seleccioneu text de punt
+@msg	The point type is aligned that way already	El text de punt ja està alineat així
+@msg	The point type has no transform to reset	El text de punt no té cap transformació per restablir
+@msg	No fonts are missing	No falta cap tipus de lletra
+@msg	the replacement font is not available	el tipus de lletra de reemplaçament no està disponible
+@msg	missing `align`	falta `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` ha de ser lines, paragraphs, words o glyphs, no {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` ha de ser "line" o "paragraph", no {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` ha de ser "left", "center" o "right", no {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Efectes de traçat
+	Reverse Direction	Inverteix la direcció
+	Align to Corners and Ends	Alinea a les cantonades i als extrems
+	Count	Nombre
+	Max Count	Nombre màxim
+	Start Length	Longitud a l’inici
+	Start Percent	Percentatge a l’inici
+	Start Shape	Forma a l’inici
+	End Length	Longitud al final
+	End Percent	Percentatge al final
+	End Shape	Forma al final
+	By Count	Per nombre
+	By Distance	Per distància
+	Both	Tots dos
+	Shorter Than Length	Més curts que la longitud
+	Dashes to Geometry	Traços a geometria
+	Dashes to Geometry…	Traços a geometria…
+	Add Anchors	Afegeix punts d’ancoratge
+	Add Anchors…	Afegeix punts d’ancoratge…
+	Smooth Anchors	Suavitza els punts d’ancoratge
+	Smooth Anchors…	Suavitza els punts d’ancoratge…
+	Simplify Anchors	Simplifica els punts d’ancoratge
+	Simplify Anchors…	Simplifica els punts d’ancoratge…
+	Split at Anchors	Divideix als punts d’ancoratge
+	Split at Anchors…	Divideix als punts d’ancoratge…
+	Extend Path…	Allarga el traçat…
+	Close Path…	Tanca el traçat…
+	Retract Handles…	Retrau les nanses…
+	Dash 1	Guió 1
+	Gap 1	Separació 1
+	Dash 2	Guió 2
+	Gap 2	Separació 2
+	Dash 3	Guió 3
+	Gap 3	Separació 3
+	Dash 4	Guió 4
+	Gap 4	Separació 4
+	Dash 5	Guió 5
+	Gap 5	Separació 5

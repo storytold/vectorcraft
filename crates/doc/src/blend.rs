@@ -196,7 +196,11 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
 /// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
 fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
     let solid_like = |d: &Dash| Dash {
-        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        // An odd pattern repeats twice per period, so pair up the doubled one to keep every gap closed.
+        pattern: if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() }
+            .chunks(2)
+            .flat_map(|c| [c.iter().sum::<f64>(), 0.0])
+            .collect(),
         offset: d.offset,
         align_corners: d.align_corners,
     };
@@ -1421,6 +1425,12 @@ mod tests {
         let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
         assert_eq!(p.at(0.0), (0.5, 0.5));
         assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn odd_dash_blends_to_solid_with_closed_gaps() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![2.0, 3.0, 4.0], ..Default::default() }), None, 1.0).unwrap();
+        assert!(d.pattern.iter().skip(1).step_by(2).all(|g| *g == 0.0), "{:?}", d.pattern);
     }
 
     #[test]

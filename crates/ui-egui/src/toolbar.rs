@@ -389,6 +389,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::menus::invoke(app, id, json!({}));
             Ok(json!({ "dialog": "command" }))
         }
+        // The add-ons' tools.
+        _ if crate::addons::pathtools::has_options(tool) => crate::addons::pathtools::open_options(app, tool),
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }
@@ -484,7 +486,7 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
             ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
             ui.spacing_mut().item_spacing.x = gap;
             let mut clicked = None;
-            for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+            for (tip, cmd) in [("Color (, or <)", "paint.lastColor"), ("Gradient (. or >)", "paint.lastGradient"), ("None (/)", "paint.none")] {
                 let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
                 match cmd {
                     "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),

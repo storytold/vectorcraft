@@ -1,4 +1,4 @@
-use super::exporter::{address, blend, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable};
+use super::exporter::{UNDECODED, address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
 use super::{
     Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32, Paint, Path, Rect,
     Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
@@ -7,7 +7,7 @@ use super::{
 impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
     /// invert is a white Difference rect on top (luminance is linear, so luma(1 − c) = 1 − luma(c)).
-    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> krilla::mask::Mask {
+    fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> Option<krilla::mask::Mask> {
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
@@ -19,15 +19,21 @@ impl Exporter<'_> {
         // and has no inks to overprint.
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
+        let incomplete = self.image_left_out.unwrap_or(false);
+        self.image_left_out = image_left_out.map(|outer| outer || incomplete);
         (self.knockout, self.overprint) = (knockout, overprint);
+        if incomplete {
+            return None;
+        }
         if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
             cover(&mut ms, page, 255, 1.0);
             ms.pop();
         }
         ms.finish();
-        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
+        Some(krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity))
     }
 
     /// The children of a group, as the elements of a knockout group when it is one.
@@ -143,7 +149,13 @@ impl Exporter<'_> {
         if let Some(m) = mask
             && alpha.is_none()
         {
-            let mask = self.soft_mask(s, m, page);
+            let Some(mask) = self.soft_mask(s, m, page) else {
+                self.knockout = enclosing;
+                for _ in 0..pushes {
+                    s.pop();
+                }
+                return;
+            };
             s.push_mask(mask);
             pushes += 1;
         }
@@ -182,10 +194,22 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => {
-                let colorized = n.extras().colorize.as_deref().and_then(|p| self.colorized_image(im, p, !n.extras().pixelated));
-                self.image(s, im, colorized.or(alpha), n.extras().pixelated)
-            }
+            NodeKind::Image(im) => match n.extras().colorize.as_deref() {
+                Some(p @ Paint::Solid { .. }) => {
+                    if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
+                        if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
+                            self.image(s, im, Some(colorized), n.extras().pixelated);
+                        } else {
+                            self.image_left_out = self.image_left_out.map(|_| true);
+                            self.warn(UNDECODED);
+                        }
+                    } else if self.image_left_out.is_some() {
+                        self.image_left_out = Some(true);
+                        self.warn(super::exporter::UNWRITABLE_IMAGE);
+                    }
+                }
+                _ => self.image(s, im, alpha, n.extras().pixelated),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
                 // instances multiply.
@@ -198,6 +222,8 @@ impl Exporter<'_> {
                     self.node(s, &art, page, true);
                 }
             }
+            // A gradient mesh is a smooth patch shading where it can be written as one.
+            NodeKind::Mesh(m) if self.mesh(s, m) => {}
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
@@ -215,6 +241,56 @@ impl Exporter<'_> {
         for _ in 0..pushes {
             s.pop();
         }
+    }
+
+    /// Gradient mesh `m` as one PDF Type 6 (Coons patch) shading filling its outline (ISO 32000-1,
+    /// 8.7.4.5.7): each patch blends its corner colours bilinearly, as the canvas draws it, and
+    /// the viewer or RIP does so smoothly at its own resolution. Cutting the mesh into flat quads
+    /// instead banded, left seams between them, and made files with many meshes very large.
+    /// Corner colours are written as [`Self::page_color`] writes any colour; RGB among other
+    /// models goes through RGB, as the writer needs one colour space a shading (ink-based ones:
+    /// CMYK and grey, merge). `false` when it isn't written so: the caller draws it expanded.
+    /// That is a mesh with see-through points (their opacities would be a soft mask of another
+    /// patch shading, which a common viewer, Poppler, draws with gaps and too opaque; the quads
+    /// carry their own opacity), an invalid mesh, or one beyond the coordinates a file holds.
+    fn mesh(&mut self, s: &mut Surface, m: &vectorcraft_doc::live::GradientMesh) -> bool {
+        if !m.is_valid() || !m.points.iter().all(|p| p.opacity >= 1.0) {
+            return false;
+        }
+        let Some(bounds) = m.bounds() else { return false };
+        if !writable(s, Affine::IDENTITY, bounds) {
+            return false;
+        }
+        let Some(path) = to_path(s, &m.outline().to_bezpath()) else { return false };
+        let page: Vec<vectorcraft_color::Color> = m.points.iter().map(|p| self.page_color(&p.color)).collect();
+        let mixed = page.windows(2).any(|w| w[0].model() != w[1].model());
+        let rgb = page.iter().any(|c| matches!(c, vectorcraft_color::Color::Rgb { .. } | vectorcraft_color::Color::Lab { .. }));
+        let colors: Vec<krilla::color::Color> =
+            page.iter().map(|c| if mixed && rgb { color(&c.in_model(vectorcraft_color::cms::Model::Rgb)) } else { color(c) }).collect();
+        let pt = |p: vectorcraft_geom::Point| (p.x as f32, p.y as f32);
+        let mut patches = Vec::with_capacity(m.rows as usize * m.cols as usize);
+        for r in 0..m.rows as usize {
+            for c in 0..m.cols as usize {
+                // The corners in the order a Type 6 shading lists them: down the left edge (v),
+                // along the bottom (u), back up the right edge and back along the top.
+                let corners = [m.idx(r, c), m.idx(r + 1, c), m.idx(r + 1, c + 1), m.idx(r, c + 1)];
+                let (left, bottom, right, top) = (m.edge_v(r, c), m.edge_u(r + 1, c), m.edge_v(r, c + 1), m.edge_u(r, c));
+                let points =
+                    [left.p0, left.p1, left.p2, left.p3, bottom.p1, bottom.p2, bottom.p3, right.p2, right.p1, right.p0, top.p2, top.p1].map(pt);
+                let Some(colors) =
+                    corners.iter().map(|&i| colors.get(i).cloned()).collect::<Option<Vec<_>>>().and_then(|v| <[_; 4]>::try_from(v).ok())
+                else {
+                    return false;
+                };
+                patches.push(krilla::paint::MeshPatch { points, colors, opacities: [NormalizedF32::ONE; 4] });
+            }
+        }
+        let mesh = krilla::paint::MeshGradient { patches, transform: xf(Affine::IDENTITY), anti_alias: false };
+        s.set_stroke(None);
+        s.set_fill(Some(Fill { paint: mesh.into(), opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_path(&path);
+        s.set_fill(None);
+        true
     }
 
     fn shape(&mut self, s: &mut Surface, n: &Node, bp: &BezPath, r: FillRule, page: Rect) {

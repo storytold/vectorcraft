@@ -19,6 +19,11 @@
 //! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
 //! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
 //! (edited in the Color panel), opacity and spread, with Delete Point.
+//!
+//! The Presets menu lists ready-made gradients by theme (the built-in gradient libraries), then
+//! the gradients saved with the panel menu's Save Gradient Preset…; choosing one applies it to the
+//! gradient behind the active proxy, keeping its placement (`gradient.presets.*`). Hide Presets in
+//! the panel menu leaves the row out.
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -42,6 +47,8 @@ const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 
 const ASPECT_PRESETS: [f64; 9] = [10.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 300.0, 400.0];
 /// Panel-state key of Show/Hide Options.
 const HIDE_OPTIONS: &str = "gradient-hide-options";
+/// Panel-state key of Show/Hide Presets.
+const HIDE_PRESETS: &str = "gradient-hide-presets";
 /// Panel-state key of the selected midpoint diamond.
 const MID_SELECTED: &str = "grad-mid";
 
@@ -277,6 +284,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     }
+    if !pstate::<bool>(ui.ctx(), HIDE_PRESETS) {
+        ui.add_space(4.0);
+        presets_row(app, ui, is_grad.then_some(&g));
+    }
     // How the gradient lies on the stroke behind the Stroke proxy (a linear or radial one).
     let stroke_mode = (!app.session.fill_active && is_grad && !freeform).then(|| app.session.shown_stroke().map(|st| st.gradient_mode)).flatten();
     ui.add_space(4.0);
@@ -380,6 +391,64 @@ fn method_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad:
     });
 }
 
+/// The Presets row: a menu of the preset gradients by library (theme), then the
+/// saved ones; a choice applies to the gradient behind the active proxy, keeping its placement
+/// (`gradient.presets.apply`; a solid or no paint becomes the gradient). The menu shows the preset
+/// the gradient is, if any.
+fn presets_row(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>) {
+    let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).unwrap_or_default();
+    let enabled = crate::menus::enabled(app, "gradient.presets.apply");
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Presets:"));
+        let chosen = ui.add_enabled_ui(enabled, |ui| widgets::combo(ui, "grad-presets", &shown, 150.0, |ui| preset_list(app, ui, &shown))).inner;
+        if let Some(name) = chosen {
+            app.run("gradient.presets.apply", json!({ "name": name })).ok();
+        }
+    });
+}
+
+/// The Presets menu's rows: each library's name over its presets, then the saved presets. Returns
+/// the name of the one clicked.
+fn preset_list(app: &VectorcraftApp, ui: &mut Ui, shown: &str) -> Option<String> {
+    let t = Tokens::get(ui.ctx());
+    ui.set_min_width(200.0);
+    let mut chosen = None;
+    // The library of the rows drawn last (`Some(None)`: the saved presets).
+    let mut library: Option<Option<&str>> = None;
+    for e in app.session.gradient_presets() {
+        if library != Some(e.library) {
+            if library.is_some() {
+                ui.add_space(2.0);
+            }
+            library = Some(e.library);
+            widgets::dim_label(ui, e.library.map_or(tl!("Saved"), |l| tl!(l)));
+        }
+        if gradient_row(ui, &t, &GradientPaint::new(e.gradient), &e.name, e.name == shown).clicked() {
+            chosen = Some(e.name);
+        }
+    }
+    chosen
+}
+
+/// A menu row: a chip of `g` and `name` (lit when `marked`).
+fn gradient_row(ui: &mut Ui, t: &Tokens, g: &GradientPaint, name: &str, marked: bool) -> egui::Response {
+    let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
+    // A long menu scrolls: rows out of view are laid out but not drawn, as labels aren't.
+    if !ui.is_rect_visible(row) {
+        return resp;
+    }
+    if marked {
+        ui.painter().rect_filled(row, 0.0, t.row_selected);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(row, 0.0, t.hover);
+    }
+    let chip = Rect::from_min_size(row.left_center() + vec2(4.0, -8.0), vec2(16.0, 16.0));
+    widgets::gradient_chip(ui, chip, g);
+    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+    ui.painter().text(chip.right_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
+    resp
+}
+
 /// The freeform points shown: the gradient's own, else (unplaced) as many as it places, coloured
 /// along the stops.
 pub(crate) fn shown_points(g: &GradientPaint) -> std::borrow::Cow<'_, Freeform> {
@@ -478,18 +547,8 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
             widgets::dim_label(ui, tl!("No gradient swatches"));
         }
         for (name, grad) in &swatches {
-            let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-            // The gradient swatch the gradient was applied from.
-            if g.swatch.as_ref() == Some(name) {
-                ui.painter().rect_filled(row, 0.0, t.row_selected);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(row, 0.0, t.hover);
-            }
-            let chip = Rect::from_min_size(row.left_center() + vec2(4.0, -8.0), vec2(16.0, 16.0));
-            widgets::gradient_chip(ui, chip, grad);
-            ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
-            ui.painter().text(chip.right_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
-            if resp.clicked() {
+            // The gradient swatch the gradient was applied from is lit.
+            if gradient_row(ui, &t, grad, name, g.swatch.as_ref() == Some(name)).clicked() {
                 chosen = Some(name.clone());
             }
         }
@@ -572,7 +631,7 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
 
 /// The stop's eyedropper: the Eyedropper tool samples the next colour clicked on the art into the
 /// selected stop, then hands back to the current tool.
-fn stop_eyedropper(app: &mut VectorcraftApp) {
+pub(crate) fn stop_eyedropper(app: &mut VectorcraftApp) {
     let back = app.session.tool_id();
     app.select_tool("eyedropper");
     app.session.set_tool_option("stop", &json!(back));
@@ -831,6 +890,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Reset to White, Black"), true, false) {
         set_stops(app, &Gradient::default().stops, None, Live::Released);
+    }
+    ui.separator();
+    let presets_hidden: bool = pstate(ui.ctx(), HIDE_PRESETS);
+    if menu_item(ui, if presets_hidden { tl!("Show Presets") } else { tl!("Hide Presets") }, true, false) {
+        set_pstate(ui.ctx(), HIDE_PRESETS, !presets_hidden);
+    }
+    if menu_item(ui, tl!("Save Gradient Preset…"), crate::menus::enabled(app, "gradient.presets.save"), false) {
+        let name = app.session.next_gradient_preset_name();
+        let p = json!({"command": "gradient.presets.save", "label": "Gradient Preset", "params": {"name": name}});
+        app.run("ui.paramDialog", p).ok();
+    }
+    // Deletes the saved preset the gradient behind the active proxy is.
+    if menu_item(ui, tl!("Delete Gradient Preset"), app.session.active_saved_gradient_preset().is_some(), false) {
+        app.run("gradient.presets.delete", json!({})).ok();
     }
 }
 

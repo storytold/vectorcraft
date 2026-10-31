@@ -44,9 +44,13 @@ fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("_"), None);
 }
 
-/// The Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
+/// The Bosnian, Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
 /// [`tags_map_to_languages`].
 fn other_tags_map_to_languages() {
+    let bs = Lang::from_code("bs").expect("bs registered");
+    for tag in ["bs", "bs-BA", "bs_BA.UTF-8", "BS-ba", "bs-Latn-BA"] {
+        assert_eq!(lang_from_tag(tag), Some(bs), "{tag}");
+    }
     for tag in ["ka", "ka-GE", "ka_GE.UTF-8", "KA-ge"] {
         assert_eq!(lang_from_tag(tag), Some(ka()), "{tag}");
     }
@@ -149,7 +153,7 @@ fn each_language_counts_with_its_plural_rule() {
         (&["de", "es", "it", "pt-br", "fi", "ca"][..], [1, 0, 1, 1, 1, 1, 1, 1]),
         (&["fr"], [0, 0, 1, 1, 1, 1, 1, 1]),
         (&["ja", "ka", "hu", "ko", "vi", "tr"], [0; 8]),
-        (&["ru", "uk"], [2, 0, 1, 1, 2, 2, 0, 1]),
+        (&["ru", "uk", "bs"], [2, 0, 1, 1, 2, 2, 0, 1]),
         (&["cs"], [2, 0, 1, 1, 2, 2, 2, 2]),
         (&["pl"], [2, 0, 1, 1, 2, 2, 2, 1]),
     ] {
@@ -1925,6 +1929,7 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
     ("file-filter", "PDF-compatible .ai"),
     ("file-filter", "VectorCraft Template"),
     ("file-filter", "Templates"),
+    ("anchor", "Points:"),
     ("diagnostics", "render"),
     ("diagnostics", "ui"),
     ("", "Preset {number}"),

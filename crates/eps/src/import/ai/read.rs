@@ -106,6 +106,10 @@ pub struct Structure {
     /// Where the drawn looks lay that objects read with their art style took the place of (the
     /// document's coordinates): the page draws Illustrator's rendering of those styles there.
     pub restyled: Vec<Rect>,
+    /// Placed files whose pixels the file puts at another point too: their image's id and the
+    /// move, in its pixels, that places them there (the corner of the box they are written with,
+    /// in place of the canvas point of art space's origin).
+    pub placed_elsewhere: Vec<(NodeId, Affine)>,
     pub warnings: Vec<String>,
 }
 
@@ -179,8 +183,14 @@ struct Reader<'a> {
     blend_budget: usize,
     /// A group just ended, its state (`Xy`, `Xd`, `XW`) not yet read.
     group_ended: bool,
+    /// A gradient mesh just ended (`/End X!`), its own state (`Xy`) not yet read: also after its
+    /// dictionary (its name, its opacity mask and the mask's art).
+    mesh_ended: bool,
     /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
     layer_state: Option<(f32, BlendMode, bool, Knockout)>,
+    /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
+    /// instead when the layer's `LB` follows rather than their own `6 () XW`.
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
@@ -197,6 +207,8 @@ struct Reader<'a> {
     palette: super::palette::Palette,
     /// See [`Structure::restyled`].
     restyled: Vec<Rect>,
+    /// See [`Structure::placed_elsewhere`].
+    placed_elsewhere: Vec<(NodeId, Affine)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
     /// A `/ForeignObject`'s `/Data`: its PDF as ASCII85 in comment lines, until the object closes.
@@ -282,10 +294,13 @@ impl<'a> Reader<'a> {
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
             group_ended: false,
+            mesh_ended: false,
             layer_state: None,
+            mesh_undo: None,
             styles: HashMap::new(),
             palette: super::palette::Palette::default(),
             restyled: vec![],
+            placed_elsewhere: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),
             done: false,

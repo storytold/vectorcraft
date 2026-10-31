@@ -1603,3 +1603,86 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
     close_b_tab(&mut app, &ctx, &base);
     delete_shown_board(&mut app, &ctx, &base);
 }
+
+/// #4365: Full Screen and Presentation Mode put the window full screen once, and Normal Screen
+/// Mode takes it back out; a window already full screen is left as it is.
+#[test]
+fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
+    let mut app = title_test_app(true);
+    let ctx = egui::Context::default();
+    let sent = |app: &mut crate::VectorcraftApp, fullscreen: bool| -> Vec<bool> {
+        let mut input = egui::RawInput::default();
+        input.viewports.entry(egui::ViewportId::ROOT).or_default().fullscreen = Some(fullscreen);
+        let mut out = ctx.run_ui(input, |ui| super::sync_fullscreen(app, ui.ctx()));
+        out.textures_delta.clear();
+        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+        cmds.iter().filter_map(|c| if let egui::ViewportCommand::Fullscreen(f) = c { Some(*f) } else { None }).collect()
+    };
+    assert!(sent(&mut app, false).is_empty(), "Normal Screen Mode");
+    app.ui.screen_mode = 3;
+    assert_eq!(sent(&mut app, false), [true], "Presentation Mode");
+    assert!(sent(&mut app, true).is_empty(), "once");
+    app.ui.screen_mode = 2;
+    assert!(sent(&mut app, true).is_empty(), "Full Screen Mode keeps it");
+    app.ui.screen_mode = 0;
+    assert_eq!(sent(&mut app, true), [false], "back to a window");
+    assert!(sent(&mut app, false).is_empty());
+    // Full screen by the user's own choice: the modes leave it so.
+    app.ui.screen_mode = 3;
+    assert!(sent(&mut app, true).is_empty());
+    app.ui.screen_mode = 0;
+    assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
+}
+
+/// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
+/// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
+#[test]
+fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone()
+    };
+    let (a, b, c) = (rect(&mut app, 10.0), rect(&mut app, 100.0), rect(&mut app, 200.0));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    const DISTRIBUTE: [&str; 6] = [
+        "Vertical Distribute Top",
+        "Vertical Distribute Center",
+        "Vertical Distribute Bottom",
+        "Horizontal Distribute Left",
+        "Horizontal Distribute Center",
+        "Horizontal Distribute Right",
+    ];
+    let rects = |app: &mut crate::VectorcraftApp| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        DISTRIBUTE.map(|name| {
+            let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
+            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        })
+    };
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(rects(&mut app).iter().all(Option::is_none), "one object: no distribute buttons");
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let rects = rects(&mut app);
+    assert!(rects.iter().all(Option::is_some), "three objects: {rects:?}");
+    let r = rects[3].expect("Horizontal Distribute Left");
+    let press =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
+        frame(&mut app, events);
+    }
+    let left = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
+    };
+    assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}

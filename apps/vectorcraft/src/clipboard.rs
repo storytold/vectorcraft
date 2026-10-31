@@ -9,8 +9,10 @@
 //!   and EPS as vector art (#1499) and its PNG or TIFF as they are, as screenshots copy them (on
 //!   Linux arboard reads no other formats). On Wayland, arboard's data-control
 //!   backend reads the compositor's clipboard (X11 through XWayland only sees what X11 apps
-//!   copied), falling back to X11 where the compositor lacks the protocol. A clipboard that can't
-//!   be opened is tried again after a wait that grows to a minute, not each time Paste asks.
+//!   copied), falling back to X11 where the compositor lacks the protocol, and where there is no
+//!   X11 either (a Flatpak on GNOME) to the compositor's core protocol on the window's connection,
+//!   text only. A clipboard that can't be opened is tried again after a wait that grows to a
+//!   minute, not each time Paste asks.
 //! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, EPS,
 //!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text).
 
@@ -20,12 +22,16 @@ use std::path::PathBuf;
 use vectorcraft_engine::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
 use vectorcraft_ui_egui::SystemClipboard;
 
-/// This platform's system clipboard.
-pub fn system_clipboard() -> Box<dyn SystemClipboard> {
+/// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text where
+/// arboard can't open (GNOME has no data-control protocol, a Flatpak there no X11).
+pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -> Box<dyn SystemClipboard> {
     #[cfg(windows)]
-    let cb = Box::<win::Clipboard>::default();
+    let cb = {
+        let _ = window;
+        Box::<win::Clipboard>::default()
+    };
     #[cfg(not(windows))]
-    let cb = Box::<portable::Clipboard>::default();
+    let cb = Box::new(portable::Clipboard::new(window));
     cb
 }
 
@@ -307,10 +313,12 @@ mod win {
     }
 }
 
-/// arboard: one format at a time. Built everywhere so it is checked everywhere.
+/// arboard, or on a Wayland compositor without its data-control protocol the core protocol's text
+/// clipboard: one format at a time. Built everywhere so it is checked everywhere.
 #[cfg_attr(windows, allow(dead_code))]
 mod portable {
     use std::borrow::Cow;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
@@ -320,6 +328,109 @@ mod portable {
     enum Ours {
         Text(String),
         Image(usize, usize),
+    }
+
+    /// An open clipboard connection.
+    enum Backend {
+        Arboard(arboard::Clipboard),
+        /// The compositor's core data-device protocol on the window's connection (text only).
+        #[cfg(target_os = "linux")]
+        Wayland(super::wayland::TextClipboard),
+    }
+
+    /// What a write of a picture says where the clipboard carries text only.
+    #[cfg(target_os = "linux")]
+    const TEXT_ONLY: &str = "this clipboard carries text only";
+
+    impl Backend {
+        /// arboard (Wayland data-control, else X11), else the core protocol on `window`'s
+        /// Wayland connection. Err: why each failed.
+        fn open(window: Option<&Arc<winit::window::Window>>) -> Result<Self, String> {
+            first_open(
+                || arboard::Clipboard::new().map(Self::Arboard).map_err(|e| e.to_string()),
+                || {
+                    #[cfg(target_os = "linux")]
+                    return window.and_then(|w| super::wayland::TextClipboard::new(w.clone())).map(Self::Wayland).ok_or("not a Wayland window");
+                    #[cfg(not(target_os = "linux"))]
+                    {
+                        let _ = window;
+                        Err("not on Linux")
+                    }
+                },
+            )
+        }
+
+        fn name(&self) -> &'static str {
+            match self {
+                Self::Arboard(_) => "arboard",
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => "the Wayland core protocol (text only)",
+            }
+        }
+
+        fn get_text(&mut self) -> Result<String, String> {
+            match self {
+                Self::Arboard(cb) => cb.get_text().map_err(|e| e.to_string()),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(cb) => cb.get_text(),
+            }
+        }
+
+        fn set_text(&mut self, text: &str) -> Result<(), String> {
+            match self {
+                Self::Arboard(cb) => cb.set_text(text).map_err(|e| e.to_string()),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(cb) => {
+                    cb.set_text(text);
+                    Ok(())
+                }
+            }
+        }
+
+        fn get_image(&mut self) -> Result<arboard::ImageData<'static>, String> {
+            match self {
+                Self::Arboard(cb) => cb.get_image().map_err(|e| e.to_string()),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+            }
+        }
+
+        fn set_image(&mut self, img: arboard::ImageData<'_>) -> Result<(), String> {
+            match self {
+                Self::Arboard(cb) => cb.set_image(img).map_err(|e| e.to_string()),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+            }
+        }
+
+        fn clear(&mut self) -> Result<(), String> {
+            match self {
+                Self::Arboard(cb) => cb.clear().map_err(|e| e.to_string()),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(cb) => {
+                    cb.set_text("");
+                    Ok(())
+                }
+            }
+        }
+
+        /// Files copied in a file manager (none where the backend can't read a file list).
+        fn file_list(&mut self) -> Vec<std::path::PathBuf> {
+            match self {
+                Self::Arboard(cb) => cb.get().file_list().unwrap_or_default(),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(_) => vec![],
+            }
+        }
+    }
+
+    /// The first of `arboard` and `wayland` that opens, tried in that order. Err: why each failed.
+    fn first_open<B>(arboard: impl FnOnce() -> Result<B, String>, wayland: impl FnOnce() -> Result<B, &'static str>) -> Result<B, String> {
+        let arboard = match arboard() {
+            Ok(cb) => return Ok(cb),
+            Err(e) => e,
+        };
+        wayland().map_err(|wayland| format!("arboard: {arboard}; Wayland core protocol: {wayland}"))
     }
 
     /// Who asks for the clipboard: the background paste check waits out the whole wait after a
@@ -348,7 +459,7 @@ mod portable {
     }
 
     /// A handle opened on first use and kept, or after a failure opened again only once its wait is
-    /// over: where the clipboard can't be opened, asking a few times a second must not reconnect each time.
+    /// over: where neither backend opens, asking a few times a second must not reconnect each time.
     pub(super) struct Reopen<B> {
         handle: Option<B>,
         failed: Option<Failed>,
@@ -415,20 +526,20 @@ mod portable {
 
     pub struct Clipboard {
         /// Kept open: on Linux the copied data lives as long as the handle does.
-        cb: Reopen<arboard::Clipboard>,
+        cb: Reopen<Backend>,
+        /// The app window, for the Wayland core protocol (on its connection).
+        window: Option<Arc<winit::window::Window>>,
         ours: Option<Ours>,
     }
 
-    impl Default for Clipboard {
-        fn default() -> Self {
-            Self { cb: Reopen::new(&UNAVAILABLE_LOGGED), ours: None }
-        }
-    }
-
     impl Clipboard {
-        fn cb(&mut self, asker: Asker) -> Result<&mut arboard::Clipboard, String> {
-            let open = || arboard::Clipboard::new().map_err(|e| e.to_string());
-            self.cb.get(asker, Instant::now(), open, |_| "arboard").ok_or_else(|| "no system clipboard".to_string())
+        pub fn new(window: Option<Arc<winit::window::Window>>) -> Self {
+            Self { cb: Reopen::new(&UNAVAILABLE_LOGGED), window, ours: None }
+        }
+
+        fn cb(&mut self, asker: Asker) -> Result<&mut Backend, String> {
+            let window = self.window.as_ref();
+            self.cb.get(asker, Instant::now(), || Backend::open(window), Backend::name).ok_or_else(|| "no system clipboard".to_string())
         }
     }
 
@@ -442,16 +553,16 @@ mod portable {
             let cb = self.cb(Asker::User)?;
             let ours = match (text, image) {
                 (Some(t), _) => {
-                    cb.set_text(t.as_str()).map_err(|e| e.to_string())?;
+                    cb.set_text(t.as_str())?;
                     Some(Ours::Text(t))
                 }
                 (None, Some(img)) => {
                     let (width, height) = (img.width() as usize, img.height() as usize);
-                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) }).map_err(|e| e.to_string())?;
+                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) })?;
                     Some(Ours::Image(width, height))
                 }
                 (None, None) => {
-                    cb.clear().map_err(|e| e.to_string())?;
+                    cb.clear()?;
                     None
                 }
             };
@@ -470,7 +581,7 @@ mod portable {
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
             let cb = self.cb(Asker::User).ok()?;
-            if let Some(f) = cb.get().file_list().ok().and_then(|paths| copied_file(paths, mimes)) {
+            if let Some(f) = copied_file(cb.file_list(), mimes) {
                 return Some(f);
             }
             mimes.iter().find_map(|m| {
@@ -609,6 +720,26 @@ mod portable {
         }
 
         #[test]
+        fn arboard_is_tried_before_the_wayland_core_protocol() {
+            let wayland_tried = Cell::new(false);
+            let wayland = |ok| {
+                wayland_tried.set(true);
+                if ok { Ok("wayland") } else { Err("not a Wayland window") }
+            };
+            // Where arboard opens (data-control, X11) the core protocol isn't tried.
+            assert_eq!(first_open(|| Ok("arboard"), || wayland(true)), Ok("arboard"));
+            assert!(!wayland_tried.get());
+            // The Flatpak on GNOME: no data-control, no X11.
+            assert_eq!(first_open(|| Err("no X11".into()), || wayland(true)), Ok("wayland"));
+            assert!(wayland_tried.get());
+            // Neither: every reason is kept for the log.
+            assert_eq!(
+                first_open(|| Err("no X11".into()), || wayland(false)),
+                Err::<&str, _>("arboard: no X11; Wayland core protocol: not a Wayland window".into())
+            );
+        }
+
+        #[test]
         fn one_outage_is_logged_once_across_handles() {
             static LOGGED: AtomicBool = AtomicBool::new(false);
             let clock = Clock::new();
@@ -619,6 +750,169 @@ mod portable {
             assert!(ui.get(Asker::User, clock.now(), fail, name).is_none());
             assert!(LOGGED.load(Ordering::Relaxed));
             assert!(probe.opened().is_none() && ui.opened().is_none());
+        }
+    }
+}
+
+/// The compositor's clipboard through the core data-device protocol (`wl_data_device`), on the
+/// window's own Wayland connection: what Copy and Paste use where the compositor lacks the
+/// data-control protocol arboard needs (GNOME) and there is no X11 to fall back on (the Flatpak on
+/// a Wayland session). Text only (smithay-clipboard), and only while the window has focus, as the
+/// protocol has it. A read waits [`LOAD_WAIT`] at most: smithay-clipboard waits for the owner's
+/// data with no limit, so reads run on a worker of their own.
+#[cfg(target_os = "linux")]
+mod wayland {
+    use std::sync::Arc;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    /// The longest a read waits for the selection's owner to send its text.
+    const LOAD_WAIT: Duration = Duration::from_secs(2);
+    /// What a read says once its worker has stopped.
+    const GONE: &str = "the clipboard's reader stopped";
+
+    pub struct TextClipboard {
+        /// Writes: a store only hands the text to smithay-clipboard's thread.
+        cb: smithay_clipboard::Clipboard,
+        /// Reads, on a worker with a second clipboard on the same connection.
+        loads: Loads,
+        /// Held as long as the clipboards: their connection is the window's.
+        _window: Arc<winit::window::Window>,
+    }
+
+    /// The read worker's clipboard and the window whose connection it uses, dropped in that order.
+    struct Loader {
+        cb: smithay_clipboard::Clipboard,
+        _window: Arc<winit::window::Window>,
+    }
+
+    impl Loader {
+        fn load(&self) -> Result<String, String> {
+            self.cb.load().map_err(|e| e.to_string())
+        }
+    }
+
+    impl TextClipboard {
+        /// None when `window` isn't a Wayland window or the read worker can't start.
+        #[allow(unsafe_code)]
+        pub fn new(window: Arc<winit::window::Window>) -> Option<Self> {
+            use winit::raw_window_handle::{HasDisplayHandle as _, RawDisplayHandle};
+            let RawDisplayHandle::Wayland(d) = window.display_handle().ok()?.as_raw() else { return None };
+            let display = d.display.as_ptr();
+            // SAFETY: the display is winit's open `wl_display`, which outlives `window`; each
+            // clipboard is held beside a clone of `window` and dropped before it. smithay-clipboard
+            // makes its own event queue on the display and doesn't close it.
+            let (cb, reader) = unsafe { (smithay_clipboard::Clipboard::new(display), smithay_clipboard::Clipboard::new(display)) };
+            let loader = Loader { cb: reader, _window: window.clone() };
+            // `loader.load()`, not `loader.cb.load()`: a closure moves only the fields it names,
+            // and the worker must hold the window as long as its clipboard.
+            let loads = Loads::spawn(move || loader.load())?;
+            Some(Self { cb, loads, _window: window })
+        }
+
+        pub fn get_text(&mut self) -> Result<String, String> {
+            self.loads.get(LOAD_WAIT)
+        }
+
+        pub fn set_text(&self, text: &str) {
+            self.cb.store(text);
+        }
+    }
+
+    /// Reads made on a worker thread and waited for a bounded time: a selection owner that never
+    /// sends its data holds the worker, not the caller.
+    struct Loads {
+        requests: mpsc::Sender<()>,
+        answers: mpsc::Receiver<Result<String, String>>,
+        /// A read that timed out and hasn't answered yet: until it does, reads don't queue behind it.
+        pending: bool,
+    }
+
+    impl Loads {
+        fn spawn(mut load: impl FnMut() -> Result<String, String> + Send + 'static) -> Option<Self> {
+            let (requests, asked) = mpsc::channel::<()>();
+            let (answer, answers) = mpsc::channel();
+            let work = move || {
+                while asked.recv().is_ok() {
+                    if answer.send(load()).is_err() {
+                        break;
+                    }
+                }
+            };
+            std::thread::Builder::new().name("wayland-clipboard-read".into()).spawn(work).ok()?;
+            Some(Self { requests, answers, pending: false })
+        }
+
+        /// The text, or why there is none, after `wait` at most.
+        fn get(&mut self, wait: Duration) -> Result<String, String> {
+            if self.pending {
+                match self.answers.try_recv() {
+                    // The late answer of the read that timed out: stale by now.
+                    Ok(_) => self.pending = false,
+                    Err(mpsc::TryRecvError::Empty) => return Err("the clipboard's owner hasn't answered an earlier read".into()),
+                    Err(mpsc::TryRecvError::Disconnected) => return Err(GONE.into()),
+                }
+            }
+            self.requests.send(()).map_err(|_| GONE.to_string())?;
+            match self.answers.recv_timeout(wait) {
+                Ok(text) => text,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.pending = true;
+                    Err(format!("the clipboard's owner didn't send its text within {wait:?}"))
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => Err(GONE.into()),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::time::Instant;
+
+        use super::*;
+
+        #[test]
+        fn a_read_that_answers_in_time_gives_the_text() {
+            let mut loads = Loads::spawn(|| Ok("<svg/>".into())).unwrap();
+            assert_eq!(loads.get(Duration::from_secs(5)), Ok("<svg/>".to_string()));
+            assert_eq!(loads.get(Duration::from_secs(5)), Ok("<svg/>".to_string()));
+        }
+
+        #[test]
+        fn an_owner_that_never_answers_holds_the_worker_not_the_caller() {
+            let (release, gate) = mpsc::channel::<()>();
+            let mut calls = 0;
+            let mut loads = Loads::spawn(move || {
+                calls += 1;
+                if calls == 1 {
+                    // The first owner sends nothing until released.
+                    let _ = gate.recv();
+                    return Ok("stale".into());
+                }
+                Ok("fresh".into())
+            })
+            .unwrap();
+            let start = Instant::now();
+            assert!(loads.get(Duration::from_millis(50)).is_err(), "the first read times out");
+            // While it is unanswered, a read doesn't queue behind it or wait at all.
+            assert!(loads.get(Duration::from_secs(60)).is_err());
+            assert!(start.elapsed() < Duration::from_secs(30), "no read waited past its bound");
+            release.send(()).unwrap();
+            // Once the late answer is in, it is dropped and a new read is made.
+            let text = (0..200).find_map(|_| {
+                std::thread::sleep(Duration::from_millis(10));
+                loads.get(Duration::from_secs(5)).ok()
+            });
+            assert_eq!(text.as_deref(), Some("fresh"));
+        }
+
+        #[test]
+        fn a_read_after_the_worker_stops_says_so() {
+            let mut loads = Loads::spawn(|| Ok(String::new())).unwrap();
+            // The worker ends when its answers can't be sent: drop them by hand.
+            let (_, dead) = mpsc::channel();
+            drop(std::mem::replace(&mut loads.answers, dead));
+            assert_eq!(loads.get(Duration::from_millis(50)), Err(GONE.to_string()));
         }
     }
 }

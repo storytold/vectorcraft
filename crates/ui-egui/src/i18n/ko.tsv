@@ -1701,6 +1701,7 @@ font-technology	Variable	가변
 	Delete Guides	안내선 삭제
 	Delete Slice	분할 삭제
 	Delete Style	스타일 삭제
+	Delete Styles	스타일 삭제
 	Delete Variables	변수 삭제
 	Delete View	보기 삭제
 	Done Editing Pattern	패턴 편집 완료
@@ -2077,6 +2078,7 @@ font-technology	Variable	가변
 	Move Guide	안내선 이동
 	Move Locked and Hidden Artwork with Artboard	잠기거나 숨겨진 아트워크를 아트보드와 함께 이동
 	Move Mesh Point	메시 포인트 이동
+	Move Mesh Points	메시 포인트 이동
 	Move Plane	평면 이동
 	Move Rows	행 이동
 	Move Slices	슬라이스 이동
@@ -2638,6 +2640,7 @@ mark-style	Japanese	일본식
 	Repeat Tab	탭 반복
 	Repeat {name}	{name} 반복
 	Replace	바꾸기
+	Replace:	바꾸기:
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
 	Replace With Font	바꿀 글꼴
@@ -3351,7 +3354,7 @@ gradient-kind	Radial	방사형
 	Client-side (.html)	클라이언트 측 (.html)
 	Cmd	Cmd
 	Collect Links in a Separate Folder	링크를 별도 폴더에 모으기
-	Color (,)	색상 (,)
+	Color (, or <)	색상 (, 또는 <)
 	Color Group	색상 그룹
 	Color Library	색상 라이브러리
 	Color Management	색상 관리
@@ -3446,7 +3449,7 @@ file-filter	Templates	템플릿
 	General › Placement › X	일반 › 배치 › X
 	General › Thumbnails	일반 › 축소판
 	Global Process Color, CMYK	글로벌 프로세스 색상, CMYK
-	Gradient (.)	그레이디언트 (.)
+	Gradient (. or >)	그레이디언트 (. 또는 >)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
 	Graph Design	그래프 디자인
@@ -4465,6 +4468,7 @@ theme	Appearance	외관
 @msg	no PNG encoder	PNG 인코더가 없습니다
 @msg	no document open	열린 문서가 없습니다
 @msg	no effect applied yet	아직 적용된 효과가 없습니다
+@msg	no Pathfinder operation applied yet	아직 적용된 패스파인더 작업이 없습니다
 @msg	no such perspective grid preset	해당 원근 격자 프리셋이 없습니다
 @msg	no such recent file	해당 최근 파일이 없습니다
 @msg	no such recent font	해당 최근 글꼴이 없습니다
@@ -5272,3 +5276,299 @@ axis	Y Axis	Y축
 	Glyph Bounds	글리프 경계
 	Proximity Guides	근접 안내선
 	Angular Guides	각도 안내선
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	평균 및 결합…
+	Average & Join	평균 및 결합
+anchor	Points:	포인트:
+@msg	select two open path ends, or two open paths, to average and join	평균 및 결합할 열린 패스의 끝점 두 개 또는 열린 패스 두 개를 선택하세요
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	아트워크 정리
+	Simplify Anchors (Keep Shape)…	앵커 포인트 단순화(모양 유지)…
+	Health Check	상태 점검
+	Show Issue	문제 표시
+	Fix All Issues	모든 문제 수정
+	Fix Issues	문제 수정
+	Deep Ungroup…	모든 단계 그룹 해제…
+	Rejoin Path Pieces…	패스 조각 다시 연결…
+	Document Health Check	문서 상태 점검
+	Check Selection	선택 영역 점검
+	Check Document	문서 점검
+	No issues found.	문제가 없습니다.
+	Changed since the last check.	마지막 점검 이후 변경되었습니다.
+	Fix Selected	선택한 항목 수정
+	Fix All	모두 수정
+	Issues fixed: {count}	수정한 문제: {count}
+	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
+	Empty Text	빈 텍스트
+	Unpainted Objects	칠하지 않은 오브젝트
+	Zero-Opacity Objects	불투명도 0% 오브젝트
+	Duplicate Objects	중복 오브젝트
+	Off-Artboard Art	아트보드 밖의 아트워크
+	Duplicate Anchors	중복 앵커 포인트
+	Tiny Handles	아주 짧은 핸들
+	Collinear Anchors	일직선 위의 앵커 포인트
+	Nearly Coincident Anchors	거의 겹치는 앵커 포인트
+	Nearly Closed Paths	거의 닫힌 패스
+	Filled Open Paths	칠한 열린 패스
+	Needless Clipping Groups	불필요한 클리핑 그룹
+	Needless Compound Paths	불필요한 컴파운드 패스
+	Needless Groups	불필요한 그룹
+	Empty Artboards	빈 아트보드
+	Protect Corners	모서리 보호
+	Gap	간격
+	Include Clip Groups	클리핑 그룹 포함
+@msg	`tolerance` must be from 1 to 100	`tolerance`는 1에서 100 사이여야 합니다
+@msg	`gap` must be from 0 to 6 pt	`gap`은 0에서 6pt 사이여야 합니다
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	앵커 포인트 단순화: 패스의 앵커 포인트가 너무 많아 한 번에 단순화할 수 없습니다
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	패스 조각 다시 연결: 패스가 너무 많아 한 번에 연결할 수 없습니다
+@msg	None of these issues are left: check again	이 문제가 더 이상 남아 있지 않습니다. 다시 점검하세요
+@msg	`kinds` must be a list of issue kinds	`kinds`는 문제 종류의 목록이어야 합니다
+@msg	missing `kind`	`kind`가 없습니다
+	Simplify Anchors (Keep Shape)	앵커 포인트 단순화(모양 유지)
+	Deep Ungroup	모든 단계 그룹 해제
+	Rejoin Path Pieces	패스 조각 다시 연결
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	색상 효과
+	Color Effects Panel	색상 효과 패널
+	Exposure	노출
+	Exposure…	노출…
+	Desaturate	채도 감소
+	Adjustment	조정
+	Add as Effect	효과로 추가
+	Apply as Filter	필터로 적용
+	Select objects to adjust their colors.	색상을 조정할 개체를 선택하십시오.
+	Brightness/Contrast	밝기/대비
+	Hue/Saturation	색조/채도
+	Temperature/Tint	색온도/색조
+@msg	`{id}` is not a colour adjustment	`{id}`은(는) 색상 조정이 아닙니다
+@msg	missing `effect`	`effect`이 없습니다
+@msg	`params` must be an object	`params`는 개체여야 합니다
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	패스 정밀 도구
+	Anchor Eraser Brush	앵커 포인트 지우개 브러시
+	Extend Path Tool	패스 연장 도구
+	Measure & Inspect Tool	측정 및 검사 도구
+	Anchor Inspector	앵커 포인트 검사기
+	Add Points at Crossings	교차점에 포인트 추가
+	Split at Crossings	교차점에서 분할
+	Extend Path	패스 연장
+	Measure & Inspect	측정 및 검사
+	Set Anchor	앵커 포인트 설정
+	Make Smooth	매끄럽게 만들기
+	Make Corner	모서리로 만들기
+	Equalize Handles	핸들 길이 맞추기
+	Remove Points, Keep Shape	포인트 제거(모양 유지)
+	Add Points to Segments…	세그먼트에 포인트 추가…
+	Add Points to Segments	세그먼트에 포인트 추가
+	Open a document to edit its anchor points.	앵커 포인트를 편집하려면 문서를 여세요.
+	Anchors selected: {count}	선택한 앵커 포인트: {count}
+	Direct-select anchor points to edit them.	편집할 앵커 포인트를 직접 선택하세요.
+	Length	길이
+	In:	들어옴:
+	Out:	나감:
+	Add Points	포인트 추가
+	Points per segment	세그먼트당 포인트
+	Close Path:	패스 닫기:
+	Keep Handles	핸들 유지
+	Straight	직선
+	Stretch Curve	곡선 늘이기
+@msg	direct-select the anchor points to remove	제거할 앵커 포인트를 직접 선택하세요
+@msg	select segments, or paths, to add points to	포인트를 추가할 세그먼트나 패스를 선택하세요
+@msg	select open paths to close	닫을 열린 패스를 선택하세요
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	패스가 너무 많거나 너무 얽혀 교차점을 찾을 수 없습니다(최대 10000개 세그먼트)
+@msg	the paths have too many anchors to edit at once	패스의 앵커 포인트가 너무 많아 한 번에 편집할 수 없습니다
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	파라메트릭 모양 도구
+	Parametric Shape	파라메트릭 모양
+	Edit Parametric Shape	파라메트릭 모양 편집
+	Convert to Parametric Shape	파라메트릭 모양으로 변환
+	Ring	고리
+	Arrow	화살표
+	Cross	십자
+	Heart	하트
+	Gear	톱니바퀴
+	Speech Bubble	말풍선
+	Count:	개수:
+	Thickness:	두께:
+	Inner Radius:	안쪽 반지름:
+	Head:	머리:
+	Shaft:	몸통:
+	Point:	끝:
+	Tooth Height:	톱니 높이:
+	Tail:	꼬리:
+	Tip:	끝:
+	Open a document to draw parametric shapes.	파라메트릭 모양을 그리려면 문서를 여세요.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	편집할 파라메트릭 모양을 선택하세요. 선택하지 않으면 이 값은 다음 모양에 적용됩니다.
+@msg	the object is not an editable parametric shape	개체가 편집 가능한 파라메트릭 모양이 아닙니다
+@msg	select plain rectangles, ellipses or regular polygons to convert	변환할 일반 사각형, 타원 또는 정다각형을 선택하세요
+@msg	the shape's numbers are out of range	모양의 값이 범위를 벗어났습니다
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind`은(는) 다음 중 하나여야 합니다: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count`는 3에서 1000 사이의 정수여야 합니다
+@msg	`{key}` must be from {lo} to {hi}	`{key}`은(는) {lo}에서 {hi} 사이여야 합니다
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	스마트 펜
+	Smart Pen Tool	스마트 펜 도구
+	Smart Pen Panel	스마트 펜 패널
+	Next Segment	다음 세그먼트
+	Curved	곡선
+	Retract Handles	핸들 접기
+	Close or Join	닫기 또는 결합
+	Open a document to draw with the Smart Pen.	스마트 펜으로 그리려면 문서를 여세요.
+	Straight or Curved Segment	직선 또는 곡선 세그먼트
+@msg	the path is locked or hidden	패스가 잠겨 있거나 숨겨져 있습니다
+@msg	`id` is not a path	`id`은(는) 패스가 아닙니다
+@msg	the path has no open subpath	패스에 열린 하위 패스가 없습니다
+@msg	the subpath is closed	하위 패스가 닫혀 있습니다
+@msg	the subpath is closed or too short to close	하위 패스가 닫혀 있거나 너무 짧아 닫을 수 없습니다
+@msg	the path is too short to remove a point from	패스가 너무 짧아 포인트를 제거할 수 없습니다
+@msg	the segment can't be bent that far	세그먼트를 그만큼 구부릴 수 없습니다
+@msg	give `{a}` and `{b}`	`{a}`와(과) `{b}`을(를) 지정하세요
+@msg	`t` must be from 0 to 1	`t`는 0에서 1 사이여야 합니다
+@msg	`segment` must be "straight" or "curved"	`segment`는 "straight" 또는 "curved"여야 합니다
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`는 "free", "keepAngles" 또는 "symmetric"이어야 합니다
+@msg	`{key}` must be [x, y]	`{key}`은(는) [x, y]여야 합니다
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	색상 종류로 선택
+	Objects with Spot Colors	별색을 사용한 개체
+	Objects with Color Effects	색상 효과가 있는 개체
+	RGB Images	RGB 이미지
+	CMYK Images	CMYK 이미지
+	Grayscale Images	회색 음영 이미지
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind`는 spotColors, colorEffects, rgbImages, cmykImages 또는 grayImages여야 합니다
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	아트워크에서 점 색상 가져오기
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	이중톤…
+	Duotone	이중톤
+	Print Ink Fixes…	인쇄 잉크 수정…
+	Print Ink Fixes	인쇄 잉크 수정
+	Inks	잉크
+	Tone 1	톤 1
+	Tone 2	톤 2
+	Tone 3	톤 3
+	Tone 4	톤 4
+	Curve	곡선
+	Reset to Linear	선형으로 재설정
+	Reset to Inverse	반전으로 재설정
+	Skip Objects with Spot Colors	별색을 사용한 개체 건너뛰기
+	Ink Limit	잉크 한계
+	Exclude Pure Black	순수 검정 제외
+	Remove White Overprint	흰색 겹쳐찍기 제거
+	Overprint Black	검정 겹쳐찍기
+	Text Only	문자만
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` 또는 `overprintBlack`을 지정하십시오
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	인쇄 잉크 수정은 CMYK 문서에서 작동합니다. 먼저 파일 › 문서 색상 모드 › CMYK 색상을 선택하십시오
+@msg	`{key}` must be 0..{max}	`{key}`은(는) 0..{max}이어야 합니다
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	모퉁이 도구
+	Slide Anchor Along Path	패스를 따라 앵커 포인트 밀기
+	Set Corners	모퉁이 설정
+	Remove Corners	모퉁이 제거
+	Corners selected: {count}	선택한 모퉁이: {count}
+	Apply to Selected Anchors	선택한 앵커 포인트에 적용
+@msg	`radius` must be from 0 to 1000000 pt	`radius`은(는) 0에서 1000000 pt 사이여야 합니다
+@msg	`t` must be a number from -0.98 to 0.98	`t`은(는) -0.98에서 0.98 사이의 숫자여야 합니다
+@msg	choose anchors where two sides meet at an angle: only those take a corner	두 변이 각을 이루며 만나는 앵커 포인트를 선택하세요. 그런 포인트만 모퉁이를 만들 수 있습니다
+@msg	give `anchor`, the index of the anchor to slide	밀 앵커 포인트의 인덱스 `anchor`를 지정하세요
+@msg	that anchor can't slide: an end of an open path has nowhere to go	이 앵커 포인트는 밀 수 없습니다. 열린 패스의 끝은 갈 곳이 없습니다
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	공유 가장자리 병합 도구
+	Merge Shared Edge	공유 가장자리 병합
+	Keep Shared Points Together	공유 포인트 함께 유지
+	Shared Edges	공유 가장자리
+	Coincidence:	일치 허용치:
+@msg	`a` and `b` must be two different paths	`a`와 `b`는 서로 다른 두 패스여야 합니다
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter`는 0.25~200 pt여야 합니다
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance`는 0~3 pt여야 합니다
+@msg	`follow` must be "average", "a" or "b"	`follow`는 "average", "a" 또는 "b"여야 합니다
+@msg	the paths have nothing to merge there	여기에는 병합할 패스 부분이 없습니다
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	텍스트 나누기
+	Combine Point Text	포인트 문자 결합
+	Remove Breaks	나누기 제거
+	Split Text at Cursor	커서 위치에서 텍스트 나누기
+	Set Alignment, Keep Position	위치를 유지하며 정렬 설정
+	Reset Text Transform	텍스트 변형 재설정
+	Replace Missing Fonts…	누락된 글꼴 바꾸기…
+	Replace Missing Fonts	누락된 글꼴 바꾸기
+	Remove Line Breaks	강제 줄 바꿈 제거
+	Remove Paragraph Breaks	단락 나누기 제거
+	Break Text into Lines	텍스트를 줄로 나누기
+	Break Text into Paragraphs	텍스트를 단락으로 나누기
+	Break Text into Words	텍스트를 단어로 나누기
+	Break Text into Glyphs	텍스트를 글리프로 나누기
+	Reset Text Transform and Scale	텍스트 변형 및 비율 재설정
+	Set Alignment, Keep Position:	위치를 유지하며 정렬 설정:
+	Break Text into:	텍스트 나누기:
+	Split at Cursor	커서 위치에서 나누기
+	Reset Transform	변형 재설정
+	Shift-click: break into paragraphs	Shift-클릭: 단락으로 나누기
+	Alt-click: reset the horizontal scale too	Alt-클릭: 가로 비율도 재설정
+breakText	Lines	줄
+breakText	Words	단어
+breakText	Glyphs	글리프
+@msg	Click in type with a Type tool to split it	나누려면 문자 도구로 텍스트 안을 클릭하십시오
+@msg	Too many type objects to change at once	한 번에 변경할 문자 오브젝트가 너무 많습니다
+@msg	Too many pieces to make at once	한 번에 만들 조각이 너무 많습니다
+@msg	Select horizontal point or area type whose text fits	텍스트가 모두 들어가는 가로 포인트 문자 또는 영역 문자를 선택하십시오
+@msg	Nothing to split at the cursor	커서 위치에서 나눌 내용이 없습니다
+@msg	Select two or more one-line point type objects on one baseline to combine	결합하려면 같은 기준선에 있는 한 줄짜리 포인트 문자 오브젝트를 두 개 이상 선택하십시오
+@msg	No line breaks to remove	제거할 강제 줄 바꿈이 없습니다
+@msg	No paragraph breaks to remove	제거할 단락 나누기가 없습니다
+@msg	Too many breaks to remove at once	한 번에 제거할 나누기가 너무 많습니다
+@msg	Select point type	포인트 문자를 선택하십시오
+@msg	The point type is aligned that way already	포인트 문자가 이미 그렇게 정렬되어 있습니다
+@msg	The point type has no transform to reset	포인트 문자에 재설정할 변형이 없습니다
+@msg	No fonts are missing	누락된 글꼴이 없습니다
+@msg	the replacement font is not available	대체 글꼴을 사용할 수 없습니다
+@msg	missing `align`	`align`이 없습니다
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by`는 lines, paragraphs, words 또는 glyphs여야 합니다({other}는 사용할 수 없음)
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind`는 "line" 또는 "paragraph"여야 합니다({other}는 사용할 수 없음)
+@msg	`align` must be "left", "center" or "right", not {other}	`align`은 "left", "center" 또는 "right"여야 합니다({other}는 사용할 수 없음)
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	패스 효과
+	Reverse Direction	방향 반전
+	Align to Corners and Ends	모퉁이와 끝에 정렬
+	Count	개수
+	Max Count	최대 개수
+	Start Length	시작 길이
+	Start Percent	시작 퍼센트
+	Start Shape	시작 모양
+	End Length	끝 길이
+	End Percent	끝 퍼센트
+	End Shape	끝 모양
+	By Count	개수 기준
+	By Distance	거리 기준
+	Both	둘 다
+	Shorter Than Length	길이보다 짧은 핸들
+	Anchors	앵커 포인트
+	Dashes to Geometry	대시를 도형으로
+	Dashes to Geometry…	대시를 도형으로…
+	Add Anchors	앵커 포인트 추가
+	Add Anchors…	앵커 포인트 추가…
+	Smooth Anchors	앵커 포인트 매끄럽게
+	Smooth Anchors…	앵커 포인트 매끄럽게…
+	Simplify Anchors	앵커 포인트 단순화
+	Simplify Anchors…	앵커 포인트 단순화…
+	Split at Anchors	앵커 포인트에서 분할
+	Split at Anchors…	앵커 포인트에서 분할…
+	Extend Path…	패스 연장…
+	Close Path…	패스 닫기…
+	Retract Handles…	핸들 접기…
+	Dash 1	대시 1
+	Gap 1	간격 1
+	Dash 2	대시 2
+	Gap 2	간격 2
+	Dash 3	대시 3
+	Gap 3	간격 3
+	Dash 4	대시 4
+	Gap 4	간격 4
+	Dash 5	대시 5
+	Gap 5	간격 5

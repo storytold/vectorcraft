@@ -58,7 +58,7 @@ use outline::KEY_OUTLINE;
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
+use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub(crate) use raster::color_image;
 use raster::{changed_pixels, pixel_region, upload};
 use task_bar::task_bar;
@@ -164,6 +164,11 @@ enum Drag {
     Present,
 }
 
+/// Whether the canvas is holding a pointer drag across frames.
+pub(crate) fn dragging(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+}
+
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -207,9 +212,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rect = rect.round_to_pixels(ui.ctx().pixels_per_point());
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
-    if !fitted {
+    // Presentation Mode shows the active artboard on the whole screen and nothing but the art:
+    // no selection, guides, grids or artboard edges (#4365).
+    let presenting = app.ui.screen_mode == 3;
+    if !fitted || (presenting && app.canvas.presented != Some(rect)) {
         fit(app, "view.fitArtboard");
     }
+    app.canvas.presented = presenting.then_some(rect);
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {
         scroll_bars(app, ui, rect, outer, &t);
@@ -238,7 +247,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     paint_paper(app, ui, &painter, &xf, rect, &t);
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
-    let grid_look = app.ui.view.grid.then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -293,28 +302,30 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): in Pixel Preview from
     // 600% zoom, a line at every document pixel over the art, so the pixels it rasterizes to show.
-    if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
-        grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
-    }
-    artboard_outlines(app, ui, &painter, &xf, &t);
-    if app.ui.view.guides {
-        guide_lines(app, &painter, &xf, rect, &t);
-    }
-
-    if !app.session.slices_hidden() {
-        slice_overlay(app, &painter, &xf);
-    }
-    if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
-        print_tiling_overlay(app, &painter, &xf);
-    }
-    original_path_overlay(app, &painter, &xf);
-
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
     let view_info = app.view_info();
-    let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, hover_still), revolve_edit, view_info);
-    draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
-    if !revolve_edit {
-        shaper_widget_overlay(app, &painter, &xf);
+    if !presenting {
+        if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
+            grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
+        }
+        artboard_outlines(app, ui, &painter, &xf, &t);
+        if app.ui.view.guides {
+            guide_lines(app, &painter, &xf, rect, &t);
+        }
+
+        if !app.session.slices_hidden() {
+            slice_overlay(app, &painter, &xf);
+        }
+        if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
+            print_tiling_overlay(app, &painter, &xf);
+        }
+        original_path_overlay(app, &painter, &xf);
+
+        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, hover_still), revolve_edit, view_info);
+        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
+        if !revolve_edit {
+            shaper_widget_overlay(app, &painter, &xf);
+        }
     }
     ime_geometry(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
@@ -329,7 +340,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The task bar is not drawn while the Simplify or Smooth slider shows.
     let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
-    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 && !strip {
+    // It gives way to a drag, not to a click: hidden for the length of every press, it flashed as
+    // each click picked another object (#4681).
+    let dragging = app.session.tool_busy() && ui.input(|i| i.pointer.is_decidedly_dragging());
+    if app.ui.task_bar && !revolve_edit && !dragging && app.ui.screen_mode < 3 && !strip {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
@@ -646,7 +660,11 @@ fn paint_paper(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, 
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
-    if app.ui.view.artboards && !app.ui.view.outline {
+    if !shows_artboards(app) {
+        // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
+        let setup = &doc.setup;
+        painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
+    } else if !app.ui.view.outline {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -709,8 +727,17 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
     }
 }
 
+/// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which
+/// edits them.
+fn shows_artboards(app: &VectorcraftApp) -> bool {
+    app.ui.view.artboards || app.session.tool_id() == "artboard"
+}
+
 /// The artboards' edges, bleeds, marks and names.
 fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf: &Xf, t: &Tokens) {
+    if !shows_artboards(app) {
+        return;
+    }
     let Some(st) = app.session.active() else { return };
     let doc = &st.doc;
     // Artboard edges and names. The Artboard tool labels its selected artboards itself (following
@@ -792,6 +819,7 @@ fn selection_visuals(
             hover_highlight(app, painter, xf);
         }
         selection_overlay(app, painter, xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
+        draw_inside_overlay(app, painter, xf);
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         if app.ui.view.text_threads {

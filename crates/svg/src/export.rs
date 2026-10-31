@@ -10,7 +10,8 @@ use vectorcraft_doc::{
 };
 use vectorcraft_doc::{CharStyle, ImageBlob, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
+use vectorcraft_geom::shapes::KAPPA;
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, SubPath};
 
 use vectorcraft_text::{FontDb, FontFace};
 

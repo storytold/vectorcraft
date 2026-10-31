@@ -591,7 +591,7 @@ font-technology	Variable	Biến thiên
 	Collect in New Layer	Thu thập vào lớp mới
 	Collect Links in a Separate Folder	Thu thập liên kết vào thư mục riêng
 	Color	Màu
-	Color (,)	Màu (,)
+	Color (, or <)	Màu (, hoặc <)
 	Color Adjustments	Điều chỉnh màu sắc
 	Color bars	Thanh màu
 	Color blindness – Deuteranopia-type	Mù màu – loại Deuteranopia
@@ -1491,7 +1491,7 @@ file-filter	Templates	Mẫu
 	GPU Performance	Hiệu suất GPU
 	Grab bag	Tổng hợp
 	Gradient	Chuyển sắc
-	Gradient (.)	Chuyển sắc (.)
+	Gradient (. or >)	Chuyển sắc (. hoặc >)
 	Gradient across stroke	Chuyển sắc ngang qua nét
 	Gradient along stroke	Chuyển sắc dọc theo nét
 	Gradient and Mesh Resolution:	Độ phân giải chuyển sắc và lưới:
@@ -1637,6 +1637,7 @@ file-filter	Templates	Mẫu
 	Delete Guides	Xóa các đường căn
 	Delete Slice	Xóa lát cắt
 	Delete Style	Xóa kiểu
+	Delete Styles	Xóa kiểu
 	Delete Variables	Xóa biến số
 	Delete View	Xóa chế độ xem
 	Done Editing Pattern	Hoàn tất chỉnh sửa họa tiết
@@ -2227,6 +2228,7 @@ file-filter	Templates	Mẫu
 	Move Library Item to Group	Di chuyển mục thư viện vào nhóm
 	Move Locked and Hidden Artwork with Artboard	Di chuyển tác phẩm đã khóa và ẩn cùng bảng vẽ
 	Move Mesh Point	Di chuyển điểm lưới
+	Move Mesh Points	Di chuyển các điểm lưới
 	Move Panel	Di chuyển bảng
 	Move Plane	Di chuyển mặt phẳng
 	Move Plane to Match Object	Di chuyển mặt phẳng khớp với đối tượng
@@ -2934,6 +2936,7 @@ mark-style	Japanese	Kiểu Nhật
 	Repeat Tab	Tab lặp lại
 	Repeat {name}	Lặp lại {name}
 	Replace	Thay thế
+	Replace:	Thay thế:
 	Replace Font	Thay thế phông chữ
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
@@ -4459,6 +4462,7 @@ theme	Appearance	Giao diện
 @msg	no document	không có tài liệu
 @msg	no document open	không có tài liệu nào đang mở
 @msg	no effect applied yet	chưa áp dụng hiệu ứng
+@msg	no Pathfinder operation applied yet	chưa áp dụng thao tác Pathfinder
 @msg	no effect at index {k}	không có hiệu ứng tại chỉ mục {k}
 @msg	no end record	không có bản ghi kết thúc
 @msg	no file manager here	không có trình quản lý tệp ở đây
@@ -5291,3 +5295,299 @@ axis	Y Axis	Trục Y
 	Glyph Bounds	Giới hạn glyph
 	Proximity Guides	Đường căn lân cận
 	Angular Guides	Đường căn góc
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Trung bình và nối…
+	Average & Join	Trung bình và nối
+anchor	Points:	Điểm:
+@msg	select two open path ends, or two open paths, to average and join	hãy chọn hai đầu của đường dẫn mở, hoặc hai đường dẫn mở, để lấy trung bình và nối
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Dọn dẹp tác phẩm
+	Simplify Anchors (Keep Shape)…	Đơn giản hóa điểm neo (giữ hình dạng)…
+	Health Check	Kiểm tra tình trạng
+	Show Issue	Hiện vấn đề
+	Fix All Issues	Sửa mọi vấn đề
+	Fix Issues	Sửa vấn đề
+	Deep Ungroup…	Bỏ nhóm mọi cấp…
+	Rejoin Path Pieces…	Nối lại các mảnh đường dẫn…
+	Document Health Check	Kiểm tra tình trạng tài liệu
+	Check Selection	Kiểm tra vùng chọn
+	Check Document	Kiểm tra tài liệu
+	No issues found.	Không tìm thấy vấn đề nào.
+	Changed since the last check.	Đã thay đổi kể từ lần kiểm tra trước.
+	Fix Selected	Sửa mục đã chọn
+	Fix All	Sửa tất cả
+	Issues fixed: {count}	Vấn đề đã sửa: {count}
+	Open a document to check it for issues.	Mở một tài liệu để kiểm tra vấn đề.
+	Empty Text	Văn bản trống
+	Unpainted Objects	Đối tượng không tô màu
+	Zero-Opacity Objects	Đối tượng có độ mờ đục bằng 0
+	Duplicate Objects	Đối tượng trùng lặp
+	Off-Artboard Art	Hình vẽ ngoài bảng vẽ
+	Duplicate Anchors	Điểm neo trùng lặp
+	Tiny Handles	Tay nắm rất ngắn
+	Collinear Anchors	Điểm neo thẳng hàng
+	Nearly Coincident Anchors	Điểm neo gần trùng nhau
+	Nearly Closed Paths	Đường dẫn gần khép kín
+	Filled Open Paths	Đường dẫn mở có tô
+	Needless Clipping Groups	Nhóm cắt không cần thiết
+	Needless Compound Paths	Đường dẫn phức không cần thiết
+	Needless Groups	Nhóm không cần thiết
+	Empty Artboards	Bảng vẽ trống
+	Protect Corners	Bảo vệ góc
+	Gap	Khoảng hở
+	Include Clip Groups	Bao gồm nhóm cắt
+@msg	`tolerance` must be from 1 to 100	`tolerance` phải từ 1 đến 100
+@msg	`gap` must be from 0 to 6 pt	`gap` phải từ 0 đến 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Đơn giản hóa điểm neo: các đường dẫn có quá nhiều điểm neo để đơn giản hóa một lần
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Nối lại các mảnh đường dẫn: quá nhiều đường dẫn để nối một lần
+@msg	None of these issues are left: check again	Không còn vấn đề nào trong số này: hãy kiểm tra lại
+@msg	`kinds` must be a list of issue kinds	`kinds` phải là danh sách các loại vấn đề
+@msg	missing `kind`	thiếu `kind`
+	Simplify Anchors (Keep Shape)	Đơn giản hóa điểm neo (giữ hình dạng)
+	Deep Ungroup	Bỏ nhóm mọi cấp
+	Rejoin Path Pieces	Nối lại các mảnh đường dẫn
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Hiệu ứng màu
+	Color Effects Panel	Bảng Hiệu ứng màu
+	Exposure	Phơi sáng
+	Exposure…	Phơi sáng…
+	Desaturate	Khử bão hòa
+	Adjustment	Điều chỉnh
+	Add as Effect	Thêm làm hiệu ứng
+	Apply as Filter	Áp dụng làm bộ lọc
+	Select objects to adjust their colors.	Chọn đối tượng để điều chỉnh màu của chúng.
+	Brightness/Contrast	Độ sáng/Tương phản
+	Hue/Saturation	Sắc độ/Độ bão hòa
+	Temperature/Tint	Nhiệt độ màu/Tông
+@msg	`{id}` is not a colour adjustment	`{id}` không phải là điều chỉnh màu
+@msg	missing `effect`	thiếu `effect`
+@msg	`params` must be an object	`params` phải là một đối tượng
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Công cụ chính xác cho đường dẫn
+	Anchor Eraser Brush	Cọ tẩy điểm neo
+	Extend Path Tool	Công cụ Kéo dài đường dẫn
+	Measure & Inspect Tool	Công cụ Đo và kiểm tra
+	Anchor Inspector	Trình kiểm tra điểm neo
+	Add Points at Crossings	Thêm điểm tại chỗ giao nhau
+	Split at Crossings	Tách tại chỗ giao nhau
+	Extend Path	Kéo dài đường dẫn
+	Measure & Inspect	Đo và kiểm tra
+	Set Anchor	Đặt điểm neo
+	Make Smooth	Làm mượt
+	Make Corner	Chuyển thành góc
+	Equalize Handles	Cân bằng tay nắm
+	Remove Points, Keep Shape	Gỡ điểm, giữ hình dạng
+	Add Points to Segments…	Thêm điểm vào đoạn…
+	Add Points to Segments	Thêm điểm vào đoạn
+	Open a document to edit its anchor points.	Mở một tài liệu để sửa các điểm neo của nó.
+	Anchors selected: {count}	Điểm neo đã chọn: {count}
+	Direct-select anchor points to edit them.	Chọn trực tiếp các điểm neo để sửa chúng.
+	Length	Độ dài
+	In:	Vào:
+	Out:	Ra:
+	Add Points	Thêm điểm
+	Points per segment	Số điểm mỗi đoạn
+	Close Path:	Đóng đường dẫn:
+	Keep Handles	Giữ tay nắm
+	Straight	Thẳng
+	Stretch Curve	Kéo giãn đường cong
+@msg	direct-select the anchor points to remove	chọn trực tiếp các điểm neo cần gỡ
+@msg	select segments, or paths, to add points to	chọn các đoạn hoặc đường dẫn để thêm điểm
+@msg	select open paths to close	chọn các đường dẫn mở để đóng
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	quá nhiều đường dẫn hoặc chúng quá rối để tìm chỗ giao nhau (tối đa 10000 đoạn)
+@msg	the paths have too many anchors to edit at once	các đường dẫn có quá nhiều điểm neo để sửa cùng lúc
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Công cụ Hình tham số
+	Parametric Shape	Hình tham số
+	Edit Parametric Shape	Sửa hình tham số
+	Convert to Parametric Shape	Chuyển thành hình tham số
+	Ring	Vành khuyên
+	Arrow	Mũi tên
+	Cross	Chữ thập
+	Heart	Trái tim
+	Gear	Bánh răng
+	Speech Bubble	Bong bóng thoại
+	Count:	Số lượng:
+	Thickness:	Độ dày:
+	Inner Radius:	Bán kính trong:
+	Head:	Đầu:
+	Shaft:	Thân:
+	Point:	Mũi:
+	Tooth Height:	Chiều cao răng:
+	Tail:	Đuôi:
+	Tip:	Chóp:
+	Open a document to draw parametric shapes.	Mở một tài liệu để vẽ hình tham số.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Chọn một hình tham số để sửa nó. Khi không chọn gì, các giá trị này dùng cho hình tiếp theo.
+@msg	the object is not an editable parametric shape	đối tượng không phải hình tham số có thể sửa
+@msg	select plain rectangles, ellipses or regular polygons to convert	chọn các hình chữ nhật, hình elip hoặc đa giác đều thông thường để chuyển đổi
+@msg	the shape's numbers are out of range	các giá trị của hình nằm ngoài phạm vi
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` phải là một trong: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` phải là số nguyên từ 3 đến 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` phải từ {lo} đến {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Bút thông minh
+	Smart Pen Tool	Công cụ Bút thông minh
+	Smart Pen Panel	Bảng Bút thông minh
+	Next Segment	Đoạn tiếp theo
+	Curved	Cong
+	Retract Handles	Thu tay nắm
+	Close or Join	Đóng hoặc nối
+	Open a document to draw with the Smart Pen.	Mở một tài liệu để vẽ bằng bút thông minh.
+	Straight or Curved Segment	Đoạn thẳng hoặc cong
+@msg	the path is locked or hidden	đường dẫn bị khóa hoặc bị ẩn
+@msg	`id` is not a path	`id` không phải là đường dẫn
+@msg	the path has no open subpath	đường dẫn không có nhánh con mở
+@msg	the subpath is closed	nhánh con đã đóng
+@msg	the subpath is closed or too short to close	nhánh con đã đóng hoặc quá ngắn để đóng
+@msg	the path is too short to remove a point from	đường dẫn quá ngắn để xóa một điểm
+@msg	the segment can't be bent that far	không thể uốn đoạn xa đến vậy
+@msg	give `{a}` and `{b}`	hãy cho `{a}` và `{b}`
+@msg	`t` must be from 0 to 1	`t` phải từ 0 đến 1
+@msg	`segment` must be "straight" or "curved"	`segment` phải là "straight" hoặc "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` phải là "free", "keepAngles" hoặc "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` phải là [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Chọn theo loại màu
+	Objects with Spot Colors	Đối tượng có màu pha
+	Objects with Color Effects	Đối tượng có hiệu ứng màu
+	RGB Images	Ảnh RGB
+	CMYK Images	Ảnh CMYK
+	Grayscale Images	Ảnh thang độ xám
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` phải là spotColors, colorEffects, rgbImages, cmykImages hoặc grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Màu chấm theo tác phẩm
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Hai tông…
+	Duotone	Hai tông
+	Print Ink Fixes…	Sửa mực in…
+	Print Ink Fixes	Sửa mực in
+	Inks	Mực
+	Tone 1	Tông 1
+	Tone 2	Tông 2
+	Tone 3	Tông 3
+	Tone 4	Tông 4
+	Curve	Đường cong
+	Reset to Linear	Đặt lại thành tuyến tính
+	Reset to Inverse	Đặt lại thành đảo ngược
+	Skip Objects with Spot Colors	Bỏ qua đối tượng có màu pha
+	Ink Limit	Giới hạn mực
+	Exclude Pure Black	Loại trừ đen thuần
+	Remove White Overprint	Bỏ in chồng màu trắng
+	Overprint Black	In chồng đen
+	Text Only	Chỉ văn bản
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	hãy cho `inkLimit`, `removeWhiteOverprint` hoặc `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Sửa mực in hoạt động trên tài liệu CMYK: trước hết chọn Tệp › Chế độ màu tài liệu › Màu CMYK
+@msg	`{key}` must be 0..{max}	`{key}` phải là 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Công cụ Góc
+	Slide Anchor Along Path	Trượt điểm neo dọc đường dẫn
+	Set Corners	Đặt góc
+	Remove Corners	Gỡ góc
+	Corners selected: {count}	Góc đã chọn: {count}
+	Apply to Selected Anchors	Áp dụng cho các điểm neo đã chọn
+@msg	`radius` must be from 0 to 1000000 pt	`radius` phải từ 0 đến 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` phải là số từ -0.98 đến 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	hãy chọn các điểm neo nơi hai cạnh gặp nhau thành góc: chỉ những điểm đó mới nhận góc
+@msg	give `anchor`, the index of the anchor to slide	hãy cho biết `anchor`, chỉ số của điểm neo cần trượt
+@msg	that anchor can't slide: an end of an open path has nowhere to go	không thể trượt điểm neo đó: đầu của đường dẫn mở không có chỗ để đi
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Công cụ Hợp nhất cạnh chung
+	Merge Shared Edge	Hợp nhất cạnh chung
+	Keep Shared Points Together	Giữ các điểm chung đi cùng nhau
+	Shared Edges	Cạnh chung
+	Coincidence:	Độ trùng khớp:
+@msg	`a` and `b` must be two different paths	`a` và `b` phải là hai đường dẫn khác nhau
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` phải từ 0.25 đến 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` phải từ 0 đến 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` phải là "average", "a" hoặc "b"
+@msg	the paths have nothing to merge there	các đường dẫn không có gì để hợp nhất ở đây
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Tách văn bản
+	Combine Point Text	Kết hợp chữ điểm
+	Remove Breaks	Xóa ngắt
+	Split Text at Cursor	Tách văn bản tại con trỏ
+	Set Alignment, Keep Position	Đặt căn lề, giữ vị trí
+	Reset Text Transform	Đặt lại biến đổi văn bản
+	Replace Missing Fonts…	Thay thế phông chữ thiếu…
+	Replace Missing Fonts	Thay thế phông chữ thiếu
+	Remove Line Breaks	Xóa xuống dòng
+	Remove Paragraph Breaks	Xóa ngắt đoạn
+	Break Text into Lines	Tách văn bản thành dòng
+	Break Text into Paragraphs	Tách văn bản thành đoạn
+	Break Text into Words	Tách văn bản thành từ
+	Break Text into Glyphs	Tách văn bản thành glyph
+	Reset Text Transform and Scale	Đặt lại biến đổi và tỷ lệ văn bản
+	Set Alignment, Keep Position:	Đặt căn lề, giữ vị trí:
+	Break Text into:	Tách văn bản thành:
+	Split at Cursor	Tách tại con trỏ
+	Reset Transform	Đặt lại biến đổi
+	Shift-click: break into paragraphs	Shift-bấm: tách thành đoạn
+	Alt-click: reset the horizontal scale too	Alt-bấm: đặt lại cả tỷ lệ ngang
+breakText	Lines	Dòng
+breakText	Words	Từ
+breakText	Glyphs	Glyph
+@msg	Click in type with a Type tool to split it	Nhấp vào văn bản bằng công cụ Chữ để tách văn bản
+@msg	Too many type objects to change at once	Quá nhiều đối tượng chữ để thay đổi cùng lúc
+@msg	Too many pieces to make at once	Quá nhiều phần để tạo cùng lúc
+@msg	Select horizontal point or area type whose text fits	Chọn chữ điểm hoặc chữ vùng nằm ngang có văn bản vừa khung
+@msg	Nothing to split at the cursor	Không có gì để tách tại con trỏ
+@msg	Select two or more one-line point type objects on one baseline to combine	Chọn hai đối tượng chữ điểm một dòng trở lên trên cùng một đường cơ sở để kết hợp
+@msg	No line breaks to remove	Không có xuống dòng nào để xóa
+@msg	No paragraph breaks to remove	Không có ngắt đoạn nào để xóa
+@msg	Too many breaks to remove at once	Quá nhiều ngắt để xóa cùng lúc
+@msg	Select point type	Chọn chữ điểm
+@msg	The point type is aligned that way already	Chữ điểm đã được căn như vậy
+@msg	The point type has no transform to reset	Chữ điểm không có biến đổi nào để đặt lại
+@msg	No fonts are missing	Không thiếu phông chữ nào
+@msg	the replacement font is not available	phông chữ thay thế không có sẵn
+@msg	missing `align`	thiếu `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` phải là lines, paragraphs, words hoặc glyphs, không phải {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` phải là "line" hoặc "paragraph", không phải {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` phải là "left", "center" hoặc "right", không phải {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Hiệu ứng đường dẫn
+	Reverse Direction	Đảo ngược hướng
+	Align to Corners and Ends	Căn theo góc và đầu mút
+	Count	Số lượng
+	Max Count	Số lượng tối đa
+	Start Length	Độ dài đầu
+	Start Percent	Phần trăm đầu
+	Start Shape	Hình dạng đầu
+	End Length	Độ dài cuối
+	End Percent	Phần trăm cuối
+	End Shape	Hình dạng cuối
+	By Count	Theo số lượng
+	By Distance	Theo khoảng cách
+	Both	Cả hai
+	Shorter Than Length	Ngắn hơn độ dài
+	Anchors	Điểm neo
+	Dashes to Geometry	Nét đứt thành hình học
+	Dashes to Geometry…	Nét đứt thành hình học…
+	Add Anchors	Thêm các điểm neo
+	Add Anchors…	Thêm các điểm neo…
+	Smooth Anchors	Làm mượt điểm neo
+	Smooth Anchors…	Làm mượt điểm neo…
+	Simplify Anchors	Đơn giản hóa điểm neo
+	Simplify Anchors…	Đơn giản hóa điểm neo…
+	Split at Anchors	Tách tại điểm neo
+	Split at Anchors…	Tách tại điểm neo…
+	Extend Path…	Kéo dài đường dẫn…
+	Close Path…	Đóng đường dẫn…
+	Retract Handles…	Thu tay nắm…
+	Dash 1	Nét 1
+	Gap 1	Khoảng hở 1
+	Dash 2	Nét 2
+	Gap 2	Khoảng hở 2
+	Dash 3	Nét 3
+	Gap 3	Khoảng hở 3
+	Dash 4	Nét 4
+	Gap 4	Khoảng hở 4
+	Dash 5	Nét 5
+	Gap 5	Khoảng hở 5

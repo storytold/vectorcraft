@@ -1,6 +1,6 @@
 #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
 use super::gpu;
-use super::prefs::save_prefs;
+use super::prefs::{save_prefs, save_prefs_soon};
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access, window};
@@ -71,6 +71,9 @@ impl eframe::App for App {
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         if self.app.take_prefs_changed() {
             file_access::unconfined(|| save_prefs(&self.app));
+        } else {
+            // The workspace, panels and other UI settings change without the dialog (#4625).
+            file_access::unconfined(|| save_prefs_soon(&self.app));
         }
         // Not while a file dialog's sheet has the keyboard: its name field's composition would go.
         #[cfg(target_os = "macos")]

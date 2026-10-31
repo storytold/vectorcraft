@@ -6,7 +6,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_testkit::ai;
 use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
 
@@ -533,6 +533,194 @@ fn an_ai_file_whose_pdf_part_is_only_text_still_opens_from_editing_data_that_rea
     let mut s = Session::new();
     open(&mut s, "art.ai", &ai::ai_with(&compressed(&ai::sample_data()), TEXT_ART, "/ArtBox [0 0 200 100]"), json!({})).unwrap();
     check_sample(&s);
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_is_cropped_to_its_art_opens_from_its_layers() {
+    // A 400 × 200 pt artboard with two red bars across (100, 50)–(300, 150). The PDF part's page
+    // is that art's box, 200 × 100 pt (the editing data's bounding box), not the artboard.
+    let red = "0 1 1 0 1 0 0 Xa\n";
+    let art = ai::layer("Art", &format!("{red}{}f\n{red}{}f\n", ai::rect(100.0, 50.0, 180.0, 150.0), ai::rect(220.0, 50.0, 300.0, 150.0)));
+    let data = ai::editing_data_in([100.0, 50.0, 300.0, 150.0], [0.0, 0.0, 400.0, 200.0], &art);
+    let page = "1 0 0 rg 0 0 80 100 re f 120 0 80 100 re f";
+    let mut s = Session::new();
+    let r = open(&mut s, "cropped.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    assert!(!r["warnings"].to_string().contains("weren't read"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"]);
+    assert_eq!(doc.artboards.len(), 1);
+    assert_eq!(doc.artboards[0].rect, vectorcraft_geom::Rect::new(0.0, 0.0, 400.0, 200.0), "the file's artboard, not its page");
+    let bars = doc.layers[0].children().unwrap();
+    assert_eq!(bars.len(), 2);
+    let b = bars[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 100.0).abs() < 0.01 && (b.y0 - 50.0).abs() < 0.01, "where the artboard has it: {b:?}");
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_draws_nothing_opens_from_its_editing_data() {
+    // A PDF-compatible `.ai` whose PDF part is a page with nothing on it (no notice text either),
+    // with or without the boxes that say where its art is: its editing data is the art.
+    for boxed in ["", "/ArtBox [0 0 200 100] /TrimBox [0 0 200 100]"] {
+        let mut s = Session::new();
+        let r = open(&mut s, "blank.ai", &ai::ai_with(&compressed(&ai::sample_data()), "", boxed), json!({})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{boxed:?}: {r}");
+        check_sample(&s);
+        // The PDF part alone, as asked: its empty page.
+        open(&mut s, "blank.ai", &ai::ai_with(&compressed(&ai::sample_data()), "", boxed), json!({"editingData": false})).unwrap();
+        let layers = &s.doc().unwrap().doc.layers;
+        assert!(layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "{boxed:?}");
+    }
+    // Editing data that can't be read leaves the empty page, as before.
+    let mut s = Session::new();
+    open(&mut s, "blank.ai", &ai::ai(b"%AI24_ZStandard_Data\0\0\0\0\0\0\0\0", ""), json!({})).unwrap();
+    assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
+}
+
+/// A page that draws nothing only because what it holds couldn't be read (an image that can't be
+/// decoded) isn't an empty page: its notes stay, and the editing data isn't taken in its place
+/// unchecked.
+#[test]
+fn a_page_whose_content_was_skipped_is_not_taken_for_an_empty_one() {
+    let broken = "q 100 0 0 50 0 0 cm BI /W 2 /H 2 /CS /RGB /BPC 8 /F /DCT ID notajpeg EI Q";
+    let mut s = Session::new();
+    let r = open(&mut s, "broken.ai", &ai::ai(&compressed(&ai::sample_data()), broken), json!({})).unwrap();
+    let warnings = r["warnings"].to_string();
+    assert_ne!(r["warnings"], json!([]), "the skipped image is told: {r}");
+    assert!(!warnings.contains("saved without PDF compatibility"), "{r}");
+}
+
+/// Editing data with one layer, "Art", holding one left-aligned story, "Hi", 14 pt Helvetica,
+/// anchored at the canvas centre (the template box's centre), as the editing data's text document
+/// gives it; compressed.
+fn typed_data() -> Vec<u8> {
+    let story = "<< /0 << /0 (Hi\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 3 >> ] >> \
+                 /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 3 >> ] >> >> \
+                 /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8191.5 8191.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+                 << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 3 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>";
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n/1 << /1 [ {story} ] /2 << /1 12.0 >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n2 /TextAntialiasing ,\n;\n";
+    let data = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_NumLayers: 1\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        ai::layer("Art", text),
+        lines.join("\n")
+    );
+    compressed(data.as_bytes())
+}
+
+/// How many text objects and how many paths the open document holds.
+fn texts_and_paths(s: &Session) -> (usize, usize) {
+    let (mut texts, mut paths) = (0, 0);
+    s.doc().unwrap().doc.walk(|c| {
+        texts += usize::from(matches!(c.kind, NodeKind::Text(_)));
+        paths += usize::from(matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
+    });
+    (texts, paths)
+}
+
+/// Type asked for as outlines on a page that draws nothing: the editing data's type, outlined (the
+/// page has none to give).
+#[test]
+fn an_empty_page_with_type_as_outlines_outlines_the_editing_datas_type() {
+    let file = ai::ai(&typed_data(), "");
+    let mut s = Session::new();
+    let r = open(&mut s, "typed.ai", &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, "typed.ai", &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
+}
+
+/// Type asked for as outlines in a `.ai` saved without PDF compatibility (its page only a
+/// placeholder): the editing data's type, outlined, as for an empty page.
+#[test]
+fn a_file_saved_without_its_pdf_part_with_type_as_outlines_outlines_its_type() {
+    let file = ai::ai(&typed_data(), PLACEHOLDER);
+    let mut s = Session::new();
+    let r = open(&mut s, "typed.ai", &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, "typed.ai", &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
+}
+
+/// Type of the editing data outlined keeps its transparency, opacity mask and effects, and is
+/// shown and locked as the type was.
+#[test]
+fn outlined_type_of_the_editing_data_keeps_its_transparency_and_effects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let mut doc = s.doc().unwrap().doc.as_ref().clone();
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+    {
+        let t = doc.node_mut(id).unwrap();
+        t.opacity = 0.5;
+        t.blend = vectorcraft_color::BlendMode::Multiply;
+        t.isolate = true;
+        t.locked = true;
+        t.name = Some("Title".into());
+        t.appearance.effects = vec![shadow.clone()];
+    }
+    let opts = LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() };
+    let (doc, _) = load::outlined_if_asked(doc, vec![], &opts);
+    let mut outlines = vec![];
+    doc.walk(|n| {
+        if n.extras().type_outlines {
+            outlines.push(n.clone());
+        }
+    });
+    let [o] = &outlines[..] else { panic!("one group of outlines: {outlines:?}") };
+    assert_eq!((o.opacity, o.blend, o.isolate), (0.5, vectorcraft_color::BlendMode::Multiply, true));
+    assert_eq!(o.appearance.effects, [shadow]);
+    assert!(o.locked && o.visible);
+    assert_eq!(o.name.as_deref(), Some("Title"));
+}
+
+/// Threaded type of the editing data, its story all in its first frame as the editing data gives
+/// it, outlined: each frame's outlines show the text that flows into it.
+#[test]
+fn outlined_threaded_type_of_the_editing_data_shows_the_text_of_every_frame() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    // As the editing data gives it: the first frame holds the story, the second nothing yet.
+    let mut doc = s.doc().unwrap().doc.as_ref().clone();
+    let runs = |id: u64| match &doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("area type"),
+    };
+    let (shown, flowed) = (runs(a), runs(b));
+    let empty: Vec<_> = flowed.iter().take(1).map(|r| vectorcraft_doc::TextRun { text: String::new(), ..r.clone() }).collect();
+    for (id, put) in [(a, [shown, flowed].concat()), (b, empty)] {
+        if let NodeKind::Text(t) = &mut doc.node_mut(NodeId(id)).unwrap().kind {
+            t.runs = put;
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+        }
+    }
+    let opts = LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() };
+    let (doc, _) = load::outlined_if_asked(doc, vec![], &opts);
+    let mut right = 0;
+    doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && n.geometric_bounds().is_some_and(|r| r.x0 >= 190.0) {
+            right += 1;
+        }
+    });
+    assert!(right > 0, "the second frame's text is outlined where it flows");
+    assert!(doc.text_threads.is_empty(), "outlined frames are in no thread: {:?}", doc.text_threads);
 }
 
 #[test]

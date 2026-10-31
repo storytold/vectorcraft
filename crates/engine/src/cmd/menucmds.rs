@@ -57,6 +57,15 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, _| other_layers(s, true)
         ),
         cmd!(
+            "object.lock.unselected",
+            "Unselected Artwork",
+            ["Object", "Lock"],
+            Some("Cmd+Alt+Shift+2"),
+            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide → {count}",
+            has_selection,
+            |s, _| unselected_art(s, true)
+        ),
+        cmd!(
             "object.hide.above",
             "All Artwork Above",
             ["Object", "Hide"],
@@ -81,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Alt+Shift+3"),
             "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; object.showAll shows them again; disabled in isolation mode → {count}",
             has_selection_outside_isolation,
-            hide_unselected
+            |s, _| unselected_art(s, false)
         ),
         cmd!(
             "object.transformEach",
@@ -321,15 +330,24 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
     Ok(json!({ "count": n }))
 }
 
-/// The objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and hold none of
-/// them. The objects of a selected layer count as selected. Guide paths are left out while `guides_locked`, and so are
-/// the objects that hold one. The walk goes into a plain group that holds a selected object or such a guide path; a
-/// clip group, a Shaper group, a compound path and every other object that holds one is left out with its members.
-fn unselected(d: &vectorcraft_doc::Document, iso: Option<NodeId>, selection: &[NodeId], roots: &[NodeId], guides_locked: bool) -> Vec<NodeId> {
+/// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
+/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
+/// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
+/// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
+/// object or such a guide are left out with their members.
+fn unselected(
+    d: &vectorcraft_doc::Document,
+    iso: Option<NodeId>,
+    selection: &[NodeId],
+    roots: &[NodeId],
+    guides_locked: bool,
+    lock: bool,
+) -> Vec<NodeId> {
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
     roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
-    if guides_locked {
+    if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
@@ -344,24 +362,30 @@ fn unselected(d: &vectorcraft_doc::Document, iso: Option<NodeId>, selection: &[N
             out.push(n.id);
             return false;
         }
-        !roots.contains(&n.id) && matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.extras().shaper.is_none()
+        !roots.contains(&n.id)
+            && (matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.extras().shaper.is_none()
+                || lock && (matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Compound { .. })))
     });
     out
 }
 
-fn hide_unselected(s: &mut Session, _: &Value) -> Result<Value> {
+fn unselected_art(s: &mut Session, lock: bool) -> Result<Value> {
     let roots = selected_roots_to_transform(s)?;
     let guides_locked = s.menu.guides_locked;
     let st = s.doc()?;
-    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked);
-    // With nothing to hide, the document and its undo history stay as they are.
+    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked, lock);
+    // With nothing to lock (Lock) or hide (Hide), the document and its undo history stay as they are.
     if !ids.is_empty() {
-        s.edit("Hide", |d, _| {
-            // Hiding moves no node in the tree, so the paths found up front stay right.
+        s.edit(if lock { "Lock" } else { "Hide" }, |d, _| {
+            // Locking and hiding move no node in the tree, so the paths found up front stay right.
             let paths = d.index_paths(ids.iter().copied());
             for id in &ids {
                 if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p)) {
-                    n.visible = false;
+                    if lock {
+                        n.locked = true;
+                    } else {
+                        n.visible = false;
+                    }
                 }
             }
             Ok(())

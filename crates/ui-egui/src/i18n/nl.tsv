@@ -1141,12 +1141,12 @@ lighting	Light	Licht
 	 to set spacing and orientation	 om de tussenruimte en de oriëntatie in te stellen
 	Apply	Toepassen
 	Change Screen Mode (F)	Schermmodus wisselen (F)
-	Color (,)	Kleur (,)
+	Color (, or <)	Kleur (, of <)
 	Draw Behind	Achter tekenen
 	Draw Inside	Binnen tekenen
 	Draw Normal	Normaal tekenen
 	Expand:	Uitvouwen:
-	Gradient (.)	Verloop (.)
+	Gradient (. or >)	Verloop (. of >)
 	H:	H:
 	Modify	Wijzigen
 	Navigate	Navigeren
@@ -3086,6 +3086,7 @@ theme	Appearance	Vormgeving
 	Make Envelope	Omtrek maken
 	Move Envelope Mesh Point	Maaspunt van omtrek verplaatsen
 	Move Mesh Point	Maaspunt verplaatsen
+	Move Mesh Points	Maaspunten verplaatsen
 	Move Spine Point	Aspunt verplaatsen
 	Reshape Spine Segment	Segment van de as opnieuw vormgeven
 	Reset with Mesh	Opnieuw instellen met maas
@@ -3550,6 +3551,7 @@ axis	Both	Beide
 	Set Text	Tekst instellen
 	Insert Character	Teken invoegen
 	Replace	Vervangen
+	Replace:	Vervangen:
 	Type on a Path Options	Opties voor tekst op pad
 	Highlight Variable	Variabele markeren
 	New Variable	Nieuwe variabele
@@ -4161,6 +4163,7 @@ imageTrace	Outline	Contour
 @msg	no document	geen document
 @msg	no document open	geen document geopend
 @msg	no effect applied yet	nog geen effect toegepast
+@msg	no Pathfinder operation applied yet	nog geen Pathfinder-bewerking toegepast
 @msg	no effect at index {k}	geen effect op index {k}
 @msg	no end record	geen eindrecord
 @msg	no file manager here	hier is geen bestandsbeheerder
@@ -5339,6 +5342,7 @@ swatch	Bright Violet	Felviolet
 	Delete Guides	Hulplijnen verwijderen
 	Delete Slice	Slice verwijderen
 	Delete Style	Stijl verwijderen
+	Delete Styles	Stijlen verwijderen
 	Delete Variables	Variabelen verwijderen
 	Delete View	Weergave verwijderen
 	Done Editing Pattern	Patroon bewerken voltooid
@@ -5642,3 +5646,295 @@ axis	Y Axis	Y-as
 	Glyph Bounds	Glyphbegrenzing
 	Proximity Guides	Nabijheidshulplijnen
 	Angular Guides	Hoekhulplijnen
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Gemiddelde en verbinden…
+	Average & Join	Gemiddelde en verbinden
+anchor	Points:	Punten:
+@msg	select two open path ends, or two open paths, to average and join	selecteer twee uiteinden van open paden, of twee open paden, om te middelen en te verbinden
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Illustratie opschonen
+	Simplify Anchors (Keep Shape)…	Ankerpunten vereenvoudigen (vorm behouden)…
+	Health Check	Gezondheidscontrole
+	Show Issue	Probleem tonen
+	Fix All Issues	Alle problemen oplossen
+	Fix Issues	Problemen oplossen
+	Deep Ungroup…	Alle groeperingsniveaus opheffen…
+	Rejoin Path Pieces…	Padstukken opnieuw verbinden…
+	Document Health Check	Gezondheidscontrole van document
+	Check Selection	Selectie controleren
+	Check Document	Document controleren
+	No issues found.	Geen problemen gevonden.
+	Changed since the last check.	Gewijzigd sinds de laatste controle.
+	Fix Selected	Geselecteerde oplossen
+	Fix All	Alles oplossen
+	Issues fixed: {count}	Opgeloste problemen: {count}
+	Open a document to check it for issues.	Open een document om het op problemen te controleren.
+	Empty Text	Lege tekst
+	Unpainted Objects	Objecten zonder verf
+	Zero-Opacity Objects	Objecten met 0% dekking
+	Duplicate Objects	Dubbele objecten
+	Off-Artboard Art	Illustraties buiten de tekenborden
+	Duplicate Anchors	Dubbele ankerpunten
+	Tiny Handles	Piepkleine grepen
+	Collinear Anchors	Collineaire ankerpunten
+	Nearly Coincident Anchors	Bijna samenvallende ankerpunten
+	Nearly Closed Paths	Bijna gesloten paden
+	Filled Open Paths	Gevulde open paden
+	Needless Clipping Groups	Overbodige knipgroepen
+	Needless Compound Paths	Overbodige samengestelde paden
+	Needless Groups	Overbodige groepen
+	Empty Artboards	Lege tekenborden
+	Protect Corners	Hoeken beschermen
+	Gap	Tussenruimte
+	Include Clip Groups	Knipgroepen meenemen
+@msg	`tolerance` must be from 1 to 100	`tolerance` moet tussen 1 en 100 liggen
+@msg	`gap` must be from 0 to 6 pt	`gap` moet tussen 0 en 6 pt liggen
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Ankerpunten vereenvoudigen: de paden hebben te veel ankerpunten om in één keer te vereenvoudigen
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Padstukken opnieuw verbinden: te veel paden om in één keer te verbinden
+@msg	None of these issues are left: check again	Geen van deze problemen is nog over: controleer opnieuw
+@msg	`kinds` must be a list of issue kinds	`kinds` moet een lijst met soorten problemen zijn
+@msg	missing `kind`	`kind` ontbreekt
+	Simplify Anchors (Keep Shape)	Ankerpunten vereenvoudigen (vorm behouden)
+	Deep Ungroup	Alle groeperingsniveaus opheffen
+	Rejoin Path Pieces	Padstukken opnieuw verbinden
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Kleureffecten
+	Color Effects Panel	Deelvenster Kleureffecten
+	Exposure	Belichting
+	Exposure…	Belichting…
+	Desaturate	Desatureren
+	Adjustment	Aanpassing
+	Add as Effect	Toevoegen als effect
+	Apply as Filter	Toepassen als filter
+	Select objects to adjust their colors.	Selecteer objecten om hun kleuren aan te passen.
+	Brightness/Contrast	Helderheid/contrast
+	Hue/Saturation	Kleurtoon/verzadiging
+	Temperature/Tint	Temperatuur/tint
+@msg	`{id}` is not a colour adjustment	`{id}` is geen kleuraanpassing
+@msg	missing `effect`	`effect` ontbreekt
+@msg	`params` must be an object	`params` moet een object zijn
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Precisiegereedschappen voor paden
+	Anchor Eraser Brush	Ankerpunt-gumpenseel
+	Extend Path Tool	Pad verlengen-gereedschap
+	Measure & Inspect Tool	Meten en inspecteren-gereedschap
+	Anchor Inspector	Ankerpuntinspecteur
+	Add Points at Crossings	Punten toevoegen bij kruisingen
+	Split at Crossings	Splitsen bij kruisingen
+	Extend Path	Pad verlengen
+	Measure & Inspect	Meten en inspecteren
+	Set Anchor	Ankerpunt instellen
+	Make Smooth	Vloeiend maken
+	Make Corner	Hoekpunt maken
+	Equalize Handles	Grepen gelijkmaken
+	Remove Points, Keep Shape	Punten verwijderen, vorm behouden
+	Add Points to Segments…	Punten aan segmenten toevoegen…
+	Add Points to Segments	Punten aan segmenten toevoegen
+	Open a document to edit its anchor points.	Open een document om de ankerpunten ervan te bewerken.
+	Anchors selected: {count}	Geselecteerde ankerpunten: {count}
+	Direct-select anchor points to edit them.	Selecteer ankerpunten direct om ze te bewerken.
+	In:	In:
+	Out:	Uit:
+	Add Points	Punten toevoegen
+	Points per segment	Punten per segment
+	Close Path:	Pad sluiten:
+	Keep Handles	Grepen behouden
+	Straight	Recht
+	Stretch Curve	Curve uitrekken
+@msg	direct-select the anchor points to remove	selecteer de te verwijderen ankerpunten direct
+@msg	select segments, or paths, to add points to	selecteer segmenten, of paden, om punten aan toe te voegen
+@msg	select open paths to close	selecteer open paden om te sluiten
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	te veel of te verwarde paden om hun kruisingen te vinden (hoogstens 10000 segmenten)
+@msg	the paths have too many anchors to edit at once	de paden hebben te veel ankerpunten om in één keer te bewerken
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrische vorm-gereedschap
+	Parametric Shape	Parametrische vorm
+	Edit Parametric Shape	Parametrische vorm bewerken
+	Convert to Parametric Shape	Omzetten in parametrische vorm
+	Ring	Ring
+	Heart	Hart
+	Gear	Tandwiel
+	Speech Bubble	Tekstballon
+	Count:	Aantal:
+	Thickness:	Dikte:
+	Inner Radius:	Binnenstraal:
+	Head:	Kop:
+	Shaft:	Schacht:
+	Point:	Punt:
+	Tooth Height:	Tandhoogte:
+	Tail:	Staart:
+	Tip:	Punt:
+	Open a document to draw parametric shapes.	Open een document om parametrische vormen te tekenen.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Selecteer een parametrische vorm om die te bewerken. Zonder selectie gelden deze waarden voor de volgende vorm.
+@msg	the object is not an editable parametric shape	het object is geen bewerkbare parametrische vorm
+@msg	select plain rectangles, ellipses or regular polygons to convert	selecteer gewone rechthoeken, ellipsen of regelmatige polygonen om om te zetten
+@msg	the shape's numbers are out of range	de waarden van de vorm liggen buiten het bereik
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` moet een van deze zijn: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` moet een geheel getal van 3 tot 1000 zijn
+@msg	`{key}` must be from {lo} to {hi}	`{key}` moet tussen {lo} en {hi} liggen
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Slimme pen
+	Smart Pen Tool	Slimme pen-gereedschap
+	Smart Pen Panel	Slimme pen-paneel
+	Next Segment	Volgend segment
+	Curved	Gebogen
+	Retract Handles	Grepen intrekken
+	Close or Join	Sluiten of verbinden
+	Open a document to draw with the Smart Pen.	Open een document om met de slimme pen te tekenen.
+	Straight or Curved Segment	Recht of gebogen segment
+@msg	the path is locked or hidden	het pad is vergrendeld of verborgen
+@msg	`id` is not a path	`id` is geen pad
+@msg	the path has no open subpath	het pad heeft geen open subpad
+@msg	the subpath is closed	het subpad is gesloten
+@msg	the subpath is closed or too short to close	het subpad is gesloten of te kort om te sluiten
+@msg	the path is too short to remove a point from	het pad is te kort om er een punt uit te verwijderen
+@msg	the segment can't be bent that far	het segment kan niet zo ver worden gebogen
+@msg	give `{a}` and `{b}`	geef `{a}` en `{b}` op
+@msg	`t` must be from 0 to 1	`t` moet tussen 0 en 1 liggen
+@msg	`segment` must be "straight" or "curved"	`segment` moet "straight" of "curved" zijn
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` moet "free", "keepAngles" of "symmetric" zijn
+@msg	`{key}` must be [x, y]	`{key}` moet [x, y] zijn
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Selecteren op kleursoort
+	Objects with Spot Colors	Objecten met steunkleuren
+	Objects with Color Effects	Objecten met kleureffecten
+	RGB Images	RGB-afbeeldingen
+	CMYK Images	CMYK-afbeeldingen
+	Grayscale Images	Grijswaardenafbeeldingen
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` moet spotColors, colorEffects, rgbImages, cmykImages of grayImages zijn
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Puntkleur uit artwork
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duotoon…
+	Duotone	Duotoon
+	Print Ink Fixes…	Drukinktcorrecties…
+	Print Ink Fixes	Drukinktcorrecties
+	Inks	Inkten
+	Tone 1	Toon 1
+	Tone 2	Toon 2
+	Tone 3	Toon 3
+	Tone 4	Toon 4
+	Curve	Curve
+	Reset to Linear	Herstellen naar lineair
+	Reset to Inverse	Herstellen naar omgekeerd
+	Skip Objects with Spot Colors	Objecten met steunkleuren overslaan
+	Ink Limit	Inktlimiet
+	Exclude Pure Black	Puur zwart uitsluiten
+	Remove White Overprint	Overprint van wit verwijderen
+	Overprint Black	Zwart overprinten
+	Text Only	Alleen tekst
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geef `inkLimit`, `removeWhiteOverprint` of `overprintBlack` op
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Drukinktcorrecties werken in CMYK-documenten: kies eerst Bestand › Documentkleurmodus › CMYK-kleur
+@msg	`{key}` must be 0..{max}	`{key}` moet 0..{max} zijn
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Hoekengereedschap
+	Slide Anchor Along Path	Ankerpunt langs pad schuiven
+	Set Corners	Hoeken instellen
+	Remove Corners	Hoeken verwijderen
+	Corners selected: {count}	Geselecteerde hoeken: {count}
+	Apply to Selected Anchors	Toepassen op geselecteerde ankerpunten
+@msg	`radius` must be from 0 to 1000000 pt	`radius` moet van 0 tot 1000000 pt zijn
+@msg	`t` must be a number from -0.98 to 0.98	`t` moet een getal van -0.98 tot 0.98 zijn
+@msg	choose anchors where two sides meet at an angle: only those take a corner	kies ankerpunten waar twee zijden elkaar in een hoek ontmoeten: alleen die kunnen een hoek krijgen
+@msg	give `anchor`, the index of the anchor to slide	geef `anchor` op, de index van het ankerpunt dat moet schuiven
+@msg	that anchor can't slide: an end of an open path has nowhere to go	dat ankerpunt kan niet schuiven: het einde van een open pad kan nergens heen
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Gereedschap Gedeelde rand samenvoegen
+	Merge Shared Edge	Gedeelde rand samenvoegen
+	Keep Shared Points Together	Gedeelde punten bij elkaar houden
+	Shared Edges	Gedeelde randen
+	Coincidence:	Samenvallen:
+@msg	`a` and `b` must be two different paths	`a` en `b` moeten twee verschillende paden zijn
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` moet van 0.25 tot 200 pt zijn
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` moet van 0 tot 3 pt zijn
+@msg	`follow` must be "average", "a" or "b"	`follow` moet "average", "a" of "b" zijn
+@msg	the paths have nothing to merge there	de paden hebben hier niets om samen te voegen
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Tekst splitsen
+	Combine Point Text	Punttekst combineren
+	Remove Breaks	Einden verwijderen
+	Split Text at Cursor	Tekst splitsen bij cursor
+	Set Alignment, Keep Position	Uitlijning instellen, positie behouden
+	Reset Text Transform	Teksttransformatie herstellen
+	Replace Missing Fonts…	Ontbrekende lettertypen vervangen…
+	Replace Missing Fonts	Ontbrekende lettertypen vervangen
+	Remove Line Breaks	Regeleinden verwijderen
+	Remove Paragraph Breaks	Alinea-einden verwijderen
+	Break Text into Lines	Tekst splitsen in regels
+	Break Text into Paragraphs	Tekst splitsen in alinea's
+	Break Text into Words	Tekst splitsen in woorden
+	Break Text into Glyphs	Tekst splitsen in glyphs
+	Reset Text Transform and Scale	Teksttransformatie en schaal herstellen
+	Set Alignment, Keep Position:	Uitlijning instellen, positie behouden:
+	Break Text into:	Tekst splitsen in:
+	Split at Cursor	Splitsen bij cursor
+	Reset Transform	Transformatie herstellen
+	Shift-click: break into paragraphs	Shift-klik: splitsen in alinea's
+	Alt-click: reset the horizontal scale too	Alt-klik: ook de horizontale schaal herstellen
+breakText	Lines	Regels
+breakText	Words	Woorden
+breakText	Glyphs	Glyphs
+@msg	Click in type with a Type tool to split it	Klik met een Type-gereedschap in tekst om deze te splitsen
+@msg	Too many type objects to change at once	Te veel tekstobjecten om in één keer te wijzigen
+@msg	Too many pieces to make at once	Te veel stukken om in één keer te maken
+@msg	Select horizontal point or area type whose text fits	Selecteer horizontale punt- of vlaktekst waarvan de tekst past
+@msg	Nothing to split at the cursor	Niets te splitsen bij de cursor
+@msg	Select two or more one-line point type objects on one baseline to combine	Selecteer twee of meer punttekstobjecten van één regel op één basislijn om ze te combineren
+@msg	No line breaks to remove	Geen regeleinden om te verwijderen
+@msg	No paragraph breaks to remove	Geen alinea-einden om te verwijderen
+@msg	Too many breaks to remove at once	Te veel einden om in één keer te verwijderen
+@msg	Select point type	Selecteer punttekst
+@msg	The point type is aligned that way already	De punttekst is al zo uitgelijnd
+@msg	The point type has no transform to reset	De punttekst heeft geen transformatie om te herstellen
+@msg	No fonts are missing	Er ontbreken geen lettertypen
+@msg	the replacement font is not available	het vervangende lettertype is niet beschikbaar
+@msg	missing `align`	`align` ontbreekt
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` moet lines, paragraphs, words of glyphs zijn, niet {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` moet "line" of "paragraph" zijn, niet {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` moet "left", "center" of "right" zijn, niet {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Padeffecten
+	Reverse Direction	Richting omkeren
+	Align to Corners and Ends	Uitlijnen op hoeken en uiteinden
+	Count	Aantal
+	Max Count	Maximumaantal
+	Start Length	Beginlengte
+	Start Percent	Beginpercentage
+	Start Shape	Beginvorm
+	End Length	Eindlengte
+	End Percent	Eindpercentage
+	End Shape	Eindvorm
+	By Count	Op aantal
+	By Distance	Op afstand
+	Both	Beide
+	Shorter Than Length	Korter dan lengte
+	Dashes to Geometry	Streepjes naar geometrie
+	Dashes to Geometry…	Streepjes naar geometrie…
+	Add Anchors	Ankerpunten toevoegen
+	Add Anchors…	Ankerpunten toevoegen…
+	Smooth Anchors	Ankerpunten gladmaken
+	Smooth Anchors…	Ankerpunten gladmaken…
+	Simplify Anchors	Ankerpunten vereenvoudigen
+	Simplify Anchors…	Ankerpunten vereenvoudigen…
+	Split at Anchors	Splitsen bij ankerpunten
+	Split at Anchors…	Splitsen bij ankerpunten…
+	Extend Path…	Pad verlengen…
+	Close Path…	Pad sluiten…
+	Retract Handles…	Grepen intrekken…
+	Dash 1	Streepje 1
+	Gap 1	Tussenruimte 1
+	Dash 2	Streepje 2
+	Gap 2	Tussenruimte 2
+	Dash 3	Streepje 3
+	Gap 3	Tussenruimte 3
+	Dash 4	Streepje 4
+	Gap 4	Tussenruimte 4
+	Dash 5	Streepje 5
+	Gap 5	Tussenruimte 5

@@ -14,9 +14,10 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint, keep_model};
-use vectorcraft_doc::recolor::{ColorVisitor, Reach, map_paint, recolor_node};
+use vectorcraft_doc::recolor::{ColorVisitor, Reach, map_links, recolor_node};
 use vectorcraft_doc::{Document, Effect, Node, NodeKind};
 
+use crate::addons::duotone::{Duotone, SwatchKinds};
 use crate::merged_params;
 use crate::raster::color_param;
 use crate::util::{flag, num, text};
@@ -27,7 +28,7 @@ pub const ADJUSTMENTS: [&str; 6] =
 
 /// Is `id` a colour adjustment effect?
 pub fn is_adjustment(id: &str) -> bool {
-    ADJUSTMENTS.contains(&id)
+    ADJUSTMENTS.contains(&id) || crate::addons::color::is_color_effect(id)
 }
 
 fn visible_adjustment(e: &Effect) -> bool {
@@ -72,7 +73,7 @@ pub fn is_channel(s: &str) -> bool {
 }
 
 /// Entries of a sampled tone curve.
-const LUT: usize = 256;
+pub(crate) const LUT: usize = 256;
 
 /// One adjustment, its parameters normalised.
 #[derive(Clone, Debug, PartialEq)]
@@ -88,6 +89,18 @@ enum Adjust {
     ShiftToColor { target: [f32; 3], amount: f32, preserve: bool },
     /// Warm/cool and magenta/green shifts, -1..1.
     TemperatureTint { temperature: f32, tint: f32 },
+    /// One of the Color Effects add-on's.
+    Addon(crate::addons::color::Adjust),
+}
+
+impl Adjust {
+    /// Duotone, which maps a colour with its swatch link ([`ColorMap::apply_link`]).
+    fn duotone(&self) -> Option<&Duotone> {
+        match self {
+            Adjust::Addon(crate::addons::color::Adjust::Duotone(d)) => Some(d),
+            _ => None,
+        }
+    }
 }
 
 /// The colour adjustments of an effect list, composed in order.
@@ -102,17 +115,44 @@ impl ColorMap {
 
     /// Adjust display (sRGB) components 0..1.
     pub fn apply_rgb(&self, rgb: [f32; 3]) -> [f32; 3] {
-        self.0.iter().fold(rgb, |c, a| a.apply(c).map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }))
+        apply_rgb(&self.0, rgb)
     }
 
     /// Adjust a colour, keeping its colour model (unchanged when the adjustments leave it as is).
+    /// Duotone gives its inks' colour instead ([`Duotone`]).
     pub fn apply(&self, c: Color) -> Color {
-        let rgb = c.to_rgb();
-        let out = self.apply_rgb(rgb);
-        if out.iter().zip(rgb).all(|(a, b)| (a - b).abs() < 1e-6) {
-            return c;
+        let (mut c, mut link, mut tint) = (c, None, 1.0);
+        self.apply_link(&mut c, &mut link, &mut tint, &|_| None);
+        c
+    }
+
+    /// Adjust a colour with its swatch link and tint (`link`, `tint`), as a paint holds them;
+    /// true when it changed. A colour that changes loses its link, except that Duotone with one
+    /// tone of a swatch the document has (`swatches`, [`SwatchKinds`]) links it to that swatch at
+    /// the tone's tint. The adjustments between Duotones work in display RGB, each run keeping
+    /// the colour's model.
+    pub fn apply_link(&self, c: &mut Color, link: &mut Option<String>, tint: &mut f32, swatches: &SwatchKinds) -> bool {
+        let mut changed = false;
+        let mut rest: &[Adjust] = &self.0;
+        while !rest.is_empty() {
+            let (run, after) = rest.split_at(rest.iter().position(|a| a.duotone().is_some()).unwrap_or(rest.len()));
+            if !run.is_empty() {
+                let rgb = c.to_rgb();
+                let out = apply_rgb(run, rgb);
+                if !out.iter().zip(rgb).all(|(a, b)| (a - b).abs() < 1e-6) {
+                    *c = keep_model(*c, Color::rgb(out[0], out[1], out[2]));
+                    *link = None;
+                    *tint = 1.0;
+                    changed = true;
+                }
+            }
+            let Some((duotone, tail)) = after.split_first() else { break };
+            if let Some(d) = duotone.duotone() {
+                changed |= d.map_link(c, link, tint, swatches);
+            }
+            rest = tail;
         }
-        keep_model(c, Color::rgb(out[0], out[1], out[2]))
+        changed
     }
 
     /// Adjust an 8-bit sRGB pixel.
@@ -120,6 +160,11 @@ impl ColorMap {
         let out = self.apply_rgb([r, g, b].map(|v| v as f32 / 255.0));
         out.map(|v| (v * 255.0).round() as u8)
     }
+}
+
+/// Display (sRGB) components 0..1 through `adjustments`, in order.
+fn apply_rgb(adjustments: &[Adjust], rgb: [f32; 3]) -> [f32; 3] {
+    adjustments.iter().fold(rgb, |c, a| a.apply(c).map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }))
 }
 
 /// The visible colour adjustments of `effects` as one map, `None` when there are none.
@@ -175,7 +220,7 @@ impl Adjust {
                 preserve: flag(p, "preserveLightness", true),
             },
             "adjust.temperatureTint" => Adjust::TemperatureTint { temperature: amount(p, "temperature"), tint: amount(p, "tint") },
-            _ => return None,
+            _ => Adjust::Addon(crate::addons::color::Adjust::parse(id, p)?),
         })
     }
 
@@ -225,17 +270,18 @@ impl Adjust {
                 let (t, m) = (temperature * 0.3, tint * 0.3);
                 [r * (1.0 + t), g * (1.0 - m), b * (1.0 - t)]
             }
+            Adjust::Addon(a) => a.apply([r, g, b]),
         }
     }
 }
 
 /// `f` sampled at [`LUT`] inputs 0..1.
-fn sample(f: impl Fn(f32) -> f32) -> Arc<[f32]> {
+pub(crate) fn sample(f: impl Fn(f32) -> f32) -> Arc<[f32]> {
     (0..LUT).map(|i| f(i as f32 / (LUT - 1) as f32).clamp(0.0, 1.0)).collect()
 }
 
 /// The tone curve `lut` at `v` (linear between samples).
-fn lookup(lut: &[f32], v: f32) -> f32 {
+pub(crate) fn lookup(lut: &[f32], v: f32) -> f32 {
     let x = v.clamp(0.0, 1.0) * (LUT - 1) as f32;
     let i = (x.floor() as usize).min(LUT - 2);
     let (a, b) = (lut.get(i).copied().unwrap_or(v), lut.get(i + 1).copied().unwrap_or(v));
@@ -245,6 +291,12 @@ fn lookup(lut: &[f32], v: f32) -> f32 {
 /// Curves' points (0..1 each, sorted by input, one per input) from its `points` parameter:
 /// `"x,y x,y …"` or `[[x, y], …]` in 0..255. Missing or unreadable points give the identity line.
 pub fn curve_points(v: Option<&Value>) -> Vec<(f32, f32)> {
+    // At most a point per level is meaningful.
+    curve_points_on(v, 255.0, 256)
+}
+
+/// [`curve_points`] on a scale of 0..`max`, reading at most `cap` points.
+pub fn curve_points_on(v: Option<&Value>, max: f64, cap: usize) -> Vec<(f32, f32)> {
     let mut pts: Vec<(f64, f64)> = match v {
         Some(Value::String(s)) => s
             .split(|c: char| c.is_whitespace() || c == ';')
@@ -257,10 +309,9 @@ pub fn curve_points(v: Option<&Value>) -> Vec<(f32, f32)> {
         _ => vec![],
     };
     pts.retain(|(x, y)| x.is_finite() && y.is_finite());
-    // At most a point per level is meaningful.
-    pts.truncate(256);
-    let mut pts: Vec<(f32, f32)> =
-        pts.into_iter().map(|(x, y)| ((x.clamp(0.0, 255.0) / 255.0) as f32, (y.clamp(0.0, 255.0) / 255.0) as f32)).collect();
+    pts.truncate(cap);
+    let unit = |v: f64| (v.clamp(0.0, max) / max) as f32;
+    let mut pts: Vec<(f32, f32)> = pts.into_iter().map(|(x, y)| (unit(x), unit(y))).collect();
     pts.sort_by(|a, b| a.0.total_cmp(&b.0));
     pts.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-6);
     if pts.len() < 2 {
@@ -354,15 +405,22 @@ fn from_hsl([h, s, l]: [f32; 3]) -> [f32; 3] {
 /// Gives the key of an embedded image recoloured by a map (`None`: leave it as it is).
 pub type ImageHook<'a> = dyn FnMut(&str, &ColorMap) -> Option<String> + 'a;
 
-/// The live visitor: every colour through `map`, embedded images through the hook.
+/// The live visitor: every colour through `map` (paints with their swatch links, the document's
+/// swatches being `swatches`), embedded images through the hook.
 struct Live<'a, 'b> {
     map: &'a ColorMap,
+    swatches: &'a SwatchKinds<'b>,
     images: &'a mut ImageHook<'b>,
+}
+
+/// `p`'s colours through `map` with their swatch links ([`ColorMap::apply_link`]).
+fn map_paint(p: &mut Paint, map: &ColorMap, swatches: &SwatchKinds) -> bool {
+    map_links(p, &|c, link, tint| map.apply_link(c, link, tint, swatches))
 }
 
 impl ColorVisitor for Live<'_, '_> {
     fn paint(&mut self, p: &mut Paint) -> bool {
-        map_paint(p, &|c| self.map.apply(c))
+        map_paint(p, self.map, self.swatches)
     }
     fn color(&mut self, c: Color) -> Color {
         self.map.apply(c)
@@ -375,12 +433,13 @@ impl ColorVisitor for Live<'_, '_> {
 /// `n` with the colour adjustments in it applied, `None` when it has none: its members' first,
 /// then those of its fills and strokes on their paints, then its own followed by `outer` (the
 /// adjustments of an object `n` is the art of) on everything it paints. The adjustment effects
-/// are gone from the result; embedded images take the keys `images` gives.
-pub fn adjust(n: &Node, outer: Option<&ColorMap>, images: &mut ImageHook<'_>) -> Option<Node> {
+/// are gone from the result; embedded images take the keys `images` gives. `swatches` tells the
+/// document's global and spot swatches apart ([`crate::addons::duotone::swatch_kind`]).
+pub fn adjust(n: &Node, outer: Option<&ColorMap>, swatches: &SwatchKinds, images: &mut ImageHook<'_>) -> Option<Node> {
     let mut m: Option<Node> = None;
     if let Some(ch) = n.children() {
         for (i, c) in ch.iter().enumerate() {
-            if let Some(new) = adjust(c, None, images)
+            if let Some(new) = adjust(c, None, swatches, images)
                 && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
             {
                 *slot = Arc::new(new);
@@ -391,7 +450,7 @@ pub fn adjust(n: &Node, outer: Option<&ColorMap>, images: &mut ImageHook<'_>) ->
         if let Some(map) = color_map(item.effects())
             && let Some(it) = m.get_or_insert_with(|| n.clone()).appearance.items.get_mut(i)
         {
-            map_paint(it.paint_mut(), &|c| map.apply(c));
+            map_paint(it.paint_mut(), &map, swatches);
             it.effects_mut().retain(|e| !is_adjustment(&e.id));
         }
     }
@@ -403,7 +462,7 @@ pub fn adjust(n: &Node, outer: Option<&ColorMap>, images: &mut ImageHook<'_>) ->
     if let Some(map) = map {
         let mm = m.get_or_insert_with(|| n.clone());
         mm.appearance.effects.retain(|e| !is_adjustment(&e.id));
-        recolor_node(mm, Reach::ALL, &mut Live { map: &map, images });
+        recolor_node(mm, Reach::ALL, &mut Live { map: &map, swatches, images });
     }
     m
 }
@@ -420,13 +479,14 @@ pub fn adjust_in_document(d: &mut Document, n: &Node) -> Option<Node> {
         }
         _ => n,
     };
+    let kinds = crate::addons::duotone::swatch_kinds(d);
     let mut hook = |key: &str, map: &ColorMap| -> Option<String> {
         let blob = d.images.get(key)?.map_rgb(|rgb| map.apply_rgb8(rgb))?;
         let k = blob.content_key();
         d.images.entry(k.clone()).or_insert(blob);
         Some(k)
     };
-    adjust(src, None, &mut hook)
+    adjust(src, None, &|name| kinds.get(name).copied(), &mut hook)
 }
 
 #[cfg(test)]
@@ -489,17 +549,17 @@ mod tests {
         let mut g = Node::group(NodeId(1), vec![leaf(2), leaf(3)]);
         g.appearance.effects.push(Effect { id: "adjust.hueSaturation".into(), params: json!({"hue": 120}), visible: true });
         assert!(has_adjustment(&g));
-        let out = adjust(&g, None, &mut |_, _| None).unwrap();
+        let out = adjust(&g, None, &|_| None, &mut |_, _| None).unwrap();
         assert!(out.appearance.effects.is_empty());
         for c in out.children().unwrap() {
             assert_eq!(c.appearance.fill_paint().color().unwrap().to_hex(), "#00ff00");
         }
         // A hidden effect does nothing; a stroke's own effect recolours just that stroke.
         g.appearance.effects[0].visible = false;
-        assert!(!has_adjustment(&g) && adjust(&g, None, &mut |_, _| None).is_none());
+        assert!(!has_adjustment(&g) && adjust(&g, None, &|_| None, &mut |_, _| None).is_none());
         let mut p = Node::path(NodeId(5), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         p.appearance.items[1].effects_mut().push(Effect { id: "adjust.levels".into(), params: json!({"outputBlack": 255}), visible: true });
-        let out = adjust(&p, None, &mut |_, _| None).unwrap();
+        let out = adjust(&p, None, &|_| None, &mut |_, _| None).unwrap();
         assert_eq!(out.appearance.items[1].paint().color().unwrap().to_hex(), "#ffffff");
         assert_eq!(out.appearance.items[0].paint(), p.appearance.items[0].paint());
         assert!(out.appearance.items[1].effects().is_empty());
@@ -514,7 +574,7 @@ mod tests {
         let fill = Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 0.0);
         let mut p = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), fill);
         p.appearance.effects.push(Effect { id: "adjust.hueSaturation".into(), params: json!({"hue": 120}), visible: true });
-        let out = adjust(&p, None, &mut |_, _| None).unwrap();
+        let out = adjust(&p, None, &|_| None, &mut |_, _| None).unwrap();
         let Paint::Gradient(g) = out.appearance.fill_paint() else { panic!("a gradient fill") };
         // The points are what a freeform gradient draws from, not its stops.
         let hexes: Vec<String> = g.freeform.as_ref().unwrap().points.iter().map(|p| p.color.to_hex()).collect();

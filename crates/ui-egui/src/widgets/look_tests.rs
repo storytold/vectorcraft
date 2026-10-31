@@ -427,3 +427,44 @@ fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
     let open = [open_after_click(far, None), open_after_click(None, None), open_after_click(far, panel_drag())];
     assert_eq!(open, [false, true, true]);
 }
+
+/// #4267: a click on a spinner arrow steps once; an arrow held down steps again and again after a
+/// pause, and letting go of it doesn't step once more.
+#[test]
+fn a_held_spinner_arrow_repeats() {
+    let ctx = themed(Default::default());
+    let value = std::cell::Cell::new(5.0);
+    let mut add = |ui: &mut Ui| {
+        ui.horizontal(|ui| {
+            if let Some(v) = spin_plain(ui, "repeat", value.get(), "", 0, 100.0, 1.0, 0.0, &[]) {
+                value.set(v);
+            }
+        });
+    };
+    let shapes = frame(&ctx, 0.0, vec![], &mut add);
+    let spinner = shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Rect(r) if r.rect.height() > 20.0 && r.fill != Color32::TRANSPARENT => Some(r.rect),
+            _ => None,
+        })
+        .min_by(|a, b| a.min.x.total_cmp(&b.min.x))
+        .expect("the spinner box");
+    let up = spinner.center_top() + vec2(0.0, 6.0);
+    let button = |pressed| egui::Event::PointerButton { pos: up, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // A click: one step, on release.
+    frame(&ctx, 0.1, vec![egui::Event::PointerMoved(up), button(true)], &mut add);
+    frame(&ctx, 0.2, vec![button(false)], &mut add);
+    assert_eq!(value.get(), 6.0, "a click steps once");
+    // Held: nothing more until the pause is over, then a step every repeat.
+    frame(&ctx, 1.0, vec![button(true)], &mut add);
+    frame(&ctx, 1.3, vec![], &mut add);
+    assert_eq!(value.get(), 6.0, "no step before the pause");
+    for (i, t) in [1.5, 1.6, 1.7].into_iter().enumerate() {
+        frame(&ctx, t, vec![], &mut add);
+        assert_eq!(value.get(), 7.0 + i as f64, "a step every repeat at {t}");
+    }
+    frame(&ctx, 1.75, vec![button(false)], &mut add);
+    frame(&ctx, 1.8, vec![], &mut add);
+    assert_eq!(value.get(), 9.0, "letting go doesn't step once more");
+}

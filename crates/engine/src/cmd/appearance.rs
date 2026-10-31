@@ -125,7 +125,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
             has_doc,
             copy_from
         ),
@@ -840,11 +840,23 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.copyFrom";
     let clicked = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
     let (reverse, append) = (switch_or(p, "reverse", false, C)?, switch_or(p, "append", false, C)?);
+    let defaults_only = switch_or(p, "defaultsOnly", false, C)?;
+    if defaults_only && (reverse || append || p.get("ids").is_some()) {
+        return Err(bad(C, "`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`"));
+    }
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
-    let range = if !reverse && !append && p.get("ids").is_none() { super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b) } else { None };
-    let selected = match ids_param(p, "ids") {
-        Some(v) => outermost(&s.doc()?.doc, v),
-        None => selected_roots(s)?,
+    let range = if !defaults_only && !reverse && !append && p.get("ids").is_none() {
+        super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b)
+    } else {
+        None
+    };
+    let selected = if defaults_only {
+        vec![]
+    } else {
+        match ids_param(p, "ids") {
+            Some(v) => outermost(&s.doc()?.doc, v),
+            None => selected_roots(s)?,
+        }
     };
     // Reversed, the first selected object's attributes go onto the clicked object; with nothing
     // selected, what the Eyedropper picked up last does (#4382).
@@ -864,7 +876,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         None => s.eyedropper_sample.clone().ok_or_else(|| bad(C, "select the object to copy from"))?,
     };
     let picked = Picked::of(&node);
-    if !reverse {
+    if !reverse && !defaults_only {
         s.eyedropper_sample = Some(node);
     }
     let range = range.filter(|(id, _, _)| targets.contains(id));

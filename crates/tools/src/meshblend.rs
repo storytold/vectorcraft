@@ -8,9 +8,11 @@
 //!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
 //!   new point takes the current fill color in its own model, unless Shift); drag a mesh point,
 //!   or a handle of the point last clicked → `object.mesh.movePoint` previews ([`MeshEdit`]);
-//!   Alt-click a mesh point → `object.mesh.deletePoint`. Clicking a gradient mesh's point selects
-//!   the mesh, and the next solid fill color recolors just that point. Escape during a drag
-//!   cancels it.
+//!   Shift-click mesh points to pick several (Shift-click a picked one to drop it): a drag of one
+//!   moves them all (`object.mesh.movePoints`) and the arrow keys nudge them. Alt-click a mesh
+//!   point → `object.mesh.deletePoint`. Clicking a gradient mesh's point selects the mesh, and the
+//!   next solid fill color or Transparency panel opacity goes to just the picked points. Escape
+//!   during a drag cancels it.
 
 use serde_json::json;
 use vectorcraft_color::Paint;
@@ -190,6 +192,11 @@ impl MeshTool {
     fn grab_at(&self, cx: &ToolContext, p: Point) -> Option<crate::meshedit::MeshGrab> {
         self.edit.hit(cx, &Self::meshes(cx), p)
     }
+
+    /// An arrow key's nudge of the picked points.
+    fn nudge(&self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Option<Vec<Action>> {
+        self.edit.nudge(cx, key, mods, &|_| true)
+    }
 }
 
 impl Tool for MeshTool {
@@ -200,18 +207,23 @@ impl Tool for MeshTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Down => {
-                if let Some(g) = self.grab_at(cx, p) {
+                let meshes = Self::meshes(cx);
+                if let Some(g) = self.edit.hit(cx, &meshes, p) {
                     if ev.mods.alt && g.handle.is_none() {
                         self.edit.unfocus();
                         return vec![Action::Exec("object.mesh.deletePoint".into(), json!({"id": g.id.0, "index": g.index}))];
                     }
                     // A gradient mesh's point is picked for the next fill colour, so its mesh is
-                    // what gets selected.
+                    // what gets selected (with Shift, added to the selection).
                     let mut out = vec![];
-                    if cx.selection.objects != [g.id] && cx.doc.node(g.id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_))) {
-                        out.push(Action::Exec("select.set".into(), json!({"ids": [g.id.0]})));
+                    if cx.doc.node(g.id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_))) {
+                        if ev.mods.shift && !cx.selection.contains(g.id) {
+                            out.push(Action::Exec("select.add".into(), json!({"ids": [g.id.0]})));
+                        } else if !ev.mods.shift && cx.selection.objects != [g.id] {
+                            out.push(Action::Exec("select.set".into(), json!({"ids": [g.id.0]})));
+                        }
                     }
-                    out.extend(self.edit.press(cx, g));
+                    out.extend(self.edit.press(cx, &meshes, g, p, ev.mods.shift));
                     return out;
                 }
                 self.edit.unfocus();
@@ -242,7 +254,7 @@ impl Tool for MeshTool {
                 vec![]
             }
             PointerKind::Drag => self.edit.drag_to(p).unwrap_or_default(),
-            PointerKind::Up => self.edit.release().unwrap_or_default(),
+            PointerKind::Up => self.edit.release(cx).unwrap_or_default(),
             _ => vec![],
         }
     }
@@ -256,7 +268,7 @@ impl Tool for MeshTool {
                 }
             }
         }
-        out.extend(self.edit.overlays(cx));
+        out.extend(self.edit.overlays(cx, &|_| true));
         out
     }
     fn cursor(&self, cx: &ToolContext, p: Point, mods: Mods) -> Cursor {
@@ -273,16 +285,19 @@ impl Tool for MeshTool {
         self.edit.dragging()
     }
     /// Escape during a drag of a mesh point or handle cancels it: the point goes back and the
-    /// release does nothing.
-    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    /// release does nothing. The arrow keys nudge the picked points.
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key != ToolKey::Escape {
-            return vec![];
+            return self.nudge(cx, key, mods).unwrap_or_default();
         }
         self.edit.cancel().unwrap_or_default()
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
+        self.nudge(cx, key, Mods::default()).is_some()
+    }
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.edit.unfocus();
-        self.edit.release().unwrap_or_default()
+        self.edit.release(cx).unwrap_or_default()
     }
 }
 

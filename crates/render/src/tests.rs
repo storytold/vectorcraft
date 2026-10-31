@@ -747,6 +747,229 @@ fn opacity_mask_without_clip_and_inverted() {
     assert_eq!(img.pixel(80, 50), [255, 0, 0, 255], "inverted clip background → visible");
 }
 
+#[test]
+fn opacity_mask_with_undecodable_image_leaves_out_object() {
+    use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("broken-mask-image".into(), ImageBlob::new("image/png", b"not a PNG".to_vec()));
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let image = ImageObject {
+        key: "broken-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    let object_id = object.id;
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let pending = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { kept_images_only: true, ..opts.clone() });
+    assert_eq!(pending.pixel(70, 70), [255, 0, 0, 255], "an image awaiting decoding does not invalidate the mask");
+    let mut renderer = Renderer::new();
+    let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "missing mask image leaves out the object");
+    let again = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(again.pixel(70, 70), [255, 255, 255, 255], "the cached raster keeps the mask incomplete");
+    let mask_view = renderer.render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mask_view: Some(object_id), ..opts.clone() });
+    assert_eq!(mask_view.pixel(70, 70), [0, 0, 0, 255], "an incomplete mask view has no coverage");
+    let marked = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mark_undecoded_images: true, ..opts.clone() });
+    assert_eq!(marked.pixel(70, 70), [255, 0, 0, 255], "the undecoded-image mark remains part of the mask");
+    let kept = RenderOptions { kept_images_only: true, ..opts.clone() };
+    for frame in 0..2 {
+        let img = renderer.render(&d, 100, 100, Affine::IDENTITY, &kept);
+        assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "an image already known undecodable leaves out the object on frame {frame}");
+    }
+
+    let working = Renderer::new().render(&masked_doc(false, false), 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(working.pixel(80, 50), [255, 0, 0, 255], "a complete mask still draws the object");
+}
+
+#[test]
+fn opacity_mask_with_missing_image_in_pattern_leaves_out_object() {
+    use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+    use vectorcraft_doc::{ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-pattern-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    let mut pattern = PatternDef::new("Missing image", vec![Arc::new(image)]);
+    pattern.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    d.patterns.push(pattern);
+    let art = rect_node(&mut d, Rect::new(10.0, 10.0, 50.0, 90.0), pattern_paint("Missing image"), Paint::None, 0.0);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    for frame in 0..2 {
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        assert_eq!(img.pixel(70, 50), [255, 255, 255, 255], "frame {frame}: incomplete pattern mask leaves out the object");
+    }
+    // Pattern tiles draw no undecoded-image mark, so the object stays out with the marks on too.
+    let marked = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { mark_undecoded_images: true, ..opts.clone() });
+    assert_eq!(marked.pixel(70, 50), [255, 255, 255, 255], "a tile without the mark leaves out the object");
+}
+
+#[test]
+fn complete_image_mask_with_blur_reuses_cached_raster() {
+    use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 255, 255, 255])))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("complete-mask-image".into(), ImageBlob::new("image/png", png));
+    let image = ImageObject {
+        key: "complete-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(first.pixel(70, 70), [255, 0, 0, 255]);
+    let raster = r.pixel_fx.values().next().unwrap().image.clone();
+    let second = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(second.pixels, first.pixels);
+    assert!(Arc::ptr_eq(&raster, &r.pixel_fx.values().next().unwrap().image), "the second frame draws the image mask from its cached effect raster");
+}
+
+#[test]
+fn missing_image_mask_with_blur_stays_incomplete_from_cached_raster() {
+    use vectorcraft_doc::{Effect, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-blurred-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: serde_json::json!({"radius": 4.0}), visible: true });
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(first.pixel(70, 70), [255, 255, 255, 255]);
+    let raster = r.pixel_fx.values().next().unwrap().image.clone();
+    let second = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(second.pixel(70, 70), [255, 255, 255, 255]);
+    assert!(Arc::ptr_eq(&raster, &r.pixel_fx.values().next().unwrap().image), "the incomplete raster is reused");
+}
+
+#[test]
+fn missing_image_mask_with_rasterize_and_shadow_keeps_incomplete_content_raster() {
+    use vectorcraft_doc::{Effect, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    let image = ImageObject {
+        key: "missing-rasterized-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    image.appearance.effects = [
+        ("rasterize", serde_json::json!({"background": "white"})),
+        ("stylize.dropShadow", serde_json::json!({"mode": "normal", "opacity": 100, "x": 2, "y": 2, "blur": 1, "color": "#0000ff"})),
+        ("blur.gaussian", serde_json::json!({"radius": 4.0})),
+    ]
+    .into_iter()
+    .map(|(id, params)| Effect { id: id.into(), params, visible: true })
+    .collect();
+    let white = rect_node(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(white), Arc::new(image)]);
+    let mut object = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    object.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, object).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let mut first_raster = None;
+    for frame in 0..2 {
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "frame {frame}: the incomplete mask leaves out the object");
+        let raster = r.pixel_fx.values().next().unwrap();
+        assert!(raster.image_left_out, "frame {frame}: the content raster records the missing image");
+        if let Some(first) = &first_raster {
+            assert!(Arc::ptr_eq(first, &raster.image), "the second frame reuses the incomplete content raster");
+        } else {
+            first_raster = Some(raster.image.clone());
+        }
+    }
+}
+
+#[test]
+fn undecodable_image_in_nested_opacity_mask_leaves_out_outer_object() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind, OpacityMask};
+
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("broken-nested-mask-image".into(), ImageBlob::new("image/png", b"not a nested PNG".to_vec()));
+    let mut outer = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut inner = rect_node(&mut d, Rect::new(20.0, 20.0, 80.0, 80.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let image = ImageObject {
+        key: "broken-nested-mask-image".into(),
+        width: 20,
+        height: 20,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+    inner.extras_mut().mask = Some(Box::new(OpacityMask::new(image, false)));
+    let art = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    outer.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    d.insert(Some(d.layers[0].id), 0, outer).unwrap();
+
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "the incomplete inner mask invalidates the outer mask");
+}
+
 /// #3580: each opacity mask is rendered over its object's pixels, not over the whole frame. 300
 /// masked 4 × 4 pt squares on a 1000 × 1000 page draw offscreen in proportion to their bounds, and
 /// still draw where their masks show them.

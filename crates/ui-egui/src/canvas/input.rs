@@ -1,7 +1,7 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     HoverContext, apply_requests, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, mods, on_canvas, pen_pressure,
-    tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
@@ -81,9 +81,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let middle_pan = matches!(drag, Some(Drag::Pan { middle: true, .. }));
     // egui counts a press a few pixels outside the canvas as on it (its interaction radius): only a
     // press on the canvas itself reaches the tools, else it would land at the canvas's centre.
+    // A finger pressing with others down, or with another landing in its frame, presses nothing
+    // (`touch_gestures` made the press a gesture, #4198).
     if pointer.primary_pressed()
         && resp.hovered()
         && !middle_pan
+        && drag != Some(Drag::Gesture)
         && let Some(p) = at
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
@@ -123,7 +126,13 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     } else if let Some(p) = hover_tool
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
-        let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+        let ev = PointerEvent {
+            kind: PointerKind::Move,
+            pos: xf.to_doc(p),
+            mods: mods(m, space),
+            backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+            pressure: 1.0,
+        };
         dispatch(app, &ev, view);
     }
     // The pointer left the canvas (for a panel, or out of the window) or went under a floating
@@ -262,7 +271,13 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation, snaps: !space }
     } else {
         // Cmd with another tool drags with the selection tool used last (the session lends it).
-        let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, true) };
+        let ev = PointerEvent {
+            kind: PointerKind::Down,
+            pos: xf.to_doc(p),
+            mods: mods(m, space),
+            backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+            pressure: pen_pressure(ui, app, true),
+        };
         dispatch(app, &ev, view);
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
         Drag::Tool
@@ -338,7 +353,13 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
         Drag::Art if pointer.has_pointer() && on_canvas(ui, resp, p) => {
             // Back on the canvas: the move goes on from where it left, with the pointer.
             egui::DragAndDrop::clear_payload(ui.ctx());
-            let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+            let ev = PointerEvent {
+                kind: PointerKind::Drag,
+                pos: xf.to_doc(p),
+                mods: mods(m, space),
+                backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                pressure: pen_pressure(ui, app, false),
+            };
             dispatch(app, &ev, view);
             ui.data_mut(|dd| {
                 dd.insert_temp(drag_id(), Drag::Tool);
@@ -358,12 +379,20 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             // the last position only, so a costly drag preview runs once a frame.
             let moves = tool_frame_moves(ui, app);
             // A frame whose pointer ends where the last one did still moved in between.
-            if tool_drag_moved(ui, &xf, p, pointer) || !moves.is_empty() {
+            let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
+            let mods_changed = tool_drag_mods_changed(ui, mods(m, space), backquote);
+            if tool_drag_moved(ui, &xf, p, pointer) || mods_changed || !moves.is_empty() {
                 for (at, force) in moves {
                     let pressure = force.unwrap_or_else(|| pen_pressure(ui, app, false));
-                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), pressure }, view);
+                    dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure }, view);
                 }
-                let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                let ev = PointerEvent {
+                    kind: PointerKind::Drag,
+                    pos: xf.to_doc(p),
+                    mods: mods(m, space),
+                    backquote,
+                    pressure: pen_pressure(ui, app, false),
+                };
                 dispatch(app, &ev, view);
             }
             // Time held (Twirl, Pucker and Bloat keep applying); a stalled frame counts
@@ -427,10 +456,22 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             if let Some(last) = last_drag
                 && last != xf.to_doc(p)
             {
-                let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+                let ev = PointerEvent {
+                    kind: PointerKind::Drag,
+                    pos: xf.to_doc(p),
+                    mods: mods(m, space),
+                    backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                    pressure: pen_pressure(ui, app, false),
+                };
                 dispatch(app, &ev, view);
             }
-            let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, app, false) };
+            let ev = PointerEvent {
+                kind: PointerKind::Up,
+                pos: xf.to_doc(p),
+                mods: mods(m, space),
+                backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                pressure: pen_pressure(ui, app, false),
+            };
             dispatch(app, &ev, view);
         }
         Drag::Art if on_canvas(ui, resp, p) => {
@@ -438,15 +479,45 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             egui::DragAndDrop::clear_payload(ui.ctx());
             let pressure = pen_pressure(ui, app, false);
             let pos = xf.to_doc(p);
-            dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos, mods: mods(m, space), pressure }, view);
-            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos, mods: mods(m, space), pressure }, view);
+            dispatch(
+                app,
+                &PointerEvent {
+                    kind: PointerKind::Drag,
+                    pos,
+                    mods: mods(m, space),
+                    backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                    pressure,
+                },
+                view,
+            );
+            dispatch(
+                app,
+                &PointerEvent {
+                    kind: PointerKind::Up,
+                    pos,
+                    mods: mods(m, space),
+                    backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                    pressure,
+                },
+                view,
+            );
         }
         Drag::Art => {
             // Released over a panel: the move goes back. (The app ends it before the panels
             // see the release, so a panel can take the art; this is the headless path.)
             // With no document open there is nothing to roll back; the tool still gets its up.
             let _ = app.session.cancel_interaction();
-            dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+            dispatch(
+                app,
+                &PointerEvent {
+                    kind: PointerKind::Up,
+                    pos: Point::ZERO,
+                    mods: Mods::default(),
+                    backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+                    pressure: 1.0,
+                },
+                view,
+            );
         }
         Drag::Gesture | Drag::Present => {}
         Drag::Pan { .. } | Drag::RotateView { .. } => {}
@@ -459,7 +530,13 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     if let Some(i) = artboard_name_at(app, ui, &xf, p) {
         begin_artboard_name_edit(ui, app, i);
     } else {
-        let ev = PointerEvent { kind: PointerKind::DoubleClick, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+        let ev = PointerEvent {
+            kind: PointerKind::DoubleClick,
+            pos: xf.to_doc(p),
+            mods: mods(m, space),
+            backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+            pressure: 1.0,
+        };
         let before = app.session.tool_id().to_string();
         dispatch(app, &ev, view);
         // A double-click on type switched a selection tool to the Type tool: the caret goes where

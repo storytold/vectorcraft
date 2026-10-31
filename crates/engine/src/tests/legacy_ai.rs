@@ -520,6 +520,67 @@ fn pattern_over_blue(tile: &[u8], opacity: f32) -> Session {
     s
 }
 
+/// A pattern of opaque grayscale pixels whose black squares draw red and white squares leave the blue background visible.
+fn colorized_pattern_over_blue() -> Session {
+    fn colorize_image(n: &mut vectorcraft_doc::Node) -> bool {
+        if matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)) {
+            n.extras_mut().colorize = Some(Box::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(255, 0, 0))));
+            return true;
+        }
+        n.children_mut().is_some_and(|children| children.iter_mut().any(|child| colorize_image(std::sync::Arc::make_mut(child))))
+    }
+
+    let tile = image::GrayImage::from_fn(32, 32, |x, y| image::Luma([if (x < 16) == (y < 16) { 0 } else { 255 }]));
+    let mut bytes = vec![];
+    tile.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let mut s = pattern_over_blue(&bytes, 1.0);
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    assert!(d.patterns[0].art.iter_mut().any(|art| colorize_image(std::sync::Arc::make_mut(art))));
+    s
+}
+
+#[test]
+fn a_colorized_grayscale_image_pattern_fill_is_expanded() {
+    let mut s = colorized_pattern_over_blue();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let keys = crate::cmd::flatten::see_through_images(d);
+    assert!(keys.is_empty());
+    let layer = d.layers[0].id;
+    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys).unwrap(), 1);
+    let mut patterns = 0;
+    let mut tile_images = 0;
+    d.walk(|n| {
+        patterns += n
+            .appearance
+            .items
+            .iter()
+            .filter(
+                |i| matches!(i, vectorcraft_doc::appearance::AppearanceItem::Fill(f) if matches!(f.paint, vectorcraft_color::Paint::Pattern { .. })),
+            )
+            .count();
+        tile_images += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)));
+    });
+    assert_eq!(patterns, 0);
+    assert!(tile_images > 0);
+}
+
+#[test]
+fn colorized_grayscale_image_pattern_keeps_its_colors_in_legacy_ai() {
+    let mut s = colorized_pattern_over_blue();
+    let points = [(72.0, 72.0), (88.0, 72.0), (136.0, 152.0), (152.0, 152.0)];
+    let before: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    assert_eq!(before[0], [255, 0, 0], "{before:?}");
+    assert_eq!(before[1], [0, 0, 255], "{before:?}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "flatten"})).unwrap();
+    let saved_warnings = warnings(&r);
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let after: Vec<[u8; 3]> = points.iter().map(|&(x, y)| colour_at(&s.doc().unwrap().doc, x, y)).collect();
+    for (a, b) in before.iter().zip(&after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "before {before:?} after {after:?}");
+    }
+    assert!(saved_warnings.iter().any(|w| w.contains("flattened with the art under them")), "{saved_warnings:?}");
+}
+
 /// #3666: a pattern fill whose tile is an image, under opacity, is flattened with the art under it
 /// like a transparent image, instead of being written opaque over white.
 #[test]

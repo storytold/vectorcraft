@@ -7,6 +7,7 @@
 //! by the control channel and MCP, and keeps tools testable without a UI.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 pub mod bbox;
 pub mod builder;
 pub mod catalog;
@@ -291,6 +292,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| intertwine::create(other))
             .or_else(|| objects_on_path::create(other))
             .or_else(|| touchtype::create(other))
+            .or_else(|| addons::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }

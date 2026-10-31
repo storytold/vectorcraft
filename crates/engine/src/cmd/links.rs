@@ -374,7 +374,11 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
             continue;
         };
         let preview = d.images.get(&key).map(|b| b.bytes.clone());
-        let mime = fileio::format_for_name(g.link.name()).map(|f| f.mime.to_string()).unwrap_or_else(|| img.blob.mime.clone());
+        // A file read as it is keeps its own type; one turned upright (EXIF orientation) is the PNG it became.
+        let mime = match fileio::format_for_name(g.link.name()) {
+            Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
+            _ => img.blob.mime.clone(),
+        };
         out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
     }
     let mut warnings = vec![];

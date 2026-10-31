@@ -1140,12 +1140,12 @@ lighting	Light	Światło
 	 to set spacing and orientation	 aby ustawić odstęp i orientację
 	Apply	Zastosuj
 	Change Screen Mode (F)	Zmień tryb ekranu (F)
-	Color (,)	Kolor (,)
+	Color (, or <)	Kolor (, lub <)
 	Draw Behind	Rysuj pod spodem
 	Draw Inside	Rysuj wewnątrz
 	Draw Normal	Rysuj normalnie
 	Expand:	Rozszerz:
-	Gradient (.)	Gradient (.)
+	Gradient (. or >)	Gradient (. lub >)
 	H:	W:
 	Modify	Modyfikuj
 	Navigate	Nawigacja
@@ -1508,6 +1508,7 @@ lighting	Light	Światło
 	Delete Guides	Usuń linie pomocnicze
 	Delete Slice	Usuń plasterek
 	Delete Style	Usuń styl
+	Delete Styles	Usuń style
 	Delete Variables	Usuń zmienne
 	Delete View	Usuń widok
 	Done Editing Pattern	Zakończ edycję wzorka
@@ -3194,6 +3195,7 @@ theme	Appearance	Wygląd
 	Make Envelope	Utwórz kopertę
 	Move Envelope Mesh Point	Przesuń punkt siatki koperty
 	Move Mesh Point	Przesuń punkt siatki
+	Move Mesh Points	Przesuń punkty siatki
 	Move Spine Point	Przesuń punkt grzbietu
 	Reshape Spine Segment	Zmień kształt segmentu grzbietu
 	Reset with Mesh	Resetuj z siatką
@@ -3641,6 +3643,7 @@ axis	Both	Obie
 	Set Text	Ustaw tekst
 	Insert Character	Wstaw znak
 	Replace	Zastąp
+	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
 	New Variable	Nowa zmienna
@@ -4285,6 +4288,7 @@ imageTrace	Outline	Kontur
 @msg	no document	brak dokumentu
 @msg	no document open	brak otwartego dokumentu
 @msg	no effect applied yet	nie zastosowano jeszcze żadnego efektu
+@msg	no Pathfinder operation applied yet	nie zastosowano jeszcze żadnej operacji odnajdywania ścieżek
 @msg	no effect at index {k}	brak efektu o indeksie {k}
 @msg	no end record	brak rekordu końcowego
 @msg	no file manager here	brak menedżera plików
@@ -5547,3 +5551,297 @@ axis	Y Axis	Oś Y
 	Glyph Bounds	Granice glifów
 	Proximity Guides	Linie bliskości
 	Angular Guides	Linie kątowe
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Uśrednij i połącz…
+	Average & Join	Uśrednij i połącz
+anchor	Points:	Punkty:
+@msg	select two open path ends, or two open paths, to average and join	zaznacz dwa końce otwartych ścieżek lub dwie otwarte ścieżki do uśrednienia i połączenia
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Porządkowanie grafiki
+	Simplify Anchors (Keep Shape)…	Uprość punkty kontrolne (zachowaj kształt)…
+	Health Check	Kontrola stanu
+	Show Issue	Pokaż problem
+	Fix All Issues	Napraw wszystkie problemy
+	Fix Issues	Napraw problemy
+	Deep Ungroup…	Rozgrupuj wszystkie poziomy…
+	Rejoin Path Pieces…	Ponownie połącz fragmenty ścieżek…
+	Document Health Check	Kontrola stanu dokumentu
+	Check Selection	Sprawdź zaznaczenie
+	Check Document	Sprawdź dokument
+	No issues found.	Nie znaleziono problemów.
+	Changed since the last check.	Zmieniono od ostatniego sprawdzenia.
+	Fix Selected	Napraw zaznaczone
+	Fix All	Napraw wszystko
+	Issues fixed: {count}	Naprawione problemy: {count}
+	Open a document to check it for issues.	Otwórz dokument, aby sprawdzić go pod kątem problemów.
+	Empty Text	Pusty tekst
+	Unpainted Objects	Obiekty bez koloru
+	Zero-Opacity Objects	Obiekty o zerowym kryciu
+	Duplicate Objects	Zduplikowane obiekty
+	Off-Artboard Art	Grafika poza obszarami kompozycji
+	Duplicate Anchors	Zduplikowane punkty kontrolne
+	Tiny Handles	Bardzo krótkie uchwyty
+	Collinear Anchors	Współliniowe punkty kontrolne
+	Nearly Coincident Anchors	Prawie pokrywające się punkty kontrolne
+	Nearly Closed Paths	Prawie zamknięte ścieżki
+	Filled Open Paths	Wypełnione otwarte ścieżki
+	Needless Clipping Groups	Zbędne grupy przycinające
+	Needless Compound Paths	Zbędne ścieżki złożone
+	Needless Groups	Zbędne grupy
+	Empty Artboards	Puste obszary kompozycji
+	Protect Corners	Chroń narożniki
+	Gap	Odstęp
+	Include Clip Groups	Uwzględnij grupy przycinające
+@msg	`tolerance` must be from 1 to 100	`tolerance` musi mieścić się w zakresie od 1 do 100
+@msg	`gap` must be from 0 to 6 pt	`gap` musi mieścić się w zakresie od 0 do 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Uprość punkty kontrolne: ścieżki mają zbyt wiele punktów kontrolnych, aby uprościć je naraz
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Ponownie połącz fragmenty ścieżek: zbyt wiele ścieżek do połączenia naraz
+@msg	None of these issues are left: check again	Żaden z tych problemów już nie występuje: sprawdź ponownie
+@msg	`kinds` must be a list of issue kinds	`kinds` musi być listą rodzajów problemów
+@msg	missing `kind`	brak `kind`
+	Simplify Anchors (Keep Shape)	Uprość punkty kontrolne (zachowaj kształt)
+	Deep Ungroup	Rozgrupuj wszystkie poziomy
+	Rejoin Path Pieces	Ponownie połącz fragmenty ścieżek
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Efekty koloru
+	Color Effects Panel	Panel Efekty koloru
+	Exposure	Ekspozycja
+	Exposure…	Ekspozycja…
+	Desaturate	Usuń nasycenie
+	Adjustment	Korekta
+	Add as Effect	Dodaj jako efekt
+	Apply as Filter	Zastosuj jako filtr
+	Select objects to adjust their colors.	Zaznacz obiekty, aby skorygować ich kolory.
+	Brightness/Contrast	Jasność/kontrast
+	Hue/Saturation	Barwa/nasycenie
+	Temperature/Tint	Temperatura/odcień
+@msg	`{id}` is not a colour adjustment	`{id}` nie jest korektą koloru
+@msg	missing `effect`	brak `effect`
+@msg	`params` must be an object	`params` musi być obiektem
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Precyzyjne narzędzia ścieżek
+	Anchor Eraser Brush	Pędzel gumki punktów kontrolnych
+	Extend Path Tool	Narzędzie Przedłuż ścieżkę
+	Measure & Inspect Tool	Narzędzie Mierz i badaj
+	Anchor Inspector	Inspektor punktów kontrolnych
+	Add Points at Crossings	Dodaj punkty na skrzyżowaniach
+	Split at Crossings	Podziel na skrzyżowaniach
+	Extend Path	Przedłuż ścieżkę
+	Measure & Inspect	Mierz i badaj
+	Set Anchor	Ustaw punkt kontrolny
+	Make Smooth	Zmień na gładki
+	Make Corner	Zmień na narożny
+	Equalize Handles	Wyrównaj uchwyty
+	Remove Points, Keep Shape	Usuń punkty, zachowaj kształt
+	Add Points to Segments…	Dodaj punkty do segmentów…
+	Add Points to Segments	Dodaj punkty do segmentów
+	Open a document to edit its anchor points.	Otwórz dokument, aby edytować jego punkty kontrolne.
+	Anchors selected: {count}	Zaznaczone punkty kontrolne: {count}
+	Direct-select anchor points to edit them.	Zaznacz bezpośrednio punkty kontrolne, aby je edytować.
+	Length	Długość
+	In:	Wejście:
+	Out:	Wyjście:
+	Add Points	Dodaj punkty
+	Points per segment	Punkty na segment
+	Close Path:	Zamknij ścieżkę:
+	Keep Handles	Zachowaj uchwyty
+	Straight	Prosty
+	Stretch Curve	Rozciągnij krzywą
+@msg	direct-select the anchor points to remove	zaznacz bezpośrednio punkty kontrolne do usunięcia
+@msg	select segments, or paths, to add points to	zaznacz segmenty lub ścieżki, do których dodać punkty
+@msg	select open paths to close	zaznacz otwarte ścieżki do zamknięcia
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	za dużo ścieżek lub są zbyt splątane, by znaleźć ich skrzyżowania (najwyżej 10000 segmentów)
+@msg	the paths have too many anchors to edit at once	ścieżki mają za dużo punktów kontrolnych, by edytować je naraz
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Narzędzie Kształt parametryczny
+	Parametric Shape	Kształt parametryczny
+	Edit Parametric Shape	Edytuj kształt parametryczny
+	Convert to Parametric Shape	Konwertuj na kształt parametryczny
+	Ring	Pierścień
+	Heart	Serce
+	Gear	Koło zębate
+	Speech Bubble	Dymek
+	Count:	Liczba:
+	Thickness:	Grubość:
+	Inner Radius:	Promień wewnętrzny:
+	Head:	Grot:
+	Shaft:	Trzon:
+	Point:	Czubek:
+	Tooth Height:	Wysokość zęba:
+	Tail:	Ogonek:
+	Tip:	Czubek:
+	Open a document to draw parametric shapes.	Otwórz dokument, aby rysować kształty parametryczne.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Zaznacz kształt parametryczny, aby go edytować. Bez zaznaczenia te wartości dotyczą następnego kształtu.
+@msg	the object is not an editable parametric shape	obiekt nie jest edytowalnym kształtem parametrycznym
+@msg	select plain rectangles, ellipses or regular polygons to convert	zaznacz zwykłe prostokąty, elipsy lub wielokąty foremne do konwersji
+@msg	the shape's numbers are out of range	wartości kształtu są poza zakresem
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` musi mieć jedną z wartości: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` musi być liczbą całkowitą od 3 do 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` musi mieć wartość od {lo} do {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Inteligentne pióro
+	Smart Pen Tool	Narzędzie Inteligentne pióro
+	Smart Pen Panel	Panel Inteligentne pióro
+	Next Segment	Następny segment
+	Curved	Zakrzywiony
+	Retract Handles	Schowaj uchwyty
+	Close or Join	Zamknij lub połącz
+	Open a document to draw with the Smart Pen.	Otwórz dokument, aby rysować inteligentnym piórem.
+	Straight or Curved Segment	Segment prosty lub zakrzywiony
+@msg	the path is locked or hidden	ścieżka jest zablokowana lub ukryta
+@msg	`id` is not a path	`id` nie jest ścieżką
+@msg	the path has no open subpath	ścieżka nie ma otwartej ścieżki podrzędnej
+@msg	the subpath is closed	ścieżka podrzędna jest zamknięta
+@msg	the subpath is closed or too short to close	ścieżka podrzędna jest zamknięta lub za krótka, by ją zamknąć
+@msg	the path is too short to remove a point from	ścieżka jest za krótka, by usunąć z niej punkt
+@msg	the segment can't be bent that far	segmentu nie da się tak bardzo wygiąć
+@msg	give `{a}` and `{b}`	podaj `{a}` i `{b}`
+@msg	`t` must be from 0 to 1	`t` musi mieć wartość od 0 do 1
+@msg	`segment` must be "straight" or "curved"	`segment` musi mieć wartość "straight" lub "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musi mieć wartość "free", "keepAngles" lub "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` musi mieć postać [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Zaznacz według rodzaju koloru
+	Objects with Spot Colors	Obiekty z kolorami dodatkowymi
+	Objects with Color Effects	Obiekty z efektami koloru
+	RGB Images	Obrazy RGB
+	CMYK Images	Obrazy CMYK
+	Grayscale Images	Obrazy w skali szarości
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` musi mieć wartość spotColors, colorEffects, rgbImages, cmykImages lub grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Kolor kropek z kompozycji
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Dwutonowy…
+	Duotone	Dwutonowy
+	Print Ink Fixes…	Poprawki farb drukarskich…
+	Print Ink Fixes	Poprawki farb drukarskich
+	Inks	Farby
+	Tone 1	Ton 1
+	Tone 2	Ton 2
+	Tone 3	Ton 3
+	Tone 4	Ton 4
+	Curve	Krzywa
+	Reset to Linear	Resetuj do liniowej
+	Reset to Inverse	Resetuj do odwróconej
+	Skip Objects with Spot Colors	Pomiń obiekty z kolorami dodatkowymi
+	Ink Limit	Limit farby
+	Exclude Pure Black	Wyklucz czystą czerń
+	Remove White Overprint	Usuń nadruk bieli
+	Overprint Black	Nadruk czerni
+	Text Only	Tylko tekst
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	podaj `inkLimit`, `removeWhiteOverprint` lub `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Poprawki farb drukarskich działają w dokumentach CMYK: najpierw wybierz Plik › Tryb koloru dokumentu › Kolor CMYK
+@msg	`{key}` must be 0..{max}	`{key}` musi wynosić 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Narzędzie Narożniki
+	Slide Anchor Along Path	Przesuń punkt kontrolny wzdłuż ścieżki
+	Set Corners	Ustaw narożniki
+	Remove Corners	Usuń narożniki
+	Corners selected: {count}	Zaznaczone narożniki: {count}
+	Apply to Selected Anchors	Zastosuj do zaznaczonych punktów kontrolnych
+@msg	`radius` must be from 0 to 1000000 pt	`radius` musi wynosić od 0 do 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` musi być liczbą od -0.98 do 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	wybierz punkty kontrolne, w których dwa boki spotykają się pod kątem: tylko one mogą mieć narożnik
+@msg	give `anchor`, the index of the anchor to slide	podaj `anchor`, indeks punktu kontrolnego do przesunięcia
+@msg	that anchor can't slide: an end of an open path has nowhere to go	tego punktu kontrolnego nie można przesunąć: koniec otwartej ścieżki nie ma dokąd pójść
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Narzędzie Scal wspólną krawędź
+	Merge Shared Edge	Scal wspólną krawędź
+	Keep Shared Points Together	Trzymaj wspólne punkty razem
+	Shared Edges	Wspólne krawędzie
+	Coincidence:	Zbieżność:
+@msg	`a` and `b` must be two different paths	`a` i `b` muszą być dwiema różnymi ścieżkami
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` musi mieć od 0.25 do 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` musi mieć od 0 do 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` musi mieć wartość "average", "a" lub "b"
+@msg	the paths have nothing to merge there	ścieżki nie mają tu nic do scalenia
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Podziel tekst
+	Combine Point Text	Połącz tekst punktowy
+	Remove Breaks	Usuń podziały
+	Split Text at Cursor	Podziel tekst w miejscu kursora
+	Set Alignment, Keep Position	Ustaw wyrównanie, zachowaj położenie
+	Reset Text Transform	Resetuj przekształcenie tekstu
+	Replace Missing Fonts…	Zastąp brakujące czcionki…
+	Replace Missing Fonts	Zastąp brakujące czcionki
+	Remove Line Breaks	Usuń podziały wiersza
+	Remove Paragraph Breaks	Usuń podziały akapitu
+	Break Text into Lines	Podziel tekst na wiersze
+	Break Text into Paragraphs	Podziel tekst na akapity
+	Break Text into Words	Podziel tekst na słowa
+	Break Text into Glyphs	Podziel tekst na glify
+	Reset Text Transform and Scale	Resetuj przekształcenie i skalę tekstu
+	Set Alignment, Keep Position:	Ustaw wyrównanie, zachowaj położenie:
+	Break Text into:	Podziel tekst na:
+	Split at Cursor	Podziel w miejscu kursora
+	Reset Transform	Resetuj przekształcenie
+	Shift-click: break into paragraphs	Kliknięcie z Shift: podziel na akapity
+	Alt-click: reset the horizontal scale too	Kliknięcie z Alt: resetuj także skalę poziomą
+breakText	Lines	Wiersze
+breakText	Words	Słowa
+breakText	Glyphs	Glify
+@msg	Click in type with a Type tool to split it	Kliknij w tekst narzędziem Tekst, aby go podzielić
+@msg	Too many type objects to change at once	Zbyt wiele obiektów tekstowych do zmiany naraz
+@msg	Too many pieces to make at once	Zbyt wiele części do utworzenia naraz
+@msg	Select horizontal point or area type whose text fits	Zaznacz poziomy tekst punktowy lub akapitowy, którego tekst się mieści
+@msg	Nothing to split at the cursor	Nie ma nic do podzielenia w miejscu kursora
+@msg	Select two or more one-line point type objects on one baseline to combine	Zaznacz co najmniej dwa jednowierszowe obiekty tekstu punktowego na jednej linii bazowej, aby je połączyć
+@msg	No line breaks to remove	Brak podziałów wiersza do usunięcia
+@msg	No paragraph breaks to remove	Brak podziałów akapitu do usunięcia
+@msg	Too many breaks to remove at once	Zbyt wiele podziałów do usunięcia naraz
+@msg	Select point type	Zaznacz tekst punktowy
+@msg	The point type is aligned that way already	Tekst punktowy jest już tak wyrównany
+@msg	The point type has no transform to reset	Tekst punktowy nie ma przekształcenia do zresetowania
+@msg	No fonts are missing	Nie brakuje żadnych czcionek
+@msg	the replacement font is not available	czcionka zastępcza jest niedostępna
+@msg	missing `align`	brak `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` musi mieć wartość lines, paragraphs, words lub glyphs, a nie {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` musi mieć wartość "line" lub "paragraph", a nie {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` musi mieć wartość "left", "center" lub "right", a nie {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Efekty ścieżki
+	Reverse Direction	Odwróć kierunek
+	Align to Corners and Ends	Wyrównaj do narożników i końców
+	Count	Liczba
+	Max Count	Maksymalna liczba
+	Start Length	Długość na początku
+	Start Percent	Procent na początku
+	Start Shape	Kształt na początku
+	End Length	Długość na końcu
+	End Percent	Procent na końcu
+	End Shape	Kształt na końcu
+	By Count	Według liczby
+	By Distance	Według odległości
+	Both	Oba
+	Shorter Than Length	Krótsze niż długość
+	Anchors	Punkty kontrolne
+	Dashes to Geometry	Kreski jako geometria
+	Dashes to Geometry…	Kreski jako geometria…
+	Add Anchors	Dodaj punkty kontrolne
+	Add Anchors…	Dodaj punkty kontrolne…
+	Smooth Anchors	Wygładź punkty kontrolne
+	Smooth Anchors…	Wygładź punkty kontrolne…
+	Simplify Anchors	Uprość punkty kontrolne
+	Simplify Anchors…	Uprość punkty kontrolne…
+	Split at Anchors	Podziel w punktach kontrolnych
+	Split at Anchors…	Podziel w punktach kontrolnych…
+	Extend Path…	Przedłuż ścieżkę…
+	Close Path…	Zamknij ścieżkę…
+	Retract Handles…	Schowaj uchwyty…
+	Dash 1	Kreska 1
+	Gap 1	Odstęp 1
+	Dash 2	Kreska 2
+	Gap 2	Odstęp 2
+	Dash 3	Kreska 3
+	Gap 3	Odstęp 3
+	Dash 4	Kreska 4
+	Gap 4	Odstęp 4
+	Dash 5	Kreska 5
+	Gap 5	Odstęp 5

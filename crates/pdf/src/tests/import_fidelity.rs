@@ -241,6 +241,41 @@ fn isolate_and_knockout_flags_of_a_group_are_kept() {
     assert!(all(&d).iter().all(|n| !matches!(n.kind, NodeKind::Group { .. })));
 }
 
+#[test]
+fn knockout_groups_after_a_group_drawn_straight_keep_their_flag() {
+    // Two knockout groups (ISO 32000-1, 11.4.6.3), each of a full-opacity element and a 50% one,
+    // both elements groups of their own. A full-opacity element adds nothing as a group and is
+    // drawn straight onto its parent; the knockout group after it still knocks out.
+    let x = first_extra(1);
+    let ring = |at: usize| {
+        let res = format!("/ExtGState << /A << /ca 1 >> /B << /ca 0.5 >> >> /XObject << /E {} 0 R /F {} 0 R >>", at, at + 1);
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /K true >> /Resources << {res} >>"),
+            "q /A gs /E Do Q q /B gs /F Do Q",
+        )
+    };
+    let element = |art: &str| stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>", art);
+    let d = open(&one_page(
+        "/X0 Do /X1 Do",
+        &format!("/XObject << /X0 {x} 0 R /X1 {} 0 R >>", x + 1),
+        &[
+            &ring(x + 2),
+            &ring(x + 4),
+            &element("0 0 1 rg 10 10 40 40 re f"),
+            &element("0 0 1 rg 20 20 20 20 re f"),
+            &element("0 0 1 rg 50 50 40 40 re f"),
+            &element("0 0 1 rg 60 60 20 20 re f"),
+        ],
+    ));
+    let groups: Vec<Node> = all(&d).into_iter().filter(|n| matches!(n.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    for g in &groups {
+        assert_eq!(g.knockout, Knockout::On, "{g:?}");
+        let opacities: Vec<f32> = g.children().unwrap().iter().map(|c| c.opacity).collect();
+        assert_eq!(opacities, [1.0, 0.5]);
+    }
+}
+
 // ---------- tiling patterns ----------
 
 #[test]
@@ -395,10 +430,12 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("") + ">"
 }
 
-#[test]
-fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
-    // One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1),
-    // white (1, 0) in u/v.
+/// A Coons patch mesh shading's dictionary for [`coons_patch`] data.
+const COONS_MESH: &str = "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode";
+
+/// One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1), white
+/// (1, 0) in u/v.
+fn coons_patch() -> Vec<u8> {
     let pts: [(u8, u8); 12] =
         [(10, 10), (10, 37), (10, 63), (10, 90), (37, 90), (63, 90), (90, 90), (90, 63), (90, 37), (90, 10), (63, 10), (37, 10)];
     let mut data = vec![0u8];
@@ -406,11 +443,13 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
         data.extend([x, y]);
     }
     data.extend([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+    data
+}
+
+#[test]
+fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     let s = first_extra(1);
-    let sh = stream(
-        "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode",
-        &hex(&data),
-    );
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
     let d = open(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]));
     let meshes: Vec<vectorcraft_doc::live::GradientMesh> =
         all(&d).into_iter().filter_map(|n| if let NodeKind::Mesh(m) = n.kind { Some(m) } else { None }).collect();
@@ -425,6 +464,48 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     assert_eq!(at(1, 1).color.to_rgb(), [0.0, 0.0, 1.0]);
     assert_eq!(at(0, 1).color.to_rgb(), [1.0, 1.0, 1.0]);
     assert!(!all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })), "the mesh lies inside the page");
+}
+
+/// Illustrator writes meshes of many thousands of patches (14,355 in one of a user's files): one
+/// of 5,000 comes in as gradient meshes, not a flat grey.
+#[test]
+fn a_mesh_shading_of_thousands_of_patches_becomes_gradient_meshes() {
+    let data: Vec<u8> = std::iter::repeat_n(coons_patch(), 5000).flatten().collect();
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&data));
+    let r = open_with(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]), |_| {});
+    assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+    assert_eq!(all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 5000);
+}
+
+/// A stroke painted with a mesh shading (how Illustrator writes a freeform gradient on a stroke)
+/// is the mesh clipped to the area the stroke paints, dashes included, not a flat grey.
+#[test]
+fn a_stroke_painted_with_a_mesh_shading_is_the_mesh_clipped_to_the_stroke() {
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
+    let resources = format!("/Pattern << /P0 << /PatternType 2 /Shading {s} 0 R >> >>");
+    // A 10 pt line from (20, 50) to (80, 50) with butt caps: page y 45 to 55. Dashed 10 on, 10
+    // off: pieces at 20–30, 40–50 and 60–70.
+    for (dash, pieces, end) in [("[] 0 d", 1, 80.0), ("[10 10] 0 d", 3, 70.0)] {
+        let content = format!("/Pattern CS /P0 SCN 10 w {dash} 20 50 m 80 50 l S");
+        let r = open_with(&one_page(&content, &resources, &[&sh]), |_| {});
+        assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+        let nodes = all(&r.document);
+        assert_eq!(nodes.iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 1, "{dash}");
+        let clip = nodes
+            .iter()
+            .find_map(|n| match &n.kind {
+                NodeKind::Group { children, clip: true } => children.first().cloned(),
+                _ => None,
+            })
+            .expect("a clip group");
+        let NodeKind::Path { path, .. } = &clip.kind else { panic!("{:?}", clip.kind) };
+        let b = path.bounds().unwrap();
+        assert!((b.x0 - 20.0).abs() < 0.01 && (b.x1 - end).abs() < 0.01 && (b.y0 - 45.0).abs() < 0.01 && (b.y1 - 55.0).abs() < 0.01, "{dash}: {b:?}");
+        let subpaths = path.to_bezpath().elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+        assert_eq!(subpaths, pieces, "{dash}");
+    }
 }
 
 #[test]

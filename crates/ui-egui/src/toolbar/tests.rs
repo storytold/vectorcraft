@@ -109,7 +109,7 @@ fn screen_readers_name_the_tool_buttons_and_the_active_tool() {
     let name = |id| tool_info(id).map(tip).unwrap_or_default();
     assert_eq!(role_and_state(&tree, &name("pen")), (Role::Button, Some(Toggled::True)));
     assert_eq!(role_and_state(&tree, &name("selection")), (Role::Button, Some(Toggled::False)));
-    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (,)", "Gradient (.)", "None (/)"] {
+    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (, or <)", "Gradient (. or >)", "None (/)"] {
         assert_eq!(role_and_state(&tree, label), (Role::Button, None), "{label}");
     }
 }

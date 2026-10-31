@@ -679,7 +679,7 @@ font-technology	Variable	Változó
 	Collect in New Layer	Összegyűjtés új rétegbe
 	Collect Links in a Separate Folder	Csatolások gyűjtése külön mappába
 	Color	Szín
-	Color (,)	Szín (,)
+	Color (, or <)	Szín (, vagy <)
 	Color Adjustments	Színkorrekciók
 	Color bars	Színsávok
 	Color blindness – Deuteranopia-type	Színvakság – deuteranópia
@@ -1591,7 +1591,7 @@ file-filter	Templates	Sablonok
 	GPU Performance	GPU-teljesítmény
 	Grab bag	Vegyes
 	Gradient	Színátmenet
-	Gradient (.)	Színátmenet (.)
+	Gradient (. or >)	Színátmenet (. vagy >)
 	Gradient across stroke	Színátmenet a körvonalon keresztben
 	Gradient along stroke	Színátmenet a körvonal mentén
 	Gradient and Mesh Resolution:	Színátmenet és háló felbontása:
@@ -1806,6 +1806,7 @@ file-filter	Templates	Sablonok
 	Delete Guides	Segédvonalak törlése
 	Delete Slice	Szelet törlése
 	Delete Style	Stílus törlése
+	Delete Styles	Stílusok törlése
 	Delete Variables	Változók törlése
 	Delete View	Nézet törlése
 	Done Editing Pattern	Mintázatszerkesztés befejezése
@@ -2418,6 +2419,7 @@ file-filter	Templates	Sablonok
 	Move Library Item to Group	Könyvtárelem áthelyezése csoportba
 	Move Locked and Hidden Artwork with Artboard	Zárolt és rejtett grafika mozgatása a rajztáblával
 	Move Mesh Point	Hálópont áthelyezése
+	Move Mesh Points	Hálópontok áthelyezése
 	Move Panel	Panel áthelyezése
 	Move Plane	Sík áthelyezése
 	Move Plane to Match Object	Sík igazítása az objektumhoz
@@ -3168,6 +3170,7 @@ mark-style	Japanese	Japán
 	Repeat Tab	Tabulátor ismétlése
 	Repeat {name}	Ismétlés: {name}
 	Replace	Csere
+	Replace:	Csere:
 	Replace Font	Betűtípus cseréje
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Cseréld le egy másik fájlra, vagy hagyd ki: a képei a dokumentummal mentett előnézetet mutatják tovább.
 	Replace Spine	Gerinc cseréje
@@ -4811,6 +4814,7 @@ imageTrace	Outline	Körvonal
 @msg	no document	nincs dokumentum
 @msg	no document open	nincs megnyitott dokumentum
 @msg	no effect applied yet	még nincs alkalmazott effektus
+@msg	no Pathfinder operation applied yet	még nincs alkalmazott útvonalkezelő-művelet
 @msg	no effect at index {k}	ezen az indexen nincs effektus: {k}
 @msg	no end record	nincs záró rekord
 @msg	no file manager here	itt nincs fájlkezelő
@@ -5679,3 +5683,296 @@ axis	Y Axis	Y tengely
 	Glyph Bounds	Glifahatárok
 	Proximity Guides	Közelségi segédvonalak
 	Angular Guides	Szög-segédvonalak
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Átlagolás és összekapcsolás…
+	Average & Join	Átlagolás és összekapcsolás
+anchor	Points:	Pontok:
+@msg	select two open path ends, or two open paths, to average and join	jelölj ki két nyitott útvonalvéget vagy két nyitott útvonalat az átlagoláshoz és összekapcsoláshoz
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Grafika tisztítása
+	Simplify Anchors (Keep Shape)…	Horgonypontok egyszerűsítése (alak megtartása)…
+	Health Check	Állapotellenőrzés
+	Show Issue	Probléma megjelenítése
+	Fix All Issues	Minden probléma javítása
+	Fix Issues	Problémák javítása
+	Deep Ungroup…	Csoportbontás minden szinten…
+	Rejoin Path Pieces…	Útvonaldarabok újraegyesítése…
+	Document Health Check	Dokumentum állapotellenőrzése
+	Check Selection	Kijelölés ellenőrzése
+	Check Document	Dokumentum ellenőrzése
+	No issues found.	Nem található probléma.
+	Changed since the last check.	Módosult a legutóbbi ellenőrzés óta.
+	Fix Selected	Kijelöltek javítása
+	Fix All	Összes javítása
+	Issues fixed: {count}	Javított problémák: {count}
+	Open a document to check it for issues.	Nyisson meg egy dokumentumot a problémák ellenőrzéséhez.
+	Empty Text	Üres szöveg
+	Unpainted Objects	Festetlen objektumok
+	Zero-Opacity Objects	Nulla átlátszatlanságú objektumok
+	Duplicate Objects	Ismétlődő objektumok
+	Off-Artboard Art	Rajztáblákon kívüli grafika
+	Duplicate Anchors	Ismétlődő horgonypontok
+	Tiny Handles	Apró fogantyúk
+	Collinear Anchors	Egy egyenesre eső horgonypontok
+	Nearly Coincident Anchors	Majdnem egybeeső horgonypontok
+	Nearly Closed Paths	Majdnem zárt útvonalak
+	Filled Open Paths	Kitöltött nyitott útvonalak
+	Needless Clipping Groups	Szükségtelen vágócsoportok
+	Needless Compound Paths	Szükségtelen összetett útvonalak
+	Needless Groups	Szükségtelen csoportok
+	Empty Artboards	Üres rajztáblák
+	Protect Corners	Sarkok védelme
+	Gap	Hézag
+	Include Clip Groups	Vágócsoportokkal együtt
+@msg	`tolerance` must be from 1 to 100	A `tolerance` értéke 1 és 100 között lehet
+@msg	`gap` must be from 0 to 6 pt	A `gap` értéke 0 és 6 pt között lehet
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Horgonypontok egyszerűsítése: az útvonalaknak túl sok horgonypontja van ahhoz, hogy egyszerre egyszerűsíthetők legyenek
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Útvonaldarabok újraegyesítése: túl sok útvonal az egyszerre történő egyesítéshez
+@msg	None of these issues are left: check again	Ezek közül a problémák közül már egy sem maradt: ellenőrizze újra
+@msg	`kinds` must be a list of issue kinds	A `kinds` értékének problémafajták listájának kell lennie
+@msg	missing `kind`	hiányzik a `kind`
+	Simplify Anchors (Keep Shape)	Horgonypontok egyszerűsítése (alak megtartása)
+	Deep Ungroup	Csoportbontás minden szinten
+	Rejoin Path Pieces	Útvonaldarabok újraegyesítése
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Színeffektusok
+	Color Effects Panel	Színeffektusok panel
+	Exposure	Expozíció
+	Exposure…	Expozíció…
+	Desaturate	Telítettség csökkentése
+	Adjustment	Korrekció
+	Add as Effect	Hozzáadás effektusként
+	Apply as Filter	Alkalmazás szűrőként
+	Select objects to adjust their colors.	Jelöljön ki objektumokat a színeik módosításához.
+	Brightness/Contrast	Fényesség/kontraszt
+	Hue/Saturation	Színárnyalat/telítettség
+	Temperature/Tint	Színhőmérséklet/tónus
+@msg	`{id}` is not a colour adjustment	`{id}` nem színkorrekció
+@msg	missing `effect`	hiányzik: `effect`
+@msg	`params` must be an object	`params`: objektum kell
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Útvonal-precíziós eszközök
+	Anchor Eraser Brush	Horgonypont-radírecset
+	Extend Path Tool	Útvonal meghosszabbítása eszköz
+	Measure & Inspect Tool	Mérés és vizsgálat eszköz
+	Anchor Inspector	Horgonypont-vizsgáló
+	Add Points at Crossings	Pontok hozzáadása a kereszteződésekben
+	Split at Crossings	Felosztás a kereszteződésekben
+	Extend Path	Útvonal meghosszabbítása
+	Measure & Inspect	Mérés és vizsgálat
+	Set Anchor	Horgonypont beállítása
+	Make Smooth	Simává alakítás
+	Make Corner	Sarokká alakítás
+	Equalize Handles	Fogantyúk kiegyenlítése
+	Remove Points, Keep Shape	Pontok eltávolítása, alak megtartása
+	Add Points to Segments…	Pontok hozzáadása a szakaszokhoz…
+	Add Points to Segments	Pontok hozzáadása a szakaszokhoz
+	Open a document to edit its anchor points.	Nyisson meg egy dokumentumot a horgonypontjai szerkesztéséhez.
+	Anchors selected: {count}	Kijelölt horgonypontok: {count}
+	Direct-select anchor points to edit them.	A szerkesztéshez jelölje ki közvetlenül a horgonypontokat.
+	Length	Hossz
+	In:	Be:
+	Out:	Ki:
+	Add Points	Pontok hozzáadása
+	Points per segment	Pont szakaszonként
+	Close Path:	Útvonal lezárása:
+	Keep Handles	Fogantyúk megtartása
+	Straight	Egyenes
+	Stretch Curve	Görbe nyújtása
+@msg	direct-select the anchor points to remove	jelölje ki közvetlenül az eltávolítandó horgonypontokat
+@msg	select segments, or paths, to add points to	jelöljön ki szakaszokat vagy útvonalakat, amelyekhez pontokat ad
+@msg	select open paths to close	jelöljön ki lezárandó nyitott útvonalakat
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	túl sok vagy túl összegabalyodott útvonal a kereszteződések megtalálásához (legfeljebb 10000 szakasz)
+@msg	the paths have too many anchors to edit at once	az útvonalaknak túl sok horgonypontjuk van az egyszerre szerkesztéshez
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Paraméteres alakzat eszköz
+	Parametric Shape	Paraméteres alakzat
+	Edit Parametric Shape	Paraméteres alakzat szerkesztése
+	Convert to Parametric Shape	Átalakítás paraméteres alakzattá
+	Ring	Gyűrű
+	Heart	Szív
+	Gear	Fogaskerék
+	Speech Bubble	Szövegbuborék
+	Count:	Darabszám:
+	Thickness:	Vastagság:
+	Inner Radius:	Belső sugár:
+	Head:	Fej:
+	Shaft:	Szár:
+	Point:	Csúcs:
+	Tooth Height:	Fogmagasság:
+	Tail:	Csóva:
+	Tip:	Csúcs:
+	Open a document to draw parametric shapes.	Nyisson meg egy dokumentumot paraméteres alakzatok rajzolásához.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	A szerkesztéshez jelöljön ki egy paraméteres alakzatot. Kijelölés nélkül ezek az értékek a következő alakzatra vonatkoznak.
+@msg	the object is not an editable parametric shape	az objektum nem szerkeszthető paraméteres alakzat
+@msg	select plain rectangles, ellipses or regular polygons to convert	jelöljön ki átalakítandó egyszerű téglalapokat, ellipsziseket vagy szabályos sokszögeket
+@msg	the shape's numbers are out of range	az alakzat értékei a megengedett tartományon kívül esnek
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind`: ezek egyike kell: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count`: 3 és 1000 közötti egész szám kell
+@msg	`{key}` must be from {lo} to {hi}	`{key}`: {lo} és {hi} között kell
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Okostoll
+	Smart Pen Tool	Okostoll eszköz
+	Smart Pen Panel	Okostoll panel
+	Next Segment	Következő szakasz
+	Curved	Ívelt
+	Retract Handles	Fogantyúk behúzása
+	Close or Join	Lezárás vagy összekapcsolás
+	Open a document to draw with the Smart Pen.	Nyisson meg egy dokumentumot az okostollal való rajzoláshoz.
+	Straight or Curved Segment	Egyenes vagy ívelt szakasz
+@msg	the path is locked or hidden	az útvonal zárolt vagy rejtett
+@msg	`id` is not a path	`id`: nem útvonal
+@msg	the path has no open subpath	az útvonalnak nincs nyitott részútvonala
+@msg	the subpath is closed	a részútvonal zárt
+@msg	the subpath is closed or too short to close	a részútvonal zárt vagy túl rövid a lezáráshoz
+@msg	the path is too short to remove a point from	az útvonal túl rövid egy pont eltávolításához
+@msg	the segment can't be bent that far	a szakasz nem hajlítható ennyire
+@msg	give `{a}` and `{b}`	adja meg: `{a}` és `{b}`
+@msg	`t` must be from 0 to 1	`t`: 0 és 1 között kell
+@msg	`segment` must be "straight" or "curved"	`segment`: "straight" vagy "curved" kell
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`: "free", "keepAngles" vagy "symmetric" kell
+@msg	`{key}` must be [x, y]	`{key}`: [x, y] kell
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Kijelölés színtípus szerint
+	Objects with Spot Colors	Direkt színeket használó objektumok
+	Objects with Color Effects	Színeffektusos objektumok
+	RGB Images	RGB-képek
+	CMYK Images	CMYK-képek
+	Grayscale Images	Szürkeárnyalatos képek
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	A `kind` értéke spotColors, colorEffects, rgbImages, cmykImages vagy grayImages lehet
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Pontszín a grafikából
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duplex…
+	Duotone	Duplex
+	Print Ink Fixes…	Nyomdai festékjavítások…
+	Print Ink Fixes	Nyomdai festékjavítások
+	Inks	Festékek
+	Tone 1	1. tónus
+	Tone 2	2. tónus
+	Tone 3	3. tónus
+	Tone 4	4. tónus
+	Curve	Görbe
+	Reset to Linear	Visszaállítás lineárisra
+	Reset to Inverse	Visszaállítás fordítottra
+	Skip Objects with Spot Colors	Direkt színeket használó objektumok kihagyása
+	Ink Limit	Festékkorlát
+	Exclude Pure Black	Tiszta fekete kizárása
+	Remove White Overprint	Fehér felülnyomásának eltávolítása
+	Overprint Black	Fekete felülnyomása
+	Text Only	Csak szöveg
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	adja meg: `inkLimit`, `removeWhiteOverprint` vagy `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	A nyomdai festékjavítások CMYK-dokumentumokon működnek: előbb válassza a Fájl › Dokumentum színmódja › CMYK-szín parancsot
+@msg	`{key}` must be 0..{max}	`{key}` értéke 0..{max} lehet
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Sarok eszköz
+	Slide Anchor Along Path	Horgonypont csúsztatása az útvonal mentén
+	Set Corners	Sarkok beállítása
+	Remove Corners	Sarkok eltávolítása
+	Corners selected: {count}	Kijelölt sarkok: {count}
+	Apply to Selected Anchors	Alkalmazás a kijelölt horgonypontokra
+@msg	`radius` must be from 0 to 1000000 pt	a `radius` értéke 0 és 1000000 pt között lehet
+@msg	`t` must be a number from -0.98 to 0.98	a `t` értéke -0.98 és 0.98 közötti szám lehet
+@msg	choose anchors where two sides meet at an angle: only those take a corner	válasszon olyan horgonypontokat, ahol két oldal szögben találkozik: csak ezek kaphatnak sarkot
+@msg	give `anchor`, the index of the anchor to slide	adja meg az `anchor` értékét, a csúsztatandó horgonypont indexét
+@msg	that anchor can't slide: an end of an open path has nowhere to go	ez a horgonypont nem csúsztatható: a nyitott útvonal végének nincs hová mennie
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Közös él egyesítése eszköz
+	Merge Shared Edge	Közös él egyesítése
+	Keep Shared Points Together	Közös pontok együtt tartása
+	Shared Edges	Közös élek
+	Coincidence:	Egybeesés:
+@msg	`a` and `b` must be two different paths	`a` és `b` két különböző útvonal kell legyen
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter`: 0.25 és 200 pt között kell
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance`: 0 és 3 pt között kell
+@msg	`follow` must be "average", "a" or "b"	`follow`: "average", "a" vagy "b" kell
+@msg	the paths have nothing to merge there	az útvonalaknak itt nincs mit egyesíteni
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Szöveg felosztása
+	Combine Point Text	Pontszöveg egyesítése
+	Remove Breaks	Törések eltávolítása
+	Split Text at Cursor	Szöveg felosztása a kurzornál
+	Set Alignment, Keep Position	Igazítás beállítása, helyzet megtartása
+	Reset Text Transform	Szövegátalakítás visszaállítása
+	Replace Missing Fonts…	Hiányzó betűtípusok cseréje…
+	Replace Missing Fonts	Hiányzó betűtípusok cseréje
+	Remove Line Breaks	Sortörések eltávolítása
+	Remove Paragraph Breaks	Bekezdéstörések eltávolítása
+	Break Text into Lines	Szöveg felosztása sorokra
+	Break Text into Paragraphs	Szöveg felosztása bekezdésekre
+	Break Text into Words	Szöveg felosztása szavakra
+	Break Text into Glyphs	Szöveg felosztása glifákra
+	Reset Text Transform and Scale	Szövegátalakítás és méretezés visszaállítása
+	Set Alignment, Keep Position:	Igazítás beállítása, helyzet megtartása:
+	Break Text into:	Szöveg felosztása:
+	Split at Cursor	Felosztás a kurzornál
+	Reset Transform	Átalakítás visszaállítása
+	Shift-click: break into paragraphs	Shift+kattintás: felosztás bekezdésekre
+	Alt-click: reset the horizontal scale too	Alt+kattintás: a vízszintes méretezés visszaállítása is
+breakText	Lines	Sorok
+breakText	Words	Szavak
+breakText	Glyphs	Glifák
+@msg	Click in type with a Type tool to split it	Kattintson a szövegbe egy szöveg eszközzel a felosztáshoz
+@msg	Too many type objects to change at once	Túl sok szövegobjektum az egyszerre történő módosításhoz
+@msg	Too many pieces to make at once	Túl sok darab az egyszerre történő létrehozáshoz
+@msg	Select horizontal point or area type whose text fits	Jelöljön ki vízszintes pont- vagy területszöveget, amelynek szövege elfér
+@msg	Nothing to split at the cursor	A kurzornál nincs mit felosztani
+@msg	Select two or more one-line point type objects on one baseline to combine	Az egyesítéshez jelöljön ki legalább két egysoros pontszöveg-objektumot egy alapvonalon
+@msg	No line breaks to remove	Nincs eltávolítandó sortörés
+@msg	No paragraph breaks to remove	Nincs eltávolítandó bekezdéstörés
+@msg	Too many breaks to remove at once	Túl sok törés az egyszerre történő eltávolításhoz
+@msg	Select point type	Jelöljön ki pontszöveget
+@msg	The point type is aligned that way already	A pontszöveg már így van igazítva
+@msg	The point type has no transform to reset	A pontszövegnek nincs visszaállítandó átalakítása
+@msg	No fonts are missing	Nem hiányzik betűtípus
+@msg	the replacement font is not available	a helyettesítő betűtípus nem érhető el
+@msg	missing `align`	hiányzik az `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	a `by` értéke lines, paragraphs, words vagy glyphs lehet, nem {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	a `kind` értéke "line" vagy "paragraph" lehet, nem {other}
+@msg	`align` must be "left", "center" or "right", not {other}	az `align` értéke "left", "center" vagy "right" lehet, nem {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Útvonaleffektusok
+	Reverse Direction	Irány megfordítása
+	Align to Corners and Ends	Igazítás a sarkokhoz és végekhez
+	Count	Darabszám
+	Max Count	Legnagyobb darabszám
+	Start Length	Kezdő hossz
+	Start Percent	Kezdő százalék
+	Start Shape	Kezdő alak
+	End Length	Záró hossz
+	End Percent	Záró százalék
+	End Shape	Záró alak
+	By Count	Darabszám szerint
+	By Distance	Távolság szerint
+	Both	Mindkettő
+	Shorter Than Length	A hossznál rövidebbek
+	Dashes to Geometry	Vonalak geometriává
+	Dashes to Geometry…	Vonalak geometriává…
+	Add Anchors	Horgonypontok hozzáadása
+	Add Anchors…	Horgonypontok hozzáadása…
+	Smooth Anchors	Horgonypontok simítása
+	Smooth Anchors…	Horgonypontok simítása…
+	Simplify Anchors	Horgonypontok egyszerűsítése
+	Simplify Anchors…	Horgonypontok egyszerűsítése…
+	Split at Anchors	Felosztás a horgonypontoknál
+	Split at Anchors…	Felosztás a horgonypontoknál…
+	Extend Path…	Útvonal meghosszabbítása…
+	Close Path…	Útvonal lezárása…
+	Retract Handles…	Fogantyúk behúzása…
+	Dash 1	Vonal 1
+	Gap 1	Hézag 1
+	Dash 2	Vonal 2
+	Gap 2	Hézag 2
+	Dash 3	Vonal 3
+	Gap 3	Hézag 3
+	Dash 4	Vonal 4
+	Gap 4	Hézag 4
+	Dash 5	Vonal 5
+	Gap 5	Hézag 5

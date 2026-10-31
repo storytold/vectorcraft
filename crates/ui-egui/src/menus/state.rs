@@ -217,6 +217,10 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.dialog" | "ui.recolorDialog" | "ui.effectGalleryDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.cropImage" => selected_image(app, |_| true),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "pathfinder.repeat" => app.last_pathfinder.as_ref().is_some_and(|op| {
+            let min = crate::panels::pathfinder::minimum_operands(op);
+            crate::panels::pathfinder::operands(app) >= min
+        }),
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),

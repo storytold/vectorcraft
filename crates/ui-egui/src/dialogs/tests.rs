@@ -105,6 +105,7 @@ fn every_dialog_draws() {
     for (kind, fields) in [
         ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
         ("average", json!({"axis": "both"})),
+        ("averageJoin", json!({"to": "corner"})),
         (crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"})),
         ("newWorkspace", json!({"name": "Mine"})),
         ("shortcuts", json!({})),
@@ -2484,4 +2485,112 @@ fn artboard_options_selected_fit_spans_other_boards_and_off_board_art() {
     assert_eq!(app.session.doc().unwrap().doc, before);
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, after);
+}
+
+/// An effect dialog keeps a distance typed outside the effect's range to the range, so the field
+/// shows what the effect applies: Color Halftone's Max Radius below 4 pt is 4 pt (#4637).
+#[test]
+fn an_effect_dialog_keeps_a_typed_distance_within_the_effects_range() {
+    let enter = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    for (typed, applied) in [("1 pt", 4.0), ("0.5 px", 4.0), ("200 pt", 127.0), ("10 pt", 10.0)] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+        // Max Radius, the first field, is focused: type over it and press Enter.
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text(typed.into())]);
+        frame(&mut app, vec![enter()]);
+        assert!(app.ui.dialog.is_none(), "{typed}");
+        let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        assert_eq!(node.appearance.effects.last().map(|e| e.params["maxRadius"].clone()), Some(json!(applied)), "{typed}");
+    }
+}
+
+/// #4638: typing invalid input in an effect length field does not silently revert to a sub-minimum
+/// or out-of-range value; sub-minimum input is clamped immediately and invalid input clears cleanly.
+#[test]
+fn color_halftone_invalid_input_does_not_revert_to_sub_minimum_value() {
+    let mut app = app();
+    let _id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+    frame(&mut app, vec![]);
+    // 1. Enter 0.5 px (sub-minimum): clamped immediately to 4 pt on commit
+    frame(&mut app, vec![egui::Event::Text("0.5 px".into())]);
+    frame(&mut app, vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(4.0));
+    let s1 = frame(&mut app, vec![]);
+    let shows_clamped_text = s1.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Text(t) => t.galley.text().trim() == "4 pt",
+        _ => false,
+    });
+    assert!(shows_clamped_text, "rendered field must show clamped '4 pt' text after sub-minimum commit");
+
+    // 2. Return focus to Max Radius with Shift+Tab, type invalid text, and commit with Enter
+    frame(
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT }],
+    );
+    frame(&mut app, vec![egui::Event::Text("1jgghgh".into())]);
+    let _out = frame(
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    // Dialog remains open and retains the clamped 4.0 pt rather than reverting to 0.5 px
+    assert!(app.ui.dialog.is_some(), "dialog must remain open on invalid Enter commit");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(4.0));
+
+    // The field paints with rejection highlight (width 1.5, accent_strong)
+    let next_out = frame(&mut app, vec![]);
+    let has_rejection_highlight = next_out.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Rect(r) => (r.stroke.width - 1.5).abs() < 1e-3 && r.stroke.color.a() > 0,
+        _ => false,
+    });
+    assert!(has_rejection_highlight, "Max Radius must display rejection highlight after invalid input");
+    let shows_clamped_after_invalid = next_out.shapes.iter().any(|s| match &s.shape {
+        egui::Shape::Text(t) => t.galley.text().trim() == "4 pt",
+        _ => false,
+    });
+    assert!(shows_clamped_after_invalid, "rendered field must retain '4 pt' text after invalid input rejection");
+}
+
+#[test]
+fn bounded_field_with_inches_does_not_clamp_point_bounds_to_inch_numbers() {
+    let mut test_app = app();
+    let _id = test_app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    // Switch document units to Inches
+    test_app.run("document.setup", json!({"units": "Inches"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    test_app.run("select.all", json!({})).unwrap();
+    test_app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
+    frame(&mut test_app, vec![]);
+    // Type 1 in: 72 pt is within 4..127 pt range and must not clamp to ~1.76 pt
+    frame(&mut test_app, vec![egui::Event::Text("1 in".into())]);
+    frame(
+        &mut test_app,
+        vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    assert_eq!(test_app.ui.dialog.as_ref().unwrap().fields["maxRadius"], serde_json::json!(72.0));
 }

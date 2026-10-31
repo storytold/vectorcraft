@@ -4,7 +4,7 @@
 use serde_json::json;
 use vectorcraft_geom::{Point, Rect, Vec2};
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
 
@@ -109,6 +109,65 @@ fn alt_drag_copies_and_the_copy_stays_attached() {
     }
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(copy).is_none());
+}
+
+#[test]
+fn cmd_alt_drag_copies_on_the_perspective_plane() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let before = plane_pts(&s, id, Plane::Right, 0.0);
+    let count = s.doc().unwrap().doc.node_count();
+    let c = bounds_of(&before).center();
+    let h = grid(&s).homography(Plane::Right).unwrap();
+    let (from, to) = (h.apply(c).unwrap(), h.apply(c + Vec2::new(80.0, 0.0)).unwrap());
+    let n = undo_len(&s);
+    drag(&mut s, &[from, to, to], Mods { cmd: true, alt: true, ..Default::default() });
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+    assert_eq!(s.doc().unwrap().doc.node_count(), count + 1, "one copy");
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+    let copy = s.doc().unwrap().selection.objects[0];
+    assert_ne!(copy, id, "the copy is selected");
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before, "the original stays");
+    assert_eq!(attached(&s, copy), Some((Plane::Right, 0.0)), "the copy is attached");
+    for (a, b) in before.iter().zip(plane_pts(&s, copy, Plane::Right, 0.0)) {
+        assert!((b - *a - Vec2::new(80.0, 0.0)).hypot() < 1e-6);
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), count);
+    assert_eq!(plane_pts(&s, id, Plane::Right, 0.0), before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+}
+
+#[test]
+fn cmd_drag_still_lends_selection_from_perspective_selection() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let p = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, p.x, p.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, p.x, p.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "perspectiveSelection");
+    let cmd_alt = Mods { cmd: true, alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, p.x, p.y).with_mods(cmd_alt), v).unwrap();
+    assert_eq!(s.tool_id(), "perspectiveSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, p.x, p.y).with_mods(cmd_alt), v).unwrap();
+}
+
+#[test]
+fn cmd_alt_cursor_stays_with_perspective_selection() {
+    let (mut s, id) = persp_session();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("perspectiveSelection", v).unwrap();
+    let p = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let cmd_alt = Mods { cmd: true, alt: true, ..Default::default() };
+    assert_eq!(s.cursor(p, cmd_alt, v), Cursor::Arrow);
+    assert_eq!(s.tool_id(), "perspectiveSelection");
 }
 
 #[test]

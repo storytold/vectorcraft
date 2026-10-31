@@ -369,6 +369,57 @@ fn transforms_without_transform_objects_move_only_the_pattern() {
 }
 
 #[test]
+fn selection_backquote_drag_changes_pattern_fill_and_stroke_without_moving_mixed_art() {
+    let mut s = session();
+    make_dots(&mut s);
+    let patterned = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let solid = rect(&mut s, 220.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [patterned.0], "swatch": "Dots"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [patterned.0], "swatch": "Dots"})).unwrap();
+    s.execute("prefs.set", &json!({"key": "transformPatternTiles", "value": false})).unwrap();
+    sel(&mut s, &[patterned, solid]);
+    let before_patterned = node(&s, patterned);
+    let before_solid = node(&s, solid);
+    let history = crate::tests::history(&s).0;
+    let v = ViewInfo { show_bbox: false, ..Default::default() };
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Drag, 145.0, 125.0) }, v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 145.0, 125.0) }, v).unwrap();
+    let after = node(&s, patterned);
+    assert_eq!(after.geometric_bounds(), before_patterned.geometric_bounds());
+    assert_eq!(node(&s, solid), before_solid);
+    for paint in [after.appearance.fill_paint(), after.appearance.stroke_paint()] {
+        let Paint::Pattern { xf, .. } = paint else { panic!("pattern paint expected") };
+        assert_eq!(xf.as_coeffs()[4], 20.0);
+    }
+    assert_eq!(crate::tests::history(&s).0, history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, patterned), before_patterned);
+    assert_eq!(node(&s, solid), before_solid);
+}
+
+#[test]
+fn selection_backquote_drag_changes_stroke_only_pattern() {
+    let mut s = session();
+    make_dots(&mut s);
+    let id = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [id.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[id]);
+    let before = node(&s, id).geometric_bounds();
+    let v = ViewInfo { show_bbox: false, ..Default::default() };
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Drag, 120.0, 125.0) }, v).unwrap();
+    s.pointer(&PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 120.0, 125.0) }, v).unwrap();
+    let after = node(&s, id);
+    assert_eq!(after.geometric_bounds(), before);
+    let Paint::Pattern { xf, .. } = after.appearance.stroke_paint() else { panic!("pattern stroke expected") };
+    assert_eq!(xf.as_coeffs()[4], 20.0);
+}
+
+#[test]
 fn list_reports_patterns_and_edit_state() {
     let mut s = session();
     make_dots(&mut s);
@@ -495,7 +546,7 @@ fn svg_export_writes_pattern_def() {
     // The tile art is inside the pattern.
     let start = svg.find("<pattern").unwrap();
     let end = svg.find("</pattern>").unwrap();
-    assert!(svg[start..end].contains("<path"));
+    assert!(vectorcraft_testkit::svg_shapes(&svg[start..end]) > 0);
 }
 
 /// A pattern fill is written as a PDF tiling pattern, which PDF import reads back as a pattern

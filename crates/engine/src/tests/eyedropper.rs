@@ -69,6 +69,113 @@ fn picking_up_without_weight_keeps_the_target_weight() {
 }
 
 #[test]
+fn bucket_attribute_sample_changes_only_defaults_and_respects_options() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    let art = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo = undo_len(&s);
+    s.execute("eyedropper.setOptions", &json!({"pickUp": {"appearance": {"stroke": {"weight": false}}}})).unwrap();
+    let width = s.paint.stroke_width;
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(s.paint.stroke.color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.paint.stroke_width, width);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(undo_len(&s), undo);
+    assert_eq!(node(&s, dst).appearance.fill_paint().color().unwrap().to_hex(), "#ffffff");
+    for extra in [json!({"ids": []}), json!({"reverse": true}), json!({"append": true})] {
+        let mut p = json!({"source": src.0, "defaultsOnly": true});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        assert!(s.execute("appearance.copyFrom", &p).is_err());
+    }
+    assert!(s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": "yes"})).is_err());
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_replace_last_eyedropper_sample() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).is_err());
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_commit_highlighted_type() {
+    let mut s = session();
+    s.prefs.placeholder_text = false;
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let view = ViewInfo::default();
+    s.select_tool("type", view).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+    }
+    let dst = s.doc().unwrap().selection.objects[0];
+    s.tool_text("ABCD", view).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let before = node(&s, dst);
+    let undo = undo_len(&s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), before);
+    assert_eq!(undo_len(&s), undo, "sampling does not commit pending typing");
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn bucket_color_sample_changes_only_defaults_and_supplies_next_fill() {
+    let mut s = session();
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [dst.0]})).unwrap();
+    let dst_before = node(&s, dst);
+    let art = s.doc().unwrap().doc.clone();
+    let undo = undo_len(&s);
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(undo_len(&s), undo);
+    let r = s.execute("livePaint.fill", &json!({"ids": [dst.0], "point": [35, 35]})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    assert_eq!(node(&s, face).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn image_color_sample_sets_only_fill_default_and_clears_stroke() {
+    let mut s = session();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    let before = (node(&s, dst), s.doc().unwrap().selection.clone());
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "stroke": false, "ids": [], "clearStroke": true})).unwrap();
+    assert_eq!(s.paint.fill.color(), Some(Color::rgb8(0, 255, 0)));
+    assert!(s.paint.stroke.is_none());
+    assert_eq!((node(&s, dst), s.doc().unwrap().selection.clone()), before);
+    let state = (s.paint.clone(), node(&s, dst));
+    for p in [
+        json!({"color": "#ffffff", "stroke": true, "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [dst.0], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "stop": 0, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "clearStroke": "yes"}),
+        json!({"color": "#ffffff", "stroke": "no", "ids": [], "clearStroke": true}),
+        json!({"color": {"bad": true}, "stroke": false, "ids": [], "clearStroke": true}),
+    ] {
+        assert!(s.execute("paint.sampleColor", &p).is_err(), "{p}");
+        assert_eq!((s.paint.clone(), node(&s, dst)), state, "{p}");
+    }
+}
+
+#[test]
 fn every_appearance_attribute_copies_the_whole_stack() {
     let mut s = session();
     let (src, dst) = source_and_target(&mut s);

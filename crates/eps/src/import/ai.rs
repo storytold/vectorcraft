@@ -13,7 +13,7 @@
 //! groups, paths, colours, gradients, images) with newer ones (transparency, hidden objects) and
 //! dictionaries (names, artboards, type). `lex` scans it, `read` builds the document.
 //!
-//! Reading is bounded: the data decompresses to at most [`MAX_DATA`], and the reader caps nesting,
+//! Reading is bounded: the data decompresses to at most [`max_data`], and the reader caps nesting,
 //! objects and points. Anything it doesn't read is an error: the caller opens the file the way it
 //! did before (the printed page, or the PDF), with a warning saying why.
 
@@ -39,10 +39,27 @@ pub(crate) use read::{slot_frame, slot_of};
 #[cfg(test)]
 mod tests;
 
-/// Largest editing data read, decompressed (bytes). Files with embedded rasters reach 340 MB (a
-/// 30 MB poker box template unpacks to 322 MiB), so 64-bit builds read twice the old 256 MiB; a
-/// 32-bit address space (wasm) keeps it.
-pub const MAX_DATA: u64 = if cfg!(target_pointer_width = "64") { 512 << 20 } else { 256 << 20 };
+/// Least editing data read, decompressed (bytes), whatever the machine: 512 MiB on 64-bit builds (a
+/// 30 MB poker box template with embedded rasters unpacks to 322 MiB), 256 MiB in a 32-bit address
+/// space (wasm).
+pub const MIN_DATA: u64 = if cfg!(target_pointer_width = "64") { 512 << 20 } else { 256 << 20 };
+/// Most editing data read on any machine (bytes). Reading takes about as much memory again as the
+/// data (1.1 GB of data with 24 embedded 4096 x 4096 images peaked 1.1 GB above the start).
+pub const MAX_DATA: u64 = if cfg!(target_pointer_width = "64") { 2 << 30 } else { 256 << 20 };
+
+/// Largest editing data read, decompressed (bytes): an eighth of installed memory, from
+/// [`MIN_DATA`] to [`MAX_DATA`], so a file whose embedded rasters unpack past 512 MiB keeps its
+/// layers on a machine with room for it (#3510), while a small file that unpacks without end
+/// still stops early.
+pub fn max_data() -> u64 {
+    static LIMIT: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *LIMIT.get_or_init(|| data_limit(vectorcraft_render::installed_memory()))
+}
+
+/// [`max_data`] on a machine with `memory` bytes installed (`None`: not known).
+fn data_limit(memory: Option<u64>) -> u64 {
+    memory.map_or(MIN_DATA, |m| (m / 8).clamp(MIN_DATA, MAX_DATA))
+}
 /// Largest Zstandard window accepted (a frame asking for more is damaged data).
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// Most Zstandard frames read (the app writes one).
@@ -81,13 +98,13 @@ fn eps_section(section: &[u8]) -> Result<Vec<u8>, String> {
         }
         header.extend_from_slice(line);
         header.extend_from_slice(b"\n");
-        if header.len() as u64 > MAX_DATA {
+        if header.len() as u64 > max_data() {
             return Err(too_large());
         }
     }
     let Some(codec) = codec else {
         // Not compressed: the section is the data, as it is (images' samples are binary).
-        if section.len() as u64 > MAX_DATA {
+        if section.len() as u64 > max_data() {
             return Err(too_large());
         }
         return Ok(section.to_vec());
@@ -96,7 +113,7 @@ fn eps_section(section: &[u8]) -> Result<Vec<u8>, String> {
     for line in lines {
         let body = line.strip_prefix(b"%").unwrap_or(line);
         text.push_str(std::str::from_utf8(body).map_err(|_| damaged("its ASCII85 encoding"))?);
-        if text.len() as u64 > MAX_DATA {
+        if text.len() as u64 > max_data() {
             return Err(too_large());
         }
     }
@@ -105,21 +122,21 @@ fn eps_section(section: &[u8]) -> Result<Vec<u8>, String> {
     }
     let packed = ps::ascii85_decode(&text).ok_or_else(|| damaged("its ASCII85 encoding"))?;
     let mut data = header;
-    data.extend(codec.decode(&packed, MAX_DATA.saturating_sub(data.len() as u64))?);
+    data.extend(codec.decode(&packed, max_data().saturating_sub(data.len() as u64))?);
     Ok(data)
 }
 
 /// The editing data of a `.ai` file: its `AIPrivateData` streams joined (`raw`), decompressed. The
 /// compressed data may follow header comments that aren't.
 pub fn decode_private(raw: &[u8]) -> Result<Vec<u8>, String> {
-    if raw.len() as u64 > MAX_DATA {
+    if raw.len() as u64 > max_data() {
         return Err(too_large());
     }
     for (marker, codec) in [(&b"%AI24_ZStandard_Data"[..], Codec::Zstd), (b"%AI12_CompressedData", Codec::Zlib)] {
         if let Some(at) = find(raw, marker) {
             let (header, body) = raw.split_at(at);
             let mut data = header.to_vec();
-            data.extend(codec.decode(body.get(marker.len()..).unwrap_or_default(), MAX_DATA.saturating_sub(header.len() as u64))?);
+            data.extend(codec.decode(body.get(marker.len()..).unwrap_or_default(), max_data().saturating_sub(header.len() as u64))?);
             return Ok(data);
         }
     }
@@ -172,5 +189,5 @@ fn damaged(what: &str) -> String {
 }
 
 fn too_large() -> String {
-    format!("it decompresses to more than {} MB", MAX_DATA >> 20)
+    format!("it decompresses to more than {} MB", max_data() >> 20)
 }

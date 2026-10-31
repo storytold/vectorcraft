@@ -491,7 +491,7 @@ font-technology	Variable	Değişken
 	Collect in New Layer	Yeni Katmanda Topla
 	Collect Links in a Separate Folder	Bağlantıları Ayrı Bir Klasörde Toplayın
 	Color	Renk
-	Color (,)	Renk (,)
+	Color (, or <)	Renk (, veya <)
 	Color Adjustments	Renk Ayarlamaları
 	Color bars	Renk çubukları
 	Color blindness – Deuteranopia-type	Renk körlüğü – Döteranopi tipi
@@ -1215,7 +1215,7 @@ font-technology	Variable	Değişken
 	GPL palettes keep solid colours only, as RGB.	GPL paletleri yalnızca düz renkleri RGB olarak tutar.
 	GPU Performance	GPU Performansı
 	Gradient	Degrade
-	Gradient (.)	Gradyan (.)
+	Gradient (. or >)	Gradyan (. veya >)
 	Gradient across stroke	Kontur boyunca gradyan
 	Gradient along stroke	Kontur boyunca gradyan
 	Gradient and Mesh Resolution:	Gradyan ve Mesh Çözünürlüğü:
@@ -1757,6 +1757,7 @@ font-technology	Variable	Değişken
 	Move in Perspective	Perspektifte Hareket Et
 	Move Locked and Hidden Artwork with Artboard	Çalışma Yüzeyi ile Kilitli ve Gizli Resimleri Taşıma
 	Move Mesh Point	Mesh Noktasını Taşı
+	Move Mesh Points	Mesh Noktalarını Taşı
 	Move Plane	Düzlemi Taşı
 	Move Plane to Match Object	Nesneyi Eşleştirecek Düzlemi Taşı
 	Move Rows	Satırları Taşı
@@ -2459,6 +2460,7 @@ shape	Open	Açık
 	Repeat Tab	Sekmeyi Tekrarla
 	Repeat {name}	{name}'yi tekrarla
 	Replace	Değiştir
+	Replace:	Değiştir:
 	Replace Font	Yazı Tipini Değiştir
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Onu başka bir dosyayla değiştirin veya yok sayın: resimleri, belgeyle birlikte kaydedilen önizlemeyi göstermeye devam eder.
 	Replace Spine	Omurgayı Değiştir
@@ -3929,6 +3931,7 @@ axis	Both	Her İkisi
 @msg	no document	belge yok
 @msg	no document open	hiçbir belge açık değil
 @msg	no effect applied yet	henüz hiçbir efekt uygulanmadı
+@msg	no Pathfinder operation applied yet	henüz hiçbir Yol Bulucu işlemi uygulanmadı
 @msg	no effect at index {k}	{k} endeksinde etkisi yok
 @msg	no end record	son kayıt yok
 @msg	no file manager here	burada dosya yöneticisi yok
@@ -5145,6 +5148,7 @@ theme	Appearance	Görünüm
 	Delete Guides	Kılavuzları Sil
 	Delete Slice	Dilimi Sil
 	Delete Style	Stili Sil
+	Delete Styles	Stilleri Sil
 	Delete Variables	Değişkenleri Sil
 	Delete View	Görünümü Sil
 	Done Editing Pattern	Desen Düzenlemeyi Bitir
@@ -5651,3 +5655,295 @@ axis	Y Axis	Y ekseni
 	Glyph Bounds	Glif Sınırları
 	Proximity Guides	Yakınlık Kılavuzları
 	Angular Guides	Açısal Kılavuzlar
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Ortalama ve katıl…
+	Average & Join	Ortalama ve katıl
+anchor	Points:	Noktalar:
+@msg	select two open path ends, or two open paths, to average and join	ortalaması alınıp katılmak için iki açık yol ucu veya iki açık yol seçin
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Çizim Temizliği
+	Simplify Anchors (Keep Shape)…	Bağlantı Noktalarını Basitleştir (Şekli Koru)…
+	Health Check	Sağlık Denetimi
+	Show Issue	Sorunu Göster
+	Fix All Issues	Tüm Sorunları Düzelt
+	Fix Issues	Sorunları Düzelt
+	Deep Ungroup…	Tüm Düzeylerde Grubu Çöz…
+	Rejoin Path Pieces…	Yol Parçalarını Yeniden Birleştir…
+	Document Health Check	Belge Sağlık Denetimi
+	Check Selection	Seçimi Denetle
+	Check Document	Belgeyi Denetle
+	No issues found.	Sorun bulunamadı.
+	Changed since the last check.	Son denetimden bu yana değişti.
+	Fix Selected	Seçilenleri Düzelt
+	Fix All	Tümünü Düzelt
+	Issues fixed: {count}	Düzeltilen sorunlar: {count}
+	Open a document to check it for issues.	Sorunlar için denetlemek üzere bir belge açın.
+	Empty Text	Boş Metin
+	Unpainted Objects	Boyanmamış Nesneler
+	Zero-Opacity Objects	Sıfır Opaklıklı Nesneler
+	Duplicate Objects	Yinelenen Nesneler
+	Off-Artboard Art	Çalışma Yüzeyi Dışındaki Çizimler
+	Duplicate Anchors	Yinelenen Bağlantı Noktaları
+	Tiny Handles	Çok Kısa Kollar
+	Collinear Anchors	Doğrusal Bağlantı Noktaları
+	Nearly Coincident Anchors	Neredeyse Çakışan Bağlantı Noktaları
+	Nearly Closed Paths	Neredeyse Kapalı Yollar
+	Filled Open Paths	Dolgulu Açık Yollar
+	Needless Clipping Groups	Gereksiz Kırpma Grupları
+	Needless Compound Paths	Gereksiz Bileşik Yollar
+	Needless Groups	Gereksiz Gruplar
+	Empty Artboards	Boş Çalışma Yüzeyleri
+	Protect Corners	Köşeleri Koru
+	Gap	Boşluk
+	Include Clip Groups	Kırpma Gruplarını Dahil Et
+@msg	`tolerance` must be from 1 to 100	`tolerance` 1 ile 100 arasında olmalıdır
+@msg	`gap` must be from 0 to 6 pt	`gap` 0 ile 6 pt arasında olmalıdır
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Bağlantı Noktalarını Basitleştir: yollarda bir kerede basitleştirilemeyecek kadar çok bağlantı noktası var
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Yol Parçalarını Yeniden Birleştir: bir kerede birleştirilemeyecek kadar çok yol var
+@msg	None of these issues are left: check again	Bu sorunların hiçbiri kalmadı: yeniden denetleyin
+@msg	`kinds` must be a list of issue kinds	`kinds` bir sorun türleri listesi olmalıdır
+@msg	missing `kind`	`kind` eksik
+	Simplify Anchors (Keep Shape)	Bağlantı Noktalarını Basitleştir (Şekli Koru)
+	Deep Ungroup	Tüm Düzeylerde Grubu Çöz
+	Rejoin Path Pieces	Yol Parçalarını Yeniden Birleştir
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Renk Efektleri
+	Color Effects Panel	Renk Efektleri Paneli
+	Exposure	Pozlama
+	Exposure…	Pozlama…
+	Desaturate	Doygunluğu Kaldır
+	Adjustment	Ayar
+	Add as Effect	Efekt Olarak Ekle
+	Apply as Filter	Filtre Olarak Uygula
+	Select objects to adjust their colors.	Renklerini ayarlamak için nesneleri seçin.
+	Brightness/Contrast	Parlaklık/Kontrast
+	Hue/Saturation	Ton/Doygunluk
+	Temperature/Tint	Sıcaklık/Renk Tonu
+@msg	`{id}` is not a colour adjustment	`{id}` bir renk ayarı değil
+@msg	missing `effect`	"isim" eksik
+@msg	`params` must be an object	"gradyan" bir nesne olmalıdır
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Yol Hassasiyet Araçları
+	Anchor Eraser Brush	Bağlantı Noktası Silgi Fırçası
+	Extend Path Tool	Yolu Uzat Aracı
+	Measure & Inspect Tool	Ölç ve İncele Aracı
+	Anchor Inspector	Bağlantı Noktası Denetçisi
+	Add Points at Crossings	Kesişimlere Nokta Ekle
+	Split at Crossings	Kesişimlerden Böl
+	Extend Path	Yolu Uzat
+	Measure & Inspect	Ölç ve İncele
+	Set Anchor	Bağlantı Noktasını Ayarla
+	Make Smooth	Yumuşak Yap
+	Make Corner	Köşe Yap
+	Equalize Handles	Kolları Eşitle
+	Remove Points, Keep Shape	Noktaları Kaldır, Şekli Koru
+	Add Points to Segments…	Bölümlere Nokta Ekle…
+	Add Points to Segments	Bölümlere Nokta Ekle
+	Open a document to edit its anchor points.	Bağlantı noktalarını düzenlemek için bir belge açın.
+	Anchors selected: {count}	Seçili bağlantı noktaları: {count}
+	Direct-select anchor points to edit them.	Düzenlemek için bağlantı noktalarını doğrudan seçin.
+	In:	Giriş:
+	Out:	Çıkış:
+	Add Points	Nokta Ekle
+	Points per segment	Bölüm başına nokta
+	Close Path:	Yolu Kapat:
+	Keep Handles	Kolları Koru
+	Straight	Düz
+	Stretch Curve	Eğriyi Uzat
+@msg	direct-select the anchor points to remove	kaldırılacak bağlantı noktalarını doğrudan seçin
+@msg	select segments, or paths, to add points to	nokta eklenecek bölümleri veya yolları seçin
+@msg	select open paths to close	kapatılacak açık yolları seçin
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	kesişimlerini bulmak için yollar çok fazla veya çok karışık (en fazla 10000 bölüm)
+@msg	the paths have too many anchors to edit at once	yolların aynı anda düzenlenemeyecek kadar çok bağlantı noktası var
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrik Şekil Aracı
+	Parametric Shape	Parametrik Şekil
+	Edit Parametric Shape	Parametrik Şekli Düzenle
+	Convert to Parametric Shape	Parametrik Şekle Dönüştür
+	Ring	Halka
+	Heart	Kalp
+	Gear	Dişli
+	Speech Bubble	Konuşma Balonu
+	Count:	Sayı:
+	Thickness:	Kalınlık:
+	Inner Radius:	İç Yarıçap:
+	Head:	Uç:
+	Shaft:	Gövde:
+	Point:	Sivri Uç:
+	Tooth Height:	Diş Yüksekliği:
+	Tail:	Kuyruk:
+	Tip:	Uç:
+	Open a document to draw parametric shapes.	Parametrik şekiller çizmek için bir belge açın.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Düzenlemek için bir parametrik şekil seçin. Seçim yokken bu değerler bir sonraki şekle uygulanır.
+@msg	the object is not an editable parametric shape	nesne düzenlenebilir bir parametrik şekil değil
+@msg	select plain rectangles, ellipses or regular polygons to convert	dönüştürülecek düz dikdörtgenleri, elipsleri veya düzgün çokgenleri seçin
+@msg	the shape's numbers are out of range	şeklin değerleri aralığın dışında
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` şunlardan biri olmalıdır: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` 3 ile 1000 arasında bir tam sayı olmalıdır
+@msg	`{key}` must be from {lo} to {hi}	`{key}` {lo} ile {hi} arasında olmalıdır
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Akıllı Kalem
+	Smart Pen Tool	Akıllı Kalem Aracı
+	Smart Pen Panel	Akıllı Kalem Paneli
+	Next Segment	Sonraki Segment
+	Curved	Eğri
+	Retract Handles	Kolları Geri Çek
+	Close or Join	Kapat veya Birleştir
+	Open a document to draw with the Smart Pen.	Akıllı kalemle çizmek için bir belge açın.
+	Straight or Curved Segment	Düz veya Eğri Segment
+@msg	the path is locked or hidden	yol kilitli veya gizli
+@msg	`id` is not a path	`id` bir yol değil
+@msg	the path has no open subpath	yolun açık alt yolu yok
+@msg	the subpath is closed	alt yol kapalı
+@msg	the subpath is closed or too short to close	alt yol kapalı veya kapatmak için çok kısa
+@msg	the path is too short to remove a point from	yol, bir nokta kaldırmak için çok kısa
+@msg	the segment can't be bent that far	segment bu kadar bükülemez
+@msg	give `{a}` and `{b}`	`{a}` ve `{b}` değerlerini verin
+@msg	`t` must be from 0 to 1	`t` 0 ile 1 arasında olmalıdır
+@msg	`segment` must be "straight" or "curved"	`segment` "straight" veya "curved" olmalıdır
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` "free", "keepAngles" veya "symmetric" olmalıdır
+@msg	`{key}` must be [x, y]	`{key}` [x, y] olmalıdır
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Renk Türüne Göre Seç
+	Objects with Spot Colors	Spot Renkli Nesneler
+	Objects with Color Effects	Renk Efektli Nesneler
+	RGB Images	RGB Görüntüler
+	CMYK Images	CMYK Görüntüler
+	Grayscale Images	Gri Tonlamalı Görüntüler
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` değeri spotColors, colorEffects, rgbImages, cmykImages veya grayImages olmalıdır
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Nokta Rengini Sanattan Al
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Çift Ton…
+	Duotone	Çift Ton
+	Print Ink Fixes…	Baskı Mürekkebi Düzeltmeleri…
+	Print Ink Fixes	Baskı Mürekkebi Düzeltmeleri
+	Inks	Mürekkepler
+	Tone 1	Ton 1
+	Tone 2	Ton 2
+	Tone 3	Ton 3
+	Tone 4	Ton 4
+	Curve	Eğri
+	Reset to Linear	Doğrusala sıfırla
+	Reset to Inverse	Terse sıfırla
+	Skip Objects with Spot Colors	Spot renkli nesneleri atla
+	Ink Limit	Mürekkep sınırı
+	Exclude Pure Black	Saf siyahı hariç tut
+	Remove White Overprint	Beyazın üst baskısını kaldır
+	Overprint Black	Üst Baskı Siyah
+	Text Only	Yalnızca metin
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` veya `overprintBlack` verin
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Baskı Mürekkebi Düzeltmeleri CMYK belgelerinde çalışır: önce Dosya › Belge Renk Modu › CMYK Rengi'ni seçin
+@msg	`{key}` must be 0..{max}	`{key}` 0..{max} olmalıdır
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Köşe Aracı
+	Slide Anchor Along Path	Bağlantı Noktasını Yol Boyunca Kaydır
+	Set Corners	Köşeleri Ayarla
+	Remove Corners	Köşeleri Kaldır
+	Corners selected: {count}	Seçili köşeler: {count}
+	Apply to Selected Anchors	Seçili Bağlantı Noktalarına Uygula
+@msg	`radius` must be from 0 to 1000000 pt	`radius` 0 ile 1000000 pt arasında olmalıdır
+@msg	`t` must be a number from -0.98 to 0.98	`t` -0.98 ile 0.98 arasında bir sayı olmalıdır
+@msg	choose anchors where two sides meet at an angle: only those take a corner	iki kenarın açıyla birleştiği bağlantı noktalarını seçin: yalnızca onlara köşe uygulanır
+@msg	give `anchor`, the index of the anchor to slide	kaydırılacak bağlantı noktasının dizini `anchor` değerini verin
+@msg	that anchor can't slide: an end of an open path has nowhere to go	bu bağlantı noktası kaydırılamaz: açık yolun ucunun gidecek yeri yok
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Ortak Kenar Birleştirme Aracı
+	Merge Shared Edge	Ortak Kenarı Birleştir
+	Keep Shared Points Together	Ortak Noktaları Bir Arada Tut
+	Shared Edges	Ortak Kenarlar
+	Coincidence:	Çakışma:
+@msg	`a` and `b` must be two different paths	`a` ve `b` iki farklı yol olmalıdır
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` 0.25 ile 200 pt arasında olmalıdır
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` 0 ile 3 pt arasında olmalıdır
+@msg	`follow` must be "average", "a" or "b"	`follow` "average", "a" veya "b" olmalıdır
+@msg	the paths have nothing to merge there	yolların burada birleştirilecek bir kısmı yok
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Metni Böl
+	Combine Point Text	Nokta Metnini Birleştir
+	Remove Breaks	Kesmeleri Kaldır
+	Split Text at Cursor	Metni İmleçte Böl
+	Set Alignment, Keep Position	Hizalamayı Ayarla, Konumu Koru
+	Reset Text Transform	Metin Dönüşümünü Sıfırla
+	Replace Missing Fonts…	Eksik Yazı Tiplerini Değiştir…
+	Replace Missing Fonts	Eksik Yazı Tiplerini Değiştir
+	Remove Line Breaks	Satır Sonlarını Kaldır
+	Remove Paragraph Breaks	Paragraf Sonlarını Kaldır
+	Break Text into Lines	Metni Satırlara Böl
+	Break Text into Paragraphs	Metni Paragraflara Böl
+	Break Text into Words	Metni Sözcüklere Böl
+	Break Text into Glyphs	Metni Gliflere Böl
+	Reset Text Transform and Scale	Metin Dönüşümünü ve Ölçeğini Sıfırla
+	Set Alignment, Keep Position:	Hizalamayı Ayarla, Konumu Koru:
+	Break Text into:	Metni Böl:
+	Split at Cursor	İmleçte Böl
+	Reset Transform	Dönüşümü Sıfırla
+	Shift-click: break into paragraphs	Shift tuşuyla tıklayın: paragraflara böl
+	Alt-click: reset the horizontal scale too	Alt tuşuyla tıklayın: yatay ölçeği de sıfırla
+breakText	Lines	Satırlar
+breakText	Words	Sözcükler
+breakText	Glyphs	Glifler
+@msg	Click in type with a Type tool to split it	Bölmek için bir Yazım Aracıyla metnin içine tıklayın
+@msg	Too many type objects to change at once	Bir kerede değiştirilecek çok fazla metin nesnesi var
+@msg	Too many pieces to make at once	Bir kerede oluşturulacak çok fazla parça var
+@msg	Select horizontal point or area type whose text fits	Metni sığan yatay nokta veya alan metni seçin
+@msg	Nothing to split at the cursor	İmleçte bölünecek bir şey yok
+@msg	Select two or more one-line point type objects on one baseline to combine	Birleştirmek için aynı taban çizgisinde iki veya daha fazla tek satırlı nokta metni nesnesi seçin
+@msg	No line breaks to remove	Kaldırılacak satır sonu yok
+@msg	No paragraph breaks to remove	Kaldırılacak paragraf sonu yok
+@msg	Too many breaks to remove at once	Bir kerede kaldırılacak çok fazla kesme var
+@msg	Select point type	Nokta metni seçin
+@msg	The point type is aligned that way already	Nokta metni zaten bu şekilde hizalı
+@msg	The point type has no transform to reset	Nokta metninin sıfırlanacak dönüşümü yok
+@msg	No fonts are missing	Eksik yazı tipi yok
+@msg	the replacement font is not available	yedek yazı tipi kullanılamıyor
+@msg	missing `align`	`align` eksik
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by`, lines, paragraphs, words veya glyphs olmalı, {other} değil
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind`, "line" veya "paragraph" olmalı, {other} değil
+@msg	`align` must be "left", "center" or "right", not {other}	`align`, "left", "center" veya "right" olmalı, {other} değil
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Yol Efektleri
+	Reverse Direction	Yönü Ters Çevir
+	Align to Corners and Ends	Köşelere ve Uçlara Hizala
+	Count	Sayı
+	Max Count	En Fazla Sayı
+	Start Length	Başlangıç Uzunluğu
+	Start Percent	Başlangıç Yüzdesi
+	Start Shape	Başlangıç Şekli
+	End Length	Bitiş Uzunluğu
+	End Percent	Bitiş Yüzdesi
+	End Shape	Bitiş Şekli
+	By Count	Sayıya Göre
+	By Distance	Mesafeye Göre
+	Both	Her İkisi
+	Shorter Than Length	Uzunluktan Kısa Olanlar
+	Dashes to Geometry	Çizgileri Geometriye Dönüştür
+	Dashes to Geometry…	Çizgileri Geometriye Dönüştür…
+	Add Anchors	Bağlantı Noktaları Ekle
+	Add Anchors…	Bağlantı Noktaları Ekle…
+	Smooth Anchors	Bağlantı Noktalarını Yumuşat
+	Smooth Anchors…	Bağlantı Noktalarını Yumuşat…
+	Simplify Anchors	Bağlantı Noktalarını Basitleştir
+	Simplify Anchors…	Bağlantı Noktalarını Basitleştir…
+	Split at Anchors	Bağlantı Noktalarından Böl
+	Split at Anchors…	Bağlantı Noktalarından Böl…
+	Extend Path…	Yolu Uzat…
+	Close Path…	Yolu Kapat…
+	Retract Handles…	Kolları Geri Çek…
+	Dash 1	Çizgi 1
+	Gap 1	Boşluk 1
+	Dash 2	Çizgi 2
+	Gap 2	Boşluk 2
+	Dash 3	Çizgi 3
+	Gap 3	Boşluk 3
+	Dash 4	Çizgi 4
+	Gap 4	Boşluk 4
+	Dash 5	Çizgi 5
+	Gap 5	Boşluk 5

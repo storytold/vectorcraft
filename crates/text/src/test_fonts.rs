@@ -343,6 +343,56 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`lam_alef_font`] whose lam-alef ligature is in `feature`.
+pub fn lam_alef_family(feature: &[u8; 4]) -> &'static str {
+    match feature {
+        b"liga" => "Lamtest Liga",
+        b"rlig" => "Lamtest Rlig",
+        _ => "Lamtest Other",
+    }
+}
+
+/// A test-only Arabic cmap over bundled Source Sans 3: lam uses l, alef I, alef with hamza above
+/// J and beh b. The `GSUB` table's `arab` script has one ligature lookup, under `feature`, that
+/// joins lam + alef into H and lam + alef with hamza above into K. Older fonts put the mandatory
+/// lam-alef ligature in `liga` rather than `rlig`; this builds either, without an OS font. `None`
+/// when it can't be built.
+pub fn lam_alef_font(feature: &[u8; 4]) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('\u{0644}', 'l'), ('\u{0627}', 'I'), ('\u{0623}', 'J'), ('\u{0628}', 'b')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = lam_alef_family(feature);
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let coverage = CoverageFormat1::new(vec![gid('l')?]);
+    let ligatures = vec![Ligature::new(gid('H')?, vec![gid('I')?]), Ligature::new(gid('K')?, vec![gid('J')?])];
+    let subst = LigatureSubstFormat1::new(coverage.into(), vec![LigatureSet::new(ligatures)]);
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(feature), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`pair_kerning_font`].
 pub const PAIR_KERNING_FAMILY: &str = "Pairtest Sans";
 
