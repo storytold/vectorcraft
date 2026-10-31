@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several, a layer among several by its art). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
+            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped in the lowest of their layers if several; a layer among several stands for its art, so the topmost object of a layer on top is the mask). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask; one target (an object or a layer) is refused in isolation mode and in pattern editing mode → {id, editing}",
             can_make,
             make
         ),
@@ -185,7 +185,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     if d.mask_edit.is_some() {
         return Err(bad(C, "stop editing the opacity mask first"));
     }
-    let ids = match ids_param(p, "ids") {
+    let mut ids = match ids_param(p, "ids") {
         Some(ids) => {
             if let Some(id) = ids.iter().find(|id| d.node(**id).is_none()) {
                 return Err(EngineError::NoNode(*id));
@@ -194,6 +194,23 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => super::appearance::subject_roots(s)?,
     };
+    // A layer among several targets stands for its visible, unlocked art. A hidden, locked or
+    // template layer gives none.
+    let art_of = |id: NodeId| match d.node(id) {
+        Some(n) if n.is_layer() && (!n.visible || n.locked || n.is_template()) => vec![],
+        Some(n) if n.is_layer() => n.layer_art(true),
+        _ => vec![id],
+    };
+    // A layer on top: the topmost object of its art is the mask, and the rest of it is masked.
+    let layer_on_top = ids.len() > 1 && ids.last().is_some_and(|top| d.node(*top).is_some_and(Node::is_layer));
+    if layer_on_top && let Some(&top) = ids.last() {
+        let top_art = super::edit::outermost(d, d.paint_order(art_of(top)));
+        if top_art.is_empty() {
+            return Err(bad(C, "select the art and, on top of it, the mask object"));
+        }
+        ids.pop();
+        ids.extend(top_art);
+    }
     let Some((&top, below)) = ids.split_last() else { return Err(bad(C, "select the art and, on top of it, the mask object")) };
     // One target gets an empty mask and enters mask editing, which isolation mode and pattern
     // editing mode do not allow.
@@ -206,17 +223,11 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     let invert = bool_or(p, "invert", s.menu.new_masks_inverted);
     // Several objects: the top one is the mask. One: an empty mask, drawn in mask editing.
     let (art, mask_id) = if below.is_empty() { (&ids[..], None) } else { (below, Some(top)) };
-    // Several objects go into a new group, and a layer can't: a layer among them stands for its
-    // visible, unlocked art, which the group takes from it. A hidden, locked or template layer
-    // gives none.
+    // Several objects go into a new group, and a layer can't: the group takes a layer's art. A
+    // layer under a layer on top stands for its art too, also when it is the only one left.
     let contents;
-    let art = if art.len() > 1 && art.iter().any(|id| d.node(*id).is_some_and(Node::is_layer)) {
-        let objects = art.iter().flat_map(|id| match d.node(*id) {
-            Some(n) if n.is_layer() && (!n.visible || n.locked || n.is_template()) => vec![],
-            Some(n) if n.is_layer() => n.layer_art(true),
-            _ => vec![*id],
-        });
-        contents = super::edit::outermost(d, d.paint_order(objects));
+    let art = if (art.len() > 1 || layer_on_top) && art.iter().any(|id| d.node(*id).is_some_and(Node::is_layer)) {
+        contents = super::edit::outermost(d, d.paint_order(art.iter().flat_map(|id| art_of(*id))));
         if contents.is_empty() {
             return Err(bad(C, "the layers hold no art to mask"));
         }
@@ -229,15 +240,27 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
             Some(m) => (*d.remove(m)?).clone(),
             None => mask_group(vec![]),
         };
-        // Several objects are grouped so they share one mask.
+        // Several objects are grouped so they share one mask. The group goes in the layer or
+        // sublayer that directly holds the lowest of them, above the topmost of them there.
+        let inner_layer =
+            |d: &Document, id: NodeId| d.ancestry(id).and_then(|a| a.into_iter().take_while(|id| d.node(*id).is_some_and(Node::is_layer)).last());
+        let last = art[art.len() - 1];
+        let lowest = inner_layer(d, art[0]);
+        let mut anchor = art.iter().rev().copied().find(|id| inner_layer(d, *id) == lowest).unwrap_or(last);
+        // Art from another layer goes beside the outermost object that holds the anchor, not into
+        // a group (which may clip it or change its opacity).
+        if anchor != last
+            && let Some(outer) = d.ancestry(anchor).and_then(|a| a.into_iter().find(|id| d.node(*id).is_some_and(|n| !n.is_layer())))
+        {
+            anchor = outer;
+        }
         let target = if let [one] = art {
             *one
-        } else if separate(d, art) {
+        } else if anchor == last && separate(d, art) {
             let gid = d.alloc_id();
             d.wrap(art, |children| Node::group(gid, children))?
         } else {
-            let last = art[art.len() - 1];
-            let (par, idx, _) = d.position(last).ok_or(EngineError::NoNode(last))?;
+            let (par, idx, _) = d.position(anchor).ok_or(EngineError::NoNode(anchor))?;
             let gid = d.alloc_id();
             d.insert(par, idx + 1, Node::group(gid, vec![]))?;
             for id in art {
@@ -547,6 +570,134 @@ mod tests {
         let d = &s.doc().unwrap().doc;
         assert_eq!(d.node(NodeId(g)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), vec![a, a2]);
         assert_eq!((d.parent_of(NodeId(b)), d.parent_of(NodeId(b2))), (Some(NodeId(l2)), Some(NodeId(l2))));
+    }
+
+    /// A session with `a` and `a2` in layer 1, `b` and `b2` in layer 2 above it, and `top` in a
+    /// third layer: `(session, [l1, l2, l3], [a, a2, b, b2, top])`.
+    fn three_layers() -> (Session, [u64; 3], [u64; 5]) {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let rect = |s: &mut Session, x: u64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        };
+        let l1 = s.doc().unwrap().doc.layers[0].id.0;
+        let (a, a2) = (rect(&mut s, 0), rect(&mut s, 30));
+        let l2 = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let (b, b2) = (rect(&mut s, 60), rect(&mut s, 90));
+        let l3 = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let top = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 150, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        (s, [l1, l2, l3], [a, a2, b, b2, top])
+    }
+
+    #[test]
+    fn make_puts_the_group_in_the_lowest_layer_of_its_art() {
+        let (mut s, [l1, l2, _], [a, a2, b, b2, top]) = three_layers();
+        let before = s.doc().unwrap().doc.layers.clone();
+        // `None` in the last list stands for the group.
+        for (ids, grouped, in_l1) in [
+            (vec![a, b, top], vec![a, b], vec![None, Some(a2)]),
+            (vec![a, a2, b, b2, top], vec![a, a2, b, b2], vec![None]),
+            (vec![l1, l2, top], vec![a, a2, b, b2], vec![None]),
+            (vec![l1, b, top], vec![a, a2, b], vec![None]),
+            (vec![a, l2, top], vec![a, b, b2], vec![None, Some(a2)]),
+        ] {
+            let g = s.execute("transparency.makeOpacityMask", &json!({ "ids": ids })).unwrap()["id"].as_u64().unwrap();
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.parent_of(NodeId(g)), Some(NodeId(l1)), "{ids:?}: the group is in the lowest layer");
+            assert_eq!(d.node(NodeId(g)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), grouped, "{ids:?}");
+            // Where the topmost of its art in that layer was; the rest of layer 1 stays.
+            let l1_kids: Vec<u64> = d.node(NodeId(l1)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect();
+            assert_eq!(l1_kids, in_l1.iter().map(|id| id.unwrap_or(g)).collect::<Vec<_>>(), "{ids:?}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.layers, before, "{ids:?}: undo");
+        }
+        // Art in a group of the lowest layer: the masked group goes beside that group, not into it.
+        select(&mut s, &[a, a2]);
+        let held = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let g = s.execute("transparency.makeOpacityMask", &json!({ "ids": [a, b, top] })).unwrap()["id"].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let l1_kids: Vec<u64> = d.node(NodeId(l1)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect();
+        assert_eq!(l1_kids, vec![held, g]);
+        assert_eq!(d.node(NodeId(g)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), vec![a, b]);
+    }
+
+    #[test]
+    fn make_puts_the_group_in_the_sublayer_or_layer_that_holds_the_lowest_art() {
+        let kids = |s: &Session, id: u64| -> Vec<u64> {
+            s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect()
+        };
+        // (sublayer above the layer's own art, mask in the sublayer rather than a top layer)
+        for (sub_on_top, mask_in_sub) in [(true, true), (false, false), (true, false)] {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+            let rect = |s: &mut Session, x: u64| {
+                s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+            };
+            let parent = s.doc().unwrap().doc.layers[0].id.0;
+            let (direct_extra, direct) = (rect(&mut s, 0), rect(&mut s, 30));
+            let sub = s.execute("layer.newSublayer", &json!({"parent": parent, "bottom": !sub_on_top})).unwrap()["id"].as_u64().unwrap();
+            s.execute("layer.setCurrent", &json!({"id": sub})).unwrap();
+            let (nested_extra, nested) = (rect(&mut s, 60), rect(&mut s, 90));
+            if !mask_in_sub {
+                s.execute("layer.new", &json!({"top": true})).unwrap();
+            }
+            let mask = rect(&mut s, 120);
+            let (lower, upper) = if sub_on_top { (direct, nested) } else { (nested, direct) };
+            let before = s.doc().unwrap().doc.layers.clone();
+            let case = format!("sublayer on top {sub_on_top}, mask in sublayer {mask_in_sub}");
+            let g = s.execute("transparency.makeOpacityMask", &json!({ "ids": [direct, nested, mask] })).unwrap()["id"].as_u64().unwrap();
+            assert_eq!(kids(&s, g), vec![lower, upper], "{case}");
+            // The group is where the lowest object was, in the layer or sublayer that held it.
+            if sub_on_top {
+                assert_eq!(kids(&s, parent), vec![direct_extra, g, sub], "{case}");
+                assert_eq!(kids(&s, sub), vec![nested_extra], "{case}");
+            } else {
+                assert_eq!(kids(&s, parent), vec![sub, direct_extra], "{case}");
+                assert_eq!(kids(&s, sub), vec![nested_extra, g], "{case}");
+            }
+            assert!(s.doc().unwrap().doc.node(NodeId(g)).unwrap().extras().mask.as_ref().is_some_and(|m| m.art.id == NodeId(mask)), "{case}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.layers, before, "{case}: undo");
+        }
+    }
+
+    #[test]
+    fn make_takes_the_mask_from_the_art_of_a_layer_on_top() {
+        let (mut s, [l1, l2, l3], [a, a2, b, b2, top]) = three_layers();
+        let before = s.doc().unwrap().doc.layers.clone();
+        let layer_ids: Vec<u64> = before.iter().map(|l| l.id.0).collect();
+        // The topmost object of the top layer is the mask, and the rest of that layer's art is
+        // masked with the art below it.
+        // A layer under a top layer of one object stands for its art.
+        for (ids, mask, grouped) in [
+            (vec![a, l3], top, None),
+            (vec![l1, l2], b2, Some(vec![a, a2, b])),
+            (vec![a, l2], b2, Some(vec![a, b])),
+            (vec![l1, l3], top, Some(vec![a, a2])),
+        ] {
+            let r = s.execute("transparency.makeOpacityMask", &json!({ "ids": ids })).unwrap();
+            let id = NodeId(r["id"].as_u64().unwrap());
+            assert_eq!(r["editing"], false, "{ids:?}");
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.layers.iter().map(|l| l.id.0).collect::<Vec<_>>(), layer_ids, "{ids:?}: every layer stays");
+            assert!(d.node(NodeId(mask)).is_none(), "{ids:?}: the mask art left the layer tree");
+            let n = d.node(id).unwrap();
+            assert_eq!(n.extras().mask.as_ref().unwrap().art.id, NodeId(mask), "{ids:?}");
+            match grouped {
+                Some(g) => {
+                    assert!(matches!(n.kind, NodeKind::Group { .. }), "{ids:?}: a new group is masked");
+                    assert_eq!(n.children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), g, "{ids:?}");
+                }
+                None => assert_eq!(id, NodeId(a), "{ids:?}"),
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.layers, before, "{ids:?}: undo");
+        }
+        // A top layer without art gives no mask.
+        s.execute("layer.setProps", &json!({"id": l3, "visible": false})).unwrap();
+        let hidden = s.doc().unwrap().doc.layers.clone();
+        assert!(s.execute("transparency.makeOpacityMask", &json!({ "ids": [a, l3] })).is_err());
+        assert_eq!(s.doc().unwrap().doc.layers, hidden);
     }
 
     #[test]
