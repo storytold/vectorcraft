@@ -216,6 +216,8 @@ pub struct DirectSelectionTool {
     /// The already selected frame anchor the press landed on without Shift: a click (no drag)
     /// selects it alone, as a drag moves every selected frame anchor with it.
     frame_click: Option<(NodeId, AnchorRef)>,
+    /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
+    bracket_hover: Option<Point>,
 }
 
 impl DirectSelectionTool {
@@ -241,6 +243,7 @@ impl DirectSelectionTool {
             frame: BTreeMap::new(),
             frame_revision: (0, 0),
             frame_click: None,
+            bracket_hover: None,
         }
     }
 
@@ -642,6 +645,7 @@ impl Tool for DirectSelectionTool {
         }
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        self.bracket_hover = (ev.kind == PointerKind::Move).then_some(ev.pos);
         if let Some(out) = self.guide.pointer(cx, ev) {
             return out;
         }
@@ -851,7 +855,8 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     out.extend(frame_overlays(cx, &self.frame_anchors(cx)));
-                    out.extend(pathtype::overlays(cx));
+                    let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
+                    out.extend(pathtype::overlays(cx, self.bracket_hover, drag));
                 }
                 if matches!(self.state, State::Handle { .. } | State::MoveAnchors { .. } | State::MoveObject { .. }) {
                     out.extend(self.guides.iter().cloned());

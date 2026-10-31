@@ -145,6 +145,11 @@ pub fn ports_shown(d: &vectorcraft_doc::Document, selected: &[NodeId]) -> bool {
 /// on the in port to thread into one before it. Every such frame has both ports, threaded,
 /// overflowing or not, while their ports show ([`PORTS_MAX`]).
 pub(crate) fn port_at(cx: &ToolContext, p: Point) -> Option<(NodeId, Port)> {
+    port_near(cx, p).map(|(id, port, _)| (id, port))
+}
+
+/// [`port_at`], with how far (document units) the port's centre is from `p`.
+pub(crate) fn port_near(cx: &ToolContext, p: Point) -> Option<(NodeId, Port, f64)> {
     if !ports_shown(cx.doc, &cx.selection.objects) {
         return None;
     }
@@ -152,7 +157,7 @@ pub(crate) fn port_at(cx: &ToolContext, p: Point) -> Option<(NodeId, Port)> {
     let near = |c: Point| (c.x - p.x).abs() <= h && (c.y - p.y).abs() <= h;
     cx.selection.objects.iter().find_map(|id| {
         let t = ported(cx.doc, *id)?;
-        [Port::Out, Port::In].into_iter().find(|port| port_centre(t, *port, cx.tol(1.0)).is_some_and(near)).map(|port| (*id, port))
+        [Port::Out, Port::In].into_iter().find_map(|port| port_centre(t, port, cx.tol(1.0)).filter(|c| near(*c)).map(|c| (*id, port, c.distance(p))))
     })
 }
 

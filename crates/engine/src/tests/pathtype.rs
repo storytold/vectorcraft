@@ -277,3 +277,79 @@ fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
 }
+
+/// Sliding and flipping type on a closed circle (`type.pathOptions`, what dragging its centre
+/// bracket runs) changes where the type sits, never the circle it runs on.
+#[test]
+fn sliding_and_flipping_type_round_a_circle_leaves_the_circle_alone() {
+    let mut s = session();
+    let id = path_type(
+        &mut s,
+        "M300 200 C355 200 400 245 400 300 C400 355 355 400 300 400 C245 400 200 355 200 300 C200 245 245 200 300 200 Z",
+        [300.0, 190.0],
+        "Round",
+    );
+    let circle = |s: &Session| match text(s, id).kind {
+        TextKind::OnPath { path, .. } => path,
+        k => panic!("not type on a path: {k:?}"),
+    };
+    let before = circle(&s);
+    let bounds = ink(&s, id);
+    s.execute("type.pathOptions", &json!({"ids": [id.0], "start": 0.6})).unwrap();
+    assert_eq!(circle(&s), before, "the slide keeps the circle");
+    assert!((brackets(&s, id).0 - 0.6).abs() < 1e-9);
+    assert_ne!(ink(&s, id), bounds, "the type moved round it");
+    s.execute("type.pathOptions", &json!({"ids": [id.0], "start": 0.6, "flip": true})).unwrap();
+    let flipped = circle(&s);
+    let r = |p: &vectorcraft_geom::PathData| Shape::bounding_box(&p.to_bezpath());
+    let (a, b) = (r(&before), r(&flipped));
+    assert!(
+        (a.x0 - b.x0).abs() < 1e-6 && (a.y0 - b.y0).abs() < 1e-6 && (a.x1 - b.x1).abs() < 1e-6 && (a.y1 - b.y1).abs() < 1e-6,
+        "the flip runs the same circle the other way: {a:?} {b:?}"
+    );
+}
+
+/// Arabic made into type on a path aligns to the end of its span, where right-to-left text begins
+/// (new type aligns to the start of its paragraph's direction), and Latin to its start: from a start
+/// bracket at the beginning of a line drawn left to right the Arabic runs back from the line's end and
+/// the Latin forward from its start; on a circle the Arabic's first letter is by the start bracket.
+/// Skipped without an installed Arabic font.
+#[test]
+fn arabic_type_on_a_path_starts_at_the_right_to_left_end() {
+    let db = vectorcraft_text::FontDb::global();
+    let Some(face) =
+        ["Noto Sans Arabic", "Geeza Pro", "Arial"].into_iter().filter_map(|n| db.face(n, "Regular")).find(|f| "سكة".chars().all(|c| f.covers(c)))
+    else {
+        eprintln!("no Arabic font installed: skipped");
+        return;
+    };
+    let make = |s: &mut Session, d: &str, at: [f64; 2]| {
+        let pid = s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap();
+        let r = s
+            .execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "سكة", "size": 24, "at": at, "font": face.family}))
+            .unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let mut s = session();
+    let id = make(&mut s, "M100 300 L500 300", [100.0, 300.0]);
+    let b = ink(&s, id);
+    assert!(b.x1 > 495.0 && b.x0 > 400.0, "at the right end: {b:?}");
+    // Latin from the same start runs forward from it.
+    let pid = s.execute("path.create", &json!({ "d": "M100 300 L500 300" })).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Latin", "size": 24, "at": [100.0, 300.0]})).unwrap();
+    let b = ink(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(b.x0 < 105.0 && b.x1 < 250.0, "from the start: {b:?}");
+    let id = make(
+        &mut s,
+        "M300 100 C355 100 400 145 400 200 C400 255 355 300 300 300 C245 300 200 255 200 200 C200 145 245 100 300 100 Z",
+        [300.0, 100.0],
+    );
+    let t = text(&s, id);
+    let l = vectorcraft_text::layout(db, &t);
+    let start = t.xf * Point::new(300.0, 100.0);
+    let nearest = l.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).min_by(|a, b| {
+        let d = |g: &vectorcraft_text::PositionedGlyph| (t.xf * Shape::bounding_box(&g.outline).center()).distance(start);
+        d(a).total_cmp(&d(b))
+    });
+    assert_eq!(nearest.map(|g| g.byte), Some(0), "the first letter sits by the start bracket");
+}

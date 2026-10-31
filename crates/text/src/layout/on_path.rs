@@ -38,9 +38,11 @@ const BEND_PIECES: usize = 32;
 const BEND_MAX_ELEMENTS: usize = 8192;
 
 /// `outline` (text space, placed straight by `pre`, which takes the glyph's pen space there) bent
-/// along `ap` as `bend` says ([`GlyphBend`]); `None` where the path doesn't turn under the glyph
-/// (it stays as it is, exactly), or the bent outline would be too large or not finite.
-fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) -> Option<BezPath> {
+/// along `ap` as `bend` says ([`GlyphBend`]): across the path (Rainbow), or with `upright` its
+/// vertical edges kept vertical, down for 1 and up for -1 (Skew); `None` where the path doesn't turn
+/// under the glyph (it stays as it is, exactly), or the bent outline would be too large or not
+/// finite.
+fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend, upright: Option<f64>) -> Option<BezPath> {
     let GlyphBend { s, step, advance, rise } = *bend;
     if outline.elements().is_empty() || !(advance > 1e-9 && step.is_finite() && step > 0.0 && s.is_finite() && rise.is_finite()) {
         return None;
@@ -59,7 +61,10 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) 
     let k = step / advance;
     let map = |q: Point| {
         let (p, d) = ap.at(s + q.x * k);
-        p + Vec2::new(-d.y, d.x) * (q.y + rise)
+        match upright {
+            Some(down) => p + Vec2::new(0.0, down * (q.y + rise)),
+            None => p + Vec2::new(-d.y, d.x) * (q.y + rise),
+        }
     };
     // Pieces short enough that mapping a piece's control points stays within the tolerance: the
     // error of a piece of length L under curvature c, at height y, is about L² c (1 + |y| c) / 8.
@@ -129,6 +134,34 @@ fn bend_outline(outline: &BezPath, pre: Affine, ap: &ArcPath, bend: &GlyphBend) 
             PathEl::ClosePath => true,
         })
         .then_some(out)
+}
+
+/// Gravity's numerical guard: the least determinant (the sine of the angle between a glyph's
+/// horizontal and vertical edges) it gives a glyph, where the line from the path's centre runs along
+/// the path. Small enough not to change the effect anywhere it is drawable; there only to keep every
+/// coordinate finite and every glyph invertible.
+const GRAVITY_MIN_DET: f64 = 1e-3;
+
+/// Gravity's glyph space → text space for a glyph (or a block of joined glyphs) whose baseline is
+/// centred at `p` on the path, the path's direction `dir` there, its pen `at` from that centre: x
+/// along the tangent, vertical edges pointing at the path's `centre`, on the glyph's up side. None
+/// where that isn't finite (the glyph then stands as Rainbow would).
+fn gravity(p: Point, dir: Vec2, centre: Point, at: (f64, f64)) -> Option<Affine> {
+    let n = Vec2::new(dir.y, -dir.x);
+    let away = p - centre;
+    let mut up = if away.hypot() < 1e-9 { n } else { away / away.hypot() };
+    if up.dot(n) < 0.0 {
+        up = -up;
+    }
+    // A numerical guard, not a design limit: along the path the shear would flatten the glyph to
+    // nothing (a zero determinant), so its edges keep at least [`GRAVITY_MIN_DET`] between them.
+    if up.dot(n) < GRAVITY_MIN_DET {
+        let along = up - n * up.dot(n);
+        let along = if along.hypot() < 1e-12 { dir } else { along / along.hypot() };
+        up = n * GRAVITY_MIN_DET + along * (1.0 - GRAVITY_MIN_DET * GRAVITY_MIN_DET).sqrt();
+    }
+    let xf = Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * Affine::translate(at);
+    xf.as_coeffs().iter().all(|c| c.is_finite()).then_some(xf)
 }
 
 /// Lay type on a path out along `path` (text space), between its brackets.
@@ -324,36 +357,73 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         PathAlign::Center => (m.0 - m.1) * 0.5,
     };
     let mut x = 0.0;
-    for (g, &step) in sg.iter().zip(&steps).take(fit) {
+    // 3D Ribbon and Gravity: each block of joined glyphs stands on one baseline, centred on the
+    // path where the block's middle is, and turns as one: for each glyph, that point along the
+    // path and how far along the baseline (glyph space) from it the glyph starts. Other glyphs are
+    // blocks of one.
+    let joins = |g: &SGlyph| g.cursive && !g.ch.is_whitespace() && g.inline.is_none();
+    let mut blocks: Vec<(f64, f64)> = Vec::with_capacity(fit);
+    {
+        let placed: Vec<(&SGlyph, f64)> = sg.iter().zip(&steps).take(fit).map(|(g, &step)| (g, step)).collect();
+        let (mut i, mut at) = (0, s0);
+        while let Some(&(first, _)) = placed.get(i) {
+            let n = if joins(first) { placed.get(i..).map_or(1, |rest| rest.iter().take_while(|(g, _)| joins(g)).count()) } else { 1 };
+            let block = placed.get(i..i + n).unwrap_or_default();
+            let along: f64 = block.iter().map(|(_, step)| step).sum();
+            let width: f64 = block.iter().map(|(g, _)| g.adv).sum();
+            let mut x = -width * 0.5;
+            for (g, _) in block {
+                blocks.push((at + along * 0.5, x));
+                x += g.adv;
+            }
+            at += along;
+            i += n.max(1);
+        }
+    }
+    for (gi, (g, &step)) in sg.iter().zip(&steps).take(fit).enumerate() {
         let s = s0 + x;
+        let (block_s, block_x) = blocks.get(gi).copied().unwrap_or((s + step * 0.5, -g.adv * 0.5));
+        let (block_p, block_dir) = ap.at(block_s);
+        // Stair Step: a glyph on its own stands with the left end of its baseline on the path; a
+        // joined word steps as one block, the middle of its baseline on the path, so its joins
+        // stay closed.
+        let stair = if joins(g) {
+            Affine::translate(block_p.to_vec2()) * Affine::translate((block_x, rise))
+        } else {
+            Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise))
+        };
         let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
         let half = Affine::translate((-g.adv * 0.5, rise));
         // Glyph space: x along the advance, y down from the baseline; `pre` maps it onto the path.
         let pre = match t.path_effect {
             PathEffect::Rainbow => Affine::translate(p.to_vec2()) * Affine::rotate(angle) * half,
-            // x axis along the tangent, y axis stays vertical.
-            PathEffect::Skew => Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, 1.0, 0.0, 0.0]) * half,
-            // x axis stays horizontal (facing the path's direction), y axis perpendicular to the path.
-            PathEffect::Ribbon3d => {
-                let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
-                Affine::translate(p.to_vec2()) * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0]) * half
+            // x axis along the tangent, y axis stays vertical: down where the path runs rightward, up
+            // where it runs leftward, so the glyph turns over there (as Rainbow's does) instead of
+            // being mirrored.
+            PathEffect::Skew => {
+                let down = if dir.x < 0.0 { -1.0 } else { 1.0 };
+                Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, down, 0.0, 0.0]) * half
             }
-            PathEffect::StairStep => Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise)),
-            // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
-            // up side, and never closer than ~17° to the baseline so glyphs stay legible).
+            // x axis stays horizontal (facing the path's direction), y axis perpendicular to the path,
+            // on the glyphs' underside: where the path runs leftward the glyph turns over, never
+            // mirrored.
+            // A block of joined glyphs stands on its first glyph's baseline, so its joins meet.
+            PathEffect::Ribbon3d => {
+                let dir = block_dir;
+                let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
+                Affine::translate(block_p.to_vec2()) * Affine::new([sx, 0.0, -dir.y, dir.x, 0.0, 0.0]) * Affine::translate((block_x, rise))
+            }
+            PathEffect::StairStep => stair,
+            // The middle of the glyph's baseline (a joined block's) on the path, x axis along the
+            // tangent there, vertical edges pointing at the path's centre (on the glyph's up side).
+            // On a circle that is Rainbow, as the public help says ("Applying the Gravity effect to
+            // text on a perfectly circular path creates a result that looks like the default
+            // Rainbow effect", [Create type on a path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html)).
+            // Where the line from the centre runs nearly along the path the glyph leans far and thins:
+            // that is the effect, not capped here.
             PathEffect::Gravity => {
-                let n = Vec2::new(dir.y, -dir.x);
-                let mut up = p - centre;
-                up = if up.hypot() < 1e-9 { n } else { up / up.hypot() };
-                if up.dot(n) < 0.0 {
-                    up = -up;
-                }
-                if up.dot(n) < 0.3 {
-                    let along = up - n * up.dot(n);
-                    up = n * 0.3 + along / along.hypot().max(1e-9) * (1.0 - 0.09f64).sqrt();
-                }
-                Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * half
+                gravity(block_p, block_dir, centre, (block_x, rise)).unwrap_or_else(|| Affine::translate(p.to_vec2()) * Affine::rotate(angle) * half)
             }
         };
         // The caret's baseline moves with the type.
@@ -376,14 +446,16 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             }
         }
         cx.emit(g, pre, origin, angle, g.adv, 0);
-        // A glyph of a script whose letters join is bent along a curved path (Rainbow), so its
-        // joining strokes meet its neighbours' instead of standing off the curve.
-        if t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {
+        // A glyph of a script whose letters join is bent along a curved path (Rainbow, and Skew with
+        // its vertical edges kept upright, turned over where the path runs leftward), so its joining
+        // strokes meet its neighbours' instead of standing off the curve.
+        let upright = (t.path_effect == PathEffect::Skew).then(|| if dir.x < 0.0 { -1.0 } else { 1.0 });
+        if matches!(t.path_effect, PathEffect::Rainbow | PathEffect::Skew) && g.cursive && !cx.vertical && g.inline.is_none() {
             let bend = GlyphBend { s, step, advance: g.adv, rise };
             if let Some(last) = cx.out.glyphs.last_mut()
                 && last.image.is_none()
                 && last.colour.is_none()
-                && let Some(bent) = bend_outline(&last.outline, pre, &ap, &bend)
+                && let Some(bent) = bend_outline(&last.outline, pre, &ap, &bend, upright)
             {
                 last.outline = bent;
                 last.bend = Some(bend);
