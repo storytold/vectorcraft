@@ -145,7 +145,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         for f in r["files"].as_array().into_iter().flatten() {
             let (Some(name), Some(data)) = (f["name"].as_str(), f["dataBase64"].as_str()) else { continue };
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
-            io::write_to(&mut app.services, name, &bytes)?;
+            io::write_to(&mut app.services, name, &bytes, crate::SaveKind::Export)?;
             names.push(json!(name));
         }
         match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {

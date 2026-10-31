@@ -130,8 +130,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let in_background = later.clone();
     let work = move |write: Writer| {
         // A writer error that already names the file (an automation root's refusal) is kept as it is.
-        let mut write =
-            |path: &str, bytes: &[u8]| write(path, bytes).map_err(|e| EngineError::Other(if e.contains(path) { e } else { format!("{path}: {e}") }));
+        let mut write = |path: &str, bytes: &[u8]| {
+            write(path, bytes, crate::SaveKind::Export).map_err(|e| EngineError::Other(if e.contains(path) { e } else { format!("{path}: {e}") }))
+        };
         package.write(&mut write).map_err(|e| e.to_string())
     };
     let r = background::run(app, enabled, label, None, work, move |app, r| packaged(app, r, web, in_background.get()))?;
@@ -159,7 +160,7 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
     if web {
         let (name, data) = (r["name"].as_str().unwrap_or("package.zip"), r["dataBase64"].as_str().unwrap_or_default());
         let bytes = vectorcraft_format::base64_decode(data).ok_or("the package came back damaged")?;
-        io::write_named(app, None, name, &bytes)?;
+        io::write_named(app, None, name, &bytes, crate::SaveKind::Export)?;
         let status = if shown_note.is_empty() {
             crate::i18n::fmt(tl!("Packaged {n} file(s)"), &[("n", &n_s)])
         } else {

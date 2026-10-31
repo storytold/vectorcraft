@@ -635,7 +635,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 // Its save dialog is open: the file is written when it answers.
                 None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
-                    Some(dl) => dl("VectorCraft Shortcuts.json", &bytes).map(|()| Value::Null),
+                    Some(dl) => dl("VectorCraft Shortcuts.json", &bytes, crate::SaveKind::Export).map(|()| Value::Null),
                     None => Ok(v),
                 },
             }

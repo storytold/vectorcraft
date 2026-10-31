@@ -14,7 +14,7 @@ use vectorcraft_ui_egui::i18n;
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
 use vectorcraft_ui_egui::stylus::StylusFeed;
-use vectorcraft_ui_egui::{Services, VectorcraftApp};
+use vectorcraft_ui_egui::{SaveKind, Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 use crate::locks::WebLocks;
@@ -60,8 +60,22 @@ struct Host {
 
 pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
+    // `?host=parent`: a same-origin page framing VectorCraft (or the parent on the origin
+    // `?host_origin=` names) opens documents in it and stores what it saves (`crate::host`).
+    // Installed first, so a page without a canvas still reports the failure.
+    // The parent percent-encodes the origin (`encodeURIComponent`); a value that won't decode is
+    // passed on as written, and `Bridge::new` refuses it if it isn't an origin.
+    let host_origin = query_param("host_origin").map(|raw| crate::bridge::percent_decode(&raw).unwrap_or(raw));
+    if query_param("host").as_deref() == Some("parent")
+        && let Some(bridge) = crate::host::Bridge::new(host_origin.as_deref())
+    {
+        bridge.install();
+    }
     let Some(canvas) = element(CANVAS_ID).and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok()) else {
         log::error!("missing <canvas id=\"{CANVAS_ID}\">");
+        if let Some(bridge) = crate::host::installed() {
+            bridge.post_failed(&format!("missing <canvas id=\"{CANVAS_ID}\">"));
+        }
         return;
     };
     detect_language();
@@ -136,6 +150,9 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         if let Err(e) = crate::api::install() {
                             log::error!("vectorcraft-web: couldn't install window.vectorcraft: {}", js_err(e));
                         }
+                        if let Some(bridge) = crate::host::installed() {
+                            bridge.listen(host.inbox.clone(), ctx.clone());
+                        }
                         VectorcraftApp::new(Session::new(), services).with_control(control_rx)
                     }
                 };
@@ -144,7 +161,13 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
         )
         .await;
     match (result, kept) {
-        (Ok(()), _) => {
+        (Ok(()), restart) => {
+            // Ready only once the runner started (and only on the first start, not a restart).
+            if restart.is_none()
+                && let Some(bridge) = crate::host::installed()
+            {
+                bridge.post_ready();
+            }
             if let Err(e) = crate::pencil::install(&runner, &pen_canvas, &pointers) {
                 log::error!("vectorcraft-web: no pen input: {}", js_err(e));
             }
@@ -152,7 +175,12 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 el.remove();
             }
         }
-        (Err(e), None) => notice(&[&format!("VectorCraft failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]),
+        (Err(e), None) => {
+            if let Some(bridge) = crate::host::installed() {
+                bridge.post_failed(&js_err(e.clone()));
+            }
+            notice(&[&format!("VectorCraft failed to start: {}", js_err(e)), "A browser with WebGPU or WebGL2 is required."]);
+        }
         (Err(e), Some(kept)) => {
             log::error!("vectorcraft-web: couldn't restart the graphics: {}", js_err(e));
             give_up(slot.borrow_mut().take(), kept);
@@ -370,6 +398,7 @@ impl eframe::App for WebShell {
         }
         let Some(app) = &mut self.app else { return };
         app.tick(ctx);
+        crate::host::report_dirty(app, ctx);
         crate::api::poll_replies();
         app.finish_ime_logic(ctx);
     }
@@ -470,7 +499,9 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Op
         // Sample Color from Screen: the browser's EyeDropper, where it has one.
         screen_color,
         // A download that couldn't be started fails the save or export it is for (#1693).
-        download: Some(Box::new(|name: &str, bytes: &[u8]| download(name, bytes).inspect_err(|e| log::error!("download of {name} failed: {e}")))),
+        download: Some(Box::new(|name: &str, bytes: &[u8], kind: SaveKind| {
+            download(name, bytes, kind).inspect_err(|e| log::error!("download of {name} failed: {e}"))
+        })),
         inbox: Some(inbox),
         recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
@@ -568,9 +599,12 @@ impl RecoveryStore for BrowserStore {
 }
 
 /// Trigger a browser download of `bytes` named after the last component of `path`.
-fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
+fn download(path: &str, bytes: &[u8], kind: SaveKind) -> Result<(), String> {
     if crate::api::capture(path, bytes) {
         return Ok(());
+    }
+    if let Some(posted) = crate::host::deliver(&fileio::file_name(path), bytes, kind) {
+        return posted;
     }
     let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "vectorcraft".into());

@@ -31,7 +31,7 @@ fn web() -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let services = Services {
-        download: Some(Box::new(move |name: &str, b: &[u8]| {
+        download: Some(Box::new(move |name: &str, b: &[u8], _k: crate::SaveKind| {
             w.borrow_mut().push((name.to_string(), b.to_vec()));
             Ok(())
         })),

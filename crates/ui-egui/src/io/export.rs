@@ -68,7 +68,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             cancel::check().map_err(|e| e.to_string())?;
             let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
             cancel::check().map_err(|e| e.to_string())?;
-            let files = write_encoded(write, &doc, &path, &enc)?;
+            let files = write_encoded(write, crate::SaveKind::Export, &doc, &path, &enc)?;
             let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
             if files.len() > 1 {
                 out["files"] = json!(files);
@@ -117,7 +117,7 @@ pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params
 pub(crate) fn save_command_output_named(app: &mut VectorcraftApp, id: &str, name: &str, params: Value) -> Result<String, String> {
     let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
     let bytes = take_output(&mut v)?;
-    let path = write_named(app, None, name, &bytes)?;
+    let path = write_named(app, None, name, &bytes, crate::SaveKind::Export)?;
     app.status(format!("Saved {path}"));
     Ok(path)
 }
@@ -159,7 +159,7 @@ pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut par
         Some(p) => p,
         None => target_path(app, None, ext)?,
     };
-    write_reporting(app, &path, &bytes)?;
+    write_reporting(app, &path, &bytes, crate::SaveKind::Export)?;
     Ok((path, v))
 }
 
@@ -243,7 +243,8 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     let (reporting, asked) = (progress.clone(), progress.clone());
     let work = move |write: Writer| {
         progress::scope(&reporting, || {
-            let mut write = |path: &str, bytes: &[u8]| write(path, bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")));
+            let mut write =
+                |path: &str, bytes: &[u8]| write(path, bytes, crate::SaveKind::Export).map_err(|e| EngineError::Other(format!("{path}: {e}")));
             export.write(&mut write).map_err(|e| e.to_string())
         })
     };
@@ -287,7 +288,7 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
     } else if let Some(download) = app.services.download.as_mut() {
         for (name, data) in &returned {
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
-            download(name, &bytes)?;
+            download(name, &bytes, crate::SaveKind::Export)?;
         }
         let what = match returned.as_slice() {
             [(name, _)] => (*name).to_string(),

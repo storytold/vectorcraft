@@ -24,7 +24,7 @@ fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
         ..Default::default()
     };
     if web {
-        services.download = Some(Box::new(move |name: &str, b: &[u8]| {
+        services.download = Some(Box::new(move |name: &str, b: &[u8], _k: crate::SaveKind| {
             l2.borrow_mut().push(format!("download {name} {}", b.len()));
             Ok(())
         }));

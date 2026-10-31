@@ -25,7 +25,7 @@ pub type SharedStreamFn =
 
 /// A writer for the work: the host's file writer (or browser download) on the UI thread, the
 /// shared one on the worker.
-pub type Writer<'a> = &'a mut dyn FnMut(&str, &[u8]) -> Result<(), String>;
+pub type Writer<'a> = &'a mut dyn FnMut(&str, &[u8], crate::SaveKind) -> Result<(), String>;
 
 /// Encodes and writes a snapshot (no access to the app) → the result handed to [`Then`].
 type Work = Box<dyn FnOnce(Writer) -> Result<Value, String> + Send>;
@@ -95,7 +95,7 @@ impl Background {
                 .spawn(move || {
                     while let Ok(Task { id, work, write, scope }) = tasks.recv() {
                         let r = scope
-                            .run(|| vectorcraft_engine::guard::catch_panic(|| work(&mut |p: &str, b: &[u8]| write(p, b))))
+                            .run(|| vectorcraft_engine::guard::catch_panic(|| work(&mut |p: &str, b: &[u8], _: crate::SaveKind| write(p, b))))
                             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
                         if done_tx.send((id, r)).is_err() {
                             break;
@@ -186,7 +186,7 @@ pub fn run_with_progress(
         }
     }
     let services = &mut app.services;
-    let r = work(&mut |p: &str, b: &[u8]| crate::io::write_to(services, p, b));
+    let r = work(&mut |p: &str, b: &[u8], k: crate::SaveKind| crate::io::write_to(services, p, b, k));
     then(app, r)
 }
 

@@ -285,7 +285,7 @@ fn the_save_dialog_writes_swatch_exchange_files() {
     let downloads = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let dl = downloads.clone();
     let services = crate::Services {
-        download: Some(Box::new(move |name: &str, _: &[u8]| {
+        download: Some(Box::new(move |name: &str, _: &[u8], _k: crate::SaveKind| {
             dl.borrow_mut().push(name.to_string());
             Ok(())
         })),

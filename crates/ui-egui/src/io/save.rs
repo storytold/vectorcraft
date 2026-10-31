@@ -20,8 +20,8 @@ pub(crate) fn report_write_error(app: &mut VectorcraftApp, export: bool, path: &
 }
 
 /// [`write_to`], a failure reported ([`report_write_error`]).
-pub(crate) fn write_reporting(app: &mut VectorcraftApp, path: &str, bytes: &[u8]) -> Result<(), String> {
-    let r = write_to(&mut app.services, path, bytes);
+pub(crate) fn write_reporting(app: &mut VectorcraftApp, path: &str, bytes: &[u8], kind: SaveKind) -> Result<(), String> {
+    let r = write_to(&mut app.services, path, bytes, kind);
     if let Err(e) = &r {
         report_write_error(app, false, path, e);
     }
@@ -29,9 +29,9 @@ pub(crate) fn write_reporting(app: &mut VectorcraftApp, path: &str, bytes: &[u8]
 }
 
 /// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.
-pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8], kind: SaveKind) -> Result<(), String> {
     if let Some(dl) = services.download.as_mut() {
-        return dl(&fileio::file_name(path), bytes);
+        return dl(&fileio::file_name(path), bytes, kind);
     }
     services.write.as_mut().ok_or("no file writer")?(path, bytes)
 }
@@ -44,7 +44,7 @@ pub(crate) fn is_web(app: &VectorcraftApp) -> bool {
 /// Write `bytes` to `path`, else to a file picked in a save panel that suggests `name` next to the
 /// document and shows its file type, [`file_types`] (the web downloads them as `name`) → where
 /// they went.
-pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: &str, bytes: &[u8]) -> Result<String, String> {
+pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: &str, bytes: &[u8], kind: SaveKind) -> Result<String, String> {
     let path = match path {
         Some(p) => p,
         None => {
@@ -53,7 +53,7 @@ pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: 
             pick_path(app, &FilePick { name: name.to_string(), folder, filters }, |_| false)?
         }
     };
-    write_reporting(app, &path, bytes)?;
+    write_reporting(app, &path, bytes, kind)?;
     Ok(path)
 }
 
@@ -209,10 +209,16 @@ fn with_picked_type(path: &str, suggested: &str, picked: Option<&str>, f: &Forma
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
 /// → the export's own files (without the linked images).
-pub(super) fn write_encoded(write: Writer, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<Vec<String>, String> {
+pub(super) fn write_encoded(
+    write: Writer,
+    kind: SaveKind,
+    doc: &vectorcraft_doc::Document,
+    path: &str,
+    enc: &fileio::Encoded,
+) -> Result<Vec<String>, String> {
     let named = enc.named(doc, path);
     for (p, bytes) in &named {
-        write(p, bytes)?;
+        write(p, bytes, kind)?;
     }
     Ok(named.into_iter().take(enc.files.len()).map(|(p, _)| p).collect())
 }
@@ -387,6 +393,11 @@ pub(super) fn saved_status(path: &str, r: &Value) -> String {
     }
 }
 
+/// The kind of a save in `format`: the native document format is a document, any other an export.
+fn save_kind(format: &Format) -> SaveKind {
+    if format.id == "vectorcraft" { SaveKind::Document } else { SaveKind::Export }
+}
+
 /// Write a planned save through the services and report it in the status bar.
 /// With Background Save on, the file is encoded and written from a snapshot off the UI thread
 /// ([`background`]): this returns `{path, background: true, status, format, warnings}` at once
@@ -398,6 +409,7 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     if app.background.busy_with(uid) {
         background::wait_all(app);
     }
+    let kind = save_kind(plan.format);
     let job = fileio::save_job(&mut app.session, plan).map_err(|e| e.to_string())?;
     let (retargets, target) = (job.plan().retargets(), job.plan().path.clone());
     let (format, warnings) = (job.plan().format.id, job.known_warnings());
@@ -414,7 +426,7 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let work = move |write: Writer| {
         match stream {
             Some(stream) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
-            None => job.write(|p, b| write(p, b).map_err(EngineError::Other)),
+            None => job.write(|p, b| write(p, b, kind).map_err(EngineError::Other)),
         }
         .map_err(|e| e.to_string())
     };

@@ -174,7 +174,7 @@ pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
             && let (Some(name), Some(bytes)) = (v["name"].as_str(), v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode))
         {
             // A download that can't start is said like any file that can't be written.
-            let _ = crate::io::write_reporting(app, name, &bytes);
+            let _ = crate::io::write_reporting(app, name, &bytes, crate::SaveKind::Export);
         }
         return;
     }

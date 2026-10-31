@@ -193,14 +193,14 @@ pub(crate) fn export_file(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
     let path = q.as_object_mut().and_then(|o| o.remove("path")).and_then(|v| v.as_str().map(str::to_string));
     let r = app.session.execute("css.export", &q).map_err(|e| e.to_string())?;
     let path = io::target_path(app, path, "css")?;
-    io::write_to(&mut app.services, &path, r["data"].as_str().unwrap_or_default().as_bytes())?;
+    io::write_to(&mut app.services, &path, r["data"].as_str().unwrap_or_default().as_bytes(), crate::SaveKind::Export)?;
     let folder = std::path::Path::new(&path).parent().map(std::path::Path::to_path_buf);
     let mut images = Vec::new();
     for im in r["images"].as_array().into_iter().flatten() {
         let (Some(name), Some(data)) = (im["name"].as_str(), im["dataBase64"].as_str()) else { continue };
         let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
         let at = folder.as_ref().map_or_else(|| name.to_string(), |f| f.join(name).to_string_lossy().into_owned());
-        io::write_to(&mut app.services, &at, &bytes)?;
+        io::write_to(&mut app.services, &at, &bytes, crate::SaveKind::Export)?;
         images.push(at);
     }
     // The status bar shows the first warning in Export As's message.

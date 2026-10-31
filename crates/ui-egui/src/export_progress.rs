@@ -184,7 +184,7 @@ mod tests {
             "Exporting a.png".into(),
             None,
             Some(p.clone()),
-            |w| w("/a.png", b"x").map(|()| json!({})),
+            |w| w("/a.png", b"x", crate::SaveKind::Export).map(|()| json!({})),
             |_, r| r,
         );
         assert_eq!(r.unwrap()["background"], true);
@@ -213,7 +213,7 @@ mod tests {
             "Exporting b.png".into(),
             None,
             Some(p.clone()),
-            |w| w("/b.png", b"x").map(|()| json!({})),
+            |w| w("/b.png", b"x", crate::SaveKind::Export).map(|()| json!({})),
             |_, r| r,
         )
         .unwrap();
@@ -245,7 +245,7 @@ mod tests {
             move |w| {
                 vectorcraft_engine::cmd::fileio::progress::scope(&reporting, || {
                     vectorcraft_doc::cancel::progress(1, 3, "file 2 of 3");
-                    w("/icons/b.png", b"x").map(|()| json!({}))
+                    w("/icons/b.png", b"x", crate::SaveKind::Export).map(|()| json!({}))
                 })
             },
             |_, r| r,

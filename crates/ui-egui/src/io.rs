@@ -8,6 +8,7 @@ use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
 use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan, TEMPLATE_FORMATS};
 
+use crate::SaveKind;
 use crate::background::{self, Writer};
 use crate::dialogs::svg_options;
 use crate::state::Dialog;
@@ -138,8 +139,9 @@ mod tests {
     fn a_download_that_cannot_start_leaves_the_document_unsaved_and_open() {
         let started = Rc::new(RefCell::new(false));
         let ok = started.clone();
-        let download: crate::DownloadFn =
-            Box::new(move |_: &str, _: &[u8]| if *ok.borrow() { Ok(()) } else { Err("the browser refused the download".into()) });
+        let download: crate::DownloadFn = Box::new(
+            move |_: &str, _: &[u8], _k: crate::SaveKind| if *ok.borrow() { Ok(()) } else { Err("the browser refused the download".into()) },
+        );
         let mut app = VectorcraftApp::new(Session::new(), Services { download: Some(download), ..Default::default() });
         app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
@@ -160,6 +162,27 @@ mod tests {
         *started.borrow_mut() = true;
         save(&mut app, SaveMode::Save, &json!({}), false).unwrap();
         assert!(!app.session.doc().unwrap().is_dirty());
+    }
+
+    /// The kind of a write travels with its bytes: a copy named like a document is a document,
+    /// and an export is an export, whatever its name is.
+    #[test]
+    fn the_save_kind_is_carried_by_the_write_not_read_from_the_name() {
+        let written = Rc::new(RefCell::new(Vec::new()));
+        let seen = written.clone();
+        let download: crate::DownloadFn = Box::new(move |name: &str, _: &[u8], kind: crate::SaveKind| {
+            seen.borrow_mut().push((name.to_string(), kind));
+            Ok(())
+        });
+        let mut app = VectorcraftApp::new(Session::new(), Services { download: Some(download), ..Default::default() });
+        app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        save(&mut app, SaveMode::Copy, &json!({"path": "Poster copy.vectorcraft"}), false).unwrap();
+        crate::io::export(&mut app, Some("png"), Some("Poster.png".into()), &json!({})).unwrap();
+        assert_eq!(
+            *written.borrow(),
+            [("Poster copy.vectorcraft".to_string(), crate::SaveKind::Document), ("Poster.png".to_string(), crate::SaveKind::Export),]
+        );
     }
 
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {

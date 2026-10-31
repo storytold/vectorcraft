@@ -26,7 +26,7 @@ fn app(artboards: usize, web: bool) -> (VectorcraftApp, Log) {
     let l = log.clone();
     let mut services = Services::default();
     if web {
-        services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
+        services.download = Some(Box::new(move |name: &str, bytes: &[u8], _k: crate::SaveKind| {
             l.borrow_mut().push((name.to_string(), bytes.to_vec()));
             Ok(())
         }));

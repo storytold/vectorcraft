@@ -16,13 +16,22 @@
 //! - a Cmd or Ctrl chord the keymap binds runs its command, not the browser's own action as well
 //!   (`Cmd+=` zooms the canvas, not the page; `Cmd+Z` undoes in the document) (`keys`).
 //!
+//! With `?host=parent` (inside an `<iframe>`), a same-origin parent page (or the parent on the
+//! origin `?host_origin=` names) opens documents and receives saves instead of downloads (`host.rs`).
+//!
 //! URL query flags: `?webgl` forces the WebGL2 backend instead of WebGPU; `?lang=es` (any
 //! language code) stands in for the browser's languages when the interface language is Automatic.
 
 #[cfg(target_arch = "wasm32")]
 mod api;
+#[cfg(any(target_arch = "wasm32", test))]
+mod bridge;
 #[cfg(target_arch = "wasm32")]
 mod fonts;
+#[cfg(target_arch = "wasm32")]
+mod host;
+#[cfg(any(target_arch = "wasm32", test))]
+mod host_open;
 #[cfg(any(target_arch = "wasm32", test))]
 mod keys;
 #[cfg(target_arch = "wasm32")]

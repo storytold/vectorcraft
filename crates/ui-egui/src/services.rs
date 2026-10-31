@@ -43,9 +43,18 @@ pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
 
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
-/// Starts a browser download of the bytes under a file name; an error when it couldn't be started
-/// (the save or export then fails as a refused write does: #1693).
-pub type DownloadFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
+/// What a write is, passed with its bytes: a document (the file the document is saved as, which
+/// the host keeps as its session) or an export (any other file). Carried explicitly, never read
+/// back from the file name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveKind {
+    Document,
+    Export,
+}
+
+/// Starts a browser download of the bytes under a file name and kind; an error when it couldn't be
+/// started (the save or export then fails as a refused write does: #1693).
+pub type DownloadFn = Box<dyn FnMut(&str, &[u8], SaveKind) -> Result<(), String>>;
 
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
