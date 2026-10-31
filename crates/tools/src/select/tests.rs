@@ -1017,6 +1017,29 @@ fn a_click_on_a_selected_object_makes_it_the_key() {
     assert_eq!(click(&one, 150.0, 150.0), vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
 }
 
+/// An Alt-click on a selected object makes it the key as a plain click does, and an Alt-drag from
+/// it still copies the selection without touching the key.
+#[test]
+fn an_alt_click_on_a_selected_object_makes_it_the_key() {
+    let (d, id) = doc_with_area_type();
+    let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    let p = paint();
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut s = Selection::default();
+    s.add(rect);
+    s.add(id);
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(alt));
+    let a = t.pointer(&c, &ev(PointerKind::Up, 150.0, 150.0).with_mods(alt));
+    assert_eq!(a, vec![Action::Exec("select.key".into(), json!({"id": rect.0}))]);
+    let mut t = SelectionTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(alt));
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0).with_mods(alt));
+    assert!(a.iter().any(|x| matches!(x, Action::Preview(_, v) if v["copy"] == json!(true))), "{a:?}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 150.0).with_mods(alt)), vec![Action::Commit]);
+}
+
 /// In isolation mode a click makes only a selected top-level object the key, as `select.key`
 /// takes no other: a click on a sublayer's art inside an isolated layer picks the sublayer,
 /// a click inside an isolated group that is also selected picks an object inside it, and a
