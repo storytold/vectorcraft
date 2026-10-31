@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use egui::{CornerRadius, Sense, Stroke, Ui, vec2};
+use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 
@@ -92,7 +92,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
             let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
-            ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
+            ui.painter().rect_filled(wr, t.cr(), if wresp.hovered() { t.hover } else { t.panel });
             ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
             icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
             let wresp = wresp.on_hover_text(tl!("Switch workspace"));

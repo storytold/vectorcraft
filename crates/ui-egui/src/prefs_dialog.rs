@@ -172,7 +172,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.add_space(12.0);
         ui.horizontal_top(|ui| {
             // Category list.
-            egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+            egui::Frame::NONE.fill(t.panel_darker).corner_radius(t.cr()).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 ui.set_width(196.0);
                 ui.set_min_height(430.0);
                 ui.vertical(|ui| {

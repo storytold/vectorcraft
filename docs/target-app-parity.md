@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Path Precision Tools add-on: Shared Edge Merge Tool; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Path Precision Tools add-on: Shared Edge Merge Tool; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Smart Pen, a built-in add-on beyond Illustrator; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Path Precision Tools, a built-in add-on beyond Illustrator; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Color Effects, a built-in add-on beyond Illustrator; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; shared fields and spinner/preset groups at standard 24 pt control height, square inner joints, token-driven corners (#3915); previously: Hardware: a second finger cancels the tool press the first finger began, so a pinch only navigates (#4198); scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -19,6 +19,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-24 | minor | shared fields and spinner/preset groups at standard 24 pt control height, square inner joints, token-driven corners (#3915); scores unchanged. |
 | 2026-10-30 | minor | File formats: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; evidence added; scores unchanged. |
 | 2026-10-30 | minor | Effects: bounded length inputs clamp on commit and reject invalid text visibly (#4638); scores unchanged. |

@@ -200,7 +200,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for &(c, gid) in chars.iter().skip(r * cols).take(cols) {
                     let (rect, resp) = ui.allocate_exact_size(vec2(cell, cell), Sense::click());
                     if resp.hovered() {
-                        ui.painter().rect_filled(rect, 2, t.hover);
+                        ui.painter().rect_filled(rect, t.cr(), t.hover);
                         ui.ctx().data_mut(|d| d.insert_temp(hover_id, (c, gid)));
                     }
                     ui.painter().rect_stroke(rect.shrink(0.5), 0, egui::Stroke::new(0.5, t.border), egui::StrokeKind::Inside);
@@ -268,9 +268,9 @@ fn zoom_button(ui: &mut Ui, id: &str, label: &str, tip: &str, enabled: bool) -> 
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let resp = ui.interact(rect, ui.scope_id().with(("gl-zoom", id)), sense);
     let bg = if enabled && resp.hovered() { t.hover } else { Color32::TRANSPARENT };
-    ui.painter().rect_filled(rect, 2, bg);
+    ui.painter().rect_filled(rect, t.cr(), bg);
     let border = if enabled { t.button_border } else { t.border };
-    ui.painter().rect_stroke(rect.shrink(0.5), 2, Stroke::new(1.0, border), StrokeKind::Inside);
+    ui.painter().rect_stroke(rect.shrink(0.5), t.cr(), Stroke::new(1.0, border), StrokeKind::Inside);
     let color = if enabled { t.text_strong } else { t.text_disabled };
     ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(14.0), color);
     resp.on_hover_text(tl!(tip)).clicked() && enabled

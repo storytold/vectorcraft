@@ -135,7 +135,14 @@ pub struct Tokens {
     pub guide: Color32,
     pub measure_bg: Color32,
     pub button: Color32,
+    /// The one corner scale. Controls: buttons, fields, tools, rows, tabs, wells ([`Tokens::cr`]).
     pub radius: u8,
+    /// Small marks inside controls: swatches, chips, check boxes, thumbnails, drop marks
+    /// ([`Tokens::cr_small`]).
+    pub radius_small: u8,
+    /// Floating surfaces: menus, popovers, the task bar, dialogs and windows, and [`card`]s
+    /// ([`Tokens::cr_float`]). Docked chrome and anything not listed here is square.
+    pub radius_float: u8,
     /// Field values, button labels, link labels.
     pub text_strong: Color32,
     /// Panel tab strips, doc-tab bar, dock header.
@@ -201,6 +208,8 @@ impl Tokens {
             measure_bg: Color32::from_rgba_unmultiplied(24, 27, 34, 235),
             button: hex(0x282d37),
             radius: 4,
+            radius_small: 2,
+            radius_float: 8,
             text_strong: hex(0xffffff),
             tab_strip: hex(0x0f1116),
             button_border: hex(0x4a5363),
@@ -453,13 +462,22 @@ impl Tokens {
     pub fn get(ctx: &egui::Context) -> Tokens {
         ctx.data(|d| d.get_temp::<Tokens>(egui::Id::NULL)).unwrap_or_else(|| Tokens::for_brightness(Brightness::default()))
     }
+    /// Corners of controls.
     pub fn cr(&self) -> CornerRadius {
         CornerRadius::same(self.radius)
+    }
+    /// Corners of small marks inside controls.
+    pub fn cr_small(&self) -> CornerRadius {
+        CornerRadius::same(self.radius_small)
+    }
+    /// Corners of floating surfaces.
+    pub fn cr_float(&self) -> CornerRadius {
+        CornerRadius::same(self.radius_float)
     }
 }
 
 /// The toolbar, the panel dock and the icon rail are cards: `body` drawn on the panel colour with
-/// soft corners, `margin` of the window's frame colour around it.
+/// the floating corners, `margin` of the window's frame colour around it.
 pub fn card<R>(ui: &mut egui::Ui, t: &Tokens, margin: egui::Margin, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::NONE
         .fill(t.app_bar)
@@ -467,7 +485,7 @@ pub fn card<R>(ui: &mut egui::Ui, t: &Tokens, margin: egui::Margin, body: impl F
         .show(ui, |ui| {
             egui::Frame::NONE
                 .fill(t.panel)
-                .corner_radius(CARD_RADIUS)
+                .corner_radius(t.cr_float())
                 .show(ui, |ui| {
                     ui.set_min_size(ui.available_size());
                     body(ui)
@@ -476,9 +494,6 @@ pub fn card<R>(ui: &mut egui::Ui, t: &Tokens, margin: egui::Margin, body: impl F
         })
         .inner
 }
-
-/// The corner radius of [`card`]s and floating windows.
-pub const CARD_RADIUS: u8 = 8;
 
 /// Selected text in the text fields `ui` draws from here on is in the strong text colour. egui
 /// paints it in the selection stroke's colour, the accent, which is hard to read on the selection's
@@ -593,8 +608,8 @@ pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Sc
     v.extreme_bg_color = t.input;
     v.faint_bg_color = t.panel_darker;
     v.window_stroke = Stroke::new(1.0, t.border);
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
+    v.window_corner_radius = t.cr_float();
+    v.menu_corner_radius = t.cr_float();
     v.selection.bg_fill = t.accent.gamma_multiply(0.55);
     v.selection.stroke = Stroke::new(1.0, t.accent);
     v.hyperlink_color = t.accent;

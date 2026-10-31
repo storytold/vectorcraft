@@ -296,9 +296,9 @@ pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::
     let label = preset_name(&s.name);
     let (r, resp) = ui.allocate_exact_size(egui::vec2(146.0, 150.0), egui::Sense::click());
     let p = ui.painter();
-    p.rect_filled(r, egui::CornerRadius::same(6), if resp.hovered() || selected { t.hover } else { t.panel_darker });
+    p.rect_filled(r, t.cr(), if resp.hovered() || selected { t.hover } else { t.panel_darker });
     if selected {
-        p.rect_stroke(r, egui::CornerRadius::same(6), egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+        p.rect_stroke(r, t.cr(), egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
     }
     let k = (60.0 / s.width.max(s.height).max(1e-9)) as f32;
     let page = egui::Rect::from_center_size(
@@ -463,11 +463,11 @@ fn background(ui: &mut egui::Ui, d: &mut Dialog, width: f32) {
             d.fields.insert("backgroundContents".into(), json!(v));
         }
         let (chip, _) = ui.allocate_exact_size(egui::vec2(22.0, 22.0), egui::Sense::hover());
-        ui.painter().rect_filled(chip, 2.0, egui::Color32::WHITE);
+        ui.painter().rect_filled(chip, t.cr_small(), egui::Color32::WHITE);
         if cur != "white" {
             ui.painter().line_segment([chip.left_bottom(), chip.right_top()], egui::Stroke::new(1.5, t.bleed));
         }
-        ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(chip, t.cr_small(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     });
 }
 

@@ -1,4 +1,4 @@
-use super::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
+use super::{Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
 
 /// A bordered list box (Swatches tiles, Appearance rows, Artboards list).
 pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
@@ -36,7 +36,7 @@ pub fn tab_bar(ui: &mut Ui, tabs: &[&str], current: usize) -> Option<usize> {
             if sel {
                 ui.painter().rect_filled(
                     Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom()),
-                    CornerRadius::same(1),
+                    Tokens::get(ui.ctx()).cr_small(),
                     t.accent,
                 );
             }
@@ -55,7 +55,7 @@ pub fn orientation_button(ui: &mut Ui, landscape: bool, selected: bool, tip: &st
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
     if resp.hovered() && !selected {
-        ui.painter().rect_filled(rect, CornerRadius::same(3), t.hover);
+        ui.painter().rect_filled(rect, Tokens::get(ui.ctx()).cr(), t.hover);
     }
     let size = if landscape { vec2(16.0, 12.0) } else { vec2(12.0, 16.0) };
     let page = Rect::from_center_size(rect.center(), size);
@@ -86,7 +86,7 @@ pub fn layout_button(ui: &mut Ui, tiles: &[(u8, u8)], selected: bool, tip: &str)
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, CornerRadius::same(3), bg);
+    ui.painter().rect_filled(rect, Tokens::get(ui.ctx()).cr(), bg);
     let color = if !enabled {
         t.text_disabled
     } else if selected {
@@ -121,8 +121,8 @@ pub fn layout_button(ui: &mut Ui, tiles: &[(u8, u8)], selected: bool, tip: &str)
 pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::click());
-    ui.painter().rect_filled(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, t.input);
-    ui.painter().rect_stroke(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+    ui.painter().rect_filled(dr, super::group_end(&t), t.input);
+    ui.painter().rect_stroke(dr, super::group_end(&t), Stroke::new(1.0, t.input_border), StrokeKind::Inside);
     let c = if !ui.is_enabled() {
         t.text_disabled
     } else if dresp.hovered() {

@@ -415,11 +415,11 @@ fn arrow_button(ui: &mut egui::Ui, dir: Direction, selected: bool, tip: &str) ->
     let (r, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::click());
     let p = ui.painter();
     if selected {
-        p.rect_filled(r, 3.0, t.row_selected);
+        p.rect_filled(r, t.cr(), t.row_selected);
     } else if resp.hovered() {
-        p.rect_filled(r, 3.0, t.hover);
+        p.rect_filled(r, t.cr(), t.hover);
     }
-    p.rect_stroke(r, 3.0, Stroke::new(1.0, if selected { t.accent } else { t.input_border }), egui::StrokeKind::Inside);
+    p.rect_stroke(r, t.cr(), Stroke::new(1.0, if selected { t.accent } else { t.input_border }), egui::StrokeKind::Inside);
     let u = match dir {
         Direction::LeftToRight => vec2(1.0, 0.0),
         Direction::RightToLeft => vec2(-1.0, 0.0),

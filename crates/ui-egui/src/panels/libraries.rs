@@ -636,7 +636,7 @@ fn kind_param(kind: ItemKind) -> &'static str {
 fn no_group_strip(ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
-    ui.painter().rect_stroke(r, 3.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+    ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.0, t.border), StrokeKind::Inside);
     ui.painter().text(
         r.center(),
         egui::Align2::CENTER_CENTER,
@@ -692,7 +692,7 @@ fn section_drop(ui: &Ui, items: &Items, grab: &Grab, sections: &[(Option<usize>,
             if items.group_of(*kind, item) == *group {
                 return true;
             }
-            ui.painter().rect_stroke(r, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.5, t.accent), StrokeKind::Inside);
             if released && take() {
                 let mut p = json!({ "kind": kind_param(*kind), "item": item });
                 if let Some(g) = group.as_ref().and_then(name) {

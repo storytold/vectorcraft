@@ -306,8 +306,8 @@ fn set_preset(app: &VectorcraftApp, d: &mut Dialog, i: usize) {
 fn chip(ui: &Ui, r: Rect, c: Color, dim: bool) {
     let t = Tokens::get(ui.ctx());
     let fill = c32(&c);
-    ui.painter().rect_filled(r, 1.0, if dim { fill.gamma_multiply(0.35) } else { fill });
-    ui.painter().rect_stroke(r, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+    ui.painter().rect_filled(r, t.cr_small(), if dim { fill.gamma_multiply(0.35) } else { fill });
+    ui.painter().rect_stroke(r, t.cr_small(), egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
 }
 
 /// The Assign tab. Returns true when the rows changed, and the row whose new colour was
@@ -401,7 +401,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                     }
                 });
                 if sel.contains(&i) {
-                    ui.painter().set(bg, egui::Shape::rect_filled(r.response.rect.expand2(vec2(2.0, 1.0)), 2.0, t.row_selected));
+                    ui.painter().set(bg, egui::Shape::rect_filled(r.response.rect.expand2(vec2(2.0, 1.0)), t.cr(), t.row_selected));
                 }
             }
         });
@@ -635,7 +635,7 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
                 let (r, resp) = ui.allocate_exact_size(vec2(28.0, 20.0), Sense::click());
                 chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
                 if Some(i) == base {
-                    ui.painter().rect_stroke(r.expand(1.5), 2.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                    ui.painter().rect_stroke(r.expand(1.5), t.cr_small(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
                 }
                 if resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default()).clicked() {
                     d.fields.insert("__sel".into(), json!([i]));
