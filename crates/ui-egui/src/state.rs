@@ -373,6 +373,13 @@ pub struct UiState {
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
+    /// The toolbars made with New Toolbar, in the order they were made.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_toolbars: Vec<CustomToolbar>,
+    /// The toolbar made with New Toolbar that the open All Tools drawer edits (none: the Tools
+    /// panel's toolbar).
+    #[serde(skip)]
+    pub drawer_toolbar: Option<String>,
     /// Floating panel groups as files from before the canvas joined [`Self::docking`] saved
     /// them. Read only to convert those files ([`crate::layout_migration`]), never written.
     #[serde(default, skip_serializing)]
@@ -633,6 +640,44 @@ pub struct FloatingFlyout {
     pub pos: [f32; 2],
 }
 
+impl FloatingFlyout {
+    /// Keep strips of known tools, one per group (a hand-edited preferences file).
+    pub fn sanitize(strips: &mut Vec<FloatingFlyout>) {
+        let mut seen = std::collections::BTreeSet::new();
+        strips.retain_mut(|f| {
+            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
+            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
+        });
+    }
+}
+
+/// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
+/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
+/// (`UiState::floating_flyouts`) hold none of them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CustomToolbar {
+    /// The name it is listed under in Window › Toolbars.
+    pub name: String,
+    /// Its slots, each a tool group (the first tool is the slot's default).
+    #[serde(default)]
+    pub slots: Vec<Vec<String>>,
+    /// It shows (Window › Toolbars › its name toggles it).
+    #[serde(default = "yes")]
+    pub shown: bool,
+    /// Top-left corner in screen points.
+    pub pos: [f32; 2],
+    /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub slot_tool: std::collections::BTreeMap<String, String>,
+    /// Its tools show in two columns (the double arrow on its title bar toggles it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub double: bool,
+    /// The groups torn off it, each floating as its own strip; they show while it does.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub floating: Vec<FloatingFlyout>,
+}
+
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
 /// toolbar) and its slots, each a tool group (the first tool is the slot's default).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -772,6 +817,8 @@ impl UiState {
         self.dialog = None;
         self.flyout = None;
         self.tools_drawer = false;
+        self.drawer_toolbar = None;
+        crate::custom_toolbars::sanitize(&mut self.custom_toolbars);
         self.palette_open = false;
         self.status.clear();
         self.about = false;
@@ -779,12 +826,7 @@ impl UiState {
         if self.group_tool.len() != vectorcraft_tools::TOOL_GROUPS.len() {
             self.group_tool = UiState::default().group_tool;
         }
-        // One strip per group, of known tools (a hand-edited preferences file).
-        let mut seen = std::collections::BTreeSet::new();
-        self.floating_flyouts.retain_mut(|f| {
-            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
-            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
-        });
+        FloatingFlyout::sanitize(&mut self.floating_flyouts);
         sanitize_toolbar_pos(&mut self.toolbar_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
         // `read_preferences` converted the file's older layouts already; this covers a state read
@@ -838,6 +880,8 @@ impl Default for UiState {
             toolbar_edits: ToolbarEdits::default(),
             toolbar_show: ToolbarShow::default(),
             tools_drawer: false,
+            custom_toolbars: vec![],
+            drawer_toolbar: None,
             floating_panels: vec![],
             docking: None,
             docking_hidden: Default::default(),

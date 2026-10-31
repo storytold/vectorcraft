@@ -354,6 +354,20 @@ of `fillStroke`, `coloring`, `drawMode`, `screenMode`) shows or hides the contro
 saved with the preferences (`ui.toolbar_show`). The toolbar names its groups only with Preferences › User
 Interface › Show Tool Group Labels, off as it ships (#1736).
 
+New Toolbar: Window › Toolbars › New Toolbar… (or New Toolbar… in the drawer's ☰ menu) asks for a name, and
+`window.toolbar.new {name}` makes the toolbar at once: a blank toolbar that floats on its own, moved by its title
+bar; its tools scroll when the window is too short for them. The title bar's × hides it, and its double arrow
+(`window.toolbarColumns {toolbar, double?}`) shows its tools in one column or two. Window › Toolbars lists each
+toolbar by its name, and its item (`window.toolbar.custom {name, show?}`) shows or hides it. Window › Tools hides
+the Tools panel alone, and Tab hides these toolbars with the other panels. A toolbar's ••• button
+(`window.editToolbar {toolbar}`) opens the All Tools drawer beside it, and the drawer's drags and
+`toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` with `toolbar` edit it; the drawer has no Show section
+there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
+it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
+two-column flag, top-left corner, the groups torn off it). They are kept with the workspace they were made in:
+switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
+workspace with a copy of them.
+
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
 another document becomes active. Its More Options (…) menu has Hide Bar (`window.taskBar`); Pin Bar Position

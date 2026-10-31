@@ -487,6 +487,10 @@ impl VectorcraftApp {
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             toolbar::show(self, ui);
+        } else if self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
+            // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New
+            // Toolbar too.
+            toolbar::show_custom(self, ui.ctx());
         }
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.

@@ -356,6 +356,141 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     assert_eq!(slots(&app), before);
 }
 
+/// A toolbar made with New Toolbar floats blank; its ••• button opens the drawer beside it, and
+/// tools dragged from the drawer fill it, leaving the Tools panel's toolbar as it was.
+#[test]
+fn a_new_toolbar_fills_from_the_drawer_beside_it() {
+    let mut app = app();
+    let ctx = ctx();
+    let shipped = slots(&app);
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
+    let area = || ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
+    let bar = area();
+    let edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).expect("its ••• button");
+    // Open beside the Tools panel's toolbar, the drawer moves to this one on its ••• click.
+    app.run("window.editToolbar", json!({})).unwrap();
+    frame(&mut app, &ctx, 0.5, vec![]);
+    click(&mut app, &ctx, 1.0, edit.center());
+    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.as_deref() == Some("Mine"));
+    assert_eq!(crate::menus::checked(&app, "window.editToolbar", &json!({"toolbar": "Mine"})), Some(true));
+    assert_eq!(crate::menus::checked(&app, "window.editToolbar", &json!({})), Some(false));
+    let shown = frame(&mut app, &ctx, 1.2, vec![]);
+    let drawer = drawer_rect(&ctx).unwrap();
+    assert!((drawer.left() - bar.right() - GAP).abs() < 2.0, "beside the new toolbar: {drawer:?} {bar:?}");
+    // The Tools panel's tools aren't dimmed: they aren't in this toolbar. The Show section, for
+    // the controls under the Tools panel's tools, is left out.
+    assert!(!shown.iter().any(|(s, p, _)| s == "Show:" && drawer.contains(*p)));
+    let dim = Tokens::get(&ctx).text_disabled;
+    assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
+    // Dragged onto the blank toolbar, a tool is added to it.
+    let (ellipse, _) = cell_at(&shown, drawer, "Ellipse Tool");
+    drag(&mut app, &ctx, 2.0, ellipse, bar.center());
+    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["ellipse"]]);
+    assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
+    let shown = frame(&mut app, &ctx, 2.9, vec![]);
+    let drawer = drawer_rect(&ctx).unwrap();
+    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim, "now in the toolbar the drawer edits");
+    // A second one, below the first.
+    let tools: Vec<Rect> = crate::toolbar::tests::widget_rects(&ctx, BUTTON).into_iter().filter(|r| area().contains(r.center())).collect();
+    let (artboard, _) = cell_at(&shown, drawer, "Artboard Tool");
+    drag(&mut app, &ctx, 3.0, artboard, tools[0].center_bottom() - vec2(0.0, 3.0));
+    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["ellipse"], ["artboard"]]);
+    // A click on its tool picks it; the drawer stays open.
+    let tools: Vec<Rect> = crate::toolbar::tests::widget_rects(&ctx, BUTTON).into_iter().filter(|r| area().contains(r.center())).collect();
+    click(&mut app, &ctx, 4.0, tools[1].center());
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert!(app.ui.tools_drawer);
+    // Dragged from it into the drawer, a tool leaves it.
+    drag(&mut app, &ctx, 5.0, tools[0].center(), drawer.center());
+    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["artboard"]]);
+    // The Tools panel's ••• button takes the drawer back beside its toolbar.
+    let main_edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().rfind(|r| r.right() < 60.0).unwrap();
+    click(&mut app, &ctx, 5.5, main_edit.center());
+    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none());
+    // The drawer closed, a drag on the grip bar moves the toolbar.
+    app.run("window.editToolbar", json!({"open": false})).unwrap();
+    frame(&mut app, &ctx, 6.0, vec![]);
+    let before = area();
+    drag(&mut app, &ctx, 7.0, before.center_top() + vec2(0.0, 5.0), before.center_top() + vec2(120.0, 205.0));
+    frame(&mut app, &ctx, 7.5, vec![]);
+    let after = area();
+    assert!((after.min - before.min - vec2(120.0, 200.0)).length() < 2.0, "{before:?} {after:?}");
+    // Hidden, it isn't drawn.
+    app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
+    frame(&mut app, &ctx, 8.0, vec![]);
+    frame(&mut app, &ctx, 8.1, vec![]);
+    assert!(!ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Middle, crate::custom_toolbars::area_id("Mine")))));
+}
+
+/// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.
+#[test]
+fn new_toolbar_in_the_drawer_menu_asks_for_a_name() {
+    let mut app = app();
+    let ctx = ctx();
+    app.run("window.editToolbar", json!({"open": true})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
+    let drawer = drawer_rect(&ctx).expect("the drawer is open");
+    let menu = crate::toolbar::tests::widget_rects(&ctx, vec2(18.0, 18.0))
+        .into_iter()
+        .find(|r| drawer.contains(r.center()))
+        .expect("the drawer menu button");
+    click(&mut app, &ctx, 1.0, menu.center());
+    // The menu is sized in its first frame and drawn from the second.
+    frame(&mut app, &ctx, 1.2, vec![]);
+    let shown = frame(&mut app, &ctx, 1.3, vec![]);
+    // A menu item's label is indented where a checked item has its ✓.
+    let item = shown.iter().find(|(s, ..)| s.trim() == "New Toolbar…").map(|(_, p, _)| *p).expect("New Toolbar… in the drawer menu");
+    assert!(app.ui.dialog.is_none());
+    click(&mut app, &ctx, 2.0, item);
+    let d = app.ui.dialog.clone().expect("the dialog asks for a name");
+    assert_eq!((d.kind.as_str(), d.str("name").as_str()), (crate::custom_toolbars::KIND, "Toolbar 1"));
+}
+
+/// A click on another toolbar's ••• button takes the drawer there, whichever was made first.
+#[test]
+fn the_drawer_moves_between_new_toolbars() {
+    let mut app = app();
+    let ctx = ctx();
+    for name in ["A", "B"] {
+        app.run("window.toolbar.new", json!({"name": name})).unwrap();
+    }
+    app.ui.custom_toolbars[1].pos = [600.0, 900.0];
+    frame(&mut app, &ctx, 0.0, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
+    let edit_of = |name: &str| {
+        let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id(name))).unwrap();
+        crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).unwrap()
+    };
+    let (a, b) = (edit_of("A"), edit_of("B"));
+    for (k, (button, name)) in [(b, "B"), (a, "A"), (b, "B")].into_iter().enumerate() {
+        click(&mut app, &ctx, 1.0 + k as f64, button.center());
+        frame(&mut app, &ctx, 1.5 + k as f64, vec![]);
+        assert_eq!(crate::custom_toolbars::drawer_target(&app.ui), Some(name), "after the click on {name}'s ••• button");
+    }
+}
+
+/// Basic or Advanced in the drawer's menu, picked while the drawer edits a toolbar made with New
+/// Toolbar, switches the Tools panel and takes the drawer to it, so Reset and drops edit it.
+#[test]
+fn basic_or_advanced_takes_the_drawer_to_the_tools_panel() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+    // With the Tools panel hidden too: it shows.
+    app.run("window.toolbar", json!({})).unwrap();
+    for advanced in [false, true] {
+        app.run("window.editToolbar", json!({"toolbar": "Mine", "open": true})).unwrap();
+        pick_layout(&mut app, advanced).unwrap();
+        assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui).is_none(), "{advanced}");
+        assert_eq!(app.ui.toolbar_advanced, advanced);
+        assert!(app.ui.toolbar, "the Tools panel shows beside the drawer");
+    }
+    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["pen"]], "Mine as it was");
+}
+
 #[test]
 fn drop_targets_follow_the_buttons_edges() {
     let r = |y: f32| Rect::from_min_size(pos2(6.0, y), BUTTON);

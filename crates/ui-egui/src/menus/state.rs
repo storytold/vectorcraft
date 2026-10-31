@@ -61,11 +61,22 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
-        "window.toolbarColumns" => app.ui.toolbar_double,
-        "window.editToolbar" => app.ui.tools_drawer,
+        "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
+            None => app.ui.toolbar_double,
+            Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
+        },
+        "window.editToolbar" => {
+            app.ui.tools_drawer
+                && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
+                    == p.get("toolbar").and_then(Value::as_str).map(crate::custom_toolbars::key)
+        }
+        "window.toolbar.custom" => {
+            p.get("name").and_then(Value::as_str).and_then(|name| crate::custom_toolbars::find(&app.ui, name)).is_some_and(|b| b.shown)
+        }
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
-            app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
+            let toolbar = p.get("toolbar").and_then(Value::as_str);
+            crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,

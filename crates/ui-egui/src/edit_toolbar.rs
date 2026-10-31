@@ -11,7 +11,9 @@
 //! is open, and the ones already in the toolbar show dimmed in it).
 //!
 //! Each toolbar (Basic, Advanced) keeps its own edits in `UiState::toolbar_edits`, saved with the
-//! preferences; `toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` make them.
+//! preferences; `toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` make them. With their
+//! `toolbar` param they edit a toolbar made with New Toolbar instead (`custom_toolbars`), whose •••
+//! button opens the drawer beside it.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -154,9 +156,38 @@ fn edit(app: &mut VectorcraftApp, f: impl FnOnce(&mut Vec<ToolbarCategory>) -> R
     Ok(slots_json(app))
 }
 
+/// Change the toolbar made with New Toolbar called `name` with `f`. Returns its slots.
+fn edit_custom(app: &mut VectorcraftApp, name: &str, f: impl FnOnce(&mut Vec<ToolbarCategory>) -> Result<(), String>) -> Result<Value, String> {
+    let bar = crate::custom_toolbars::find_mut(&mut app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
+    let mut cats = vec![ToolbarCategory { name: None, slots: bar.slots.clone() }];
+    f(&mut cats)?;
+    prune(&mut cats);
+    bar.slots = cats.into_iter().flat_map(|c| c.slots).collect();
+    Ok(json!(bar.slots))
+}
+
+/// Change the toolbar the `toolbar` param names (none: the current Basic or Advanced toolbar).
+fn edit_target(app: &mut VectorcraftApp, p: &Value, f: impl FnOnce(&mut Vec<ToolbarCategory>, bool) -> Result<(), String>) -> Result<Value, String> {
+    match crate::custom_toolbars::target(&app.ui, p)? {
+        Some(name) => edit_custom(app, &name, |cats| f(cats, false)),
+        None => {
+            let named = !app.ui.toolbar_advanced;
+            edit(app, |cats| f(cats, named))
+        }
+    }
+}
+
 /// The current toolbar's slots, each a list of tool ids (`toolbar.*` commands return it).
 fn slots_json(app: &VectorcraftApp) -> Value {
     json!(crate::toolbar::slots(app).into_iter().map(|(_, s)| s).collect::<Vec<_>>())
+}
+
+/// The tools of the toolbar the drawer edits: one made with New Toolbar, or the Tools panel's.
+fn target_tools(app: &VectorcraftApp) -> BTreeSet<&'static str> {
+    match crate::custom_toolbars::drawer_target(&app.ui).and_then(|name| crate::custom_toolbars::find(&app.ui, name)) {
+        Some(bar) => bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect(),
+        None => crate::toolbar::slots(app).into_iter().flat_map(|(_, s)| s).collect(),
+    }
 }
 
 /// Put `tool` by the slot numbered `slot` (over the toolbar's slots, 0 = the first; none or null:
@@ -222,24 +253,36 @@ fn tool_param(p: &Value) -> Result<&'static str, String> {
 /// The Edit Toolbar commands; `None` for other ids.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     Some(match id {
-        "window.editToolbar" => crate::menus::opt_bool(p, "open").map(|open| {
-            let open = open.unwrap_or(!app.ui.tools_drawer);
+        "window.editToolbar" => (|| {
+            let open = crate::menus::opt_bool(p, "open")?;
+            let target = crate::custom_toolbars::target(&app.ui, p)?;
+            // Toggled: open, or open beside another toolbar, closes or moves it.
+            let open = open.unwrap_or(!(app.ui.tools_drawer && app.ui.drawer_toolbar == target));
             app.ui.tools_drawer = open;
+            app.ui.drawer_toolbar = target.filter(|_| open);
             if open {
                 app.ui.flyout = None;
+                // The toolbar the drawer opens beside shows.
+                match app.ui.drawer_toolbar.clone() {
+                    Some(name) => {
+                        if let Some(bar) = crate::custom_toolbars::find_mut(&mut app.ui, &name) {
+                            bar.shown = true;
+                        }
+                    }
+                    None => app.ui.toolbar = true,
+                }
             }
-            json!(open)
-        }),
+            Ok(json!(open))
+        })(),
         "toolbar.addTool" => (|| {
             let tool = tool_param(p)?;
             let place = Place::parse(p)?;
-            let named = !app.ui.toolbar_advanced;
-            edit(app, |cats| add(cats, tool, p.get("slot"), place, named))
+            edit_target(app, p, |cats, named| add(cats, tool, p.get("slot"), place, named))
         })(),
         "toolbar.removeTool" => (|| {
             let tool = tool_param(p)?;
             let group = crate::menus::opt_bool(p, "group")?.unwrap_or(false);
-            edit(app, |cats| {
+            edit_target(app, p, |cats, _| {
                 remove(cats, tool, group);
                 Ok(())
             })
@@ -257,10 +300,17 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             }
             Ok(app.ui.toolbar_show.json())
         })(),
-        "toolbar.reset" => {
+        "toolbar.reset" => (|| {
+            if let Some(name) = crate::custom_toolbars::target(&app.ui, p)? {
+                // A toolbar made with New Toolbar goes back to blank, as it was made.
+                return edit_custom(app, &name, |cats| {
+                    cats.clear();
+                    Ok(())
+                });
+            }
             *current(&mut app.ui.toolbar_edits, app.ui.toolbar_advanced) = None;
             Ok(slots_json(app))
-        }
+        })(),
         _ => return None,
     })
 }
@@ -290,9 +340,9 @@ pub(crate) fn drop_target(slots: &[(usize, Rect)], at: Pos2, cols: usize) -> (Op
     (Some(k), if before { Place::Before } else { Place::After })
 }
 
-/// While a tool is dragged over the toolbar (`bounds`): mark where it would go, and on the release
-/// put it there (`toolbar.addTool`).
-pub(crate) fn toolbar_drop(app: &mut VectorcraftApp, ui: &Ui, slots: &[(usize, Rect)], cols: usize, bounds: Rect) {
+/// While a tool is dragged over the toolbar (`bounds`; `toolbar`: one made with New Toolbar): mark
+/// where it would go, and on the release put it there (`toolbar.addTool`).
+pub(crate) fn toolbar_drop(app: &mut VectorcraftApp, ui: &Ui, slots: &[(usize, Rect)], cols: usize, bounds: Rect, toolbar: Option<&str>) {
     let Some(drag) = DragAndDrop::payload::<ToolDrag>(ui.ctx()) else { return };
     let Some(at) = ui.ctx().pointer_interact_pos().filter(|p| bounds.contains(*p)) else { return };
     let t = Tokens::get(ui.ctx());
@@ -319,7 +369,7 @@ pub(crate) fn toolbar_drop(app: &mut VectorcraftApp, ui: &Ui, slots: &[(usize, R
     }
     if ui.input(|i| i.pointer.any_released()) {
         DragAndDrop::clear_payload(ui.ctx());
-        let p = json!({ "tool": drag.tool, "slot": slot, "place": place.name() });
+        let p = json!({ "tool": drag.tool, "slot": slot, "place": place.name(), "toolbar": toolbar });
         if let Err(e) = app.run("toolbar.addTool", p) {
             app.ui.status = e;
         }
@@ -420,7 +470,8 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // buttons) and the bars under it.
     let top = bar.top().max(screen.top() + GAP);
     let y = button.top().min(screen.bottom() - size.y - GAP).max(top);
-    let in_toolbar: BTreeSet<&str> = crate::toolbar::slots(app).into_iter().flat_map(|(_, s)| s).collect();
+    let in_toolbar = target_tools(app);
+    let target = crate::custom_toolbars::drawer_target(&app.ui).map(str::to_string);
     let active = app.session.tool_id();
     let dragged = DragAndDrop::payload::<ToolDrag>(ctx).map(|d| *d);
     let pointer = ctx.pointer_interact_pos();
@@ -428,13 +479,15 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let removing = dragged.is_some_and(|d| d.from_toolbar) && ctx.memory(|m| m.area_rect(id)).is_some_and(over);
     let mut picked = None;
     let mut reset = false;
+    let mut new_toolbar = false;
     let mut advanced = None;
     let mut show_toggle = None;
     let resp = egui::Area::new(id).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).show(ctx, |ui| {
         crate::toolbar::flyout_frame(&t, removing).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             let width = WIDTH.min(screen.width() - 2.0 * GAP - 16.0).max(160.0);
             ui.set_width(width);
-            // All Tools, and the drawer's flyout menu: Reset, and the Basic or Advanced toolbar.
+            // All Tools, and the drawer's flyout menu: Reset, the Basic or Advanced toolbar, and New
+            // Toolbar.
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("All Tools")).size(13.0).color(t.text_strong));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -452,6 +505,10 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             if widgets::menu_item(ui, label, true, app.ui.toolbar_advanced == adv) {
                                 advanced = Some(adv);
                             }
+                        }
+                        ui.separator();
+                        if widgets::menu_item(ui, "New Toolbar…", true, false) {
+                            new_toolbar = true;
                         }
                     });
                 });
@@ -481,7 +538,11 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                 }
             });
-            // Show: the controls under the toolbar's tools.
+            // Show: the controls under the Tools panel's tools (a toolbar made with New Toolbar has
+            // none).
+            if target.is_some() {
+                return;
+            }
             ui.add_space(4.0);
             ui.separator();
             ui.horizontal(|ui| {
@@ -501,16 +562,18 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         && ctx.input(|i| i.pointer.any_released())
     {
         DragAndDrop::clear_payload(ctx);
-        if let Err(e) = app.run("toolbar.removeTool", json!({ "tool": d.tool })) {
+        if let Err(e) = app.run("toolbar.removeTool", json!({ "tool": d.tool, "toolbar": target })) {
             app.ui.status = e;
         }
     }
-    if reset && let Err(e) = app.run("toolbar.reset", json!({})) {
+    if reset && let Err(e) = app.run("toolbar.reset", json!({ "toolbar": target })) {
         app.ui.status = e;
     }
-    // Basic or Advanced: the menu item of the other toolbar switches to it.
-    if advanced.is_some_and(|a| a != app.ui.toolbar_advanced)
-        && let Err(e) = app.run("window.toolbarAdvanced", json!({}))
+    if new_toolbar && let Err(e) = app.run("window.toolbar.new", json!({})) {
+        app.ui.status = e;
+    }
+    if let Some(advanced) = advanced
+        && let Err(e) = pick_layout(app, advanced)
     {
         app.ui.status = e;
     }
@@ -528,6 +591,19 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.tools_drawer = false;
     }
     ghost(ctx, &t);
+}
+
+/// The drawer menu's Basic or Advanced: the menu item of the other toolbar switches the Tools panel
+/// to it, and the drawer goes on to edit the Tools panel's toolbar, also from a toolbar made with
+/// New Toolbar.
+fn pick_layout(app: &mut VectorcraftApp, advanced: bool) -> Result<(), String> {
+    if crate::custom_toolbars::drawer_target(&app.ui).is_some() {
+        app.run("window.editToolbar", json!({ "open": true }))?;
+    }
+    if advanced != app.ui.toolbar_advanced {
+        app.run("window.toolbarAdvanced", json!({}))?;
+    }
+    Ok(())
 }
 
 /// A Show section toggle: lit while its control shows under the toolbar's tools. Fill and Stroke

@@ -624,6 +624,10 @@ font-technology	Variable	가변
 	Workspace	작업 영역
 	Reset Essentials	Essentials 재설정
 	New Workspace…	새 작업 영역…
+	New Toolbar…	새 도구 막대…
+	New Toolbar	새 도구 막대
+	Show Toolbar	도구 막대 표시
+	List Toolbars	도구 막대 목록
 	Manage Workspaces…	작업 영역 관리…
 	Control	컨트롤
 	Contextual Task Bar	상황별 작업 표시줄

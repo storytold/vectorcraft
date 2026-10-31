@@ -15,7 +15,7 @@ use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, icons, widgets};
 
-const PITCH: f32 = 30.0;
+pub(crate) const PITCH: f32 = 30.0;
 const WIDTH: f32 = 48.0;
 /// Seconds a press on a tool group's button is held before its flyout opens.
 const LONG_PRESS: f64 = 0.35;
@@ -92,6 +92,7 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
             app.ui.slot_tool.insert(s[0].to_string(), id.to_string());
         }
     }
+    crate::custom_toolbars::remember(&mut app.ui, id);
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -130,10 +131,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Before the flyout: one torn off this frame floats from the next (its bar mustn't be in two
     // layers in one frame).
-    floating(app, ui.ctx());
+    floating(app, ui.ctx(), false);
     crate::dialogs::dimension::floating(app, ui.ctx());
+    crate::custom_toolbars::show(app, ui.ctx());
     flyout(app, ui.ctx());
     crate::edit_toolbar::drawer(app, ui.ctx());
+}
+
+/// The toolbars made with New Toolbar while the Tools panel is hidden (Window › Tools off): their
+/// flyouts and the groups torn off them, and the All Tools drawer beside the one it edits.
+pub fn show_custom(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    floating(app, ctx, true);
+    crate::custom_toolbars::show(app, ctx);
+    flyout(app, ctx);
+    if crate::custom_toolbars::drawer_target(&app.ui).is_some() {
+        crate::edit_toolbar::drawer(app, ctx);
+    }
 }
 
 /// The Tools panel's contents, docked or floating at `floating`.
@@ -141,8 +154,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
     let bounds = ui.max_rect();
-    // The drawer opens beside it; a click in it leaves the drawer open.
-    ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::toolbar_id(), bounds));
+    let editing = app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     // Title bar with » and a grip strip: a drag on either floats the panel or moves it.
     let (hdr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click_and_drag());
@@ -180,9 +192,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             ui.data_mut(|d| d.remove::<egui::Id>(held_id));
         }
         let held: Option<egui::Id> = ui.data(|d| d.get_temp(held_id));
-        // While Edit Toolbar's drawer is open, the tools drag (to new places or into the drawer)
-        // instead of opening their flyouts.
-        let editing = app.ui.tools_drawer;
+        // While Edit Toolbar's drawer edits this toolbar, the tools drag (to new places or into the
+        // drawer) instead of opening their flyouts.
         let mut buttons: Vec<(usize, egui::Rect)> = vec![];
         let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
         // A group torn off into a floating flyout is raised instead of opening its flyout.
@@ -243,7 +254,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let press = if slot.len() > 1 && !editing { flyout_press(ui, &resp, rect) } else { None };
                     let alt = ui.input(|inp| inp.modifiers.alt);
                     if press.is_some() {
-                        if is_floating(app, slot[0]) {
+                        if is_floating(app, None, slot[0]) {
                             raise = Some(slot[0]);
                         } else {
                             open_flyout = Some((slot.clone(), rect));
@@ -269,26 +280,32 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
             i += row.len();
         }
         if editing {
-            crate::edit_toolbar::toolbar_drop(app, ui, &buttons, cols, bounds);
+            crate::edit_toolbar::toolbar_drop(app, ui, &buttons, cols, bounds, None);
         }
         if let Some(key) = raise {
-            raise_floating(ui.ctx(), key);
+            raise_floating(ui.ctx(), None, key);
         }
         if let Some((slot, rect)) = open_flyout {
             app.ui.flyout = Some(0);
             ui.data_mut(|d| {
                 d.insert_temp(egui::Id::unique("flyout-anchor"), rect);
                 d.insert_temp(egui::Id::unique("flyout-tools"), slot.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+                d.insert_temp(flyout_toolbar_id(), None::<String>);
             });
         }
         ui.add_space(8.0);
         bottom_controls(app, ui, &t, cols);
     });
+    // While the drawer edits this toolbar (also from the ••• click just made), it opens beside it; a
+    // click in it leaves the drawer open.
+    if app.ui.tools_drawer && app.ui.drawer_toolbar.is_none() {
+        ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::toolbar_id(), bounds));
+    }
 }
 
 /// How a press on a tool group's button opens its flyout.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum FlyoutPress {
+pub(crate) enum FlyoutPress {
     /// A right press (it opens at once, before the release).
     Secondary,
     /// A primary press on the corner triangle, or one held [`LONG_PRESS`] seconds: its release
@@ -299,7 +316,7 @@ enum FlyoutPress {
 /// Whether this frame's pointer state on a tool button opens its group's flyout. A primary press
 /// still short of a long one asks for the frame where it becomes long: egui draws only on input,
 /// so a still mouse would otherwise never get there.
-fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<FlyoutPress> {
+pub(crate) fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<FlyoutPress> {
     if resp.hovered() && ui.input(|inp| inp.pointer.button_pressed(egui::PointerButton::Secondary)) {
         return Some(FlyoutPress::Secondary);
     }
@@ -538,10 +555,14 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
             app.run("view.screenMode", json!({})).ok();
         }
         // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
-        let edit = widgets::icon_button(ui, "ellipsis", "Edit Toolbar", app.ui.tools_drawer, 26.0);
-        ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::button_id(), edit.rect));
+        let editing = |app: &VectorcraftApp| app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
+        let edit = widgets::icon_button(ui, "ellipsis", "Edit Toolbar", editing(app), 26.0);
         if edit.clicked() {
             app.run("window.editToolbar", json!({})).ok();
+        }
+        // After the click, which may have opened the drawer here.
+        if editing(app) {
+            ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::button_id(), edit.rect));
         }
     });
     let _ = t;
@@ -553,38 +574,72 @@ const FLOAT_AT: [f32; 2] = [90.0, 100.0];
 
 /// Float the toolbar group (of the current layout) holding `tool` as a strip of tool buttons, put
 /// it back in the toolbar, or toggle (`floating` omitted), as a flyout's tear-off bar and the
-/// strip's × do (`window.floatTools`). Returns the new state.
-pub fn float_group(app: &mut VectorcraftApp, tool: &str, floating: Option<bool>) -> Result<bool, String> {
-    let Some((_, group)) = slots(app).into_iter().find(|(_, s)| s.len() > 1 && s.contains(&tool)) else {
+/// strip's × do (`window.floatTools`; `toolbar`: the group of the toolbar made with New Toolbar
+/// called that). Returns the new state.
+pub fn float_group(app: &mut VectorcraftApp, tool: &str, floating: Option<bool>, toolbar: Option<&str>) -> Result<bool, String> {
+    let groups: Vec<Vec<&'static str>> = match toolbar {
+        None => slots(app).into_iter().map(|(_, s)| s).collect(),
+        Some(name) => crate::custom_toolbars::find(&app.ui, name)
+            .map(|b| b.slots.iter().map(|s| s.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect()).collect())
+            .unwrap_or_default(),
+    };
+    let Some(group) = groups.into_iter().find(|s| s.len() > 1 && s.contains(&tool)) else {
         return Err(format!("{tool} isn't in a toolbar group of several tools"));
     };
     let key = group.first().copied().unwrap_or_default();
-    let was = is_floating(app, key);
+    let was = is_floating(app, toolbar, key);
     let on = floating.unwrap_or(!was);
+    let Some(strips) = strips_mut(&mut app.ui, toolbar) else { return Err(format!("no toolbar named `{}`", toolbar.unwrap_or_default())) };
     if on && !was {
-        let n = app.ui.floating_flyouts.len() as f32;
+        let n = strips.len() as f32;
         let tools = group.iter().map(|id| id.to_string()).collect();
-        app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [FLOAT_AT[0], FLOAT_AT[1] + n * (PITCH + 12.0)] });
+        strips.push(crate::state::FloatingFlyout { tools, pos: [FLOAT_AT[0], FLOAT_AT[1] + n * (PITCH + 12.0)] });
         app.ui.flyout = None;
     } else if !on {
-        app.ui.floating_flyouts.retain(|f| f.tools.first().is_none_or(|k| k != key));
+        strips.retain(|f| f.tools.first().is_none_or(|k| k != key));
     }
     Ok(on)
 }
 
-/// Whether the group whose first tool is `key` floats as its own panel.
-fn is_floating(app: &VectorcraftApp, key: &str) -> bool {
-    app.ui.floating_flyouts.iter().any(|f| f.tools.first().is_some_and(|k| k == key))
+/// The groups torn off the Tools panel's toolbar (`toolbar` none) or off the toolbar made with New
+/// Toolbar called `toolbar` (none when there is no such toolbar).
+pub(crate) fn strips<'a>(ui: &'a crate::state::UiState, toolbar: Option<&str>) -> &'a [crate::state::FloatingFlyout] {
+    match toolbar {
+        None => &ui.floating_flyouts,
+        Some(name) => crate::custom_toolbars::find(ui, name).map_or(&[], |b| b.floating.as_slice()),
+    }
 }
 
-/// The area of the floating flyout of the group whose first tool is `key`.
+fn strips_mut<'a>(ui: &'a mut crate::state::UiState, toolbar: Option<&str>) -> Option<&'a mut Vec<crate::state::FloatingFlyout>> {
+    match toolbar {
+        None => Some(&mut ui.floating_flyouts),
+        Some(name) => crate::custom_toolbars::find_mut(ui, name).map(|b| &mut b.floating),
+    }
+}
+
+/// Whether the group whose first tool is `key`, of the Tools panel's toolbar (`toolbar` none) or of
+/// the toolbar made with New Toolbar called `toolbar`, floats as its own panel.
+pub(crate) fn is_floating(app: &VectorcraftApp, toolbar: Option<&str>, key: &str) -> bool {
+    strips(&app.ui, toolbar).iter().any(|f| f.tools.first().is_some_and(|k| k == key))
+}
+
+/// The area of the floating flyout of the Tools panel's group whose first tool is `key`.
 fn floating_area(key: &str) -> egui::Id {
     egui::Id::unique(("tool-floating", key))
 }
 
+/// The area of the floating flyout of the group whose first tool is `key`, torn off the toolbar
+/// made with New Toolbar called `toolbar` (none: the Tools panel's).
+fn strip_area(toolbar: Option<&str>, key: &str) -> egui::Id {
+    match toolbar {
+        None => floating_area(key),
+        Some(name) => floating_area(key).with(crate::custom_toolbars::key(name)),
+    }
+}
+
 /// Bring a floating flyout to the front and flash its border.
-fn raise_floating(ctx: &egui::Context, key: &str) {
-    let id = floating_area(key);
+pub(crate) fn raise_floating(ctx: &egui::Context, toolbar: Option<&str>, key: &str) {
+    let id = strip_area(toolbar, key);
     ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, id));
     let now = ctx.input(|i| i.time);
     ctx.data_mut(|d| d.insert_temp(id, now));
@@ -611,10 +666,12 @@ struct FlyoutInput {
 
 /// A flyout's tool rows (a floating flyout's strip of tool buttons) with the grab bar down their
 /// right side; a floating flyout's bar has a × at its top. The bar's id is the group's, so a drag
-/// that tears a flyout off carries on moving the floating flyout it becomes.
-fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating: bool) -> FlyoutInput {
+/// that tears a flyout off carries on moving the floating flyout it becomes (`toolbar`: the toolbar
+/// made with New Toolbar the group is in, none for the Tools panel's).
+fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating: bool, toolbar: Option<&str>) -> FlyoutInput {
     let mut out = FlyoutInput::default();
     let key = tools.first().map_or("", String::as_str);
+    let bar_id = bar_id(toolbar, key);
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating { ui.horizontal(|ui| tool_strip(ui, t, active, tools)) } else { ui.vertical(|ui| tool_rows(ui, t, active, tools)) };
@@ -623,7 +680,7 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
         ui.painter().rect_filled(bar, 0.0, t.tab_strip);
         let grip = if floating {
             let x = egui::Rect::from_min_size(bar.min, vec2(BAR, CLOSE));
-            let xr = ui.interact(x, egui::Id::unique(("tool-flyout-close", key)), Sense::click());
+            let xr = ui.interact(x, bar_id.with("close"), Sense::click());
             icons::paint(ui, "x", x.shrink2(vec2(1.0, 3.0)), if xr.hovered() { t.text_strong } else { t.text });
             xr.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Put back in the toolbar")));
             out.close = xr.on_hover_text(tl!("Put back in the toolbar")).clicked();
@@ -631,7 +688,7 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
         } else {
             bar
         };
-        let resp = ui.interact(grip, bar_id(key), Sense::drag());
+        let resp = ui.interact(grip, bar_id, Sense::drag());
         let half = (grip.height() / 2.0 - 3.0).clamp(0.0, 9.0);
         for k in 0..3 {
             let x = grip.center().x - 2.0 + k as f32 * 2.0;
@@ -707,14 +764,19 @@ fn rows_width<'a>(rows: impl Iterator<Item = &'a RowText>) -> f32 {
 }
 
 /// The grab bar of the group whose first tool is `key` (one id, flyout or floating, so a drag
-/// that tears the flyout off carries on moving it).
-fn bar_id(key: &str) -> egui::Id {
-    egui::Id::unique(("tool-flyout-bar", key))
+/// that tears the flyout off carries on moving it), in the toolbar made with New Toolbar called
+/// `toolbar` (none: the Tools panel's).
+fn bar_id(toolbar: Option<&str>, key: &str) -> egui::Id {
+    let id = egui::Id::unique(("tool-flyout-bar", key));
+    match toolbar {
+        None => id,
+        Some(name) => id.with(crate::custom_toolbars::key(name)),
+    }
 }
 
 /// Where the pointer holds a floating flyout's bar, from the flyout's corner, while it's dragged.
-fn grab_id(key: &str) -> egui::Id {
-    bar_id(key).with("grab")
+fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
+    bar_id(toolbar, key).with("grab")
 }
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
@@ -762,11 +824,12 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ctx.data(|d| d.get_temp(egui::Id::unique("flyout-anchor"))).unwrap_or(egui::Rect::from_min_size(pos2(40.0, 100.0), vec2(32.0, 32.0)));
     let t = Tokens::get(ctx);
     let active = app.session.tool_id();
+    let toolbar = ctx.data(|d| d.get_temp::<Option<String>>(flyout_toolbar_id())).flatten();
     let mut input = FlyoutInput::default();
     let resp = egui::Area::new(egui::Id::unique("tool-flyout")).order(egui::Order::Foreground).fixed_pos(anchor.right_top() + vec2(8.0, -1.0)).show(
         ctx,
         |ui| {
-            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false));
+            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false, toolbar.as_deref()));
         },
     );
     // Dragging the bar tears the flyout off, and so does releasing a press over it (a click, or the
@@ -781,9 +844,12 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let grab = vec2(1.0 + strip_width(&tools) - BAR / 2.0, 1.0 + CLOSE + 4.0);
         let p = at - grab;
         if let Some(key) = tools.first() {
-            ctx.data_mut(|m| m.insert_temp(grab_id(key), grab));
+            ctx.data_mut(|m| m.insert_temp(grab_id(toolbar.as_deref(), key), grab));
         }
-        app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [p.x, p.y] });
+        // A toolbar made with New Toolbar that has gone since its flyout opened keeps no strip.
+        if let Some(strips) = strips_mut(&mut app.ui, toolbar.as_deref()) {
+            strips.push(crate::state::FloatingFlyout { tools, pos: [p.x, p.y] });
+        }
         app.ui.flyout = None;
         return;
     }
@@ -797,20 +863,38 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let _ = theme::semibold;
 }
 
+/// The toolbar made with New Toolbar whose group the open flyout shows (none: the Tools panel's).
+pub(crate) fn flyout_toolbar_id() -> egui::Id {
+    egui::Id::unique("flyout-toolbar")
+}
+
 /// The flyouts torn off the toolbar, each floating where its bar was dragged; its × puts it back.
-fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    if app.ui.floating_flyouts.is_empty() {
-        return;
+/// `custom_only`: the Tools panel is hidden, and only those torn off toolbars made with New Toolbar
+/// show.
+fn floating(app: &mut VectorcraftApp, ctx: &egui::Context, custom_only: bool) {
+    // A group torn off a toolbar made with New Toolbar shows while that toolbar does.
+    let owners: Vec<Option<String>> = (!custom_only)
+        .then_some(None)
+        .into_iter()
+        .chain(app.ui.custom_toolbars.iter().filter(|b| b.shown && !b.floating.is_empty()).map(|b| Some(b.name.clone())))
+        .collect();
+    for owner in owners {
+        floating_strips(app, ctx, owner.as_deref());
     }
+}
+
+/// The strips torn off one toolbar (`toolbar` none: the Tools panel's).
+fn floating_strips(app: &mut VectorcraftApp, ctx: &egui::Context, toolbar: Option<&str>) {
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let now = ctx.input(|i| i.time);
     let active = app.session.tool_id();
     let mut chosen = None;
     let mut closed = None;
-    for (k, f) in app.ui.floating_flyouts.iter_mut().enumerate() {
+    let Some(strips) = strips_mut(&mut app.ui, toolbar) else { return };
+    for (k, f) in strips.iter_mut().enumerate() {
         let Some(key) = f.tools.first() else { continue };
-        let id = floating_area(key);
+        let id = strip_area(toolbar, key);
         let since = ctx.data(|d| d.get_temp::<f64>(id)).map(|t0| now - t0);
         let flash = since.is_some_and(|s| (0.0..FLASH).contains(&s));
         if let Some(s) = since.filter(|_| flash) {
@@ -821,12 +905,12 @@ fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let pos = crate::tools_float::clamp(f.pos, size, screen);
         let mut input = FlyoutInput::default();
         egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
-            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true));
+            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true, toolbar));
         });
         // Dragging the bar keeps the flyout where the pointer holds it (by an offset rather than
         // each frame's motion, which a just torn-off flyout's first, unseen frame would drop).
-        let grab = grab_id(key);
-        if ctx.is_being_dragged(bar_id(key))
+        let grab = grab_id(toolbar, key);
+        if ctx.is_being_dragged(bar_id(toolbar, key))
             && let Some(at) = ctx.input(|i| i.pointer.interact_pos())
         {
             let off = ctx.data_mut(|m| *m.get_temp_mut_or_insert_with(grab, || at - pos));
@@ -842,8 +926,8 @@ fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         chosen = chosen.or(input.chosen);
     }
-    if let Some(k) = closed.filter(|k| *k < app.ui.floating_flyouts.len()) {
-        app.ui.floating_flyouts.remove(k);
+    if let Some(k) = closed.filter(|k| *k < strips.len()) {
+        strips.remove(k);
     }
     if let Some(id) = chosen {
         app.select_tool(id);
