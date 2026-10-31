@@ -39,6 +39,9 @@ pub struct LoadOptions {
     /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
     /// (which can be older than it), with a warning, instead of from the PDF part.
     pub trust_editing_data: bool,
+    /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
+    /// off, it opens as another app would open it, from the editing copy of its art or its pages.
+    pub native: bool,
 }
 
 impl Default for LoadOptions {
@@ -54,6 +57,7 @@ impl Default for LoadOptions {
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
+            native: true,
         }
     }
 }
@@ -91,7 +95,7 @@ impl LoadOptions {
             Some(v) => (v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true, false or \"always\""))?, false),
         };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data })
+        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, native: true })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another

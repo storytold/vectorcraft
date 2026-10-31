@@ -403,3 +403,51 @@ fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
     assert_eq!(comparable(&s.doc().unwrap().doc), before);
     assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
 }
+
+/// The layers of `doc` as their names and the kinds and bounds of what they hold, rounded.
+fn outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    fn walk(nodes: &[std::sync::Arc<vectorcraft_doc::Node>], depth: usize, out: &mut Vec<String>) {
+        for n in nodes {
+            let b = n.visual_bounds().map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| v.round() as i64));
+            let kind = match &n.kind {
+                vectorcraft_doc::NodeKind::Layer { .. } => "layer",
+                vectorcraft_doc::NodeKind::Group { .. } => "group",
+                vectorcraft_doc::NodeKind::Path { .. } => "path",
+                _ => "other",
+            };
+            out.push(format!("{depth} {kind} {:?} {} {b:?}", n.name, n.visible));
+            walk(n.children().map(Vec::as_slice).unwrap_or_default(), depth + 1, out);
+        }
+    }
+    let mut out = vec![];
+    walk(&doc.layers, 0, &mut out);
+    out
+}
+
+/// A `.ai` also carries the editing copy of its art that other apps read: opened without the
+/// VectorCraft document it carries, it gives back the same layers, groups and paths, its page
+/// matching them. `editingData: false` leaves the copy out.
+#[test]
+fn ai_files_carry_an_editing_copy_for_other_apps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 60, "y": 10, "width": 50, "height": 30})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({"name": "Top"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 120, "y": 50, "width": 60, "height": 40})).unwrap();
+    let before = outline(&s.doc().unwrap().doc);
+    let bytes = b64(&s.execute("document.export", &json!({"format": "ai"})).unwrap());
+    let private = vectorcraft_pdf::illustrator_data(&bytes, None).expect("the editing copy for other apps");
+    assert!(private.starts_with(b"%AI24_ZStandard_Data"));
+    let opts = LoadOptions { native: false, ..Default::default() };
+    let l = load::load_with("art.ai", &bytes, &opts).unwrap();
+    assert!(l.editing_data && !l.restored);
+    assert!(!l.warnings.iter().any(|w| w.contains("editing data")), "{:?}", l.warnings);
+    assert_eq!(outline(&l.doc), before);
+    let r = s.execute("document.export", &json!({"format": "ai", "editingData": false})).unwrap();
+    assert_eq!(vectorcraft_pdf::illustrator_data(&b64(&r), None), None);
+    assert!(s.execute("document.export", &json!({"format": "ai", "editingData": "no"})).is_err());
+}

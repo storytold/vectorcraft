@@ -64,13 +64,13 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node,
-    NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node, NodeKind,
+    ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
 
-use crate::{latin, ps};
+use crate::{ai_ops, latin, ps};
 
 mod encoding;
 mod prolog;
