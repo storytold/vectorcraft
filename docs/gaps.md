@@ -1,6 +1,12 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G4: PDF import finds installed fonts whose PDF names hold hyphens or a composite font's CMap; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (shared docked Tools surface; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+
+## Tools surface follow-up (2026-10-31)
+
+Docked Tools uses the existing craft-ui docking surface and icon-rail style, with flush square edges, matching borders, balanced tool clearance and a 2 pt gap above the grip. Existing column and floating commands remain in use; scores and estimates are unchanged.
+
+Evidence: `crates/ui-egui/src/toolbar.rs`, `panel_docking.rs` and `toolbar/tests.rs`; Windows preview reviewed with the contributor. 75 targeted toolbar/edit-drawer and docking tests passed; UI clippy passed with warnings denied. Full workspace tests were not run, as requested by the contributor.
 
 ## Feature submission evidence
 
@@ -676,6 +682,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | UI chrome: docked Tools shares craft-ui rail styling; margins and grip spacing corrected. Scores and estimates unchanged. |
 | 2026-10-31 | minor | G4: PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`. Estimate unchanged. |
 | 2026-10-31 | minor | G13: Direct Selection snaps the end of an existing straight line, dragged by its end anchor, square to straight paths and grazing curves (Smart Guides › Geometric Guides: Snap to Perpendicular and Snap to Tangent), the case the public Snap to Perpendicular and Snap to Tangent pages add to drawing with the Line Segment and Pen tools (#2530). Scores and estimates unchanged. |
 | 2026-10-31 | minor | G8: a gradient mesh read from a file is budgeted: at most about a million quads per tessellation, and a mesh with more patches than that is malformed (#3592); estimate unchanged. |

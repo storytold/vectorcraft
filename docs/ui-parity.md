@@ -1,6 +1,12 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Character panel › Language, Indian languages in Document Setup › Language, #4946 #4943) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (shared docked Tools surface; Character panel › Language, Indian languages in Document Setup › Language, #4946 #4943) · **Target:** Adobe Illustrator 2026 (30.x)
+
+## Tools surface follow-up (2026-10-31)
+
+Docked Tools uses the existing craft-ui docking surface and icon-rail style, with flush square edges, matching borders, balanced tool clearance and a 2 pt gap above the grip. Existing column and floating commands remain in use; scores and estimates are unchanged.
+
+Evidence: `crates/ui-egui/src/toolbar.rs`, `panel_docking.rs` and `toolbar/tests.rs`; Windows preview reviewed with the contributor. 75 targeted toolbar/edit-drawer and docking tests passed; UI clippy passed with warnings denied. Full workspace tests were not run, as requested by the contributor.
 
 ## Feature submission evidence
 
@@ -383,6 +389,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 |---|---|---|
 | 2026-11-01 | minor | Character panel › Language: the selected characters' language, from Document Setup's list, which gains Hindi, Marathi, Gujarati, Bengali, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia and Urdu (#4946, #4943); the Digits menu's numeral names keep their own translations; scores unchanged |
 | 2026-11-01 | minor | VectorCraft Options' Version is a menu of the versions VectorCraft writes, each named by the releases that read it, and an uncompressible version turns Use Compression off (#4931); a save refused before writing shows the Can't save alert with the reason (#4933); About › Contributors' table keeps its header row above the scrolling rows (#4944); the Gradient panel's freeform point swatch opens the point's popover (#4953); scores unchanged |
+| 2026-10-31 | minor | UI chrome: docked Tools shares craft-ui rail styling; margins and grip spacing corrected. Scores and estimates unchanged. |
 | 2026-10-31 | minor | A file opened from the file manager while VectorCraft runs opens as a new tab in that window, which comes to the front, on Windows and Linux (#4892); `--new-instance` opts out; scores unchanged |
 | 2026-10-31 | minor | Object › Path › Smooth: Auto-Smooth takes a shaky line to one smooth curve, and direct-selected anchors smooth only their section; scores unchanged |
 | 2026-10-31 | minor | New Document: More Settings has Save Preset beside the name, as Preset Details does, and saves its settings (#4893); scores and estimates unchanged |

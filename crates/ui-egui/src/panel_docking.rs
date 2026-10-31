@@ -1196,7 +1196,7 @@ fn keep_field_ending_keys(ui: &egui::Ui) {
 }
 
 /// VectorCraft's look and wording of craft-ui's docking.
-fn dock_style(ui: &egui::Ui) -> craft_ui::docking::DockStyle {
+pub(crate) fn dock_style(ui: &egui::Ui) -> craft_ui::docking::DockStyle {
     let t = crate::theme::Tokens::get(ui.ctx());
     let mut style = craft_ui::docking::DockStyle::from_ui(ui);
     style.tab_height = 33.0;
