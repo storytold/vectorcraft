@@ -4014,8 +4014,11 @@ sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {�
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
 prefix, a suffix, a name pattern or an item's name become `-` in file and folder names, a folder name ends without
 periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) that
-is the whole name or comes before its first period gets a `-` after it (`CON-.png`). The document remembers the last
-params: `document.exportSettings`. As in `document.export`,
+is the whole name or comes before its first period gets a `-` after it (`CON-.png`). When a row's file would take a
+name another row's file already has, compared without case (two PNG rows with different backgrounds and no suffix),
+the later file is written as `-2`, `-3`… (`Artboard-1-2.png`) and listed under that name in `files`; two identical
+rows write one file, and row folders that differ only in case (`Print`, `print`) are one folder, spelled as the first
+row spells it. The document remembers the last params: `document.exportSettings`. As in `document.export`,
 the reply's `warnings` lists the notes of every file exported (an image that couldn't be decoded, type written in the
 fallback font…), each note once; the export still writes or returns every file.
 
