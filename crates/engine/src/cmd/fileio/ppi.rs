@@ -1,5 +1,5 @@
 //! Image resolution metadata (pixels per inch): PNG `pHYs`, JPEG JFIF density or EXIF, TIFF and
-//! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo, a PCX
+//! WebP and JPEG XL EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo, a PCX
 //! header's HDpi and VDpi. Place
 //! sizes an image by it (72 ppi when the file has none); images converted to PNG on import keep it
 //! as a `pHYs` chunk.
@@ -16,6 +16,8 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
         jpeg(bytes)
     } else if bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*") {
         tiff(bytes)
+    } else if super::jxlread::is_jxl(bytes) {
+        jxl(bytes)
     } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
         webp(bytes)
     } else if bytes.starts_with(b"BM") {
@@ -149,6 +151,32 @@ fn webp(b: &[u8]) -> Option<(f64, f64)> {
             return tiff(data.strip_prefix(b"Exif\0\0").unwrap_or(data));
         }
         at += 8 + len + (len & 1);
+    }
+    None
+}
+
+fn jxl(b: &[u8]) -> Option<(f64, f64)> {
+    if !b.starts_with(&[0, 0, 0, 12, b'J', b'X', b'L', b' ', 13, 10, 135, 10]) {
+        return None;
+    }
+    let mut at = 12;
+    while at < b.len() {
+        let size = be32(b, at)?;
+        let ty = slice(b, at.checked_add(4)?, 4)?;
+        let (header, len) = match size {
+            0 => (8, b.len().checked_sub(at)?),
+            1 => (16, usize::try_from(u64::from_be_bytes(bytes(b, at.checked_add(8)?)?)).ok()?),
+            _ => (8, size as usize),
+        };
+        if len < header {
+            return None;
+        }
+        let payload = slice(b, at.checked_add(header)?, len - header)?;
+        if ty == b"Exif" {
+            let offset = usize::try_from(be32(payload, 0)?).ok()?;
+            return tiff(payload.get(4usize.checked_add(offset)?..)?);
+        }
+        at = at.checked_add(len)?;
     }
     None
 }
