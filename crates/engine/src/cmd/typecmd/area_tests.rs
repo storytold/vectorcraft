@@ -1316,9 +1316,10 @@ fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
     s.execute("text.setStyle", &json!({"style": "Bold"})).unwrap();
     assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
     s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 75}})).unwrap();
-    s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Inter"}})).unwrap();
+    s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Source Sans 3"}})).unwrap();
     assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
-    // A static font has no axes to set.
+    // A static font has no axes to set (Source Sans 3, not Inter: an installed Inter
+    // Variable would shadow the bundled static and give it axes).
     s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
     assert_eq!(saved(&s), None);
     // A missing font keeps them as given, for when it is installed.
@@ -1340,7 +1341,7 @@ fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
             {"tag": "wdth", "name": "Width", "min": 75.0, "default": 100.0, "max": 100.0, "value": 100.0, "hidden": false},
         ])
     );
-    assert_eq!(s.execute("text.fontList", &json!({"family": "Inter"})).unwrap()["axes"], json!([]));
+    assert_eq!(s.execute("text.fontList", &json!({"family": "Source Sans 3"})).unwrap()["axes"], json!([]));
 }
 
 #[test]
