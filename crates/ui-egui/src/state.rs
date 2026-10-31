@@ -563,6 +563,10 @@ pub struct UiState {
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
+    /// The Recolor Artwork Preserve checkboxes confirmed last (`preserveWhite`, `preserveBlack`,
+    /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
+    #[serde(default)]
+    pub recolor_preserve: Value,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -904,6 +908,7 @@ impl Default for UiState {
             eps_options: Value::Null,
             offset_path: Value::Null,
             average_join: Value::Null,
+            recolor_preserve: Value::Null,
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
