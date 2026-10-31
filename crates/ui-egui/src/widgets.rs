@@ -509,6 +509,43 @@ mod gradient_chip_tests {
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
     }
+
+    /// At a position and display scale that fall between pixels, the gradient chip covers the same
+    /// pixel rows as a colour or None chip beside it (#3826). Filled rectangles are drawn on whole
+    /// pixels, so the toolbar's Gradient button sat up to half a pixel off its neighbors.
+    #[test]
+    fn gradient_chip_lines_up_with_a_solid_chip() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        // Without anti-aliasing, a filled rectangle's mesh is exactly the rectangle it fills.
+        ctx.tessellation_options_mut(|o| o.feathering = false);
+        let chip = |x: f32| Rect::from_min_size(pos2(x, 40.3), vec2(11.0, 11.0));
+        let mut shapes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                paint_chip(ui, chip(10.2), &Paint::solid(Color::BLACK));
+                gradient_chip(ui, chip(23.2), &paint(GradientKind::Linear, 0.0));
+            });
+            out.textures_delta.clear();
+            assert_eq!(out.pixels_per_point, 1.5);
+            shapes = out.shapes;
+        }
+        let bounds = |shape: egui::epaint::ClippedShape| {
+            let mut r = Rect::NOTHING;
+            for p in ctx.tessellate(vec![shape], 1.5) {
+                if let egui::epaint::Primitive::Mesh(m) = p.primitive {
+                    m.vertices.iter().for_each(|v| r.extend_with(v.pos));
+                }
+            }
+            r
+        };
+        let n = shapes.len();
+        assert!(n >= 2, "{n} shapes");
+        let gradient = bounds(shapes.remove(n - 1));
+        let solid = bounds(shapes.remove(n - 2));
+        assert_eq!((gradient.top(), gradient.bottom()), (solid.top(), solid.bottom()), "gradient {gradient:?}, solid {solid:?}");
+        assert_eq!(gradient, egui::emath::GuiRounding::round_to_pixels(chip(23.2), 1.5));
+    }
 }
 
 #[cfg(test)]
