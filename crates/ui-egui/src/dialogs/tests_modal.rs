@@ -133,10 +133,17 @@ fn tab_skips_the_band_that_moves_a_dialog() {
         settle(&ctx, &mut app);
         let band = modal::handle(id);
         assert!(ctx.read_response(band).is_some(), "{name}: the band is drawn");
+        let window = ctx.memory(|m| m.area_rect(id)).unwrap_or_else(|| panic!("{name}: the window is drawn"));
         let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 30, |events| {
             frame(&ctx, &mut app, events);
         });
-        assert!(!stops.is_empty(), "{name}: Tab reaches the dialog's controls");
+        let inside = |s: &egui::Id| ctx.read_response(*s).is_some_and(|r| r.rect.is_positive() && window.contains_rect(r.rect));
+        assert!(stops.iter().any(inside), "{name}: Tab reaches a control in the dialog: {stops:?}");
+        let backdrop: Vec<egui::Id> = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().filter(|(l, _)| **l == modal::backdrop()).flat_map(|(_, w)| w.iter()).map(|w| w.id).collect()
+        });
+        assert!(!backdrop.is_empty(), "{name}: the backdrop is drawn");
+        assert!(!stops.iter().any(|id| backdrop.contains(id)), "{name}: Tab stops on the backdrop: {stops:?}");
         assert!(!stops.contains(&band), "{name}: {stops:?}");
     }
 }

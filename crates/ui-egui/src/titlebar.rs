@@ -403,7 +403,9 @@ mod tests {
         let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 40, |events| {
             w.frame(events);
         });
-        assert!(!stops.is_empty(), "Tab reaches the bar's controls");
+        for c in CAPTIONS {
+            assert!(stops.contains(&caption_id(c)), "Tab reaches the {c:?} button: {stops:?}");
+        }
         let regions: Vec<Id> = std::iter::once(Id::unique("titlebar-drag")).chain((0..8usize).map(|i| Id::unique(("titlebar-resize", i)))).collect();
         assert!(!stops.iter().any(|id| regions.contains(id)), "{stops:?}");
     }
