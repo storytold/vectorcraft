@@ -717,6 +717,9 @@ font-technology	Variable	Μεταβλητές
 	No	Όχι
 	Delete Tab	Διαγραφή στηλοθέτη
 	Delete the graphic style “{name}”?	Να διαγραφεί το στυλ γραφικών «{name}»;
+	Delete Action Sets	Διαγραφή συνόλων ενεργειών
+	Delete the action set “{name}” and its actions?	Να διαγραφεί το σύνολο ενεργειών «{name}» και οι ενέργειές του;
+	Delete the selected action sets and their actions?	Να διαγραφούν τα επιλεγμένα σύνολα ενεργειών και οι ενέργειές τους;
 	Delete Theme	Διαγραφή θέματος
 	Delete theme	Διαγραφή θέματος
 	Delete these {n} graphic styles?	Να διαγραφούν αυτά τα {n} στυλ γραφικών;

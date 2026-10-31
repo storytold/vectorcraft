@@ -1310,6 +1310,9 @@ digits	Hindi	ヒンディー数字
 	Delete Width Point	幅ポイントを削除
 	Delete Workspace	ワークスペースを削除
 	Delete the graphic style “{name}”?	グラフィックスタイル「{name}」を削除しますか？
+	Delete Action Sets	アクションセットを削除
+	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
+	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除

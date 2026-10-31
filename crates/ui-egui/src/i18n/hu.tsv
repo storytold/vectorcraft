@@ -982,6 +982,9 @@ font-technology	Variable	Változó
 	No	Nem
 	Delete Tab	Tabulátor törlése
 	Delete the graphic style “{name}”?	Törlöd ezt a grafikai stílust: „{name}”?
+	Delete Action Sets	Műveletkészletek törlése
+	Delete the action set “{name}” and its actions?	Törlöd ezt a műveletkészletet és a műveleteit: „{name}”?
+	Delete the selected action sets and their actions?	Törlöd a kijelölt műveletkészleteket és a műveleteiket?
 	Delete the library “{name}”?	Törlöd ezt a könyvtárat: „{name}”?
 	Delete Theme	Téma törlése
 	Delete theme	Téma törlése

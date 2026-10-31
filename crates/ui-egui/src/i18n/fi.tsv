@@ -1532,6 +1532,9 @@ lighting	Light	Valo
 	Save to Swatches	Tallenna värimalleihin
 	Delete Graphic Style (Alt-click: without asking)	Poista grafiikkatyyli (Alt-napsautus: kysymättä)
 	Delete the graphic style “{name}”?	Poistetaanko grafiikkatyyli ”{name}”?
+	Delete Action Sets	Poista toimintosarjat
+	Delete the action set “{name}” and its actions?	Poistetaanko toimintosarja ”{name}” ja sen toiminnot?
+	Delete the selected action sets and their actions?	Poistetaanko valitut toimintosarjat ja niiden toiminnot?
 	Delete these {n} graphic styles?	Poistetaanko nämä {n} grafiikkatyyliä?
 	Delete this {n} graphic style?	Poistetaanko tämä {n} grafiikkatyyli?
 	Graphic Style Libraries Menu	Grafiikkatyylikirjastojen valikko

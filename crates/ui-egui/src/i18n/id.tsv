@@ -1472,6 +1472,9 @@ lighting	Light	Cahaya
 	Save to Swatches	Simpan ke swatch
 	Delete Graphic Style (Alt-click: without asking)	Hapus gaya grafis (Alt+klik: tanpa konfirmasi)
 	Delete the graphic style “{name}”?	Hapus gaya grafis “{name}”?
+	Delete Action Sets	Hapus set tindakan
+	Delete the action set “{name}” and its actions?	Hapus set tindakan “{name}” beserta tindakannya?
+	Delete the selected action sets and their actions?	Hapus set tindakan yang dipilih beserta tindakannya?
 	Delete these {n} graphic styles?	Hapus {n} gaya grafis ini?
 	Delete this {n} graphic style?	Hapus {n} gaya grafis ini?
 	Graphic Style Libraries Menu	Menu pustaka gaya grafis

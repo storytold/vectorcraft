@@ -1535,6 +1535,9 @@ lighting	Light	Svjetlo
 	Save to Swatches	Sačuvaj u uzorke boja
 	Delete Graphic Style (Alt-click: without asking)	Izbriši grafički stil (Alt-klik: bez pitanja)
 	Delete the graphic style “{name}”?	Izbrisati grafički stil „{name}”?
+	Delete Action Sets	Izbriši skupove akcija
+	Delete the action set “{name}” and its actions?	Izbrisati skup akcija „{name}” i njegove akcije?
+	Delete the selected action sets and their actions?	Izbrisati odabrane skupove akcija i njihove akcije?
 	Delete these {n} graphic styles?	Izbrisati ove grafičke stilove ({n})?
 	Delete this {n} graphic style?	Izbrisati ovaj grafički stil ({n})?
 	Graphic Style Libraries Menu	Meni biblioteka grafičkih stilova

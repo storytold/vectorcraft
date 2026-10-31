@@ -675,6 +675,9 @@
 	Delete Width Point	Excluir Ponto de Largura
 	Delete Workspace	Excluir Espaço de Trabalho
 	Delete the graphic style “{name}”?	Excluir o estilo gráfico “{name}”?
+	Delete Action Sets	Excluir Conjuntos de Ações
+	Delete the action set “{name}” and its actions?	Excluir o conjunto de ações “{name}” e suas ações?
+	Delete the selected action sets and their actions?	Excluir os conjuntos de ações selecionados e suas ações?
 	Delete theme	Excluir tema
 	Delete this saved preset	Excluir este predefinido salvo
 	Delete {kind} Style	Excluir Estilo de {kind}

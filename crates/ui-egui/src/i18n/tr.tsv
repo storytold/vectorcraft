@@ -737,6 +737,9 @@ font-technology	Variable	Değişken
 	No	Hayır
 	Delete Tab	Sekmeyi Sil
 	Delete the graphic style “{name}”?	“{name}” grafik stili silinsin mi?
+	Delete Action Sets	Eylem Setlerini Sil
+	Delete the action set “{name}” and its actions?	“{name}” eylem seti ve eylemleri silinsin mi?
+	Delete the selected action sets and their actions?	Seçili eylem setleri ve eylemleri silinsin mi?
 	Delete Theme	Temayı Sil
 	Delete theme	Temayı sil
 	Delete these {n} graphic styles?	Bu {n} grafik stilleri silinsin mi?

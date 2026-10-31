@@ -448,6 +448,10 @@ pub struct UiState {
     /// with New Set): a recording goes into it and Set Options renames it. Not saved.
     #[serde(skip)]
     pub action_set: Option<usize>,
+    /// The sets selected in the Actions panel, in index order: the current set and the sets a
+    /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
+    #[serde(skip)]
+    pub action_sets_selected: Vec<usize>,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
@@ -872,6 +876,7 @@ impl Default for UiState {
             about: false,
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
+            action_sets_selected: vec![],
             recording: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),

@@ -701,6 +701,9 @@
 	No	否
 	Delete Tab	删除制表位
 	Delete the graphic style “{name}”?	要删除图形样式“{name}”吗？
+	Delete Action Sets	删除动作组
+	Delete the action set “{name}” and its actions?	要删除动作组“{name}”及其中的动作吗？
+	Delete the selected action sets and their actions?	要删除所选动作组及其中的动作吗？
 	Delete Theme	删除主题
 	Delete theme	删除主题
 	Delete these {n} graphic styles?	要删除这 {n} 个图形样式吗？

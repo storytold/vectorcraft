@@ -747,6 +747,9 @@ font-technology	Variable	Variables
 	Delete Save for Web Preset	Supprimer le paramètre prédéfini Enregistrer pour le Web
 	Delete Selected Item	Supprimer l’élément sélectionné
 	Delete Selection	Supprimer la sélection
+	Delete Action Sets	Supprimer les jeux de scripts
+	Delete the action set “{name}” and its actions?	Supprimer le jeu de scripts « {name} » et ses scripts ?
+	Delete the selected action sets and their actions?	Supprimer les jeux de scripts sélectionnés et leurs scripts ?
 	Delete Slices	Supprimer les tranches
 	Delete Spine Point	Supprimer le point de la dorsale
 	Delete Stop	Supprimer l’étape de dégradé

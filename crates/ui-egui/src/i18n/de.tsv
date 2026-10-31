@@ -737,6 +737,9 @@ font-technology	Variable	Variabel
 	No	Nein
 	Delete Tab	Tabulator löschen
 	Delete the graphic style “{name}”?	Grafikstil „{name}“ löschen?
+	Delete Action Sets	Aktionssätze löschen
+	Delete the action set “{name}” and its actions?	Aktionssatz „{name}“ und seine Aktionen löschen?
+	Delete the selected action sets and their actions?	Ausgewählte Aktionssätze und ihre Aktionen löschen?
 	Delete Theme	Thema löschen
 	Delete theme	Thema löschen
 	Delete these {n} graphic styles?	Diese {n} Grafikstile löschen?

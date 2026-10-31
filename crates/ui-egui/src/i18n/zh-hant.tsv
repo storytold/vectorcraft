@@ -720,6 +720,9 @@ font-technology	Variable	可變
 	No	否
 	Delete Tab	刪除定位點
 	Delete the graphic style “{name}”?	要刪除繪圖樣式「{name}」嗎？
+	Delete Action Sets	刪除動作組
+	Delete the action set “{name}” and its actions?	要刪除動作組「{name}」及其中的動作嗎？
+	Delete the selected action sets and their actions?	要刪除所選動作組及其中的動作嗎？
 	Delete Theme	刪除主題
 	Delete theme	刪除主題
 	Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？

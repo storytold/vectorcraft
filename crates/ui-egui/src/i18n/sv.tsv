@@ -745,6 +745,9 @@ font-technology	Variable	Variabla
 	No	Nej
 	Delete Tab	Radera tabb
 	Delete the graphic style “{name}”?	Radera grafikstilen ”{name}”?
+	Delete Action Sets	Radera åtgärdsuppsättningar
+	Delete the action set “{name}” and its actions?	Radera åtgärdsuppsättningen ”{name}” och dess åtgärder?
+	Delete the selected action sets and their actions?	Radera de markerade åtgärdsuppsättningarna och deras åtgärder?
 	Delete Theme	Radera tema
 	Delete theme	Radera tema
 	Delete these {n} graphic styles?	Radera dessa {n} grafikstilar?

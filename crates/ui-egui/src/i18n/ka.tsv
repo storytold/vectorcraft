@@ -1389,6 +1389,9 @@ lighting	Light	სინათლე
 	Save to Swatches	ფერის ნიმუშებში შენახვა
 	Delete Graphic Style (Alt-click: without asking)	გრაფიკული სტილის წაშლა (Alt-დაწკაპუნებით: დაუკითხავად)
 	Delete the graphic style “{name}”?	წაიშალოს გრაფიკული სტილი „{name}“?
+	Delete Action Sets	მოქმედებების ნაკრებების წაშლა
+	Delete the action set “{name}” and its actions?	წაიშალოს მოქმედებების ნაკრები „{name}“ და მისი მოქმედებები?
+	Delete the selected action sets and their actions?	წაიშალოს მონიშნული მოქმედებების ნაკრებები და მათი მოქმედებები?
 	Delete these {n} graphic styles?	წაიშალოს ეს გრაფიკული სტილები ({n})?
 	Delete this {n} graphic style?	წაიშალოს ეს გრაფიკული სტილი ({n})?
 	Graphic Style Libraries Menu	გრაფიკული სტილების ბიბლიოთეკების მენიუ
