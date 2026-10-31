@@ -734,7 +734,8 @@ impl Tool for SelectionTool {
                             }
                         } else if !cx.selection.contains(top) {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
-                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
+                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd {
+                            // With Alt too: a drag from here copies, and only a click makes the key.
                             key = Some(top);
                         }
                         // Grabbed by no anchor or centre, a press on a path's stroke or beside its
