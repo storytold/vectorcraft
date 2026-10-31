@@ -623,11 +623,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let there = |w: &Swatch| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
-            let mut probe = (**d).clone();
-            match patternlib::import(&mut probe, src, pattern) {
-                (target, false) => patternlib::pattern_swatch(d, &target),
-                _ => None,
-            }
+            patternlib::existing_pattern(d, src, pattern).and_then(|target| patternlib::pattern_swatch(d, &target))
         }
         _ => d.swatch(&w.name).is_some_and(|x| x.paint == w.paint).then(|| w.name.clone()),
     };
@@ -655,7 +651,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
                     // The pattern comes with its swatch; a pattern the document has without one
                     // gets one.
-                    let (target, _) = patternlib::import(d, src, pattern);
+                    let target = patternlib::import(d, src, pattern);
                     let name = match patternlib::pattern_swatch(d, &target) {
                         Some(name) => name,
                         None => {

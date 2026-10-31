@@ -695,6 +695,25 @@ fn pattern_libraries_bring_their_patterns_and_add_each_once() {
     let d = doc(&s);
     assert!(added.iter().all(|n| d.pattern(n).is_some() && d.swatch(n).is_some()), "{added:?}");
     assert!(matches!(d.node(id).unwrap().appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Polka Dots 2"));
+    // A swatch of the pattern moved in its space is not the pattern's own swatch: a new one is added
+    // and applied, and no second pattern.
+    s.edit("Move", |d, _| {
+        if let Some(w) = d.swatches_iter_mut().find(|w| w.name == "Polka Dots 2") {
+            w.paint = Paint::Pattern { pattern: "Polka Dots 2".into(), xf: kurbo::Affine::translate((3.0, 0.0)) };
+        }
+        Ok(())
+    })
+    .unwrap();
+    let patterns = doc(&s).patterns.len();
+    let r = run(&mut s, "swatch.library.add", json!({"library": "geometric-patterns", "names": ["Polka Dots"], "apply": "fill"}));
+    let applied = r["applied"].as_str().unwrap().to_string();
+    assert_ne!(applied, "Polka Dots 2");
+    let d = doc(&s);
+    assert_eq!(
+        (d.patterns.len(), d.swatch(&applied).map(|w| w.paint.clone())),
+        (patterns, Some(vectorcraft_doc::pattern::pattern_paint("Polka Dots 2")))
+    );
+    assert_eq!(d.node(id).unwrap().appearance.fill_paint(), vectorcraft_doc::pattern::pattern_paint("Polka Dots 2"));
     // A pattern library has no colours to limit to, and is built in.
     assert!(s.execute("swatch.library.copyToUser", &json!({"library": "geometric-patterns"})).is_err());
 }

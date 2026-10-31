@@ -79,17 +79,30 @@ pub fn pattern_source(name: &str) -> Option<Arc<Document>> {
 
 /// Add pattern `name` of library `lib` to `d` with the resources its art uses, as pasting art
 /// painted with it does: the same pattern there already is used, and a name another pattern or
-/// swatch has gets a number → the pattern's name in `d`, and whether anything was added.
-pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> (String, bool) {
+/// swatch has gets a number → the pattern's name in `d`.
+pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> String {
     let user = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(pattern_paint(name), Paint::None, 0.0));
     let imported = Clipboard::gather(lib, vec![user]).import_into(d, &SwatchChoices::default(), false);
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name).and_then(|r| r["to"].as_str());
-    (renamed.unwrap_or(name).to_string(), imported.added > 0)
+    renamed.unwrap_or(name).to_string()
 }
 
-/// The name of the first swatch of `d` that paints with pattern `pattern`.
+/// The pattern of `d` that is pattern `name` of library `lib`: the same tile options and art under
+/// that name or a numbered copy of it ("Polka Dots 2"), the name itself first.
+pub(crate) fn existing_pattern(d: &Document, lib: &Document, name: &str) -> Option<String> {
+    let def = lib.pattern(name)?;
+    let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
+    let copy = |n: &str| n == name || n.strip_prefix(name).and_then(|r| r.strip_prefix(' ')).is_some_and(|r| r.parse::<u32>().is_ok());
+    let mut found: Vec<&PatternDef> = d.patterns.iter().filter(|p| copy(&p.name) && bare(p) == bare(def) && p.art == def.art).collect();
+    found.sort_by_key(|p| p.name != name);
+    found.first().map(|p| p.name.clone())
+}
+
+/// The name of the first swatch of `d` that paints with pattern `pattern` as placed in its own
+/// space, as a pattern's own swatch does.
 pub(crate) fn pattern_swatch(d: &Document, pattern: &str) -> Option<String> {
-    d.swatches_iter().find(|w| matches!(&w.paint, Paint::Pattern { pattern: p, .. } if p == pattern)).map(|w| w.name.clone())
+    let paint = pattern_paint(pattern);
+    d.swatches_iter().find(|w| w.paint == paint).map(|w| w.name.clone())
 }
 
 /// A pattern of `shapes` filled with black on the tile `w` × `h` from the origin (`tile_type`:
