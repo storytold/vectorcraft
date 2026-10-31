@@ -1,5 +1,5 @@
 use super::para_style::FirstBaseline;
-use super::*;
+use super::{Deserialize, PathData, Serialize};
 
 /// Area Type Options "Align" (vertical): where the lines of each row/column sit in it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

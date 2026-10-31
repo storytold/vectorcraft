@@ -65,7 +65,7 @@ pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRA
 `CRAFT_FONTS_REQUIRED=1`, so releases embed its Japanese fonts and fail rather than ship without
 them (the web build embeds only the UI font, BIZ UDPGothic Regular, to stay small). The packages carry each embedded font's licence as `OFL-<family>.txt`
 (`copy_font_licences` in `packaging/env.sh`). Bump the pins deliberately, in every job at once.
-The rules are in craftrules `standards/fonts.md`, the build option in
+The build option is in
 [`docs/development.md`](development.md) › Fonts.
 
 ### macOS
@@ -128,11 +128,15 @@ to the target triple, so host build scripts aren't affected.
   inside the signed bundle), for an AppImage next to the `.AppImage` file (`$APPIMAGE`; the mounted
   executable's own folder is read-only). Flatpak isn't supported: `/app` is read-only and the
   sandbox has no folder "beside the app", so a Flatpak install always uses its own config folder.
-- `vectorcraft.wxs` (WiX) is a per-machine install into Program Files with a Start Menu shortcut
+- `vectorcraft.wxs` (WiX) is a dual-scope package (per-user by default into
+  `%LOCALAPPDATA%\Programs\ArtCraft\VectorCraft`, per-machine into `Program Files\ArtCraft\VectorCraft` (`Program Files (x86)` for the 32-bit build),
+  see `packaging/windows/INSTALLATION.md`) with a Start Menu shortcut
   and an App Paths entry (Win+R `vectorcraft`). Same-version upgrades are allowed, so release
   candidates replace each other.
-- Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page):
-  Welcome, install folder (remembered for upgrades in `HKLM\Software\VectorCraft\InstallDir`),
+- Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page; the scope page appears only for a new full-UI install, not for
+  maintenance, uninstall or reduced and silent runs):
+  a scope page ("Only for me" or "Everyone on this computer"), Welcome, install folder (remembered for
+  upgrades in `HKLM` or `HKCU\Software\VectorCraft\InstallDir` according to scope),
   Shortcuts (a ticked "Create a desktop shortcut" box), Ready, a progress page, and a Finish page
   that says where to find the app, with a ticked "Launch VectorCraft" box. The pages name the full
   version (`vectorcraft.en-us.wxl`). `package.ps1` draws the wizard's banner and side bitmaps from
@@ -160,7 +164,7 @@ to the target triple, so host build scripts aren't affected.
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
 **Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
-PSB, `.ps` PostScript and Targa, so file managers list VectorCraft under Open With for them.
+PSB, `.ps` PostScript, Targa and PCX, so file managers list VectorCraft under Open With for them.
 `ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
 documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
 file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.

@@ -544,6 +544,50 @@ fn selection_squares_show_and_select_a_rows_art() {
     let _ = (layer, sub, b);
 }
 
+/// Alt-click on a layer's or sublayer's name makes it current, as a plain click does, and selects
+/// its art, as its selection square does. On another row, beside the name or with Shift or Ctrl/Cmd
+/// held too, it is the click without Alt.
+#[test]
+fn alt_clicking_a_layer_name_selects_its_art() {
+    let (mut app, [layer, sub, g, _, a, c]) = nested();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    // The rows' names start right of the thumbnail; the sublayer's row is one level deeper.
+    let name = |i: usize, depth: f32| egui::pos2(2.0 * COLUMN + 2.0 + 6.0 + depth * INDENT + 16.0 + 30.0, circles[i].y);
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        (st.selection.objects.clone(), st.highlighted_rows(), st.current_layer())
+    };
+    click_with(&mut app, &ctx, name(1, 1.0), egui::Modifiers::ALT);
+    assert_eq!(state(&app), (vec![a, g], vec![sub], Some(sub)), "the sublayer's art");
+    click_with(&mut app, &ctx, name(0, 0.0), egui::Modifiers::ALT);
+    assert_eq!(state(&app), (vec![c, a, g], vec![layer], Some(layer)), "the layer's, its sublayer's too");
+    app.session.execute("select.none", &json!({})).unwrap();
+    // A group's row, the space right of a layer's name, Alt+Shift and Ctrl/Cmd+Alt select nothing.
+    click_with(&mut app, &ctx, name(2, 2.0), egui::Modifiers::ALT);
+    assert_eq!(state(&app), (vec![], vec![g], Some(sub)), "a group's row");
+    click_with(&mut app, &ctx, circles[0] - vec2(40.0, 0.0), egui::Modifiers::ALT);
+    assert_eq!(state(&app), (vec![], vec![layer], Some(layer)), "beside the name");
+    click_with(&mut app, &ctx, name(1, 1.0), egui::Modifiers::ALT | egui::Modifiers::SHIFT);
+    assert_eq!(state(&app).0, vec![], "Alt+Shift");
+    click_with(&mut app, &ctx, name(0, 0.0), egui::Modifiers::ALT | egui::Modifiers::COMMAND);
+    assert_eq!(state(&app).0, vec![], "Ctrl/Cmd+Alt");
+}
+
+/// Alt-click right of a one-letter layer name, inside the wider rename target, selects nothing.
+#[test]
+fn alt_clicking_beside_a_short_layer_name_selects_nothing() {
+    let (mut app, [_, sub, ..]) = nested();
+    app.session.execute("layer.setProps", &json!({"ids": [sub.0], "name": "I"})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    // The sublayer's name area starts here; "I" ends about 5 points in, the rename target 20 points in.
+    let name_left = 2.0 * COLUMN + 2.0 + 6.0 + INDENT + 40.0;
+    click_with(&mut app, &ctx, egui::pos2(name_left + 14.0, circles[1].y), egui::Modifiers::ALT);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.selection.objects.clone(), st.current_layer()), (vec![], Some(sub)));
+}
+
 #[test]
 fn eye_and_lock_toggle_nested_rows_and_drag_down_the_column() {
     let (mut app, [_, sub, g, b, a, _]) = nested();
@@ -994,6 +1038,50 @@ fn cmd_alt_l_opens_new_layer_options_as_alt_clicking_new_layer_does() {
     press(&mut keyed, egui::Modifiers::COMMAND);
     assert!(keyed.ui.dialog.is_none(), "Cmd+L opens no dialog");
     assert_eq!(names(&keyed).len(), 4);
+}
+
+/// Ctrl/Cmd+Alt-click on the New Layer button adds a layer directly below the current layer, and
+/// on the New Sublayer button a sublayer under the current layer's contents, without a dialog and
+/// in one undo step each. A plain click still adds the layer above the current layer and the
+/// sublayer on top, and an Alt-click still opens Layer Options.
+#[test]
+fn cmd_alt_click_puts_a_new_layer_below_and_a_new_sublayer_at_the_bottom() {
+    let (mut app, first, [a, b]) = two_rects();
+    app.session.execute("layer.new", &json!({"name": "Top"})).unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    let ctx = egui::Context::default();
+    let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.display_name()).collect::<Vec<_>>();
+    let undos = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let cmd_alt = egui::Modifiers::COMMAND | egui::Modifiers::ALT;
+    // Clicks the bottom bar's button `k` (1: New Layer, 2: New Sublayer) with `mods` held.
+    let click = |app: &mut VectorcraftApp, k: usize, mods: egui::Modifiers| {
+        let at = bar_buttons(app, &ctx)[k];
+        click_with(app, &ctx, at, mods);
+    };
+    let before = undos(&app);
+    click(&mut app, 1, cmd_alt);
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    assert_eq!(names(&app), ["Layer 3", "Layer 1", "Top"]);
+    assert_eq!(undos(&app), before + 1);
+    app.session.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    click(&mut app, 2, cmd_alt);
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    let d = &app.session.active().unwrap().doc;
+    let kids: Vec<NodeId> = d.node(first).unwrap().children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(kids.len(), 3);
+    assert!(d.node(kids[0]).is_some_and(Node::is_layer), "the sublayer is under the rectangles");
+    assert_eq!(kids[1..], [a, b]);
+    assert_eq!(undos(&app), before + 2);
+    // A plain click: above the current layer, and the sublayer on top.
+    app.session.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    click(&mut app, 2, egui::Modifiers::NONE);
+    let d = &app.session.active().unwrap().doc;
+    assert!(d.node(first).unwrap().children().unwrap().last().is_some_and(|n| n.is_layer()), "a plain click puts it on top");
+    app.session.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    click(&mut app, 1, egui::Modifiers::NONE);
+    assert_eq!(names(&app), ["Layer 3", "Layer 1", "Layer 6", "Top"]);
+    click(&mut app, 1, egui::Modifiers::ALT);
+    assert!(app.ui.dialog.is_some(), "Alt-click opens Layer Options");
 }
 
 #[test]

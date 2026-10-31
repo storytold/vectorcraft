@@ -1,5 +1,5 @@
 use super::drag::{PanelDrag, drag_source};
-use super::*;
+use super::{Color32, Paint, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, pos2, vec2};
 
 /// Draw a paint preview (swatch chip) into `rect`.
 pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {

@@ -234,34 +234,52 @@ fn maybe_content(dict: &Dict<'_>) -> bool {
         && ![&b"Length1"[..], b"Length2", b"Length3", b"FunctionType", b"N"].iter().any(|k| dict.contains_key(k))
 }
 
-/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
-/// predictor it can't apply, or more than its [`budget`] decoded?
-pub(crate) fn unsafe_stream(stream: &Stream<'_>) -> bool {
-    unsafe_data(stream, true)
+/// Why the reader would fail on a stream ([`refused`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Refused {
+    /// A predictor whose decode parameters it can't apply ([`bad_predictor`]).
+    Parameters,
+    /// More than this many bytes decoded: the stream's [`budget`].
+    TooBig(usize),
 }
 
-/// [`unsafe_stream`], looking for inline images in it when `inside` (not in an inline image's own
+/// A stream the reader would fail on: why, and whether it is an inline image in it that it would
+/// fail on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Refusal {
+    pub why: Refused,
+    pub inline_image: bool,
+}
+
+/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
+/// predictor it can't apply, or more than its [`budget`] decoded? Why, if so.
+pub(crate) fn refused(stream: &Stream<'_>) -> Option<Refusal> {
+    refused_data(stream, true)
+}
+
+/// [`refused`], looking for inline images in it when `inside` (not in an inline image's own
 /// data: it would be read again for each inline image a hostile one nests).
-fn unsafe_data(stream: &Stream<'_>, inside: bool) -> bool {
+fn refused_data(stream: &Stream<'_>, inside: bool) -> Option<Refusal> {
     let dict = stream.dict();
+    let refusal = |why| Some(Refusal { why, inline_image: !inside });
     if params(dict).iter().any(bad_predictor) {
-        return true;
+        return refusal(Refused::Parameters);
     }
     let content = inside && maybe_content(dict);
     match decode(&stream.raw_data(), dict, content) {
-        Err(TooBig) => true,
+        Err(TooBig) => refusal(Refused::TooBig(budget(dict))),
         Ok(Some(data)) if content && data.windows(2).any(|w| w == b"ID") => {
             let mut ops = TypedIter::new(&data);
             while let Some(op) = ops.next() {
                 if let TypedInstruction::InlineImage(image) = op
-                    && unsafe_data(image.0, false)
+                    && let Some(r) = refused_data(image.0, false)
                 {
-                    return true;
+                    return Some(r);
                 }
             }
-            false
+            None
         }
-        Ok(_) => false,
+        Ok(_) => None,
     }
 }
 

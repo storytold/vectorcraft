@@ -1,6 +1,6 @@
 # Architecture
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF reader and writer; app output policy and editable-import adapter retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print; Windows 7 fallback retained) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF reader and writer; app output policy and editable-import adapter retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft is built today. The design rationale lives in the local, gitignored `plan/architecture.md`;
 this file describes what is committed. Day-to-day rules (clean-room, never crash, quality gates) are in
@@ -55,9 +55,7 @@ lists every format read or written; importers are fuzzed (`crates/engine/tests/i
 Desktop printer discovery and PDF submission use `craft-print`, pinned to an immutable
 craft-libs revision. The engine still owns sheet composition, copies, separations and colour
 management. Submission runs on the existing background worker; its receipt or refusal
-reaches the status bar, and Quit waits for pending submissions. Windows 7 retains WMI discovery
-and the installed viewer's Print/PrintTo verb;
-its target excludes the shared backend because Windows.Data.Pdf is unavailable there.
+reaches the status bar, and Quit waits for pending submissions.
 
 PDF writing uses the optional `craft-pdf` writer at an immutable craft-libs revision. Shared
 configuration, metadata, font preparation and guarded serialization leave drawing, colour

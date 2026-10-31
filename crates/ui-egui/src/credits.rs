@@ -1,6 +1,6 @@
 //! The About window's credits: every contributor (GitHub login always; display and real names only
 //! with recorded consent) and the AI models that helped. The tables are baked into the binary by
-//! build.rs from contributors/contributors.json (craftrules standards/contributors.md); nothing is
+//! build.rs from contributors/contributors.json; nothing is
 //! read at run time.
 
 use std::cmp::Ordering;
@@ -238,7 +238,7 @@ pub fn contributors_ui(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         ui.separator();
         ui.label(tl!("Sort"));
         ui.name_inputs(tl!("Sort"), |ui| {
-            egui::ComboBox::from_id_salt("credits_sort").selected_text(v.key.label().0).show_ui(ui, |ui| {
+            craft_ui::ComboBox::from_id_salt("credits_sort").selected_text(v.key.label().0).show_ui(ui, |ui| {
                 for k in SortKey::ALL {
                     if ui.selectable_label(v.key == k, k.label().0).clicked() {
                         v.key = k;

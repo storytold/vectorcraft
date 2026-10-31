@@ -7,7 +7,7 @@ use craft_keymap::import::namematch::Candidate;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::shortcut_import::{Code, KIND, Review, Row, Status, report};
+use super::shortcut_import::{Code, KIND, Review, Row, Status, report, target_picker};
 use super::*;
 use crate::{io, shortcut_editor, theme};
 
@@ -575,4 +575,59 @@ fn long_names_match_and_apply() {
     let name = "Acme Copy ".repeat(150);
     let (out, ov) = apply_rows(&mut app, "defaults", &[(&name, "Menus", "edit.copy", "Cmd+Alt+Shift+F11")]);
     assert_eq!((out["applied"].clone(), ov), (json!(1), json!({"edit.copy": "Cmd+Alt+Shift+F11"})));
+}
+
+/// A search in a row's target picker that matches nothing shrinks its menu to the search field
+/// and "No equivalent"; clearing the search lists every entry again, and the menu grows back to
+/// its height before the search (egui#5225). The search field stays where it was throughout.
+#[test]
+fn the_target_picker_grows_back_when_a_search_that_matched_nothing_is_cleared() {
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let r = Row { name: "Acme Undo".into(), ..Default::default() };
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let mut at = egui::Pos2::ZERO;
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            target_picker(ui, 0, &r);
+        });
+        out.textures_delta.clear();
+        let text = |label: &str| {
+            out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos),
+                _ => None,
+            })
+        };
+        // The row under the search field: it shows whatever the field holds.
+        let none_row = text("No equivalent");
+        let menu = none_row.and_then(|p| ctx.layer_id_at(p)).and_then(|l| ctx.memory(|m| m.area_rect(l.id)));
+        (at, none_row, text("Search"), menu.map(|r| r.height()))
+    };
+    let settle = |events: Vec<egui::Event>| {
+        let mut last = frame(events);
+        for _ in 0..5 {
+            last = frame(vec![]);
+        }
+        last
+    };
+    let (at, ..) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    let (_, none_row, search, full) = settle(vec![button(false)]);
+    let (none_row, search, full) = (none_row.expect("the menu is open"), search.expect("the search field shows"), full.expect("the menu's area"));
+    let nothing = "qqzzxxqqzz";
+    let (_, n, _, small) = settle(vec![egui::Event::Text(nothing.into())]);
+    assert_eq!(n, Some(none_row), "the search field stays put while nothing matches");
+    let small = small.expect("the menu stays open");
+    assert!(small + 40.0 < full, "the menu shrinks to its search field: {small} of {full}");
+    for _ in nothing.chars() {
+        frame(vec![press(egui::Key::Backspace)]);
+    }
+    let (_, n, s, grown) = settle(vec![]);
+    assert_eq!((n, s), (Some(none_row), Some(search)), "the search field is where it was");
+    assert_eq!(grown, Some(full), "the menu grows back to its height before the search");
 }

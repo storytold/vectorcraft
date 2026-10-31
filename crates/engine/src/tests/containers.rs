@@ -218,7 +218,8 @@ fn an_images_stroke_with_outline_object_draws_exports_and_expands_along_its_fram
         });
     }
     assert_eq!((images, frames), (1, 1));
-    // Expand Appearance leaves the stroke's outline (a filled path) below the image, in one step.
+    // Expand Appearance leaves the frame, stroked 4 pt, below the image, in one step (the stroke
+    // stays a stroke for Object › Expand to outline, #3089).
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "effect.expandAppearance", json!({}));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
@@ -226,9 +227,11 @@ fn an_images_stroke_with_outline_object_draws_exports_and_expands_along_its_fram
     let kids = n.children().unwrap();
     assert_eq!(kids.len(), 2, "{n:?}");
     assert!(matches!(kids[1].kind, NodeKind::Image(_)), "{n:?}");
-    let outline = kids[0].visual_bounds().unwrap();
-    assert!((outline.x0 - 48.0).abs() < 0.01 && (outline.x1 - 82.0).abs() < 0.01, "{outline:?}");
-    assert_eq!(kids[0].appearance.fill_paint(), Paint::solid(Color::BLACK));
+    let frame = kids[0].visual_bounds().unwrap();
+    assert!((frame.x0 - 48.0).abs() < 0.01 && (frame.x1 - 82.0).abs() < 0.01, "{frame:?}");
+    assert_eq!(kids[0].appearance.stroke_paint(), Paint::solid(Color::BLACK));
+    assert_eq!(kids[0].appearance.stroke_width(), 4.0);
+    assert!(kids[0].appearance.fill_paint().is_none());
 }
 
 /// Click with the Selection tool at (x, y) on a 100% view: what is selected afterwards.
@@ -308,13 +311,13 @@ fn group_appearance_round_trips_and_expands() {
     let ch = n.children().unwrap();
     assert_eq!(ch.len(), 4, "fill, two members, stroke");
     // Each is a group of one path per member (sharing the item's opacity and blend mode); the
-    // stroke's paths are its outlines, filled.
+    // stroke's paths are stroked by it (#3089).
     let first = |n: &Node| n.children().unwrap()[0].appearance.items[0].is_fill();
-    assert!(first(&ch[0]) && first(&ch[3]) && ch[0].children().unwrap().len() == 2);
-    let outline = ch[3].children().unwrap()[0].geometric_bounds().unwrap();
-    assert!((outline.width() - 41.0).abs() < 0.1, "{outline:?}");
-    // Moved down 50 pt; the outlined 1 pt stroke reaches half a point beyond.
-    assert!((n.geometric_bounds().unwrap().y0 - 69.5).abs() < 1e-6);
+    assert!(first(&ch[0]) && !first(&ch[3]) && ch[0].children().unwrap().len() == 2);
+    let stroked = ch[3].children().unwrap()[0].visual_bounds().unwrap();
+    assert!((stroked.width() - 41.0).abs() < 0.1, "{stroked:?}");
+    // Moved down 50 pt; the 1 pt stroke reaches half a point beyond.
+    assert!((n.visual_bounds().unwrap().y0 - 69.5).abs() < 1e-6);
 }
 
 #[test]
@@ -333,7 +336,7 @@ fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!(hidden.matches("<path").count() + 1, shown.matches("<path").count(), "{hidden}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&hidden) + 1, vectorcraft_testkit::svg_shapes(&shown), "{hidden}");
     // Expand Appearance keeps the type's opacity and visibility on its outlines.
     run(&mut s, "select.set", json!({"ids": [g.0]}));
     run(&mut s, "effect.expandAppearance", json!({}));
@@ -352,5 +355,5 @@ fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
     run(&mut s, "select.set", json!({"ids": [t.0]}));
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
-    assert_eq!((shown.matches("<path").count(), hidden.matches("<path").count()), (1, 0), "{hidden}");
+    assert_eq!((vectorcraft_testkit::svg_shapes(&shown), vectorcraft_testkit::svg_shapes(&hidden)), (1, 0), "{hidden}");
 }

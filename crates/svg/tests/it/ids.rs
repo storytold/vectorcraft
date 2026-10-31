@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, Document, Node};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import};
@@ -86,6 +86,42 @@ fn unique_ids_never_collide() {
     assert!(names(&back).contains(&"Logo mark (v2)".to_string()));
 }
 
+/// Generated def ids count up from 1 and step over numbers an object name already took, also
+/// when thousands of them are written.
+#[test]
+fn generated_ids_count_up_past_taken_names() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    for name in ["linear-gradient-2", "linear-gradient-4"] {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art());
+        n.name = Some(name.into());
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let count = 3000;
+    for i in 0..count {
+        let stops = vec![
+            GradientStop::new(0.0, Color::rgb((i % 50) as f32 / 255.0, (i / 50) as f32 / 255.0, 0.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ];
+        let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)), Appearance::basic(g, Paint::None, 0.0));
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    for object_ids in [ObjectIds::LayerNames, ObjectIds::Unique] {
+        let s = export(&d, &ExportOptions { object_ids, ..Default::default() });
+        let all = ids(&s);
+        assert_eq!(all.len(), all.iter().collect::<HashSet<_>>().len(), "unique ids");
+        let prefix = all.iter().find_map(|i| i.find("Layer_1").map(|at| i[..at].to_string())).unwrap();
+        let numbers: Vec<usize> =
+            all.iter().filter_map(|i| i.strip_prefix(&format!("{prefix}linear-gradient-"))).map(|n| n.parse().unwrap()).collect();
+        assert_eq!(numbers.len(), count + 2, "the two named objects and every gradient");
+        let mut gradients: Vec<usize> = numbers.into_iter().filter(|n| *n != 2 && *n != 4).collect();
+        gradients.sort_unstable();
+        let want: Vec<usize> = [1, 3].into_iter().chain(5..count + 3).collect();
+        assert_eq!(gradients, want);
+    }
+}
+
 #[test]
 fn label_attributes_name_objects() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:serif="http://www.serif.com/" width="100" height="100">
@@ -99,4 +135,27 @@ fn label_attributes_name_objects() {
     let d = import(svg).unwrap();
     assert_eq!(d.layers[0].name.as_deref(), Some("Background"));
     assert_eq!(names(&d), ["Background", "Sky box", "Sun disc", "Badge", "plain"]);
+}
+
+#[test]
+fn unique_ids_differ_when_only_gradient_stops_differ() {
+    let make_doc = |stop_color: Color| {
+        let mut d = Document::new(200.0, 200.0);
+        d.title = "Identical Structure".into();
+        let l = d.layers[0].id;
+        let stops = vec![GradientStop::new(0.0, stop_color), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)), Appearance::basic(g, Paint::None, 0.0));
+        d.insert(Some(l), usize::MAX, n).unwrap();
+        d
+    };
+
+    let opts = ExportOptions { object_ids: ObjectIds::Unique, ..Default::default() };
+    let svg1 = export(&make_doc(Color::rgb(1.0, 0.0, 0.0)), &opts);
+    let svg2 = export(&make_doc(Color::rgb(0.0, 1.0, 0.0)), &opts);
+
+    let ids1 = ids(&svg1);
+    let ids2 = ids(&svg2);
+    assert!(!ids1.is_empty() && !ids2.is_empty());
+    assert!(ids1.iter().all(|id| !ids2.contains(id)), "IDs must not collide: {ids1:?} vs {ids2:?}");
 }

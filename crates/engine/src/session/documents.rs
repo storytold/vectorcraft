@@ -1,9 +1,13 @@
-use super::*;
+use super::{
+    Arc, Clipboard, Color, CommandInfo, DocState, Document, DrawMode, EngineError, GradientPaint, Journal, NodeKind, PaintDefaults, Prefs, Result,
+    Session, ViewInfo, cmd, command_specs, file_access,
+};
 
 impl Session {
     /// A session with no document open, the default preferences and the Selection tool. It also
-    /// installs the hooks the document crate calls back into: the loader and file reader of placed
-    /// documents, and where an image's effects draw its fills and strokes, for clicks.
+    /// installs the hooks the document and effects crates call back into: the loader and file reader
+    /// of placed documents, where an image's effects draw its fills and strokes, for clicks, and how
+    /// Vector Halftone's dots are sampled, for exports.
     pub fn new() -> Self {
         // Placed documents are read by the native format's loader.
         vectorcraft_doc::placed_document::set_loader(cmd::place::document::read_document);
@@ -16,6 +20,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Exports bake Vector Halftone into the dots the renderer samples.
+        vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
         vectorcraft_text::set_svg_glyph_reader(vectorcraft_svg::glyph_art);
         Self {
@@ -41,6 +47,7 @@ impl Session {
             menu: Default::default(),
             gradient_stop: None,
             active_appearance_item: None,
+            eyedropper_sample: None,
             last_solid: Color::WHITE,
             last_gradient: GradientPaint::new(Default::default()),
             recent_colors: vec![],
@@ -56,6 +63,7 @@ impl Session {
             plugin_dir: None,
             plugin_output: None,
             recent_urls: vec![],
+            trace_preset_changes: Default::default(),
             ui_language: None,
             journal_note: Default::default(),
             note_depth: 1,
@@ -65,6 +73,7 @@ impl Session {
             batch_steps: None,
             place_hand_off: None,
             queue_hand_off: None,
+            trace_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,

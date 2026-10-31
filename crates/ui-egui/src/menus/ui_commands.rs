@@ -1,6 +1,18 @@
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     (
+        crate::addons::pathtools::corner::COMMAND,
+        "Corner Tool",
+        "",
+        "{} choose the Corner Tool and show the Anchor Inspector panel with its radius and kind",
+    ),
+    (
+        crate::addons::pathtools::shared_edge::COMMAND,
+        "Shared Edge Merge Tool",
+        "",
+        "{} choose the Shared Edge Merge Tool and show the Anchor Inspector panel with its brush, coincidence and Keep Shared Points Together",
+    ),
+    (
         "app.language",
         "Interface Language",
         "",
@@ -161,7 +173,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
     ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
-    ("view.snapToGlyph", "Snap to Glyph", "", "{} toggle: drawing snaps to live-text baselines and glyph bounds"),
+    (
+        "view.snapToGlyph",
+        "Snap to Glyph",
+        "",
+        "{} toggle: drawing snaps to live-text glyph bounds, and on a single line of type to its baseline, x-height, character widths and glyph anchor points",
+    ),
     (
         "view.preciseCursors",
         "Precise Cursors",
@@ -312,6 +329,42 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Italic",
         "",
         "{} the selected type (or the Type tool's selection) in its family's Italic (or Oblique) face, or back upright when it is italic; keeps the weight. A family without that face is left as it is, with a message. While the Type tool edits text, Cmd+Shift+I",
+    ),
+    (
+        "type.highlightFontName",
+        "Highlight Font Name",
+        "Cmd+Alt+Shift+F",
+        "{} show the Character panel if it is hidden and open its font family menu, whose search field takes the keyboard focus: type to search, Enter applies the highlighted font → {field: \"fontName\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
+    ),
+    (
+        "type.highlightKerning",
+        "Highlight Kerning",
+        "Cmd+Alt+K",
+        "{} show the Character panel if it is hidden and give its Kerning field the keyboard focus with its value selected: type a value and press Enter → {field: \"kerning\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
+    ),
+    (
+        "type.highlightTracking",
+        "Highlight Tracking",
+        "",
+        "{} show the Character panel if it is hidden and give its Tracking field the keyboard focus with its value selected: type a value and press Enter → {field: \"tracking\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
+    ),
+    (
+        "type.underline",
+        "Underline",
+        "Cmd+Shift+U",
+        "{} the Character panel's Underline button: underline the selected type (or the Type tool's selection), or remove the underline when the text the Character panel shows is underlined (text.setFormat {underline}) → underlined",
+    ),
+    (
+        "type.lineComposer",
+        "Toggle Line Composer",
+        "Cmd+Alt+Shift+C",
+        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer (text.setFormat {composer}) → \"singleLine\" | \"everyLine\"",
+    ),
+    (
+        "type.hyphenate",
+        "Hyphenate",
+        "Cmd+Alt+Shift+H",
+        "{} the Paragraph panel's Hyphenate checkbox: hyphenation off for the selected type's paragraphs (or those the Type tool's selection touches) when they all hyphenate, else on (text.setFormat {hyphenate}) → hyphenate",
     ),
     ("effect.last", "Last Effect…", "Cmd+Alt+Shift+E", "{} open the dialog of the last effect applied"),
     ("view.zoomIn", "Zoom In", "Cmd+=", "{}"),
@@ -495,6 +548,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.rename", "Rename Workspace", "", "{name, to}"),
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
+    (
+        "window.nextDocument",
+        "Next Document",
+        "Cmd+F6",
+        "{} make the open document after the current one in tab order the current one, as a click on its tab does (after the last document it goes to the first, and from the Home screen to the first); returns {index}",
+    ),
+    (
+        "window.previousDocument",
+        "Previous Document",
+        "Cmd+Shift+F6",
+        "{} make the open document before the current one in tab order the current one, as a click on its tab does (before the first document it goes to the last, and from the Home screen to the last); returns {index}",
+    ),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
     (
         "tool.setOption",
@@ -522,6 +587,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
+    (
+        "pathfinder.repeat",
+        "Repeat Pathfinder",
+        "Cmd+4",
+        "{} repeat the last successful Pathfinder panel operation, direct object.pathfinder.* command or command.batch step on the selection with current Pathfinder Options; an error until one has run",
+    ),
     (
         "file.export.pdf",
         "Save as PDF…",
@@ -581,6 +652,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{name?} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`): for style `name` OK renames it (graphicStyle.rename); without, OK makes a new style of that name from the selection (graphicStyle.new)",
     ),
     (
+        "ui.newCharStyle",
+        "New Character Style…",
+        "",
+        "{} open New Character Style (dialog `newTextStyle`, field `name`, filled in with the name charStyle.new {} would give the style), what Alt-clicking the Character Styles panel's New button opens; OK runs charStyle.new with the name and the Type tool's selected characters (else the selected type) as they were when the dialog opened; Cancel adds no style",
+    ),
+    (
+        "ui.newParaStyle",
+        "New Paragraph Style…",
+        "",
+        "{} open New Paragraph Style (dialog `newTextStyle`, field `name`, filled in with the name paraStyle.new {} would give the style), what Alt-clicking the Paragraph Styles panel's New button opens; OK runs paraStyle.new with the name and the paragraph of the Type tool's selection (else the selected type) as it was when the dialog opened; Cancel adds no style",
+    ),
+    (
         "ui.symbolOptions",
         "Symbol Options…",
         "F8",
@@ -590,7 +673,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x and y, draws one there with them), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values})",
+        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x, y and preview (on initially), previews one there and accepts it as one Undo step; Cancel rolls back the preview), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values})",
     ),
     (
         "ui.colorGuideOptions",
@@ -711,6 +794,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{selected?: preset name} open the presets manager (dialog `flattenerPresets`, fields `selected`, then the selected preset's `name` and option keys: setting them on a saved preset saves it, a new `name` renames it; built-in presets don't change). New, Delete, Import… and Export… run flattener.presets.save / delete / import / export",
     ),
     (
+        "ui.imageTracePresetDialog",
+        "Save as New Preset…",
+        "",
+        "{params?: tracing settings (default: the Default preset's), rename?: a saved preset's name} the Image Trace panel's Manage Presets: open Save as New Preset… for those settings, or with `rename`, Rename… for that saved preset (dialog `imageTracePreset`, field `name`: a new \"Tracing Preset N\" or the preset's name); OK runs imageTrace.presets.save with the name (as `newName` when renaming), and the panel shows the preset it made from its settings",
+    ),
+    (
         "ui.flattenerPreview",
         "Flattener Preview",
         "",
@@ -809,7 +898,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.expandDialog",
         "Expand…",
         "",
-        "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step",
+        "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step; dimmed, and an error, while the selection has an appearance effect.expandAppearance expands (object.expand.info's appearance)",
     ),
     (
         "attributes.openUrl",
@@ -833,7 +922,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, envelopeWarp, envelopeMesh, envelopeOptions; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, envelopeWarp, envelopeMesh, envelopeOptions; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -854,10 +943,22 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the open Simplify slider (Object › Path › Simplify opens it: dialog `simplifySlider` with field `level` 0..100, object.path.simplify's level, opening at the level object.path.simplify {auto: true} picks for the selection, previewed on the canvas until ui.dialog.confirm keeps it as one undo step; after OK in the Simplify dialog with `retain` ticked, the menu item opens the dialog `simplify` with the fields of that OK instead) moves to the level object.path.simplify {auto: true} picks for the selection and previews it → {level}; an error when the slider isn't open",
     ),
     (
+        "ui.smoothAuto",
+        "Auto-Smooth",
+        "",
+        "{} the open Smooth slider (Object › Path › Smooth opens it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+    ),
+    (
         "ui.simplifyMoreOptions",
         "More Options",
         "",
         "{} the Simplify dialog (dialog `simplify`: tolerance (pt), angleThreshold, straightLines, showOriginal, retain: ticked, OK makes Object › Path › Simplify open this dialog with these fields next time) takes the open Simplify slider's place, at the slider's tolerance → {tolerance}; an error when the slider isn't open",
+    ),
+    (
+        "ui.dialogReset",
+        "Reset",
+        "",
+        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`): its fields go back to their defaults and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open or the open one has no Reset",
     ),
     (
         "ui.justification",
@@ -1091,6 +1192,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the progress window of the heavy filters running in the background; they go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "imageTrace.cancelRuns",
+        "Cancel Image Trace",
+        "",
+        "{} stop every Image Trace running in the background (its progress window's Cancel): it stops at its next colour and changes nothing → {cancelled: n}",
+    ),
+    (
+        "imageTrace.hideRuns",
+        "Continue in Background",
+        "",
+        "{} close the progress window of the Image Traces running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
         "ui.checkScript",

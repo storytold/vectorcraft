@@ -3,7 +3,9 @@ use super::on_path::on_path;
 use super::region::Region;
 use super::ruby::ruby_layout;
 use super::vertical::{EM_CENTER, QUARTER_TURN, align_vertically, finish_bounds};
-use super::*;
+use super::{
+    Affine, BezPath, CharStyle, Ctx, FontDb, LayoutOptions, OtFeatures, Point, Rect, Shape, TextKind, TextLayout, TextObject, VerticalAlign,
+};
 
 /// Lay out a text object into text-space glyph outlines (default [`LayoutOptions`]).
 pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {

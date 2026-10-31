@@ -1,5 +1,5 @@
 use super::writer::{Sheet, Writer, date_time};
-use super::*;
+use super::{Affine, Document, ExportReport, Exporter, HashSet, PageBoxes, PdfError, PdfOptions, Rect, write};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {

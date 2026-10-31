@@ -36,6 +36,7 @@ pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod metafile;
 mod naming;
 mod native;
+mod pcxread;
 pub mod pdf;
 mod pdfimport;
 pub mod pngtext;
@@ -92,7 +93,7 @@ pub use svg::options_map as svg_options;
 #[cfg(not(target_arch = "wasm32"))]
 pub use vectorcraft_format::write_atomic;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, cmd, has_doc, has_selection};
 use crate::EngineError;
 
 mod access;
@@ -191,6 +192,9 @@ mod tests_pdfx;
 mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
+
+#[cfg(test)]
+mod tests_pcxread;
 
 #[cfg(test)]
 mod tests_epsimport;

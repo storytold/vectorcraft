@@ -181,6 +181,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     } else if d.kind == "arc" {
         arc_form(ui, d, unit);
+    } else if LINKED.contains(&d.kind.as_str()) {
+        linked_size_form(ui, d, unit);
     } else {
         form::grid(ui, d, unit);
     }
@@ -227,7 +229,17 @@ fn arc_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
         if d.f64("lengthY", 100.0) != ly0 {
             arc_pin_to_anchor(d);
         }
-        form::choice(ui, d, "arcType", tl!("Type:"), (form::FIELD_W, form::FIELD_W - 12.0), &[("open", tl!("Open")), ("closed", tl!("Closed"))]);
+        form::choice(
+            ui,
+            d,
+            "arcType",
+            tl!("Type:"),
+            (form::FIELD_W, form::FIELD_W - 12.0),
+            &[
+                ("open", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Open")),
+                ("closed", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Closed")),
+            ],
+        );
         form::choice(
             ui,
             d,
@@ -248,6 +260,102 @@ fn arc_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     });
     ui.add_space(8.0);
     form::check(ui, d, "fillArc", tl!("Fill Arc"));
+}
+
+/// The click dialogs whose Width and Height share a Constrain Width and Height Proportions link
+/// (<https://krankykids.com/cheatsheets/illustrator_cs6/shape_tool_rectangle.html>,
+/// <https://www.krankykids.com/cheatsheets/illustrator_cs6/shape_tool_ellipse.html>): the same
+/// link as the Transform panel's ([`crate::panels::transform::constrain_link`]), drawn the same way.
+const LINKED: [&str; 3] = ["rectangle", "roundedRectangle", "ellipse"];
+
+/// The dialog field holding the link's state (UI-only, as every `__` field is).
+const LINK: &str = "__constrain";
+
+/// The dialog field holding the link state the dialog last applied ([`link_changed`]): a change of
+/// [`LINK`], by its button or from outside (`ui.dialog.set`), shows as a difference from it.
+const APPLIED: &str = "__constrainApplied";
+
+/// The dialog field holding height ÷ width while the link is on: the proportions it keeps.
+const RATIO: &str = "__ratio";
+
+/// Where the link's state waits for the next of these dialogs (egui memory, this run only).
+const LINK_STATE: &str = "shape-size-link";
+
+/// Width and Height (then a rounded rectangle's radius) with the Constrain Width and Height
+/// Proportions link beside the two size rows. While it is on, typing one side sets the other, so
+/// the shape keeps the proportions it had when the link was turned on. The next of these dialogs
+/// opens with the link as this one left it.
+fn linked_size_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+    if !d.fields.contains_key(LINK) {
+        d.fields.insert(LINK.into(), json!(crate::panels::pstate::<bool>(ui.ctx(), LINK_STATE)));
+    }
+    sync_link(ui.ctx(), d);
+    const BUTTON: f32 = 22.0;
+    let mut rows: Option<egui::Rect> = None;
+    egui::Grid::new("shape-size-dlg").num_columns(3).spacing([10.0, 8.0]).show(ui, |ui| {
+        for (key, label) in [("width", "Width:"), ("height", "Height:")] {
+            let row = form::row_label(ui, label);
+            if ui.label_inputs_by(row.id, |ui| form::length(ui, d, key, unit, form::FIELD_W)) {
+                follow_link(d, key);
+            }
+            // The link's column: the button is drawn over both rows' cells once the grid is laid out.
+            let (_, cell) = ui.allocate_space(egui::vec2(BUTTON, BUTTON));
+            rows = Some(rows.map_or(cell, |r| r.union(cell)));
+            ui.end_row();
+        }
+        if d.kind == "roundedRectangle" {
+            form::length_field(ui, d, "radius", &form::humanized("radius"), unit);
+        }
+    });
+    let Some(rows) = rows else { return };
+    let on = d.bool(LINK);
+    let rect = egui::Rect::from_center_size(rows.center(), egui::vec2(BUTTON, BUTTON));
+    let resp = ui.interact(rect, ui.scope_id().with("shape-size-link"), egui::Sense::click());
+    let icon = if on { "link" } else { "link-2-off" };
+    if widgets::paint_icon_button(ui, resp, icon, "Constrain Width and Height Proportions", on).clicked() {
+        d.fields.insert(LINK.into(), json!(!on));
+        sync_link(ui.ctx(), d);
+    }
+}
+
+/// Apply a change of the link's state, however it was made ([`link_changed`]), and keep the new
+/// state for the next of these dialogs.
+fn sync_link(ctx: &egui::Context, d: &mut Dialog) {
+    if let Some(on) = link_changed(d) {
+        crate::panels::set_pstate(ctx, LINK_STATE, on);
+    }
+}
+
+/// When the link's state differs from the one the dialog last applied (or none was applied yet),
+/// apply it and return it: turned on, the link keeps the proportions of the sizes the dialog shows
+/// then; turned off, it forgets them. A side of zero when it turns on leaves nothing to keep, so
+/// typing changes only the side typed until the link is turned off and on again.
+fn link_changed(d: &mut Dialog) -> Option<bool> {
+    let on = d.bool(LINK);
+    if d.fields.get(APPLIED).and_then(Value::as_bool) == Some(on) {
+        return None;
+    }
+    d.fields.insert(APPLIED.into(), json!(on));
+    let ratio = d.f64("height", 100.0) / d.f64("width", 100.0);
+    if on && ratio.is_finite() && ratio != 0.0 {
+        d.fields.insert(RATIO.into(), json!(ratio));
+    } else {
+        d.fields.remove(RATIO);
+    }
+    Some(on)
+}
+
+/// After the side `typed` ("width" or "height") was typed with the link on, set the other side
+/// from the proportions the link keeps.
+fn follow_link(d: &mut Dialog, typed: &str) {
+    let ratio = d.f64(RATIO, 0.0);
+    if !d.bool(LINK) || !ratio.is_finite() || ratio == 0.0 {
+        return;
+    }
+    let (other, v) = if typed == "width" { ("height", d.f64("width", 100.0) * ratio) } else { ("width", d.f64("height", 100.0) / ratio) };
+    if v.is_finite() {
+        d.fields.insert(other.into(), json!(v));
+    }
 }
 
 /// The top-left corner of a rectangle or ellipse: the click itself, or with Alt held (draw from centre) the click minus half the size.
@@ -400,6 +508,145 @@ mod tests {
         let fields = |alt: bool| Dialog::new("rectangle", json!({"x": 100.0, "y": 50.0, "alt": alt, "width": "40 pt", "height": "20 pt"}));
         assert_eq!(box_origin(&fields(false)), (100.0, 50.0));
         assert_eq!(box_origin(&fields(true)), (80.0, 40.0));
+    }
+
+    /// Turn the link on or off as its button or `ui.dialog.set` does, then apply it as the form
+    /// does on its next frame; what [`link_changed`] returned.
+    fn turn(d: &mut Dialog, on: bool) -> Option<bool> {
+        d.fields.insert(LINK.into(), json!(on));
+        link_changed(d)
+    }
+
+    fn type_size(d: &mut Dialog, typed: &str, value: f64) -> (f64, f64) {
+        d.fields.insert(typed.into(), json!(value));
+        follow_link(d, typed);
+        // The form applies the link's state again on every frame: an unchanged state changes nothing.
+        assert_eq!(link_changed(d), None);
+        (d.f64("width", -1.0), d.f64("height", -1.0))
+    }
+
+    #[test]
+    fn the_link_keeps_the_proportions_it_had_when_turned_on() {
+        let mut d = Dialog::new("rectangle", json!({"x": 0.0, "y": 0.0, "width": "40 pt", "height": "20 pt"}));
+        // Off: a typed side changes only itself.
+        assert_eq!(turn(&mut d, false), Some(false));
+        assert_eq!(type_size(&mut d, "width", 80.0), (80.0, 20.0));
+        // On at 80 × 20: each side follows the other at 4 : 1, also through a zero and back.
+        assert_eq!(turn(&mut d, true), Some(true));
+        for (typed, value, expected) in
+            [("width", 100.0, (100.0, 25.0)), ("height", 50.0, (200.0, 50.0)), ("width", 0.0, (0.0, 0.0)), ("width", 40.0, (40.0, 10.0))]
+        {
+            assert_eq!(type_size(&mut d, typed, value), expected, "{typed} = {value}");
+        }
+    }
+
+    /// Turned off and on again from outside the dialog (`ui.dialog.set`), the link forgets the old
+    /// proportions and keeps the ones the dialog shows when it comes back on.
+    #[test]
+    fn the_link_follows_changes_made_from_outside_the_dialog() {
+        let mut d = Dialog::new("rectangle", json!({"width": 80.0, "height": 20.0}));
+        assert_eq!(turn(&mut d, true), Some(true));
+        assert_eq!(turn(&mut d, false), Some(false));
+        assert!(!d.fields.contains_key(RATIO));
+        assert_eq!(type_size(&mut d, "width", 30.0), (30.0, 20.0));
+        assert_eq!(type_size(&mut d, "height", 60.0), (30.0, 60.0));
+        assert_eq!(turn(&mut d, true), Some(true));
+        assert_eq!(type_size(&mut d, "width", 10.0), (10.0, 20.0));
+        // Set to what it already is: nothing to apply, the proportions stay.
+        assert_eq!(turn(&mut d, true), None);
+        assert_eq!(type_size(&mut d, "height", 40.0), (20.0, 40.0));
+    }
+
+    /// A side of zero when the link turns on leaves nothing to keep (no NaN): typing changes only
+    /// the side typed, even once both sides are sizes again, until the link is turned on again.
+    #[test]
+    fn a_link_turned_on_at_a_zero_side_stays_unconstrained_until_turned_on_again() {
+        let mut d = Dialog::new("ellipse", json!({"width": 0.0, "height": 30.0}));
+        assert_eq!(turn(&mut d, true), Some(true));
+        assert!(!d.fields.contains_key(RATIO));
+        assert_eq!(type_size(&mut d, "width", 50.0), (50.0, 30.0));
+        assert_eq!(type_size(&mut d, "height", 60.0), (50.0, 60.0));
+        assert!(!d.fields.contains_key(RATIO));
+        assert_eq!((turn(&mut d, false), turn(&mut d, true)), (Some(false), Some(true)));
+        assert_eq!(type_size(&mut d, "width", 100.0), (100.0, 120.0));
+    }
+
+    /// The real dialog: Width comes before Height, the link is a named button that turns on with a
+    /// click, and the next Rectangle dialog opens with it on.
+    #[test]
+    fn the_rectangle_dialog_shows_width_then_height_and_a_link_button() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        const LINK_NAME: &str = "Constrain Width and Height Proportions";
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        h.check_accessibility();
+        let (w, ht) = (h.get_by_role_and_label(Role::TextInput, "Width:").rect(), h.get_by_role_and_label(Role::TextInput, "Height:").rect());
+        assert!(w.center().y < ht.center().y, "Width is above Height: {w:?} {ht:?}");
+        assert!(!h.state().ui.dialog.as_ref().unwrap().bool(LINK));
+        let link = h.get_by_role_and_label(Role::Button, LINK_NAME).rect();
+        assert!(link.left() > w.right() && link.top() < ht.center().y && link.bottom() > w.center().y, "the link sits beside both rows: {link:?}");
+        h.get_by_role_and_label(Role::Button, LINK_NAME).click();
+        h.run_steps(2);
+        let d = h.state().ui.dialog.as_ref().unwrap();
+        assert!(d.bool(LINK));
+        assert_eq!(d.f64(RATIO, 0.0), 1.0);
+        // Cancel, then click again: the link is still on.
+        let reopen = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>| {
+            h.state_mut().ui.dialog = None;
+            h.run_steps(2);
+            super::super::open_tool_dialog(h.state_mut(), "rectangle", json!({"x": 10.0, "y": 10.0}));
+            h.run_steps(2);
+            h.state().ui.dialog.as_ref().unwrap().bool(LINK)
+        };
+        assert!(reopen(&mut h));
+        // Turned off from outside the dialog (`ui.dialog.set`): the next dialog opens with it off.
+        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert(LINK.into(), json!(false));
+        h.run_steps(2);
+        assert!(!h.state().ui.dialog.as_ref().unwrap().fields.contains_key(RATIO));
+        assert!(!reopen(&mut h));
+    }
+
+    /// With the link on, typing a width over a 40 × 20 rectangle's and pressing Enter draws it
+    /// 80 × 40.
+    #[test]
+    fn typing_a_width_with_the_link_on_draws_the_shape_in_proportion() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("width".into(), json!(40.0));
+        d.fields.insert("height".into(), json!(20.0));
+        d.fields.insert(LINK.into(), json!(true));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text("80 pt".into())]);
+        frame(&mut app, vec![enter]);
+        assert!(app.ui.dialog.is_none());
+        let doc = &app.session.doc().unwrap().doc;
+        let b = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        assert!((b.width() - 80.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6, "{b:?}");
     }
 
     #[test]

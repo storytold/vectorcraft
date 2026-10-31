@@ -5,7 +5,7 @@ use vectorcraft_geom::kurbo;
 use vectorcraft_geom::shapes::{self, KAPPA};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath, corners};
 
-use crate::util::*;
+use crate::util::{catmull_rom, flag, noise, num, seed};
 
 /// Convert to Shape (rectangle / rounded rectangle / ellipse) around the bounds.
 pub fn convert_to_shape(id: &str, b: Rect, p: &Value) -> PathData {

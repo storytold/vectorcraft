@@ -1,4 +1,4 @@
-use super::*;
+use super::{Value, VectorcraftApp, View, ViewInfo, panels};
 
 impl VectorcraftApp {
     /// Keep `views` aligned with the session's documents (a new one starts at its saved view).

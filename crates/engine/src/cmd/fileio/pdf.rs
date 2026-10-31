@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
-use super::super::*;
+use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, FormatOption, write_or_return};
 use crate::EngineError;
 
@@ -317,9 +317,9 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 
 /// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
 /// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
-/// options over it; images with see-through pixels count as transparency, rasterized areas are
-/// clipped to their regions, and discarded overprints are dropped. `None` when nothing changes (or
-/// the file keeps transparency).
+/// options over it; images with see-through pixels and colorized images count as transparency,
+/// rasterized areas are clipped to their regions, and discarded overprints are dropped. `None`
+/// when nothing changes (or the file keeps transparency).
 fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<Option<Document>> {
     if !set.pdf13() {
         return Ok(None);

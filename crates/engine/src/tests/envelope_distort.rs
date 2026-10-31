@@ -154,6 +154,115 @@ fn images_bend_as_a_raster_mesh_warp() {
     assert_eq!(svg.matches("<image").count(), 1, "the pieces share the image's pixels");
 }
 
+/// A selected embedded 2×2 image, 80×80 pt at (100, 100): a red column left of a blue one.
+fn two_color_image(s: &mut Session) -> NodeId {
+    let img = image::RgbaImage::from_fn(2, 2, |x, _| if x == 0 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) });
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.edit("Place", |d, sel| {
+        d.images.insert("two".into(), vectorcraft_doc::ImageBlob::png(png));
+        let id = d.alloc_id();
+        let xf = Affine::translate((100.0, 100.0)) * Affine::scale(40.0);
+        let im = vectorcraft_doc::ImageObject { key: "two".into(), width: 2, height: 2, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+        sel.set([id]);
+        Ok(id)
+    })
+    .unwrap()
+}
+
+/// The pixels well inside the image's frame (the clip edges left out) that are a mix of its red
+/// and blue rather than one of them.
+fn mixed_pixels(s: &Session) -> usize {
+    let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(110.0, 110.0, 170.0, 170.0), 2.0, true);
+    let mut mixed = 0;
+    for y in 0..img.height {
+        for x in 0..img.width {
+            let p = img.pixel(x, y);
+            mixed += (p[0] > 40 && p[2] > 40) as usize;
+        }
+    }
+    mixed
+}
+
+#[test]
+fn anti_alias_off_draws_distorted_images_without_smoothing() {
+    let mut s = session();
+    let im = two_color_image(&mut s);
+    sel(&mut s, &[im]);
+    let e = arch(&mut s, 2.0, json!({}));
+    let smooth = mixed_pixels(&s);
+    assert!(smooth > 400, "with Anti-Alias on the colors blend where the pixels meet: {smooth}");
+    s.execute("object.envelope.options", &json!({"antiAlias": false})).unwrap();
+    let mut pieces = 0;
+    for n in evaluated(&s, e) {
+        n.walk(&mut |c| pieces += (matches!(c.kind, NodeKind::Image(_)) && c.extras().pixelated) as usize);
+    }
+    assert!(pieces >= 32, "{pieces} pixelated pieces");
+    let hard = mixed_pixels(&s);
+    assert!(hard * 50 < smooth, "with Anti-Alias off each pixel is red or blue: {hard} mixed of {smooth}");
+    // The SVG asks viewers not to smooth the pieces either.
+    let svg = |s: &mut Session| {
+        let b64 = s.execute("document.export", &json!({"format": "svg"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+        String::from_utf8(vectorcraft_format::base64_decode(&b64).unwrap()).unwrap()
+    };
+    assert!(svg(&mut s).matches("image-rendering").count() >= 32);
+    s.execute("object.envelope.options", &json!({"antiAlias": true})).unwrap();
+    assert!(!svg(&mut s).contains("image-rendering"));
+    s.execute("object.envelope.options", &json!({"antiAlias": false})).unwrap();
+    // Expanded, the pieces keep it through a native save.
+    s.execute("object.envelope.expand", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    let mut kept = 0;
+    back.walk(|c| kept += (matches!(c.kind, NodeKind::Image(_)) && c.extras().pixelated) as usize);
+    assert_eq!(kept, pieces);
+}
+
+fn clip_groups_in(nodes: &[Node]) -> usize {
+    let mut n = 0;
+    for c in nodes {
+        c.walk(&mut |c| n += matches!(c.kind, NodeKind::Group { clip: true, .. }) as usize);
+    }
+    n
+}
+
+#[test]
+fn transparency_masks_distorted_images_instead_of_clipping_them() {
+    let mut s = session();
+    let im = red_image(&mut s);
+    sel(&mut s, &[im]);
+    let e = arch(&mut s, 80.0, json!({}));
+    let region = Rect::new(80.0, 60.0, 160.0, 160.0);
+    let clipped = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, region, 2.0, true);
+    assert!(clip_groups_in(&evaluated(&s, e)) >= 32);
+    s.execute("object.envelope.options", &json!({"preserveShape": "transparency"})).unwrap();
+    let out = evaluated(&s, e);
+    assert_eq!(clip_groups_in(&out), 0, "no clipping masks");
+    let (mut images, mut masked) = (0, 0);
+    for n in &out {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Image(_)) {
+                images += 1;
+                masked += c.extras().mask.as_ref().is_some_and(|m| m.clip && !m.invert) as usize;
+            }
+        });
+    }
+    assert!(images >= 32 && masked == images, "{masked} of {images} pieces masked");
+    // It draws as the clipping masks did.
+    let alpha = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, region, 2.0, true);
+    let (mut sum, mut n) = (0u64, 0u64);
+    for y in 0..clipped.height {
+        for x in 0..clipped.width {
+            let (a, b) = (clipped.pixel(x, y), alpha.pixel(x, y));
+            sum += (0..4).map(|i| (a[i] as i32 - b[i] as i32).unsigned_abs() as u64).sum::<u64>();
+            n += 4;
+        }
+    }
+    assert!(sum < n, "mean difference {} per channel", sum as f64 / n as f64);
+    assert!(alpha.pixel(80, 74)[0] > 200 && alpha.pixel(80, 74)[1] < 60, "the bent image shows: {:?}", alpha.pixel(80, 74));
+}
+
 #[test]
 fn symbols_bend_with_the_envelope() {
     let mut s = session();

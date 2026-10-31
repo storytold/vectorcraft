@@ -24,13 +24,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let first = first_selected(app);
     // Edit Artboards (the Artboard tool): the active artboard, whatever is selected.
     let editing_artboards = app.session.tool_id() == "artboard";
-    let label = match (&first, n_sel) {
-        _ if editing_artboards => tl!("Artboard").to_string(),
-        (None, _) => tl!("Document").to_string(),
-        (_, n) if n > 1 => crate::i18n::tn(n as u64, "{n} Object", "{n} Objects"),
-        (Some(n), _) if crate::panels::image_trace::is_trace(n) => tl!("Image Tracing").to_string(),
-        (Some(n), _) => tl!(n.kind_label()).to_string(),
-    };
+    // Ruler guides selected on their own (a click on one): their position.
+    let guides = super::transform::selected_guides(app);
+    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
     ui.add_space(4.0);
     if editing_artboards {
@@ -38,7 +34,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if first.is_none() {
-        document_sections(app, ui);
+        match guides {
+            Some(guides) => guide_sections(app, ui, guides),
+            None => document_sections(app, ui),
+        }
         return;
     }
     if n_sel == 1
@@ -112,10 +111,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
     let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
-    // Blend Options for one blend while the Blend tool is in use, Merge Live Paint for a Live
-    // Paint group selected with more to merge into it, as the Properties panel overview lists them
+    // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
+    // more to merge into it, as the Properties panel overview lists them
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-    let blend_options = n_sel == 1 && app.session.tool_id() == "blend" && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
+    // The overview names the Blend tool; the blending page has the button for a blend selected with
+    // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
+    let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
@@ -143,10 +144,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
     }
-    actions.push((tl!("Offset Path"), "object.path.offsetPath"));
-    actions.push((tl!("Simplify"), "object.path.simplify"));
+    // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
+    // live through the Appearance panel's Effect › Path › Offset Path (#2238).
+    let type_only = app.session.active().is_some_and(|st| {
+        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
+        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    });
+    if !type_only {
+        actions.push((tl!("Offset Path"), "object.path.offsetPath"));
+        actions.push((tl!("Simplify"), "object.path.simplify"));
+    }
     actions.push((tl!("Arrange: Bring to Front"), "object.arrange.bringToFront"));
     actions.push((tl!("Lock"), "object.lock"));
+    // Lock and Isolate Group are left out while their commands are off (in isolation mode, while
+    // an opacity mask is edited).
+    actions.retain(|(_, id)| !matches!(*id, "object.lock" | "object.isolate") || crate::menus::enabled(app, id));
     let w = (ui.available_width() - 6.0) / 2.0;
     for pair in actions.chunks(2) {
         ui.horizontal(|ui| {
@@ -525,7 +537,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, false, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -587,6 +599,27 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
     if pick {
         app.run("ui.colorPicker", json!({"artboard": i})).ok();
     }
+}
+
+/// The panel's heading: what the sections are for (the artboards with the Artboard tool, the
+/// selected ruler guides, the document with nothing selected), else the selection's kind.
+fn heading(first: Option<&vectorcraft_doc::Node>, n_sel: usize, editing_artboards: bool, guides: bool) -> String {
+    match (first, n_sel) {
+        _ if editing_artboards => tl!("Artboard").to_string(),
+        (None, _) if guides => tl!("Guides").to_string(),
+        (None, _) => tl!("Document").to_string(),
+        (_, n) if n > 1 => crate::i18n::tn(n as u64, "{n} Object", "{n} Objects"),
+        (Some(n), _) if crate::panels::image_trace::is_trace(n) => tl!("Image Tracing").to_string(),
+        (Some(n), _) => tl!(n.kind_label()).to_string(),
+    }
+}
+
+/// Ruler guides selected on their own: a Transform section with the X of the vertical ones and
+/// the Y of the horizontal ones, which move them, as the Transform panel shows them (#1597).
+fn guide_sections(app: &mut VectorcraftApp, ui: &mut Ui, guides: (Option<f64>, Option<f64>)) {
+    section_header(ui, tl!("Transform"));
+    let fw = super::field_width(ui);
+    super::transform::guide_fields(app, ui, guides, fw);
 }
 
 fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {

@@ -344,7 +344,7 @@ fn escape_after_closing_a_popup_or_during_a_ruler_origin_drag_keeps_the_rotation
     let combo = combo.expect("the status bar's angle menu");
     w.click(0.0, egui::PointerButton::Primary, combo.rect.center());
     w.after(0.0, vec![]);
-    assert!(egui::ComboBox::is_open(&w.ctx, combo.id), "the angle menu is open");
+    assert!(craft_ui::ComboBox::is_open(&w.ctx, combo.id), "the angle menu is open");
     w.escape(0.2);
     assert!(!egui::Popup::is_any_open(&w.ctx), "Escape closes it");
     w.escape(0.2);

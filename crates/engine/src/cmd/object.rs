@@ -14,7 +14,10 @@ use vectorcraft_render::effects;
 
 use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_transform};
 use super::opacitymask::percent;
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_multi, has_selection,
+    has_selection_or_guides, id_param, ids_param, matrix_param, ok, point_param, str_param, targets,
+};
 use crate::{EngineError, LastTransform};
 
 mod align;
@@ -32,4 +35,5 @@ pub(crate) use arrange::group_nodes;
 pub(crate) use bounds::bounds_rewrite;
 pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
+pub(super) use shape::recut;
 pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};

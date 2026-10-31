@@ -1339,3 +1339,58 @@ fn thai_words_are_words_to_the_caret() {
     assert_eq!(edit::word_at(s, s.len() - 1), end + 1..s.len());
     assert_eq!(edit::next_word("hello world", 0), 5);
 }
+
+#[test]
+fn soft_return_breaks_line_without_new_paragraph() {
+    let mut t = TextObject::point(Point::ZERO, "Line 1\u{2028}Line 2", style(12.0));
+    t.para.space_before = 20.0;
+    t.para.space_after = 20.0;
+    let lay = layout(db(), &t);
+    assert_eq!(lay.lines.len(), 2, "broken into two lines");
+    let l0 = &lay.lines[0];
+    let l1 = &lay.lines[1];
+    let line_gap = l1.baseline - l0.baseline;
+    assert!((line_gap - 12.0 * 1.2).abs() < 1.0, "normal line leading: {line_gap}");
+    assert_eq!(&t.plain_text()[l0.start..l0.end], "Line 1\u{2028}");
+    assert_eq!(&t.plain_text()[l1.start..l1.end], "Line 2");
+}
+
+#[test]
+fn soft_return_in_justified_text_does_not_spread() {
+    let text = "Short\u{2028}A much longer second line of text inside the frame.";
+    let t = area(text, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::JustifyLeft);
+    let lay = layout(db(), &t);
+    assert!(lay.lines.len() >= 2);
+    let l0 = &lay.lines[0];
+    assert!(l0.x1 - l0.x0 < 100.0, "short line ending with soft return is not justified: {}", l0.x1 - l0.x0);
+}
+
+#[test]
+fn soft_return_in_list_does_not_repeat_marker() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut t = area("First line\u{2028}Continuation line", style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    let lay = layout(db(), &t);
+    assert_eq!(lay.lines.len(), 2);
+    let l0_glyphs = &lay.glyphs[lay.lines[0].glyph_start..lay.lines[0].glyph_end];
+    let l1_glyphs = &lay.glyphs[lay.lines[1].glyph_start..lay.lines[1].glyph_end];
+    assert!(l0_glyphs.iter().any(|g| g.len == 0), "line 0 has bullet marker");
+    assert!(!l1_glyphs.iter().any(|g| g.len == 0), "continuation line does not have bullet marker");
+}
+
+#[test]
+fn trailing_soft_return_creates_empty_continuation_line() {
+    let t = TextObject::point(Point::ZERO, "Line 1\u{2028}", style(12.0));
+    let lay = layout(db(), &t);
+    assert_eq!(lay.lines.len(), 2, "trailing soft return produces a second empty line");
+    assert_eq!(lay.line_of(t.plain_text().len()), 1, "caret at end sits on the new line");
+}
+
+#[test]
+fn soft_return_breaks_line_even_inside_no_break() {
+    let mut st = style(12.0);
+    st.no_break = true;
+    let t = area("First\u{2028}Second", st, Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
+    let lay = layout(db(), &t);
+    assert_eq!(lay.lines.len(), 2, "soft return honors line break despite no_break");
+}

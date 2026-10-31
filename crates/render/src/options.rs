@@ -1,5 +1,5 @@
 use super::geometry::region_pixels;
-use super::*;
+use super::{Arc, NodeId, Rect, encode, proof};
 
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
 /// addresses at most `u16::MAX` pixels per side (and panics at that edge).
@@ -111,6 +111,14 @@ pub struct RenderOptions {
     /// Screen views: an image whose pixels can't be decoded draws as a light gray box crossed
     /// from corner to corner. Off, it draws nothing (exports, which report it instead).
     pub mark_undecoded_images: bool,
+    /// Screen views that must render quickly (the canvas's low-resolution fill): an image object
+    /// draws from pixels the shared store already holds for it: the mip
+    /// [`RenderOptions::image_mips`] would draw if the store holds it, else the nearest finer one,
+    /// else the nearest coarser one. An image object the store holds no pixels of draws as a
+    /// light gray box, not crossed, unless the store notes it as undecodable: then it draws as it
+    /// does with this option off ([`RenderOptions::mark_undecoded_images`]). No image object is decoded and
+    /// no mip of one is made. Off, image objects are decoded as they are drawn.
+    pub kept_images_only: bool,
     /// Screen views while an interaction is in progress (a drag, a dialog's preview): an object
     /// whose content only moved since an earlier frame draws its cached drop shadows, outer glows
     /// and filtered content from the rasters made then, at the nearest whole pixel, without
@@ -207,6 +215,7 @@ impl Default for RenderOptions {
             supersample: false,
             image_mips: false,
             mark_undecoded_images: false,
+            kept_images_only: false,
             interacting: false,
             dragging: false,
             rich_black: false,

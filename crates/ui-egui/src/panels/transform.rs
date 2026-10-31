@@ -215,7 +215,7 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
 
 /// With ruler guides selected and no art: the X of the vertical ones and the Y of the horizontal
 /// ones (the least of each; none where no such guide is selected).
-fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
+pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
     let st = app.session.active()?;
     if !st.selection.objects.is_empty() || st.selection.guides.is_empty() {
         return None;
@@ -226,16 +226,17 @@ fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Option<f64>)> {
     Some((least(true), least(false)))
 }
 
-/// The selected ruler guides' view of the panel (#1597): X moves the vertical ones and Y the
-/// horizontal ones, together.
-fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>)) {
+/// The selected ruler guides' view of the panel (#1597), also the Properties panel's Transform
+/// section for them: X moves the vertical ones and Y the horizontal ones, together. The fields
+/// are `width` wide.
+pub(crate) fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>), width: f32) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     egui::Grid::new("xfp-guide-grid").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
         for (label, id, pos, origin, by) in [("X:", "xfp-guide-x", x, origin.x, "dx"), ("Y:", "xfp-guide-y", y, origin.y, "dy")] {
             widgets::dim_label(ui, label);
             ui.add_enabled_ui(pos.is_some(), |ui| {
-                if let (Some(v), Some(pos)) = (widgets::num_field_named(ui, id, Some(tl!(label)), pos.map(|p| p - origin), units, 80.0), pos)
+                if let (Some(v), Some(pos)) = (widgets::num_field_named(ui, id, Some(tl!(label)), pos.map(|p| p - origin), units, width), pos)
                     && let Err(e) = app.run("guide.move", json!({ by: v + origin - pos }))
                 {
                     app.status(e);
@@ -257,7 +258,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if let Some(guides) = selected_guides(app) {
-        guide_fields(app, ui, guides);
+        guide_fields(app, ui, guides, 80.0);
         return;
     }
     let units = app.session.general_unit();

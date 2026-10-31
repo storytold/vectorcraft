@@ -994,6 +994,41 @@ fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
     }
 }
 
+/// Through the session, a click with Shift held and the Type tool chosen makes vertical type and
+/// edits it with the Type tool still chosen, and the pointer with Shift held is the vertical
+/// I-beam. A click with Alt held and the Type on a Path tool chosen turns a rectangle into area
+/// type.
+#[test]
+fn shift_and_alt_switch_the_type_tools_through_the_session() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let (shift, alt) = (Mods { shift: true, ..Mods::default() }, Mods { alt: true, ..Mods::default() });
+    s.select_tool("type", v).unwrap();
+    assert_eq!(s.cursor(Point::new(400.0, 300.0), shift, v), vectorcraft_tools::Cursor::TypeVertical);
+    assert_eq!(s.cursor(Point::new(400.0, 300.0), Mods::default(), v), vectorcraft_tools::Cursor::Text);
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 400.0, 300.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "type");
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(obj(&s, id).vertical);
+    assert!(s.tool_wants_text());
+    s.tool_text("縦", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "縦");
+    key(&mut s, ToolKey::Escape, Mods::default());
+
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    s.select_tool("typeOnPath", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 100.0, 150.0).with_mods(alt), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "typeOnPath");
+    assert!(s.doc().unwrap().doc.node(rect).is_none(), "the rectangle became the frame");
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(matches!(obj(&s, id).kind, TextKind::Area { .. }));
+    assert!(!obj(&s, id).vertical);
+}
+
 #[test]
 fn area_type_from_a_circle_keeps_glyphs_inside() {
     let mut s = session();

@@ -122,6 +122,40 @@ fn pencil_with_live_curve_fitting_off_previews_the_stroke_unfitted() {
     assert!(!drawn.is_empty() && drawn.iter().all(Option::is_none), "{drawn:?}");
 }
 
+/// A stroke whose Fidelity is finer than half a screen pixel previews fitted at half a pixel, which
+/// looks the same at a fraction of the fit's cost (#4565); the release, and another tool chosen
+/// while it is drawn, fit it at its own Fidelity. A coarser Fidelity previews as it is kept.
+#[test]
+fn fine_fidelity_previews_at_half_a_pixel() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let stroke = [(0.0, 0.0), (10.0, 5.0), (20.0, 0.0), (30.0, 5.0)];
+    let fidelities = |acts: &[Action]| -> Vec<f64> {
+        acts.iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect()
+    };
+    for id in ["pencil", "paintbrush"] {
+        for (zoom, fidelity, drawn) in [(1.0, 0.01, 0.5), (4.0, 0.01, 0.125), (1.0, 1.5, 1.5)] {
+            cx.zoom = zoom;
+            let mut t = GestureTool::new(id);
+            t.set_option("fidelity", &json!(fidelity));
+            let acts = drag(&mut t, &cx, &stroke, Mods::default());
+            let (release, during) = acts.split_last().unwrap();
+            assert_eq!(fidelities(&during.concat()), [drawn; 3], "{id} at {zoom}x, {fidelity} pt");
+            assert_eq!(fidelities(release), [fidelity], "{id} at {zoom}x, {fidelity} pt: the release");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+            for &(x, y) in &stroke[1..] {
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
+            }
+            let acts = t.deactivate(&cx);
+            let kept = if drawn > fidelity { [fidelity].to_vec() } else { vec![] };
+            assert_eq!(fidelities(&acts), kept, "{id} at {zoom}x, {fidelity} pt: another tool chosen");
+            assert_eq!(acts.last(), Some(&Action::Commit));
+        }
+    }
+}
+
 /// Keep selected is on by default, and every Pencil and Paintbrush preview sends it.
 #[test]
 fn pencil_and_paintbrush_send_keep_selected() {
@@ -279,14 +313,32 @@ fn blob_brush_sends_keep_selected_and_merge_only_with_selection() {
             "{acts:?}"
         );
     }
-    // The Eraser keeps Size, Angle and Roundness: a round tip by default.
-    assert_eq!(GestureTool::new("eraser").options(), json!({"size": 10.0, "angle": 0.0, "roundness": 100.0}));
+    // The Eraser keeps Size (Fixed by default), Angle and Roundness: a round tip by default.
+    assert_eq!(
+        GestureTool::new("eraser").options(),
+        json!({"size": 10.0, "sizeMode": "fixed", "sizeVariation": 0.0, "angle": 0.0, "roundness": 100.0})
+    );
+}
+
+/// The Blob Brush has a Fidelity, 1.5 pt by default and 0.01 to 100 pt, and its stroke sends it.
+#[test]
+fn blob_brush_sends_its_fidelity() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!(t.options()["fidelity"], json!(1.5));
+    for (set, sent) in [(1.5, 1.5), (6.0, 6.0), (0.001, 0.01), (500.0, 100.0)] {
+        t.set_option("fidelity", &json!(set));
+        assert_eq!(t.options()["fidelity"], json!(sent));
+        let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+        assert!(matches!(&acts[2][0], Action::Exec(c, v) if c == "path.blob" && v["fidelity"] == json!(sent)), "{set}: {acts:?}");
+    }
 }
 
 /// Shift keeps a Blob Brush stroke on the horizontal or vertical line through the press point,
-/// whichever is nearer to the pointer, at 90° steps from the Constrain Angle; the points
-/// dragged with Shift held move to the other line together, and each point follows the Shift
-/// state of its own event.
+/// with its axis chosen by the first clear axial movement. Crossing it never moves earlier samples.
 #[test]
 fn blob_brush_shift_keeps_the_stroke_horizontal_or_vertical() {
     let (d, _) = doc_with_rect();
@@ -294,46 +346,135 @@ fn blob_brush_shift_keeps_the_stroke_horizontal_or_vertical() {
     let p = paint();
     let mut cx = cx(&d, &s, &p);
     let shift = Mods { shift: true, ..Default::default() };
-    let blob = |acts: &[Vec<Action>]| -> Vec<(f64, f64)> {
-        let Some(Action::Exec(c, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-        assert_eq!(c, "path.blob");
-        v["points"].as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect()
+    let mut t = GestureTool::new("blobBrush");
+    let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
+    for zoom in [0.5, 1.0, 4.0] {
+        cx.zoom = zoom;
+        t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0, shift));
+        t.pointer(&cx, &ev(PointerKind::Drag, 4.0 / zoom, 4.0 / zoom, shift));
+        assert_eq!(t.points, vec![Point::ZERO]);
+        assert!(t.overlays(&cx).is_empty());
+        t.pointer(&cx, &ev(PointerKind::Drag, 1.0 / zoom, 0.5 / zoom, shift));
+        assert_eq!(t.points.len(), 1, "small component has a strict bound");
+        t.pointer(&cx, &ev(PointerKind::Drag, 1.0 / zoom, 0.0, shift));
+        let first = t.points[1];
+        t.pointer(&cx, &ev(PointerKind::Drag, 3.0 / zoom, 10.0 / zoom, shift));
+        assert_eq!(t.points[1], first);
+        assert!(t.points.iter().all(|p| p.y.abs() < 1e-9));
+        // Release Shift: freehand resumes without relocating the constrained points.
+        t.pointer(&cx, &ev(PointerKind::Drag, 8.0 / zoom, 12.0 / zoom, Mods::default()));
+        assert_eq!(t.points.last(), Some(&Point::new(8.0 / zoom, 12.0 / zoom)));
+        t.pointer(&cx, &ev(PointerKind::Drag, 0.0, 15.0 / zoom, shift));
+        assert_eq!(t.points[1], first);
+        assert!(t.points.last().unwrap().x.abs() < 1e-9);
+        t.pointer(&cx, &ev(PointerKind::Up, 0.0, 15.0 / zoom, shift));
+    }
+    // Exact quarter turns preserve the strict half-pixel boundary in either direction.
+    for angle in [-450.0, -180.0, -90.0, 90.0, 180.0, 450.0] {
+        cx.constrain_angle = angle;
+        cx.zoom = 1.0;
+        let axes = vectorcraft_geom::constrain_axes(angle).unwrap();
+        for (x, y) in [(1.0, 0.5), (0.5, 1.0), (-1.0, -0.5), (-0.5, -1.0)] {
+            t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0, shift));
+            let at = axes * Point::new(x, y);
+            t.pointer(&cx, &ev(PointerKind::Drag, at.x, at.y, shift));
+            assert_eq!(t.points, vec![Point::ZERO], "angle {angle}, ({x}, {y}) stays pending");
+            assert!(t.shift_line.is_none());
+            let at = axes * Point::new(x, 0.0);
+            t.pointer(&cx, &ev(PointerKind::Drag, at.x, at.y, shift));
+            assert_eq!(t.shift_line.is_some(), x.abs() >= 1.0);
+            t.clear();
+        }
+    }
+    cx.constrain_angle = 0.0;
+    // A pending diagonal released without locking makes the ordinary dot at the press.
+    t.pointer(&cx, &ev(PointerKind::Down, 20.0, 20.0, shift));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 30.0, 30.0, shift));
+    assert!(matches!(&acts[0], Action::Exec(c, v) if c == "path.blob" && v["points"] == json!([[20.0, 20.0]])), "{acts:?}");
+}
+
+/// Alt switches the Blob Brush to the Smooth tool: held before the press, or pressed before the
+/// drag has moved, the cursor shows the Smooth tool, the drag shows a thin line and its release
+/// smooths the selected paths (`path.smoothRegion`) instead of painting. Shift does not
+/// constrain a smoothing drag, a stroke that has moved keeps painting when Alt goes down, and
+/// with nothing selected the release changes no path.
+#[test]
+fn blob_brush_alt_switches_to_the_smooth_tool() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    let alt = Mods { alt: true, ..Default::default() };
+    let at = Point::new(50.0, 50.0);
+    let smoothed = |acts: &[Vec<Action>]| -> Option<Value> {
+        match acts.last().and_then(|a| a.first()) {
+            Some(Action::Exec(c, v)) if c == "path.smoothRegion" => Some(v.clone()),
+            _ => None,
+        }
     };
     let mut t = GestureTool::new("blobBrush");
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (30.0, 5.0), (50.0, 8.0)], shift));
-    assert_eq!(pts.len(), 3);
-    assert!(pts.iter().all(|q| q.1 == 0.0 && q.0 >= 0.0), "{pts:?}");
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (5.0, 30.0), (8.0, 50.0)], shift));
-    assert!(pts.iter().all(|q| q.0.abs() < 1e-9 && q.1 >= 0.0), "{pts:?}");
-    // A pointer that crosses to the vertical line takes the points before it along, each on
-    // its own side of the press point and at its own distance.
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (-40.0, -2.0), (100.0, 99.0), (90.0, 120.0)], shift));
-    assert_eq!(pts.len(), 4, "{pts:?}");
-    assert!(pts.iter().all(|q| q.0.abs() < 1e-9), "{pts:?}");
-    assert!((pts[1].1 + 1604f64.sqrt()).abs() < 1e-9 && (pts[2].1 - 19801f64.sqrt()).abs() < 1e-9 && (pts[3].1 - 150.0).abs() < 1e-9, "{pts:?}");
-    // Without Shift the stroke follows the pointer.
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (30.0, 5.0), (50.0, 8.0)], Mods::default()));
-    assert_eq!(pts, vec![(0.0, 0.0), (30.0, 5.0), (50.0, 8.0)]);
-    // Shift pressed and let go mid-stroke constrains only the points dragged while it is down,
-    // and a later press of Shift leaves the points of the earlier one where they are.
-    let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
-    t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0, Mods::default()));
-    t.pointer(&cx, &ev(PointerKind::Drag, 20.0, 10.0, Mods::default()));
-    t.pointer(&cx, &ev(PointerKind::Drag, 40.0, 10.0, shift));
-    t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 10.0, Mods::default()));
-    let pts = blob(&[t.pointer(&cx, &ev(PointerKind::Up, 10.0, 80.0, shift))]);
-    assert_eq!((pts.len(), pts[1], pts[3]), (5, (20.0, 10.0), (60.0, 10.0)), "{pts:?}");
-    assert!(pts[2].1 == 0.0 && (pts[2].0 - 1700f64.sqrt()).abs() < 1e-9, "{pts:?}");
-    assert!(pts[4].0.abs() < 1e-9 && (pts[4].1 - 6500f64.sqrt()).abs() < 1e-9, "{pts:?}");
-    // The axes turn with the Constrain Angle.
-    cx.constrain_angle = 30.0;
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (40.0, -20.0)], shift));
-    let a = (-pts[1].1).atan2(pts[1].0).to_degrees();
-    assert!((a - 30.0).abs() < 1e-9, "{pts:?}");
-    // A pointer back at the press point leaves the stroke on its line.
-    let pts = blob(&drag_held(&mut t, &cx, &[(0.0, 0.0), (40.0, -20.0), (0.0, 0.0)], shift));
-    let a = (-pts[1].1).atan2(pts[1].0).to_degrees();
-    assert!(pts.len() == 3 && pts[2] == (0.0, 0.0) && (a - 30.0).abs() < 1e-9, "{pts:?}");
+    assert_eq!(t.cursor(&cx, at, alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&cx, at, Mods::default()), Cursor::BlobBrush);
+    let stroke = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let acts = drag_held(&mut t, &cx, &stroke, alt);
+    assert!(acts[..acts.len() - 1].iter().all(|a| a.is_empty()), "{acts:?}");
+    let v = smoothed(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+    assert_eq!(v, json!({"points": [[50.0, 150.0], [150.0, 150.0], [250.0, 160.0]], "radius": cx.tol(12.0), "fidelity": SMOOTH_FIDELITY}));
+    // Mid-drag the cursor stays the Smooth tool's when Alt is let go, and the line is thin with
+    // no length label.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    assert_eq!(t.cursor(&cx, at, Mods::default()), Cursor::Smooth);
+    let o = t.overlays(&cx);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Path { width, .. } if *width == 1.0)), "{o:?}");
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Measure { .. })), "{o:?}");
+    // After another tool is chosen mid-drag, the Blob Brush shows its own cursor when it is chosen
+    // again, and so does the Pencil after a drag that Alt key toggles to Smooth Tool made smooth.
+    assert!(t.deactivate(&cx).is_empty());
+    assert_eq!(t.cursor(&cx, at, Mods::default()), Cursor::BlobBrush);
+    let mut pencil = GestureTool::new("pencil");
+    pencil.set_option("altSmooth", &json!(true));
+    pencil.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    pencil.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    assert!(pencil.deactivate(&cx).is_empty());
+    assert_eq!(pencil.cursor(&cx, at, Mods::default()), Cursor::PencilNew);
+    // Alt pressed before the drag has moved smooths too, and Shift leaves the points where the
+    // pointer went.
+    let alt_shift = Mods { alt: true, shift: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 170.0).with_mods(alt_shift));
+    let acts = [t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 160.0).with_mods(alt_shift))];
+    let v = smoothed(&acts).unwrap_or_else(|| panic!("{acts:?}"));
+    assert_eq!(v["points"], json!([[50.0, 150.0], [150.0, 170.0], [250.0, 160.0]]));
+    // A stroke that has moved keeps painting with Alt down.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+    assert_eq!(t.cursor(&cx, at, alt), Cursor::BlobBrush);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 150.0).with_mods(alt));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(alt));
+    assert!(matches!(acts.as_slice(), [Action::Exec(c, v)] if c == "path.blob" && v["points"].as_array().unwrap().len() == 4), "{acts:?}");
+    // So does a stroke that has moved too little to add a point.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.25, 150.0));
+    assert_eq!(t.cursor(&cx, at, alt), Cursor::BlobBrush);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(alt));
+    assert!(matches!(acts.as_slice(), [Action::Exec(c, _)] if c == "path.blob"), "{acts:?}");
+    // Alt pressed while the pointer stands still at the press point does not paint on the release.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    assert_eq!(t.cursor(&cx, at, alt), Cursor::Smooth);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 50.0, 150.0).with_mods(alt));
+    assert!(acts.is_empty(), "{acts:?}");
+    // A release away from the press point with no drag before it paints when Alt goes down.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0).with_mods(alt));
+    assert!(matches!(acts.as_slice(), [Action::Exec(c, _)] if c == "path.blob"), "{acts:?}");
+    // With nothing selected an Alt drag sends nothing.
+    let none = Selection::default();
+    let empty = crate::testutil::cx(&d, &none, &p);
+    let acts = drag_held(&mut t, &empty, &stroke, alt);
+    assert!(acts.iter().all(|a| a.is_empty()), "{acts:?}");
 }
 
 /// #3799: Shift held at the press draws a straight Pencil line from the press point, at 45°
@@ -703,6 +844,137 @@ fn pencil_alt_with_alt_to_smooth_on_smooths_instead_of_drawing_a_line() {
     assert!(matches!(&acts.last().unwrap()[0], Action::Exec(c, v) if c == "path.smoothRegion" && v["points"].as_array().unwrap().len() == 3));
 }
 
+/// While Alt switches the Pencil to the Smooth tool, the Pencil smooths within the Smooth tool's
+/// radius at any Edit selected paths Within value, 0 included.
+#[test]
+fn pencil_alt_smooths_within_the_smooth_tools_radius() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let radius = |acts: &[Vec<Action>]| match acts.last().and_then(|a| a.first()) {
+        Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["radius"].as_f64().unwrap(),
+        a => panic!("expected path.smoothRegion, got: {a:?}"),
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    for zoom in [1.0, 2.0] {
+        cx.zoom = zoom;
+        let want = radius(&drag(&mut GestureTool::new("smooth"), &cx, &pts, Mods::default()));
+        for within in [0.0, 5.0, 40.0] {
+            let mut t = GestureTool::new("pencil");
+            t.set_option("altSmooth", &json!(true));
+            t.set_option("editWithin", &json!(within));
+            assert_eq!(radius(&drag_held(&mut t, &cx, &pts, alt)), want, "zoom {zoom}, editWithin {within}");
+        }
+    }
+}
+
+/// An Alt smoothing drag uses the Smooth tool's Fidelity for Pencil, Paintbrush and Blob Brush.
+#[test]
+fn alt_smoothing_uses_the_smooth_tools_fidelity() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let fidelity = |acts: &[Vec<Action>]| match acts.last().and_then(|a| a.first()) {
+        Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["fidelity"].as_f64().unwrap(),
+        a => panic!("expected path.smoothRegion, got: {a:?}"),
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    let want = fidelity(&drag(&mut GestureTool::new("smooth"), &cx, &pts, Mods::default()));
+    for (id, alt_smooth) in [("pencil", true), ("blobBrush", false), ("paintbrush", false), ("paintbrush", true)] {
+        let mut t = GestureTool::new(id);
+        t.set_option("altSmooth", &json!(alt_smooth));
+        t.set_option("fidelity", &json!(10.0));
+        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), want, "{id} altSmooth={alt_smooth}");
+        t.set_option("smoothFidelity", &json!(7.5));
+        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), 7.5, "{id} altSmooth={alt_smooth}");
+        // Drawing keeps the tool's own Fidelity; Smooth's setting stays out of its options.
+        assert_eq!(t.options()["fidelity"], json!(10.0), "{id}");
+        assert!(t.options().get("smoothFidelity").is_none(), "{id}");
+    }
+}
+
+/// Alt pressed after a Paintbrush stroke begins closes it, and an empty selection still draws.
+#[test]
+fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws() {
+    let (d, id) = doc_with_rect();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let empty = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let mut t = GestureTool::new("paintbrush");
+    let selected_cx = cx(&d, &selected, &p);
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(alt));
+    let last = t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Up, pts[2].0, pts[2].1).with_mods(alt));
+    assert!(matches!(last.first(), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
+    let cx = cx(&d, &empty, &p);
+    let last = drag_held(&mut t, &cx, &pts, alt);
+    assert!(matches!(last.last().and_then(|a| a.first()), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
+}
+
+/// The Paintbrush shows Smooth before an Alt press only with a selected path.
+#[test]
+fn paintbrush_alt_cursor_matches_selection_at_press() {
+    let (d, id) = doc_with_rect();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let empty = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx(&d, &selected, &p), Point::new(50.0, 150.0), alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&cx(&d, &empty, &p), Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+}
+
+/// A selected text object leaves Alt Paintbrush drawing a closed stroke with its close cursor.
+#[test]
+fn paintbrush_alt_with_only_text_selected_draws_a_closed_stroke() {
+    let (d, text_id) = doc_with_area_type();
+    let mut selected = Selection::default();
+    selected.set([text_id]);
+    let p = paint();
+    let cx = cx(&d, &selected, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let acts = drag_held(&mut t, &cx, &[(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)], alt);
+    assert!(acts.iter().flatten().any(|a| matches!(a, Action::Preview(c, v) if c == "path.freehand" && v["closed"] == true)), "{acts:?}");
+    assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
+}
+
+/// A selected two-anchor line leaves Alt Paintbrush drawing a closed stroke with its close cursor.
+#[test]
+fn paintbrush_alt_with_only_two_anchor_line_selected_draws_a_closed_stroke() {
+    let (mut d, _) = doc_with_rect();
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(layer), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let p = paint();
+    let cx = cx(&d, &selected, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let acts = drag_held(&mut t, &cx, &[(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)], alt);
+    assert!(acts.iter().flatten().any(|a| matches!(a, Action::Preview(c, v) if c == "path.freehand" && v["closed"] == true)), "{acts:?}");
+    assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
+}
+
 /// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
 /// a selected open path it continues the path from that end to the pointer.
 #[test]
@@ -937,6 +1209,147 @@ fn eraser_and_knife_exec_on_release() {
     assert!(matches!(&a[0], Action::Exec(c, v) if c == "path.knife" && v["points"].as_array().unwrap().len() == 3));
 }
 
+/// The points of the Knife's release command.
+fn knife_points(acts: &[Action]) -> Vec<(f64, f64)> {
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(c, "path.knife");
+    v["points"].as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect()
+}
+
+fn overlay_points(t: &GestureTool, cx: &ToolContext) -> Vec<(f64, f64)> {
+    let o = t.overlays(cx);
+    let Some(Overlay::Path { path, dashed: true, .. }) = o.last() else { panic!("{o:?}") };
+    path.elements().iter().filter_map(|e| e.end_point()).map(|q| (q.x, q.y)).collect()
+}
+
+/// With Alt held at the press, a wavy Knife drag shows and cuts along the straight line from the
+/// press point to the pointer, even after Alt is released. Alt first pressed after the press
+/// leaves the cut freehand, and a straight cut taken back to the press point sends no command.
+#[test]
+fn knife_alt_cuts_along_a_straight_line() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let none = Mods::default();
+    let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
+    let mut t = GestureTool::new("knife");
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 150.0, alt));
+    t.pointer(&cx, &ev(PointerKind::Drag, 100.0, 120.0, alt));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 190.0, none));
+    assert_eq!(overlay_points(&t, &cx), vec![(50.0, 150.0), (150.0, 190.0)]);
+    // Alt let go: the cut stays straight.
+    let a = t.pointer(&cx, &ev(PointerKind::Up, 250.0, 160.0, none));
+    assert_eq!(knife_points(&a), vec![(50.0, 150.0), (250.0, 160.0)]);
+    // Alt pressed on the first Drag event leaves the cut freehand.
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 150.0, none));
+    t.pointer(&cx, &ev(PointerKind::Drag, 100.0, 120.0, alt));
+    let a = t.pointer(&cx, &ev(PointerKind::Up, 250.0, 160.0, alt));
+    assert_eq!(knife_points(&a), vec![(50.0, 150.0), (100.0, 120.0), (250.0, 160.0)]);
+    // Alt pressed after the drag moved: the cut follows the drag.
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 150.0, none));
+    t.pointer(&cx, &ev(PointerKind::Drag, 100.0, 120.0, none));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 190.0, alt));
+    let a = t.pointer(&cx, &ev(PointerKind::Up, 250.0, 160.0, alt));
+    assert_eq!(knife_points(&a), vec![(50.0, 150.0), (100.0, 120.0), (150.0, 190.0), (250.0, 160.0)]);
+    // Back at the press point the line goes, and the release cuts nothing.
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 150.0, alt));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 190.0, alt));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.2, 150.0, alt));
+    assert!(t.overlays(&cx).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 50.2, 150.0, alt)), vec![]);
+}
+
+/// Alt first held after the Knife press leaves the cut freehand, including when the pointer has
+/// not moved before Alt is pressed. The release command contains every collected point.
+#[test]
+fn knife_alt_after_press_keeps_freehand_cut() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    for stationary_first in [false, true] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+        if stationary_first {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0, 150.0).with_mods(alt));
+        }
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 120.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 190.0));
+        assert_eq!(overlay_points(&t, &cx), vec![(50.0, 150.0), (100.0, 120.0), (150.0, 190.0)]);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 160.0));
+        assert_eq!(knife_points(&a), vec![(50.0, 150.0), (100.0, 120.0), (150.0, 190.0), (250.0, 160.0)]);
+    }
+}
+
+/// Alt first held at release leaves a freehand Knife cut on its collected drag points.
+#[test]
+fn knife_alt_only_at_release_keeps_freehand_cut() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 120.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 190.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 160.0).with_mods(alt));
+    assert_eq!(knife_points(&a), vec![(50.0, 150.0), (100.0, 120.0), (150.0, 190.0), (250.0, 160.0)]);
+}
+
+/// With Shift and Alt held, the Knife's straight cut keeps to 45° steps from the canvas axes
+/// and is as long as the line to the pointer. Shift is read on each Drag and Up event: when Shift
+/// is let go, the line follows the pointer again. With Shift alone, the cut follows the drag.
+#[test]
+fn knife_shift_alt_cuts_at_45_degree_steps() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
+    let alt = Mods { alt: true, ..Default::default() };
+    let angle = |q: (f64, f64), from: (f64, f64)| (-(q.1 - from.1)).atan2(q.0 - from.0).to_degrees();
+    let mut t = GestureTool::new("knife");
+    // A wavy drag heading up and right at about 40°: a cut at 45°, as long as the drag.
+    let acts = drag_held(&mut t, &cx, &[(0.0, 0.0), (30.0, -10.0), (50.0, -60.0), (100.0, -84.0)], shift_alt);
+    let cut = knife_points(acts.last().unwrap());
+    assert_eq!(cut.len(), 2, "{cut:?}");
+    assert_eq!(cut[0], (0.0, 0.0));
+    assert!((angle(cut[1], (0.0, 0.0)) - 45.0).abs() < 1e-9, "{cut:?}");
+    assert!((cut[1].0.hypot(cut[1].1) - 100f64.hypot(84.0)).abs() < 1e-9, "{cut:?}");
+    // A nearly vertical drag takes the nearest 90° step, with the same overlay and command endpoints.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift_alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 15.0, -90.0).with_mods(shift_alt));
+    let shown = overlay_points(&t, &cx);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 15.0, -90.0).with_mods(shift_alt));
+    let cut = knife_points(&a);
+    assert_eq!(shown, cut);
+    assert!((cut[1].0 - 10.0).abs() < 1e-9, "{cut:?}");
+    assert!((cut[1].1 - (10.0 - 5f64.hypot(100.0))).abs() < 1e-9, "{cut:?}");
+    // Shift goes down mid-drag and up again: the overlay steps, then follows the pointer.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, -84.0).with_mods(shift_alt));
+    let shown = overlay_points(&t, &cx);
+    assert!((angle(shown[1], (0.0, 0.0)) - 45.0).abs() < 1e-9, "{shown:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, -80.0).with_mods(alt));
+    assert_eq!(overlay_points(&t, &cx), vec![(0.0, 0.0), (100.0, -80.0)]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, -84.0).with_mods(shift_alt));
+    assert!((angle(knife_points(&a)[1], (0.0, 0.0)) - 45.0).abs() < 1e-9, "{a:?}");
+    // A 30° Constrain Angle does not turn the Knife's horizontal or 45° cuts.
+    cx.constrain_angle = 30.0;
+    let acts = drag_held(&mut t, &cx, &[(10.0, 10.0), (110.0, 3.0)], shift_alt);
+    assert_eq!(knife_points(acts.last().unwrap()), vec![(10.0, 10.0), (10.0 + 100f64.hypot(7.0), 10.0)]);
+    let acts = drag_held(&mut t, &cx, &[(10.0, 10.0), (110.0, -74.0)], shift_alt);
+    let cut = knife_points(acts.last().unwrap());
+    assert!((angle(cut[1], (10.0, 10.0)) - 45.0).abs() < 1e-9, "{cut:?}");
+    // Shift alone: the cut follows the drag.
+    let acts = drag_held(&mut t, &cx, &[(0.0, 0.0), (30.0, -10.0), (50.0, -60.0)], Mods { shift: true, ..Default::default() });
+    assert_eq!(knife_points(acts.last().unwrap()), vec![(0.0, 0.0), (30.0, -10.0), (50.0, -60.0)]);
+}
+
 /// The Eraser's Angle and Roundness (Eraser Tool Options) go with its stroke, kept within
 /// −180–180° and 1–100%; while it drags, a tip that is not round shows the outline of the area
 /// it covers, and a round one the drag as wide as the tip.
@@ -976,6 +1389,53 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     let b = vectorcraft_geom::Shape::bounding_box(path);
     assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
     assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+}
+
+/// The Blob Brush's Angle and Roundness (Blob Brush Tool Options, 0° and 100% by default) go with
+/// its stroke, kept within −180–180° and 0–100%; while it drags, a tip that is not round shows the
+/// outline of the area it covers with the length label, and an Alt drag that smooths shows the
+/// Smooth tool's thin line.
+#[test]
+fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(0.0), Some(100.0)));
+    t.set_option("size", &json!(20));
+    for (angle, roundness, sent) in [(45.0, 25.0, (45.0, 25.0)), (400.0, -5.0, (180.0, 0.0)), (-400.0, 250.0, (-180.0, 100.0))] {
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(sent.0), Some(sent.1)));
+        let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+        assert!(
+            matches!(&acts[2][0], Action::Exec(c, v) if c == "path.blob" && v["size"] == 20.0 && v["angle"] == sent.0 && v["roundness"] == sent.1),
+            "{acts:?}"
+        );
+    }
+    // A tip 20 pt long and 5 pt wide, standing upright: along a horizontal drag from x 50 to
+    // x 150 the outline reaches 2.5 pt either side of the drag and 10 pt above and below its ends.
+    t.set_option("angle", &json!(90));
+    t.set_option("roundness", &json!(25));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+    let o = t.overlays(&cx);
+    let Some(Overlay::Path { path, width, .. }) = o.iter().find(|o| matches!(o, Overlay::Path { .. })) else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    let b = vectorcraft_geom::Shape::bounding_box(path);
+    assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
+    assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { .. })), "{o:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    let o = t.overlays(&cx);
+    let [Overlay::Path { path, width, .. }] = &o[..] else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use super::outline::{hit_at, hit_with, selection_hit_at};
-use super::*;
+use super::{Ui, VectorcraftApp, Xf, json, widgets};
 
 /// Right-click: the object under the pointer is selected first unless it already is, then the
 /// context menu lists what applies to the selection ([`crate::menus::context_items`]). The locked

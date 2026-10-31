@@ -11,7 +11,7 @@ use vectorcraft_pdf::{PrintLayers, PrintOptions, PrintPreview, PrintSettings};
 
 use super::fileio::pdf::{merge, pdf_error};
 use super::fileio::{extension, write_or_return};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
 
 const SETUP: &str = "print.setup";
 

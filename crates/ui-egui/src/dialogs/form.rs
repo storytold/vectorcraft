@@ -44,8 +44,22 @@ pub(super) fn length_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: 
 /// "5 mm", wins), kept in points (a string with a unit, "12 pt", also reads). Returns true when it
 /// changed.
 pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, width: f32) -> bool {
+    length_within(ui, d, key, unit, width, None)
+}
+
+/// [`length`] whose value is kept within `range` (points): a value typed outside it becomes the
+/// nearer end, so the field shows the distance the command applies (#4637).
+pub(super) fn length_within(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    key: &str,
+    unit: Unit,
+    width: f32,
+    range: Option<std::ops::RangeInclusive<f64>>,
+) -> bool {
     let value = d.fields.contains_key(key).then(|| d.f64(key, 0.0));
-    let Some(v) = crate::widgets::num_field(ui, ("dlg-len", key), value, unit, width) else { return false };
+    let bounds = range.unwrap_or(crate::widgets::ANY);
+    let Some(v) = crate::widgets::num_field_within(ui, ("dlg-len", key), value, unit, width, bounds) else { return false };
     d.fields.insert(key.into(), json!(v));
     true
 }
@@ -181,7 +195,14 @@ fn text_edit_limited_name(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f
         .inner_margin(egui::Margin::symmetric(6, 3))
         .show(ui, |ui| {
             crate::theme::strong_selected_text(ui);
-            ui.add(egui::TextEdit::singleline(&mut s).id(id).frame(egui::Frame::NONE).desired_width(width).char_limit(max_chars))
+            ui.add(
+                egui::TextEdit::singleline(&mut s)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .align(egui::Align2::LEFT_CENTER)
+                    .desired_width(width)
+                    .char_limit(max_chars),
+            )
         });
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
@@ -358,7 +379,9 @@ pub(super) fn param_fields(
                     return;
                 }
                 if is_length(&k) {
-                    changed |= length(ui, d, &k, unit, 140.0);
+                    // An effect's documented range keeps the field to the distance it applies.
+                    let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
+                    changed |= length_within(ui, d, &k, unit, 140.0, range);
                     return;
                 }
                 if let Some(options) = choices(&k) {
@@ -404,7 +427,7 @@ pub(super) fn param_fields(
                         }
                     }
                     Value::String(mut s) => {
-                        if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                        if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(140.0)).changed() {
                             d.fields.insert(k.clone(), json!(s));
                             changed = true;
                         }
@@ -624,6 +647,17 @@ pub(crate) fn humanize(k: &str) -> String {
         "Sy" => "Vertical %".into(),
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
+        "Dash1" => "Dash 1:".into(),
+        "Dash2" => "Dash 2:".into(),
+        "Dash3" => "Dash 3:".into(),
+        "Dash4" => "Dash 4:".into(),
+        "Dash5" => "Dash 5:".into(),
+        "Gap1" => "Gap 1:".into(),
+        "Gap2" => "Gap 2:".into(),
+        "Gap3" => "Gap 3:".into(),
+        "Gap4" => "Gap 4:".into(),
+        "Gap5" => "Gap 5:".into(),
+        "Align Corners" => "Align to Corners and Ends:".into(),
         "Max Radius" => "Max. Radius:".into(),
         "Blur Mode" => "Mode:".into(),
         "Channel1" => "Channel 1:".into(),

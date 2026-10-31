@@ -578,11 +578,7 @@ fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    let place = |app: &mut VectorcraftApp| {
-        app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [30, 20]})).unwrap()
-    };
+    let place = |app: &mut VectorcraftApp| vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [30, 20]}));
     let dir = vectorcraft_testkit::temp_dir("sfw-undecoded");
     let (mut desktop, _) = app(&dir, false);
     desktop.run("file.saveForWeb", json!({"format": "png24"})).unwrap();

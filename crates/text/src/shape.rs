@@ -5,12 +5,14 @@ use std::sync::Arc;
 
 use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
+use unicode_segmentation::UnicodeSegmentation;
 
 use harfrust::{Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
 use skrifa::MetadataProvider;
+use skrifa::charmap::Charmap;
 use skrifa::instance::Size;
 use vectorcraft_doc::text::INLINE_CHAR;
-use vectorcraft_doc::{CharStyle, InlineArt};
+use vectorcraft_doc::{CharStyle, Digits, InlineArt};
 
 use crate::features::{OtFeatures, ligatures_suppressed_by};
 use crate::fontdb::{FontDb, FontFace};
@@ -132,7 +134,10 @@ impl SGlyph {
     }
     /// A line may break after this glyph.
     pub fn break_after(&self) -> bool {
-        self.is_space() || self.word_end || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN) || is_cjk(self.ch)
+        self.is_space()
+            || self.word_end
+            || matches!(self.ch, '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' | SOFT_HYPHEN | '\u{2028}')
+            || is_cjk(self.ch)
     }
     /// A soft (discretionary) hyphen: invisible unless a line breaks after it.
     pub fn is_soft_hyphen(&self) -> bool {
@@ -393,24 +398,23 @@ pub(crate) fn shape_range(
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
-        let mut cache: std::collections::HashMap<char, Arc<FontFace>> = std::collections::HashMap::new();
+        let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
         let mut script = Script::Common;
-        for (i, c) in text[a..b].char_indices() {
+        // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
+        for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
             // Digits are drawn in the style's numeral system: the font must cover that digit.
-            let c = st.digits.map(c);
+            let Some(c) = cluster.chars().next().map(|c| st.digits.map(c)) else { continue };
             let level = level_at(i);
             // Whitespace the primary font doesn't map goes to the fallback face like any other
             // character (#1844): an ideographic space set at zero width would remove an indent.
-            // What the layout handles itself (tab, line and paragraph breaks) stays.
-            let covered = c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
-            let face = if covered {
+            let face = if drawn_chars(cluster, st.digits).all(|c| in_face(pmap.as_ref(), c)) {
                 primary.clone()
-            } else if let Some(f) = cache.get(&c) {
+            } else if let Some(f) = cache.get(cluster) {
                 f.clone()
             } else {
-                let f = db.fallback_for_style(c, primary.id(), primary.weight, primary.italic).unwrap_or_else(|| primary.clone());
-                cache.insert(c, f.clone());
+                let f = fallback_face(db, &primary, pmap.as_ref(), cluster, st.digits);
+                cache.insert(cluster, f.clone());
                 f
             };
             let small = small_caps && c.is_lowercase();
@@ -514,6 +518,32 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *digits == b.digits
         && *no_break == b.no_break
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
+}
+
+/// The characters of a grapheme cluster that need a glyph of their own, in the numeral system
+/// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
+/// variation selectors.
+fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
+    cluster
+        .chars()
+        .map(move |c| digits.map(c))
+        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+}
+
+/// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
+fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
+    map.is_none_or(|m| m.map(c).is_some())
+}
+
+/// The face of a grapheme cluster the primary face (charmap `pmap`) lacks a character of: the
+/// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
+/// it (#4491); when there is none, the face its first character takes on its own.
+fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
+    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
+    drawn_chars(cluster, digits)
+        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
+        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
+        .unwrap_or_else(|| primary.clone())
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
@@ -811,7 +841,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
-        if ch == SOFT_HYPHEN {
+        if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
         } else if last_in_cluster {
             let tracking = gst.tracking / 1000.0 * size;

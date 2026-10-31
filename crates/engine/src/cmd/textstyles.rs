@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{CharStyle, Document, NodeId, NodeKind, ParaStyle, TextStyleDef};
 
 use super::typecmd::{refresh_bounds, text_targets};
-use super::*;
+use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
 
 pub const NORMAL_CHAR: &str = "[Normal Character Style]";
 pub const NORMAL_PARA: &str = "[Normal Paragraph Style]";
@@ -99,9 +99,17 @@ macro_rules! style_cmds {
                 concat!($p, ".delete"),
                 concat!("Delete ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name} (text keeps its look)",
+                "{name} | {names: [name…]} delete styles in one undo step (text keeps its look; never the Normal style)",
                 |s, p| delete(s, p, $kind),
                 true,
+            ),
+            spec(
+                concat!($p, ".unused"),
+                "Select All Unused",
+                &["Window", "Type", $menu],
+                "{} → {names: [the styles no text uses, in panel order; never the Normal style]} (the panel highlights them)",
+                |s, _| unused(s, $kind),
+                false,
             ),
         ]
     };
@@ -291,19 +299,31 @@ fn text_mut(d: &mut Document, id: NodeId) -> Option<&mut vectorcraft_doc::TextOb
     }
 }
 
-/// How many runs (char) or paragraphs (para) use `name`.
-fn uses(d: &Document, kind: Kind, name: &str) -> usize {
-    let target = (name != kind.normal()).then_some(name);
-    let mut n = 0;
-    d.walk(|node| {
-        if let NodeKind::Text(t) = &node.kind {
-            n += match kind {
-                Kind::Char => t.runs.iter().filter(|r| r.style.style_name.as_deref() == target).count(),
-                Kind::Para => (0..t.paragraph_count()).filter(|&i| t.para_at(i).style_name.as_deref() == target).count(),
-            };
-        }
-    });
+/// How many runs (char) or paragraphs (para) use each style, by style name (`None`: the Normal
+/// style). Type in the art (opacity masks included), symbols, graph designs, pattern tiles and the
+/// art of brushes counts.
+fn uses(d: &Document, kind: Kind) -> std::collections::HashMap<Option<String>, usize> {
+    let mut n = std::collections::HashMap::new();
+    let mut count = |name: &Option<String>| *n.entry(name.clone()).or_insert(0) += 1;
+    let brushes = vectorcraft_brush::library(d);
+    let trees = d.layers.iter().map(|l| &**l).chain(d.symbols.iter().map(|s| &*s.art)).chain(d.graph_designs.iter().map(|g| &*g.art));
+    let trees = trees.chain(d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a))).chain(brushes.iter().flat_map(|b| b.art()));
+    for tree in trees {
+        vectorcraft_doc::swatches::walk_with_masks(tree, &mut |node| {
+            if let NodeKind::Text(t) = &node.kind {
+                match kind {
+                    Kind::Char => t.runs.iter().for_each(|r| count(&r.style.style_name)),
+                    Kind::Para => (0..t.paragraph_count()).for_each(|i| count(&t.para_at(i).style_name)),
+                }
+            }
+        });
+    }
     n
+}
+
+/// How many runs (char) or paragraphs (para) use `name` (see [`uses`]).
+fn uses_of(uses: &std::collections::HashMap<Option<String>, usize>, kind: Kind, name: &str) -> usize {
+    uses.get(&(name != kind.normal()).then(|| name.to_string())).copied().unwrap_or(0)
 }
 
 /// Update every user of `name` from `old` to `new` attributes (overrides kept).
@@ -366,9 +386,25 @@ pub(crate) fn selected_style_attrs(s: &Session, para: bool) -> Result<Option<Map
     selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char })
 }
 
+/// The attributes `charStyle.new` (`para`: `paraStyle.new`) would give a style made now from
+/// `target` (its `id`, `start` and `end`; empty for the selected objects). `None` without text
+/// there.
+pub fn target_style_attrs(s: &Session, target: &Value, para: bool) -> Option<Map<String, Value>> {
+    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }).ok().flatten()
+}
+
 /// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
 pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
+}
+
+/// The name `charStyle.new` (`para`: `paraStyle.new`) gives a style when it is given none: the
+/// first "Character Style N" ("Paragraph Style N") that no character style (paragraph style) of the
+/// document has.
+pub fn new_style_name(d: &Document, para: bool) -> String {
+    let kind = if para { Kind::Para } else { Kind::Char };
+    let base = if para { "Paragraph Style" } else { "Character Style" };
+    (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string())
 }
 
 fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
@@ -418,7 +454,8 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let mut names = vec![kind.normal().to_string()];
     names.extend(kind.defs(d).iter().map(|s| s.name.clone()).filter(|n| n != kind.normal()));
-    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses(d, kind, n) })).collect();
+    let uses = uses(d, kind);
+    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses_of(&uses, kind, n) })).collect();
     Ok(json!({ "styles": styles }))
 }
 
@@ -436,10 +473,9 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         },
     };
     let d = &s.doc()?.doc;
-    let base = if kind == Kind::Char { "Character Style" } else { "Paragraph Style" };
     let name = match str_param(p, "name") {
         Some(n) => n.trim().to_string(),
-        None => (1..).map(|i| format!("{base} {i}")).find(|n| kind.attrs(d, n).is_none()).unwrap_or_else(|| base.to_string()),
+        None => new_style_name(d, kind == Kind::Para),
     };
     if name.is_empty() {
         return Err(bad(&c, "give the style a name"));
@@ -601,16 +637,26 @@ fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 
 fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("delete");
-    let name = name_param(p, kind, "delete")?.to_string();
-    if name == kind.normal() || !kind.defs(&s.doc()?.doc).iter().any(|s| s.name == name) {
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => v
+            .as_array()
+            .and_then(|a| a.iter().map(|n| n.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+            .ok_or_else(|| bad(&c, "`names` must be an array of style names"))?,
+        None => vec![name_param(p, kind, "delete")?.to_string()],
+    };
+    if names.is_empty() {
+        return Err(bad(&c, "missing `name`"));
+    }
+    let defs = kind.defs(&s.doc()?.doc);
+    if let Some(name) = names.iter().find(|n| *n == kind.normal() || !defs.iter().any(|s| s.name == **n)) {
         return Err(bad(&c, format!("`{name}` can't be deleted")));
     }
-    s.edit("Delete Style", |d, _| {
-        kind.defs_mut(d).retain(|s| s.name != name);
+    s.edit(if names.len() > 1 { "Delete Styles" } else { "Delete Style" }, |d, _| {
+        kind.defs_mut(d).retain(|s| !names.contains(&s.name));
         for id in all_text(d) {
             let Some(t) = text_mut(d, id) else { continue };
             let fix = |n: &mut Option<String>| {
-                if n.as_deref() == Some(name.as_str()) {
+                if n.as_ref().is_some_and(|n| names.contains(n)) {
                     *n = None;
                 }
             };
@@ -622,6 +668,15 @@ fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// The styles no text uses (see [`uses`]), in the order the panel lists them, without the Normal
+/// style.
+fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let uses = uses(d, kind);
+    let names: Vec<&str> = kind.defs(d).iter().map(|s| s.name.as_str()).filter(|n| *n != kind.normal() && uses_of(&uses, kind, n) == 0).collect();
+    Ok(json!({ "names": names }))
 }
 
 #[cfg(test)]

@@ -3,7 +3,10 @@ use super::graphic_style::default_graphic_styles;
 use super::guides::{GridPrefs, RulerMode};
 use super::limits::{DocError, FORMAT_VERSION, MAX_COORD, MAX_NEXT_ID};
 use super::units::{ColorMode, Unit};
-use super::*;
+use super::{
+    Arc, BTreeMap, ColorProfiles, DocMetadata, DocSetup, Document, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, PatternDef, Places, Point,
+    RasterEffectsSettings, Rect, Vec2,
+};
 
 impl Document {
     /// Is everything but the layers the same in `other`, as the next version of the document after

@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use super::*;
+use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {

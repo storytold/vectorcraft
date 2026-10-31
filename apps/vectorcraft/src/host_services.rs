@@ -1,4 +1,12 @@
-use super::*;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+use super::portal_save;
+#[cfg(target_os = "linux")]
+use super::tablet;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+use super::windows_stylus;
+use super::{ClipboardProbeFactory, FilePick, PickRequest, Services, clipboard, cursor_theme, fileio, printing};
+#[cfg(target_os = "macos")]
+use super::{mac_save_format, mac_screen_color, mac_tablet};
 
 /// The window file dialogs belong to.
 pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
@@ -247,6 +255,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         .as_ref()
         .and_then(|w| w.window_handle().ok())
         .is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)));
+    let (clip, clip_probe) = (parent.clone(), parent.clone());
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
     #[cfg(target_os = "macos")]
     let sampled_ui = ui.clone();
@@ -266,7 +275,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         #[cfg(target_os = "macos")]
         stylus: mac_tablet::start(),
         // Windows reads it from the pen's pointer messages (`windows_stylus`).
-        #[cfg(all(windows, not(target_vendor = "win7")))]
+        #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(write_file)),
@@ -278,11 +287,12 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
             fileio::write_file_with(p, fill).map_err(|e| e.to_string())
         })),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
-        system_clipboard: Some(clipboard::system_clipboard()),
+        system_clipboard: Some(clipboard::system_clipboard(clip)),
         // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
         // owner that never answers holds a read for up to 4 s. Windows only asks which formats the
         // clipboard holds and macOS asks the pasteboard server, so they check in line.
-        clipboard_probe: cfg!(target_os = "linux").then(|| Box::new(clipboard::system_clipboard) as ClipboardProbeFactory),
+        // The probe's handle is made on its own thread, from the window (`Send`), not its raw display.
+        clipboard_probe: cfg!(target_os = "linux").then(|| Box::new(move || clipboard::system_clipboard(clip_probe)) as ClipboardProbeFactory),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);

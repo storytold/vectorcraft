@@ -51,7 +51,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, Nod
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, Shape};
 
 use super::wand::{fill_of, stroke_of};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc};
 
 const C: &str = "select.globalEdit";
 const OPTIONS: &str = "select.globalEditOptions";

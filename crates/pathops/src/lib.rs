@@ -6,6 +6,7 @@
 //! anchors. See the crate README for the API overview.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod boolean;
 mod budget;
 mod edit;
@@ -20,8 +21,8 @@ pub use boolean::{
     try_unite_all_with, unite_all, unite_all_with,
 };
 pub use edit::{
-    AverageAxis, SIMPLIFY_LEVEL, SimplifiedPart, SimplifyOptions, add_anchor_points, auto_simplify_level, average, join, remove_anchor,
-    remove_redundant_points, simplify, simplify_level_tolerance, simplify_part, simplify_with, smooth, split_into_grid,
+    AverageAxis, SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, SimplifiedPart, SimplifyOptions, add_anchor_points, auto_simplify_level, average, join,
+    remove_anchor, remove_redundant_points, simplify, simplify_level_tolerance, simplify_part, simplify_with, smooth, smooth_level, split_into_grid,
 };
 pub use offset::{Cap, Join, offset_path, outline_stroke, stroke_region};
 pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, pathfinder_with, region_at, regions};

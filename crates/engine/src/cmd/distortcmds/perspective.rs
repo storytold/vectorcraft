@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Affine, Arc, Document, EngineError, Homography, NodeId, NodeKind, PerspectiveGrid, Plane, Point, Result, Session, Value, bad, check_numbers,
+    check_switches, collect_points, duplicate_in, finite_numbers, id_param, ids_param, json, matrix_param, number_or, ok, outermost, persp,
+    point_param, project_node, selected_roots, str_param, switch_or,
+};
 
 // ---------- perspective grid ----------
 
@@ -280,12 +284,42 @@ pub(super) fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let fallback = plane_param(&grid_of(&s.doc()?.doc), p, C).ok();
     let (perp, copy) = (switch_or(p, "perpendicular", false, C)?, switch_or(p, "copy", false, C)?);
+    let constrain = switch_or(p, "constrain", false, C)?;
     // `snap_fix` uses Snap to Grid's setting for a `snap` that is not true or false.
     check_switches(p, &["snap"], C)?;
     // Snap to Grid: a correction for the objects on the first one's plane and depth.
-    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, to)) };
-    let snapped = move |pl: Plane, depth: f64, dv: vectorcraft_geom::Vec2| {
-        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| f.2)
+    let snap_to = if constrain && !perp {
+        let doc = &s.doc()?.doc;
+        let g = grid_of(doc);
+        g.plane_bounds(doc, &ids)
+            .and_then(|(plane, depth, _)| {
+                let h = g.homography_at(plane, depth)?;
+                let start = h.inverse()?.apply(from)?;
+                let delta = g.plane_delta(plane, depth, from, to)?;
+                h.apply(start + vectorcraft_tools::distort::perspective::constrain_move_delta(delta).1)
+            })
+            .unwrap_or(to)
+    } else {
+        to
+    };
+    let fix = if perp { None } else { crate::cmd::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, snap_to)) };
+    let snapped = move |pl: Plane, depth: f64, raw: vectorcraft_geom::Vec2| {
+        let (direction, dv) =
+            if constrain { vectorcraft_tools::distort::perspective::constrain_move_delta(raw) } else { (vectorcraft_geom::Vec2::ZERO, raw) };
+        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| {
+            if !constrain {
+                return f.2;
+            }
+            if direction.x.abs() < 1e-12 {
+                return vectorcraft_geom::Vec2::new(0.0, f.2.y);
+            }
+            if direction.y.abs() < 1e-12 {
+                return vectorcraft_geom::Vec2::new(f.2.x, 0.0);
+            }
+            let (correction, axis) =
+                if f.2.x == 0.0 || (f.2.y != 0.0 && f.2.y.abs() < f.2.x.abs()) { (f.2.y, direction.y) } else { (f.2.x, direction.x) };
+            direction * (correction / axis)
+        })
     };
     // In-plane: the plane-space offset under the pointer; perpendicular: the depth it reaches.
     let step = |g: &PerspectiveGrid, pl: Plane, depth: f64| -> Result<(Homography, f64)> {

@@ -10,6 +10,7 @@
 //! and the traced filled paths above it, mapped with the image's transform. Expand drops the
 //! image (a plain group of paths remains); Release puts the image back in place of the group.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -27,7 +28,10 @@ use super::draw2::replace_with_pieces;
 use super::edit::{outermost, selected_roots};
 use super::paint::paint_from;
 use super::pathops::{Beside, shape_node};
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, finite_numbers, has_doc, id_param, ids_param,
+    number_or, point_param, str_param, switch_or,
+};
 
 mod live_paint;
 mod shape_builder;
@@ -36,7 +40,9 @@ mod trace;
 pub use live_paint::live_paint_gaps;
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_merge, sb_regions};
-use trace::{trace_expand, trace_make, trace_release, trace_set_view};
+pub(crate) use trace::TracePresetChanges;
+pub use trace::{TracePreset, TracePresetChange, TraceRun, Traced};
+use trace::{trace_expand, trace_make, trace_presets_delete, trace_presets_save, trace_release, trace_set_view};
 
 /// Name of an Image Trace group.
 pub const TRACE_NAME: &str = "Image Trace";
@@ -48,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Shape Builder",
             [],
             None,
-            "{ids?|id?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click; may be left out with rect), rect?: [x, y, width, height] (Shift-drag marquee from where the drag started, x and y, to x+width and y+height; width and height may be negative: touches every region whose outline crosses the rectangle or has an anchor inside it and the region holding the whole rectangle, the region under x, y comes first and the one under the opposite corner comes next; with points, it also touches the regions along them; for pickColorFrom, x, y is the drag's first point and the opposite corner is its last), erase?: bool (erase mode, Alt: deletes the regions touched, and the pieces of open paths that cut regions and the edges (outline pieces between the points where paths meet; see shapeBuilder.regions) within tolerance, except that a point in a region no more than twice the tolerance across there touches the region; a deleted edge opens its path there, and edges bounding a deleted region go with it; what is left of each path keeps its look, with gradients fitted to its bounds kept where they were on it, its name, opacity mask and attributes, and its fill rule unless merged regions shaped it), splitStroke?: false (In Merge Mode, Clicking Stroke Splits the Path; not with erase or rect: when the one point of a click is within tolerance of a stroke, the path that stroke is on splits in two instead of a merge: the path keeps the rest of it, and a copy of the path holding the run of it from the anchor or crossing point before the click to the one after it, in the path's direction, goes directly above it; both keep the path's gradients where they were on it; the other objects stay as they are; with pickColorFrom \"swatches\" or fill, the run's stroke takes that paint; a path in a Live Paint group or a Shaper Group does not split, and nor does a path the run is all of, such as a lone line, or all but 0.05 pt or less of (a ten-thousandth of the larger side of a path over 500 pt)), tolerance?: pt (2, erase or splitStroke), gap?: pt (0–72; 0: Gap Detection off), openFilledAsClosed?: true (Consider Open Filled Paths as Closed: a filled open path bounds a region as if an invisible edge closed it; false: it cuts the regions it crosses like an unfilled one), pickColorFrom?: \"artwork\" (default: the merged shape takes the look of the front-most object under the first point, else under the last point, else of the front-most object) | \"swatches\" (the current fill, with the rest of the look of the front-most object over the first region the drag touches that an object covers, else of the front-most object), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (overrides pickColorFrom)} → {ids, merged, regions, lines, edges (counts deleted, merged or split), split?: id (the run split off, after a split)}; after a split, ids are the roots, with the rest and the run in place of the path when it was one",
+            "{ids?|id?: [id…] (default: selection), points: [[x,y]…] (drag path; one point = click; may be left out with rect), rect?: [x, y, width, height] (Shift-drag marquee from where the drag started, x and y, to x+width and y+height; width and height may be negative: touches every region whose outline crosses the rectangle or has an anchor inside it and the region holding the whole rectangle, the region under x, y comes first and the one under the opposite corner comes next; with points, it also touches the regions along them; for pickColorFrom, x, y is the drag's first point and the opposite corner is its last), erase?: bool (erase mode, Alt: deletes the regions touched, and the pieces of open paths that cut regions and the edges (outline pieces between the points where paths meet; see shapeBuilder.regions) within tolerance, except that a point in a region no more than twice the tolerance across there touches the region; a deleted edge opens its path there, and edges bounding a deleted region go with it; what is left of each path keeps its look, with gradients fitted to its bounds kept where they were on it, its name, opacity mask and attributes, and its fill rule unless merged regions shaped it), splitStroke?: false (In Merge Mode, Clicking Stroke Splits the Path; not with erase or rect: when the one point of a click is within tolerance of a stroke, the path that stroke is on splits in two instead of a merge: the path keeps the rest of it, and a copy of the path holding the run of it from the anchor or crossing point before the click to the one after it, in the path's direction, goes directly above it; both keep the path's gradients where they were on it; the other objects stay as they are; with pickColorFrom \"swatches\" or fill, the run's stroke takes that paint; a path in a Live Paint group or a Shaper Group does not split, and nor does a path the run is all of, such as a lone line, or all but 0.05 pt or less of (a ten-thousandth of the larger side of a path over 500 pt)), tolerance?: pt (2, erase or splitStroke), gap?: pt (0–72; 0: Gap Detection off), openFilledAsClosed?: true (Consider Open Filled Paths as Closed: a filled open path bounds a region as if an invisible edge closed it; false: it cuts the regions it crosses like an unfilled one), pickColorFrom?: \"artwork\" (default: the merged shape takes the look of the front-most object under the first point, else under the last point, else of the front-most object) | \"swatches\" (the current fill, with the rest of the look of the front-most object over the first region the drag touches that an object covers, else of the front-most object), fill?: \"#rrggbb\" | {color|swatch|gradient|none} (overrides pickColorFrom)} replaces the paths it uses where they are; other selected objects (type, hidden or locked objects, clipping paths) stay, and a group goes only when it is left empty → {ids (selected after: each selected object still there, or what took its place), merged, regions, lines, edges (counts deleted, merged or split), split?: id (the run split off, after a split)}; after a split, ids are the roots, with the rest and the run in place of the path when it was one",
             has_selection_or_ids,
             sb_merge
         ),
@@ -138,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at)}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), savedPreset?: {settings} (a saved preset's settings, which the journal records so a replay traces with them after the preset is changed, renamed or deleted; used in place of the saved preset `preset` names), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, automatic: flat art with its own colours, else fullTone, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px, method: \"abutting\"|\"overlapping\", ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, white is always its own colour, at most ten; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white unless ignoreWhite makes them holes; fills/strokes are ignored; gradients and photos are refused)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at)}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -178,9 +184,29 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection_or_ids,
             trace_set_view
         ),
-        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, params, enhanced: the params of the preset's enhanced version, null if it has none}]}", always, |_, _| {
-            Ok(json!({ "presets": tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "params": p, "enhanced": tr::enhanced_preset(n) })).collect::<Vec<_>>() }))
+        cmd!(query "imageTrace.presets", "Image Trace Presets", [], None, "{} → {presets: [{name, builtIn, params, enhanced: the params of the preset's enhanced version, null if it has none}], revision: grows each time the saved presets change} the built-in presets, then the saved ones (builtIn false, enhanced null); any of these names works as imageTrace.make's `preset`", always, |s, _| {
+            let builtin = tr::presets().into_iter().map(|(n, p)| json!({ "name": n, "builtIn": true, "params": p, "enhanced": tr::enhanced_preset(n) }));
+            let saved = s.prefs.trace_presets.iter().map(|p| json!({ "name": p.name, "builtIn": false, "params": p.params, "enhanced": null }));
+            Ok(json!({ "presets": builtin.chain(saved).collect::<Vec<_>>(), "revision": s.trace_presets_revision() }))
         }),
+        cmd!(
+            query "imageTrace.presets.save",
+            "Save Image Trace Preset",
+            [],
+            None,
+            "{name?: (default: a new \"Tracing Preset N\"), newName?: rename the saved preset `name`, preset?: the preset to start from (default: the saved preset `name`, else Default), enhanced?, params?: {settings, as imageTrace.make takes them, over the preset's}} create or change a saved tracing preset, kept with the preferences (built-in ones can't change) → {name, params, created, renamedFrom: the name before `newName` changed it, else null}",
+            always,
+            trace_presets_save
+        ),
+        cmd!(
+            query "imageTrace.presets.delete",
+            "Delete Image Trace Preset",
+            [],
+            None,
+            "{name} delete a saved tracing preset (built-in ones stay) → {deleted: name}",
+            always,
+            trace_presets_delete
+        ),
     ]
 }
 
@@ -296,6 +322,89 @@ fn remnant(d: &mut Document, src: &Node, path: PathData, rule: Option<FillRule>)
         *r = rule.unwrap_or(own);
     }
     n
+}
+
+/// Put each list of `outs` in place of the leaf of `leaves` at the same index (none: the leaf stays
+/// as it is), then remove the groups under `roots` that this leaves empty. A Live Paint or Shaper
+/// group (the outermost one under the root) is replaced as a whole, by the lists of its leaves,
+/// with a copy of each leaf that stays and of each hidden or locked object in it. Other objects
+/// under the roots, such as type, hidden or locked objects and clipping paths, stay where they are. Returns what to select: each root
+/// still there, or what went in its place.
+fn replace_leaves(d: &mut Document, roots: &[NodeId], leaves: &[Node], outs: Vec<Option<Vec<Node>>>) -> Result<Vec<NodeId>> {
+    let listed: HashSet<NodeId> = roots.iter().copied().collect();
+    let paths = d.index_paths(leaves.iter().map(|l| l.id));
+    // Each leaf's unit (the leaf, or the group replaced as a whole) and the groups from the unit's
+    // parent up to its root, innermost first.
+    let mut places: Vec<(NodeId, Vec<NodeId>)> = vec![];
+    for leaf in leaves {
+        let anc = paths.get(&leaf.id).and_then(|p| d.ancestry_at(p)).unwrap_or_default();
+        let below = anc.iter().position(|a| listed.contains(a)).and_then(|r| anc.get(r..)).unwrap_or_default();
+        let whole = below.iter().position(|a| d.node(*a).is_some_and(|n| is_live_paint(n) || n.extras().shaper.is_some()));
+        let at = whole.unwrap_or(below.len().saturating_sub(1));
+        let unit = below.get(at).copied().unwrap_or(leaf.id);
+        places.push((unit, below.get(..at).unwrap_or_default().iter().rev().copied().collect()));
+    }
+    // (unit, groups above it, what goes in place of each of its leaves, whether it changes); a
+    // unit's leaves are next to each other, in paint order.
+    type Unit = (NodeId, Vec<NodeId>, Vec<(NodeId, Vec<Node>)>, bool);
+    let mut units: Vec<Unit> = vec![];
+    for ((leaf, out), (unit, above)) in leaves.iter().zip(outs).zip(places) {
+        let changed = out.is_some();
+        let list = match out {
+            Some(list) => list,
+            None if unit != leaf.id => vec![d.reid(leaf)],
+            None => vec![],
+        };
+        match units.last_mut() {
+            Some(u) if u.0 == unit => {
+                u.2.push((leaf.id, list));
+                u.3 |= changed;
+            }
+            _ => units.push((unit, above, vec![(leaf.id, list)], changed)),
+        }
+    }
+    units.retain(|u| u.3);
+    let ids: Vec<NodeId> = units.iter().map(|u| u.0).collect();
+    let mut replaced = Beside::replacing(d, &ids);
+    let mut put: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+    let mut emptied = vec![];
+    for (unit, above, lists, _) in units {
+        // A group replaced as a whole keeps a copy of each hidden or locked object in it, where it was.
+        let members: Vec<Node> = d.node(unit).map(|n| b::builder_members(n).into_iter().cloned().collect()).unwrap_or_default();
+        let mut at: HashMap<NodeId, usize> = HashMap::new();
+        for (k, l) in lists.iter().enumerate() {
+            at.entry(l.0).or_insert(k);
+        }
+        let mut lists: Vec<Option<Vec<Node>>> = lists.into_iter().map(|l| Some(l.1)).collect();
+        let mut list = vec![];
+        for m in &members {
+            if let Some(l) = at.remove(&m.id).and_then(|k| lists.get_mut(k)).and_then(Option::take) {
+                list.extend(l);
+            } else if (m.locked || !m.visible) && m.id != unit {
+                list.push(d.reid(m));
+            }
+        }
+        list.extend(lists.into_iter().flatten().flatten());
+        if list.is_empty() {
+            emptied.push(above);
+        }
+        put.insert(unit, list.iter().map(|n| n.id).collect());
+        replaced.put(d, unit, list)?;
+    }
+    replaced.finish(d)?;
+    // A group goes only when nothing is left in it.
+    for above in emptied {
+        for g in above {
+            match d.node(g) {
+                None => continue,
+                Some(n) if !n.is_layer() && n.children().is_some_and(|c| c.is_empty()) => {
+                    d.remove(g)?;
+                }
+                Some(_) => break,
+            }
+        }
+    }
+    Ok(roots.iter().flat_map(|r| put.get(r).cloned().unwrap_or_else(|| d.node(*r).map(|_| vec![*r]).unwrap_or_default())).collect())
 }
 
 // ---------- Live Paint ----------

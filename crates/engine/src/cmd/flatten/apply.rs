@@ -1,7 +1,11 @@
 use super::analysis::{Scratch, outlined_text, overlapping, reach};
 use super::compose::{Builder, CLEAR, Composer, Elem, Fill, Kind, WHITE};
 use super::options::FlattenOptions;
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, ColorMode, Document, EngineError, FillLayer, FillRule, ImageBlob, ImageObject, Inks,
+    MAX_PIXELS, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, effects, isolated_doc, outline_strokes_under, planes_cmyk, po, separate,
+    shape_node, shapes, unique_key,
+};
 
 // ---------- plan ----------
 

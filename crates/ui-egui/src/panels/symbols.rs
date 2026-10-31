@@ -149,6 +149,41 @@ fn has_instances_selected(app: &VectorcraftApp) -> bool {
     })
 }
 
+/// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
+fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
+    let st = app.session.active()?;
+    let symbols: Option<Vec<String>> = st
+        .selection
+        .objects
+        .iter()
+        .map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.clone()),
+            _ => None,
+        })
+        .collect();
+    symbols.filter(|s| !s.is_empty())
+}
+
+/// The Control bar's Replace menu while symbol instances alone are selected: the document's
+/// symbols, showing the one the instances share (blank when they differ); picking another
+/// replaces them all, as "Select a new symbol from the Replace dropdown in the Control panel"
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>).
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(symbols) = selected_instance_symbols(app) else { return };
+    let Some(st) = app.session.active() else { return };
+    let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
+    let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
+    ui.label(egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text));
+    let options: Vec<&str> = names.iter().map(String::as_str).collect();
+    if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
+        && *name != shared
+        && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
+    {
+        app.status(e);
+    }
+    ui.add_space(4.0);
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
@@ -701,5 +736,66 @@ mod tests {
             a == 255 && r > 200 && (130..190).contains(&g) && b < 40
         };
         assert!(orange(3, 3) && orange(36, 36), "{:?} {:?}", thumb.pixels[3 * 40 + 3], thumb.pixels[36 * 40 + 36]);
+    }
+
+    /// #4121: with symbol instances selected, the Control bar's Replace menu lists the document's
+    /// symbols and shows the instance's own; picking another replaces it.
+    #[test]
+    fn the_control_bar_replace_menu_swaps_the_selected_instances_symbol() {
+        fn bar(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Shape> {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                ui.horizontal(|ui| control_bar(app, ui));
+            });
+            out.textures_delta.clear();
+            out.shapes.into_iter().map(|c| c.shape).collect()
+        }
+        fn text_at(shapes: &[egui::Shape], s: &str) -> Option<Pos2> {
+            shapes.iter().find_map(|sh| match sh {
+                egui::Shape::Text(t) if t.galley.text().trim() == s => Some(t.visual_bounding_rect().center()),
+                egui::Shape::Vec(v) => text_at(v, s),
+                _ => None,
+            })
+        }
+        fn click(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
+            bar(app, ctx, vec![egui::Event::PointerMoved(at), button(at, true)]);
+            bar(app, ctx, vec![button(at, false)]);
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        for (name, x) in [("Leaf", 10), ("Star", 150)] {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 30})).unwrap();
+            app.run("symbol.new", json!({"name": name})).unwrap();
+        }
+        let instance_of = |app: &VectorcraftApp, name: &str| {
+            let mut found = None;
+            for l in &app.session.active().unwrap().doc.layers {
+                l.walk(&mut |n| {
+                    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                        && symbol == name
+                    {
+                        found = Some(n.id);
+                    }
+                });
+            }
+            found
+        };
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // Art, not an instance: no Replace menu.
+        let rect = app.run("shape.rectangle", json!({"x": 10, "y": 100, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [rect]})).unwrap();
+        assert!(text_at(&bar(&mut app, &ctx, vec![]), "Replace:").is_none());
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        bar(&mut app, &ctx, vec![]);
+        let shapes = bar(&mut app, &ctx, vec![]);
+        assert!(text_at(&shapes, "Replace:").is_some());
+        let shown = text_at(&shapes, "Leaf").expect("the menu shows the instance's symbol");
+        click(&mut app, &ctx, shown);
+        let star = text_at(&bar(&mut app, &ctx, vec![]), "Star").expect("the menu lists the other symbol");
+        click(&mut app, &ctx, star);
+        let doc = &app.session.active().unwrap().doc;
+        assert!(matches!(&doc.node(leaf).unwrap().kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"), "the instance is replaced");
     }
 }

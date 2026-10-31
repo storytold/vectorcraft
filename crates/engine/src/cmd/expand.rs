@@ -22,7 +22,7 @@ use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
 use super::pathops::{assemble, node_path, outline_strokes, replace_leaves, styled_copy, with_transparency};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_selection, str_param};
 
 const C: &str = "object.expand";
 /// Expand Gradient To → Specify … Objects: the default and the most.
@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -49,14 +49,23 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Options",
             [],
             None,
-            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to)",
+            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus)",
             has_selection,
             |s, _| {
                 let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
-                Ok(json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient}))
+                Ok(json!({"object": e.object(), "fill": e.fill, "stroke": e.stroke, "gradient": e.gradient, "appearance": has_appearance(s)}))
             }
         ),
     ]
+}
+
+/// Has the selection appearance attributes that Expand Appearance expands (effects, several fills
+/// or strokes, a fill or stroke with its own opacity, blend mode or effects, a brush)? Object ›
+/// Expand… is dimmed in the menus for them until Expand Appearance has turned them into plain art
+/// (#3089); `object.expand` itself still bakes them.
+pub fn has_appearance(s: &Session) -> bool {
+    let (Ok(st), Ok(roots)) = (s.doc(), selected_roots(s)) else { return false };
+    roots.iter().filter_map(|r| st.doc.node(*r)).any(super::effectcmd::expandable)
 }
 
 /// Every placed document in `roots` of `d` (at any depth) replaced by an editable copy of the art it
@@ -131,7 +140,11 @@ impl Expandable {
                 e.placed |= matches!(c.kind, NodeKind::PlacedDocument(_));
                 e.repeats |= matches!(c.kind, NodeKind::Repeat(_));
                 e.intertwines |= matches!(c.kind, NodeKind::Intertwine { .. });
-                e.stroke |= shape && !c.appearance.stroke_paint().is_none();
+                e.stroke |= match &c.kind {
+                    // Type's outlines take its characters' stroke (see `type.createOutlines`).
+                    NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
+                    _ => shape && !c.appearance.stroke_paint().is_none(),
+                };
                 e.gradient |= match &c.kind {
                     NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
                     _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
@@ -176,13 +189,22 @@ fn pattern_fill<'a, 'd>(d: &'d Document, i: &'a AppearanceItem) -> Option<(&'a F
 }
 
 fn expand(s: &mut Session, p: &Value) -> Result<Value> {
+    let scope = s.begin_undo_scope();
+    let result = expand_steps(s, p);
+    if let Some(scope) = scope {
+        s.end_undo_scope(scope, result.is_err());
+    }
+    result
+}
+
+fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let object = bool_or(p, "object", true);
     let fill = bool_or(p, "fill", true);
     let stroke = bool_or(p, "stroke", true);
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
     let rev0 = s.doc()?.revision;
-    let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     // Placed documents first: their art (type, strokes, gradients) expands below.
     if object && e.placed {
         let roots = selected_roots(s)?;
@@ -205,7 +227,16 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
         s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
     }
     if object && e.effects {
-        let _ = run_raw(s, "effect.expandAppearance", &json!({}));
+        // Effects that Expand Appearance can't expand are left as they are. When it refuses to
+        // leave a process color on a grayscale image with transparency, Expand fails as a whole.
+        if let Err(e) = run_raw(s, "effect.expandAppearance", &json!({}))
+            && super::paint::is_colorize_refusal(&e)
+        {
+            return Err(e);
+        }
+        // What is left to expand is in the baked art: Expand Appearance leaves strokes strokes
+        // (#3089), a group's own as stroked paths among its members, which Stroke outlines below.
+        e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
     }
     if object && e.envelope {
         let roots = selected_roots(s)?;
@@ -413,10 +444,10 @@ fn expand_pattern_fills(s: &mut Session) -> Result<()> {
     })
 }
 
-/// Expand the pattern fills under `root` that paint a transparent image into the tiles they paint
+/// Expand the pattern fills under `root` that paint a transparent or colorized image into the tiles they paint
 /// ([`expand_patterns_where`]), so each tile image becomes an object of its own; the other
-/// pattern fills stay. A tile image counts as
-/// transparent when its key is in `see_through` (it has see-through pixels), or when it, a group
+/// pattern fills stay. A tile image counts when its key is in `see_through` (it has see-through
+/// pixels), when it has a colorize paint, or when it, a group
 /// in the tile art, the fill, the shape or a group the shape is in has opacity or a blending
 /// mode. Returns how many shapes changed.
 pub(crate) fn expand_transparent_image_patterns(d: &mut Document, root: NodeId, see_through: &BTreeSet<String>) -> Result<usize> {
@@ -442,12 +473,12 @@ fn blended(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal
 }
 
-/// Whether `n` is or holds a transparent image: one with see-through pixels (key in `keys`), or
-/// with opacity or a blending mode of its own or of a group in `n`, or anywhere when `on`.
+/// Whether `n` is or holds an image with see-through pixels (key in `keys`), a colorize paint,
+/// opacity or a blending mode of its own or of a group in `n`, or anywhere when `on`.
 fn transparent_image(n: &Node, keys: &BTreeSet<String>, on: bool) -> bool {
     let on = on || blended(n);
     match &n.kind {
-        NodeKind::Image(im) => on || keys.contains(&im.key),
+        NodeKind::Image(im) => on || keys.contains(&im.key) || n.extras().colorize.is_some(),
         _ => n.children().is_some_and(|ch| ch.iter().any(|c| transparent_image(c, keys, on))),
     }
 }

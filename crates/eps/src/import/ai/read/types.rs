@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, BlendMode, Dash, FillRule, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -18,6 +18,8 @@ pub(super) const MAX_POINTS: usize = 4_000_000;
 
 /// Largest image read (pixels).
 pub(super) const MAX_PIXELS: u64 = 1 << 25;
+/// Most placed files whose other placement ([`super::Structure::placed_elsewhere`]) is kept.
+pub(super) const MAX_PLACED_ELSEWHERE: usize = 4096;
 
 /// The note for an image past [`MAX_PIXELS`]: the file then opens from its PDF part, which reads
 /// larger images (#1479).
@@ -140,6 +142,8 @@ pub(super) struct Frame {
     pub(super) hidden: bool,
     /// [`Reader::after_object`] when it opened.
     pub(super) after: bool,
+    /// [`Reader::mesh_ended`] when it opened.
+    pub(super) mesh_ended: bool,
     /// The state when it opened (a container's lock and visibility; a dictionary's state to go
     /// back to).
     pub(super) gs: GState,
@@ -149,6 +153,8 @@ pub(super) struct Frame {
     pub(super) clips: Vec<usize>,
     /// A compound member group explicitly declares its subpaths' winding with `D`.
     pub(super) compound_members: bool,
+    /// A dictionary in the art: the transparency (`Xy`) its art set last, which stays after it.
+    pub(super) state: Option<(f32, BlendMode, bool, Knockout, bool)>,
 }
 
 /// What a reader of a pattern's definition has of its head, `(name) llx lly urx ury`: the operands
@@ -244,8 +250,14 @@ pub(super) const SKIPPED: &[(&str, &str)] = &[
     ("BeginSymbolList", "EndSymbolList"),
     ("BeginTextDocument", "EndTextDocument"),
     ("BeginEncoding", "EndEncoding"),
-    ("Alternate_Content", "End_Versioned_Content"),
+    // The printer's crop marks, drawn after the layers (`userdict /AI3_noCropMarks known not {
+    // … } if`); the crop area they mark is `%AI3_Cropmarks`.
+    ("BeginCrops", "EndCrops"),
 ];
+
+/// The note for versioned content whose `%AI17_End_Versioned_Content` is missing: every
+/// alternative after the first is read too, so some art may come in twice.
+pub const VERSIONED_UNENDED: &str = "versioned content that doesn't end was read whole: some art may come in twice";
 
 /// The note for a `/ForeignObject` (non-native art, the content of a placed PDF, which the editor
 /// shows but doesn't edit) whose PDF can't be read.

@@ -14,7 +14,8 @@
 //! and [`container_keeping_type`] list the other conditions). The renderer still draws its outlines.
 //!
 //! Object → Expand Appearance goes further ([`expand_leaf`]): every fill and stroke becomes an
-//! object of its own, strokes turned into filled art by the caller (their outlines or brush art).
+//! object of its own, a stroke a path stroked by it alone (brushed strokes their brush art, made by
+//! the caller).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -51,6 +52,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || crate::has_solid(n)
         || has_adjustment(n)
         || has_crop_marks(n)
+        || crate::addons::halftone::has_halftone(n)
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
@@ -101,6 +103,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Crop marks: the object and its marks.
     if let Some(m) = crop_marks_art(n) {
+        return Some(bake_pieces(d, m));
+    }
+    // Vector Halftone: the object as its dots.
+    if let Some(m) = crate::addons::halftone::halftone_art(d, n) {
         return Some(bake_pieces(d, m));
     }
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {
@@ -440,15 +446,17 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
     Some(m)
 }
 
-/// Turns one stroke of a path (the path after its geometry effects, its fill rule, the stroke
-/// without geometry effects) into filled art for [`expand_leaf`]: its outline filled with its
-/// paint, or its brush art. `None` when it paints nothing.
+/// Turns one brushed stroke of a path (the path after its geometry effects, its fill rule, the
+/// stroke without geometry effects) into its brush art for [`expand_leaf`]. `None` when it paints
+/// nothing.
 pub type StrokeArt<'a> = &'a mut dyn FnMut(&mut Document, &PathData, FillRule, &StrokeLayer) -> Option<Node>;
 
 /// Object → Expand Appearance of a path or compound path `n`: its geometry effects applied, every
-/// visible fill becomes a copy of the path painted by that fill alone and every visible stroke the
-/// filled art `stroke_art` makes of it (each with its fill's or stroke's opacity and blend mode as
-/// its own), in paint order, as the members of a group that keeps
+/// visible fill becomes a copy of the path painted by that fill alone and every visible stroke a
+/// copy stroked by that stroke alone (its weight, caps, joins, dashes, arrowheads, alignment and
+/// width profile stay stroke attributes, which Object → Expand or Outline Stroke outline later,
+/// #3089), or for a brushed stroke the brush art `stroke_art` makes of it; each with its fill's or
+/// stroke's opacity and blend mode as its own, in paint order, as the members of a group that keeps
 /// `n`'s id, name, transparency, opacity mask and remaining (raster) effects. A single piece
 /// without transparency or effects of its own takes `n`'s place itself. Hidden fills, strokes and
 /// effects are dropped. `None` for other kinds of objects.
@@ -466,8 +474,8 @@ pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<
         clear_item_effects(&mut it);
         it.effects_mut().retain(|e| e.visible);
         let p = match &it {
-            AppearanceItem::Stroke(st) => stroke_art(d, &ig, rule, st),
-            AppearanceItem::Fill(_) => Some(piece(d, n, ig, rule, it)),
+            AppearanceItem::Stroke(st) if st.brush.is_some() => stroke_art(d, &ig, rule, st),
+            _ => Some(piece(d, n, ig, rule, it)),
         };
         pieces.extend(p.map(hoist_transparency));
     }

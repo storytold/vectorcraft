@@ -26,9 +26,11 @@ mod cmdsplit;
 mod cmykflatten;
 mod colorguide;
 mod colorguidelib;
+mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
@@ -57,8 +59,10 @@ mod fontfiles;
 mod fontlist;
 mod freeform;
 mod globaledit;
+mod glyphbounds;
 mod gradient;
 mod gradpanel;
+mod gradpresets;
 mod gradspan;
 mod halftone;
 mod history_mem;
@@ -140,6 +144,7 @@ mod shortcutset;
 mod simplify_part;
 mod slices;
 mod smartguides;
+mod smooth_path;
 mod store;
 mod strokegeom;
 mod strokegradient;
@@ -165,6 +170,7 @@ mod transparencygrid;
 mod trap;
 mod typearea;
 mod typescale;
+mod typeundo;
 mod units;
 mod variables;
 mod webexport;
@@ -1458,6 +1464,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", with(&flare, "opacity", json!("50")), "opacity"),
         ("shape.flare", with(&flare, "largest", json!(true)), "largest"),
         ("shape.flare", with(&flare, "rays", json!("15")), "rays"),
+        ("shape.flare", with(&flare, "rotation", json!("90")), "rotation"),
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
@@ -1668,6 +1675,71 @@ fn lock_hide_unlock_all_and_show_all_with_nothing_to_do_record_no_undo_step() {
         assert_eq!(history(&s), (before.0 + 1, 0, true), "{c} with a");
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// Unlock All and Show All with `scope: "group"` unlock or show only the objects inside the groups
+/// that hold the selected objects: the group nearest above a selected object, or a selected group
+/// itself. With no selected object in a group they are refused and change nothing.
+#[test]
+fn unlock_all_and_show_all_within_the_groups_of_the_selection() {
+    let mut s = session();
+    let ids = |s: &mut Session, cmd: &str| NodeId(s.execute(cmd, &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [a, b, m, k, h, s1, s2, j, j2] = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0].map(|i| rect(&mut s, i * 30.0, 0.0, 20.0, 20.0));
+    // `g` holds `m`, `k`, `h` and the group `sub`, which holds `s1` and `s2`; `other` holds `j` and `j2`.
+    s.execute("select.set", &json!({"ids": [s1.0, s2.0]})).unwrap();
+    let sub = ids(&mut s, "object.group");
+    s.execute("select.set", &json!({"ids": [m.0, k.0, h.0, sub.0]})).unwrap();
+    let g = ids(&mut s, "object.group");
+    s.execute("select.set", &json!({"ids": [j.0, j2.0]})).unwrap();
+    let other = ids(&mut s, "object.group");
+    for id in [a, k, s1, j] {
+        s.execute("layer.setProps", &json!({"id": id.0, "locked": true})).unwrap();
+    }
+    s.execute("layer.setProps", &json!({"id": h.0, "visible": false})).unwrap();
+    let locked = |s: &Session| [a, k, s1, j].map(|id| s.doc().unwrap().doc.node(id).unwrap().locked);
+    let group = json!({"scope": "group"});
+
+    // A member of `g`, or `g` itself, selected: `k` and `s1` inside `sub` are unlocked and selected.
+    for selected in [m, g] {
+        s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
+        let before = history(&s);
+        assert_eq!(s.execute("object.unlockAll", &group).unwrap(), json!({"count": 2}), "{selected:?}");
+        assert_eq!(locked(&s), [true, false, false, true], "{selected:?}");
+        assert_eq!(s.doc().unwrap().selection.objects, [k, s1], "{selected:?}");
+        assert_eq!(history(&s).0, before.0 + 1, "{selected:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // `s2` selected: only `sub` counts. With `m` selected too, `sub`'s objects are taken once.
+    for (selected, count) in [(vec![s2.0], 1), (vec![m.0, s2.0], 2)] {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        assert_eq!(s.execute("object.unlockAll", &group).unwrap(), json!({"count": count}), "{selected:?}");
+        assert!(!s.doc().unwrap().doc.node(s1).unwrap().locked, "{selected:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Show All within `g` shows `h` and selects it; `other` holds nothing hidden.
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    assert_eq!(s.execute("object.showAll", &group).unwrap(), json!({"count": 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, [h]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    assert_eq!(s.execute("object.showAll", &group).unwrap(), json!({"count": 0}));
+
+    // `b`, outside every group, or nothing selected: refused, and nothing changes.
+    for selected in [vec![b.0], vec![]] {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        let (doc, before) = (s.doc().unwrap().doc.clone(), history(&s));
+        for cmd in ["object.unlockAll", "object.showAll"] {
+            let e = s.execute(cmd, &group).unwrap_err();
+            assert!(matches!(&e, EngineError::Other(msg) if msg == "nothing selected is in a group"), "{cmd}: {e:?}");
+        }
+        assert!(s.doc().unwrap().doc == doc && history(&s) == before, "{selected:?}");
+    }
+    // Any other scope is refused; `scope: "document"` and no scope take the whole document.
+    let e = s.execute("object.unlockAll", &json!({"scope": "layer"})).unwrap_err();
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "`scope` must be one of document, group"), "{e:?}");
+    assert_eq!(s.execute("object.unlockAll", &json!({"scope": "document"})).unwrap(), json!({"count": 4}));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("object.showAll", &json!({})).unwrap(), json!({"count": 1}));
 }
 
 /// Set Bounds with the current position and size records no undo step on a rotated object, with
@@ -3093,6 +3165,33 @@ fn flare_tool_two_step_gesture_is_one_undo() {
     assert_eq!(rays.path_data().unwrap().subpaths.len(), 13);
 }
 
+/// `shape.flare`'s `rotation` turns the rays clockwise about the center, and leaves the halo, the
+/// center and the rings as they are.
+#[test]
+fn flare_rotation_turns_only_the_rays() {
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let parts = |s: &mut Session, rotation: f64| {
+        let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 300, "seed": 3, "rotation": rotation});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.path_data().unwrap().clone())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, 0.0);
+    let turned = parts(&mut s, 90.0);
+    assert_eq!(plain.len(), turned.len());
+    let quarter = Affine::translate((200.0, 200.0)) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::translate((-200.0, -200.0));
+    for ((name, a), (_, b)) in plain.iter().zip(&turned) {
+        let pa: Vec<Point> = a.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let pb: Vec<Point> = b.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|k| k.p)).collect();
+        let want: Vec<Point> = if name.as_deref() == Some("Rays") { pa.iter().map(|&p| quarter * p).collect() } else { pa };
+        assert_eq!(pb.len(), want.len(), "{name:?}");
+        for (p, q) in pb.iter().zip(&want) {
+            assert!(p.distance(*q) < 1e-6, "{name:?}: {p:?} is not {q:?}");
+        }
+    }
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();
@@ -3420,6 +3519,46 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     let b = rect(&mut s, 200.0, 10.0, 50.0, 50.0);
     assert!(s.doc().unwrap().doc.node(b).is_some());
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
+}
+
+/// A command that recorded an undo step and then panicked leaves Undo and Redo as they were.
+#[test]
+fn a_panic_after_an_edit_leaves_undo_and_redo_as_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!((undo, redo), (1, 1));
+    let r = s.run_guarded("test.panic", |s| {
+        s.execute("edit.clear", &json!({"ids": [a.0]}))?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, redo));
+    assert!(st.doc.node(a).is_some());
+}
+
+/// A panic rolls back every document the command touched, and the active one stays the same.
+#[test]
+fn a_panic_rolls_back_other_documents_and_keeps_the_active_one() {
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let second = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let first_uid = s.doc().unwrap().uid;
+    let second_before = s.docs[1].doc.clone();
+    let steps = s.docs[1].history.undo.len();
+    let r = s.run_guarded("test.panic", |s| {
+        s.docs[1].history.undo.clear();
+        Arc::make_mut(&mut s.docs[1].doc).remove(second)?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    assert!(Arc::ptr_eq(&s.docs[1].doc, &second_before));
+    assert_eq!(s.docs[1].history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().uid, first_uid);
 }
 
 /// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and

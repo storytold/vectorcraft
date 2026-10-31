@@ -82,7 +82,9 @@ fn main() -> ExitCode {
 
 /// Workspace root (parent of the xtask crate).
 pub fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask has a parent dir").to_path_buf()
+    // The repository root, as a clean path (`join("..")` would print as `…/xtask/..`).
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest.parent().unwrap_or(manifest).to_path_buf()
 }
 
 /// Tracked and untracked (not ignored) files that exist, relative to `root`.

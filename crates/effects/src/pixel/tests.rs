@@ -1755,6 +1755,10 @@ fn brush_strokes_params_take_defaults_and_stay_in_range() {
         fx("brushStrokes.sumiE", json!({"strokeWidth": 2, "strokePressure": 16, "contrast": -1})),
         PixelFx::SumiE { width: 3.0, pressure: 15.0, contrast: 0.0 }
     );
+    brush_strokes_outsets();
+}
+
+fn brush_strokes_outsets() {
     // Outsets: the strokes and the shifts reach out of the object as far as into it; Accented
     // Edges and Sumi-e keep the object's shape.
     let b = Rect::new(0.0, 0.0, 100.0, 50.0);
@@ -2561,6 +2565,10 @@ fn artistic_params_take_defaults_and_stay_in_range() {
         fx("artistic.plasticWrap", json!({"highlightStrength": -1, "detail": 99, "smoothness": 0})),
         PixelFx::PlasticWrap { highlight: 0.0, detail: 15.0, smoothness: 1.0 }
     );
+    artistic_outsets_and_docs();
+}
+
+fn artistic_outsets_and_docs() {
     for id in [
         "artistic.coloredPencil",
         "artistic.cutout",

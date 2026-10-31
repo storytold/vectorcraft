@@ -395,6 +395,61 @@ fn the_search_field_stays_put_while_the_list_scrolls() {
     }
 }
 
+/// A search that matches nothing shrinks the menu to its search field and filters; clearing the
+/// search lists every family again, and the menu grows back to its height before the search
+/// (egui#5225). The search field stays where it was throughout.
+#[test]
+fn the_menu_grows_back_when_a_search_that_matched_nothing_is_cleared() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let mut at = egui::Pos2::ZERO;
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            font_menu(ui, "test-regrow", "Inter", 260.0, None, MenuLook { samples: false, ..Default::default() });
+        });
+        out.textures_delta.clear();
+        let text = |label: &str| {
+            out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos),
+                _ => None,
+            })
+        };
+        // The filter row under the search field: it shows whatever the field holds.
+        let filters = text("Any Kind");
+        let menu = filters.and_then(|p| ctx.layer_id_at(p)).and_then(|l| ctx.memory(|m| m.area_rect(l.id)));
+        (at, filters, text("Search"), text("No matching fonts").is_some(), menu.map(|r| r.height()))
+    };
+    let settle = |events: Vec<egui::Event>| {
+        let mut last = frame(events);
+        for _ in 0..5 {
+            last = frame(vec![]);
+        }
+        last
+    };
+    let (at, ..) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    let (_, filters, search, _, full) = settle(vec![button(false)]);
+    let (filters, search, full) = (filters.expect("the menu is open"), search.expect("the search field shows"), full.expect("the menu's area"));
+    let nothing = "qqzzxxqqzz";
+    let (_, f, _, none, small) = settle(vec![egui::Event::Text(nothing.into())]);
+    assert!(none, "the search matches no family");
+    assert_eq!(f, Some(filters), "the search field stays put while nothing matches");
+    let small = small.expect("the menu stays open");
+    assert!(small + MenuLook::default().row < full, "the menu shrinks to its search field: {small} of {full}");
+    for _ in nothing.chars() {
+        frame(key(egui::Key::Backspace));
+    }
+    let (_, f, s, none, grown) = settle(vec![]);
+    assert!(!none, "every family is listed again");
+    assert_eq!((f, s), (Some(filters), Some(search)), "the search field is where it was");
+    assert_eq!(grown, Some(full), "the menu grows back to its height before the search");
+}
+
 /// #563: a preview stays on the text while the menu stays on its family. The menu's caller passes
 /// the text's font, which the preview changed; the menu keeps the font from before the preview as
 /// the current one, so it doesn't take the previewed family for it and end the preview, then

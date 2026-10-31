@@ -1,5 +1,7 @@
 use super::drag::mods;
-use super::*;
+use super::{
+    Color32, Point, PointerEvent, PointerKind, Pos2, RULER, Rect, Sense, Shape, Stroke, Tokens, Ui, Unit, VectorcraftApp, Xf, json, pos2, vec2,
+};
 
 /// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), cached per
 /// look, and its cell size in screen points.
@@ -199,7 +201,13 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
             // The new guide shows even if guides were hidden.
             app.ui.view.guides = true;
         }
-        let ev = PointerEvent { kind, pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)), mods: mods(ui.input(|i| i.modifiers), false), pressure: 1.0 };
+        let ev = PointerEvent {
+            kind,
+            pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)),
+            mods: mods(ui.input(|i| i.modifiers), false),
+            backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+            pressure: 1.0,
+        };
         if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
             app.status(e.to_string());
         }

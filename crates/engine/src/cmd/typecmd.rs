@@ -9,7 +9,10 @@ use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
 use super::pathops::{len_param, num_param, shape_node};
-use super::*;
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
+    str_param, switch_or, targets,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -93,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Area",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge)",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step",
             has_doc,
             reshape_area
         ),
@@ -120,7 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -802,6 +805,8 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
+    // The fonts the styled characters are set in, for the warning.
+    let mut set = std::collections::BTreeSet::new();
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -842,6 +847,17 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
             });
             if let Some(before) = before {
                 super::textedit::protect_missing_glyphs(&before, &mut t.runs);
+            }
+            if font.is_some() || style.is_some() {
+                // All the text: every run, the one run of empty text included.
+                let styled = match range {
+                    None => t.runs.clone(),
+                    Some(r) => {
+                        let (a, b) = r.bytes(t);
+                        vectorcraft_text::edit::slice_runs(&t.runs, a, b)
+                    }
+                };
+                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
@@ -885,7 +901,11 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
+    let mut out = with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
+    if let Some(w) = super::fonts::set_font_warning(set) {
+        out["warning"] = json!(w);
+    }
+    Ok(out)
 }
 
 /// Reshape area type's frame with `f` ([`TextObject::transform_area`],
@@ -1060,22 +1080,45 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapeArea";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
-    refs.sort_unstable();
-    refs.dedup();
-    if refs.is_empty() {
-        return Err(bad(C, "missing anchors [[subpath, anchor]…]"));
+    // One area type (`id`, `anchors`), or several (`items`: [{id, anchors}…]).
+    let raw: Vec<&Value> = match p.get("items") {
+        Some(items) => {
+            if p.get("id").is_some() || p.get("anchors").is_some() {
+                return Err(bad(C, "give `id` and `anchors`, or `items`, not both"));
+            }
+            let items = items.as_array().ok_or_else(|| bad(C, "`items` must be an array of {id, anchors}"))?;
+            if items.is_empty() {
+                return Err(bad(C, "`items` is empty"));
+            }
+            items.iter().collect()
+        }
+        None => vec![p],
+    };
+    let mut items = Vec::with_capacity(raw.len());
+    for it in raw {
+        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
+        refs.sort_unstable();
+        refs.dedup();
+        if refs.is_empty() {
+            return Err(bad(C, "missing anchors [[subpath, anchor]…]"));
+        }
+        if items.iter().any(|(other, _)| *other == id) {
+            return Err(bad(C, format!("area type {} is named twice", id.0)));
+        }
+        let node = s.doc()?.doc.node(id);
+        if area_text(node).is_none() || node.is_some_and(|n| n.extras().perspective.is_some()) {
+            return Err(bad(C, "not area type (text in a frame) outside perspective"));
+        }
+        items.push((id, refs));
     }
     let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
-    let node = s.doc()?.doc.node(id);
-    if area_text(node).is_none() || node.is_some_and(|n| n.extras().perspective.is_some()) {
-        return Err(bad(C, "not area type (text in a frame) outside perspective"));
-    }
     s.edit("Reshape Type Area", |doc, _| {
-        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-        if !reshape_area_with(t, |t| t.move_area_anchors(&refs, d)) {
-            return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
+        for (id, refs) in &items {
+            let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(*id)) };
+            if !reshape_area_with(t, |t| t.move_area_anchors(refs, d)) {
+                return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
+            }
         }
         Ok(())
     })?;

@@ -2,7 +2,7 @@ use super::color::{Live, pointer_phase};
 use super::dropdowns::combo;
 use super::labels::dim_label;
 use super::numeric::{range_field, slider};
-use super::*;
+use super::{BlendMode, Rect, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, id_with, vec2};
 
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
 /// [`BlendMode::group`] starts.
@@ -13,7 +13,7 @@ pub fn blend_separator_before(i: usize) -> bool {
 /// The blend-mode dropdown, its groups separated (Normal | darken | lighten | contrast | inversion
 /// | component modes). `None` (objects that differ) shows blank. Returns the chosen mode.
 pub fn blend_dropdown(ui: &mut Ui, id: impl std::hash::Hash, current: Option<BlendMode>, width: f32) -> Option<BlendMode> {
-    combo(ui, id, current.map_or("", |m| tl!(m.label())), width, false, |ui| {
+    combo(ui, id, current.map_or("", |m| tl!(m.label())), width, |ui| {
         let mut chosen = None;
         for (i, m) in BlendMode::ALL.into_iter().enumerate() {
             if blend_separator_before(i) {

@@ -8,7 +8,12 @@ use super::state::{
     CaptureEpoch, GeometryStamp, InputGeneration, MAX_PENDING_SCREENSHOTS, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_TOTAL_BYTES, PendingScreenshot,
     QueuedScreenshot, SCREENSHOT_SETTLE_FRAMES, SCREENSHOT_TIMEOUT_ERROR, SCREENSHOT_TIMEOUT_MS, SYSTEM_CLIPBOARD_POLL, take_frame_once,
 };
-use super::*;
+use super::{
+    Arc, AutomationRoots, ControlRequest, Ordering, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome,
+    clipboard_probe, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
+    panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scrub, shortcut_editor, shortcuts, theme,
+    titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
+};
 
 mod clipboard;
 mod commands;
@@ -54,6 +59,8 @@ impl VectorcraftApp {
                 from_worker: false,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
+                fill: None,
+                fill_worker: None,
                 worker: None,
                 worker_started: false,
                 slices: None,
@@ -66,12 +73,15 @@ impl VectorcraftApp {
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
+                presented: None,
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
             titlebar_inset: 0.0,
             last_effect: None,
+            last_pathfinder: None,
             last_warp: None,
+            character_focus: None,
             run_count: 0,
             clipboard_out: None,
             clipboard_published: None,
@@ -95,6 +105,7 @@ impl VectorcraftApp {
             hover_doc: None,
             custom_titlebar: false,
             last_window_title: String::new(),
+            fullscreen_for_mode: false,
             graphics_adapter: None,
             place: Default::default(),
             system_paste: false,
@@ -113,6 +124,7 @@ impl VectorcraftApp {
             opening: Default::default(),
             plugin_runs: Default::default(),
             placing: Default::default(),
+            trace_runs: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
@@ -281,6 +293,7 @@ impl VectorcraftApp {
         screen_color::poll(self, ctx);
         opening::poll(self);
         plugin_runs::poll(self);
+        trace_runs::poll(self);
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
@@ -288,6 +301,7 @@ impl VectorcraftApp {
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
+            || !self.trace_runs.running.is_empty()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -326,6 +340,7 @@ impl VectorcraftApp {
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
         // system title bar this is where the document name lives, as the in-app mark is hidden.
         crate::chrome::sync_window_title(self, ctx);
+        crate::chrome::sync_fullscreen(self, ctx);
         self.drain_control(ctx);
         // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
         // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
@@ -385,7 +400,8 @@ impl VectorcraftApp {
         crate::ime::install_hooks(ctx);
         self.adopt_context(ctx);
         if !self.styled {
-            theme::apply(ctx, self.ui.brightness);
+            // The saved accent, color scheme and canvas color, not the defaults (#4837).
+            prefs_dialog::reapply(self, ctx);
             egui_extras::install_image_loaders(ctx);
             self.styled = true;
         }
@@ -479,11 +495,15 @@ impl VectorcraftApp {
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
         plugin_runs::show(self, &ctx);
+        trace_runs::show(self, &ctx);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }
         self.ui_fonts.frame(&ctx);
+        if self.ui.dialog.is_none() && !self.ui.palette_open {
+            shortcuts::remember_text_focus(&ctx);
+        }
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
         // Observe once, after all of this pass's input, dialogs, floating panels, palette and

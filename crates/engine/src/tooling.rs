@@ -27,7 +27,8 @@ pub struct ViewInfo {
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
     pub snap_to_point: bool,
-    /// View → Snap to Glyph: drawing snaps to live-text baselines and glyph bounds (needs Smart Guides).
+    /// View → Snap to Glyph: drawing snaps to live-text glyph bounds, and on a single line of type to
+    /// its baseline, x-height, character widths and glyph anchor points (needs Smart Guides).
     pub snap_to_glyph: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
@@ -105,7 +106,15 @@ impl Session {
         {
             crate::cmd::distortcmds::silent(self, |g| g.visible = true)?;
         }
-        self.switch_tool(id, view)
+        // When the tool already active, or the tool lent a selection tool for a drag, is chosen again,
+        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
+        let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
+        self.switch_tool(id, view)?;
+        if again {
+            let acts = self.with_tool_cx(view, |t, cx| t.chosen_again(cx));
+            self.apply_actions(acts)?;
+        }
+        Ok(())
     }
 
     /// Switch to tool `id` without choosing it afresh (back from a temporary tool: a hidden
@@ -138,6 +147,7 @@ impl Session {
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
         use vectorcraft_tools::catalog::{edits_anchors, is_selection_tool};
@@ -146,6 +156,9 @@ impl Session {
         }
         if id == "directSelection" && mods.cmd && mods.alt {
             return Some("groupSelection");
+        }
+        if id == "perspectiveSelection" && mods.cmd && mods.alt {
+            return None;
         }
         if is_selection_tool(id) {
             return None;
@@ -181,7 +194,7 @@ impl Session {
         let r = self.apply_actions(acts);
         self.keep_tool_settings();
         self.tool = lender;
-        self.after_command();
+        self.after_command(None);
         r.map(drop)
     }
 
@@ -206,6 +219,12 @@ impl Session {
                     t.set_option(k, v);
                 }
             }
+        }
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
+            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+        {
+            t.set_option("smoothFidelity", v);
         }
     }
 
@@ -262,6 +281,7 @@ impl Session {
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
             snap_to_glyph: view.snap_to_glyph && view.smart_guides && !view.snap_to_grid,
+            glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
@@ -437,6 +457,11 @@ impl Session {
         // 1–4 pick the active perspective plane while the grid is shown.
         if let Some(plane) = self.plane_key(key) {
             self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
+            if self.tool_id() == "perspectiveSelection" {
+                let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
+                self.take_tool_panic()?;
+                return self.apply_actions(acts);
+            }
             return Ok(vec![]);
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
@@ -613,7 +638,8 @@ impl Session {
 
     /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
     /// stored for when it is chosen, and the active tool takes those it shares with it (the
-    /// Liquify tools' Global Brush Dimensions). Returns the tool's options.
+    /// Liquify tools' Global Brush Dimensions, the Smooth tool's Fidelity for Pencil, Paintbrush
+    /// and Blob Brush Alt smoothing). Returns the tool's options.
     pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
@@ -678,15 +704,44 @@ impl Session {
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
     /// the Type tool and the Eyedropper clear a character range whose text is no longer selected.
-    pub(crate) fn after_command(&mut self) {
+    /// After `edit.undo` or `edit.redo` (`cmd`), the tool is told first, so the Type tool puts the
+    /// caret where the step changed the text.
+    pub(crate) fn after_command(&mut self, cmd: Option<&str>) {
         if self.in_tool_actions || (!self.tool.wants_text() && self.tool.id() != "eyedropper") {
             return;
+        }
+        if let Some(cmd @ ("edit.undo" | "edit.redo")) = cmd {
+            self.notify_text_tool(cmd);
         }
         let acts = self.with_tool_cx(self.last_view, |t, cx| t.after_command(cx));
         // The command itself succeeded: a failure here only leaves the edit as it was.
         if let Err(e) = self.apply_actions(acts) {
             log::warn!("ending the text edit: {e}");
         }
+    }
+
+    /// End the Type tool's text editing before a command saves the art of an editing layer (pattern
+    /// editing's Done, Stop Editing Opacity Mask): point type its click placed that is still empty is
+    /// discarded first, so it is not saved into the pattern tile or the mask.
+    pub(crate) fn end_text_edit(&mut self) {
+        if self.in_tool_actions || !self.tool.wants_text() {
+            return;
+        }
+        let acts = self.with_tool_cx(self.last_view, |t, cx| t.deactivate(cx));
+        if let Err(e) = self.apply_actions(acts) {
+            log::warn!("ending the text edit: {e}");
+        }
+    }
+
+    /// Tell the active tool that `edit.undo` or `edit.redo` ran, on its own or as a step of
+    /// `command.batch`, so the Type tool puts the caret where the step changed the text; or that a
+    /// `command.batch` began, ended or was rolled back (`batch.begin`, `batch.end`,
+    /// `batch.rollBack`), so the Type tool puts back what its Undo and Redo steps changed when it fails.
+    pub(crate) fn notify_text_tool(&mut self, what: &str) {
+        if self.in_tool_actions || (!self.tool.wants_text() && self.tool.id() != "eyedropper") {
+            return;
+        }
+        self.with_tool_cx(self.last_view, |t, cx| t.notify(cx, what));
     }
 
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
@@ -704,8 +759,9 @@ impl Session {
                 Action::Begin(label) => self.begin_interaction(&label)?,
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
-                    // params and apply them once on Commit instead of every move.
-                    if !self.prefs.real_time_drawing {
+                    // params and apply them once on Commit instead of every move. A ruler guide
+                    // being dragged still shows: the guide is all there is to see (#4646).
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {

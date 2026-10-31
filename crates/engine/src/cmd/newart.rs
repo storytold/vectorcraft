@@ -16,7 +16,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node,
 use vectorcraft_tools::PaintDefaults;
 
 use super::gradient::unplaced;
-use super::*;
+use super::{CommandSpec, Result, Session, always, cmd};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

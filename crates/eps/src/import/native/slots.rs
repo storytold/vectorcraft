@@ -1,5 +1,5 @@
 use super::build::MADE;
-use super::*;
+use super::{AppearanceItem, Arc, BTreeSet, BlendMode, Document, Node, NodeId, NodeKind, PathData, Point, Rect, ai, slot_of};
 
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 pub(super) const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
@@ -321,6 +321,13 @@ const SAME_PLACE: f64 = 0.75;
 /// Its letters and digits, which is what is compared of type (the page may spell a mark another way).
 pub(super) fn letters(s: &str) -> String {
     s.chars().filter(char::is_ascii_alphanumeric).collect()
+}
+
+/// The [`letters`] of each word of `s`, the empty ones left out. Type is compared word by word:
+/// the page draws a right-to-left paragraph's words in the order they show (" 120.5 mm " as
+/// "mm 120.5"), its text object keeps them in the order they are typed.
+pub(super) fn words(s: &str) -> Vec<String> {
+    s.split_whitespace().map(letters).filter(|w| !w.is_empty()).collect()
 }
 
 /// Does `n` hold type that is where `story` lays one of its lines out: the line, or a piece of it

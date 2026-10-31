@@ -7,7 +7,7 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
-use super::super::*;
+use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
 use crate::cmd::links::Resolved;
@@ -197,6 +197,49 @@ fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(D
     )
 }
 
+/// Is `w` a note on the PDF part as a page, which says nothing was skipped: that the art off the
+/// artboards is in the editing data alone, or that art past the page was clipped to it?
+fn is_page_note(w: &str) -> bool {
+    w == vectorcraft_pdf::OFF_ARTBOARD_NOTE || w == vectorcraft_pdf::PAST_PAGE_NOTE
+}
+
+/// The document read from the editing data alone with its type as outlines when `opts` asks for
+/// them (`textAs: outlines`): the page that would have them has none to give. Threaded type first
+/// flows through its frames (the editing data gives a story in its first frame), and the outlined
+/// frames leave their threads. Each outline group keeps its type's transparency, opacity mask and
+/// effects.
+pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: &LoadOptions) -> (Document, Vec<String>) {
+    if opts.text_as != vectorcraft_pdf::TextAs::Outlines {
+        return (doc, warnings);
+    }
+    if !doc.text_threads.is_empty() {
+        crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
+    }
+    let threaded = crate::cmd::threads::frames(&doc);
+    let mut texts = Vec::new();
+    doc.walk(|n| {
+        if matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)) {
+            texts.push(n.clone());
+        }
+    });
+    for t in texts {
+        let Some(o) = crate::cmd::flatten::outlined_text(&t) else { continue };
+        let o = Node { visible: t.visible, locked: t.locked, ..doc.reid(&o) };
+        if let Some(slot) = doc.node_mut(t.id) {
+            *slot = o;
+        }
+    }
+    crate::cmd::threads::leave_threads(&mut doc, &threaded);
+    (doc, warnings)
+}
+
+/// Does `doc` hold no art: only layers, with nothing in them?
+fn draws_nothing(doc: &Document) -> bool {
+    let mut art = false;
+    doc.walk(|n| art |= !n.is_layer());
+    !art
+}
+
 /// Is `e` the error of a file whose pages are only a placeholder
 /// ([`vectorcraft_pdf::PdfError::PlaceholderOnly`])?
 pub(crate) fn is_placeholder(e: &EngineError) -> bool {
@@ -272,8 +315,17 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             restore_or_import(editing, || match super::pdfimport::import(bytes, opts, format.id != "pdf") {
                 Ok(r) => {
                     // Pages of text alone: the editing copy alone where it reads, as for a file
-                    // saved without its PDF part (#1387: else the page, which is the art).
-                    let alone = r.only_text.then(|| from_editing_data_alone(bytes, opts)).flatten().and_then(|read| read.ok());
+                    // saved without its PDF part (#1387: else the page, which is the art). So too
+                    // pages that draw nothing at all: there is no page art to check the layers
+                    // against, and the empty page would lose all of it.
+                    // A page is empty only when nothing on it was skipped (an image that can't be
+                    // decoded draws nothing either): its notes are at most the page's own.
+                    let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
+                    let alone = (r.only_text || empty)
+                        .then(|| from_editing_data_alone(bytes, opts))
+                        .flatten()
+                        .and_then(|read| read.ok())
+                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
                     let (doc, warnings, read) = match alone {
                         Some((doc, warnings)) => (doc, warnings, true),
                         None => through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit),
@@ -287,6 +339,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     let whole = LoadOptions { pages: None, ..opts.clone() };
                     from_editing_data_alone(bytes, if every_page(bytes, opts) { &whole } else { opts })
                         .unwrap_or(Err(e))
+                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
                         .inspect(|_| editing_data = true)
                 }
                 Err(e) => Err(e),
@@ -430,8 +483,19 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded.with_grid_prefs(&s.prefs);
-    // What reading the file left out of the document, if anything.
-    let losses: Vec<String> = warnings.iter().filter(|w| is_loss(w)).cloned().collect();
+    // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
+    // fallbacks must ask before overwriting the richer source they could not fully read.
+    let losses: Vec<String> = warnings
+        .iter()
+        .filter(|w| {
+            is_loss(w)
+                || (format.id == "eps"
+                    && (matches!(w.as_str(), EDITING_DAMAGED | EDITING_STALE)
+                        || w.starts_with("this file's PostScript couldn't be read")
+                        || w.starts_with("the file was read up to an error")))
+        })
+        .cloned()
+        .collect();
     let source_path = path.clone().filter(|_| !losses.is_empty());
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
@@ -550,6 +614,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
+/// A PCX file is recognized by its header ([`super::pcxread::is_pcx`]) and read by
+/// [`super::pcxread::decode`], which refuses an image past [`MAX_RASTER_ALLOC`] before decoding.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
@@ -569,12 +635,19 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
         reader.set_format(image::ImageFormat::Tga);
     }
+    if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
+        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+    }
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
     reader.limits(limits);
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
+    // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
+    // seen, so it places the way it was taken (#4284); the others keep their own bytes.
+    let turned = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff") && exif_orientation(bytes).is_some();
     let kept = match f.id {
+        _ if turned => None,
         "png" | "jpg" | "gif" | "webp" => Some(bytes.to_vec()),
         "tiff" => vectorcraft_doc::cmyk::stored_cmyk_tiff(bytes, ppi),
         _ => None,
@@ -593,13 +666,16 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
             Some(read) => read.map_err(err)?,
             None => {
                 use image::ImageDecoder as _;
-                let decoder = reader.into_decoder().map_err(err)?;
+                let mut decoder = reader.into_decoder().map_err(err)?;
                 // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
                 let (w, h) = decoder.dimensions();
                 if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                image::DynamicImage::from_decoder(decoder).map_err(err)?.to_rgba8()
+                let orientation = decoder.orientation().unwrap_or(image::metadata::Orientation::NoTransforms);
+                let mut img = image::DynamicImage::from_decoder(decoder).map_err(err)?;
+                img.apply_orientation(orientation);
+                img.to_rgba8()
             }
         },
     };
@@ -607,6 +683,14 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         super::tgaread::fix_alpha(bytes, &mut img);
     }
     as_png(img, ppi)
+}
+
+/// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
+/// it leaves them as stored, or the image has none.
+pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
+    use image::ImageDecoder as _;
+    let mut decoder = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
+    decoder.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)
 }
 
 /// `img` stored as a PNG that keeps the file's resolution.

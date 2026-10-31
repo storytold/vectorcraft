@@ -1,11 +1,20 @@
 use super::exporter::{MAX_FIELD_PX, MAX_GRADIENT_PX, MAX_PATTERN_DEPTH, color, ctm, in_range, norm, q, to_path, writable, xf};
-use super::*;
+use super::{
+    Affine, Color, Exporter, GradientKind, LinearGradient, Paint, RadialGradient, Rect, SepColor, SeparationColorant, SeparationSpace, Shape, Size,
+    SpreadMethod, Stop, Surface, Vec2, cmyk, krilla, rgb,
+};
 
 impl Exporter<'_> {
     /// A colour for the page, as the Output settings write it ([`ColorOut::color`]): without
     /// conversion, RGB and Lab colours of CMYK documents are separated into CMYK through the
     /// document's colour spaces, so the file carries press values.
     fn col(&mut self, c: &Color) -> krilla::color::Color {
+        let c = self.page_color(c);
+        color(&c)
+    }
+
+    /// Color `c` as [`Self::col`] writes it, before it becomes the PDF writer's color.
+    pub(super) fn page_color(&mut self, c: &Color) -> Color {
         let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         if let (true, true, Color::Rgb { r, g, b }) = (cmyk_doc, self.convert, c) {
             self.rgb_in_cmyk.colours.insert([r.to_bits(), g.to_bits(), b.to_bits()]);
@@ -15,13 +24,21 @@ impl Exporter<'_> {
             let note = note.clone();
             self.warn(note);
         }
-        color(&c)
+        c
     }
 
     /// The Separation colour space of spot swatch `name` (its CMYK equivalent is the alternate
     /// space; a Lab spot colour also gets a Lab one, [`crate::lab_spot`], unless the Spot Colors
     /// options use CMYK values); `None` when `name` isn't a spot colour.
     fn separation(&mut self, name: &str) -> Option<SeparationSpace> {
+        let (ink, full) = self.spot_ink(name)?;
+        let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
+        Some(SeparationSpace::new(SeparationColorant::Custom(ink), alt))
+    }
+
+    /// The ink name of spot swatch `name` and its CMYK equivalent at 100% (a Lab spot color is
+    /// noted for [`crate::lab_spot`]); `None` when `name` isn't a spot color.
+    pub(super) fn spot_ink(&mut self, name: &str) -> Option<(String, [f32; 4])> {
         let doc = self.doc;
         let sw = doc.swatch(name).filter(|s| s.spot)?;
         let color = doc.linked_color(sw.paint.color()?, true);
@@ -30,9 +47,7 @@ impl Exporter<'_> {
         {
             self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
         }
-        let full = self.out.cmyk(&color, self.intent);
-        let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
-        Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
+        Some((sw.name.clone(), self.out.cmyk(&color, self.intent)))
     }
 
     /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch

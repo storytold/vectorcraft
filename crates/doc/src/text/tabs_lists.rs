@@ -1,5 +1,5 @@
 use super::char_style::{CharPosition, CharStyle};
-use super::*;
+use super::{Deserialize, Serialize};
 
 /// Tab stop alignment (Tabs panel).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

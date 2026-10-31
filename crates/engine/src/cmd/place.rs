@@ -44,7 +44,7 @@ use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, id_param, str_param, unique_name};
 use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
             has_doc,
             place
         ),
@@ -479,15 +479,17 @@ impl PlaceJob {
         str_param(&self.params, "path").or_else(|| str_param(&self.params, "name")).map(fileio::file_name).unwrap_or_else(|| "Untitled".into())
     }
 
-    /// Read and decode the file, as `file.place` does, without the session. A linked image's
-    /// preview is made here too.
+    /// Read and decode the file, as `file.place` does, without the session. The pixels of a PNG,
+    /// JPEG, GIF or WebP file are decoded here to check that they can be read (an error when they
+    /// can't), a linked image's preview is made from that decode, and the decoded pixels are kept in
+    /// the renderers' image store for the first frame that draws them
+    /// ([`super::links::readable_and_kept`]).
     pub fn read(self) -> Result<PlaceRead> {
         let mut loaded = load(&self.params, PLACE, self.target, true)?;
-        if loaded.link.is_some()
-            && bool_or(&self.params, "link", true)
-            && let Art::Image(img) = &mut loaded.art
-        {
-            img.blob = img.blob.clone().with_proxy();
+        let linked = loaded.link.is_some() && bool_or(&self.params, "link", true);
+        if let Art::Image(img) = &mut loaded.art {
+            let unread = super::links::kept_unread(&img.blob.bytes);
+            img.blob = super::links::readable_and_kept(img.blob.clone(), unread, linked)?;
         }
         Ok(PlaceRead { job: self, loaded })
     }
@@ -719,8 +721,19 @@ fn read_queue(p: Value, queued: Vec<Value>) -> Result<QueueRead> {
                 q[k] = v.clone();
             }
         }
-        // Read for its size and thumbnail: each click places it with file.place.
-        match load(&q, QUEUE, None, false) {
+        // Read for its size and thumbnail: each click places it with file.place, so a file whose
+        // pixels file.place can't read is skipped. With a thumbnail, the decoded pixels are kept
+        // so that drawing it does not decode the file again.
+        let checked = load(&q, QUEUE, None, false).and_then(|mut l| {
+            let linked = l.link.is_some() && bool_or(&q, "link", true);
+            if let Art::Image(img) = &mut l.art {
+                let unread = super::links::kept_unread(&img.blob.bytes);
+                let check = if thumbnail.is_some() { super::links::readable_and_kept } else { super::links::readable };
+                img.blob = check(img.blob.clone(), unread, linked)?;
+            }
+            Ok(l)
+        });
+        match checked {
             Ok(l) => {
                 let (w, h) = (l.natural.width(), l.natural.height());
                 let mut f = json!({ "name": l.name, "format": l.format.id, "width": w, "height": h });

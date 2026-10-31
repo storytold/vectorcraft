@@ -7,6 +7,10 @@
 //! result keeps the appearance of the object whose paint it takes. Trap ([`crate::trap`]) keeps the
 //! children and adds its traps above them.
 //!
+//! **Compound shapes** ([`compound_shape_area`]): a compound shape draws as the one area its
+//! members' shape modes make, painted by its own appearance as a group's own fills and strokes
+//! paint its members.
+//!
 //! **Container appearance** ([`evaluate_container`]): a group's or layer's own fills and strokes
 //! paint every member's geometry, below or above the members as its contents slot says
 //! ([`Appearance::contents_at`]); its geometry effects reshape the members as one piece; its raster
@@ -16,7 +20,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeId, NodeKind, ShapeMode, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_pathops::{self as po, PathfinderOp};
 
@@ -45,10 +49,11 @@ fn op_of(id: &str) -> Option<PathfinderOp> {
     PATHFINDER_EFFECTS.iter().find(|e| e.0 == id).map(|e| e.2)
 }
 
-/// Does `n` (a group or layer) carry a visible Pathfinder effect?
+/// Does `n` (a group or layer) carry a visible Pathfinder effect, or is it a compound shape?
 pub fn has_pathfinder(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })
-        && n.appearance.effects.iter().any(|e| e.visible && is_pathfinder(&e.id))
+    n.is_compound_shape()
+        || (matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })
+            && n.appearance.effects.iter().any(|e| e.visible && is_pathfinder(&e.id)))
 }
 
 /// Converts objects that aren't paths (e.g. text) to outline art, if possible. The paths and
@@ -62,11 +67,15 @@ fn leaves(n: &Node, hook: Option<OutlineHook>, out: &mut Vec<Node>) {
     }
     match &n.kind {
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.push(n.clone()),
-        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-            for c in children {
-                leaves(c, hook, out);
+        // A compound shape takes part as its area, styled like it.
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => match compound_shape_art(n, hook) {
+            Some(art) => out.push(art),
+            None => {
+                for c in children {
+                    leaves(c, hook, out);
+                }
             }
-        }
+        },
         _ => {
             // Every path of the outline art, at any depth, takes the object's opacity and blend
             // mode.
@@ -89,6 +98,63 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
         }
         _ => None,
     }
+}
+
+/// The operation that combines a compound shape's member in `mode` with the area below it.
+fn shape_op(mode: ShapeMode) -> po::BoolOp {
+    match mode {
+        ShapeMode::Add => po::BoolOp::Union,
+        ShapeMode::Subtract => po::BoolOp::Difference,
+        ShapeMode::Intersect => po::BoolOp::Intersect,
+        ShapeMode::Exclude => po::BoolOp::Xor,
+    }
+}
+
+/// The area compound shape `n` draws: each visible member's shape (a group's leaves together, type
+/// as its outlines through `hook`, open paths closed) combined with the area of the members below
+/// it by the member's shape mode; the backmost member starts the area. `None` when `n` is not a
+/// compound shape, or its members are past a live Pathfinder's budget ([`PATHFINDER_MAX_SEGMENTS`],
+/// [`PATHFINDER_MAX_OVERLAPS`]).
+pub fn compound_shape_area(n: &Node, hook: Option<OutlineHook>) -> Option<PathData> {
+    if !n.is_compound_shape() {
+        return None;
+    }
+    let mut all: Vec<Node> = vec![];
+    // Each member that has a shape: its operation and how many of the leaves are its.
+    let mut members: Vec<(po::BoolOp, usize)> = vec![];
+    for c in n.children()? {
+        let before = all.len();
+        leaves(c, hook, &mut all);
+        if all.len() > before {
+            members.push((shape_op(c.extras().shape_mode), all.len() - before));
+        }
+    }
+    if !within_budget(&all) {
+        return None;
+    }
+    if all.is_empty() {
+        return Some(PathData::default());
+    }
+    let parts: Vec<(PathData, FillRule)> = all.iter().map(|l| geometry(l).unwrap_or_default()).collect();
+    let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
+    Some(po::boolean_n(&refs, |inside| {
+        let (mut start, mut area) = (0, false);
+        for (k, (op, count)) in members.iter().enumerate() {
+            let here = inside.get(start..start + count).is_some_and(|flags| flags.contains(&true));
+            start += count;
+            area = if k == 0 { here } else { op.apply(area, here) };
+        }
+        area
+    }))
+}
+
+/// Compound shape `n` as one path of its area ([`compound_shape_area`]) with its appearance,
+/// opacity and blend mode: how it takes part in a Pathfinder operation.
+pub fn compound_shape_art(n: &Node, hook: Option<OutlineHook>) -> Option<Node> {
+    let area = compound_shape_area(n, hook)?;
+    let mut art = Node::path(n.id, area, Appearance { items: n.appearance.items.clone(), ..Default::default() });
+    (art.opacity, art.blend) = (n.opacity, n.blend);
+    Some(art)
 }
 
 /// A result path styled like `src` (its appearance, opacity and blend mode).
@@ -196,7 +262,16 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
         return None;
     }
     let source: &[Arc<Node>] = group.children()?;
-    let mut stack: Vec<Arc<Node>> = source.to_vec();
+    let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
+        // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
+        match compound_shape_area(group, hook) {
+            Some(area) if area.is_empty() => vec![],
+            Some(area) => vec![Arc::new(Node::path(group.id, area, Appearance::default()))],
+            None => return Some(source.to_vec()),
+        }
+    } else {
+        source.to_vec()
+    };
     for e in group.appearance.effects.iter().filter(|e| e.visible) {
         if e.id == crate::trap::TRAP {
             let mut lv = vec![];
@@ -375,6 +450,13 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
         match &n.kind {
             NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.extend(crate::reshape::leaf_geometry(n)),
+            NodeKind::Group { .. } if n.is_compound_shape() => {
+                let hook: &dyn Fn(&Node) -> Option<Node> = &crate::outline_text;
+                match compound_shape_area(n, Some(hook)) {
+                    Some(area) => out.push((area, FillRule::NonZero)),
+                    None => members(doc, n, out),
+                }
+            }
             NodeKind::Text(t) => {
                 let (_, all) = crate::reshape::glyph_outlines(t);
                 if !all.elements().is_empty() {
@@ -454,6 +536,8 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         if let Some(ch) = m.children_mut() {
             *ch = result;
         }
+        // The area is art now: drawn again, it is no compound shape of its own.
+        m.extras_mut().compound_shape = false;
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);

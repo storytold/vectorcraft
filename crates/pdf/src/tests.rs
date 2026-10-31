@@ -12,6 +12,7 @@ mod blend;
 mod charstroke;
 mod cmykblend;
 mod cmykimages;
+mod colorize;
 mod compression;
 mod dashalign;
 mod editing;
@@ -28,6 +29,7 @@ mod import_overprint;
 mod layers;
 pub(super) mod live_text;
 mod marks;
+mod mesh_export;
 mod output;
 mod pdf13;
 mod pdfx;
@@ -617,6 +619,31 @@ fn image_roundtrip() {
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
 }
 
+/// Images are written with /Interpolate true, so viewers may smooth them; a pixelated image (an
+/// envelope's with Anti-Alias off) is written without it.
+#[test]
+fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
+    for pixelated in [false, true] {
+        let mut d = doc(200.0, 200.0);
+        d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
+        let im = ImageObject {
+            key: "img1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(0), NodeKind::Image(Box::new(im)));
+        n.extras_mut().pixelated = pixelated;
+        add(&mut d, n);
+        let pdf = uncompressed(&d);
+        assert_eq!(pdf.matches("/Width 4").count(), 1, "the image is written");
+        assert_eq!(pdf.matches("/Interpolate").count(), usize::from(!pixelated), "pixelated: {pixelated}");
+    }
+}
+
 /// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its
 /// header reads, and its pixel data can't be decoded.
 fn cut_image(format: image::ImageFormat, tag: &[u8], keep: usize) -> Vec<u8> {
@@ -944,6 +971,77 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     let text = String::from_utf8_lossy(&bytes);
     assert!(text.contains("/SMask"), "soft mask in an ExtGState");
     assert!(text.contains("/Luminosity"));
+}
+
+/// The warnings and path count after exporting an image mask and a separate rectangle.
+fn image_mask_report(colorized: bool, available: bool, nested: bool, unwritable: bool) -> (Vec<String>, usize) {
+    let mut d = doc(100.0, 100.0);
+    if available {
+        d.images.insert("mask-image".into(), ImageBlob::png(tiny_png()));
+    }
+    let im = ImageObject {
+        key: "mask-image".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::translate(if unwritable { (1e10, 1e10) } else { (10.0, 10.0) }) * Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut art = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    if colorized {
+        art.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))));
+    }
+    if nested {
+        let mut outer_art = rect_node(Rect::new(10.0, 10.0, 50.0, 30.0), Color::WHITE);
+        outer_art.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+        art = outer_art;
+    }
+    let mut masked = rect_node(Rect::new(10.0, 10.0, 50.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+    add(&mut d, masked);
+    add(&mut d, rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::BLACK));
+    let report = export_with_report(&d, &PdfOptions::uncompressed()).expect("export");
+    let imported = import(&report.bytes).expect("import");
+    let paths = leaves(&imported).into_iter().filter(|n| n.path_data().is_some()).count();
+    (report.warnings, paths)
+}
+
+#[test]
+fn missing_colorized_image_in_unclipped_mask_omits_masked_object() {
+    let (warnings, paths) = image_mask_report(true, false, false, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn missing_plain_image_in_unclipped_mask_omits_masked_object() {
+    let (warnings, paths) = image_mask_report(false, false, false, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn missing_image_in_nested_mask_omits_outer_masked_object() {
+    let (warnings, paths) = image_mask_report(false, false, true, false);
+    assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{warnings:?}");
+    assert_eq!(paths, 1);
+}
+
+#[test]
+fn writable_colorized_image_in_unclipped_mask_keeps_masked_object() {
+    let (warnings, paths) = image_mask_report(true, true, false, false);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(paths, 2);
+}
+
+#[test]
+fn unwritable_images_in_unclipped_masks_omit_masked_objects() {
+    for colorized in [false, true] {
+        let (warnings, paths) = image_mask_report(colorized, true, false, true);
+        assert!(warnings.iter().any(|w| w == "an image couldn't be written and is missing from the picture"), "{warnings:?}");
+        assert_eq!(paths, 1, "colorized: {colorized}");
+    }
 }
 
 #[test]
