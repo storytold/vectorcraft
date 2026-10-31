@@ -120,7 +120,8 @@ const CHIP: egui::Vec2 = egui::vec2(16.0, 10.0);
 /// The Color list: each preset's name after a chip of its colour, then Custom (no chip, its
 /// name aligned with the others). Returns the chosen row; Custom is `LAYER_COLORS.len()`.
 fn color_dropdown(ui: &mut egui::Ui, shown: &str) -> Option<usize> {
-    let border = crate::theme::Tokens::get(ui.ctx()).input_border;
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let border = t.input_border;
     let rows = LAYER_COLORS.iter().map(|(n, c)| (*n, Some(*c))).chain([("Custom", None)]);
     widgets::combo(ui, "layer-color", tl!(shown), 140.0, |ui| {
         let mut chosen = None;
@@ -128,8 +129,8 @@ fn color_dropdown(ui: &mut egui::Ui, shown: &str) -> Option<usize> {
             let chip = egui::IdSalt::new(("layer-color-chip", i));
             let r = egui::Button::selectable(name == shown, (egui::Atom::custom(chip, CHIP), tl!(name))).atom_ui(ui);
             if let (Some(rect), Some([cr, cg, cb])) = (r.rect(chip), rgb) {
-                ui.painter().rect_filled(rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));
-                ui.painter().rect_stroke(rect, 1.0, egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
+                ui.painter().rect_filled(rect, t.cr_small(), egui::Color32::from_rgb(cr, cg, cb));
+                ui.painter().rect_stroke(rect, t.cr_small(), egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
             }
             if r.response.clicked() {
                 chosen = Some(i);

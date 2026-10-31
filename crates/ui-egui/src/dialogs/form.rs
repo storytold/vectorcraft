@@ -191,7 +191,7 @@ fn text_edit_limited_name(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f
     let r = egui::Frame::NONE
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, t.input_border))
-        .corner_radius(egui::CornerRadius::same(3))
+        .corner_radius(t.cr())
         .inner_margin(egui::Margin::symmetric(6, 3))
         .show(ui, |ui| {
             crate::theme::strong_selected_text(ui);
@@ -228,7 +228,7 @@ pub(super) fn text_area_named(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name
     let r = egui::Frame::NONE
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, t.input_border))
-        .corner_radius(egui::CornerRadius::same(3))
+        .corner_radius(t.cr())
         .inner_margin(egui::Margin::symmetric(6, 3))
         .show(ui, |ui| {
             crate::theme::strong_selected_text(ui);

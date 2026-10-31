@@ -39,7 +39,7 @@ pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egu
     } else {
         // In the app bar it stays quiet: a soft button with Discord's colour on its icon alone.
         let t = Tokens::get(ui.ctx());
-        ui.painter().rect_filled(r, CornerRadius::same(6), if resp.hovered() { t.hover } else { t.button });
+        ui.painter().rect_filled(r, t.cr(), if resp.hovered() { t.hover } else { t.button });
         icons::paint(ui, "message-circle", ir, DISCORD);
         ui.painter().galley(egui::pos2(ir.right() + h * 0.2, at.y), galley, if resp.hovered() { t.text_strong } else { t.text });
     }

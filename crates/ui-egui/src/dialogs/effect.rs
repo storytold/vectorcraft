@@ -775,7 +775,7 @@ pub(super) fn curve_graph(ui: &mut egui::Ui, pts: &mut Vec<(f32, f32)>, max: f32
     ui.data_mut(|m| m.insert_temp(held, grabbed));
     // The graph: quarter grid, the identity line, the curve and its points.
     let painter = ui.painter_at(rect.expand(4.0));
-    painter.rect_filled(rect, 2.0, t.input);
+    painter.rect_filled(rect, t.cr(), t.input);
     let faint = egui::Stroke::new(1.0, t.input_border);
     for k in 1..4 {
         let f = k as f32 / 4.0;
@@ -789,7 +789,7 @@ pub(super) fn curve_graph(ui: &mut egui::Ui, pts: &mut Vec<(f32, f32)>, max: f32
         let fill = if Some(i) == grabbed { t.accent } else { t.panel };
         painter.circle(screen(*q), 4.0, fill, egui::Stroke::new(1.5, t.text));
     }
-    painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    painter.rect_stroke(rect, t.cr(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     changed
 }
 

@@ -528,9 +528,9 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         }
         let p = ui.painter_at(rect);
         if st.highlight == Some(i) {
-            p.rect_filled(rect, 2.0, t.selection);
+            p.rect_filled(rect, t.cr(), t.selection);
         } else if matches!(row, Row::Family(f) if f.eq_ignore_ascii_case(current)) {
-            p.rect_filled(rect, 2.0, t.hover);
+            p.rect_filled(rect, t.cr(), t.hover);
         }
         // The disclosure triangle of a family with several styles.
         let tri = egui::Rect::from_min_size(rect.min, vec2(DISCLOSURE, row_h));

@@ -177,10 +177,10 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     for (i, c) in d.colors.iter().enumerate() {
         let r = Rect::from_min_size(row.min + vec2(i as f32 * cw, 0.0), vec2(cw - 3.0, row.height()));
         let resp = ui.interact(r, ui.scope_id().with(("ct-chip", i)), Sense::click());
-        ui.painter().rect_filled(r, 2.0, c32(c));
-        ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+        ui.painter().rect_filled(r, t.cr_small(), c32(c));
+        ui.painter().rect_stroke(r, t.cr_small(), egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
         if i == d.sel {
-            ui.painter().rect_stroke(r.expand(1.5), 3.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+            ui.painter().rect_stroke(r.expand(1.5), t.cr_small(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
         }
         if resp.on_hover_text(c.to_hex()).clicked() {
             d.sel = i;

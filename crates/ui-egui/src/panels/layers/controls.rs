@@ -90,7 +90,7 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
         let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
             || (cmd == "layer.delete" && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
         if over {
-            child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            child.painter().rect_stroke(button.rect, t.cr(), Stroke::new(1.5, t.accent), StrokeKind::Inside);
         }
     }
     // Create New Sublayer: Alt asks for its options first, and Ctrl/Cmd+Alt puts it under the

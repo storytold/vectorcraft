@@ -116,9 +116,9 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             let (r, resp) = ui.allocate_exact_size(TILE, Sense::click());
             let on = sel.contains(&a.id);
             if on {
-                ui.painter().rect_filled(r, 2.0, t.row_selected);
+                ui.painter().rect_filled(r, t.cr(), t.row_selected);
             } else if resp.hovered() {
-                ui.painter().rect_filled(r, 2.0, t.hover);
+                ui.painter().rect_filled(r, t.cr(), t.hover);
             }
             let th = Rect::from_min_size(egui::pos2(r.center().x - THUMB / 2.0, r.top() + 4.0), vec2(THUMB, THUMB));
             paint_thumb(ui, st, a, th);

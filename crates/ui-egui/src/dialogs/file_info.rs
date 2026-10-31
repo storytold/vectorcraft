@@ -169,8 +169,8 @@ fn chips(ui: &mut egui::Ui, d: &mut Dialog) {
             let galley = ui.painter().layout_no_wrap(k.clone(), egui::FontId::proportional(12.0), t.text_strong);
             let size = egui::vec2(galley.size().x + 30.0, 22.0);
             let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-            ui.painter().rect_filled(rect, egui::CornerRadius::same(11), t.hover);
-            ui.painter().rect_stroke(rect, egui::CornerRadius::same(11), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+            ui.painter().rect_filled(rect, t.cr(), t.hover);
+            ui.painter().rect_stroke(rect, t.cr(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
             ui.painter().galley(egui::pos2(rect.left() + 9.0, rect.center().y - galley.size().y / 2.0), galley, t.text_strong);
             let x = egui::Rect::from_center_size(egui::pos2(rect.right() - 11.0, rect.center().y), egui::vec2(14.0, 14.0));
             let resp = ui
