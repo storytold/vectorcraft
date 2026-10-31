@@ -1481,7 +1481,8 @@ fn highlight_after_removal(app: &mut VectorcraftApp, ctx: &egui::Context, n: &No
         _ => sel.rows().filter(|(r, _)| *r == rows).and_then(|(_, a)| shift(a)).map(|a| rows.sel(a)),
     };
     set_active(app, ctx, active.unwrap_or(Sel::None));
-    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor });
+    let active = active.and_then(|a| a.rows()).map(|(_, a)| a);
+    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
 }
 
 /// The command a stack row `what` dropped on Duplicate Selected Item (`copy`) or Delete Selected
