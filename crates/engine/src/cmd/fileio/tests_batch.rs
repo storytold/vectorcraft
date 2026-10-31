@@ -222,3 +222,208 @@ fn export_presets_save_use_and_delete() {
         assert!(s.execute(bad.0, &bad.1).is_err(), "{bad:?}");
     }
 }
+
+/// Export presets go to a file and come back from one: a name in use gets a number unless
+/// `replace`, a built-in name is never replaced, and a file in another format or with a setting an
+/// export refuses adds nothing.
+#[test]
+fn export_presets_export_and_import() {
+    let mut s = session(2);
+    assert!(s.execute("document.exportPresets.export", &json!({})).is_err(), "nothing saved to export");
+    let web = json!({"name": "ACME-<name>", "folders": "item", "formats": [{"format": "jpg", "quality": 80}]});
+    s.execute("document.exportPresets.save", &json!({"name": "Web JPG", "settings": web})).unwrap();
+    let out = s.execute("document.exportPresets.export", &json!({})).unwrap();
+    assert_eq!(out["count"], 1);
+    let data = out["data"].as_str().unwrap().to_string();
+    assert_eq!(serde_json::from_str::<Value>(&data).unwrap()["format"], "vcexportpresets");
+    // Into a session with no saved presets: the preset as it was saved, and it exports.
+    let mut other = session(2);
+    let r = other.execute("document.exportPresets.import", &json!({ "data": data })).unwrap();
+    assert_eq!(r["imported"], json!(["Web JPG"]));
+    assert_eq!(other.prefs.screen_export_presets, s.prefs.screen_export_presets);
+    assert_eq!(names(&export(&mut other, json!({"exportPreset": "Web JPG", "range": "2"}))), ["Artboard-2/ACME-Artboard 2.jpg"]);
+    // Again: a second copy with a number; with replace, the saved one changes.
+    let r = other.execute("document.exportPresets.import", &json!({ "data": data })).unwrap();
+    assert_eq!(r["imported"], json!(["Web JPG 2"]));
+    s.execute("document.exportPresets.save", &json!({"name": "Web JPG", "settings": {"formats": [{"format": "png"}]}})).unwrap();
+    let changed = s.execute("document.exportPresets.export", &json!({"names": ["Web JPG"]})).unwrap()["data"].clone();
+    let r = other.execute("document.exportPresets.import", &json!({"data": changed, "replace": true})).unwrap();
+    assert_eq!(r["imported"], json!(["Web JPG"]));
+    let saved: Vec<(&str, &Value)> =
+        other.prefs.screen_export_presets.iter().map(|p| (p.name.as_str(), &p.settings["formats"][0]["format"])).collect();
+    assert_eq!(saved, [("Web JPG", &json!("png")), ("Web JPG 2", &json!("jpg"))]);
+    // A built-in preset exports by name and comes back under a new name; the built-in one stays.
+    let path = std::env::temp_dir().join(format!("vc-export-presets-{}.vcexportpresets", std::process::id()));
+    let path = path.to_string_lossy().to_string();
+    let out = s.execute("document.exportPresets.export", &json!({"names": ["Logo Package"], "path": path})).unwrap();
+    assert_eq!((out["path"].as_str(), out["count"].as_u64()), (Some(path.as_str()), Some(1)));
+    let r = other.execute("document.exportPresets.import", &json!({"path": path, "replace": true})).unwrap();
+    assert_eq!(r["imported"], json!(["Logo Package 2"]));
+    let builtin = screens::builtin_presets();
+    assert_eq!(other.prefs.screen_export_presets.last().map(|p| &p.settings), builtin.first().map(|p| &p.settings));
+    let _ = std::fs::remove_file(&path);
+    // Refused files add nothing.
+    let before = other.prefs.screen_export_presets.clone();
+    let preset = |settings: Value| {
+        json!({"format": "vcexportpresets", "presets": [{"name": "Fine", "settings": {"formats": [{"format": "png"}]}}, {"name": "Bad", "settings": settings}]}).to_string()
+    };
+    for bad in [
+        json!({"data": "{\"format\": \"vcflattener\", \"presets\": []}"}),
+        json!({"data": "not json"}),
+        json!({"data": preset(json!({"formats": [{"format": "txt"}]}))}),
+        json!({"data": preset(json!({"folders": "sideways"}))}),
+        json!({"dataBase64": "%%"}),
+        json!({}),
+    ] {
+        assert!(other.execute("document.exportPresets.import", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(other.prefs.screen_export_presets, before);
+    assert!(s.execute("document.exportPresets.export", &json!({"names": ["Never saved"]})).is_err());
+    // `names` that is not a list of names is an error, not every saved preset.
+    for bad in [json!({"names": "Web JPG"}), json!({"names": [3]}), json!({"names": {"Web JPG": true}})] {
+        assert!(s.execute("document.exportPresets.export", &bad).is_err(), "{bad}");
+    }
+    // One file imports at most 1,000 presets; names repeated in a file are numbered in turn.
+    let many = |n: usize| {
+        let one = json!({"name": "Same", "settings": {"formats": [{"format": "png"}]}});
+        json!({"format": "vcexportpresets", "presets": vec![one; n]}).to_string()
+    };
+    assert!(other.execute("document.exportPresets.import", &json!({"data": many(1001)})).is_err(), "more than 1,000");
+    assert_eq!(other.prefs.screen_export_presets, before);
+    let r = other.execute("document.exportPresets.import", &json!({"data": many(1000)})).unwrap();
+    let imported = r["imported"].as_array().unwrap();
+    assert_eq!((imported.len(), imported.first(), imported.last()), (1000, Some(&json!("Same")), Some(&json!("Same 1000"))));
+    // An export writes no file that an import refuses: at most 1,000 presets.
+    assert!(other.prefs.screen_export_presets.len() > 1000);
+    assert!(other.execute("document.exportPresets.export", &json!({})).is_err(), "every saved preset");
+    let names: Vec<String> = other.prefs.screen_export_presets.iter().take(1001).map(|p| p.name.clone()).collect();
+    assert!(other.execute("document.exportPresets.export", &json!({ "names": names })).is_err(), "1,001 names");
+    let r = other.execute("document.exportPresets.export", &json!({ "names": names[..1000] })).unwrap();
+    assert_eq!(r["count"], 1000);
+}
+
+#[test]
+fn export_presets_import_replace_numbers_duplicates_from_one_file() {
+    let mut source = session(1);
+    source.execute("document.exportPresets.save", &json!({"name": "A", "settings": {"formats": [{"format": "png"}]}})).unwrap();
+    let data = source.execute("document.exportPresets.export", &json!({"names": ["A", "A"]})).unwrap()["data"].clone();
+
+    let mut empty = session(1);
+    let reply = empty.execute("document.exportPresets.import", &json!({"data": data, "replace": true})).unwrap();
+    assert_eq!(reply["imported"], json!(["A", "A 2"]));
+    assert_eq!(empty.prefs.screen_export_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["A", "A 2"]);
+
+    let mut existing = session(1);
+    existing.execute("document.exportPresets.save", &json!({"name": "A", "settings": {"formats": [{"format": "jpg"}]}})).unwrap();
+    let reply = existing.execute("document.exportPresets.import", &json!({"data": data, "replace": true})).unwrap();
+    assert_eq!(reply["imported"], json!(["A", "A"]));
+    assert_eq!(existing.prefs.screen_export_presets.len(), 1);
+    assert_eq!(existing.prefs.screen_export_presets[0].settings["formats"][0]["format"], "png");
+}
+
+#[test]
+fn export_presets_import_refuses_oversize_input_from_every_source() {
+    let mut s = session(1);
+    let good = s.execute("document.exportPresets.export", &json!({"names": ["Logo Package"]})).unwrap()["data"].as_str().unwrap().to_string();
+    let oversized = format!("{good}{}", " ".repeat((4 << 20) + 1));
+    let path = std::env::temp_dir().join(format!("vc-oversize-export-presets-{}.vcexportpresets", std::process::id()));
+    std::fs::write(&path, &oversized).unwrap();
+    for params in [
+        json!({"path": path.to_string_lossy()}),
+        json!({"data": oversized}),
+        json!({"dataBase64": vectorcraft_format::base64_encode(oversized.as_bytes())}),
+    ] {
+        let error = s.execute("document.exportPresets.import", &params).unwrap_err().to_string();
+        assert!(error.contains("larger than 4194304 bytes"), "{error}");
+        assert!(s.prefs.screen_export_presets.is_empty());
+    }
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn export_presets_import_accepts_wrapped_base64_near_size_limit() {
+    const LIMIT: usize = 4 << 20;
+    let empty = json!({
+        "format": "vcexportpresets",
+        "presets": [{"name": "Wrapped", "settings": {"formats": [{"format": "png"}], "prefix": ""}}],
+    });
+    let prefix = "x".repeat(LIMIT - 1 - empty.to_string().len());
+    let file = json!({
+        "format": "vcexportpresets",
+        "presets": [{"name": "Wrapped", "settings": {"formats": [{"format": "png"}], "prefix": prefix}}],
+    })
+    .to_string();
+    assert_eq!(file.len(), LIMIT - 1);
+    let encoded = vectorcraft_format::base64_encode(file.as_bytes());
+    let wrapped = encoded.as_bytes().chunks(76).map(|line| std::str::from_utf8(line).unwrap()).collect::<Vec<_>>().join("\n");
+    assert!(wrapped.len() > LIMIT.div_ceil(3) * 4);
+    assert_eq!(vectorcraft_format::base64_decode(&wrapped).as_deref(), Some(file.as_bytes()));
+
+    let mut s = session(1);
+    let reply = s.execute("document.exportPresets.import", &json!({"dataBase64": wrapped})).unwrap();
+    assert_eq!(reply["imported"], json!(["Wrapped"]));
+    assert_eq!(s.prefs.screen_export_presets[0].settings["prefix"], prefix);
+}
+
+#[test]
+fn export_presets_export_refuses_oversize_output() {
+    let mut s = session(1);
+    let prefix = "x".repeat((4 << 20) + 1);
+    s.execute("document.exportPresets.save", &json!({"name": "Large", "settings": {"prefix": prefix}})).unwrap();
+
+    let error = s.execute("document.exportPresets.export", &json!({})).unwrap_err().to_string();
+    assert!(error.contains("larger than 4194304 bytes"), "{error}");
+
+    let path = std::env::temp_dir().join(format!("vc-oversize-preset-output-{}.vcexportpresets", std::process::id()));
+    assert!(!path.exists());
+    let error = s.execute("document.exportPresets.export", &json!({"path": path.to_string_lossy()})).unwrap_err().to_string();
+    assert!(error.contains("larger than 4194304 bytes"), "{error}");
+    assert!(!path.exists());
+}
+
+/// An imported preset whose name is taken and ends in a number gets the next free number, not a
+/// second one; any other taken name gets the first free number.
+#[test]
+fn an_imported_numbered_name_counts_on() {
+    let taken = ["Logo Package", "Logo Package 2", "Logo Package 4", "Web", "Web 2", "2", "Max 18446744073709551615"];
+    let name = |base: &str| import_name(base, |n| taken.contains(&n));
+    assert_eq!(name("Print"), "Print");
+    assert_eq!(name("Logo Package 3"), "Logo Package 3");
+    assert_eq!(name("Logo Package"), "Logo Package 3");
+    assert_eq!(name("Logo Package 2"), "Logo Package 3");
+    assert_eq!(name("Logo Package 4"), "Logo Package 5");
+    assert_eq!(name("Web"), "Web 3");
+    // A number alone, or one past the largest, is not counted on.
+    assert_eq!(name("2"), "2 2");
+    assert_eq!(name("Max 18446744073709551615"), "Max 18446744073709551615 2");
+    // Through the command: a built-in preset imported twice is Logo Package 2, then Logo Package 3.
+    let mut s = session(1);
+    let data = s.execute("document.exportPresets.export", &json!({"names": ["Logo Package"]})).unwrap()["data"].clone();
+    assert_eq!(s.execute("document.exportPresets.import", &json!({ "data": data })).unwrap()["imported"], json!(["Logo Package 2"]));
+    let data = s.execute("document.exportPresets.export", &json!({"names": ["Logo Package 2"]})).unwrap()["data"].clone();
+    assert_eq!(s.execute("document.exportPresets.import", &json!({ "data": data })).unwrap()["imported"], json!(["Logo Package 3"]));
+}
+
+/// A preset name, imported or saved, keeps at most 255 characters, as an asset name does.
+#[test]
+fn export_preset_names_are_capped() {
+    let mut s = session(1);
+    let long = "é".repeat(300);
+    let capped = "é".repeat(255);
+    let file = json!({"format": "vcexportpresets", "presets": [{"name": long, "settings": {"formats": [{"format": "png"}]}}]}).to_string();
+    let r = s.execute("document.exportPresets.import", &json!({ "data": file })).unwrap();
+    assert_eq!(r["imported"], json!([capped]));
+    let r = s.execute("document.exportPresets.save", &json!({"name": format!("  {}", "w".repeat(400)), "settings": {}})).unwrap();
+    assert_eq!(r["name"], "w".repeat(255));
+    let names: Vec<usize> = s.prefs.screen_export_presets.iter().map(|p| p.name.chars().count()).collect();
+    assert_eq!(names, [255, 255]);
+    // The same long name imported again gets a number within the limit, and saving under the name
+    // it got changes that preset alone.
+    let r = s.execute("document.exportPresets.import", &json!({ "data": file })).unwrap();
+    let again = r["imported"][0].as_str().unwrap().to_string();
+    assert!(again.chars().count() <= 255 && again != capped && again.ends_with(" 2"), "{again}");
+    s.execute("document.exportPresets.save", &json!({"name": again, "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+    let formats: Vec<Option<&str>> =
+        s.prefs.screen_export_presets.iter().map(|p| p.settings.get("formats").and_then(|f| f[0]["format"].as_str())).collect();
+    assert_eq!(formats, [Some("png"), None, Some("svg")]);
+}

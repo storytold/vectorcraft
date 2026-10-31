@@ -1486,6 +1486,16 @@ font-technology	Variable	バリアブル
 	Delete Export Preset	書き出しプリセットを削除
 	Export Presets	書き出しプリセット
 	Save Export Preset	書き出しプリセットを保存
+	Export Export Presets	書き出しプリセットを書き出し
+	Export Preset…	プリセットを書き出し…
+	Import Export Presets	書き出しプリセットを読み込み
+	Import Preset…	プリセットを読み込み…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` には document.exportPresets.list にあるプリセットの名前を指定してください
+@msg	no export preset `{n}` (see document.exportPresets.list)	書き出しプリセット `{n}` が見つかりません (document.exportPresets.list を参照)
+@msg	no saved export presets to export (name built-in ones in `names`)	書き出す保存済みの書き出しプリセットがありません (組み込みのプリセットは `names` で指定してください)
+@msg	not an export presets file (format `{_1}`)	書き出しプリセットファイルではありません (形式: `{_1}`)
+@msg	not an export presets file: {e}	書き出しプリセットファイルではありません: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	レイヤーを書き出し
 	Export Selection	選択範囲を書き出し
 	All in One Folder	すべて 1 つのフォルダーに
@@ -2722,6 +2732,7 @@ mark-style	Japanese	日本式
 	Saturate	彩度を調整
 	Saturation	彩度
 	Save As	別名で保存
+	Save As Preset…	プリセットとして保存…
 	Save Colors as Swatches	カラーをスウォッチとして保存
 	Save Document	ドキュメントを保存
 	Save Document Info…	ドキュメント情報を保存…
@@ -2745,6 +2756,7 @@ mark-style	Japanese	日本式
 	Save a Copy	コピーを保存
 	Save as Template	テンプレートとして保存
 	Save as preset:	プリセットとして保存:
+	Save Changes	変更を保存
 	Save changes to {name}	{name} への変更を保存
 	Save color group to Swatch panel	カラーグループをスウォッチパネルに保存
 	Save each artboard to a separate file	アートボードごとに別のファイルに保存
@@ -3452,6 +3464,7 @@ file-filter	Swatch libraries	スウォッチライブラリ
 file-filter	Flattener presets	分割・統合プリセット
 file-filter	PDF presets	PDF プリセット
 file-filter	Print presets	プリントプリセット
+file-filter	Export presets	書き出しプリセット
 file-filter	SVG Compressed	SVG 圧縮
 file-filter	PDF-compatible .ai	PDF 互換の .ai
 file-filter	VectorCraft Template	VectorCraft テンプレート

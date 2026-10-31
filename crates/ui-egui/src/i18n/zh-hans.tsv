@@ -959,6 +959,16 @@
 	Delete Export Preset	删除导出预设
 	Export Presets	导出预设
 	Save Export Preset	存储导出预设
+	Export Export Presets	导出导出预设
+	Export Preset…	导出预设…
+	Import Export Presets	导入导出预设
+	Import Preset…	导入预设…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` 是 document.exportPresets.list 中某个预设的名称
+@msg	no export preset `{n}` (see document.exportPresets.list)	没有导出预设 `{n}` (参见 document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	没有可导出的已保存导出预设 (内置预设请在 `names` 中指定)
+@msg	not an export presets file (format `{_1}`)	不是导出预设文件 (格式为 `{_1}`)
+@msg	not an export presets file: {e}	不是导出预设文件：{e}
+@msg	`{_1}`: {msg}	`{_1}`：{msg}
 	Export Layer	导出图层
 	Export Selection	导出选区
 	All in One Folder	全部放在一个文件夹
@@ -1131,6 +1141,7 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
 file-filter	PDF-compatible .ai	PDF 兼容 .ai
 file-filter	VectorCraft Template	VectorCraft 模板
@@ -2639,11 +2650,13 @@ font-script	Japanese	汉字
 	Save a Copy	存储副本
 	Save a Copy…	保存副本…
 	Save As	存储为
+	Save As Preset…	另存为预设…
 	Save as PDF…	存为 PDF…
 	Save as preset:	存储为预设：
 	Save as Template	另存模板
 	Save as Template…	存为模板…
 	Save As…	另存为…
+	Save Changes	保存更改
 	Save changes to {name}	存储对 {name} 的更改
 	Save color group to Swatch panel	将颜色组存储至色板面板
 	Save Colors as Swatches	将颜色存储为色板

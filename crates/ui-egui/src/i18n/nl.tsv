@@ -2134,6 +2134,8 @@ lighting	Light	Licht
 	Preserve Overprints and Spot Colors	Overprints en spotkleuren behouden
 	Rasters	Rasters
 	Replaces the saved preset of that name.	Vervangt de opgeslagen voorinstelling met die naam.
+	Save As Preset…	Opslaan als voorinstelling…
+	Save Changes	Wijzigingen opslaan
 	Save Preset…	Voorinstelling opslaan…
 	Vectors	Vectoren
 	A saved copy of the selected preset	Een opgeslagen kopie van de geselecteerde voorinstelling
@@ -4863,6 +4865,7 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
 file-filter	PDF-compatible .ai	PDF-compatibel .ai
 file-filter	VectorCraft Template	VectorCraft-sjabloon
@@ -5210,6 +5213,10 @@ swatch	Bright Violet	Felviolet
 	Delete Export Preset	Exportvoorinstelling verwijderen
 	Export Presets	Exportvoorinstellingen
 	Save Export Preset	Exportvoorinstelling opslaan
+	Export Export Presets	Exportvoorinstellingen exporteren
+	Export Preset…	Voorinstelling exporteren…
+	Import Export Presets	Exportvoorinstellingen importeren
+	Import Preset…	Voorinstelling importeren…
 	Export Layer	Laag exporteren
 	Export Selection	Selectie exporteren
 	All in One Folder	Alles in één map

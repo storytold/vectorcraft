@@ -1019,6 +1019,16 @@ font-technology	Variable	Variabili
 	Delete Export Preset	Elimina predefinito di esportazione
 	Export Presets	Predefiniti di esportazione
 	Save Export Preset	Salva predefinito di esportazione
+	Export Export Presets	Esporta predefiniti di esportazione
+	Export Preset…	Esporta predefinito…
+	Import Export Presets	Importa predefiniti di esportazione
+	Import Preset…	Importa predefinito…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` è il nome di un predefinito di document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	nessun predefinito di esportazione `{n}` (vedi document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	nessun predefinito di esportazione salvato da esportare (indica quelli integrati in `names`)
+@msg	not an export presets file (format `{_1}`)	non è un file di predefiniti di esportazione (formato `{_1}`)
+@msg	not an export presets file: {e}	non è un file di predefiniti di esportazione: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Esporta livello
 	Export Selection	Esporta selezione
 	All in One Folder	Tutto in una cartella
@@ -1193,6 +1203,7 @@ file-filter	Swatch libraries	Librerie campioni
 file-filter	Flattener presets	Preset di appiattimento
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset di stampa
+file-filter	Export presets	Predefiniti di esportazione
 file-filter	SVG Compressed	SVG compresso
 file-filter	PDF-compatible .ai	.ai compatibile con PDF
 file-filter	VectorCraft Template	Modello VectorCraft
@@ -2775,11 +2786,13 @@ mark-style	Japanese	Giapponese
 	Save a Copy	Salva una copia
 	Save a Copy…	Salva una copia…
 	Save As	Salva con nome
+	Save As Preset…	Salva come predefinito…
 	Save as PDF…	Salva come PDF…
 	Save as preset:	Salva come preset:
 	Save as Template	Salva come modello
 	Save as Template…	Salva come modello…
 	Save As…	Salva con nome…
+	Save Changes	Salva modifiche
 	Save changes to {name}	Salva le modifiche a {name}
 	Save color group to Swatch panel	Salva il gruppo colori nel pannello Campioni
 	Save Colors as Swatches	Salva colori come campioni

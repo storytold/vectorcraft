@@ -1002,6 +1002,10 @@ font-technology	Variable	Променливи
 	Delete Export Preset	Изтриване на набор за експортиране
 	Export Presets	Набори за експортиране
 	Save Export Preset	Запазване на набор за експортиране
+	Export Export Presets	Експортиране на набори за експортиране
+	Export Preset…	Експортиране на набор…
+	Import Export Presets	Импортиране на набори за експортиране
+	Import Preset…	Импортиране на набор…
 	Export Layer	Експортиране на слой
 	Export Selection	Експортиране на избраното
 	All in One Folder	Всичко в една папка
@@ -2685,11 +2689,13 @@ font-technology	Variable	Променливи
 	Save a Copy	Запазване на копие
 	Save a Copy…	Запазване на копие…
 	Save As	Запазване като
+	Save As Preset…	Запази като предварителна настройка…
 	Save as PDF…	Запазване като PDF…
 	Save as preset:	Запази като предварителна настройка:
 	Save as Template	Запази като шаблон
 	Save as Template…	Запази като шаблон…
 	Save As…	Запази като…
+	Save Changes	Запази промените
 	Save changes to {name}	Запазване на промените в {name}
 	Save color group to Swatch panel	Запазване на цветовата група в панела „Образци“
 	Save Colors as Swatches	Запази цветовете като образци
@@ -5160,6 +5166,7 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
 file-filter	Swatch libraries	Библиотеки с образци
 file-filter	Templates	Шаблони

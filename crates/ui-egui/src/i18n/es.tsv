@@ -1019,6 +1019,16 @@ font-technology	Variable	Variables
 	Delete Export Preset	Eliminar ajuste de exportación
 	Export Presets	Ajustes de exportación
 	Save Export Preset	Guardar ajuste de exportación
+	Export Export Presets	Exportar ajustes de exportación
+	Export Preset…	Exportar ajuste…
+	Import Export Presets	Importar ajustes de exportación
+	Import Preset…	Importar ajuste…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` es el nombre de un ajuste de document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	no hay ningún ajuste de exportación `{n}` (consulta document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	no hay ajustes de exportación guardados para exportar (indica los integrados en `names`)
+@msg	not an export presets file (format `{_1}`)	no es un archivo de ajustes de exportación (formato `{_1}`)
+@msg	not an export presets file: {e}	no es un archivo de ajustes de exportación: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Exportar capa
 	Export Selection	Exportar selección
 	All in One Folder	Todo en una carpeta
@@ -2743,11 +2753,13 @@ font-technology	Variable	Variables
 	Save a Copy	Guardar una copia
 	Save a Copy…	Guardar una copia…
 	Save As	Guardar como
+	Save As Preset…	Guardar como ajuste preestablecido…
 	Save as PDF…	Guardar como PDF…
 	Save as preset:	Guardar como preajuste:
 	Save as Template	Guardar como plantilla
 	Save as Template…	Guardar como plantilla…
 	Save As…	Guardar como…
+	Save Changes	Guardar cambios
 	Save changes to {name}	Guardar cambios en {name}
 	Save color group to Swatch panel	Guardar grupo de colores en el panel Muestras
 	Save Colors as Swatches	Guardar colores como muestras
@@ -5109,6 +5121,7 @@ file-filter	Swatch libraries	Bibliotecas de muestras
 file-filter	Flattener presets	Preajustes del acoplador
 file-filter	PDF presets	Preajustes de PDF
 file-filter	Print presets	Preajustes de impresión
+file-filter	Export presets	Ajustes de exportación
 file-filter	SVG Compressed	SVG comprimido
 file-filter	PDF-compatible .ai	.ai compatible con PDF
 file-filter	VectorCraft Template	Plantilla de VectorCraft

@@ -43,6 +43,8 @@
 	Close All	Zatvori sve
 	Save	Sačuvaj
 	Save As…	Sačuvaj kao…
+	Save As Preset…	Sačuvaj kao predložak…
+	Save Changes	Sačuvaj promjene
 	Save a Copy…	Sačuvaj kopiju…
 	Save as Template…	Sačuvaj kao predložak…
 	Save as PDF…	Sačuvaj kao PDF…
@@ -2887,6 +2889,10 @@ lighting	Light	Svjetlo
 	Delete Export Preset	Izbriši predložak izvoza
 	Export Presets	Izvezi predloške
 	Save Export Preset	Sačuvaj predložak izvoza
+	Export Export Presets	Izvezi predloške izvoza
+	Export Preset…	Izvezi predložak…
+	Import Export Presets	Uvezi predloške izvoza
+	Import Preset…	Uvezi predložak…
 	Export Layer	Izvezi sloj
 	Export Selection	Izvezi odabir
 	All in One Folder	Sve u jednom folderu
@@ -4211,6 +4217,7 @@ imageTrace	Outline	Obris
 @msg	`freeform.points` must be an array	`freeform.points` mora biti niz
 @msg	`freeform.lines` must be an array	`freeform.lines` mora biti niz
 @msg	`gradient` must be an object	`gradient` mora biti objekat
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` je naziv predloška iz document.exportPresets.list
 @msg	`groupColors` must be an array	`groupColors` mora biti niz
 @msg	`library` is a library id or name (see {list})	`library` je ID ili naziv biblioteke (vidi {list})
 @msg	`mode` applies to freeform gradients	`mode` se primjenjuje na gradijente slobodnog oblika
@@ -4219,6 +4226,7 @@ imageTrace	Outline	Obris
 @msg	`stops` must be an array	`stops` mora biti niz
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` mora biti objekat SVG opcija (vidi document.formats)
 @msg	`{_1}` is no save command	`{_1}` nije naredba čuvanja
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 @msg	`{area}` is no recovery area name	`{area}` nije naziv područja za oporavak
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` nije boja (#rrggbb ili naziv predloška)
 @msg	`{id}` has no envelope dialog	`{id}` nema dijalog omotnice
@@ -4452,12 +4460,14 @@ imageTrace	Outline	Obris
 @msg	no plug-in {id} is installed	nije instaliran dodatak {id}
 @msg	no point {i} (the gradient has {_1})	nema tačke {i} (gradijent ima {_1})
 @msg	no preset editor	nema uređivača predložaka
+@msg	no export preset `{n}` (see document.exportPresets.list)	nema predloška izvoza `{n}` (vidi document.exportPresets.list)
 @msg	no previous transform	nema prethodne transformacije
 @msg	no print preset named `{base}`	nema predloška štampanja pod nazivom `{base}`
 @msg	no print preset named `{name}`	nema predloška štampanja pod nazivom `{name}`
 @msg	no print service	nema usluge štampanja
 @msg	no revert command	nema naredbe za vraćanje
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	nema sačuvanog PDF predloška pod nazivom `{name}` (ugrađeni predlošci su samo za čitanje: započnite novi od njih)
+@msg	no saved export presets to export (name built-in ones in `names`)	nema sačuvanih predložaka izvoza za izvoz (ugrađene navedite u `names`)
 @msg	no saved preset named `{name}`	nema sačuvane unaprijed postavljene vrijednosti `{name}`
 @msg	no saved preset named `{name}` to rename	nema sačuvane unaprijed postavljene vrijednosti `{name}` za preimenovanje
 @msg	no saved presets	nema sačuvanih predložaka
@@ -4504,6 +4514,8 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
+@msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
 @msg	not in pattern editing mode	nije u načinu uređivanja uzorka
 @msg	finish editing the pattern first	prvo završite uređivanje uzorka
@@ -5187,6 +5199,7 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
 file-filter	PDF-compatible .ai	.ai kompatibilan s PDF-om
 file-filter	VectorCraft Template	VectorCraft predložak
