@@ -186,7 +186,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             crate::panels::character::text_style(app).is_some()
         }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
-        "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
+        "type.applyBullets" | "type.applyNumbers" | "ui.bulletsAndNumbering" | "type.convertListToText" => {
+            crate::panels::character::text_style(app).is_some()
+        }
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),

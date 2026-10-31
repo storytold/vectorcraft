@@ -852,15 +852,15 @@ fn a_bullet_is_text_of_its_own_before_its_paragraph() {
 
 /// A numbered list paragraph's number and period are a TEXT entity of their own where they are
 /// drawn, in the order they are drawn: in a right-to-left paragraph the period comes first, at the
-/// number's left.
+/// number's left, with the marker aligned left or right.
 #[test]
 fn a_number_is_text_of_its_own_before_its_paragraph() {
-    use vectorcraft_doc::text::{NumberStyle, ParaList};
-    let numbered = |text: &str, count: u32| {
+    use vectorcraft_doc::text::{ListAlign, NumberStyle, ParaList};
+    let numbered_aligned = |text: &str, count: u32, align: ListAlign| {
         let mut d = text_doc(text, 20.0);
         let id = d.layers[0].children().unwrap()[0].id;
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
-            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic));
+            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic).aligned(align));
             t.para.left_indent = 30.0;
             t.para.first_line_indent = -30.0;
             t.list_count = count;
@@ -868,10 +868,17 @@ fn a_number_is_text_of_its_own_before_its_paragraph() {
         let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
         entities(&out).iter().map(|e| (get(e, 1).map(str::to_string), all(e, 10)[0])).collect::<Vec<_>>()
     };
+    let numbered = |text: &str, count: u32| numbered_aligned(text, count, ListAlign::Left);
     assert_eq!(numbered("Item", 11), [(Some("12.".to_string()), 10.0), (Some("Item".to_string()), 40.0)]);
     let rtl = numbered("שלום", 11);
     assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
     assert!(rtl[1].1 > rtl[0].1, "the number right of the text: {rtl:?}");
+    // Aligned right, the number keeps its order and moves right, against the text.
+    let right = numbered_aligned("Item", 11, ListAlign::Right);
+    assert_eq!((right[0].0.as_deref(), right[1].clone()), (Some("12."), (Some("Item".to_string()), 40.0)));
+    assert!(right[0].1 > 10.0 && right[0].1 < 40.0, "{right:?}");
+    let rtl = numbered_aligned("שלום", 11, ListAlign::Right);
+    assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
 }
 
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.

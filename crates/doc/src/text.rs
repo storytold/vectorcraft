@@ -21,7 +21,7 @@ pub use para_style::{
     ParaStyle, SingleWordJustify,
 };
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
-pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};
+pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, ListAlign, NumberStyle, ParaList, TabAlign, TabStop};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///

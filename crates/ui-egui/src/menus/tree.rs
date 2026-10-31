@@ -422,6 +422,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Apply Bullets", "type.applyBullets"),
                         c("Apply Numbers", "type.applyNumbers"),
                         c("Convert to Text", "type.convertListToText"),
+                        c("Bullets and Numbering…", "ui.bulletsAndNumbering"),
                     ],
                 ),
                 Sep,
