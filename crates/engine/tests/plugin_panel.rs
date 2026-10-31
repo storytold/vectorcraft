@@ -119,8 +119,19 @@ fn a_panel_keeps_its_state_between_events() {
 #[test]
 fn a_refused_command_runs_none() {
     let mut s = session();
-    for refused in ["file.save", "edit.undo", "plugin.remove", "prefs.set", "stroke.widthProfile.reset", "object.pathfinder.options", "command.batch"]
-    {
+    for refused in [
+        "file.save",
+        "edit.undo",
+        "plugin.remove",
+        "prefs.set",
+        "stroke.widthProfile.reset",
+        "object.pathfinder.options",
+        "text.findFontFiles",
+        "text.addFontFiles",
+        "text.rescanFonts",
+        "text.missingFonts",
+        "command.batch",
+    ] {
         let commands = json!([rectangle(150), {"command": refused}]);
         answering(&mut s, "test.refused", &json!({"panel": {}, "state": {"ran": true}, "commands": commands}));
         let before = paths(&s);
@@ -130,6 +141,78 @@ fn a_refused_command_runs_none() {
     }
     expecting(&mut s, "test.refused", Given::Input, r#""state":null"#);
     click(&mut s, "test.refused").unwrap();
+}
+
+/// A panel sets type through a variable and steps through data sets it hands in as CSV, all as one
+/// undo step.
+#[test]
+fn a_panel_steps_through_data_sets_it_hands_in() {
+    let mut s = session();
+    let commands = json!([
+        {"command": "text.create", "params": {"x": 20, "y": 150, "text": "Title"}},
+        {"command": "variable.define", "params": {"name": "Title", "kind": "text"}},
+        {"command": "variable.bind", "params": {"variable": "Title"}},
+        {"command": "dataset.import", "params": {"csv": "name,Title\nOne,Alpha\nTwo,Beta\n"}},
+        {"command": "dataset.next"},
+        {"command": "dataset.next"},
+    ]);
+    answering(&mut s, "test.data", &json!({"panel": {}, "commands": commands}));
+    let r = click(&mut s, "test.data").unwrap();
+    let id = r["results"][0]["id"].clone();
+    assert_eq!(s.execute("text.getRange", &json!({"id": id})).unwrap()["text"], "Beta", "{r}");
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["active"], "Two");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.execute("text.getRange", &json!({"id": id})).is_err(), "one undo step takes the type back");
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"], json!([]));
+    assert_eq!(s.execute("dataset.list", &json!({})).unwrap()["datasets"], json!([]));
+}
+
+/// A 1×1 PNG.
+const DOT_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/// A panel's commands touch no file: one that reads or writes a path fails, and with it the batch,
+/// writing nothing; a data set it applies leaves an image variable's image as it was, not reading
+/// the file it names. Outside a panel the same commands read and write those files.
+#[test]
+fn a_panel_reads_and_writes_no_file() {
+    let dir = std::env::temp_dir().join(format!("vc-panel-files-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = |name: &str| dir.join(name).to_string_lossy().into_owned();
+    std::fs::write(path("data.csv"), "name,Title\nOne,Alpha\n").unwrap();
+    std::fs::write(path("library.xml"), "<variableSets/>").unwrap();
+    std::fs::write(path("other.png"), vectorcraft_format::base64_decode(DOT_PNG).unwrap()).unwrap();
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Row"})).unwrap();
+    for (command, params, refused) in [
+        ("dataset.import", json!({"path": path("data.csv")}), "read authority is absent"),
+        ("variable.loadLibrary", json!({"path": path("library.xml")}), "read authority is absent"),
+        ("dataset.export", json!({"path": path("out.csv")}), "write authority is absent"),
+    ] {
+        answering(&mut s, "test.files", &json!({"panel": {}, "commands": [rectangle(150), {"command": command, "params": params}]}));
+        let before = paths(&s);
+        let e = click(&mut s, "test.files").unwrap_err();
+        assert!(e.to_string().contains(refused), "{command}: {e}");
+        assert_eq!(paths(&s), before, "{command}");
+    }
+    assert!(!dir.join("out.csv").exists());
+    s.execute("dataset.export", &json!({"path": path("out.csv")})).unwrap();
+    assert!(dir.join("out.csv").exists());
+
+    s.execute("file.place", &json!({"name": "dot.png", "dataBase64": DOT_PNG})).unwrap();
+    s.execute("variable.define", &json!({"name": "Picture", "kind": "image"})).unwrap();
+    assert_eq!(s.execute("variable.bind", &json!({"variable": "Picture"})).unwrap()["bound"], 1);
+    let commands = json!([
+        {"command": "dataset.new", "params": {"name": "Other", "values": {"Picture": path("other.png")}}},
+        {"command": "dataset.select", "params": {"name": "Other"}},
+    ]);
+    answering(&mut s, "test.files", &json!({"panel": {}, "commands": commands}));
+    let r = click(&mut s, "test.files").unwrap();
+    assert_eq!((&r["results"][1]["applied"], &r["results"][1]["skipped"]), (&json!(0), &json!(1)), "{r}");
+    let r = s.execute("dataset.select", &json!({"name": "Other"})).unwrap();
+    assert_eq!((&r["applied"], &r["skipped"]), (&json!(1), &json!(0)), "{r}");
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// A command that fails rolls back the ones before it, and the panel keeps what it kept.

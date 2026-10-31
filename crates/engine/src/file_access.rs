@@ -85,6 +85,12 @@ impl AutomationRoots {
         Ok(Some(Arc::new(Self { read: open(read, Access::Read)?, write: open(write, Access::Write)? })))
     }
 
+    /// No root of either kind: in force ([`confine`]), every path read or written is refused. What
+    /// a panel plug-in's commands run in (`plugin.panel.event`): they touch no file.
+    pub fn none() -> Arc<Self> {
+        Arc::new(Self { read: vec![], write: vec![] })
+    }
+
     /// May the file or folder at `path` be read (or written)? It must lie inside one of the roots
     /// of that kind. `Err` says why not.
     pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
@@ -383,6 +389,27 @@ mod tests {
         let read_only = AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
         let e = read_only.check(&s(base.join("in/x.svg")), Access::Write).unwrap_err();
         assert!(e.contains("write authority is absent"), "{e}");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn no_roots_refuse_every_path() {
+        let (base, roots) = folders("no-roots");
+        let file = s(base.join("in/a.svg"));
+        let none = AutomationRoots::none();
+        assert_eq!(none.describe(), "read none; write none");
+        confine(Some(&none), || {
+            assert!(check_read(&file).unwrap_err().contains("read authority is absent"));
+            assert!(check_write(&s(base.join("out/x.png"))).unwrap_err().contains("write authority is absent"));
+            assert_eq!(unconfined(|| check_read(&file)), Ok(()), "the app's own folders");
+        });
+        // Inside roots in force, a path in them is refused too.
+        confine(Some(&roots), || {
+            assert_eq!(check_read(&file), Ok(()));
+            assert!(confine(Some(&none), || check_read(&file)).is_err());
+            assert_eq!(check_read(&file), Ok(()), "restored after the inner scope");
+        });
+        assert_eq!(check_read(&file), Ok(()));
         let _ = std::fs::remove_dir_all(base);
     }
 

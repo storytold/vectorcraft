@@ -52,9 +52,13 @@ plug-in is removed.
 The commands are the host's own, as MCP and scripts run them (`shape.rectangle`, `object.group`, `select.all`…). They
 run as one `command.batch`: one undo step, and when one fails, all of them are rolled back and the panel keeps what it
 kept. The batch is journaled, not the event, so replaying the journal needs no plug-in. A panel runs only commands
-whose ids start with `shape.`, `path.`, `object.`, `select.`, `paint.` or `stroke.`, which make, select and edit art
-in the active document, and none that changes the preferences (`stroke.widthProfile.*`, `object.pathfinder.options`):
-one other command refuses them all before any runs. It can't read or write files, open or switch documents, use the
+whose ids start with `shape.`, `path.`, `object.`, `select.`, `paint.`, `stroke.`, `text.`, `variable.` or
+`dataset.`, which make, select and edit art, type, variables and data sets in the active document, and none that
+changes the preferences (`stroke.widthProfile.*`, `object.pathfinder.options`) or the app's fonts, or looks in folders
+for fonts (`text.findFontFiles`, `text.addFontFiles`, `text.rescanFonts`, `text.missingFonts`): one other command
+refuses them all before any runs. The commands run with no file access: one that reads or writes a path fails, and
+the batch with it. So `dataset.import` and `variable.loadLibrary` take their data inline (`csv`, `xml`), and a data
+set applied leaves the images of image variables as they were. A panel can't open or switch documents, use the
 clipboard, or install or remove plug-ins. Commands can't refer to the results of the ones before them; those that make
 art select it, so the next one acts on it.
 

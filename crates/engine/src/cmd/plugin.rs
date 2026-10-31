@@ -9,7 +9,7 @@
 //! like any effect (`effect.apply {effect: "plugin.<id>"}`) and drawn by `vectorcraft-effects`;
 //! exporters add a file format that `document.export` writes (`fileio::plugin_formats`); a panel
 //! answers the events of its panel with `plugin.panel.event`, its commands run as one
-//! `command.batch` (only those [`panel_may_run`] lets it run).
+//! `command.batch` (only those [`panel_may_run`] lets it run, with no file access).
 //!
 //! A filter may ask for a heavy budget (`Budget::Heavy`: minutes rather than a minute, for routing,
 //! packing or simulation). It installs only once the user agrees (`plugin.install {allowHeavy}`),
@@ -216,14 +216,18 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The commands a panel may run (`plugin.panel.event`), by the start of their ids: those that make,
-/// select and edit art in the active document. None of them reads or writes a file, opens or
-/// switches documents, or changes the preferences, the clipboard or the plug-ins, except the ones in
-/// [`PANEL_REFUSED`].
-const PANEL_COMMANDS: &[&str] = &["shape.", "path.", "object.", "select.", "paint.", "stroke."];
+/// select and edit art, type, variables and data sets in the active document. None of them opens or
+/// switches documents, or changes the preferences, the clipboard, the fonts or the plug-ins, except
+/// the ones in [`PANEL_REFUSED`]. They run with no file access at all ([`panel_event`]), so those
+/// that take a path (`dataset.import`, `dataset.export`, `variable.loadLibrary`) work only on data
+/// given inline, and an image variable's file is not read.
+const PANEL_COMMANDS: &[&str] = &["shape.", "path.", "object.", "select.", "paint.", "stroke.", "text.", "variable.", "dataset."];
 
 /// Commands among [`PANEL_COMMANDS`] a panel may not run: they change the preferences (the stroke
-/// width profiles kept with them, the Pathfinder Options).
-const PANEL_REFUSED: &[&str] = &["stroke.widthProfile.", "object.pathfinder.options"];
+/// width profiles kept with them, the Pathfinder Options) or the fonts the app has, or look in
+/// folders for them (the app's own Fonts folder is written whatever the file access in force).
+const PANEL_REFUSED: &[&str] =
+    &["stroke.widthProfile.", "object.pathfinder.options", "text.findFontFiles", "text.addFontFiles", "text.rescanFonts", "text.missingFonts"];
 
 /// May a panel run command `id`?
 fn panel_may_run(id: &str) -> bool {
@@ -234,8 +238,10 @@ fn panel_may_run(id: &str) -> bool {
 /// last event, the panel's `values` and the selected paths and compound paths (as a filter is),
 /// and returns what its panel shows, what it keeps and commands, which run as one `command.batch`:
 /// one undo step, all rolled back when one fails, journaled as the batch (the event itself isn't).
-/// One command a panel may not run ([`panel_may_run`]) refuses them all before any runs. What it
-/// keeps changes only once its commands ran. → `{plugin, panel, results}`.
+/// The batch runs with no file access ([`crate::file_access::AutomationRoots::none`]): a command
+/// that reads or writes a path fails, and with it the batch. One command a panel may not run
+/// ([`panel_may_run`]) refuses them all before any runs. What it keeps changes only once its
+/// commands ran. → `{plugin, panel, results}`.
 fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.panel.event";
     let plugin = plugin_by_id(C, p)?;
@@ -275,7 +281,13 @@ fn panel_event(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         let commands: Vec<Value> = answer.commands.iter().map(|c| json!({"command": c.command, "params": c.params})).collect();
         let label = m.name.trim_end_matches('…');
-        s.execute("command.batch", &json!({"label": label, "commands": commands}))?.get("results").cloned().unwrap_or(Value::Array(vec![]))
+        // A plug-in never has the host touch a file: not by a path it names, nor by one it put in
+        // the document (an image variable's value in a data set).
+        let none = crate::file_access::AutomationRoots::none();
+        crate::file_access::confine(Some(&none), || s.execute("command.batch", &json!({"label": label, "commands": commands})))?
+            .get("results")
+            .cloned()
+            .unwrap_or(Value::Array(vec![]))
     };
     match answer.state {
         Some(Value::Null) => {
