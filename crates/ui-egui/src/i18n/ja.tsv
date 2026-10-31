@@ -335,6 +335,7 @@ digits	Malayalam	マラヤーラム数字
 	No filter plug-ins installed	フィルタープラグインはインストールされていません
 	No panel plug-ins installed	パネルプラグインはインストールされていません
 	This plug-in is no longer installed.	このプラグインはもうインストールされていません。
+	The file is larger than 4 MiB, the most a plug-in panel is given.	ファイルが 4 MiB を超えています。プラグインパネルに渡せるのは 4 MiB までです。
 	Install Plug-in…	プラグインをインストール…
 	Open this setting's help page	この設定のヘルプページを開く
 	Reload Plug-ins	プラグインを再読み込み

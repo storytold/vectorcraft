@@ -6,14 +6,16 @@
 //! The panel draws what the plug-in answered last (`plugin.panel.event`): its `items`, top to
 //! bottom ([`item`]). An item of a type this host doesn't know is left out. Drawn for the first time
 //! since it opened, the panel asks the plug-in what it shows (an `open` event); a button clicked, a
-//! checkbox or dropdown changed and a field's text or number committed are events too, sent with
-//! the values of all the panel's fields, and the answer is drawn from then on. A failed event leaves
-//! the panel as it was and says why under it. Plug-in text is shown as it is, never translated.
+//! checkbox or dropdown changed, a field's text or number committed and a file picked with a file
+//! field ([`pick_file`]) are events too, sent with the values of all the panel's fields, and the
+//! answer is drawn from then on. A failed event leaves the panel as it was and says why under it.
+//! Plug-in text is shown as it is, never translated.
 
 use std::sync::{Arc, Mutex, PoisonError};
 
 use egui::{RichText, Ui};
 use serde_json::{Map, Value, json};
+use vectorcraft_plugins::panel::MAX_FILE;
 use vectorcraft_plugins::{Kind, Plugin, registry};
 
 use crate::VectorcraftApp;
@@ -205,9 +207,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, panel: &str) {
     let Some(view) = app.ui.plugin_panels.get(&id).cloned() else { return };
     let mut values = view.values;
     let mut event = None;
+    let mut pick = None;
     let mut budget = MAX_ITEMS;
+    // The web app shows no open dialog that answers with a file's path.
+    let can_pick = crate::picks::can(app, &crate::picks::PickRequest::Open(crate::FilePick::default()));
     if let Some(items) = view.panel.get("items").and_then(Value::as_array) {
-        let mut f = Fields { panel: &id, values: &mut values, event: &mut event, budget: &mut budget };
+        let mut f = Fields { panel: &id, values: &mut values, event: &mut event, pick: &mut pick, can_pick, budget: &mut budget };
         f.items(ui, items, 0);
     }
     if let Some(e) = &view.error {
@@ -220,6 +225,52 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, panel: &str) {
     if let Some(event) = event {
         send(app, &id, event);
     }
+    if let Some((target, extensions)) = pick {
+        pick_file(app, &id, target, extensions);
+    }
+}
+
+/// File field `target` of panel plug-in `id` clicked: an open dialog for files with `extensions`
+/// (any file without them), and the file picked sent as a `file` event with its name and bytes,
+/// never its folder. Shown off the UI thread, the dialog's answer runs this again
+/// ([`crate::picks::button`]). A file that can't be read, or is larger than a panel takes, sends
+/// nothing and is said under the panel.
+fn pick_file(app: &mut VectorcraftApp, id: &str, target: String, extensions: Vec<String>) {
+    let id = id.to_string();
+    crate::picks::button(app, move |app| {
+        let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
+        let filters = if exts.is_empty() { vec![] } else { vec![crate::FilePick::filter(&exts.join(", ").to_uppercase(), &exts)] };
+        let Some(path) = crate::picks::open(app, &crate::FilePick { filters, ..Default::default() }) else { return };
+        match read_picked(app, &path) {
+            Ok((name, bytes)) => {
+                let event = json!({ "type": "file", "target": target, "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) });
+                send(app, &id, event);
+            }
+            Err(e) => app.ui.plugin_panels.entry(id.clone()).or_default().error = Some(e),
+        }
+    });
+}
+
+// The message below names the size.
+const _: () = assert!(MAX_FILE == 4 << 20);
+
+/// The name, without its folder, and the bytes of the file at `path`, picked for a panel.
+fn read_picked(app: &VectorcraftApp, path: &str) -> Result<(String, Vec<u8>), String> {
+    let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| format!("{path}: not a file"))?;
+    let read = app.services.read.as_ref().ok_or("no file reader")?;
+    let bytes = read(path)?;
+    if bytes.len() > MAX_FILE {
+        return Err(tl!("The file is larger than 4 MiB, the most a plug-in panel is given.").to_string());
+    }
+    Ok((name, bytes))
+}
+
+/// The file extensions a file field's `extensions` list: lower-case letters and digits, 1-16 of
+/// them each, at most 16 extensions; others are left out.
+fn extensions(it: &Value) -> Vec<String> {
+    let valid = |e: &&str| (1..=16).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
+    let list = it.get("extensions").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    list.iter().filter_map(Value::as_str).filter(valid).take(16).map(str::to_string).collect()
 }
 
 /// What drawing a panel's items collects: the values set, and the event to send.
@@ -227,6 +278,10 @@ struct Fields<'a> {
     panel: &'a str,
     values: &'a mut Map<String, Value>,
     event: &'a mut Option<Value>,
+    /// The file field clicked: its id and the extensions it takes.
+    pick: &'a mut Option<(String, Vec<String>)>,
+    /// Whether file fields can show an open dialog here.
+    can_pick: bool,
     /// How many more items may be drawn.
     budget: &'a mut usize,
 }
@@ -242,10 +297,11 @@ impl Fields<'_> {
         }
     }
 
-    /// One item: `text`, `heading`, `separator`, `button`, `string` (a text field, `multiline`
-    /// for several lines), `number` and `int` (`min`, `max`, `step`, `unit`), `bool` (a
-    /// checkbox), `choice` (a dropdown of `options`), `row` (its `items` side by side) or `group`
-    /// (its `items` under a `label` that folds, `open` at first unless it says `false`).
+    /// One item: `text`, `heading`, `separator`, `button`, `file` (a button that opens a file
+    /// dialog for its `extensions`; off where the app shows none, as on the web), `string` (a text
+    /// field, `multiline` for several lines), `number` and `int` (`min`, `max`, `step`, `unit`),
+    /// `bool` (a checkbox), `choice` (a dropdown of `options`), `row` (its `items` side by side) or
+    /// `group` (its `items` under a `label` that folds, `open` at first unless it says `false`).
     fn item(&mut self, ui: &mut Ui, it: &Value, depth: usize) {
         let s = |k: &str| it.get(k).and_then(Value::as_str).unwrap_or_default();
         let id = s("id");
@@ -263,6 +319,12 @@ impl Fields<'_> {
                 let enabled = it.get("enabled").and_then(Value::as_bool).unwrap_or(true);
                 if ui.add_enabled_ui(enabled, |ui| widgets::flat_button_fit(ui, label, 60.0)).inner.clicked() {
                     *self.event = Some(json!({ "type": "click", "target": id }));
+                }
+            }
+            "file" if !id.is_empty() => {
+                let enabled = self.can_pick && it.get("enabled").and_then(Value::as_bool).unwrap_or(true);
+                if ui.add_enabled_ui(enabled, |ui| widgets::flat_button_fit(ui, label, 60.0)).inner.clicked() {
+                    *self.pick = Some((id.to_string(), extensions(it)));
                 }
             }
             "string" if !id.is_empty() => {

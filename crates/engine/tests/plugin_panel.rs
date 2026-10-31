@@ -8,6 +8,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_engine::{EngineError, Session};
+use vectorcraft_plugins::panel::MAX_FILE;
 use vectorcraft_plugins::wat::{self as tpl, Given};
 
 /// A document with one rectangle, selected.
@@ -89,6 +90,30 @@ fn a_panel_is_given_its_event_values_and_selection() {
     expecting(&mut s, "test.given", Given::Input, "not there");
     let e = click(&mut s, "test.given").unwrap_err();
     assert!(e.to_string().contains("panel"), "{e}");
+}
+
+/// A file picked in the panel comes with its name and its bytes, as plain base64, never its folder;
+/// bytes that aren't base64, or more than a panel takes, are refused before the plug-in runs.
+#[test]
+fn a_panel_is_given_the_file_picked() {
+    let mut s = session();
+    let csv = vectorcraft_format::base64_encode(b"name,Title\nOne,Alpha\n");
+    let picked = |data: &str| json!({"type": "file", "target": "pick", "name": "data.csv", "dataBase64": data});
+    let bytes = format!(r#""dataBase64":"{csv}""#);
+    for needle in [r#""type":"file""#, r#""target":"pick""#, r#""name":"data.csv""#, &bytes] {
+        expecting(&mut s, "test.file", Given::Input, needle);
+        assert!(event(&mut s, "test.file", picked(&csv), Value::Null).is_ok(), "{needle}");
+    }
+    // White space in the base64 is left out before the plug-in is given it.
+    let spaced = format!("{}\n{}", &csv[..8], &csv[8..]);
+    assert!(event(&mut s, "test.file", picked(&spaced), Value::Null).is_ok());
+    let big = vectorcraft_format::base64_encode(&vec![0; MAX_FILE + 1]);
+    for (data, why) in [("not base64!", "not base64"), (big.as_str(), "larger than")] {
+        let e = event(&mut s, "test.file", picked(data), Value::Null).unwrap_err();
+        assert!(matches!(e, EngineError::BadParams { .. }) && e.to_string().contains(why), "{e}");
+    }
+    let e = event(&mut s, "test.file", json!({"type": "file", "target": "pick", "name": "/tmp/data.csv", "dataBase64": csv}), Value::Null);
+    assert!(e.unwrap_err().to_string().contains("without its folder"));
 }
 
 /// What a panel keeps comes back with its next event; `null` forgets it, and so does removing the

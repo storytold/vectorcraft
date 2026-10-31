@@ -1,6 +1,7 @@
 //! Panel plug-ins: a plug-in of kind `panel` has a panel of its own. It declares what the panel
-//! shows, and answers each event of the panel (it opened, a button was clicked, a field was set)
-//! with what the panel shows now, what it keeps until its next event and the host commands to run.
+//! shows, and answers each event of the panel (it opened, a button was clicked, a field was set, a
+//! file was picked) with what the panel shows now, what it keeps until its next event and the host
+//! commands to run.
 //!
 //! A plug-in still keeps nothing between runs: each event runs a fresh instance, as a filter's run
 //! does. The host keeps the panel's `state` (at most [`MAX_STATE`] bytes of JSON) and hands it back
@@ -22,6 +23,13 @@ pub const MAX_COMMANDS: usize = 256;
 /// Longest field id an event names, in bytes.
 pub const MAX_TARGET: usize = 64;
 
+/// Largest file a `file` event hands a panel, in bytes.
+pub const MAX_FILE: usize = 4 << 20;
+
+/// Longest file name a `file` event gives, in bytes of UTF-8 (a name of 255 characters, as file
+/// systems allow, takes up to 765 of them).
+pub const MAX_FILE_NAME: usize = 1024;
+
 /// What happened in a panel.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
@@ -31,11 +39,15 @@ pub enum Event {
     Click { target: String },
     /// Field `target` was set to `value`.
     Change { target: String, value: Value },
+    /// A file was picked with file field `target`: its `name`, without its folder, and its bytes,
+    /// base64 encoded. The host reads the file and checks the base64 (this crate has no base64 of
+    /// its own); the plug-in never learns where the file is.
+    File { target: String, name: String, data_base64: String },
 }
 
 impl Event {
-    /// The event `v` describes: `{"type": "open"}`, `{"type": "click", "target"}` or
-    /// `{"type": "change", "target", "value"}`.
+    /// The event `v` describes: `{"type": "open"}`, `{"type": "click", "target"}`,
+    /// `{"type": "change", "target", "value"}` or `{"type": "file", "target", "name", "dataBase64"}`.
     pub fn parse(v: &Value) -> std::result::Result<Event, String> {
         let target = || match v.get("target").and_then(Value::as_str) {
             Some(t) if !t.is_empty() && t.len() <= MAX_TARGET => Ok(t.to_string()),
@@ -45,7 +57,21 @@ impl Event {
             Some("open") => Ok(Event::Open),
             Some("click") => Ok(Event::Click { target: target()? }),
             Some("change") => Ok(Event::Change { target: target()?, value: v.get("value").cloned().unwrap_or(Value::Null) }),
-            _ => Err("`event.type` must be \"open\", \"click\" or \"change\"".into()),
+            Some("file") => {
+                let target = target()?;
+                let name = match v.get("name").and_then(Value::as_str) {
+                    Some(n) if !n.is_empty() && n.len() <= MAX_FILE_NAME && !n.contains(['/', '\\', '\0']) => n.to_string(),
+                    _ => return Err(format!("`event.name` must be the file's name, without its folder, in 1-{MAX_FILE_NAME} bytes")),
+                };
+                // Four characters for every three bytes, the last group padded.
+                let data_base64 = match v.get("dataBase64").and_then(Value::as_str) {
+                    Some(d) if d.len() <= MAX_FILE.div_ceil(3) * 4 => d.to_string(),
+                    Some(_) => return Err(format!("the file is larger than {MAX_FILE} bytes")),
+                    None => return Err("`event.dataBase64` must be the file's bytes, base64 encoded".into()),
+                };
+                Ok(Event::File { target, name, data_base64 })
+            }
+            _ => Err("`event.type` must be \"open\", \"click\", \"change\" or \"file\"".into()),
         }
     }
 
@@ -55,6 +81,7 @@ impl Event {
             Event::Open => json!({"type": "open"}),
             Event::Click { target } => json!({"type": "click", "target": target}),
             Event::Change { target, value } => json!({"type": "change", "target": target, "value": value}),
+            Event::File { target, name, data_base64 } => json!({"type": "file", "target": target, "name": name, "dataBase64": data_base64}),
         }
     }
 }
@@ -161,6 +188,31 @@ mod tests {
             json!({"type": "click"}),
             json!({"type": "click", "target": ""}),
             json!({"type": "change", "target": long}),
+        ] {
+            assert!(Event::parse(&bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_file_event_gives_the_name_and_the_bytes() {
+        let v = json!({"type": "file", "target": "pick", "name": "data.csv", "dataBase64": "YSxi"});
+        let file = Event::parse(&v).unwrap();
+        assert_eq!(file, Event::File { target: "pick".into(), name: "data.csv".into(), data_base64: "YSxi".into() });
+        assert_eq!(file.to_json(), v);
+        // An empty file is a file.
+        assert!(Event::parse(&json!({"type": "file", "target": "pick", "name": "empty.txt", "dataBase64": ""})).is_ok());
+        let big = "A".repeat(MAX_FILE.div_ceil(3) * 4 + 4);
+        let e = Event::parse(&json!({"type": "file", "target": "pick", "name": "big.bin", "dataBase64": big})).unwrap_err();
+        assert!(e.contains("larger than"), "{e}");
+        for bad in [
+            json!({"type": "file", "name": "a.csv", "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "name": "", "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "name": "/Users/me/a.csv", "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "name": "..\\a.csv", "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "name": "x".repeat(MAX_FILE_NAME + 1), "dataBase64": ""}),
+            json!({"type": "file", "target": "pick", "name": "a.csv"}),
+            json!({"type": "file", "target": "pick", "name": "a.csv", "dataBase64": [1, 2]}),
         ] {
             assert!(Event::parse(&bad).is_err(), "{bad}");
         }

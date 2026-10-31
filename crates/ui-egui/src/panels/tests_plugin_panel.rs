@@ -111,3 +111,50 @@ fn a_failed_event_says_why_and_fields_keep_their_values() {
     let values = Value::Object(app.ui.plugin_panels[id].values.clone());
     assert_eq!(values, json!({"name": "Leaf", "count": 3, "shape": "Circle", "outline": true}));
 }
+
+#[test]
+fn a_file_field_sends_the_file_picked_with_its_name_and_bytes() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let mut app = app_with_rect();
+    let id = "test.ui.file";
+    let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| plugin_panel::show(app, ui, &plugin_panel::panel_id(id));
+    let file = json!({"type": "file", "id": "pick", "label": "Choose Data…", "extensions": ["csv", "txt", "No.Dots"]});
+    install(&mut app, id, &json!({"panel": {"items": [file]}}));
+    app.run("window.pluginPanel", json!({"id": id})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], draw);
+    // From now on the panel answers only a file event that brings the file's name and bytes; any
+    // other event fails and says so under it.
+    let csv = b"name,Title\nOne,Alpha\n";
+    let needle = format!(r#""dataBase64":"{}","name":"data.csv""#, vectorcraft_format::base64_encode(csv));
+    let read = json!({"panel": {"items": [file, {"type": "text", "text": "Read data.csv"}]}});
+    let src = tpl::when_given(&tpl::manifest(id, "panel", "{}"), tpl::Given::Input, &needle, &read.to_string());
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+
+    // Without an open dialog (as on the web), the field is off: a click sends nothing.
+    click(&ctx, &mut app, text_rect(&texts, "Choose Data…").center(), draw);
+    assert_eq!(app.ui.plugin_panels[id].error, None);
+
+    // With one, it offers the field's file types, and the file picked comes with its name and
+    // bytes, not its folder.
+    let offered = Rc::new(RefCell::new(vec![]));
+    let seen = offered.clone();
+    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
+        seen.borrow_mut().push(pick.filters.clone());
+        Some("/somewhere/data.csv".into())
+    }));
+    app.services.read = Some(Box::new(|_: &str| Ok(b"name,Title\nOne,Alpha\n".to_vec())));
+    click(&ctx, &mut app, text_rect(&texts, "Choose Data…").center(), draw);
+    assert_eq!(app.ui.plugin_panels[id].error, None);
+    assert_eq!(*offered.borrow(), vec![vec![crate::FilePick::filter("CSV, TXT", &["csv", "txt"])]]);
+    let texts = frame_events(&ctx, &mut app, vec![], draw);
+    assert!(texts.iter().any(|(t, _)| t == "Read data.csv"), "{texts:?}");
+
+    // A file larger than a panel takes is not sent: the panel says why.
+    app.services.read = Some(Box::new(|_: &str| Ok(vec![0; vectorcraft_plugins::panel::MAX_FILE + 1])));
+    click(&ctx, &mut app, text_rect(&texts, "Choose Data…").center(), draw);
+    let error = app.ui.plugin_panels[id].error.clone().unwrap_or_default();
+    assert!(error.contains("larger than 4 MiB"), "{error}");
+}

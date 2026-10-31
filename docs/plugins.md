@@ -64,15 +64,16 @@ art select it, so the next one acts on it.
 
 In the app, **Window › Plug-ins** lists the installed panels (`window.pluginPanel {id}`). Each opens floating, as
 panel `plugin:<id>`, and docks, tabs and closes as any panel. Drawn for the first time since it opened, it sends its
-plug-in an `open` event; a button clicked, a checkbox or dropdown changed and a text or number field committed (Enter,
-or leaving it) are events too, sent with the values of all its fields. It draws the plug-in's last answer: the
-`items` of `panel`, top to bottom, each one of
+plug-in an `open` event; a button clicked, a checkbox or dropdown changed, a text or number field committed (Enter,
+or leaving it) and a file picked with a file field are events too, sent with the values of all its fields. It draws
+the plug-in's last answer: the `items` of `panel`, top to bottom, each one of
 
 | `type` | Draws | Keys |
 |---|---|---|
 | `heading`, `text` | a heading, a line of text | `text` |
 | `separator` | a divider | |
 | `button` | a button: a `click` event | `id`, `label`, `enabled`? (default true) |
+| `file` | a button that opens a file dialog: a `file` event | `id`, `label`, `extensions`? (lower-case, without the dot; default: any file), `enabled`? |
 | `string` | a text field | `id`, `label`?, `value`?, `multiline`? |
 | `number`, `int` | a number field (`int`: whole numbers) | `id`, `label`?, `value`?, `min`?, `max`?, `step`?, `unit`? |
 | `bool` | a checkbox | `id`, `label`, `value`? |
@@ -85,6 +86,12 @@ plug-in can try a type a later host draws. At most 500 items are drawn, rows and
 failed event leaves the panel as it was and says why under it. A panel's text is the plug-in's, never translated. A
 panel whose plug-in is removed closes. One open when the app quits is open again at the next start while its plug-in
 is installed then (the `Plug-ins` folder's are, before the first frame), and asks it afresh what it shows.
+
+A file field hands the plug-in the file picked, never where it is: `{"type": "file", "target": "pick", "name":
+"data.csv", "dataBase64": "…"}`, the file's name without its folder and its bytes, at most 4 MiB. Cancelling the
+dialog sends nothing, and a file that can't be read or is larger sends nothing and says why under the panel. The
+field is off where the app shows no open dialog for a path, as in the web app. The plug-in reads the bytes as it
+likes: a CSV, say, can go straight to `dataset.import {csv}`.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
@@ -352,10 +359,11 @@ is, and what the export left out or changed, for the user (at most 100 warnings 
 with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
 
 A **panel** is given something else as its input: `{"event": {"type": "click", "target": "add"}, "state": …, "values":
-{"width": 40}, "objects": [...]}` (the objects as a filter gets them). It returns `{"panel": {…}, "state"?: …,
-"commands"?: [{"command": "shape.rectangle", "params"?: {…}}]}`: `panel` is what the panel shows (`{"items": [...]}`,
-[above](#panels)), `state` what it keeps until its next event (left out: what it kept; `null`: nothing), and at most
-256 commands, in order ([panels](#panels)). A decline or an invalid output runs nothing and keeps the state as it was.
+{"width": 40}, "objects": [...]}` (the event `open`, `click`, `change` or `file`, [above](#panels); the objects as a
+filter gets them). It returns `{"panel": {…}, "state"?: …, "commands"?: [{"command": "shape.rectangle", "params"?:
+{…}}]}`: `panel` is what the panel shows (`{"items": [...]}`, [above](#panels)), `state` what it keeps until its next
+event (left out: what it kept; `null`: nothing), and at most 256 commands, in order ([panels](#panels)). A decline or
+an invalid output runs nothing and keeps the state as it was.
 
 ## Writing a plug-in in Rust
 
