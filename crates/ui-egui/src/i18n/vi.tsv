@@ -1176,6 +1176,16 @@ font-technology	Variable	Biến thiên
 	Delete Export Preset	Xóa cài đặt sẵn xuất
 	Export Presets	Cài đặt sẵn xuất
 	Save Export Preset	Lưu cài đặt sẵn xuất
+	Export Export Presets	Xuất cài đặt sẵn xuất
+	Export Preset…	Xuất cài đặt sẵn…
+	Import Export Presets	Nhập cài đặt sẵn xuất
+	Import Preset…	Nhập cài đặt sẵn…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` là tên của một cài đặt sẵn trong document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	không có cài đặt sẵn xuất `{n}` (xem document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	không có cài đặt sẵn xuất đã lưu nào để xuất (ghi các cài đặt tích hợp sẵn trong `names`)
+@msg	not an export presets file (format `{_1}`)	không phải tệp cài đặt sẵn xuất (định dạng `{_1}`)
+@msg	not an export presets file: {e}	không phải tệp cài đặt sẵn xuất: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Xuất lớp
 	Export Selection	Xuất vùng chọn
 	All in One Folder	Tất cả trong một thư mục
@@ -1380,6 +1390,7 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén
 file-filter	PDF-compatible .ai	.ai tương thích PDF
 file-filter	VectorCraft Template	Mẫu VectorCraft
@@ -3075,11 +3086,13 @@ mark-style	Japanese	Kiểu Nhật
 	Save a Copy	Lưu bản sao
 	Save a Copy…	Lưu bản sao…
 	Save As	Lưu thành
+	Save As Preset…	Lưu dưới dạng cài đặt sẵn…
 	Save as PDF…	Lưu thành PDF…
 	Save as preset:	Lưu thành thiết lập sẵn:
 	Save as Template	Lưu thành mẫu
 	Save as Template…	Lưu thành mẫu…
 	Save As…	Lưu thành…
+	Save Changes	Lưu thay đổi
 	Save changes to {name}	Lưu thay đổi vào {name}
 	Save color group to Swatch panel	Lưu nhóm màu vào bảng mẫu màu
 	Save Colors as Swatches	Lưu màu thành mẫu màu

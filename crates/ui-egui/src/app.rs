@@ -139,6 +139,7 @@ impl VectorcraftApp {
             ime_caret_rect: None,
             ime_discard: false,
             prefs_changed: false,
+            asset_export_presets: Value::Null,
             touch_screen: false,
             scrub_group: false,
             scrub_scope: None,

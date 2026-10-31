@@ -1012,6 +1012,16 @@ font-technology	Variable	Варіативні
 	Delete Export Preset	Видалити набір параметрів експорту
 	Export Presets	Набори параметрів експорту
 	Save Export Preset	Зберегти набір параметрів експорту
+	Export Export Presets	Експортувати набори параметрів експорту
+	Export Preset…	Експортувати набір…
+	Import Export Presets	Імпортувати набори параметрів експорту
+	Import Preset…	Імпортувати набір…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` — це ім’я набору з document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	немає набору параметрів експорту `{n}` (див. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	немає збережених наборів параметрів експорту для експорту (вбудовані вкажіть у `names`)
+@msg	not an export presets file (format `{_1}`)	не є файлом наборів параметрів експорту (формат `{_1}`)
+@msg	not an export presets file: {e}	не є файлом наборів параметрів експорту: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Експортувати шар
 	Export Selection	Експортувати виділення
 	All in One Folder	Усе в одну теку
@@ -1186,6 +1196,7 @@ file-filter	Swatch libraries	Бібліотеки зразків
 file-filter	Flattener presets	Набори зведення
 file-filter	PDF presets	Набори PDF
 file-filter	Print presets	Набори друку
+file-filter	Export presets	Набори параметрів експорту
 file-filter	SVG Compressed	Стиснутий SVG
 file-filter	PDF-compatible .ai	.ai, сумісний з PDF
 file-filter	VectorCraft Template	Шаблон VectorCraft
@@ -2766,11 +2777,13 @@ mark-style	Japanese	Японський
 	Save a Copy	Зберегти копію
 	Save a Copy…	Зберегти копію…
 	Save As	Зберегти як
+	Save As Preset…	Зберегти як стиль…
 	Save as PDF…	Зберегти як PDF…
 	Save as preset:	Зберегти як набір:
 	Save as Template	Зберегти як шаблон
 	Save as Template…	Зберегти як шаблон…
 	Save As…	Зберегти як…
+	Save Changes	Зберегти зміни
 	Save changes to {name}	Зберегти зміни в {name}
 	Save color group to Swatch panel	Зберегти групу кольорів на панелі «Зразки»
 	Save Colors as Swatches	Зберегти кольори як зразки

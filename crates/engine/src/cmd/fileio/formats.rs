@@ -1,4 +1,7 @@
-use super::{Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, svg, text, unsupported};
+use super::super::unique_name;
+use super::{
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+};
 
 /// One option a format's encoder reads from the export params.
 #[derive(Clone, Copy, Debug)]
@@ -604,8 +607,8 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
 }
 
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF and print
-/// presets (imported), scripts (checked without running them) and plug-ins (installed).
+/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF, print
+/// and export presets (imported), scripts (checked without running them) and plug-ins (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All readable files", OPEN_EXTS))
         .chain(format_filters())
@@ -614,6 +617,7 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", crate::cmd::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
         .chain(std::iter::once(("Shortcut sets", crate::cmd::shortcutset::EXTS)))
         .chain(std::iter::once(("Scripts", crate::cmd::scripts::EXTS)))
         .chain(std::iter::once(("Plug-ins", crate::cmd::plugin::EXTS)))
@@ -691,6 +695,25 @@ pub fn extension(name: &str) -> String {
 /// A file name or path without its folder and extension (`/a/Poster.svg` → `Poster`).
 pub fn file_stem(name: &str) -> String {
     std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
+}
+
+/// The name an imported preset `base` takes: `base` if `taken` doesn't claim it, else for a name
+/// that ends in a space and a number ("Logo Package 2") the first free name with a higher number
+/// ("Logo Package 3"), and for any other name the first free "base 2", "base 3"… ([`unique_name`]).
+pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let numbered = base
+        .rsplit_once(' ')
+        .filter(|(stem, n)| !stem.trim().is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|(stem, n)| Some((stem, n.parse::<u64>().ok()?)));
+    match numbered {
+        Some((stem, n)) => {
+            (n.saturating_add(1)..=u64::MAX).map(|i| format!("{stem} {i}")).find(|c| !taken(c)).unwrap_or_else(|| unique_name(base, &taken))
+        }
+        None => unique_name(base, taken),
+    }
 }
 
 /// What a `format` export of `doc`, whose file is `path`, writes when it isn't `doc` itself: a

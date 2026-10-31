@@ -2019,6 +2019,8 @@ lighting	Light	სინათლე
 	Preserve Overprints and Spot Colors	ზედდაბეჭდვისა და სპოტ-ფერების შენარჩუნება
 	Rasters	რასტრები
 	Replaces the saved preset of that name.	ანაცვლებს ამავე სახელის შენახულ პრესეტს.
+	Save As Preset…	შენახვა წინასწარ პარამეტრად…
+	Save Changes	ცვლილებების შენახვა
 	Save Preset…	პრესეტის შენახვა…
 	Vectors	ვექტორები
 	A saved copy of the selected preset	მონიშნული პრესეტის შენახული ასლი
@@ -4707,6 +4709,7 @@ file-filter	Swatch libraries	ფერის ნიმუშების ბი�
 file-filter	Flattener presets	გაბრტყელების პრესეტები
 file-filter	PDF presets	PDF-ის პრესეტები
 file-filter	Print presets	ბეჭდვის პრესეტები
+file-filter	Export presets	ექსპორტის პრესეტები
 file-filter	SVG Compressed	შეკუმშული SVG
 file-filter	PDF-compatible .ai	PDF-თან თავსებადი .ai
 file-filter	VectorCraft Template	VectorCraft-ის შაბლონი
@@ -5084,6 +5087,16 @@ imageTrace	Outline	კონტური
 	Delete Export Preset	ექსპორტის პრესეტის წაშლა
 	Export Presets	ექსპორტის პრესეტები
 	Save Export Preset	ექსპორტის პრესეტის შენახვა
+	Export Export Presets	ექსპორტის პრესეტების ექსპორტირება
+	Export Preset…	პრესეტის ექსპორტირება…
+	Import Export Presets	ექსპორტის პრესეტების იმპორტირება
+	Import Preset…	პრესეტის იმპორტირება…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` არის პრესეტის სახელი სიიდან document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	ექსპორტის პრესეტი `{n}` არ არის (იხ. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	შენახული ექსპორტის პრესეტები ექსპორტისთვის არ არის (ჩაშენებულები მიუთითეთ `names`-ში)
+@msg	not an export presets file (format `{_1}`)	ეს არ არის ექსპორტის პრესეტების ფაილი (ფორმატი `{_1}`)
+@msg	not an export presets file: {e}	ეს არ არის ექსპორტის პრესეტების ფაილი: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	შრის ექსპორტირება
 	Export Selection	მონიშნულის ექსპორტირება
 	All in One Folder	ყველა ერთ საქაღალდეში

@@ -2119,6 +2119,8 @@ lighting	Light	Cahaya
 	Preserve Overprints and Spot Colors	Pertahankan overprint dan warna spot
 	Rasters	Raster
 	Replaces the saved preset of that name.	Mengganti preset tersimpan dengan nama tersebut.
+	Save As Preset…	Simpan sebagai Preset…
+	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
@@ -4852,6 +4854,7 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
 file-filter	PDF-compatible .ai	.ai kompatibel PDF
 file-filter	VectorCraft Template	Templat VectorCraft
@@ -5200,6 +5203,10 @@ swatch	Bright Violet	Violet cerah
 	Delete Export Preset	Hapus preset ekspor
 	Export Presets	Daftar preset ekspor
 	Save Export Preset	Simpan preset ekspor
+	Export Export Presets	Ekspor preset ekspor
+	Export Preset…	Ekspor preset…
+	Import Export Presets	Impor preset ekspor
+	Import Preset…	Impor preset…
 	Export Layer	Ekspor lapisan
 	Export Selection	Ekspor seleksi
 	All in One Folder	Semua dalam satu folder

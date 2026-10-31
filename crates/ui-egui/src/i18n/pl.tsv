@@ -2232,6 +2232,8 @@ lighting	Light	Światło
 	Preserve Overprints and Spot Colors	Zachowaj nadruki i kolory dodatkowe
 	Rasters	Rastry
 	Replaces the saved preset of that name.	Zastępuje zapisane ustawienie o tej nazwie.
+	Save As Preset…	Zapisz jako ustawienie predefiniowane…
+	Save Changes	Zapisz zmiany
 	Save Preset…	Zapisz ustawienie…
 	Vectors	Wektory
 	A saved copy of the selected preset	Zapisana kopia zaznaczonego ustawienia
@@ -2800,6 +2802,16 @@ lighting	Light	Światło
 	Delete Export Preset	Usuń ustawienie eksportu
 	Export Presets	Ustawienia eksportu
 	Save Export Preset	Zapisz ustawienie eksportu
+	Export Export Presets	Eksportuj ustawienia eksportu
+	Export Preset…	Eksportuj ustawienie…
+	Import Export Presets	Importuj ustawienia eksportu
+	Import Preset…	Importuj ustawienie…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset` to nazwa ustawienia z document.exportPresets.list
+@msg	no export preset `{n}` (see document.exportPresets.list)	brak ustawienia eksportu `{n}` (zob. document.exportPresets.list)
+@msg	no saved export presets to export (name built-in ones in `names`)	brak zapisanych ustawień eksportu do wyeksportowania (wbudowane podaj w `names`)
+@msg	not an export presets file (format `{_1}`)	to nie jest plik ustawień eksportu (format `{_1}`)
+@msg	not an export presets file: {e}	to nie jest plik ustawień eksportu: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	Eksportuj warstwę
 	Export Selection	Eksportuj zaznaczenie
 	All in One Folder	Wszystko w jednym folderze
@@ -5074,6 +5086,7 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
 file-filter	PDF-compatible .ai	.ai zgodny z PDF
 file-filter	VectorCraft Template	Szablon VectorCraft
