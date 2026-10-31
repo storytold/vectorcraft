@@ -1013,6 +1013,25 @@ fn after_a_row_click_delete_reaches_the_layers_panel_not_edit_clear() {
     assert!(d.node(rect).is_some(), "the rectangle on Layer 1 stays");
 }
 
+/// A tool that claims Delete and Backspace (the Artboard tool's active artboard) leaves them to a
+/// clicked Layers row.
+#[test]
+fn after_a_row_click_delete_reaches_the_layers_panel_not_the_artboard_tool() {
+    for key in [egui::Key::Delete, egui::Key::Backspace] {
+        let ctx = drop_ctx();
+        let mut app = app_with_rect();
+        run(&mut app, "layer.new", json!({}));
+        run(&mut app, "artboard.new", json!({"width": 200, "height": 100}));
+        app.select_tool("artboard");
+        let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+        let row = text_rect(&texts, "Layer 2").center();
+        app_click(&ctx, &mut app, row, boxed_layers);
+        app_key(&ctx, &mut app, key, boxed_layers);
+        let d = &app.session.active().unwrap().doc;
+        assert_eq!((d.layers.len(), d.artboards.len()), (1, 2), "{key:?}: Layer 2 is deleted, both artboards stay");
+    }
+}
+
 /// "Opacity:" is a link to the Transparency panel ("Click to edit"), whatever modifiers are held: on
 /// a stroke's Opacity row it makes that stroke the active row first; on the object's own Opacity row
 /// no fill/stroke is active.
