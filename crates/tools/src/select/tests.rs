@@ -1301,6 +1301,57 @@ fn handle_drag_scales() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
 }
 
+#[test]
+fn backquote_move_uses_release_state_and_one_commit() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    assert!(matches!(drag.as_slice(), [Action::Begin(_), Action::Preview(_, v)] if v["objects"] == false && v["patterns"] == true));
+    let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 170.0, 150.0) });
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v["objects"] == false && v["patterns"] == true));
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    let up = t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0));
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()));
+}
+
+#[test]
+fn backquote_box_scale_and_rotate_use_pattern_matrix_at_release() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+    for (from, to) in [((200.0, 200.0), (300.0, 300.0)), ((210.0, 210.0), (150.0, 230.0))] {
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        assert!(
+            matches!(drag.as_slice(), [Action::Preview(c, v)] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{drag:?}"
+        );
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, to.0, to.1) });
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(c, v), Action::Commit] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{up:?}"
+        );
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        let up = t.pointer(&cx, &ev(PointerKind::Up, to.0, to.1));
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()),
+            "{up:?}"
+        );
+    }
+}
+
 /// Escape during a bounding-box scale or rotation cancels it, and the release after it commits
 /// nothing.
 #[test]

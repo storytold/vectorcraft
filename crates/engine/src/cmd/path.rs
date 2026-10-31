@@ -99,6 +99,15 @@ pub fn specs() -> Vec<CommandSpec> {
             average
         ),
         cmd!(
+            "path.averageJoin",
+            "Average & Join…",
+            ["Object", "Path"],
+            Some("Cmd+Alt+Shift+J"),
+            "{to: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours), ids?: [path, ...] (default: the selection; a compound path ID expands to its open member paths)} move two open path ends to their midpoint and join them there, as one undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in ids or the selection (or both ends of one open path, closing it) → the joined path stays selected",
+            has_selection,
+            average_join
+        ),
+        cmd!(
             "path.convertAnchors",
             "Convert Anchor Points",
             [],
@@ -332,7 +341,7 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The compound path enclosing `id`, or `id` itself if it is not inside a compound path.
-fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
+pub(super) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
     d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).unwrap_or(id)
 }
 
@@ -538,7 +547,7 @@ fn join_subpaths_in_node(d: &mut Document, id: NodeId, (sa, sb): (usize, usize),
 }
 
 /// Join open paths into a single path, or close an open path, preserving compound path structure.
-fn join(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn join(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.join";
     let join_kind = match p.get("to").and_then(Value::as_str) {
         None => None,
@@ -802,29 +811,11 @@ fn join(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         };
-        if ida == idb {
-            if sa == sb {
-                s.edit("Join", |d, sel| {
-                    close_subpath_in_node(d, ida, sa, join_kind)?;
-                    sel.set([compound_or_self(d, ida)]);
-                    Ok(())
-                })?;
-            } else {
-                s.edit("Join", |d, sel| {
-                    join_subpaths_in_node(d, ida, (sa, sb), (rx, ry), join_kind)?;
-                    sel.set([compound_or_self(d, ida)]);
-                    Ok(())
-                })?;
-            }
-            return ok();
-        } else {
-            s.edit("Join", |d, sel| {
-                join_two(d, ida, idb, (sa, sb), (rx, ry), join_kind)?;
-                sel.set([compound_or_self(d, ida)]);
-                Ok(())
-            })?;
-            return ok();
-        }
+        s.edit("Join", |d, sel| {
+            sel.set([join_pair(d, (ida, sa), (idb, sb), (rx, ry), join_kind)?]);
+            Ok(())
+        })?;
+        return ok();
     }
 
     let ids = selected_paths(s)?;
@@ -865,21 +856,11 @@ fn join(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some((rx, ry)) = ends
         && open_subs.len() == 2
     {
-        let (a, sa) = open_subs[0];
-        let (b, sb) = open_subs[1];
-        if a == b {
-            s.edit("Join", |d, sel| {
-                join_subpaths_in_node(d, a, (sa, sb), (rx, ry), join_kind)?;
-                sel.set([compound_or_self(d, a)]);
-                Ok(())
-            })?;
-        } else {
-            s.edit("Join", |d, sel| {
-                join_two(d, a, b, (sa, sb), (rx, ry), join_kind)?;
-                sel.set([compound_or_self(d, a)]);
-                Ok(())
-            })?;
-        }
+        let (a, b) = (open_subs[0], open_subs[1]);
+        s.edit("Join", |d, sel| {
+            sel.set([join_pair(d, a, b, (rx, ry), join_kind)?]);
+            Ok(())
+        })?;
         return ok();
     }
 
@@ -992,6 +973,17 @@ fn join_two(d: &mut Document, a: NodeId, b: NodeId, (sa, sb): (usize, usize), (r
     Ok(())
 }
 
+/// Join subpath `sa` of path `a` and subpath `sb` of path `b` oriented as [`join_two`] takes them
+/// (one subpath: close it). Returns what to select: the joined path, or its compound path.
+fn join_pair(d: &mut Document, (a, sa): (NodeId, usize), (b, sb): (NodeId, usize), r: (bool, bool), join_kind: Option<bool>) -> Result<NodeId> {
+    if a == b {
+        join_subpaths_in_node(d, a, (sa, sb), r, join_kind)?;
+    } else {
+        join_two(d, a, b, (sa, sb), r, join_kind)?;
+    }
+    Ok(compound_or_self(d, a))
+}
+
 pub(super) type AnchorTargets = Vec<(NodeId, Vec<(usize, usize)>)>;
 
 pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
@@ -1037,6 +1029,90 @@ fn average(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// An open path end: (path, subpath, anchor).
+type End = (NodeId, usize, usize);
+
+/// Average & Join: the two ends Average moves to their midpoint, joined there as Join joins them.
+fn average_join(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "path.averageJoin";
+    let smooth = match str_param(p, "to") {
+        Some("smooth") => true,
+        Some("corner") => false,
+        _ => return Err(bad(C, "`to` must be \"corner\" or \"smooth\"")),
+    };
+    let ends = average_join_ends(s, p, C)?;
+    let [a, b] = ends.ok_or_else(|| bad(C, "select two open path ends, or two open paths, to average and join"))?;
+    let doc = &s.doc()?.doc;
+    let point = |(id, si, ai): End| doc.node(id)?.path_data()?.subpaths.get(si)?.anchors.get(ai).map(|a| a.p);
+    let (Some(pa), Some(pb)) = (point(a), point(b)) else { return Err(bad(C, "join needs open paths")) };
+    let mid = pa.midpoint(pb);
+    // The first end must come last in its subpath, the second first (as `ends` takes them in Join).
+    let r = (a.2 == 0, b.2 != 0);
+    s.edit("Average & Join", |d, sel| {
+        for (id, si, ai) in [a, b] {
+            if let Some(anchor) = path_mut(d, id)?.anchor_mut(si, ai) {
+                anchor.translate(mid - anchor.p);
+            }
+        }
+        sel.set([join_pair(d, (a.0, a.1), (b.0, b.1), r, Some(smooth))?]);
+        Ok(())
+    })?;
+    ok()
+}
+
+/// The two ends Average & Join brings together: the two direct-selected anchors when they are
+/// open path ends; else, of the paths in `ids` or the selected ones, the nearest ends of their two
+/// open subpaths, or both ends of their one. `None` when there are no such two ends, or when they
+/// are the two ends of a line, which the midpoint would collapse.
+fn average_join_ends(s: &Session, p: &Value, c: &str) -> Result<Option<[End; 2]>> {
+    let st = s.doc()?;
+    let doc = &st.doc;
+    let subpath = |id: NodeId, si: usize| doc.node(id)?.path_data()?.subpaths.get(si).filter(|sp| !sp.closed && !sp.anchors.is_empty());
+    let last = |sp: &SubPath| sp.anchors.len().saturating_sub(1);
+    let ids = ids_param(p, "ids");
+    let ends = if ids.is_none() && !st.selection.anchors.is_empty() {
+        let picked: Vec<End> = st.selection.anchors.iter().flat_map(|(&id, set)| set.iter().map(move |&(si, ai)| (id, si, ai))).collect();
+        match picked.as_slice() {
+            &[a, b] if [a, b].iter().all(|&(id, si, ai)| subpath(id, si).is_some_and(|sp| ai == 0 || ai == last(sp))) => [a, b],
+            _ => return Ok(None),
+        }
+    } else {
+        let paths = match ids {
+            None => selected_paths(s)?,
+            Some(ids) => {
+                let mut out = vec![];
+                for id in ids {
+                    match doc.node(id).map(|n| (n, &n.kind)) {
+                        Some((_, NodeKind::Path { .. })) => out.push(id),
+                        Some((n, NodeKind::Compound { .. })) => out.extend(open_members(n)),
+                        _ => return Err(bad(c, format!("{} isn't a path", id.0))),
+                    }
+                }
+                out
+            }
+        };
+        let open: Vec<(NodeId, usize, &SubPath)> = paths
+            .iter()
+            .filter_map(|&id| Some((id, doc.node(id)?.path_data()?)))
+            .flat_map(|(id, pd)| {
+                pd.subpaths.iter().enumerate().filter(|(_, sp)| !sp.closed && !sp.anchors.is_empty()).map(move |(si, sp)| (id, si, sp))
+            })
+            .collect();
+        match *open.as_slice() {
+            [(id, si, sp)] => [(id, si, 0), (id, si, last(sp))],
+            [(ia, sa, x), (ib, sb, y)] => {
+                let Some((rx, ry)) = nearest_ends(x, y) else { return Ok(None) };
+                [(ia, sa, if rx { 0 } else { last(x) }), (ib, sb, if ry { last(y) } else { 0 })]
+            }
+            _ => return Ok(None),
+        }
+    };
+    // A subpath's two ends: it needs an anchor between them to close around.
+    let [a, b] = ends;
+    let line = (a.0, a.1) == (b.0, b.1) && subpath(a.0, a.1).is_none_or(|sp| sp.anchors.len() <= 2);
+    Ok((!line).then_some(ends))
 }
 
 fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {

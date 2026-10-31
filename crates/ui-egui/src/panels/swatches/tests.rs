@@ -133,6 +133,21 @@ fn modifier_clicks_select_several_swatches_and_groups() {
     assert_eq!(selected(&ctx), ["Grays"], "a plain click on a group selects it alone");
 }
 
+#[test]
+fn switching_documents_clears_the_swatch_range_anchor() {
+    let mut app = app();
+    let ctx = context();
+    click_tile(&mut app, &ctx, "White", Modifiers::NONE, 0.0);
+    assert_eq!(selected(&ctx), ["White"]);
+
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    frame(&mut app, &ctx, vec![], 1.0, show);
+    assert!(selected(&ctx).is_empty());
+
+    click_tile(&mut app, &ctx, "Black", Modifiers::SHIFT, 2.0);
+    assert_eq!(selected(&ctx), ["Black"]);
+}
+
 /// A color swatch or a recent color clicked in the panel becomes the Color Guide's base color
 /// (#3137); a modifier click only selects.
 #[test]

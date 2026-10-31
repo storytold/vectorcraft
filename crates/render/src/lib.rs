@@ -6,6 +6,7 @@
 //! gradients, images and text (via `vectorcraft-text` glyph outlines).
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod brush_fx;
 mod changed;
 mod dither;
@@ -40,7 +41,7 @@ use lru::FrameCache;
 pub use brush_fx::instance_art;
 pub use changed::{Changed, changed, placed_area, view_pixels};
 pub use effects::stroke::width_outline;
-pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, newly_undecodable, set_image_cache_budget};
+pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, installed_memory, newly_undecodable, set_image_cache_budget};
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
@@ -146,6 +147,8 @@ pub struct Renderer {
     /// The picture [`Self::flatten`] started the current context again from, with 8-bit
     /// compositing: [`Self::finish`] renders the context over it.
     picture: Option<Arc<Pixmap>>,
+    /// Whether an image failed to draw while opacity-mask art is being drawn.
+    image_left_out: Option<bool>,
     /// Pixels of the groups being drawn offscreen (contexts and backdrop copies), and the most
     /// they may hold (set from the frame when the first opens, see [`Self::group`]); both reset
     /// at the start of every frame.

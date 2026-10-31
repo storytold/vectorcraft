@@ -192,6 +192,33 @@ fn text_and_its_strokes_come_from_the_page_into_the_layer_of_its_text_object() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// A point type object in the legacy format (`To` … `TO`), as an EPS saved for Illustrator 10
+/// keeps its type in the editing data: no `/AI11Text` for the page's type to go in.
+fn legacy_text(x: u32, y: u32, text: &str) -> String {
+    format!("0 To\n1 0 0 1 {x} {y} 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n({text}) Tx\nTO")
+}
+
+#[test]
+fn type_in_the_legacy_format_is_the_layers_own_and_the_page_has_text() {
+    let page = format!("{}\n0 0 0 1 setcmykcolor /Helvetica findfont 12 scalefont setfont 10 50 moveto (Hi) show", page_square(10, 10));
+    let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &legacy_text(10, 50, "Hi"))));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    assert_eq!(texts[0].plain_text(), "Hi");
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("weren't read")), "{:?}", r.warnings);
+    // Type the editing data keeps as outlines (here a stand-in, a small square where the page has
+    // more type) comes in as they are, and the import says so.
+    let page = format!("{page}\n/Helvetica findfont 4 scalefont setfont 60 20 moveto (o) show");
+    let outlines = format!("{}\n0 0 0 1 k\n60.5 20 m\n62.5 20 L\n62.5 22 L\n60.5 22 L\nf", legacy_text(10, 50, "Hi"));
+    let art = native(&(layer("Art", true, &square(10, 10)) + &layer("Words", true, &outlines)));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    assert_eq!(kinds(&r.document.layers[1]), ["text", "path"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("1 text objects of the page are outlines on the layers")), "{:?}", r.warnings);
+}
+
 #[test]
 fn a_damaged_editing_copy_leaves_the_page() {
     // Not ASCII85, ASCII85 of something that isn't Zstandard, Zstandard of something that isn't art.
@@ -264,6 +291,57 @@ fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_p
     let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(1, 1))));
     let (_, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
     assert!(read, "{warnings:?}");
+}
+
+/// A `.ai` whose layers hold a placed PDF and no text object: its PDF part draws the placed file,
+/// type and all, where the layers show the file's preview. That type is the placed file's and needs
+/// no text object, so the file comes in from its layers, the placed file where its matrix takes the
+/// canvas point of art space's origin or at the corner of its box (see
+/// `a_placed_file_at_its_boxs_corner_matches_the_page`). Type outside the placed file still needs
+/// one, and without it the file comes in as its PDF part.
+#[test]
+fn type_of_the_page_inside_a_placed_file_needs_no_text_object() {
+    // A file placed on (30, 30)–(70, 70) whose preview is 2 × 2 pixels of half-transparent black,
+    // as in `a_placed_file_at_its_boxs_corner_matches_the_page`; with the template box, the canvas
+    // point of art space's origin puts it off the page, and the box's corner on it.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(/files/pages.pdf)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let at_origin = native(&layer("Pages", true, &place));
+    let at_corner = at_origin.replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    // The PDF part: the placed file's page in 50% grey, and type at (`x`, 55).
+    let pdf = |x: f64| {
+        let mut d = Document::new(100.0, 100.0);
+        let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+        let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+        let page = Node::path(
+            d.alloc_id(),
+            rect,
+            vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() },
+        );
+        let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 55.0), "Hi", style);
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(text)));
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, page).unwrap();
+        d.insert(Some(layer), 1, text).unwrap();
+        d
+    };
+    for data in [&at_origin, &at_corner] {
+        let (d, warnings, read) = crate::layered_ai(&private(data), pdf(38.0), vec![], false, false, 1.0);
+        assert!(read, "{warnings:?}");
+        assert_eq!(names(&d), ["Pages"]);
+        let mut links = vec![];
+        d.visit_images(|_, im| links.extend(im.link.as_ref().map(|l| l.path.clone())));
+        assert_eq!(links, ["/files/pages.pdf"], "{warnings:?}");
+        assert!(warnings.iter().all(|w| !w.contains("no text object")), "the type is the placed file's, not left out: {warnings:?}");
+        // Type beside the placed file is a text object's, which the layers don't have.
+        let (_, warnings, read) = crate::layered_ai(&private(data), pdf(5.0), vec![], false, false, 1.0);
+        assert!(!read, "{warnings:?}");
+        assert!(warnings.iter().any(|w| w.contains("its layers have no text objects")), "{warnings:?}");
+    }
 }
 
 /// A palette of `[None]` and White, and a color group `Inks` holding a spot color, Red ink.
@@ -374,6 +452,84 @@ fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
     assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
 }
 
+/// A PDF part read from a `UserUnit` page cropped to the art: the art's box, not the artboard, is
+/// the page in the editing data's units, so the layers are read at the page's size, with their
+/// artboard.
+#[test]
+fn a_user_unit_page_cropped_to_the_art_is_read_in_its_units() {
+    // A 50 × 50 artboard, art over 100 × 100 (its bounding box), and a page of that box at 10 pt a
+    // unit: 1000 × 1000 pt.
+    let art = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards[0].rect.size(), vectorcraft_geom::Size::new(500.0, 500.0));
+    // The square, 36 down the artboard, ten times as large and as far.
+    let b = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    assert!([b.x0 - 100.0, b.y0 - 360.0, b.x1 - 140.0, b.y1 - 400.0].iter().all(|v| v.abs() < 1e-6), "{b:?}");
+}
+
+/// A PDF part whose pages are each cropped to all of the art holds the art once a page: the type
+/// of the pages after the first is that type again, and only the first page's goes into the
+/// layers.
+#[test]
+fn type_on_the_copies_of_a_page_cropped_to_the_art_is_read_once() {
+    // A 50 × 50 artboard, art over 100 × 100, a text object with no story in the file, and two
+    // pages of the art's box in a row, 20 apart, each with the square and the type.
+    let art = native(&layer("Art", true, &(square(10, 10) + &text_object(0)))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let mut pdf = pdf_part(10.0, 86.0);
+    let mut second = pdf.artboards[0].clone();
+    (second.id, second.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(second);
+    let copy = pdf_part(130.0, 86.0).layers[0].children().unwrap()[0].as_ref().clone();
+    let layer_id = pdf.layers[0].id;
+    let id = pdf.alloc_id();
+    pdf.insert(Some(layer_id), 1, Node { id, ..copy }).unwrap();
+    for x in [30.0, 150.0] {
+        let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 40.0), "Hi", style);
+        let id = pdf.alloc_id();
+        pdf.insert(Some(layer_id), 2, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    }
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let texts = text_of(&d.layers[0]);
+    // The first page's type, where the art has it: 50 above the artboard's top.
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 30.0).abs() < 1e-6 && (f + 10.0).abs() < 1e-6, "{:?}", texts[0].xf);
+}
+
+/// A PDF saved with only the second of its two artboards has a page for that one, while its
+/// editing data keeps both: the layers are compared with the page on that artboard, and the page's
+/// type goes there.
+#[test]
+fn a_pdf_of_its_second_artboard_is_compared_on_that_artboard() {
+    // Two 100-point artboards side by side, 50 apart (art space, y up), a square on each, and a
+    // text object with no story in the file.
+    let board = |x0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    let boards = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n", board(0), board(150));
+    let art = native(&(boards + &layer("Art", true, &(square(10, 10) + "\n" + &square(180, 50) + "\n" + &text_object(0)))));
+    // The page: the second artboard, its square 30 from the left and 46 down, and the type.
+    let mut pdf = pdf_part(30.0, 46.0);
+    let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(40.0, 20.0), "Hi", style);
+    let (layer_id, id) = (pdf.layers[0].id, pdf.alloc_id());
+    pdf.insert(Some(layer_id), 1, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards.len(), 2, "both artboards are kept");
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 190.0).abs() < 1e-6 && (f - 20.0).abs() < 1e-6, "on the second artboard: {:?}", texts[0].xf);
+}
+
 #[test]
 fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let pdf = pdf_part(10.0, 86.0);
@@ -381,11 +537,18 @@ fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let (d, w, read) = crate::layered_ai(b"nothing", pdf.clone(), vec![], false, false, 1.0);
     assert_eq!(d.layers.len(), pdf.layers.len());
     assert!(w.is_empty() && !read);
-    // Editing data that isn't for this page.
-    let other = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    // Editing data that isn't for this page: neither its artboard nor its art's box is the page.
+    let other = native(&layer("Jig", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 50 50");
     let (d, w, _) = crate::layered_ai(&private(&other), pdf.clone(), vec![], false, false, 1.0);
     assert_eq!(names(&d), names(&pdf));
     assert!(w.iter().any(|w| w.contains("for a 50 × 50 pt page, the file's 100 × 100 pt page at 1:2")), "{w:?}");
+    // A page cropped to the art's box, not the artboard, is that art's page: the layers are read,
+    // with their artboard.
+    let cropped = native(&layer("Jig", true, &square(10, 10))).replace("%AI3_Cropmarks: 0 0 100 100", "%AI3_Cropmarks: 0 0 50 50");
+    let (d, w, read) = crate::layered_ai(&private(&cropped), pdf.clone(), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Jig"]);
+    assert_eq!(d.artboards[0].rect.size(), vectorcraft_geom::Size::new(50.0, 50.0));
 }
 
 /// #2034: editing data for a page of another size gives both sizes in points, in an EPS's note and
@@ -676,6 +839,30 @@ fn type_on_a_hidden_layer_comes_from_the_text_document() {
     let [.., e, f] = b.xf.as_coeffs();
     assert!((e - 50.0).abs() < 1e-6 && (f - 50.0).abs() < 1e-6, "{:?}", b.xf);
     assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
+}
+
+#[test]
+fn type_from_the_text_document_keeps_its_case_setting() {
+    // Key 12 of a character style is its case: 1 Small Caps, 2 All Caps. The characters stay as
+    // typed; the setting shows them as capitals.
+    let doc = text_document(&[
+        ("hon. guest\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0),
+        ("Book Now\r", 0, (8200.0, 8170.0), (0.0, 0.0), 0.0),
+        ("plain\r", 0, (8200.0, 8160.0), (0.0, 0.0), 0.0),
+    ])
+    .replacen("/1 14.0 /53", "/1 14.0 /12 2 /53", 1)
+    .replacen("/1 14.0 /53", "/1 14.0 /12 1 /53", 1);
+    let spare = text_object(0) + &text_object(1) + &text_object(2);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &spare)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 3, "{:?}", r.warnings);
+    let case = |i: usize| texts[i].runs.iter().map(|r| (r.style.all_caps, r.style.small_caps)).collect::<Vec<_>>();
+    assert_eq!(texts[0].plain_text(), "hon. guest");
+    assert_eq!(case(0), [(true, None)]);
+    assert_eq!(texts[1].plain_text(), "Book Now");
+    assert_eq!(case(1), [(false, Some(r.document.setup.small_caps_size))]);
+    assert_eq!(case(2), [(false, None)]);
 }
 
 #[test]
@@ -1360,6 +1547,84 @@ fn area_type_and_type_on_a_path_come_from_the_text_document() {
     assert!(!r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
 }
 
+/// A story of `text` on frame 0 whose layout sets glyphs `advance` wide round the outside of a
+/// circle of radius `radius`, the circle's length between their centres `fraction` of an advance.
+fn round_story(text: &str, advance: f64, radius: f64, fraction: f64) -> String {
+    let n = text.chars().count();
+    let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![]);
+    for i in 0..=n {
+        // From the circle's left, clockwise on the canvas (y down), feet towards its centre.
+        let angle = std::f64::consts::PI + i as f64 * advance * fraction / radius;
+        let along = (-angle.sin(), angle.cos());
+        xs.push(radius * angle.cos() - along.0 * advance * 0.5);
+        ys.push(radius * angle.sin() - along.1 * advance * 0.5);
+        matrices.push(format!("{} {} {} {} 0 0", along.0, along.1, -along.1, along.0));
+        ends.push(i as f64 * advance);
+    }
+    let nums = |v: &[f64]| v.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(" ");
+    format!(
+        "<< /0 << /0 ({text}) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 {n} >> ] >> \
+         /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /1 12.0 >> >> >> /1 {n} >> ] >> >> /1 << /0 [ << /0 0 >> ] \
+         /2 [ << /99 /PC /6 [ << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >> ] >> ] >> >>",
+        nums(&xs),
+        nums(&ys),
+        matrices.join(" "),
+        nums(&ends)
+    )
+}
+
+/// The file closes type up round the outside of a curve (its layout puts the glyphs' centres
+/// closer than their advances), though the frame has no spacing of its own: the type comes in
+/// spaced as the layout is, not at its advances, so it doesn't run on past where the page ends it.
+#[test]
+fn type_round_a_circle_is_spaced_as_the_file_lays_it_out() {
+    // A circle of radius 40 round the middle of the page, in four cubics from its right, clockwise
+    // on the page; the type from its left, over the top, round almost all of it.
+    let k = 40.0 * 0.552_284_75;
+    let points = [
+        (90.0, 50.0),
+        (90.0, 50.0 - k),
+        (50.0 + k, 10.0),
+        (50.0, 10.0),
+        (50.0 - k, 10.0),
+        (10.0, 50.0 - k),
+        (10.0, 50.0),
+        (10.0, 50.0 + k),
+        (50.0 - k, 90.0),
+        (50.0, 90.0),
+        (50.0 + k, 90.0),
+        (90.0, 50.0 + k),
+        (90.0, 50.0),
+    ];
+    let all: Vec<(f64, f64)> = points.iter().map(|(x, y)| canvas(*x, *y)).collect();
+    let segment = |i: usize| (0..4).map(|j| format!("{} {}", all[i * 3 + j].0, all[i * 3 + j].1)).collect::<Vec<_>>().join(" ");
+    let frame =
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 2 /6 [ 2.0 5.99 ] >> >> >>", (0..4).map(segment).collect::<Vec<_>>().join(" "));
+    // Glyphs 5 apart, their centres 5 × 40/48 apart round the circle: spaced 8 above the path.
+    let doc = document_of(&[frame], &[round_story("abcdefgh", 5.0, 40.0, 40.0 / 48.0)]);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }), "{:?}", t.kind);
+    assert!((t.path_spacing - 8.0).abs() < 0.05, "{}", t.path_spacing);
+    // Laid out, the glyphs' centres are 40/48 of their advances apart round the circle.
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let centres: Vec<(f64, f64)> = layout
+        .glyphs
+        .iter()
+        .map(|g| (g.origin.x + g.angle.cos() * g.advance * 0.5 - 50.0, g.origin.y + g.angle.sin() * g.advance * 0.5 - 50.0, g.advance))
+        .map(|(x, y, a)| (y.atan2(x), a))
+        .collect();
+    assert_eq!(centres.len(), 8);
+    for w in centres.windows(2) {
+        let turn = (w[1].0 - w[0].0 + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+        let ratio = turn.abs() * 40.0 / ((w[0].1 + w[1].1) * 0.5);
+        assert!((ratio - 40.0 / 48.0).abs() < 0.01, "{ratio}");
+    }
+}
+
 #[test]
 fn threaded_area_type_flows_through_its_frames() {
     let frames = [
@@ -1562,4 +1827,114 @@ fn point_type_without_a_matrix_is_placed_by_its_layout() {
         (texts[0].plain_text(), texts[0].xf)
     };
     assert_eq!(place(&without), place(&with));
+}
+
+/// A placed file is put where its matrix takes the canvas point of art space's origin (the
+/// centre of `%AI3_TemplateBox` on the canvas); many files put it at the corner of the box it is
+/// written with instead. When the layers don't draw as the page with the first, the second is
+/// tried.
+#[test]
+fn a_placed_file_at_its_boxs_corner_matches_the_page() {
+    // A 2 × 2 preview of half-transparent black (premultiplied ARGB), of a file whose box is
+    // 8000 8000 8040 8040 on the canvas: 40 × 40 units, which the matrix takes to (30, 70)–(70,
+    // 30) in art space, a square at (30, 30)–(70, 70) on the 100 × 100 page. The template box's
+    // canvas point (8091.5, 8241.5) would put it off the page.
+    let pixel = "\x7f\0\0\0";
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(photo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        pixel.repeat(4)
+    );
+    let data = native(&layer("Jig", true, &place)).replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    // The page: the square in 50% grey, as the PDF part draws the image.
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Jig"]);
+    let image = &d.layers[0].children().unwrap()[0];
+    assert!(matches!(image.kind, NodeKind::Image(_)), "{:?}", image.kind);
+    let b = image.geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+}
+
+#[test]
+fn a_small_placed_file_goes_where_it_draws_closer_to_the_page() {
+    // A 2 × 2 placed file (a small logo on a large page) whose box corner the matrix takes to
+    // (30, 30)–(32, 32), as the page draws it. The template box's canvas point puts it at
+    // (10, 10)–(12, 12): on the page too, and small enough that the layers pass the comparison
+    // there all the same.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8002 8002 4 4 0\n(logo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let data = native(&layer("Jig", true, &place)).replace("%AI5_NumLayers", "%AI3_TemplateBox: 211.5 -211.5 211.5 -211.5\n%AI5_NumLayers");
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 32.0, 32.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let b = d.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 32.0, b.y1 - 32.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+}
+
+#[test]
+fn text_a_placed_file_covers_only_at_its_first_placement_is_kept() {
+    const OPAQUE: &str = "<opaque>";
+    // An opaque black 2 × 2 preview of a file whose box corner the matrix takes to (30, 30)–(70,
+    // 70), as the page draws it. The template box's canvas point puts it 10 to the left instead,
+    // over the 8 pt text object "Hi" at (21, 48): there the text can't be seen, and the page has
+    // no type for it (it draws it as outlines), so the text looks like type the app doesn't draw.
+    // The layers then differ from the page by little more than `compare` allows, so that is
+    // weighed. With the file at its box's corner the text shows, as the page has it.
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0\n(photo.png)`\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n",
+        OPAQUE.repeat(4)
+    );
+    // Canvas centre 8191.5 is the template box's centre (201.5, -191.5): the anchor (8011, 7952) is
+    // (21, 48) in art space.
+    let document = text_document(&[("Hi\r", 0, (8011.0, 7952.0), (0.0, 0.0), 0.0)]).replace("/1 14.0", "/1 8.0");
+    let data = native_with_text(&layer("Art", true, &(text_object(0) + &place)), &document)
+        .replace("%AI3_TemplateBox: 50 50 50 50", "%AI3_TemplateBox: 201.5 -191.5 201.5 -191.5");
+    // The page (y down): the image's black square, and the type's outlines, a magenta box where
+    // its glyphs are.
+    let mut page = Document::new(100.0, 100.0);
+    let l = page.layers[0].id;
+    for (rect, color) in [
+        (vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0), vectorcraft_color::Color::BLACK),
+        (vectorcraft_geom::Rect::new(21.5, 46.5, 28.0, 52.0), vectorcraft_color::Color::Cmyk { c: 0.0, m: 1.0, y: 0.0, k: 0.0 }),
+    ] {
+        let id = page.alloc_id();
+        let fill = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(color));
+        let n = Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(rect),
+            vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(fill)], ..Default::default() },
+        );
+        page.insert(Some(l), 0, n).unwrap();
+    }
+    // The preview's pixels are opaque black (ARGB `ff 00 00 00`), bytes a `str` can't hold.
+    let bytes =
+        data.replace(OPAQUE, "\u{1}").into_bytes().into_iter().flat_map(|b| if b == 1 { vec![0xff, 0, 0, 0] } else { vec![b] }).collect::<Vec<u8>>();
+    let private =
+        [b"%AI24_ZStandard_Data".as_slice(), &ruzstd::encoding::compress_to_vec(&bytes[..], ruzstd::encoding::CompressionLevel::Fastest)].concat();
+    let (d, w, read) = crate::layered_ai(&private, page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let art = d.layers[0].children().unwrap();
+    let image = art.iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("the image");
+    let b = image.geometric_bounds().unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+    assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
 }

@@ -1207,3 +1207,17 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
     let small = Node::new(NodeId(0), NodeKind::Repeat(RepeatSpec::mirror(vec![instance("Small")], 90.0, 5.0)));
     assert_eq!(expand_live(Some(&d), &small).len(), 2);
 }
+
+#[test]
+fn a_distance_parameters_range_comes_from_its_documentation() {
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    // The effect applies the range's floor to a radius below it.
+    assert_eq!(
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
+    );
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(length_range("no.such", "maxRadius"), None);
+}

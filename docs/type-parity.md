@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Character panel menu › Show Snap to Glyph Options shows the Snap to Glyph section (Baseline, x-height, Glyph Bounds, Proximity Guides, Angular Guides, Anchor Point; `view.snapToGlyph.options`) (#4232); scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Highlight Alternate Glyphs leaves the required lam-alef ligature unhighlighted also in older Arabic fonts (such as legacy Arial) that put it in `liga` rather than `rlig` (#394); scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -28,7 +28,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Character and Paragraph panels, styles with overrides | done | Character-style Auto-leading resets, partial definitions, local leading overrides, override markers, Undo/Redo and native serialization have regression coverage; differing paragraph alignments leave the shared alignment buttons unselected (headless regressions, full integration CI and visual review pass); mixed-value display for other paragraph fields remains missing |
 | Character size and horizontal scale after object/group scaling | done | #1034: fields and setters compensate the stored affine; point size follows the transformed em-height axis, not the glyph ink bounds. Range edits, keyboard increments, leading and baseline shift use document points; rotation, reflection and shear remain editable. |
 | Preserve font sizes while scaling a group | missing | Separate enhancement; scaling still scales text with the other artwork. |
-| OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference (#394, off by default) paints pink behind OpenType substitutions on screen when on; stylistic sets ss01–ss20, stylistic and titling alternates, proportional and lining figures, superscript and subscript are character-style features (`text.setStyle {features}`, #1607) |
+| OpenType panel, Glyphs panel, alternates | done | Highlight Alternate Glyphs preference (#394, off by default) paints pink behind OpenType substitutions on screen when on (required shaping such as Arabic joining forms and the lam-alef ligature, including a lam-alef older fonts file under `liga`, is not highlighted); stylistic sets ss01–ss20, stylistic and titling alternates, proportional and lining figures, superscript and subscript are character-style features (`text.setStyle {features}`, #1607) |
 | Font menu: samples, live preview, filters, favourites, recent families; font matching by any name; Find Font | done | #3515: recently applied families appear first, once each; missing families are omitted and the existing Number of Recent Fonts setting applies; #339; script filter: Japanese, Latin, Thai; the font scan on Linux also reads the folders fontconfig's configuration lists, such as TeX fonts under `/usr/share/texmf/fonts` (#1548, fixes #1529; not verified on Linux) |
 | Missing glyphs set in an installed font made for their script (Thai, Lao, Khmer, Myanmar first; then any font that has them) | done | Thai: Leelawadee UI, Tahoma, Thonburi, Sukhumvit Set, Noto Sans Thai, TLWG |
 | Full font-name matching (OpenType name ID 4) | done | #1258: loaded/cataloged faces and Missing Fonts searches; localized names and variable default faces; Windows font-service QA pending |
@@ -71,6 +71,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | Highlight Alternate Glyphs leaves the required lam-alef ligature unhighlighted also in older Arabic fonts (such as legacy Arial) that put it in `liga` rather than `rlig` (#394); scores unchanged |
 | 2026-10-30 | minor | Character panel menu › Show Snap to Glyph Options shows the Snap to Glyph section (Baseline, x-height, Glyph Bounds, Proximity Guides, Angular Guides, Anchor Point; `view.snapToGlyph.options`) (#4232); scores unchanged |
 | 2026-10-29 | minor | Font fallback keeps a letter and its combining marks in one face; Vietnamese stacked diacritics (Ể, Ứ, Ự) attach in precomposed, decomposed and keyboard forms (#4491); scores and hours unchanged |
 | 2026-10-25 | minor | Threading ports: a double-click on a threaded port with the Selection tool breaks the thread there (`text.thread.break`); the story flows into the frames before the break; scores unchanged |

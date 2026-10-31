@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (G12: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; no entry closed, estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G13: gradient presets done; G1: Average & Join with a corner or smooth choice, Cmd+Alt+Shift+J, done; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -131,7 +131,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (#1251):** Eyedropper source reads are independent of locks and isolation, including Shift/Shift+Alt and gradient stops. Source and selection preservation, unchanged Alt reverse/selection restrictions, hidden art and Undo/Redo have regression coverage. This addresses the reported behavior, with no new full-parity measurement.
 - **Done (#1253):** adding paint to an unpainted zero-width stroke restores the existing 1 pt default, including new-art defaults and Swap Fill/Stroke. The real Eyedropper inheritance sequence, targeted appearance items, preserved widths and Undo/Redo have regression coverage.
 - **Done:** a busy cursor while a file opens off the UI thread or a labelled background save or export runs (`Cursor::Busy` in `crates/tools/src/cursors.toml`). Heavy synchronous effect previews remain open.
-- **Missing:** Average and Join in one step, with a corner or smooth choice for the joined anchor. `path.average` and `path.join` are separate commands and Join has no such choice (coinciding anchors merge into one since #1533). [ui-parity.md](ui-parity.md) listed "Join with corner/smooth choice" as done until 2026-10-13. About 1–2 h (estimated), inside the estimate below.
+- **Done:** Average and Join in one step, with a corner or smooth choice for the joined anchor: Object › Path › Average & Join… (`path.averageJoin {to: "corner"|"smooth"}`, Cmd+Alt+Shift+J, Ctrl+Alt+Shift+J on Windows) moves the two direct-selected open path ends, or the nearest ends of two selected open paths (both ends of one, closing it), to their midpoint and joins them there in one undo step. The public [Default keyboard shortcuts](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) page lists the shortcut as "Create corner or smooth join" ("Select the paths" on Windows, "Select the anchor point" on macOS). The dialog (Points: Corner / Smooth) opens on Corner and then on the choice confirmed last in the session: VectorCraft's reading, as the page doesn't say. Inside the estimate below.
 - **Implemented (#1760):** Effect › Warp has a shared style selector with original previews, orientation buttons and percent sliders. Existing effects retain their stack slot and target. Focused checks passed and original captures were reviewed; optional Properties integration and remembered defaults remain outside this change.
 - **Done (#2120):** Smart Guides line extension: dragging the end of a straight segment with Direct Selection or Curvature, the point snaps to the segment's own direction at any angle and the guide runs along it from the other end. Inside the estimate below.
 - **Done (#1692):** Tab in the Color Picker moves through one color model's fields before the next. Completed upstream before the layout change (#2008).
@@ -151,6 +151,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Estimate:** 60–90 h; splits well by tool across agents.
 
 ## G9 Illustrator `.ai` and EPS files from real users
+
+- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out; EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
 
 - **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
 
@@ -178,8 +180,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Unconfirmed (2026-10-14):** Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed). On Windows the custom title bar's window stays truly borderless, so the pointer lines up with what is drawn on systems where the hidden caption offset it (#1791, #1758; awaiting the reporter's confirmation).
 - **Done:** RPM required dependencies use 64-bit library capabilities and declare glibc 2.35, libm and libgcc_s (#1275); generated metadata and isolated synthetic-provider checks cover x86_64/aarch64. Real-distribution install/start-up QA is still missing.
-- **Done (2026-10-29):** the Linux Flatpak on GNOME no longer reconnects to the compositor and logs a warning every 250 ms when arboard has neither data-control nor X11 (267k warnings in 18 h filled the 16 MB log in 3 h): a clipboard that can't be opened is retried with a wait growing to a minute and logged once. Copy and Paste with other apps still don't work there.
-- **Missing:** the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
+- **Done (2026-10-29):** the Linux Flatpak on GNOME no longer reconnects to the compositor and logs a warning every 250 ms when arboard has neither data-control nor X11 (267k warnings in 18 h filled the 16 MB log in 3 h): a clipboard that can't be opened is retried with a wait growing to a minute and logged once. Copy and Paste of text with other apps work there through the core Wayland protocol.
+- **Missing:** pictures (`image/png`) and SVG as `image/svg+xml` on the clipboard of the Flatpak on GNOME, where only text travels (smithay-clipboard 0.7 carries text only); the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
   2026-10-10, #620, #818), slow pointer on a Linux AppImage (#575), macOS paste from other apps (#954), a
   web-free crash/hang reporter, a field record.
 - **Evidence:** open issues; the never-crash lints and `guard` stop panics, not driver, windowing or packaging
@@ -392,11 +394,17 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (2026-10-21, #394):** General › Constrain Angle turns the arrow keys' axes (guides stay on the page's), holds Shift drags of the Selection, Direct Selection, Free Transform, Slice Selection, Reshape and Measure tools and the Pen's handles to the turned axes, and new rectangles, rounded rectangles, ellipses, grids, point and area type, Shift-drawn polygons and stars and the shape size dialogs are drawn along it with their bounding box turned; 0° and whole turns are exactly as before, quarter turns exact (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>). Arcs, spirals, flares and the Pen's new paths are not turned yet. Estimate unchanged. **2026-10-24:** General › Corner Radius is the Rounded Rectangle tool's radius: the tool takes the preference when chosen and when it changes while the tool is active (or lent a selection tool for a drag), and the radius ↑/↓ set while drawing one, or a Tool Options value, becomes the preference, clamped to its 0–1296 pt range (<https://helpx.adobe.com/illustrator/using/drawing-simple-lines-shapes.html>). Estimate unchanged.
 - **Done (2026-10-17):** Background Export shows its progress in a dialog with Cancel and Continue in Background (#2564), on the shared cancel token (#2546); a cancelled export writes no file. Save As, Export for Screens and Export Selection don't show it yet. Estimate unchanged.
 - **Done:** quick Image Trace presets trace at once and leave the panel as it was; the Image Trace button (Control bar, Properties) opens the controls with Threshold and Advanced (Paths, Corners, Noise), as the public documentation describes (<https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html>). Other context-specific Properties gaps remain.
-
-- **Missing:** ~14 Preferences options stored but not acted on (#394: Open
-- **Done:** quick Image Trace presets reveal Threshold and Advanced controls (Paths, Corners, Noise); Properties can reopen them. Other context-specific Properties gaps remain.
-- **Missing:** ~15 Preferences options stored but not acted on (#394: Highlight Alternate Glyphs, Open
-  Documents As Tabs, Real-time Drawing, hyphenation language, devices…), Properties panel per
+- **Audited (2026-10-30, #394):** every Preferences dialog option but the five below is read by shipped code, by
+  its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
+  (tool previews wait for the commit), Show Tool Tips, Anti-aliased Artwork, Use Precise Cursors and Devices ›
+  Enable Touch Workspace and Touch Gestures included.
+- **Missing:** 5 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
+  User Interface › Open Documents As Tabs (off would open documents in floating windows; one window per
+  document is G7), Units › East Asian Type (nothing is measured in it yet, and the Q and Ha units aren't in the
+  unit lists), Hyphenation › Default Language (hyphenation is English-only, with no per-language dictionaries),
+  Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to disk), and
+  Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and Overprints choice
+  (Illustrator's own clipboard flavour, which has no public specification). Also Properties panel per
   context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG Interactivity.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
@@ -453,7 +461,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   segments for drawn lines. Controls are saved under Preferences › Smart Guides › Geometric Guides
   and available from Control bar › Snapping; both default to on. Existing-line endpoint editing and
   other tool cases remain unverified. [Public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/snap-to-perpendicular.html).
-- **Missing:** gradient presets (30.0); remaining tangent/perpendicular snapping cases and the consolidated
+- **Done (2026-10-30):** gradient presets (30.0): the Gradient panel's Presets menu applies one of the
+  built-in gradient libraries' presets (by theme) or a saved one to the gradient behind the active proxy, keeping
+  its placement, as one undo step; the panel menu saves the gradient as a preset (kept with the preferences) and
+  deletes saved ones; `gradient.presets.*` commands.
+- **Missing:** remaining tangent/perpendicular snapping cases and the consolidated
   snapping options (30.0); artboard colors in exports and print, and managing artboards from the canvas other
   than locking and unlocking them from the Artboard tool's right-click menu (30.0); the Blend panel with ease
   in/out and separate colour acceleration (30.7);
@@ -647,6 +659,10 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
+| 2026-10-30 | minor | G1: Object › Path › Average & Join… (`path.averageJoin`, Cmd+Alt+Shift+J) moves two open path ends to their midpoint and joins them there, the joined anchor a corner or a smooth point as its dialog's Points choice asks, in one undo step; the "Average and Join in one step" entry is done. Estimate unchanged |
+| 2026-10-30 | minor | G12: Preferences audit (#394): 5 options are stored but not acted on (Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard), each waiting on a subsystem; Highlight Alternate Glyphs, Real-time Drawing and the Devices options act. Estimate unchanged. |
+| 2026-10-29 | minor | G10: the Linux Flatpak on GNOME copies and pastes text through the core Wayland protocol; pictures and `image/svg+xml` there listed as missing. Estimate unchanged. |
 | 2026-10-29 | minor | G10: the Linux Flatpak on GNOME stops the clipboard retry storm (retried with a growing wait, logged once). Estimate unchanged. |
 | 2026-10-29 | minor | G12: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act. No entry closed, estimates unchanged. |
 | 2026-10-29 | minor | G8: a blend makes at most 100,000 steps in all, the steps of blends nested in its keys and steps included; past it each pair of keys keeps the same share of its steps (#3579). No entry closed, estimates unchanged. |

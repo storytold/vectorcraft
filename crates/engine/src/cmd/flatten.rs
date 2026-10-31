@@ -48,7 +48,7 @@ mod options;
 mod presets;
 mod report;
 
-pub(crate) use analysis::see_through_images;
+pub(crate) use analysis::{outlined_text, see_through_images};
 pub(crate) use apply::flatten_document;
 pub use commands::specs;
 pub use options::FlattenOptions;

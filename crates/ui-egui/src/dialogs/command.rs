@@ -49,6 +49,7 @@ fn order(command: &str) -> &'static [&'static str] {
     match command {
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
+        "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
         _ => &[],
     }
 }

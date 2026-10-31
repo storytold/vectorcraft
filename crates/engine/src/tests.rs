@@ -62,6 +62,7 @@ mod globaledit;
 mod glyphbounds;
 mod gradient;
 mod gradpanel;
+mod gradpresets;
 mod gradspan;
 mod halftone;
 mod history_mem;

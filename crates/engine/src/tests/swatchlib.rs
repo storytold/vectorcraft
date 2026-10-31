@@ -216,6 +216,22 @@ fn library_commands_refuse_params_of_the_wrong_form() {
 }
 
 #[test]
+fn library_loads_validate_name_before_reading_a_file_or_decoding_data() {
+    let mut s = session();
+    let missing = temp_dir("invalid-load-name").join("missing.vcswatches").to_string_lossy().to_string();
+    for cmd in ["swatch.library.load", "graphicStyle.loadLibrary", "symbol.loadLibrary", "brush.loadLibrary"] {
+        for name in [json!(5), json!([])] {
+            let p = json!({"path": missing, "name": name});
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            assert!(e.contains("`name` must be a string"), "{cmd} {p}: {e}");
+        }
+        let p = json!({"dataBase64": "not base64!", "name": 5});
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("`name` must be a string"), "{cmd} {p}: {e}");
+    }
+}
+
+#[test]
 fn libraries_saved_in_the_user_folder_are_user_defined() {
     let dir = temp_dir("user");
     let mut s = session();

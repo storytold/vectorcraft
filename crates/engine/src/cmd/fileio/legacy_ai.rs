@@ -161,9 +161,8 @@ fn expand_appearances(d: &mut Document) {
     }
 }
 
-/// Expand every layer's pattern fills that paint a transparent image into their tiles, so those
-/// images flatten like any other transparent image. The writer would otherwise draw them opaque
-/// over white.
+/// Expand every layer's pattern fills that paint an image with see-through pixels, a colorize paint,
+/// opacity or blending into their tiles, so those images can be flattened.
 fn expand_image_patterns(d: &mut Document) -> Result<()> {
     let keys = super::super::flatten::see_through_images(d);
     let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
@@ -174,8 +173,8 @@ fn expand_image_patterns(d: &mut Document) -> Result<()> {
 }
 
 /// The images of `d` a legacy `.ai` can't hold, in paint order with their places in it (as
-/// [`Document::walk`] counts). These are the images with see-through pixels, and the images
-/// that have opacity or a blending mode of their own or, with `flatten`, of a group they are in.
+/// [`Document::walk`] counts). These have see-through pixels or a colorize paint, or have opacity
+/// or a blending mode of their own or, with `flatten`, of a group they are in.
 /// With `flatten` only visible images are returned, because a hidden one (which the hidden objects
 /// option may write) is written over white. With `omit` all of them are returned.
 fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
@@ -184,7 +183,11 @@ fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
     let mut at = 0;
     d.walk(|n| {
         if let NodeKind::Image(im) = &n.kind
-            && (keys.contains(&im.key) || n.opacity < 1.0 || n.blend != BlendMode::Normal || (mode == SeeThrough::Flatten && transparent(d, n.id)))
+            && (keys.contains(&im.key)
+                || n.extras().colorize.is_some()
+                || n.opacity < 1.0
+                || n.blend != BlendMode::Normal
+                || (mode == SeeThrough::Flatten && transparent(d, n.id)))
         {
             out.push((at, n.id));
         }

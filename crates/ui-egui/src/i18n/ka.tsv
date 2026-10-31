@@ -1061,12 +1061,12 @@ lighting	Light	სინათლე
 	 to set spacing and orientation	 — ინტერვალისა და ორიენტაციის დასაყენებლად
 	Apply	გამოყენება
 	Change Screen Mode (F)	ეკრანის რეჟიმის შეცვლა (F)
-	Color (,)	ფერი (,)
+	Color (, or <)	ფერი (, ან <)
 	Draw Behind	უკან ხატვა
 	Draw Inside	შიგნით ხატვა
 	Draw Normal	ჩვეულებრივი ხატვა
 	Expand:	გაშლა:
-	Gradient (.)	გრადიენტი (.)
+	Gradient (. or >)	გრადიენტი (. ან >)
 	H:	სიმ.:
 	Modify	შეცვლა
 	Navigate	ნავიგაცია
@@ -2885,6 +2885,7 @@ theme	Appearance	იერსახე
 	Make Envelope	გარსის შექმნა
 	Move Envelope Mesh Point	გარსის ბადის წერტილის გადაადგილება
 	Move Mesh Point	ბადის წერტილის გადაადგილება
+	Move Mesh Points	ბადის წერტილების გადაადგილება
 	Move Spine Point	ხერხემლის წერტილის გადაადგილება
 	Reshape Spine Segment	ხერხემლის სეგმენტის ფორმის შეცვლა
 	Reset with Mesh	ბადით ჩამოყრა
@@ -3321,6 +3322,7 @@ axis	Both	ორივე
 	Set Text	ტექსტის დაყენება
 	Insert Character	სიმბოლოს ჩასმა
 	Replace	ჩანაცვლება
+	Replace:	ჩანაცვლება:
 	Type on a Path Options	ტრაექტორიაზე ტექსტის პარამეტრები
 	Highlight Variable	ცვლადის გამოკვეთა
 	New Variable	ახალი ცვლადი
@@ -3932,6 +3934,7 @@ font-technology	Variable	ცვლადი
 @msg	no document	დოკუმენტი არ არის
 @msg	no document open	გახსნილი დოკუმენტი არ არის
 @msg	no effect applied yet	ეფექტი ჯერ არ გამოყენებულა
+@msg	no Pathfinder operation applied yet	ტრაექტორიების ოპერაცია ჯერ არ გამოყენებულა
 @msg	no effect at index {k}	ინდექსზე {k} ეფექტი არ არის
 @msg	no end record	დასასრულის ჩანაწერი არ არის
 @msg	no file manager here	აქ ფაილების მენეჯერი არ არის
@@ -5183,6 +5186,7 @@ imageTrace	Outline	კონტური
 	Delete Light	სინათლის წაშლა
 	Delete Slice	ნაჭრის წაშლა
 	Delete Style	სტილის წაშლა
+	Delete Styles	სტილების წაშლა
 	Delete Variables	ცვლადების წაშლა
 	Delete View	ხედის წაშლა
 	Done Editing Pattern	პატერნის რედაქტირების დასრულება
@@ -5682,3 +5686,296 @@ swatch	Bright Violet	კაშკაშა იისფერი
 	Glyph Bounds	გლიფის საზღვრები
 	Proximity Guides	სიახლოვის დამხმარე ხაზები
 	Angular Guides	კუთხური დამხმარე ხაზები
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	საშუალო და შეერთება…
+	Average & Join	საშუალო და შეერთება
+anchor	Points:	წერტილები:
+@msg	select two open path ends, or two open paths, to average and join	მონიშნეთ ღია ტრაექტორიების ორი ბოლო ან ორი ღია ტრაექტორია საშუალოსა და შეერთებისთვის
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	გრაფიკის გასუფთავება
+	Simplify Anchors (Keep Shape)…	საყრდენი წერტილების გამარტივება (ფორმის შენარჩუნებით)…
+	Health Check	მდგომარეობის შემოწმება
+	Show Issue	პრობლემის ჩვენება
+	Fix All Issues	ყველა პრობლემის გამოსწორება
+	Fix Issues	პრობლემების გამოსწორება
+	Deep Ungroup…	დაჯგუფების მოხსნა ყველა დონეზე…
+	Rejoin Path Pieces…	ტრაექტორიის ნაწილების ხელახლა შეერთება…
+	Document Health Check	დოკუმენტის მდგომარეობის შემოწმება
+	Check Selection	მონიშნულის შემოწმება
+	Check Document	დოკუმენტის შემოწმება
+	No issues found.	პრობლემები ვერ მოიძებნა.
+	Changed since the last check.	შეიცვალა ბოლო შემოწმების შემდეგ.
+	Fix Selected	მონიშნულის გამოსწორება
+	Fix All	ყველას გამოსწორება
+	Issues fixed: {count}	გამოსწორებული პრობლემები: {count}
+	Open a document to check it for issues.	გახსენით დოკუმენტი, რომ პრობლემებზე შეამოწმოთ.
+	Empty Text	ცარიელი ტექსტი
+	Unpainted Objects	შეუღებავი ობიექტები
+	Zero-Opacity Objects	ნულოვანი გაუმჭვირვალობის ობიექტები
+	Duplicate Objects	დუბლირებული ობიექტები
+	Off-Artboard Art	სამუშაო დაფებს გარეთ მყოფი გრაფიკა
+	Duplicate Anchors	დუბლირებული საყრდენი წერტილები
+	Tiny Handles	პაწაწინა სახელურები
+	Collinear Anchors	კოლინეარული საყრდენი წერტილები
+	Nearly Coincident Anchors	თითქმის დამთხვეული საყრდენი წერტილები
+	Nearly Closed Paths	თითქმის შეკრული ტრაექტორიები
+	Filled Open Paths	შევსებული ღია ტრაექტორიები
+	Needless Clipping Groups	ზედმეტი მომჭრელი ჯგუფები
+	Needless Compound Paths	ზედმეტი შედგენილი ტრაექტორიები
+	Needless Groups	ზედმეტი ჯგუფები
+	Empty Artboards	ცარიელი სამუშაო დაფები
+	Protect Corners	კუთხეების დაცვა
+	Gap	ღრეჩო
+	Include Clip Groups	მომჭრელი ჯგუფების ჩართვა
+@msg	`tolerance` must be from 1 to 100	`tolerance` უნდა იყოს 1-დან 100-მდე
+@msg	`gap` must be from 0 to 6 pt	`gap` უნდა იყოს 0-დან 6 pt-მდე
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	საყრდენი წერტილების გამარტივება: ტრაექტორიებს ძალიან ბევრი საყრდენი წერტილი აქვს ერთბაშად გასამარტივებლად
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	ტრაექტორიის ნაწილების ხელახლა შეერთება: ძალიან ბევრი ტრაექტორიაა ერთბაშად შესაერთებლად
+@msg	None of these issues are left: check again	ამ პრობლემებიდან აღარცერთი დარჩა: შეამოწმეთ ხელახლა
+@msg	`kinds` must be a list of issue kinds	`kinds` უნდა იყოს პრობლემის სახეების სია
+@msg	missing `kind`	`kind` აკლია
+	Simplify Anchors (Keep Shape)	საყრდენი წერტილების გამარტივება (ფორმის შენარჩუნებით)
+	Deep Ungroup	დაჯგუფების მოხსნა ყველა დონეზე
+	Rejoin Path Pieces	ტრაექტორიის ნაწილების ხელახლა შეერთება
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	ფერის ეფექტები
+	Color Effects Panel	ფერის ეფექტების პანელი
+	Exposure	ექსპოზიცია
+	Exposure…	ექსპოზიცია…
+	Desaturate	გაუფერულება
+	Adjustment	კორექცია
+	Add as Effect	ეფექტად დამატება
+	Apply as Filter	ფილტრად გამოყენება
+	Select objects to adjust their colors.	აირჩიეთ ობიექტები მათი ფერების დასარეგულირებლად.
+	Brightness/Contrast	სიკაშკაშე/კონტრასტი
+	Hue/Saturation	ფერის ტონი/გაჯერება
+	Temperature/Tint	ტემპერატურა/ტონირება
+@msg	`{id}` is not a colour adjustment	`{id}` ფერის კორექცია არ არის
+@msg	missing `effect`	აკლია `effect`
+@msg	`params` must be an object	`params` უნდა იყოს ობიექტი
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	ტრაექტორიების ზუსტი ხელსაწყოები
+	Anchor Eraser Brush	საყრდენი წერტილების საშლელი ფუნჯი
+	Extend Path Tool	ტრაექტორიის გაგრძელების ხელსაწყო
+	Measure & Inspect Tool	გაზომვისა და შემოწმების ხელსაწყო
+	Anchor Inspector	საყრდენი წერტილების ინსპექტორი
+	Add Points at Crossings	წერტილების დამატება გადაკვეთებზე
+	Split at Crossings	დაყოფა გადაკვეთებზე
+	Extend Path	ტრაექტორიის გაგრძელება
+	Measure & Inspect	გაზომვა და შემოწმება
+	Set Anchor	საყრდენი წერტილის დაყენება
+	Make Smooth	გლუვად ქცევა
+	Make Corner	კუთხოვნად ქცევა
+	Equalize Handles	სახელურების გათანაბრება
+	Remove Points, Keep Shape	წერტილების მოცილება ფორმის შენარჩუნებით
+	Add Points to Segments…	წერტილების დამატება სეგმენტებში…
+	Add Points to Segments	წერტილების დამატება სეგმენტებში
+	Open a document to edit its anchor points.	გახსენით დოკუმენტი მისი საყრდენი წერტილების დასარედაქტირებლად.
+	Anchors selected: {count}	მონიშნული საყრდენი წერტილები: {count}
+	Direct-select anchor points to edit them.	დასარედაქტირებლად საყრდენი წერტილები პირდაპირ მონიშნეთ.
+	Length	სიგრძე
+	In:	შესასვლელი:
+	Out:	გამოსასვლელი:
+	Add Points	წერტილების დამატება
+	Points per segment	წერტილები სეგმენტზე
+	Close Path:	ტრაექტორიის შეკვრა:
+	Keep Handles	სახელურების შენარჩუნება
+	Straight	სწორი
+	Stretch Curve	მრუდის გაჭიმვა
+@msg	direct-select the anchor points to remove	პირდაპირ მონიშნეთ მოსაცილებელი საყრდენი წერტილები
+@msg	select segments, or paths, to add points to	მონიშნეთ სეგმენტები ან ტრაექტორიები წერტილების დასამატებლად
+@msg	select open paths to close	მონიშნეთ შესაკრავი ღია ტრაექტორიები
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	ტრაექტორიები ზედმეტად ბევრი ან ჩახლართულია გადაკვეთების საპოვნელად (მაქსიმუმ 10000 სეგმენტი)
+@msg	the paths have too many anchors to edit at once	ტრაექტორიებს ზედმეტად ბევრი საყრდენი წერტილი აქვს ერთბაშად დასარედაქტირებლად
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	პარამეტრული ფიგურის ხელსაწყო
+	Parametric Shape	პარამეტრული ფიგურა
+	Edit Parametric Shape	პარამეტრული ფიგურის რედაქტირება
+	Convert to Parametric Shape	პარამეტრულ ფიგურად გარდაქმნა
+	Ring	რგოლი
+	Heart	გული
+	Gear	კბილანა
+	Speech Bubble	ტექსტის ბუშტი
+	Count:	რაოდენობა:
+	Thickness:	სისქე:
+	Inner Radius:	შიდა რადიუსი:
+	Head:	თავი:
+	Shaft:	ღერო:
+	Point:	წვერი:
+	Tooth Height:	კბილის სიმაღლე:
+	Tail:	კუდი:
+	Tip:	წვერი:
+	Open a document to draw parametric shapes.	გახსენით დოკუმენტი პარამეტრული ფიგურების დასახატად.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	მონიშნეთ პარამეტრული ფიგურა მის დასარედაქტირებლად. მონიშვნის გარეშე ეს მნიშვნელობები შემდეგ ფიგურას ეხება.
+@msg	the object is not an editable parametric shape	ობიექტი არ არის რედაქტირებადი პარამეტრული ფიგურა
+@msg	select plain rectangles, ellipses or regular polygons to convert	მონიშნეთ გარდასაქმნელი ჩვეულებრივი მართკუთხედები, ელიფსები ან წესიერი მრავალკუთხედები
+@msg	the shape's numbers are out of range	ფიგურის მნიშვნელობები დასაშვებ დიაპაზონს სცდება
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` უნდა იყოს ერთ-ერთი: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` უნდა იყოს მთელი რიცხვი 3-დან 1000-მდე
+@msg	`{key}` must be from {lo} to {hi}	`{key}` უნდა იყოს {lo}-დან {hi}-მდე
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	ჭკვიანი კალამი
+	Smart Pen Tool	ჭკვიანი კალმის ხელსაწყო
+	Smart Pen Panel	ჭკვიანი კალმის პანელი
+	Next Segment	შემდეგი სეგმენტი
+	Curved	მრუდი
+	Retract Handles	სახელურების შეკეცვა
+	Close or Join	შეკვრა ან შეერთება
+	Open a document to draw with the Smart Pen.	გახსენით დოკუმენტი ჭკვიანი კალმით სახატავად.
+	Straight or Curved Segment	სწორი ან მრუდი სეგმენტი
+@msg	the path is locked or hidden	ტრაექტორია ჩაკეტილი ან დამალულია
+@msg	`id` is not a path	`id` არ არის ტრაექტორია
+@msg	the path has no open subpath	ტრაექტორიას არ აქვს ღია ქვეტრაექტორია
+@msg	the subpath is closed	ქვეტრაექტორია შეკრულია
+@msg	the subpath is closed or too short to close	ქვეტრაექტორია შეკრულია ან შესაკრავად ძალიან მოკლეა
+@msg	the path is too short to remove a point from	ტრაექტორია წერტილის მოსაშორებლად ძალიან მოკლეა
+@msg	the segment can't be bent that far	სეგმენტის ამდენად მოხრა შეუძლებელია
+@msg	give `{a}` and `{b}`	მიუთითეთ `{a}` და `{b}`
+@msg	`t` must be from 0 to 1	`t` უნდა იყოს 0-დან 1-მდე
+@msg	`segment` must be "straight" or "curved"	`segment` უნდა იყოს "straight" ან "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` უნდა იყოს "free", "keepAngles" ან "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` უნდა იყოს [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	ფერის სახეობით არჩევა
+	Objects with Spot Colors	ობიექტები სპოტ-ფერებით
+	Objects with Color Effects	ობიექტები ფერის ეფექტებით
+	RGB Images	RGB გამოსახულებები
+	CMYK Images	CMYK გამოსახულებები
+	Grayscale Images	ნაცრისფერის გრადაციის გამოსახულებები
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` უნდა იყოს spotColors, colorEffects, rgbImages, cmykImages ან grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	წერტილების ფერი ნახატიდან
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	დუოტონი…
+	Duotone	დუოტონი
+	Print Ink Fixes…	საბეჭდი მელნის შესწორებები…
+	Print Ink Fixes	საბეჭდი მელნის შესწორებები
+	Inks	მელნები
+	Tone 1	ტონი 1
+	Tone 2	ტონი 2
+	Tone 3	ტონი 3
+	Tone 4	ტონი 4
+	Curve	მრუდი
+	Reset to Linear	წრფივზე დაბრუნება
+	Reset to Inverse	შებრუნებულზე დაბრუნება
+	Skip Objects with Spot Colors	სპოტ-ფერების მქონე ობიექტების გამოტოვება
+	Ink Limit	მელნის ზღვარი
+	Exclude Pure Black	სუფთა შავის გამორიცხვა
+	Remove White Overprint	თეთრის ზედდაბეჭდვის მოხსნა
+	Overprint Black	შავის ზედდაბეჭდვა
+	Text Only	მხოლოდ ტექსტი
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	მიუთითეთ `inkLimit`, `removeWhiteOverprint` ან `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	საბეჭდი მელნის შესწორებები მუშაობს CMYK დოკუმენტებზე: ჯერ აირჩიეთ ფაილი › დოკუმენტის ფერის რეჟიმი › CMYK ფერი
+@msg	`{key}` must be 0..{max}	`{key}` უნდა იყოს 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	კუთხეების ხელსაწყო
+	Slide Anchor Along Path	საყრდენი წერტილის სრიალი ტრაექტორიაზე
+	Set Corners	კუთხეების დაყენება
+	Remove Corners	კუთხეების მოცილება
+	Corners selected: {count}	მონიშნული კუთხეები: {count}
+	Apply to Selected Anchors	მონიშნულ საყრდენ წერტილებზე გამოყენება
+@msg	`radius` must be from 0 to 1000000 pt	`radius` უნდა იყოს 0-დან 1000000 pt-მდე
+@msg	`t` must be a number from -0.98 to 0.98	`t` უნდა იყოს რიცხვი -0.98-დან 0.98-მდე
+@msg	choose anchors where two sides meet at an angle: only those take a corner	აირჩიეთ საყრდენი წერტილები, სადაც ორი გვერდი კუთხით ხვდება ერთმანეთს: მხოლოდ მათ შეუძლიათ კუთხის მიღება
+@msg	give `anchor`, the index of the anchor to slide	მიუთითეთ `anchor`, სასრიალო საყრდენი წერტილის ინდექსი
+@msg	that anchor can't slide: an end of an open path has nowhere to go	ეს საყრდენი წერტილი ვერ ისრიალებს: ღია ტრაექტორიის ბოლოს წასასვლელი არ აქვს
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	საერთო წიბოს შერწყმის ხელსაწყო
+	Merge Shared Edge	საერთო წიბოს შერწყმა
+	Keep Shared Points Together	საერთო წერტილების ერთად შენარჩუნება
+	Shared Edges	საერთო წიბოები
+	Coincidence:	დამთხვევა:
+@msg	`a` and `b` must be two different paths	`a` და `b` ორი სხვადასხვა ტრაექტორია უნდა იყოს
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` უნდა იყოს 0.25-დან 200 pt-მდე
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` უნდა იყოს 0-დან 3 pt-მდე
+@msg	`follow` must be "average", "a" or "b"	`follow` უნდა იყოს "average", "a" ან "b"
+@msg	the paths have nothing to merge there	ტრაექტორიებს აქ შესარწყმელი არაფერი აქვთ
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	ტექსტის დაყოფა
+	Combine Point Text	წერტილის ტექსტის გაერთიანება
+	Remove Breaks	წყვეტების წაშლა
+	Split Text at Cursor	ტექსტის დაყოფა კურსორთან
+	Set Alignment, Keep Position	სწორების დაყენება მდებარეობის შენარჩუნებით
+	Reset Text Transform	ტექსტის გარდაქმნის ჩამოყრა
+	Replace Missing Fonts…	დაკარგული შრიფტების ჩანაცვლება…
+	Replace Missing Fonts	დაკარგული შრიფტების ჩანაცვლება
+	Remove Line Breaks	სტრიქონის წყვეტების წაშლა
+	Remove Paragraph Breaks	აბზაცის წყვეტების წაშლა
+	Break Text into Lines	ტექსტის დაყოფა სტრიქონებად
+	Break Text into Paragraphs	ტექსტის დაყოფა აბზაცებად
+	Break Text into Words	ტექსტის დაყოფა სიტყვებად
+	Break Text into Glyphs	ტექსტის დაყოფა გლიფებად
+	Reset Text Transform and Scale	ტექსტის გარდაქმნისა და მასშტაბის ჩამოყრა
+	Set Alignment, Keep Position:	სწორების დაყენება მდებარეობის შენარჩუნებით:
+	Break Text into:	ტექსტის დაყოფა:
+	Split at Cursor	დაყოფა კურსორთან
+	Reset Transform	გარდაქმნის ჩამოყრა
+	Shift-click: break into paragraphs	Shift-დაწკაპუნება: დაყოფა აბზაცებად
+	Alt-click: reset the horizontal scale too	Alt-დაწკაპუნება: ჰორიზონტალური მასშტაბის ჩამოყრაც
+breakText	Lines	სტრიქონები
+breakText	Words	სიტყვები
+breakText	Glyphs	გლიფები
+@msg	Click in type with a Type tool to split it	დასაყოფად დააწკაპუნეთ ტექსტში ტექსტის ხელსაწყოთი
+@msg	Too many type objects to change at once	ერთდროულად შესაცვლელად ძალიან ბევრი ტექსტური ობიექტია
+@msg	Too many pieces to make at once	ერთდროულად შესაქმნელად ძალიან ბევრი ნაწილია
+@msg	Select horizontal point or area type whose text fits	აირჩიეთ ჰორიზონტალური წერტილის ან არის ტექსტი, რომლის ტექსტიც ეტევა
+@msg	Nothing to split at the cursor	კურსორთან დასაყოფი არაფერია
+@msg	Select two or more one-line point type objects on one baseline to combine	გასაერთიანებლად აირჩიეთ ერთ საბაზისო ხაზზე მდებარე ორი ან მეტი ერთსტრიქონიანი წერტილის ტექსტის ობიექტი
+@msg	No line breaks to remove	წასაშლელი სტრიქონის წყვეტები არ არის
+@msg	No paragraph breaks to remove	წასაშლელი აბზაცის წყვეტები არ არის
+@msg	Too many breaks to remove at once	ერთდროულად წასაშლელად ძალიან ბევრი წყვეტაა
+@msg	Select point type	აირჩიეთ წერტილის ტექსტი
+@msg	The point type is aligned that way already	წერტილის ტექსტი უკვე ასეა სწორებული
+@msg	The point type has no transform to reset	წერტილის ტექსტს ჩამოსაყრელი გარდაქმნა არ აქვს
+@msg	No fonts are missing	დაკარგული შრიფტები არ არის
+@msg	the replacement font is not available	ჩამნაცვლებელი შრიფტი მიუწვდომელია
+@msg	missing `align`	`align` აკლია
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` უნდა იყოს lines, paragraphs, words ან glyphs და არა {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` უნდა იყოს "line" ან "paragraph" და არა {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` უნდა იყოს "left", "center" ან "right" და არა {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	ტრაექტორიის ეფექტები
+	Reverse Direction	მიმართულების შებრუნება
+	Align to Corners and Ends	კუთხეებთან და ბოლოებთან სწორება
+	Count	რაოდენობა
+	Max Count	მაქსიმალური რაოდენობა
+	Start Length	საწყისი სიგრძე
+	Start Percent	საწყისი პროცენტი
+	Start Shape	საწყისი ფორმა
+	End Length	საბოლოო სიგრძე
+	End Percent	საბოლოო პროცენტი
+	End Shape	საბოლოო ფორმა
+	By Count	რაოდენობით
+	By Distance	მანძილით
+	Both	ორივე
+	Shorter Than Length	სიგრძეზე მოკლე
+	Dashes to Geometry	ტირეები გეომეტრიად
+	Dashes to Geometry…	ტირეები გეომეტრიად…
+	Add Anchors	საყრდენი წერტილების დამატება
+	Add Anchors…	საყრდენი წერტილების დამატება…
+	Smooth Anchors	საყრდენი წერტილების მოგლუვება
+	Smooth Anchors…	საყრდენი წერტილების მოგლუვება…
+	Simplify Anchors	საყრდენი წერტილების გამარტივება
+	Simplify Anchors…	საყრდენი წერტილების გამარტივება…
+	Split at Anchors	დაყოფა საყრდენ წერტილებზე
+	Split at Anchors…	დაყოფა საყრდენ წერტილებზე…
+	Extend Path…	ტრაექტორიის გაგრძელება…
+	Close Path…	ტრაექტორიის შეკვრა…
+	Retract Handles…	სახელურების შეკეცვა…
+	Dash 1	ტირე 1
+	Gap 1	შუალედი 1
+	Dash 2	ტირე 2
+	Gap 2	შუალედი 2
+	Dash 3	ტირე 3
+	Gap 3	შუალედი 3
+	Dash 4	ტირე 4
+	Gap 4	შუალედი 4
+	Dash 5	ტირე 5
+	Gap 5	შუალედი 5

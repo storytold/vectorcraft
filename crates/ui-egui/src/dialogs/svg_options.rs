@@ -407,7 +407,7 @@ mod tests {
         app.run("file.save", Value::Null).unwrap();
         assert!(app.ui.dialog.is_none());
         assert_eq!(written.borrow()[1].0, "/tmp/doc.svg");
-        assert!(text(&written, 1).contains("style=\"fill:") && text(&written, 1).matches("<path").count() == 2);
+        assert!(text(&written, 1).contains("style=\"fill:") && vectorcraft_testkit::svg_shapes(&text(&written, 1)) == 2);
         // Save a Copy (options given) leaves the document's path alone.
         app.run("file.saveCopy", json!({"path": "/tmp/copy.svg", "svg": {"minify": true}})).unwrap();
         assert!(!text(&written, 2).trim_end().contains('\n') && !text(&written, 2).contains("<?xml"), "minified");

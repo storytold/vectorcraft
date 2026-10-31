@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index} sample a colour into the active fill/stroke (and the selection); with `stop`, recolour that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -343,7 +343,11 @@ fn eyedropper_options(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.sampleColor";
-    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
+    let stroke = super::switch_or(p, "stroke", !s.fill_active, C)?;
+    let clear_stroke = super::switch_or(p, "clearStroke", false, C)?;
+    if clear_stroke && (stroke || p.get("stroke") != Some(&Value::Bool(false)) || p.get("ids") != Some(&json!([])) || p.get("stop").is_some()) {
+        return Err(bad(C, "`clearStroke` requires `stroke: false`, `ids: []` and no `stop`"));
+    }
     let c = p.get("color").ok_or_else(|| bad(C, "missing color"))?;
     let (id, mut q) = match p.get("stop") {
         None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
@@ -364,7 +368,11 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         q["ids"] = ids.clone();
     }
     let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    (spec.run)(s, &q)
+    let result = (spec.run)(s, &q)?;
+    if clear_stroke {
+        s.paint.stroke = Paint::None;
+    }
+    Ok(result)
 }
 
 // ---------- artboards ----------

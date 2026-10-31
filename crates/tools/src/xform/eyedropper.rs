@@ -49,6 +49,25 @@ pub fn paint_color_at(paint: &Paint, bounds: Option<vectorcraft_geom::Rect>, p: 
     }
 }
 
+/// The visible object under `p`, using the Eyedropper's source selection rules.
+pub(crate) fn sample_source(cx: &ToolContext, p: Point) -> Option<(vectorcraft_doc::NodeId, HitKind)> {
+    let opts = vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..cx.hit_options() };
+    let h = hit_test_visible(cx.doc, p, opts)?;
+    Some((paint_owner(cx.doc, h.leaf), h.kind))
+}
+
+/// The visible color under `p`, including image pixels and intermediate gradient colors.
+pub(crate) fn sample_color_at(cx: &ToolContext, p: Point) -> Option<Color> {
+    let (id, kind) = sample_source(cx, p)?;
+    let n = cx.doc.node(id)?;
+    if matches!(n.kind, NodeKind::Image(_)) { image_color_at(cx, n, p) } else { paint_sample(n, kind == HitKind::Stroke, p) }
+}
+
+/// Whether the source has fill or stroke paint for an attribute sample.
+pub(crate) fn has_sampleable_paint(cx: &ToolContext, id: vectorcraft_doc::NodeId) -> bool {
+    cx.doc.node(id).is_some_and(|n| [false, true].into_iter().any(|stroke| n.proxy_paint(stroke, None).is_some_and(|(paint, ..)| !paint.is_none())))
+}
+
 /// The colour of `n`'s fill (or its stroke, when the stroke was hit or there is no fill) at `p`,
 /// sampled in the paint's own space (text space for type runs) and box.
 fn paint_sample(n: &Node, on_stroke: bool, p: Point) -> Option<Color> {
@@ -91,13 +110,7 @@ impl Tool for EyedropperTool {
         // Object Selection by Path Only say.
         let opts = vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..cx.hit_options() };
         if self.brush_key_color {
-            let h = hit_test_visible(cx.doc, ev.pos, opts);
-            let Some(h) = h else { return vec![] };
-            let src = paint_owner(cx.doc, h.leaf);
-            let Some(n) = cx.doc.node(src) else { return vec![] };
-            let image = matches!(n.kind, NodeKind::Image(_));
-            let sampled = if image { image_color_at(cx, n, ev.pos) } else { paint_sample(n, h.kind == HitKind::Stroke, ev.pos) };
-            let Some(c) = sampled else { return vec![] };
+            let Some(c) = sample_color_at(cx, ev.pos) else { return vec![] };
             let back = self.stop.clone().unwrap_or_else(|| "selection".to_string());
             self.brush_key_color = false;
             self.stop = None;
@@ -106,9 +119,12 @@ impl Tool for EyedropperTool {
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
         // Reading a source is independent of its editability. Only Alt's reverse operation
         // writes to the clicked object; Shift+Alt appends its appearance to the selection.
-        let h = if ev.mods.alt && !ev.mods.shift && stop.is_none() { hit_test(cx.doc, ev.pos, opts) } else { hit_test_visible(cx.doc, ev.pos, opts) };
-        let Some(h) = h else { return vec![] };
-        let src = paint_owner(cx.doc, h.leaf);
+        let source = if ev.mods.alt && !ev.mods.shift && stop.is_none() {
+            hit_test(cx.doc, ev.pos, opts).map(|h| (paint_owner(cx.doc, h.leaf), h.kind))
+        } else {
+            sample_source(cx, ev.pos)
+        };
+        let Some((src, kind)) = source else { return vec![] };
         let Some(n) = cx.doc.node(src) else { return vec![] };
         if ev.mods.alt && stop.is_none() {
             let how = if ev.mods.shift { "append" } else { "reverse" };
@@ -118,7 +134,7 @@ impl Tool for EyedropperTool {
         if !(ev.mods.shift || stop.is_some() || image) {
             return vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": src.0 }))];
         }
-        let sampled = if image { image_color_at(cx, n, ev.pos) } else { paint_sample(n, h.kind == HitKind::Stroke, ev.pos) };
+        let sampled = if image { image_color_at(cx, n, ev.pos) } else { paint_sample(n, kind == HitKind::Stroke, ev.pos) };
         let Some(c) = sampled else { return vec![] };
         let color = color_json(&c);
         let Some((back, i)) = stop else { return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color }))] };

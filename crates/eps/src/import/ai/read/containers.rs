@@ -19,6 +19,7 @@ impl<'a> Reader<'a> {
             children: Vec::new(),
             hidden,
             after: self.after_object,
+            mesh_ended: self.mesh_ended,
             gs: self.gs.clone(),
             base,
             clips: Vec::new(),
@@ -171,7 +172,14 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn end_layer(&mut self) -> Result<(), String> {
-        let f = self.close("LB", |k| matches!(k, Kind::Layer(_)))?;
+        let mut f = self.close("LB", |k| matches!(k, Kind::Layer(_)))?;
+        let state = self.layer_state.take();
+        // An `Xy` right after the layer's last mesh or blend, then `LB`: the layer's, not theirs.
+        if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
+            && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
+        {
+            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout) = before;
+        }
         let Kind::Layer(a) = f.kind else { return Ok(()) };
         let (children, clip) = self.clip_first(f.children, &f.clips);
         let color = a.color.unwrap_or(LayerColor::Preset(0));
@@ -183,7 +191,7 @@ impl<'a> Reader<'a> {
         layer.visible = a.visible;
         layer.locked = a.locked;
         // The layer's own opacity, blend and knockout, written after its art (#2003).
-        if let Some((opacity, blend, isolate, knockout)) = self.layer_state.take() {
+        if let Some((opacity, blend, isolate, knockout)) = state {
             (layer.opacity, layer.blend, layer.isolate, layer.knockout) = (opacity, blend, isolate, knockout);
         }
         match self.frames.last_mut() {
@@ -236,6 +244,7 @@ impl<'a> Reader<'a> {
         let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
         self.gs = f.gs;
         self.after_object = f.after;
+        self.mesh_ended = f.mesh_ended;
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
             return Err("mask art ends outside a mask dictionary".into());
         };
@@ -251,13 +260,15 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let Some(f) = self.frames.pop() else { return Ok(()) };
-        let Frame { kind, children, base, hidden, gs, after, .. } = f;
+        let Frame { kind, children, base, hidden, gs, after, mesh_ended, .. } = f;
         let Kind::Obj(mut o) = kind else { return Ok(()) };
         obj::close(&mut o, &mut self.stack, base);
         self.obj_hidden = hidden;
-        // Art made inside a dictionary (type's paths) isn't kept.
+        // Art made inside a dictionary (type's paths, a mask's art) isn't kept, and doesn't end what
+        // follows the object the dictionary is about: a mesh's state comes after its mask.
         self.gs = gs;
         self.after_object = after;
+        self.mesh_ended = mesh_ended;
         if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
             return self.push(V::Obj(Rc::new(*o)));
         }
@@ -392,6 +403,8 @@ impl<'a> Reader<'a> {
                 self.warn(crate::import::ai::blend::DRAWN);
             }
         }
+        // The blend's own state block follows its record, as a group's follows its end.
+        self.after_object = true;
     }
 }
 

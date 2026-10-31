@@ -52,6 +52,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || crate::has_solid(n)
         || has_adjustment(n)
         || has_crop_marks(n)
+        || crate::addons::halftone::has_halftone(n)
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
@@ -102,6 +103,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Crop marks: the object and its marks.
     if let Some(m) = crop_marks_art(n) {
+        return Some(bake_pieces(d, m));
+    }
+    // Vector Halftone: the object as its dots.
+    if let Some(m) = crate::addons::halftone::halftone_art(d, n) {
         return Some(bake_pieces(d, m));
     }
     if let Some(m) = crate::revolve_art(n).or_else(|| crate::solid_art(n)) {

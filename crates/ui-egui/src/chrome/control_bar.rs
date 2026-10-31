@@ -190,6 +190,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let image = crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui);
                 crate::toolbar::control_bar_options(app, ui);
                 crate::dialogs::envelope::control_bar(app, ui);
+                crate::panels::symbols::control_bar(app, ui);
                 let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
                 if !image {
                     let shown_stroke = crate::panels::current_stroke(app);
@@ -243,6 +244,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     return;
                 }
                 crate::panels::align::align_buttons(app, ui, 24.0);
+                // Two or more objects get the six Distribute Objects buttons too; a single
+                // object keeps the bar as it was.
+                if sel.len() > 1 {
+                    ui.add_space(4.0);
+                    crate::panels::align::distribute_buttons(app, ui, 24.0);
+                }
                 ui.separator();
                 // The Transform link opens the whole Transform panel (reference point, rotate,
                 // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.

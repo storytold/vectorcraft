@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use kurbo::PathEl;
 use vectorcraft_color::freeform::{painted_box, spread_scale};
 use vectorcraft_color::{BlendMode, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, LineCap, LineJoin, Node, NodeKind, StrokeLayer, SymbolBoxes};
@@ -35,6 +36,10 @@ const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
 const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
 const TEXT_OUTLINES: &str = "type is written as outlines: it can't be searched, selected or read aloud as text";
 const PATTERN_TILES: &str = "pattern fills are written as their tiles, one shape each";
+const PATTERN_SHAPES: &str = "pattern fills are written as their tiles, one shape for each part of the tile";
+/// How far (points) art may lie past a convex clip, or a pattern's art past its tile, and still
+/// count as inside (what the device units round away).
+const INSIDE_TOL: f64 = 1e-6;
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
@@ -126,6 +131,9 @@ pub(crate) struct Scene<'a> {
     nest: u32,
     /// Pattern tiles left to write ([`MAX_TILES`]).
     tiles_left: usize,
+    /// Pattern tiles being written that may be merged: their parts aren't left out off the page,
+    /// so each tile draws the same parts (the fill's clip still trims them).
+    whole_tiles: bool,
 }
 
 impl<'a> Scene<'a> {
@@ -142,6 +150,7 @@ impl<'a> Scene<'a> {
             opacity: 1.0,
             nest: 0,
             tiles_left: MAX_TILES,
+            whole_tiles: false,
         }
     }
 
@@ -173,7 +182,7 @@ impl<'a> Scene<'a> {
         if !force && !n.visible {
             return;
         }
-        if !n.is_layer() {
+        if !n.is_layer() && !self.whole_tiles {
             match n.visual_bounds_with(&self.symbols) {
                 Some(b) if !overlaps(b, self.region) => return,
                 None if !n.is_container() => return,
@@ -319,15 +328,37 @@ impl<'a> Scene<'a> {
                     return;
                 }
                 self.tiles_left -= tiles.len();
-                if !tiles.is_empty() {
-                    self.warn(PATTERN_TILES);
-                }
+                // Tiles that can't overlap one another (grid and brick tilings whose art stays in
+                // its tile) may be merged: see `merge_tiles`.
+                let per_tile = self.doc.pattern(pattern).filter(|def| tiles_apart(def)).map(|def| def.art.len());
                 let outer = self.opacity;
                 self.opacity *= opacity.clamp(0.0, 1.0);
                 self.ops.push(Op::Clip { path: bp.clone(), rule });
                 self.nest += 1;
-                tiles.iter().for_each(|t| self.node(t, true));
+                let mut chunks = Vec::new();
+                let (whole, left) = (self.whole_tiles, self.tiles_left);
+                self.whole_tiles = per_tile.is_some();
+                for (i, t) in tiles.iter().enumerate() {
+                    if per_tile.is_some_and(|k| k > 0 && i % k == 0) {
+                        chunks.push(self.ops.len());
+                    }
+                    self.node(t, true);
+                }
+                self.whole_tiles = whole;
+                let merged = per_tile.is_some() && merge_tiles(&mut self.ops, &chunks);
+                // Tiles that couldn't merge are written as before, their parts off the page left out.
+                if per_tile.is_some() && !merged {
+                    if let Some(&first) = chunks.first() {
+                        self.ops.truncate(first);
+                    }
+                    // Patterns inside the tiles take from the budget once.
+                    self.tiles_left = left;
+                    tiles.iter().for_each(|t| self.node(t, true));
+                }
                 self.nest -= 1;
+                if !tiles.is_empty() {
+                    self.warn(if merged { PATTERN_SHAPES } else { PATTERN_TILES });
+                }
                 self.ops.push(Op::Unclip);
                 self.opacity = outer;
             }
@@ -463,5 +494,189 @@ impl<'a> Scene<'a> {
         }
         self.images.insert(key.to_string(), img.clone());
         img
+    }
+}
+
+/// Do the instances of `def` stay apart? A grid or brick tiling places its tiles side by side, so
+/// art that stays in its tile never overlaps another instance's; hex tilings overlap their tiles.
+fn tiles_apart(def: &vectorcraft_doc::PatternDef) -> bool {
+    use vectorcraft_doc::TileType;
+    let tiling = matches!(def.tile_type, TileType::Grid | TileType::BrickByRow { .. } | TileType::BrickByColumn { .. });
+    let inside = def.art.iter().all(|a| painted_bounds(a).is_some_and(|b| def.tile.inflate(INSIDE_TOL, INSIDE_TOL).contains_rect(b)));
+    tiling && !def.art.is_empty() && inside
+}
+
+/// The extent `n` paints: a clipping group's clip path, else its visual bounds.
+fn painted_bounds(n: &Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Group { children, clip: true } => children.first().and_then(|c| c.path_data()).map(|p| p.to_bezpath().bounding_box()),
+        _ => n.visual_bounds(),
+    }
+}
+
+/// Write a pattern fill's tiles (`ops` from each start in `starts` to the next, the last to the
+/// end) with fewer shapes, when every tile drew the same plain fills: each tile's clip is left out
+/// where what it clips lies inside it already, then the n-th fill of every tile becomes one path.
+/// The tiles don't overlap ([`tiles_apart`]), so the picture is the same. → whether they merged.
+fn merge_tiles(ops: &mut Vec<Op>, starts: &[usize]) -> bool {
+    let Some(&first) = starts.first() else { return false };
+    let ends = starts.iter().skip(1).copied().chain([ops.len()]);
+    let mut tiles: Vec<Vec<(BezPath, FillRule, [u8; 3])>> = Vec::with_capacity(starts.len());
+    for (start, end) in starts.iter().copied().zip(ends) {
+        let Some(fills) = ops.get(start..end).and_then(plain_fills) else { return false };
+        // A tile off the page draws nothing.
+        if !fills.is_empty() {
+            tiles.push(fills);
+        }
+    }
+    let Some((shape, rest)) = tiles.split_first() else { return false };
+    let same = |t: &Vec<(BezPath, FillRule, [u8; 3])>| t.len() == shape.len() && t.iter().zip(shape).all(|(a, b)| (a.1, a.2) == (b.1, b.2));
+    if shape.is_empty() || !rest.iter().all(same) {
+        return false;
+    }
+    let mut merged: Vec<Op> = shape.iter().map(|(_, rule, rgb)| Op::Fill { path: BezPath::new(), rule: *rule, rgb: *rgb }).collect();
+    for tile in &tiles {
+        for (op, (path, _, _)) in merged.iter_mut().zip(tile) {
+            if let Op::Fill { path: all, .. } = op {
+                all.extend(path.elements().iter().copied());
+            }
+        }
+    }
+    ops.truncate(first);
+    ops.extend(merged);
+    true
+}
+
+/// A tile's ops as plain fills: fills, or fills inside one clip that lies around them all
+/// already (a tile clipped to its cell). `None` for anything else (strokes, images, clips that cut).
+fn plain_fills(ops: &[Op]) -> Option<Vec<(BezPath, FillRule, [u8; 3])>> {
+    let inner = match ops {
+        [Op::Clip { path, .. }, inner @ .., Op::Unclip] => {
+            let hull = convex_polygon(path)?;
+            inner
+                .iter()
+                .all(|op| matches!(op, Op::Fill { path, .. } if path.elements().iter().all(|el| el_points(el).all(|p| inside(&hull, p)))))
+                .then_some(inner)?
+        }
+        all => all,
+    };
+    inner
+        .iter()
+        .map(|op| match op {
+            Op::Fill { path, rule, rgb } => Some((path.clone(), *rule, *rgb)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The points of a path element (a curve lies inside its control points' hull).
+fn el_points(el: &PathEl) -> impl Iterator<Item = Point> {
+    let pts: Vec<Point> = match *el {
+        PathEl::MoveTo(p) | PathEl::LineTo(p) => vec![p],
+        PathEl::QuadTo(a, b) => vec![a, b],
+        PathEl::CurveTo(a, b, c) => vec![a, b, c],
+        PathEl::ClosePath => vec![],
+    };
+    pts.into_iter()
+}
+
+/// `bp` as the corners of a convex polygon, counter-clockwise: one closed figure of straight
+/// segments that turns one way. `None` for any other path.
+fn convex_polygon(bp: &BezPath) -> Option<Vec<Point>> {
+    let mut pts = Vec::new();
+    for (i, el) in bp.elements().iter().enumerate() {
+        match (i, el) {
+            (0, PathEl::MoveTo(p)) | (1.., PathEl::LineTo(p)) => pts.push(*p),
+            (1.., PathEl::ClosePath) if i + 1 == bp.elements().len() => {}
+            _ => return None,
+        }
+    }
+    if pts.len() > 1 && pts.first().zip(pts.last()).is_some_and(|(a, b)| (*a - *b).hypot() <= INSIDE_TOL) {
+        pts.pop();
+    }
+    if pts.len() < 3 {
+        return None;
+    }
+    let n = pts.len();
+    let turn = |i: usize| {
+        let (a, b, c) = (pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+        (b - a).cross(c - b)
+    };
+    let turns: Vec<f64> = (0..n).map(turn).collect();
+    if turns.iter().any(|t| !t.is_finite()) {
+        return None;
+    }
+    if turns.iter().all(|t| *t >= -INSIDE_TOL) && turns.iter().any(|t| *t > INSIDE_TOL) {
+        Some(pts)
+    } else if turns.iter().all(|t| *t <= INSIDE_TOL) && turns.iter().any(|t| *t < -INSIDE_TOL) {
+        pts.reverse();
+        Some(pts)
+    } else {
+        None
+    }
+}
+
+/// Is `p` inside (or on) the counter-clockwise convex polygon `hull`?
+fn inside(hull: &[Point], p: Point) -> bool {
+    let n = hull.len();
+    (0..n).all(|i| {
+        let (a, b) = (hull[i], hull[(i + 1) % n]);
+        let edge = b - a;
+        let len = edge.hypot();
+        len > 0.0 && edge.cross(p - a) / len >= -INSIDE_TOL
+    })
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+
+    fn poly(pts: &[(f64, f64)]) -> BezPath {
+        let mut bp = BezPath::new();
+        for (i, (x, y)) in pts.iter().enumerate() {
+            if i == 0 { bp.move_to((*x, *y)) } else { bp.line_to((*x, *y)) }
+        }
+        bp.close_path();
+        bp
+    }
+
+    #[test]
+    fn convex_polygons_in_either_direction_hold_what_is_inside_them() {
+        let square = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
+        let reversed: Vec<(f64, f64)> = square.iter().rev().copied().collect();
+        for pts in [&square[..], &reversed[..]] {
+            let hull = convex_polygon(&poly(pts)).unwrap();
+            assert!(inside(&hull, Point::new(5.0, 5.0)));
+            assert!(inside(&hull, Point::new(10.0, 3.0)), "on an edge");
+            assert!(!inside(&hull, Point::new(10.5, 3.0)));
+        }
+        // A rotated square too.
+        let diamond = convex_polygon(&poly(&[(5.0, 0.0), (10.0, 5.0), (5.0, 10.0), (0.0, 5.0)])).unwrap();
+        assert!(inside(&diamond, Point::new(5.0, 5.0)) && !inside(&diamond, Point::new(1.0, 1.0)));
+    }
+
+    #[test]
+    fn concave_curved_and_open_clips_are_not_convex_polygons() {
+        assert!(convex_polygon(&poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (5.0, 5.0), (0.0, 10.0)])).is_none(), "concave");
+        let mut curved = BezPath::new();
+        curved.move_to((0.0, 0.0));
+        curved.curve_to((5.0, -5.0), (10.0, -5.0), (10.0, 0.0));
+        curved.line_to((5.0, 10.0));
+        curved.close_path();
+        assert!(convex_polygon(&curved).is_none(), "curved");
+        let mut two = poly(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]);
+        two.extend(poly(&[(5.0, 5.0), (6.0, 5.0), (6.0, 6.0)]));
+        assert!(convex_polygon(&two).is_none(), "two figures");
+        assert!(convex_polygon(&poly(&[(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)])).is_none(), "a line");
+    }
+
+    /// A tile whose fill reaches past its clip keeps the clip, so the tiles aren't merged.
+    #[test]
+    fn a_clip_that_cuts_its_fill_is_kept() {
+        let clip = Op::Clip { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero };
+        let past = Op::Fill { path: poly(&[(0.0, 0.0), (12.0, 0.0), (12.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        assert!(plain_fills(&[clip.clone(), past, Op::Unclip]).is_none());
+        let within = Op::Fill { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        assert_eq!(plain_fills(&[clip, within, Op::Unclip]).map(|f| f.len()), Some(1));
     }
 }

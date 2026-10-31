@@ -4,6 +4,16 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use super::super::tests_appearance::{click, frame_events, frame_raw, text_rect};
 
 #[test]
+fn current_style_highlight_has_a_separate_indicator() {
+    let ctx = egui::Context::default();
+    let t = Tokens::get(&ctx);
+    assert_eq!(row_look(true, false, false, &t), (Some(t.row_selected), false));
+    assert_eq!(row_look(true, true, false, &t), (Some(t.row_selected), true));
+    assert_eq!(row_look(false, true, false, &t), (Some(t.hover), false));
+    assert_eq!(row_look(false, false, false, &t), (None, false));
+}
+
+#[test]
 fn panels_draw_and_apply_headless() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
@@ -309,7 +319,7 @@ fn a_style_made_from_the_panel_is_scrolled_into_view() {
             } else {
                 // The New button's path: the style it made, highlighted with `highlight_made`.
                 let name = app.run(&format!("{}.new", kind.prefix()), json!({})).unwrap()["name"].as_str().unwrap_or_default().to_string();
-                highlight_made(&ctx, kind, Some(name.clone()));
+                highlight_made(&ctx, kind, vec![name.clone()]);
                 name
             };
             assert_eq!(pstate::<Option<String>>(&ctx, kind.key()).as_deref(), Some(made.as_str()), "{what}: the new style is highlighted");
@@ -358,6 +368,15 @@ fn capture_from_menu(range: Option<(usize, usize)>, redefine: bool) {
     capture_from_ui(range, redefine, false, false);
 }
 
+fn assert_new_style_highlight(ctx: &egui::Context, redefine: bool, name: &str) {
+    if !redefine {
+        let selected: Option<String> = pstate(ctx, Kind::Char.key());
+        assert_eq!(selected.as_deref(), Some(name), "New highlights the style it made");
+        let scroll_to: Option<String> = pstate(ctx, Kind::Char.scroll_key());
+        assert_eq!(scroll_to.as_deref(), Some(name), "New requests a scroll to the new style");
+    }
+}
+
 fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, footer: bool, unicode: bool) {
     let (mut app, id, ctx) = capture_app();
     let (first, tail) = if unicode { ("é", "漢字") } else { ("AB", "cdef") };
@@ -403,6 +422,7 @@ fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, footer: bool, 
     }
     let after = app.session.doc().unwrap().doc.clone();
     let name = if redefine { "Body" } else { "Character Style 1" };
+    assert_new_style_highlight(&ctx, redefine, name);
     let definition = after.char_styles.iter().find(|s| s.name == name);
     let size = definition.and_then(|s| s.attrs.get("size")).and_then(Value::as_f64);
     let expected_size = if range.is_some_and(|(a, b)| b > a && a >= first.len()) { 34.0 } else { 18.0 };
@@ -491,6 +511,243 @@ fn character_style_range_apply_from_panel_control() {
     assert_eq!(app.session.doc().unwrap().doc, before);
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, after);
+}
+
+/// A document with selected type and both kinds' styles A, B, C and D, the type using B.
+fn several_app() -> (VectorcraftApp, NodeId) {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "Hi", "size": 18})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    for kind in [Kind::Char, Kind::Para] {
+        for n in ["A", "B", "C", "D"] {
+            app.run(&format!("{}.new", kind.prefix()), json!({"name": n, "attrs": {}})).unwrap();
+        }
+        app.run(&format!("{}.apply", kind.prefix()), json!({"name": "B"})).unwrap();
+    }
+    (app, id)
+}
+
+/// Click the text `label` that `draw` paints, with `modifiers` held.
+fn click_text_held(
+    ctx: &egui::Context,
+    app: &mut VectorcraftApp,
+    label: &str,
+    modifiers: egui::Modifiers,
+    draw: impl FnMut(&mut VectorcraftApp, &mut egui::Ui),
+) {
+    click_where(ctx, app, |texts| text_rect(texts, label).center(), modifiers, draw);
+}
+
+/// Click where `at` finds in the texts `draw` paints, with `modifiers` held, over three frames
+/// (hover, press, release) after two frames that lay them out.
+fn click_where(
+    ctx: &egui::Context,
+    app: &mut VectorcraftApp,
+    at: impl FnOnce(&[(String, egui::Rect)]) -> egui::Pos2,
+    modifiers: egui::Modifiers,
+    mut draw: impl FnMut(&mut VectorcraftApp, &mut egui::Ui),
+) {
+    let held = egui::Event::ModifiersChanged(modifiers);
+    frame_events(ctx, app, vec![held.clone()], &mut draw);
+    let pos = at(&frame_events(ctx, app, vec![held.clone()], &mut draw));
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+        frame_events(ctx, app, vec![held.clone(), e], &mut draw);
+    }
+    frame_events(ctx, app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)], &mut draw);
+}
+
+/// The styles `kind`'s panel highlights.
+fn highlighted_now(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind) -> Vec<String> {
+    let all = styles(app, kind);
+    highlighted(app, ctx, kind, &all.iter().map(|s| s.0.as_str()).collect::<Vec<_>>())
+}
+
+#[test]
+fn switching_documents_clears_highlighted_styles_with_matching_names() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        click_text_held(&ctx, &mut app, "A", egui::Modifiers::NONE, rows);
+        click_text_held(&ctx, &mut app, "B", egui::Modifiers::COMMAND, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "B"]);
+
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        for name in ["A", "B"] {
+            app.run(&format!("{}.new", kind.prefix()), json!({"name": name, "attrs": {}})).unwrap();
+        }
+        assert!(highlighted_now(&mut app, &ctx, kind).is_empty(), "{} Styles: the new document has no highlighted styles", kind.what());
+        assert_eq!(pstate::<String>(&ctx, kind.anchor_key()), "");
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.key()), None);
+        assert_eq!(pstate::<(Option<String>, Vec<String>)>(&ctx, kind.many_key()).1, Vec::<String>::new());
+    }
+}
+
+/// In both panels Shift-click highlights every style from the last one clicked without Shift
+/// through the one clicked, and Cmd/Ctrl-click adds or removes one; neither applies a style to the
+/// selected type.
+/// Delete then deletes every highlighted style in one undo step, and the type keeps its look.
+#[test]
+fn shift_and_cmd_clicks_highlight_several_styles_that_delete_deletes_at_once() {
+    use egui::Modifiers;
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, id) = several_app();
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        click_text_held(&ctx, &mut app, "A", Modifiers::NONE, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A"]);
+        let doc = app.session.doc().unwrap().doc.clone();
+        click_text_held(&ctx, &mut app, "C", Modifiers::SHIFT, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "B", "C"], "{} Styles: Shift-click", kind.what());
+        click_text_held(&ctx, &mut app, "B", Modifiers::COMMAND, rows);
+        click_text_held(&ctx, &mut app, "D", Modifiers::COMMAND, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "C", "D"], "{} Styles: Cmd/Ctrl-click", kind.what());
+        assert_eq!(app.session.doc().unwrap().doc, doc, "Shift and Cmd/Ctrl clicks apply nothing");
+        let undo = app.session.doc().unwrap().history.undo.len();
+        // The footer's Delete button is centered 12 points left of the panel's right edge.
+        let button = std::cell::Cell::new(egui::Pos2::ZERO);
+        let footer = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            let right = ui.max_rect().right();
+            show(app, ui, kind);
+            button.set(egui::pos2(right - 12.0, ui.min_rect().bottom() - 12.0));
+        };
+        click_where(&ctx, &mut app, |_| button.get(), Modifiers::NONE, footer);
+        let left: Vec<String> = styles(&mut app, kind).into_iter().skip(1).map(|s| s.0).collect();
+        assert_eq!(left, ["B"], "{} Styles: Delete deletes A, C and D", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), Vec::<String>::new());
+        assert_eq!(text_runs(&app, id)[0].1, 18.0, "the type keeps its look");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, doc);
+    }
+}
+
+/// The panel menu's Select All Unused highlights, in both panels, the styles no text uses, never
+/// the Normal style; the menu's Delete then deletes them in one undo step.
+#[test]
+fn select_all_unused_highlights_the_unused_styles_for_delete() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let items = |app: &mut VectorcraftApp, ui: &mut egui::Ui| menu(app, ui, kind);
+        click_text_held(&ctx, &mut app, "   Select All Unused", egui::Modifiers::NONE, items);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "C", "D"], "{} Styles", kind.what());
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let label = format!("   Delete {} Style", kind.what());
+        click_text_held(&ctx, &mut app, &label, egui::Modifiers::NONE, items);
+        let left: Vec<String> = styles(&mut app, kind).into_iter().map(|s| s.0).collect();
+        assert_eq!(left[1..], ["B"], "{} Styles: the unused styles are deleted", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), Vec::<String>::new());
+        // With every style used, nothing is highlighted.
+        click_text_held(&ctx, &mut app, "   Select All Unused", egui::Modifiers::NONE, items);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), Vec::<String>::new());
+    }
+}
+
+/// With several styles highlighted, the panel menu's Duplicate copies each of them in one undo
+/// step, highlights the copies and scrolls the first copy's row into view.
+#[test]
+fn panel_menu_duplicate_copies_every_highlighted_style() {
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let items = |app: &mut VectorcraftApp, ui: &mut egui::Ui| menu(app, ui, kind);
+        click_text_held(&ctx, &mut app, "   Select All Unused", egui::Modifiers::NONE, items);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "C", "D"], "{what} Styles");
+        let before = styles(&mut app, kind);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, &format!("   Duplicate {what} Style"), egui::Modifiers::NONE, items);
+        let names: Vec<String> = styles(&mut app, kind).into_iter().skip(1).map(|s| s.0).collect();
+        assert_eq!(names, ["A", "B", "C", "D", "A copy", "C copy", "D copy"], "{what} Styles: A, C and D are duplicated");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{what} Styles: one undo step");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A copy", "C copy", "D copy"], "{what} Styles: the copies are highlighted");
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.scroll_key()).as_deref(), Some("A copy"), "{what} Styles: the first copy scrolls into view");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(styles(&mut app, kind), before);
+    }
+}
+
+/// The panel and its menu list the styles, and count their uses, once per document version: more
+/// frames of an unchanged document list nothing again, and an edit lists them again.
+#[test]
+fn the_styles_are_listed_once_per_document_version() {
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            show(app, ui, kind);
+            menu(app, ui, kind);
+        };
+        let listed = || LISTED.with(|n| n.get());
+        frame_events(&ctx, &mut app, vec![], draw);
+        let first = listed();
+        for _ in 0..4 {
+            frame_events(&ctx, &mut app, vec![], draw);
+        }
+        assert_eq!(listed(), first, "{what} Styles: unchanged frames list nothing again");
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "E", "attrs": {}})).unwrap();
+        frame_events(&ctx, &mut app, vec![], draw);
+        assert_eq!(listed(), first + 1, "{what} Styles: an edit lists the styles again");
+        assert_eq!(styles(&mut app, kind).last().map(|s| s.0.as_str()), Some("E"), "{what} Styles: the new style is listed");
+    }
+}
+
+/// A row dragged from the highlighted styles carries all of them: dropped on Create New Style it
+/// duplicates each in one undo step and highlights the copies, and dropped on Delete it deletes each
+/// but the Normal style in one undo step and clears the highlight. A row from outside the highlight
+/// carries only its own style; dropped on Delete it leaves the highlight as it is.
+#[test]
+fn dragging_a_highlighted_style_carries_every_highlighted_style() {
+    use egui::Modifiers;
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        let names = |app: &mut VectorcraftApp| styles(app, kind).into_iter().skip(1).map(|s| s.0).collect::<Vec<_>>();
+        let undo_len = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, "A", Modifiers::NONE, rows);
+        click_text_held(&ctx, &mut app, "C", Modifiers::COMMAND, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A", "C"], "{what} Styles");
+
+        let undo = undo_len(&app);
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, "C", 40.0, false), "{what} Styles: New is outlined");
+        assert_eq!(names(&mut app), ["A", "B", "C", "D", "A copy", "C copy"], "{what} Styles: A and C are duplicated");
+        assert_eq!(undo_len(&app), undo + 1, "{what} Styles: one undo step for the copies");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["A copy", "C copy"], "{what} Styles: the copies are highlighted");
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, "B", 40.0, false), "{what} Styles: New is outlined");
+        assert_eq!(names(&mut app), ["A", "B", "C", "D", "A copy", "C copy", "B copy"], "{what} Styles: only B is duplicated");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), ["B copy"], "{what} Styles: the copy of B is highlighted");
+
+        let normal = super::super::label_or_name(&styles(&mut app, kind)[0].0, true).to_string();
+        click_text_held(&ctx, &mut app, "A copy", Modifiers::NONE, rows);
+        click_text_held(&ctx, &mut app, "C copy", Modifiers::COMMAND, rows);
+        click_text_held(&ctx, &mut app, &normal, Modifiers::COMMAND, rows);
+        assert_eq!(highlighted_now(&mut app, &ctx, kind).len(), 3, "{what} Styles: A copy, C copy and Normal are highlighted");
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, "D", 12.0, false), "{what} Styles: Delete is outlined");
+        assert_eq!(names(&mut app), ["A", "B", "C", "A copy", "C copy", "B copy"], "{what} Styles: only D is deleted");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind).len(), 3, "{what} Styles: the highlight stays");
+        let undo = undo_len(&app);
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, &normal, 12.0, false), "{what} Styles: Delete is outlined for the highlight");
+        assert_eq!(names(&mut app), ["A", "B", "C", "B copy"], "{what} Styles: A copy and C copy are deleted, Normal stays");
+        assert_eq!(undo_len(&app), undo + 1, "{what} Styles: one undo step for the deletes");
+        assert_eq!(highlighted_now(&mut app, &ctx, kind), Vec::<String>::new(), "{what} Styles: the highlight is cleared");
+    }
 }
 
 /// Feed real text/shortcut events through the canvas Type routing. No focus reset or typing
@@ -593,6 +850,10 @@ fn alt_clicking_new_character_style_asks_for_its_name() {
     set_name(&mut app, "Untouched");
     assert!(crate::dialogs::confirm(&mut app).is_err(), "names are unique");
     assert!(app.ui.dialog.is_some(), "a taken name keeps the dialog open");
+    assert!(app.ui.made_text_style.is_empty(), "a taken name does not request a highlight");
+    set_name(&mut app, "");
+    assert!(crate::dialogs::confirm(&mut app).is_err(), "a name is required");
+    assert!(app.ui.made_text_style.is_empty(), "an empty name does not request a highlight");
     set_name(&mut app, "Heading");
     let undo = app.session.doc().unwrap().history.undo.len();
     crate::dialogs::confirm(&mut app).unwrap();
@@ -603,6 +864,107 @@ fn alt_clicking_new_character_style_asks_for_its_name() {
     assert_eq!(doc.char_styles.len(), before.len() + 1);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
     assert_eq!(text_editing(&app), Some((id, 3, 5)), "the Type selection stays");
+}
+
+/// The dialog highlights its new style and scrolls the matching panel to its row.
+#[test]
+fn a_style_made_in_the_new_style_dialog_is_highlighted() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, id, ctx) = capture_app();
+        if kind == Kind::Para {
+            app.run("paraStyle.new", json!({"name": "Untouched"})).unwrap();
+        }
+        for i in 1..=12 {
+            app.run(&format!("{}.new", kind.prefix()), json!({"name": format!("Item {i:02}")})).unwrap();
+        }
+        select_type_range(&mut app, id, 3, 5);
+        let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            egui::ScrollArea::vertical().id_salt("styles").max_height(80.0).show(ui, |ui| show(app, ui, kind));
+        };
+        let before = frame_events(&ctx, &mut app, vec![], panel);
+        let top = text_rect(&before, "Untouched").top() - 30.0;
+        set_pstate(&ctx, kind.key(), Some("Untouched".to_string()));
+        alt_click_new(&ctx, &mut app, kind);
+        set_name(&mut app, "Heading");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let other = if kind == Kind::Char { Kind::Para } else { Kind::Char };
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, other));
+        assert_eq!(pstate::<Option<String>>(&ctx, other.key()), None, "{}: the other panel highlights nothing", kind.what());
+        assert_eq!(
+            app.ui.made_text_style.first().map(|(_, _, name)| name.as_str()),
+            Some("Heading"),
+            "{}: the other panel leaves the new style pending",
+            kind.what()
+        );
+        let mut after = vec![];
+        for _ in 0..3 {
+            let time = ctx.input(|i| i.time) + 1.0;
+            after = frame_raw(&ctx, &mut app, egui::RawInput { time: Some(time), ..Default::default() }, panel);
+        }
+        let highlighted: Option<String> = pstate(&ctx, kind.key());
+        assert_eq!(highlighted.as_deref(), Some("Heading"), "{}: the new style replaces the old highlight", kind.what());
+        assert!(app.ui.made_text_style.is_empty(), "{}: the panel consumes its pending highlight", kind.what());
+        let row = text_rect(&after, "Heading");
+        assert!(row.top() >= top && row.bottom() <= top + 80.0 + 30.0, "{}: Heading at {row:?}, panel from {top}", kind.what());
+    }
+}
+
+#[test]
+fn new_character_and_paragraph_style_highlights_wait_for_their_panels() {
+    let (mut app, id, ctx) = capture_app();
+    select_type_range(&mut app, id, 3, 5);
+    for (kind, name) in [(Kind::Char, "Heading Char"), (Kind::Para, "Heading Para")] {
+        open_new(&mut app, kind).unwrap();
+        set_name(&mut app, name);
+        crate::dialogs::confirm(&mut app).unwrap();
+    }
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Char));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Char.key()).as_deref(), Some("Heading Char"));
+    assert_eq!(app.ui.made_text_style.len(), 1);
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Para));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Para.key()).as_deref(), Some("Heading Para"));
+    assert!(app.ui.made_text_style.is_empty());
+}
+
+/// A style made in one document is highlighted only when that document's panel draws.
+#[test]
+fn a_new_style_dialog_highlight_waits_for_its_document() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, id, ctx) = capture_app();
+        let first_uid = app.session.active().unwrap().uid;
+        select_type_range(&mut app, id, 3, 5);
+        alt_click_new(&ctx, &mut app, kind);
+        set_name(&mut app, "Heading");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.made_text_style.first().map(|(uid, _, _)| *uid), Some(first_uid));
+
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Heading"})).unwrap();
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, kind));
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.key()), None, "{}: the second document highlights nothing", kind.what());
+        assert!(!app.ui.made_text_style.is_empty(), "{}: the first document's highlight stays pending", kind.what());
+
+        assert!(app.session.set_active(0));
+        frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, kind));
+        assert_eq!(pstate::<Option<String>>(&ctx, kind.key()).as_deref(), Some("Heading"), "{}: the first document is highlighted", kind.what());
+        assert!(app.ui.made_text_style.is_empty());
+    }
+}
+
+#[test]
+fn a_closed_document_drops_its_pending_style_highlight() {
+    let (mut app, id, ctx) = capture_app();
+    select_type_range(&mut app, id, 3, 5);
+    alt_click_new(&ctx, &mut app, Kind::Char);
+    set_name(&mut app, "Heading");
+    crate::dialogs::confirm(&mut app).unwrap();
+
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("charStyle.new", json!({"name": "Heading"})).unwrap();
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    frame_events(&ctx, &mut app, vec![], |app, ui| show(app, ui, Kind::Char));
+    assert_eq!(pstate::<Option<String>>(&ctx, Kind::Char.key()), None);
+    assert!(app.ui.made_text_style.is_empty(), "the closed document's highlight is discarded");
 }
 
 /// OK makes the style from the text's attributes as they were when the dialog opened: a later

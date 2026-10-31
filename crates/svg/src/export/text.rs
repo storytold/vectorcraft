@@ -110,7 +110,7 @@ impl Writer<'_> {
         let glyphs = |w: &mut Self, items: &[AppearanceItem]| {
             if !items.is_empty() {
                 let ap = vectorcraft_doc::Appearance { items: items.to_vec(), ..Default::default() };
-                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, tb);
+                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, tb);
             }
         };
         glyphs(self, below);
@@ -192,7 +192,7 @@ impl Writer<'_> {
             // An unnamed id: the pieces carry no id attribute (the group has it).
             let glyphs = Node::path(NodeId(u64::MAX), pd.clone(), run.style.appearance());
             let d = self.path_d(&pd, self.xf);
-            self.shape(&glyphs, &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            self.shape(&glyphs, &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
         }
         self.xf = saved;
         self.depth -= 1;
@@ -335,7 +335,7 @@ impl Writer<'_> {
             let pd = PathData::from_bezpath(&bp);
             let ap = vectorcraft_doc::Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
             let d = self.path_d(&pd, self.xf);
-            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
+            self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
         }
         self.xf = saved;
     }

@@ -2,6 +2,7 @@
 // Unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod basic_shapes;
 mod blend_export;
 mod colour_glyphs;
 mod container_export;

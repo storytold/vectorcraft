@@ -118,7 +118,9 @@ fn arabic_joining_forms_are_not_alternates() {
     assert_eq!(alternates(&t), 0);
 }
 
-/// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either.
+/// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either. With an
+/// older font that files it under `liga` (as the legacy Arial of Microsoft's core fonts does) it
+/// is still required: [`lam_alef_in_liga_is_not_an_alternate`] checks that without an OS font.
 #[test]
 fn lam_alef_is_not_an_alternate() {
     // Looking up an installed font loads it, which changes the fonts.
@@ -126,6 +128,38 @@ fn lam_alef_is_not_an_alternate() {
     let Some(style) = arabic_style("lam_alef_is_not_an_alternate") else { return };
     for s in ["لا", "سلام", "الاسم"] {
         assert_eq!(alternates(&text(s, style.clone())), 0, "{s}");
+    }
+}
+
+/// #394: a font whose lam-alef ligature is in `liga` (older Arabic fonts) or `rlig` gets no
+/// highlight on it: the ligature is required by the characters, not chosen by an optional
+/// feature. Built in code, so it runs whatever fonts the machine has.
+#[test]
+fn lam_alef_in_liga_is_not_an_alternate() {
+    use vectorcraft_text::test_fonts::{lam_alef_family, lam_alef_font};
+    let _adding = crate::tests_fontchange::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    for feature in [b"liga", b"rlig"] {
+        db.add_font(lam_alef_font(feature).unwrap());
+        let style = vectorcraft_doc::text::CharStyle { size: 36.0, font_family: lam_alef_family(feature).into(), ..Default::default() };
+        for s in ["\u{0644}\u{0627}", "\u{0644}\u{0623}", "\u{0628}\u{0644}\u{0627}", "\u{0644}\u{064E}\u{0627}"] {
+            let t = text(s, style.clone());
+            // The font's ligature glyph stands for the pair.
+            assert!(glyphs(&t).iter().any(|g| g.1 > 2), "{}: {s} is shaped to one ligature glyph", lam_alef_family(feature));
+            assert_eq!(alternates(&t), 0, "{}: {s}", lam_alef_family(feature));
+        }
+    }
+}
+
+/// Only a lam followed by an alef (marks between or after allowed) is the required lam-alef.
+#[test]
+fn only_lam_alef_clusters_are_the_required_ligature() {
+    for s in ["\u{0644}\u{0627}", "\u{0644}\u{0622}", "\u{0644}\u{0623}", "\u{0644}\u{0625}", "\u{0644}\u{064E}\u{0627}", "\u{0644}\u{0627}\u{064B}"]
+    {
+        assert!(crate::text_geom::is_lam_alef(s), "{s:?}");
+    }
+    for s in ["", "\u{0644}", "\u{0627}\u{0644}", "\u{0644}\u{0628}", "\u{0628}\u{0644}\u{0627}", "\u{0644}\u{0627}\u{0627}", "fi", "\u{064E}"] {
+        assert!(!crate::text_geom::is_lam_alef(s), "{s:?}");
     }
 }
 

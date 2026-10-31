@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-29 · **Change:** minor (Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Bosnian (`bs`): complete catalog; previously minor: Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -58,6 +58,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Polish | `pl` | 5,130 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/few/many plurals | full; native review pending |
 | Finnish | `fi` | 5,318 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals, 797 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 5,240 catalog entries, including 795 `@msg` rows (counted 2026-10-21); menus, literals and messages complete when counted | catalog complete; render-site gaps reduced; native review pending |
+| Bosnian | `bs` | 5,841 rows (counted 2026-10-30): menus, `tl!` literals and messages complete when counted; one/few/other plurals | full; AI-assisted, native review pending |
 | Swedish | `sv` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
@@ -95,6 +96,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | Bosnian (`bs`, Latin, Ijekavian): complete catalog of 5,841 rows, every `bs-*` locale, one/few/other plurals; AI-assisted, not yet native-reviewed |
 | 2026-10-29 | minor | Vietnamese text: letters with two marks (Ể, Ứ, Ự) attach in precomposed, decomposed and keyboard forms, and a font lacking the marks falls back for the whole letter (#4491); scores unchanged |
 | 2026-10-28 | minor | Catalan (`ca`): complete catalog under the tests (menus, literals, messages; one/other plurals); every `ca-*` locale resolves here; AI-drafted, native review welcome. Added the Turkish and Indonesian rows the table was missing. Scores and estimates unchanged |
 | 2026-10-23 | patch | A missing translation never fails a test or a build; one untranslated report, printed by `cargo xtask ci` and `cargo xtask i18n-report`, lists the missing strings per language; scores unchanged |

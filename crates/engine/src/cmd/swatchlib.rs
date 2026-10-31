@@ -232,13 +232,16 @@ impl<L: LibraryFile> Libraries<L> {
     /// others are listed as loaded until the app quits.
     pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
         let path = text_param(p, "path", cmd)?;
-        let bytes = match (path, text_param(p, "data", cmd)?, text_param(p, "dataBase64", cmd)?) {
+        let data = text_param(p, "data", cmd)?;
+        let data_base64 = text_param(p, "dataBase64", cmd)?;
+        let name = text_param(p, "name", cmd)?;
+        let bytes = match (path, data, data_base64) {
             (Some(path), ..) => read_file(path)?,
             (None, Some(text), _) => text.as_bytes().to_vec(),
             (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
             _ => return Err(bad(cmd, "give `path`, `data` or `dataBase64`")),
         };
-        let file = text_param(p, "name", cmd)?.map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
+        let file = name.map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
         let lib = parse(&bytes, &file)?;
         self.rescan();
         let user =

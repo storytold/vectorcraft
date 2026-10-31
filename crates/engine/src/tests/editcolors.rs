@@ -233,6 +233,81 @@ fn a_clicked_mesh_point_takes_the_opacity() {
     assert!(mesh_opacities(&s, m).iter().all(|a| *a == 1.0));
 }
 
+/// Mesh points picked together (Shift-clicks with the Mesh tool, a Direct Selection marquee) all
+/// take a solid fill colour and the Transparency panel's opacity, and only they do; the panel
+/// shows their opacity, blank when it differs; a drag of one moves them all as one undo step
+/// (#4207, #4208, #4170).
+#[test]
+fn picked_mesh_points_take_the_fill_opacity_and_drag_together() {
+    let mut s = session();
+    let m = rect(&mut s, json!("#ff0000"));
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    let v = ViewInfo::default();
+    let point = |s: &Session, i: usize| {
+        let NodeKind::Mesh(g) = &s.doc().unwrap().doc.node(m).unwrap().kind else { panic!("not a mesh") };
+        g.points[i].p
+    };
+    let pointer = |s: &mut Session, kind: PointerKind, q: vectorcraft_geom::Point, shift: bool| {
+        let mut ev = PointerEvent::new(kind, q.x, q.y);
+        ev.mods.shift = shift;
+        s.pointer(&ev, v).unwrap();
+    };
+    let click = |s: &mut Session, i: usize, shift: bool| {
+        let q = point(s, i);
+        pointer(s, PointerKind::Down, q, shift);
+        pointer(s, PointerKind::Up, q, shift);
+    };
+    let check = |s: &Session, picked: &[usize], hex: &str, opacity: f32, what: &str| {
+        let (c, o) = (mesh_colors(s, m), mesh_opacities(s, m));
+        for i in 0..c.len() {
+            let on = picked.contains(&i);
+            assert_eq!(c[i].to_hex() == hex, on, "{what}: point {i} colour {c:?}");
+            assert_eq!((o[i] - opacity).abs() < 1e-6, on, "{what}: point {i} opacity {o:?}");
+        }
+        assert_eq!(s.doc().unwrap().doc.node(m).unwrap().opacity, 1.0, "{what}: the object stays opaque");
+    };
+    // The Mesh tool: a click, then Shift-clicks add points (and a second one takes one away).
+    s.select_tool("mesh", v).unwrap();
+    click(&mut s, 1, false);
+    for i in [4, 8, 8] {
+        click(&mut s, i, true);
+    }
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("transparency.set", &json!({"opacity": 40})).unwrap();
+    check(&s, &[1, 4], "#0000ff", 0.4, "mesh tool");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step for both points");
+    assert_eq!(s.transparency_info().opacity, Some(40.0), "the panel shows the points' opacity");
+    s.execute("object.mesh.setPointColor", &json!({"id": m.0, "index": 4, "opacity": 0.9})).unwrap();
+    assert_eq!(s.transparency_info().opacity, None, "mixed: blank");
+    // Direct Selection: a marquee over the top-left patch picks its four points.
+    s.select_tool("directSelection", v).unwrap();
+    let corner = point(&s, 0);
+    pointer(&mut s, PointerKind::Down, corner - vectorcraft_geom::Vec2::new(8.0, 8.0), false);
+    let far = point(&s, 4) + vectorcraft_geom::Vec2::new(5.0, 5.0);
+    pointer(&mut s, PointerKind::Drag, far, false);
+    pointer(&mut s, PointerKind::Up, far, false);
+    assert_eq!(s.doc().unwrap().selection.objects, [m], "the marquee selects the mesh");
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 20})).unwrap();
+    check(&s, &[0, 1, 3, 4], "#00ff00", 0.2, "marquee");
+    // A drag of one picked point moves all four by the same offset, in one step.
+    let before: Vec<_> = (0..9).map(|i| point(&s, i)).collect();
+    let undo = s.doc().unwrap().history.undo.len();
+    let d = vectorcraft_geom::Vec2::new(4.0, 6.0);
+    pointer(&mut s, PointerKind::Down, before[4], false);
+    pointer(&mut s, PointerKind::Drag, before[4] + d, false);
+    pointer(&mut s, PointerKind::Up, before[4] + d, false);
+    for (i, was) in before.iter().enumerate() {
+        let want = if [0, 1, 3, 4].contains(&i) { *was + d } else { *was };
+        assert!(point(&s, i).distance(want) < 1e-9, "point {i}: {:?} ≠ {want:?}", point(&s, i));
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((0..9).map(|i| point(&s, i)).collect::<Vec<_>>(), before);
+}
+
 #[test]
 fn blend_moves_a_mesh_to_the_blended_colour() {
     let mut s = session();

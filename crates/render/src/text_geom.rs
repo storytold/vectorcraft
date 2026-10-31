@@ -48,7 +48,8 @@ impl TextGeom {
     /// The boxes of the glyphs of `t` (the text this geometry is of) that optional OpenType features
     /// chose (Preferences › Highlight Alternate Glyphs): candidates the text's required shaping
     /// alone doesn't give ([`required_shaping`]). Arabic letters joining, Indic conjuncts and the
-    /// lam-alef ligature are what the script needs, not alternates. Measured once.
+    /// lam-alef ligature are what the script needs, not alternates (the lam-alef ligature also when
+    /// a font files it under `liga`: [`is_lam_alef`]). Measured once.
     pub(crate) fn alternate_glyphs(&self, t: &TextObject) -> &BezPath {
         self.alternate_glyphs.get_or_init(|| {
             let mut out = BezPath::new();
@@ -82,6 +83,17 @@ impl TextGeom {
 /// id is not the face's cmap mapping for its first character (contextual / stylistic alternate).
 pub(crate) fn is_opentype_alternate(nominal_gid: u32, shaped_gid: u32, cluster_chars: usize) -> bool {
     shaped_gid != 0 && (cluster_chars > 1 || shaped_gid != nominal_gid)
+}
+
+/// Whether `cluster` is a lam followed by an alef (plain, with madda, or with hamza above or below),
+/// with any Arabic marks between or after them: the lam-alef ligature, which the Unicode
+/// Standard's Arabic chapter treats as obligatory, not a stylistic choice. Fonts made before
+/// `rlig` was common put it in `liga`, which [`required_shaping`] turns off, so it is required
+/// by its characters whatever feature the font files it under.
+pub(crate) fn is_lam_alef(cluster: &str) -> bool {
+    let is_mark = |c: &char| matches!(c, '\u{0610}'..='\u{061A}' | '\u{064B}'..='\u{065F}' | '\u{0670}' | '\u{06D6}'..='\u{06DC}' | '\u{06DF}'..='\u{06E4}' | '\u{06E7}' | '\u{06E8}' | '\u{06EA}'..='\u{06ED}');
+    let mut letters = cluster.chars().filter(|c| !is_mark(c));
+    matches!((letters.next(), letters.next(), letters.next()), (Some('\u{0644}'), Some('\u{0622}' | '\u{0623}' | '\u{0625}' | '\u{0627}'), None))
 }
 
 /// A glyph [`is_opentype_alternate`] marks, in its cluster of the text (`byte`, `len`), with its
@@ -181,7 +193,7 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
         let cluster_chars = cluster.chars().count();
         let Some(first) = cluster.chars().next() else { continue };
         let nominal = db.face_by_id(g.font_id).map(|f| f.glyph_for(first)).unwrap_or(0);
-        if is_opentype_alternate(nominal, g.gid, cluster_chars) {
+        if is_opentype_alternate(nominal, g.gid, cluster_chars) && !is_lam_alef(cluster) {
             alternate_candidates.push(AlternateCandidate { byte: g.byte, len: g.len, font_id: g.font_id, gid: g.gid, cell });
         }
     }

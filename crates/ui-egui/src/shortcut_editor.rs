@@ -506,6 +506,17 @@ pub fn reset_one(overrides: &mut Overrides, key: &str) {
     overrides.remove(&crate::keymap::stored_key(key));
 }
 
+/// Text shown for all active chords in a dialog row.
+fn dialog_shortcuts_with(km: &Keymap, key: &str) -> Option<String> {
+    let bindings = km.bindings(&command_of(key));
+    if bindings.len() > 1 {
+        let primary = effective_with(km, key).map(|s| menus::pretty_shortcut(&s))?;
+        let additional = bindings.iter().skip(1).map(|b| menus::pretty_shortcut(&crate::keymap::binding_text(b)));
+        return Some(std::iter::once(primary).chain(additional).collect::<Vec<_>>().join(" · "));
+    }
+    effective_with(km, key).map(|s| menus::pretty_shortcut(&s))
+}
+
 /// Overrides of a preset (both presets are the registry defaults for now).
 pub fn preset(name: &str) -> Option<Overrides> {
     PRESETS.contains(&set_name(name)).then(Overrides::new)
@@ -695,7 +706,7 @@ struct DialogView {
 impl DialogView {
     fn new(overrides: Overrides) -> DialogView {
         let keymap = keymap_with(&overrides);
-        let texts = entries().iter().map(|e| effective_with(&keymap, &e.key)).collect();
+        let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key)).collect();
         let conflicts = conflicts_in(&keymap).len();
         DialogView { source: stored::to_value(keymap.overrides()), keymap, texts, conflicts }
     }
@@ -812,7 +823,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 for (i, e) in entries().iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
                     let sc = match &km {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
-                        Cow::Owned(km) => effective_with(km, &e.key),
+                        Cow::Owned(km) => dialog_shortcuts_with(km, &e.key),
                     };
                     let matches = e.label.to_lowercase().contains(&q)
                         || tl!(&e.label).to_lowercase().contains(&q)
@@ -837,11 +848,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         if r.clicked() {
                             d.fields.insert("__selected".into(), json!(e.key));
                         }
-                        let label = if rec == e.key {
-                            tl!("Press keys…").to_string()
-                        } else {
-                            sc.as_deref().map(menus::pretty_shortcut).unwrap_or_else(|| "—".into())
-                        };
+                        let label = if rec == e.key { tl!("Press keys…").to_string() } else { sc.unwrap_or_else(|| "—".into()) };
                         let changed = crate::keymap::has_override(km.overrides(), &e.key);
                         let txt = egui::RichText::new(label).color(if changed { t.accent } else { t.text });
                         let b = ui
@@ -1222,6 +1229,18 @@ mod tests {
             assert_eq!(preset(p), Some(Overrides::new()));
         }
         assert!(preset("Nope").is_none());
+    }
+
+    #[test]
+    fn paint_dialog_rows_show_both_default_keys() {
+        let view = DialogView::new(Overrides::new());
+        for (key, plain, shifted) in [("paint.lastColor", ",", "Shift+Comma"), ("paint.lastGradient", ".", "Shift+Period")] {
+            let at = entries().iter().position(|e| e.key == key).unwrap();
+            let shown = view.texts[at].as_deref().unwrap();
+            let shifted = menus::pretty_shortcut(shifted);
+            assert!(shown.contains(plain) && shown.contains(&shifted), "{key}: {shown}");
+        }
+        assert_eq!(view.conflicts, 0);
     }
 
     #[test]

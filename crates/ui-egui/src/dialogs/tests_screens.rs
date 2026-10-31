@@ -113,7 +113,7 @@ fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
     let click = |app: &mut VectorcraftApp, i: usize, shift: bool| {
         let mods = Mods { shift, ..Default::default() };
         for kind in [PointerKind::Down, PointerKind::Up] {
-            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, pressure: 1.0 }, view);
+            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, backquote: false, pressure: 1.0 }, view);
         }
     };
     // A click on artboard 2 and a Shift-click on artboard 3 select those two. The dialog opens with

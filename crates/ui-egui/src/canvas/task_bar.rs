@@ -93,6 +93,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
         // These run the same commands as the Control bar's anchor buttons.
         let anchors = !st.selection.anchors.is_empty();
+        // With the Direct Selection tool, a path selected whole offers its anchor points' actions
+        // too, as the reference app's bar does for any path that tool selects (same page), and Edit
+        // Path, which only switches to that tool, is left out (#4469).
+        let direct = app.session.tool_id() == "directSelection";
         if anchors {
             items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors", none()));
             items.push((tl!("Connect"), "dc-join", "path.join", none()));
@@ -122,7 +126,9 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                 items.push((tl!("Isolate"), "square-dashed", "object.isolate", none()));
             }
         } else if is_compound {
-            items.push(edit_path());
+            if !direct {
+                items.push(edit_path());
+            }
             items.push((tl!("Release Compound Path"), "ungroup", "object.compoundPath.release", none()));
         } else if let Some(kind) = text {
             items.push((tl!("Create Outlines"), "type", "type.createOutlines", none()));
@@ -134,6 +140,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
+        } else if !anchors && direct {
+            // Corner and Smooth convert every anchor of a path selected whole; Remove and Cut
+            // need anchors picked out, so they wait for them.
+            if open_path {
+                items.push((tl!("Connect"), "dc-join", "path.join", none()));
+            }
+            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Simplify"), "spline", "object.path.simplify", none()));
         } else if !anchors {
             if open_path {
                 items.push((tl!("Join"), "dc-join", "path.join", none()));

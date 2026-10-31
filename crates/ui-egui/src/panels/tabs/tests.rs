@@ -249,6 +249,244 @@ fn drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f
     ruler_frame(ctx, app, vec![], shift);
 }
 
+fn indent_app(left: f64, first: f64) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "one\ntwo", "area": {"width": 300, "height": 100}})).unwrap();
+    app.run("text.setFormat", json!({"leftIndent": left, "firstLineIndent": first})).unwrap();
+    app
+}
+
+fn indent_values(app: &VectorcraftApp, paragraph: usize) -> (f64, f64) {
+    let (node, _, _) = current(app).unwrap();
+    let NodeKind::Text(t) = node.kind else { panic!("selected text") };
+    let p = t.para_at(paragraph);
+    (p.left_indent, p.first_line_indent)
+}
+
+fn marker_event(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64, upper: bool, command: bool, shift: bool) {
+    let labels = ruler_frame(ctx, app, vec![], shift);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + if upper { 3.0 } else { 11.0 };
+    let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y));
+    let modifiers = match (command, shift) {
+        (true, true) => egui::Modifiers { command: true, shift: true, ..Default::default() },
+        (true, false) => egui::Modifiers::COMMAND,
+        (false, true) => egui::Modifiers::SHIFT,
+        (false, false) => egui::Modifiers::NONE,
+    };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    ruler_frame(ctx, app, vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(press), button(press, true)], shift);
+    if press != end {
+        for f in [0.25, 0.5, 1.0] {
+            ruler_frame(ctx, app, vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(press.lerp(end, f))], shift);
+        }
+    }
+    ruler_frame(ctx, app, vec![egui::Event::ModifiersChanged(modifiers), button(end, false)], shift);
+    ruler_frame(ctx, app, vec![], shift);
+}
+
+#[test]
+fn indent_markers_show_positions_and_select_without_adding_stops() {
+    let mut app = indent_app(24.0, 12.0);
+    let ctx = egui::Context::default();
+    assert_eq!(marker_position(IndentMarker::Lower, &current_para(&app).unwrap().1), 24.0);
+    assert_eq!(marker_position(IndentMarker::Upper, &current_para(&app).unwrap().1), 36.0);
+    let labels = ruler_frame(&ctx, &mut app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 400.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let triangles: Vec<egui::Pos2> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Path(path) if path.points.len() == 3 && path.points.iter().all(|p| p.y >= a.y && p.y <= a.y + 16.0) => {
+                Some(egui::pos2(path.points.iter().map(|p| p.x).sum::<f32>() / 3.0, path.points.iter().map(|p| p.y).sum::<f32>() / 3.0))
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(triangles.iter().any(|p| (p.x - x(36.0)).abs() < 0.5 && p.y < a.y + 8.0), "upper marker at 36 pt: {triangles:?}");
+    assert!(triangles.iter().any(|p| (p.x - x(24.0)).abs() < 0.5 && p.y > a.y + 8.0), "lower marker at 24 pt: {triangles:?}");
+    marker_event(&ctx, &mut app, 36.0, 36.0, true, false, false);
+    assert_eq!(pstate::<Option<IndentMarker>>(&ctx, "tabs-marker-sel"), Some(IndentMarker::Upper));
+    assert!(current(&app).unwrap().1.is_empty());
+    marker_event(&ctx, &mut app, 24.0, 24.0, false, false, false);
+    assert_eq!(pstate::<Option<IndentMarker>>(&ctx, "tabs-marker-sel"), Some(IndentMarker::Lower));
+    assert!(current(&app).unwrap().1.is_empty());
+}
+
+#[test]
+fn upper_and_lower_marker_drags_map_indents_and_undo_once() {
+    let mut app = indent_app(24.0, 12.0);
+    let ctx = egui::Context::default();
+    let before = app.session.active().unwrap().history.undo.len();
+    marker_event(&ctx, &mut app, 36.0, 60.0, true, false, false);
+    assert_eq!(indent_values(&app, 0), (24.0, 36.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(indent_values(&app, 0), (24.0, 12.0));
+    marker_event(&ctx, &mut app, 24.0, 40.0, false, false, false);
+    assert_eq!(indent_values(&app, 0), (40.0, -4.0));
+    marker_event(&ctx, &mut app, 40.0, 50.0, false, true, false);
+    assert_eq!(indent_values(&app, 0), (50.0, -4.0));
+}
+
+#[test]
+fn marker_shift_drag_snaps_and_coincident_halves_remain_separate() {
+    let mut app = indent_app(24.0, 0.0);
+    let ctx = egui::Context::default();
+    marker_event(&ctx, &mut app, 24.0, 33.4, true, false, true);
+    assert_eq!(indent_values(&app, 0), (24.0, 11.0));
+    app.run("text.setFormat", json!({"leftIndent": 24, "firstLineIndent": 0})).unwrap();
+    marker_event(&ctx, &mut app, 24.0, 40.0, false, false, false);
+    assert_eq!(indent_values(&app, 0), (40.0, -16.0));
+}
+
+#[test]
+fn mixed_indent_upper_marker_keeps_each_left_indent_in_one_undo_step() {
+    let mut app = indent_app(24.0, 12.0);
+    let id = current(&app).unwrap().0.id.0;
+    app.run("text.setFormat", json!({"id": id, "start": 4, "end": 4, "leftIndent": 60, "firstLineIndent": -10})).unwrap();
+    let ctx = egui::Context::default();
+    let before = app.session.active().unwrap().history.undo.len();
+    marker_event(&ctx, &mut app, 36.0, 70.0, true, false, false);
+    assert_eq!(indent_values(&app, 0), (24.0, 46.0));
+    assert_eq!(indent_values(&app, 1), (60.0, 10.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(indent_values(&app, 0), (24.0, 12.0));
+    assert_eq!(indent_values(&app, 1), (60.0, -10.0));
+    marker_event(&ctx, &mut app, 60.0, 60.0, false, false, false);
+    assert_ne!(pstate::<Option<IndentMarker>>(&ctx, "tabs-marker-sel"), Some(IndentMarker::Lower));
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let a = app.run("text.create", json!({"x": 10, "y": 20, "text": "one", "area": {"width": 300, "height": 100}})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 10, "y": 140, "text": "two", "area": {"width": 300, "height": 100}})).unwrap()["id"].clone();
+    app.run("text.setFormat", json!({"id": a, "leftIndent": 24, "firstLineIndent": 12})).unwrap();
+    app.run("text.setFormat", json!({"id": b, "leftIndent": 60, "firstLineIndent": -10})).unwrap();
+    app.run("select.set", json!({"ids": [a, b.clone()]})).unwrap();
+    let ctx = egui::Context::default();
+    assert_eq!(current_para(&app).unwrap().1.left_indent, 24.0);
+    marker_event(&ctx, &mut app, 36.0, 70.0, true, false, false);
+    assert_eq!(indent_values(&app, 0), (24.0, 46.0));
+    let second = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(b.as_u64().unwrap())).unwrap();
+    let NodeKind::Text(second) = &second.kind else { panic!("second text") };
+    assert_eq!((second.para_at(0).left_indent, second.para_at(0).first_line_indent), (60.0, 10.0));
+}
+
+#[test]
+fn lower_marker_keeps_each_first_line_position_in_one_undo_step() {
+    let mut app = indent_app(24.0, 12.0);
+    let id = current(&app).unwrap().0.id.0;
+    app.run("text.setFormat", json!({"id": id, "start": 4, "end": 7, "firstLineIndent": 28})).unwrap();
+    assert_eq!(indent_values(&app, 0), (24.0, 12.0));
+    assert_eq!(indent_values(&app, 1), (24.0, 28.0));
+    let ctx = egui::Context::default();
+    let before = app.session.active().unwrap().history.undo.len();
+    marker_event(&ctx, &mut app, 24.0, 40.0, false, false, false);
+    assert_eq!(indent_values(&app, 0), (40.0, -4.0));
+    assert_eq!(indent_values(&app, 1), (40.0, 12.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(indent_values(&app, 0), (24.0, 12.0));
+    assert_eq!(indent_values(&app, 1), (24.0, 28.0));
+    marker_event(&ctx, &mut app, 24.0, 40.0, false, true, false);
+    assert_eq!(indent_values(&app, 0), (40.0, 12.0));
+    assert_eq!(indent_values(&app, 1), (40.0, 28.0));
+}
+
+#[test]
+fn lower_marker_bounds_cover_each_touched_first_line() {
+    let targets = [IndentTarget { id: 1, start: 0, left: 24.0, first_line: -20.0 }, IndentTarget { id: 1, start: 4, left: 24.0, first_line: 280.0 }];
+    assert_eq!(bounded_marker_position(IndentMarker::Lower, 40.0, 300.0, &targets, true), Some(20.0));
+    assert_eq!(bounded_marker_position(IndentMarker::Lower, 1200.0, 300.0, &targets, false), Some(300.0));
+}
+
+#[test]
+fn hidden_lower_selection_returns_x_field_to_tab_stop() {
+    let mut app = indent_app(24.0, 12.0);
+    app.run("text.tabs.set", json!({"stops": [{"position": 100}]})).unwrap();
+    let ctx = egui::Context::default();
+    marker_event(&ctx, &mut app, 24.0, 24.0, false, false, false);
+    assert_eq!(pstate::<Option<IndentMarker>>(&ctx, "tabs-marker-sel"), Some(IndentMarker::Lower));
+    let id = current(&app).unwrap().0.id.0;
+    app.run("text.setFormat", json!({"id": id, "start": 4, "end": 7, "leftIndent": 60})).unwrap();
+    assert_eq!(indent_values(&app, 0), (24.0, 12.0));
+    assert_eq!(indent_values(&app, 1), (60.0, 12.0));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 400.0));
+    let frame = |app: &mut VectorcraftApp, events| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let texts = frame(&mut app, vec![]);
+    let at = texts.iter().find(|(text, _)| text == "100 pt").unwrap_or_else(|| panic!("tab X field missing: {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    frame(&mut app, vec![egui::Event::PointerMoved(at), button(true)]);
+    frame(&mut app, vec![button(false)]);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+    frame(&mut app, vec![egui::Event::Text("120".into())]);
+    frame(&mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    assert_eq!(indent_values(&app, 0).0, 24.0);
+    assert_eq!(indent_values(&app, 1).0, 60.0);
+    assert_eq!(current(&app).unwrap().1[0].position, 120.0);
+}
+
+#[test]
+fn selected_marker_position_field_sets_its_absolute_position() {
+    let mut app = indent_app(24.0, 12.0);
+    let ctx = egui::Context::default();
+    marker_event(&ctx, &mut app, 36.0, 36.0, true, false, false);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 400.0));
+    let field_frame = |app: &mut VectorcraftApp, events| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let texts = field_frame(&mut app, vec![]);
+    let at = texts.iter().find(|(text, _)| text == "36 pt").unwrap_or_else(|| panic!("36 pt in {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    field_frame(&mut app, vec![egui::Event::PointerMoved(at), button(true)]);
+    field_frame(&mut app, vec![button(false)]);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    field_frame(&mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+    field_frame(&mut app, vec![egui::Event::Text("80".into())]);
+    field_frame(&mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    assert_eq!(indent_values(&app, 0), (24.0, 56.0));
+    marker_event(&ctx, &mut app, 24.0, 24.0, false, false, false);
+    let texts = field_frame(&mut app, vec![]);
+    let at = texts.iter().find(|(text, _)| text == "24 pt").unwrap_or_else(|| panic!("24 pt in {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    field_frame(&mut app, vec![egui::Event::PointerMoved(at), button(true)]);
+    field_frame(&mut app, vec![button(false)]);
+    field_frame(&mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+    field_frame(&mut app, vec![egui::Event::Text("40".into())]);
+    field_frame(&mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    assert_eq!(indent_values(&app, 0), (40.0, 40.0));
+}
+
 /// The ruler is numbered in the General unit (the document's units), with labels at least 50 px
 /// apart as on the canvas rulers.
 #[test]
@@ -548,6 +786,22 @@ fn panel_menu_repeats_deletes_and_clears_tab_stops() {
     assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "Clear All Tabs");
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(positions(&app).len(), 21);
+}
+
+#[test]
+fn panel_menu_does_not_change_stops_while_an_indent_marker_is_selected() {
+    let mut app = indent_app(24.0, 12.0);
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}, {"position": 70}]})).unwrap();
+    let ctx = egui::Context::default();
+    set_pstate(&ctx, "tabs-sel", 1usize);
+    marker_event(&ctx, &mut app, 36.0, 36.0, true, false, false);
+    assert_eq!(pstate::<Option<IndentMarker>>(&ctx, "tabs-marker-sel"), Some(IndentMarker::Upper));
+    let before = current(&app).unwrap().1;
+
+    choose(&ctx, &mut app, "Repeat Tab");
+    assert_eq!(current(&app).unwrap().1, before);
+    choose(&ctx, &mut app, "Delete Tab");
+    assert_eq!(current(&app).unwrap().1, before);
 }
 
 /// Repeat Tab on the first stop spaces the copies by the stop's distance from the paragraph's

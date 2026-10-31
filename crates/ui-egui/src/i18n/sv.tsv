@@ -184,7 +184,7 @@
 	Anti-aliased Artwork	Kantutjämnad grafik
 	Anti-aliasing:	Kantutjämning:
 	Any Kind	Alla typer
-	Font Technology	Teckensnittsteknik
+	Font Technology	Typsnittsteknik
 font-technology	Variable	Variabla
 	Appearance	Utseende
 	Appearance Attribute	Utseendeattribut
@@ -497,7 +497,7 @@ font-technology	Variable	Variabla
 	Collect in New Layer	Samla i nytt lager
 	Collect Links in a Separate Folder	Samla länkar i en separat mapp
 	Color	Färg
-	Color (,)	Färg (,)
+	Color (, or <)	Färg (, eller <)
 	Color Adjustments	Färgjusteringar
 	Color bars	Färgstaplar
 	Color blindness – Deuteranopia-type	Färgblindhet – deuteranopi
@@ -1238,7 +1238,7 @@ font-technology	Variable	Variabla
 	GPL palettes keep solid colours only, as RGB.	GPL-paletter sparar bara enfärgade färger, som RGB.
 	GPU Performance	GPU-prestanda
 	Gradient	Gradient
-	Gradient (.)	Gradient (.)
+	Gradient (. or >)	Gradient (. eller >)
 	Gradient across stroke	Gradient tvärs över konturen
 	Gradient along stroke	Gradient längs konturen
 	Gradient and Mesh Resolution:	Upplösning för gradienter och nät:
@@ -1382,6 +1382,7 @@ font-technology	Variable	Variabla
 	Delete Guides	Radera stödlinjer
 	Delete Slice	Radera skiva
 	Delete Style	Radera stil
+	Delete Styles	Radera stilar
 	Delete Variables	Radera variabler
 	Delete View	Radera vy
 	Done Editing Pattern	Avsluta mönsterredigering
@@ -1860,6 +1861,7 @@ font-technology	Variable	Variabla
 	Move in Perspective	Flytta i perspektiv
 	Move Locked and Hidden Artwork with Artboard	Flytta låst och dold grafik med ritytan
 	Move Mesh Point	Flytta nätpunkt
+	Move Mesh Points	Flytta nätpunkter
 	Move Plane	Flytta plan
 	Move Plane to Match Object	Flytta plan så att det matchar objekt
 	Move Rows	Flytta rader
@@ -2261,7 +2263,7 @@ font-technology	Variable	Variabla
 	Percent:	Procent:
 	Perceptual Scales	Perceptuella skalor
 	Performance	Prestanda
-	Plug-ins & Scratch Disks	Insticksprogram & Arbetsdiskar
+	Plug-ins & Scratch Disks	Plugins & arbetsdiskar
 	Permissions	Behörigheter
 	Permissions password:	Lösenord för behörigheter:
 	Perspective	Perspektiv
@@ -2582,6 +2584,7 @@ font-technology	Variable	Variabla
 	Repeat Tab	Upprepa tabb
 	Repeat {name}	Upprepa {name}
 	Replace	Ersätt
+	Replace:	Ersätt:
 	Replace Font	Ersätt typsnitt
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
@@ -4065,6 +4068,7 @@ axis	Both	Båda
 @msg	no document	inget dokument
 @msg	no document open	inget dokument är öppet
 @msg	no effect applied yet	ingen effekt har använts än
+@msg	no Pathfinder operation applied yet	ingen banfinnaråtgärd har använts än
 @msg	no effect at index {k}	ingen effekt vid index {k}
 @msg	no end record	ingen slutpost
 @msg	no file manager here	ingen filhanterare här
@@ -5502,7 +5506,7 @@ swatch	Yellow Green	Gulgrön
 @msg	“{name}” is not a file	”{name}” är inte en fil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Bilden är {_1} × {_2} pixlar, mer än {LARGE_TRACE_SIDE} på en sida: den vektoriseras, men långsammare. En förinställning med lägre återgivning eller en mindre kopia av bilden går snabbare.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Bilden vektoriserades vid {_1} × {_2} pixlar, nedskalad från {_3} × {_4} (högst {_5} megapixlar).
-	Snapping	Fästning
+	Snapping	Fäst
 	Snap to Tangent	Fäst mot tangent
 	Snap to Perpendicular	Fäst mot vinkelrät
 @msg	unknown snap option `{key}` (use {options})	okänt fästalternativ `{key}` (använd {options})
@@ -5599,19 +5603,19 @@ axis	Y Axis	Y-axel
 	{count} file(s) in {folder}. Show the package folder?	{count} fil(er) i {folder}. Visa paketmappen?
 	Clockwise	Medurs
 	Dither	Dithering
-	Fine noise hides banding in the gradient fill	Fint brus döljer bandningen i övertoningsfyllningen
-@msg	`dither` applies to gradient fills (stroke: false)	`dither` gäller övertoningsfyllningar (stroke: false)
-@msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller övertoningsfyllningar (paint.setFill)
+	Fine noise hides banding in the gradient fill	Fint brus döljer bandningen i gradientfyllningen
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` gäller gradientfyllningar (stroke: false)
+@msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
 @msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installera ”{name}”, som begär en stor beräkningsbudget?
-	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Varje körning kan ta upp till {minutes} minuter och göra {times} gånger så mycket arbete som andra insticksprogram får. Den körs i bakgrunden och du kan avbryta den.
+	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Varje körning kan ta upp till {minutes} minuter och göra {times} gånger så mycket arbete som andra plugins får. Den körs i bakgrunden och du kan avbryta den.
 	It may take minutes, so it runs in the background, where you can cancel it.	Det kan ta flera minuter, så det körs i bakgrunden, där du kan avbryta det.
-	The plug-in is computing…	Insticksprogrammet räknar…
-	Inspect Plug-in	Granska insticksprogram
-	Cancel Plug-in Run	Avbryt körning av insticksprogram
-@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} är klar, men dokumentet eller insticksprogrammet ändrades under tiden: kör det igen
+	The plug-in is computing…	Pluginet räknar…
+	Inspect Plug-in	Granska plugin
+	Cancel Plug-in Run	Avbryt körning av plugin
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} är klar, men dokumentet eller pluginet ändrades under tiden: kör det igen
 @msg	Running “{name}”…	Kör ”{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
@@ -5717,3 +5721,324 @@ axis	Y Axis	Y-axel
 	Glyph Bounds	Glyfgränser
 	Proximity Guides	Närhetsstödlinjer
 	Angular Guides	Vinkelstödlinjer
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Medelvärde och foga samman…
+	Average & Join	Medelvärde och foga samman
+anchor	Points:	Punkter:
+@msg	select two open path ends, or two open paths, to average and join	markera två ändar av öppna banor, eller två öppna banor, att medelvärdesberäkna och foga samman
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Upprensning av grafik
+	Simplify Anchors (Keep Shape)…	Förenkla ankarpunkter (behåll formen)…
+	Health Check	Hälsokontroll
+	Show Issue	Visa problem
+	Fix All Issues	Åtgärda alla problem
+	Fix Issues	Åtgärda problem
+	Deep Ungroup…	Dela upp grupper på alla nivåer…
+	Rejoin Path Pieces…	Foga samman banbitar igen…
+	Document Health Check	Hälsokontroll av dokument
+	Check Selection	Kontrollera markering
+	Check Document	Kontrollera dokument
+	No issues found.	Inga problem hittades.
+	Changed since the last check.	Ändrat sedan den senaste kontrollen.
+	Fix Selected	Åtgärda markerade
+	Fix All	Åtgärda alla
+	Issues fixed: {count}	Åtgärdade problem: {count}
+	Open a document to check it for issues.	Öppna ett dokument för att kontrollera det efter problem.
+	Empty Text	Tom text
+	Unpainted Objects	Ofärgade objekt
+	Zero-Opacity Objects	Objekt med 0 % opacitet
+	Duplicate Objects	Dubblettobjekt
+	Off-Artboard Art	Grafik utanför ritytorna
+	Duplicate Anchors	Dubbletter av ankarpunkter
+	Tiny Handles	Små handtag
+	Collinear Anchors	Kollineära ankarpunkter
+	Nearly Coincident Anchors	Nästan sammanfallande ankarpunkter
+	Nearly Closed Paths	Nästan slutna banor
+	Filled Open Paths	Fyllda öppna banor
+	Needless Clipping Groups	Onödiga klippgrupper
+	Needless Compound Paths	Onödiga sammansatta banor
+	Needless Groups	Onödiga grupper
+	Empty Artboards	Tomma ritytor
+	Protect Corners	Skydda hörn
+	Gap	Mellanrum
+	Include Clip Groups	Ta med klippgrupper
+@msg	`tolerance` must be from 1 to 100	`tolerance` måste vara från 1 till 100
+@msg	`gap` must be from 0 to 6 pt	`gap` måste vara från 0 till 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Förenkla ankarpunkter: banorna har för många ankarpunkter för att förenklas på en gång
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Foga samman banbitar igen: för många banor för att foga samman på en gång
+@msg	None of these issues are left: check again	Inget av dessa problem finns kvar: kontrollera igen
+@msg	`kinds` must be a list of issue kinds	`kinds` måste vara en lista med problemtyper
+@msg	missing `kind`	`kind` saknas
+	Simplify Anchors (Keep Shape)	Förenkla ankarpunkter (behåll formen)
+	Deep Ungroup	Dela upp grupper på alla nivåer
+	Rejoin Path Pieces	Foga samman banbitar igen
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Färgeffekter
+	Color Effects Panel	Panelen Färgeffekter
+	Exposure	Exponering
+	Exposure…	Exponering…
+	Desaturate	Avmätta
+	Adjustment	Justering
+	Add as Effect	Lägg till som effekt
+	Apply as Filter	Använd som filter
+	Select objects to adjust their colors.	Markera objekt för att justera deras färger.
+	Brightness/Contrast	Ljusstyrka/kontrast
+	Hue/Saturation	Nyans/mättnad
+	Temperature/Tint	Temperatur/färgton
+@msg	`{id}` is not a colour adjustment	`{id}` är ingen färgjustering
+@msg	missing `effect`	`effect` saknas
+@msg	`params` must be an object	`params` måste vara ett objekt
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Precisionsverktyg för banor
+	Anchor Eraser Brush	Ankarpunktsraderpensel
+	Extend Path Tool	Förläng bana-verktyget
+	Measure & Inspect Tool	Mät och granska-verktyget
+	Anchor Inspector	Ankarpunktsgranskare
+	Add Points at Crossings	Lägg till punkter vid korsningar
+	Split at Crossings	Dela vid korsningar
+	Extend Path	Förläng bana
+	Measure & Inspect	Mät och granska
+	Set Anchor	Ange ankarpunkt
+	Make Smooth	Gör mjuk
+	Make Corner	Gör till hörn
+	Equalize Handles	Utjämna handtag
+	Remove Points, Keep Shape	Ta bort punkter, behåll formen
+	Add Points to Segments…	Lägg till punkter i segment…
+	Add Points to Segments	Lägg till punkter i segment
+	Open a document to edit its anchor points.	Öppna ett dokument för att redigera dess ankarpunkter.
+	Anchors selected: {count}	Valda ankarpunkter: {count}
+	Direct-select anchor points to edit them.	Direktmarkera ankarpunkter för att redigera dem.
+	In:	In:
+	Out:	Ut:
+	Add Points	Lägg till punkter
+	Points per segment	Punkter per segment
+	Close Path:	Stäng bana:
+	Keep Handles	Behåll handtag
+	Straight	Rak
+	Stretch Curve	Sträck kurvan
+@msg	direct-select the anchor points to remove	direktmarkera ankarpunkterna som ska tas bort
+@msg	select segments, or paths, to add points to	markera segment, eller banor, att lägga till punkter i
+@msg	select open paths to close	markera öppna banor att stänga
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	för många eller för trassliga banor för att hitta deras korsningar (högst 10000 segment)
+@msg	the paths have too many anchors to edit at once	banorna har för många ankarpunkter för att redigeras på en gång
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Parametrisk form-verktyget
+	Parametric Shape	Parametrisk form
+	Edit Parametric Shape	Redigera parametrisk form
+	Convert to Parametric Shape	Konvertera till parametrisk form
+	Ring	Ring
+	Heart	Hjärta
+	Gear	Kugghjul
+	Speech Bubble	Pratbubbla
+	Count:	Antal:
+	Thickness:	Tjocklek:
+	Inner Radius:	Inre radie:
+	Head:	Huvud:
+	Shaft:	Skaft:
+	Point:	Spets:
+	Tooth Height:	Tandhöjd:
+	Tail:	Svans:
+	Tip:	Spets:
+	Open a document to draw parametric shapes.	Öppna ett dokument för att rita parametriska former.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Markera en parametrisk form för att redigera den. Utan markering gäller värdena nästa form.
+@msg	the object is not an editable parametric shape	objektet är inte en redigerbar parametrisk form
+@msg	select plain rectangles, ellipses or regular polygons to convert	markera vanliga rektanglar, ellipser eller regelbundna polygoner att konvertera
+@msg	the shape's numbers are out of range	formens värden ligger utanför intervallet
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` måste vara något av: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` måste vara ett heltal från 3 till 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` måste vara från {lo} till {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Smart penna
+	Smart Pen Tool	Smart penna-verktyget
+	Smart Pen Panel	Smart penna-panelen
+	Next Segment	Nästa segment
+	Curved	Böjd
+	Retract Handles	Dra in handtag
+	Close or Join	Stäng eller foga samman
+	Open a document to draw with the Smart Pen.	Öppna ett dokument för att rita med smart penna.
+	Straight or Curved Segment	Rakt eller böjt segment
+@msg	the path is locked or hidden	banan är låst eller dold
+@msg	`id` is not a path	`id` är inte en bana
+@msg	the path has no open subpath	banan har ingen öppen delbana
+@msg	the subpath is closed	delbanan är stängd
+@msg	the subpath is closed or too short to close	delbanan är stängd eller för kort för att stänga
+@msg	the path is too short to remove a point from	banan är för kort för att ta bort en punkt
+@msg	the segment can't be bent that far	segmentet kan inte böjas så långt
+@msg	give `{a}` and `{b}`	ange `{a}` och `{b}`
+@msg	`t` must be from 0 to 1	`t` måste vara från 0 till 1
+@msg	`segment` must be "straight" or "curved"	`segment` måste vara "straight" eller "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` måste vara "free", "keepAngles" eller "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` måste vara [x, y]
+	 on the canvas to create one	 på arbetsytan för att skapa en
+	Arrow Scale:	Pilskala:
+	Arrow Style:	Pilstil:
+	Check for Updates…	Sök efter uppdateringar…
+	Dimension Lines	Måttlinjer
+	Dimension Text	Måttal
+	Extension Lines	Måttgränslinjer
+	Extension:	Förlängning:
+	Hide Extension Lines	Dölj måttgränslinjer
+	Hide Units	Dölj enheter
+	Invalid panel layout; restored the default dock	Ogiltig panellayout; standarddockningen har återställts
+	Japanese Double Postcard	Japanskt dubbelvykort
+	Japanese Envelope #3	Japanskt kuvert #3
+	Japanese Envelope #4	Japanskt kuvert #4
+	Japanese Postcard	Japanskt vykort
+	Kaku #2	Kaku #2
+	Kaku #3	Kaku #3
+	Line Type:	Linjetyp:
+	Line Weight:	Linjetjocklek:
+	Load Variable Library	Läs in variabelbibliotek
+	Preparing the image…	Förbereder bilden…
+	Right-click an item to move it into this group.	Högerklicka på ett objekt för att flytta det till den här gruppen.
+	Tracing the colors…	Vektoriserar färgerna…
+	Units & Scale	Enheter & skala
+	VectorCraft Updates	Uppdateringar för VectorCraft
+	Yonroku-ban	Yonroku-ban
+@msg	image '{key}' has no pixels and was left out	bilden '{key}' har inga pixlar och utelämnades
+@msg	not an RTF file: it doesn't start with {\\rtf	inte en RTF-fil: den börjar inte med {\\rtf
+shape	Open	Öppen
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Markera efter färgtyp
+	Objects with Spot Colors	Objekt med dekorfärger
+	Objects with Color Effects	Objekt med färgeffekter
+	RGB Images	RGB-bilder
+	CMYK Images	CMYK-bilder
+	Grayscale Images	Gråskalebilder
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` måste vara spotColors, colorEffects, rgbImages, cmykImages eller grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Punktfärg från objekt
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Duoton…
+	Duotone	Duoton
+	Print Ink Fixes…	Tryckfärgskorrigeringar…
+	Print Ink Fixes	Tryckfärgskorrigeringar
+	Inks	Tryckfärger
+	Tone 1	Ton 1
+	Tone 2	Ton 2
+	Tone 3	Ton 3
+	Tone 4	Ton 4
+	Curve	Kurva
+	Reset to Linear	Återställ till linjär
+	Reset to Inverse	Återställ till omvänd
+	Skip Objects with Spot Colors	Hoppa över objekt med dekorfärger
+	Ink Limit	Färggräns
+	Exclude Pure Black	Uteslut ren svart
+	Remove White Overprint	Ta bort övertryck av vitt
+	Overprint Black	Övertryck svart
+	Text Only	Endast text
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	ange `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Tryckfärgskorrigeringar fungerar i CMYK-dokument: välj först Fil › Dokumentets färgläge › CMYK-färg
+@msg	`{key}` must be 0..{max}	`{key}` måste vara 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Hörnverktyget
+	Slide Anchor Along Path	Skjut ankarpunkt längs bana
+	Set Corners	Ange hörn
+	Remove Corners	Ta bort hörn
+	Corners selected: {count}	Valda hörn: {count}
+	Apply to Selected Anchors	Tillämpa på valda ankarpunkter
+@msg	`radius` must be from 0 to 1000000 pt	`radius` måste vara från 0 till 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` måste vara ett tal från -0.98 till 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	välj ankarpunkter där två sidor möts i en vinkel: bara de kan få ett hörn
+@msg	give `anchor`, the index of the anchor to slide	ange `anchor`, indexet för ankarpunkten som ska skjutas
+@msg	that anchor can't slide: an end of an open path has nowhere to go	den ankarpunkten kan inte skjutas: änden av en öppen bana har ingenstans att ta vägen
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Verktyg för sammanfogning av gemensam kant
+	Merge Shared Edge	Sammanfoga gemensam kant
+	Keep Shared Points Together	Håll ihop gemensamma punkter
+	Shared Edges	Gemensamma kanter
+	Coincidence:	Sammanfall:
+@msg	`a` and `b` must be two different paths	`a` och `b` måste vara två olika banor
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` måste vara från 0.25 till 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` måste vara från 0 till 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` måste vara "average", "a" eller "b"
+@msg	the paths have nothing to merge there	banorna har inget att sammanfoga här
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Dela upp text
+	Combine Point Text	Kombinera punkttext
+	Remove Breaks	Ta bort brytningar
+	Split Text at Cursor	Dela text vid markören
+	Set Alignment, Keep Position	Ställ in justering, behåll position
+	Reset Text Transform	Återställ texttransformering
+	Replace Missing Fonts…	Ersätt saknade typsnitt…
+	Replace Missing Fonts	Ersätt saknade typsnitt
+	Remove Line Breaks	Ta bort radbrytningar
+	Remove Paragraph Breaks	Ta bort styckebrytningar
+	Break Text into Lines	Dela upp text i rader
+	Break Text into Paragraphs	Dela upp text i stycken
+	Break Text into Words	Dela upp text i ord
+	Break Text into Glyphs	Dela upp text i glyfer
+	Reset Text Transform and Scale	Återställ texttransformering och skala
+	Set Alignment, Keep Position:	Ställ in justering, behåll position:
+	Break Text into:	Dela upp text i:
+	Split at Cursor	Dela vid markören
+	Reset Transform	Återställ transformering
+	Shift-click: break into paragraphs	Shift-klicka: dela upp i stycken
+	Alt-click: reset the horizontal scale too	Alt-klick: återställ även den horisontella skalan
+breakText	Lines	Rader
+breakText	Words	Ord
+breakText	Glyphs	Glyfer
+@msg	Click in type with a Type tool to split it	Klicka i text med ett textverktyg för att dela den
+@msg	Too many type objects to change at once	För många textobjekt att ändra på en gång
+@msg	Too many pieces to make at once	För många delar att skapa på en gång
+@msg	Select horizontal point or area type whose text fits	Markera vågrät punkt- eller områdestext vars text får plats
+@msg	Nothing to split at the cursor	Inget att dela vid markören
+@msg	Select two or more one-line point type objects on one baseline to combine	Markera två eller fler enradiga punkttextobjekt på samma baslinje för att kombinera dem
+@msg	No line breaks to remove	Inga radbrytningar att ta bort
+@msg	No paragraph breaks to remove	Inga styckebrytningar att ta bort
+@msg	Too many breaks to remove at once	För många brytningar att ta bort på en gång
+@msg	Select point type	Markera punkttext
+@msg	The point type is aligned that way already	Punkttexten är redan justerad så
+@msg	The point type has no transform to reset	Punkttexten har ingen transformering att återställa
+@msg	No fonts are missing	Inga typsnitt saknas
+@msg	the replacement font is not available	ersättningstypsnittet är inte tillgängligt
+@msg	missing `align`	`align` saknas
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` måste vara lines, paragraphs, words eller glyphs, inte {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` måste vara "line" eller "paragraph", inte {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` måste vara "left", "center" eller "right", inte {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Baneffekter
+	Reverse Direction	Vänd riktning
+	Align to Corners and Ends	Justera mot hörn och ändar
+	Count	Antal
+	Max Count	Högsta antal
+	Start Length	Startlängd
+	Start Percent	Startprocent
+	Start Shape	Startform
+	End Length	Slutlängd
+	End Percent	Slutprocent
+	End Shape	Slutform
+	By Count	Efter antal
+	By Distance	Efter avstånd
+	Both	Båda
+	Shorter Than Length	Kortare än längden
+	Dashes to Geometry	Streck till geometri
+	Dashes to Geometry…	Streck till geometri…
+	Add Anchors	Lägg till ankarpunkter
+	Add Anchors…	Lägg till ankarpunkter…
+	Smooth Anchors	Jämna ut ankarpunkter
+	Smooth Anchors…	Jämna ut ankarpunkter…
+	Simplify Anchors	Förenkla ankarpunkter
+	Simplify Anchors…	Förenkla ankarpunkter…
+	Split at Anchors	Dela vid ankarpunkter
+	Split at Anchors…	Dela vid ankarpunkter…
+	Extend Path…	Förläng bana…
+	Close Path…	Stäng bana…
+	Retract Handles…	Dra in handtag…
+	Dash 1	Streck 1
+	Gap 1	Mellanrum 1
+	Dash 2	Streck 2
+	Gap 2	Mellanrum 2
+	Dash 3	Streck 3
+	Gap 3	Mellanrum 3
+	Dash 4	Streck 4
+	Gap 4	Mellanrum 4
+	Dash 5	Streck 5
+	Gap 5	Mellanrum 5

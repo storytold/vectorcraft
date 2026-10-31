@@ -160,6 +160,23 @@ pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Full Screen Mode and Presentation Mode fill the screen (#4365: the taskbar and the window's
+/// frame stayed): the window goes full screen when one of them starts, and back when a mode with
+/// the menu bar returns. A window that was full screen already stays so.
+pub fn sync_fullscreen(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let want = app.ui.screen_mode >= 2;
+    let is = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+    if want && !is && !app.fullscreen_for_mode {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        app.fullscreen_for_mode = true;
+    } else if !want && app.fullscreen_for_mode {
+        if is {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        }
+        app.fullscreen_for_mode = false;
+    }
+}
+
 #[cfg(test)]
 mod tests;
 

@@ -92,6 +92,10 @@ x11rb = { version = "0.13", default-features = false, features = ["xinput"] }
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one. Both are already in the build through winit.
 wayland-client = "0.31"
+# Copy and Paste of text through the compositor's core data-device protocol on the window's
+# connection (src/clipboard.rs), where arboard has neither data-control (GNOME) nor X11 (a Flatpak
+# on a Wayland session). MIT, already in the build through egui-winit.
+smithay-clipboard = "0.7"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 # The save dialog's parent window on Wayland (src/portal_save.rs): an xdg-foreign handle (in
 # wayland-protocols' `unstable` set) made on the window's own connection. MIT, already in the build

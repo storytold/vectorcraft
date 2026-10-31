@@ -530,6 +530,7 @@ mod tests {
             tint: None,
             ink: Ink::Display,
             luts: (0, 0),
+            plates: 0,
             mip: 0,
         };
         let pm =

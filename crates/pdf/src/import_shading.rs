@@ -21,8 +21,8 @@ use crate::import_color::{Colors, Native};
 use crate::import_mask::{contains, is_rectangle, luminance};
 
 /// The most mesh patches (or triangles) imported per shading: past it, the shading is a flat
-/// colour.
-const MAX_PATCHES: usize = 4096;
+/// colour. (Illustrator writes meshes of up to 14,355 in files users sent.)
+const MAX_PATCHES: usize = 16_384;
 
 /// An axial or radial shading as a gradient paint, with whether it extends past its start and
 /// its end. `inks`: the colorant names of its space, from the page's walk ([`Colors::solid`]).

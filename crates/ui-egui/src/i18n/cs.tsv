@@ -1209,12 +1209,12 @@ lighting	Light	Světlo
 	 to set spacing and orientation	 nastaví rozestupy a orientaci
 	Apply	Použít
 	Change Screen Mode (F)	Změnit režim obrazovky (F)
-	Color (,)	Barva (,)
+	Color (, or <)	Barva (, nebo <)
 	Draw Behind	Kreslit za
 	Draw Inside	Kreslit dovnitř
 	Draw Normal	Kreslit normálně
 	Expand:	Rozložit:
-	Gradient (.)	Přechod (.)
+	Gradient (. or >)	Přechod (. nebo >)
 	H:	V:
 	Modify	Úpravy
 	Navigate	Pohled
@@ -1593,6 +1593,7 @@ lighting	Light	Světlo
 	Delete Guides	Odstranit vodítka
 	Delete Slice	Odstranit řez
 	Delete Style	Odstranit styl
+	Delete Styles	Odstranit styly
 	Delete Variables	Odstranit proměnné
 	Delete View	Odstranit zobrazení
 	Done Editing Pattern	Dokončit úpravy vzorku
@@ -3314,6 +3315,7 @@ theme	Appearance	Motiv
 	Make Envelope	Vytvořit obálku
 	Move Envelope Mesh Point	Přesunout bod sítě obálky
 	Move Mesh Point	Přesunout bod sítě
+	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
 	Reset with Mesh	Obnovit sítí
@@ -3799,6 +3801,7 @@ axis	Both	Obě
 	Set Text	Nastavit text
 	Insert Character	Vložit znak
 	Replace	Nahradit
+	Replace:	Nahradit:
 	Type on a Path Options	Možnosti textu na cestě
 	Highlight Variable	Zvýraznit proměnnou
 	New Variable	Nová proměnná
@@ -4461,6 +4464,7 @@ imageTrace	Outline	Obrys
 @msg	no document	žádný dokument
 @msg	no document open	není otevřen žádný dokument
 @msg	no effect applied yet	zatím nebyl použit žádný efekt
+@msg	no Pathfinder operation applied yet	zatím nebyla použita žádná operace s cestami
 @msg	no effect at index {k}	na indexu {k} není žádný efekt
 @msg	no end record	chybí koncový záznam
 @msg	no file manager here	zde není správce souborů
@@ -5693,3 +5697,295 @@ axis	Y Axis	osa Y
 	Glyph Bounds	Hranice glyfů
 	Proximity Guides	Vodítka blízkosti
 	Angular Guides	Úhlová vodítka
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Zprůměrovat a spojit…
+	Average & Join	Zprůměrovat a spojit
+anchor	Points:	Body:
+@msg	select two open path ends, or two open paths, to average and join	vyberte dva konce otevřených cest nebo dvě otevřené cesty ke zprůměrování a spojení
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Vyčištění kresby
+	Simplify Anchors (Keep Shape)…	Zjednodušit kotevní body (zachovat tvar)…
+	Health Check	Kontrola stavu
+	Show Issue	Zobrazit problém
+	Fix All Issues	Opravit všechny problémy
+	Fix Issues	Opravit problémy
+	Deep Ungroup…	Oddělit všechny úrovně…
+	Rejoin Path Pieces…	Znovu spojit části cest…
+	Document Health Check	Kontrola stavu dokumentu
+	Check Selection	Zkontrolovat výběr
+	Check Document	Zkontrolovat dokument
+	No issues found.	Nebyly nalezeny žádné problémy.
+	Changed since the last check.	Změněno od poslední kontroly.
+	Fix Selected	Opravit vybrané
+	Fix All	Opravit vše
+	Issues fixed: {count}	Opravené problémy: {count}
+	Open a document to check it for issues.	Otevřete dokument a zkontrolujte jeho problémy.
+	Empty Text	Prázdný text
+	Unpainted Objects	Objekty bez barvy
+	Zero-Opacity Objects	Objekty s nulovým krytím
+	Duplicate Objects	Duplicitní objekty
+	Off-Artboard Art	Kresba mimo pracovní plochy
+	Duplicate Anchors	Duplicitní kotevní body
+	Tiny Handles	Drobné úchyty
+	Collinear Anchors	Kolineární kotevní body
+	Nearly Coincident Anchors	Téměř shodné kotevní body
+	Nearly Closed Paths	Téměř uzavřené cesty
+	Filled Open Paths	Vyplněné otevřené cesty
+	Needless Clipping Groups	Zbytečné ořezové skupiny
+	Needless Compound Paths	Zbytečné složené cesty
+	Needless Groups	Zbytečné skupiny
+	Empty Artboards	Prázdné pracovní plochy
+	Protect Corners	Chránit rohy
+	Gap	Mezera
+	Include Clip Groups	Zahrnout ořezové skupiny
+@msg	`tolerance` must be from 1 to 100	`tolerance` musí být od 1 do 100
+@msg	`gap` must be from 0 to 6 pt	`gap` musí být od 0 do 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Zjednodušit kotevní body: cesty mají příliš mnoho kotevních bodů, než aby je šlo zjednodušit najednou
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Znovu spojit části cest: příliš mnoho cest ke spojení najednou
+@msg	None of these issues are left: check again	Žádný z těchto problémů už nezůstal: zkontrolujte znovu
+@msg	`kinds` must be a list of issue kinds	`kinds` musí být seznam druhů problémů
+@msg	missing `kind`	chybí `kind`
+	Simplify Anchors (Keep Shape)	Zjednodušit kotevní body (zachovat tvar)
+	Deep Ungroup	Oddělit všechny úrovně
+	Rejoin Path Pieces	Znovu spojit části cest
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Barevné efekty
+	Color Effects Panel	Panel Barevné efekty
+	Exposure	Expozice
+	Exposure…	Expozice…
+	Desaturate	Odbarvit
+	Adjustment	Úprava
+	Add as Effect	Přidat jako efekt
+	Apply as Filter	Použít jako filtr
+	Select objects to adjust their colors.	Vyberte objekty, jejichž barvy chcete upravit.
+	Brightness/Contrast	Jas/kontrast
+	Hue/Saturation	Odstín/sytost
+	Temperature/Tint	Teplota/nádech
+@msg	`{id}` is not a colour adjustment	`{id}` není úprava barev
+@msg	missing `effect`	chybí `effect`
+@msg	`params` must be an object	`params` musí být objekt
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Přesné nástroje pro cesty
+	Anchor Eraser Brush	Štětec gumy kotevních bodů
+	Extend Path Tool	Nástroj Prodloužit cestu
+	Measure & Inspect Tool	Nástroj Měřit a zkoumat
+	Anchor Inspector	Inspektor kotevních bodů
+	Add Points at Crossings	Přidat body v křížení
+	Split at Crossings	Rozdělit v křížení
+	Extend Path	Prodloužit cestu
+	Measure & Inspect	Měřit a zkoumat
+	Set Anchor	Nastavit kotevní bod
+	Make Smooth	Změnit na hladký
+	Make Corner	Změnit na rohový
+	Equalize Handles	Vyrovnat úchyty
+	Remove Points, Keep Shape	Odstranit body, zachovat tvar
+	Add Points to Segments…	Přidat body do segmentů…
+	Add Points to Segments	Přidat body do segmentů
+	Open a document to edit its anchor points.	Otevřete dokument a upravte jeho kotevní body.
+	Anchors selected: {count}	Vybrané kotevní body: {count}
+	Direct-select anchor points to edit them.	Kotevní body pro úpravy vyberte přímým výběrem.
+	In:	Vstup:
+	Out:	Výstup:
+	Add Points	Přidat body
+	Points per segment	Bodů na segment
+	Close Path:	Uzavřít cestu:
+	Keep Handles	Zachovat úchyty
+	Straight	Přímý
+	Stretch Curve	Natáhnout křivku
+@msg	direct-select the anchor points to remove	přímým výběrem vyberte kotevní body k odstranění
+@msg	select segments, or paths, to add points to	vyberte segmenty nebo cesty, do nichž přidat body
+@msg	select open paths to close	vyberte otevřené cesty k uzavření
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	příliš mnoho nebo příliš spletených cest pro nalezení jejich křížení (nejvýše 10000 segmentů)
+@msg	the paths have too many anchors to edit at once	cesty mají příliš mnoho kotevních bodů na úpravu najednou
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Nástroj Parametrický tvar
+	Parametric Shape	Parametrický tvar
+	Edit Parametric Shape	Upravit parametrický tvar
+	Convert to Parametric Shape	Převést na parametrický tvar
+	Ring	Prstenec
+	Heart	Srdce
+	Gear	Ozubené kolo
+	Speech Bubble	Bublina
+	Count:	Počet:
+	Thickness:	Tloušťka:
+	Inner Radius:	Vnitřní poloměr:
+	Head:	Hrot:
+	Shaft:	Dřík:
+	Point:	Špička:
+	Tooth Height:	Výška zubu:
+	Tail:	Ocásek:
+	Tip:	Špička:
+	Open a document to draw parametric shapes.	Otevřete dokument a kreslete parametrické tvary.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Vyberte parametrický tvar a upravte ho. Bez výběru tyto hodnoty platí pro další tvar.
+@msg	the object is not an editable parametric shape	objekt není upravitelný parametrický tvar
+@msg	select plain rectangles, ellipses or regular polygons to convert	vyberte k převodu obyčejné obdélníky, elipsy nebo pravidelné mnohoúhelníky
+@msg	the shape's numbers are out of range	hodnoty tvaru jsou mimo rozsah
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` musí být jedno z: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` musí být celé číslo od 3 do 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` musí být od {lo} do {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Chytré pero
+	Smart Pen Tool	Nástroj Chytré pero
+	Smart Pen Panel	Panel Chytré pero
+	Next Segment	Další segment
+	Curved	Zakřivený
+	Retract Handles	Zasunout úchyty
+	Close or Join	Uzavřít nebo spojit
+	Open a document to draw with the Smart Pen.	Otevřete dokument a kreslete chytrým perem.
+	Straight or Curved Segment	Přímý nebo zakřivený segment
+@msg	the path is locked or hidden	cesta je zamčená nebo skrytá
+@msg	`id` is not a path	`id` není cesta
+@msg	the path has no open subpath	cesta nemá žádnou otevřenou dílčí cestu
+@msg	the subpath is closed	dílčí cesta je uzavřená
+@msg	the subpath is closed or too short to close	dílčí cesta je uzavřená nebo příliš krátká k uzavření
+@msg	the path is too short to remove a point from	cesta je příliš krátká na odebrání bodu
+@msg	the segment can't be bent that far	segment nelze ohnout tak daleko
+@msg	give `{a}` and `{b}`	zadejte `{a}` a `{b}`
+@msg	`t` must be from 0 to 1	`t` musí být od 0 do 1
+@msg	`segment` must be "straight" or "curved"	`segment` musí být "straight" nebo "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musí být "free", "keepAngles" nebo "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` musí být [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Vybrat podle druhu barvy
+	Objects with Spot Colors	Objekty s přímými barvami
+	Objects with Color Effects	Objekty s barevnými efekty
+	RGB Images	Obrazy RGB
+	CMYK Images	Obrazy CMYK
+	Grayscale Images	Obrazy ve stupních šedi
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` musí být spotColors, colorEffects, rgbImages, cmykImages nebo grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Barva bodů podle kresby
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Dvoutón…
+	Duotone	Dvoutón
+	Print Ink Fixes…	Opravy tiskových barev…
+	Print Ink Fixes	Opravy tiskových barev
+	Inks	Barvy
+	Tone 1	Tón 1
+	Tone 2	Tón 2
+	Tone 3	Tón 3
+	Tone 4	Tón 4
+	Curve	Křivka
+	Reset to Linear	Obnovit lineární
+	Reset to Inverse	Obnovit obrácenou
+	Skip Objects with Spot Colors	Vynechat objekty s přímými barvami
+	Ink Limit	Limit barvy
+	Exclude Pure Black	Vyloučit čistou černou
+	Remove White Overprint	Odebrat přetisk bílé
+	Overprint Black	Přetisk černé
+	Text Only	Pouze text
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	zadejte `inkLimit`, `removeWhiteOverprint` nebo `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Opravy tiskových barev fungují v dokumentech CMYK: nejprve zvolte Soubor › Barevný režim dokumentu › Barvy CMYK
+@msg	`{key}` must be 0..{max}	`{key}` musí být 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Nástroj Rohy
+	Slide Anchor Along Path	Posunout kotevní bod po cestě
+	Set Corners	Nastavit rohy
+	Remove Corners	Odstranit rohy
+	Corners selected: {count}	Vybrané rohy: {count}
+	Apply to Selected Anchors	Použít na vybrané kotevní body
+@msg	`radius` must be from 0 to 1000000 pt	`radius` musí být od 0 do 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` musí být číslo od -0.98 do 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	vyberte kotevní body, kde se dvě strany setkávají pod úhlem: jen ty mohou mít roh
+@msg	give `anchor`, the index of the anchor to slide	zadejte `anchor`, index kotevního bodu k posunutí
+@msg	that anchor can't slide: an end of an open path has nowhere to go	tento kotevní bod nelze posunout: konec otevřené cesty nemá kam jít
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Nástroj Sloučení sdílené hrany
+	Merge Shared Edge	Sloučit sdílenou hranu
+	Keep Shared Points Together	Držet sdílené body pohromadě
+	Shared Edges	Sdílené hrany
+	Coincidence:	Shoda:
+@msg	`a` and `b` must be two different paths	`a` a `b` musí být dvě různé cesty
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` musí být od 0.25 do 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` musí být od 0 do 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` musí být "average", "a" nebo "b"
+@msg	the paths have nothing to merge there	cesty zde nemají co sloučit
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Rozdělit text
+	Combine Point Text	Sloučit bodový text
+	Remove Breaks	Odstranit zalomení
+	Split Text at Cursor	Rozdělit text u kurzoru
+	Set Alignment, Keep Position	Nastavit zarovnání, zachovat polohu
+	Reset Text Transform	Obnovit transformaci textu
+	Replace Missing Fonts…	Nahradit chybějící písma…
+	Replace Missing Fonts	Nahradit chybějící písma
+	Remove Line Breaks	Odstranit zalomení řádků
+	Remove Paragraph Breaks	Odstranit zalomení odstavců
+	Break Text into Lines	Rozdělit text na řádky
+	Break Text into Paragraphs	Rozdělit text na odstavce
+	Break Text into Words	Rozdělit text na slova
+	Break Text into Glyphs	Rozdělit text na glyfy
+	Reset Text Transform and Scale	Obnovit transformaci a měřítko textu
+	Set Alignment, Keep Position:	Nastavit zarovnání, zachovat polohu:
+	Break Text into:	Rozdělit text na:
+	Split at Cursor	Rozdělit u kurzoru
+	Reset Transform	Obnovit transformaci
+	Shift-click: break into paragraphs	Shift+kliknutí: rozdělit na odstavce
+	Alt-click: reset the horizontal scale too	Alt+kliknutí: obnovit i vodorovné měřítko
+breakText	Lines	Řádky
+breakText	Words	Slova
+breakText	Glyphs	Glyfy
+@msg	Click in type with a Type tool to split it	Klikněte do textu nástrojem Text, abyste jej rozdělili
+@msg	Too many type objects to change at once	Příliš mnoho textových objektů ke změně najednou
+@msg	Too many pieces to make at once	Příliš mnoho částí k vytvoření najednou
+@msg	Select horizontal point or area type whose text fits	Vyberte vodorovný bodový text nebo text v oblasti, jehož text se vejde
+@msg	Nothing to split at the cursor	U kurzoru není co rozdělit
+@msg	Select two or more one-line point type objects on one baseline to combine	Vyberte dva nebo více jednořádkových objektů bodového textu na jednom účaří, abyste je sloučili
+@msg	No line breaks to remove	Žádná zalomení řádků k odstranění
+@msg	No paragraph breaks to remove	Žádná zalomení odstavců k odstranění
+@msg	Too many breaks to remove at once	Příliš mnoho zalomení k odstranění najednou
+@msg	Select point type	Vyberte bodový text
+@msg	The point type is aligned that way already	Bodový text je již takto zarovnán
+@msg	The point type has no transform to reset	Bodový text nemá žádnou transformaci k obnovení
+@msg	No fonts are missing	Žádná písma nechybějí
+@msg	the replacement font is not available	náhradní písmo není k dispozici
+@msg	missing `align`	chybí `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` musí být lines, paragraphs, words nebo glyphs, ne {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` musí být "line" nebo "paragraph", ne {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` musí být "left", "center" nebo "right", ne {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	Efekty cesty
+	Reverse Direction	Obrátit směr
+	Align to Corners and Ends	Zarovnat k rohům a koncům
+	Count	Počet
+	Max Count	Maximální počet
+	Start Length	Délka na začátku
+	Start Percent	Procenta na začátku
+	Start Shape	Tvar na začátku
+	End Length	Délka na konci
+	End Percent	Procenta na konci
+	End Shape	Tvar na konci
+	By Count	Podle počtu
+	By Distance	Podle vzdálenosti
+	Both	Obojí
+	Shorter Than Length	Kratší než délka
+	Dashes to Geometry	Čárky na geometrii
+	Dashes to Geometry…	Čárky na geometrii…
+	Add Anchors	Přidat kotevní body
+	Add Anchors…	Přidat kotevní body…
+	Smooth Anchors	Vyhladit kotevní body
+	Smooth Anchors…	Vyhladit kotevní body…
+	Simplify Anchors	Zjednodušit kotevní body
+	Simplify Anchors…	Zjednodušit kotevní body…
+	Split at Anchors	Rozdělit v kotevních bodech
+	Split at Anchors…	Rozdělit v kotevních bodech…
+	Extend Path…	Prodloužit cestu…
+	Close Path…	Uzavřít cestu…
+	Retract Handles…	Zasunout úchyty…
+	Dash 1	Čárka 1
+	Gap 1	Mezera 1
+	Dash 2	Čárka 2
+	Gap 2	Mezera 2
+	Dash 3	Čárka 3
+	Gap 3	Mezera 3
+	Dash 4	Čárka 4
+	Gap 4	Mezera 4
+	Dash 5	Čárka 5
+	Gap 5	Mezera 5

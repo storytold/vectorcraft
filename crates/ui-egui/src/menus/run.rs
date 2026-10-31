@@ -40,13 +40,16 @@ pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Va
 /// handles its own way (a Window menu panel item that toggles, …) → `None` to leave it to the
 /// engine.
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
-    // The Window menu's panel items toggle like its other checked items (#2361); the panel's
-    // other ways in (shortcuts, Show Properties Panel, a tool's double-click) only show it.
+    // Window menu items and the named panel function keys toggle against the checked state;
+    // other commands that open panels show them.
     if id == "window.panel" && p.get("toggle").and_then(Value::as_bool) == Some(true) && checked(app, id, p) == Some(true) {
         let panel = p.get("panel").and_then(Value::as_str).and_then(normalize_panel).unwrap_or_default();
         if app.ui.open_panel.as_deref() == Some(panel) {
             app.ui.open_panel = None;
             return Some(Ok(json!({"open": null})));
+        }
+        if p.get("toggleGroup").and_then(Value::as_bool) == Some(true) {
+            return Some(crate::panel_docking::hide_group(app, panel));
         }
         return Some(app.run("window.panel.close", json!({"panel": panel})));
     }
@@ -524,6 +527,8 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
+        crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
@@ -544,6 +549,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
             None => Err("no effect applied yet".into()),
         },
+        "pathfinder.repeat" => crate::panels::pathfinder::repeat(app),
         "file.export.pdf" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::open_save_pdf(app, &json!({})),
         "file.export.pdf" => io::export_pdf(app, p.clone()),
         _ => return None,

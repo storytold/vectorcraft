@@ -565,6 +565,28 @@ fn marquee_selects_anchors() {
     assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
 }
 
+/// #4654: a marquee over part of a segment, with neither of its anchors inside, selects that
+/// segment as a click on it does; with Shift it toggles it. Group Selection selects objects.
+#[test]
+fn a_marquee_over_part_of_a_segment_selects_it() {
+    let (d, id) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    // Across the middle of the square's top edge, (100, 100)–(200, 100).
+    let drag = |t: &mut DirectSelectionTool, m: Mods| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 140.0, 80.0).with_mods(m));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 120.0).with_mods(m));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 120.0).with_mods(m))
+    };
+    let segment = |mode: &str| Action::Exec("select.segments".into(), json!({"id": id.0, "segments": [[0, 0]], "mode": mode}));
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, Mods::default()), vec![Action::Exec("select.anchorsMany".into(), json!({"items": [], "mode": "set"})), segment("add")]);
+    let shift = Mods { shift: true, ..Mods::default() };
+    assert_eq!(drag(&mut t, shift).get(1), Some(&segment("toggle")));
+    let mut g = DirectSelectionTool::new(true);
+    assert!(!drag(&mut g, Mods::default()).iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.segments")));
+}
+
 #[test]
 fn marquee_selects_ruler_guides() {
     let (mut d, id) = doc_with_rect();

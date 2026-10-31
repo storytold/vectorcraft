@@ -337,12 +337,46 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
+    if app.ui.docking_hidden.contains_key(panel) {
+        return restore_hidden_group(app, panel);
+    }
     let value = shared_command(app, "window.panel.activate", &json!({"panel": panel}))?;
     let layout = layout_of(&app.ui);
     Ok(match floating_window(&layout, panel) {
         Some(window) => json!({"floating": window_panels(window)}),
         None => value,
     })
+}
+
+/// Hides the group holding an active panel and records each tab's return location.
+pub(crate) fn hide_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let mut txn = Transaction::begin(app)?;
+    let panel = panel.to_string();
+    let closed = txn.apply(Action::CloseGroup { panel })?;
+    let group = closed.clone();
+    let result = txn.commit(app, closed, None);
+    if !group.is_empty() {
+        app.ui.docking_hidden_groups.push(group);
+    }
+    Ok(result)
+}
+
+/// Reopens the tabs hidden together with `panel` and brings it to the front.
+fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let mut txn = Transaction::begin(app)?;
+    let members =
+        app.ui.docking_hidden_groups.iter().find(|group| group.iter().any(|id| id == panel)).cloned().unwrap_or_else(|| vec![panel.to_string()]);
+    for member in members {
+        if !txn.workspace.hidden.iter().any(|(id, _)| id == &member) {
+            continue;
+        }
+        let fallback = first_dock_panel(&txn.workspace.layout, &member);
+        txn.workspace.set_visible(member, true, fallback, model_permissions).map_err(|e| e.to_string())?;
+    }
+    txn.apply(Action::Activate { panel: panel.to_string() })?;
+    let result = txn.commit(app, Vec::new(), Some(panel.to_string()));
+    app.ui.docking_hidden_groups.retain(|group| !group.iter().any(|id| id == panel));
+    Ok(result)
 }
 
 /// Show `panel` as `window.panel` does, but leave it be when it already shows ([`showing`]): a
@@ -927,6 +961,10 @@ impl Transaction {
             }
         }
         let reveal = reveal.filter(|panel| layout.contains(panel));
+        for group in &mut app.ui.docking_hidden_groups {
+            group.retain(|panel| hidden.contains_key(panel) && !layout.contains(panel));
+        }
+        app.ui.docking_hidden_groups.retain(|group| !group.is_empty());
         let flyout = reveal.as_ref().filter(|panel| in_iconic_column(&layout, panel)).cloned();
         match (app.ui.docking.is_none() && hidden.is_empty()).then(|| default_flags(&app.ui, &layout)).flatten() {
             Some((tab, collapsed, width)) => {
@@ -1188,6 +1226,9 @@ const DOCK_LABELS: &[(&str, &str)] = &[
 fn floating_size(panel: &str) -> egui::Vec2 {
     match panel {
         "properties" | "layers" | "libraries" => egui::vec2(300.0, 420.0),
+        // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
+        // Tool's and Shared Edge Merge Tool's menu items open.
+        crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }

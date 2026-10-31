@@ -470,7 +470,7 @@ font-technology	Variable	Μεταβλητές
 	Collect in New Layer	Συγκέντρωση σε νέο επίπεδο
 	Collect Links in a Separate Folder	Συγκέντρωση συνδεδεμένων αρχείων σε ξεχωριστό φάκελο
 	Color	Χρώμα
-	Color (,)	Χρώμα (,)
+	Color (, or <)	Χρώμα (, ή <)
 	Color Adjustments	Ρυθμίσεις χρώματος
 	Color bars	Χρωματικές μπάρες
 	Color blindness – Deuteranopia-type	Αχρωματοψία – τύπου δευτερανοπίας
@@ -1200,7 +1200,7 @@ font-technology	Variable	Μεταβλητές
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU
 	Gradient	Ντεγκραντέ
-	Gradient (.)	Ντεγκραντέ (.)
+	Gradient (. or >)	Ντεγκραντέ (. ή >)
 	Gradient across stroke	Ντεγκραντέ εγκάρσια στο περίγραμμα
 	Gradient along stroke	Ντεγκραντέ κατά μήκος του περιγράμματος
 	Gradient and Mesh Resolution:	Ανάλυση ντεγκραντέ και πλέγματος:
@@ -1344,6 +1344,7 @@ font-technology	Variable	Μεταβλητές
 	Delete Guides	Διαγραφή οδηγών
 	Delete Slice	Διαγραφή τομής
 	Delete Style	Διαγραφή στυλ
+	Delete Styles	Διαγραφή στυλ
 	Delete Variables	Διαγραφή μεταβλητών
 	Delete View	Διαγραφή προβολής
 	Done Editing Pattern	Ολοκλήρωση επεξεργασίας μοτίβου
@@ -1798,6 +1799,7 @@ font-technology	Variable	Μεταβλητές
 	Rename	Μετονομασία
 	Repeat	Επανάληψη
 	Replace	Αντικατάσταση
+	Replace:	Αντικατάσταση:
 	Replace…	Αντικατάσταση…
 	Reselect	Επαναφορά προηγούμενης επιλογής
 	Reset	Επαναφορά
@@ -2675,6 +2677,7 @@ theme	Appearance	Εμφάνιση
 	Move in Perspective	Μετακίνηση σε προοπτική
 	Move Locked and Hidden Artwork with Artboard	Μετακίνηση κλειδωμένων και κρυφών σχεδίων μαζί με τον πίνακα σχεδίασης
 	Move Mesh Point	Μετακίνηση σημείου πλέγματος
+	Move Mesh Points	Μετακίνηση σημείων πλέγματος
 	Move Plane	Μετακίνηση επιπέδου προοπτικής
 	Move Plane to Match Object	Μετακίνηση επιπέδου προοπτικής ώστε να ταιριάζει στο αντικείμενο
 	Move Rows	Μετακίνηση γραμμών
@@ -4114,6 +4117,7 @@ theme	Appearance	Εμφάνιση
 @msg	no document	δεν υπάρχει έγγραφο
 @msg	no document open	δεν υπάρχει ανοιχτό έγγραφο
 @msg	no effect applied yet	δεν έχει εφαρμοστεί ακόμη εφέ
+@msg	no Pathfinder operation applied yet	δεν έχει εφαρμοστεί ακόμη λειτουργία Pathfinder
 @msg	no effect at index {k}	δεν υπάρχει εφέ στον δείκτη {k}
 @msg	no end record	λείπει η εγγραφή τέλους
 @msg	no file manager here	δεν υπάρχει διαχειριστής αρχείων εδώ
@@ -5645,3 +5649,296 @@ axis	Y Axis	Άξονας Y
 	Glyph Bounds	Όρια γλυφής
 	Proximity Guides	Οδηγοί εγγύτητας
 	Angular Guides	Γωνιακοί οδηγοί
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Μέσος όρος και ένωση…
+	Average & Join	Μέσος όρος και ένωση
+anchor	Points:	Σημεία:
+@msg	select two open path ends, or two open paths, to average and join	επιλέξτε δύο άκρα ανοιχτών διαδρομών ή δύο ανοιχτές διαδρομές για μέσο όρο και ένωση
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Εκκαθάριση γραφικών
+	Simplify Anchors (Keep Shape)…	Απλοποίηση σημείων αγκύρωσης (διατήρηση σχήματος)…
+	Health Check	Έλεγχος κατάστασης
+	Show Issue	Εμφάνιση προβλήματος
+	Fix All Issues	Διόρθωση όλων των προβλημάτων
+	Fix Issues	Διόρθωση προβλημάτων
+	Deep Ungroup…	Κατάργηση ομαδοποίησης σε όλα τα επίπεδα…
+	Rejoin Path Pieces…	Επανένωση τμημάτων διαδρομών…
+	Document Health Check	Έλεγχος κατάστασης εγγράφου
+	Check Selection	Έλεγχος επιλογής
+	Check Document	Έλεγχος εγγράφου
+	No issues found.	Δεν βρέθηκαν προβλήματα.
+	Changed since the last check.	Άλλαξε μετά τον τελευταίο έλεγχο.
+	Fix Selected	Διόρθωση επιλεγμένων
+	Fix All	Διόρθωση όλων
+	Issues fixed: {count}	Διορθωμένα προβλήματα: {count}
+	Open a document to check it for issues.	Ανοίξτε ένα έγγραφο για να το ελέγξετε για προβλήματα.
+	Empty Text	Κενό κείμενο
+	Unpainted Objects	Αντικείμενα χωρίς χρώμα
+	Zero-Opacity Objects	Αντικείμενα με μηδενική αδιαφάνεια
+	Duplicate Objects	Διπλότυπα αντικείμενα
+	Off-Artboard Art	Γραφικά εκτός πινάκων σχεδίασης
+	Duplicate Anchors	Διπλότυπα σημεία αγκύρωσης
+	Tiny Handles	Μικροσκοπικές λαβές
+	Collinear Anchors	Συγγραμμικά σημεία αγκύρωσης
+	Nearly Coincident Anchors	Σχεδόν συμπίπτοντα σημεία αγκύρωσης
+	Nearly Closed Paths	Σχεδόν κλειστές διαδρομές
+	Filled Open Paths	Γεμισμένες ανοιχτές διαδρομές
+	Needless Clipping Groups	Περιττές ομάδες αποκοπής
+	Needless Compound Paths	Περιττές σύνθετες διαδρομές
+	Needless Groups	Περιττές ομάδες
+	Empty Artboards	Κενοί πίνακες σχεδίασης
+	Protect Corners	Προστασία γωνιών
+	Gap	Απόσταση
+	Include Clip Groups	Συμπερίληψη ομάδων αποκοπής
+@msg	`tolerance` must be from 1 to 100	Το `tolerance` πρέπει να είναι από 1 έως 100
+@msg	`gap` must be from 0 to 6 pt	Το `gap` πρέπει να είναι από 0 έως 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Απλοποίηση σημείων αγκύρωσης: οι διαδρομές έχουν πάρα πολλά σημεία αγκύρωσης για να απλοποιηθούν μονομιάς
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Επανένωση τμημάτων διαδρομών: πάρα πολλές διαδρομές για επανένωση μονομιάς
+@msg	None of these issues are left: check again	Δεν έχει απομείνει κανένα από αυτά τα προβλήματα: ελέγξτε ξανά
+@msg	`kinds` must be a list of issue kinds	Το `kinds` πρέπει να είναι λίστα ειδών προβλημάτων
+@msg	missing `kind`	λείπει το `kind`
+	Simplify Anchors (Keep Shape)	Απλοποίηση σημείων αγκύρωσης (διατήρηση σχήματος)
+	Deep Ungroup	Κατάργηση ομαδοποίησης σε όλα τα επίπεδα
+	Rejoin Path Pieces	Επανένωση τμημάτων διαδρομών
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Εφέ χρώματος
+	Color Effects Panel	Πλαίσιο Εφέ χρώματος
+	Exposure	Έκθεση
+	Exposure…	Έκθεση…
+	Desaturate	Αποκορεσμός
+	Adjustment	Διόρθωση
+	Add as Effect	Προσθήκη ως εφέ
+	Apply as Filter	Εφαρμογή ως φίλτρο
+	Select objects to adjust their colors.	Επιλέξτε αντικείμενα για να προσαρμόσετε τα χρώματά τους.
+	Brightness/Contrast	Φωτεινότητα/Αντίθεση
+	Hue/Saturation	Απόχρωση/Κορεσμός
+	Temperature/Tint	Θερμοκρασία/Απόχρωση
+@msg	`{id}` is not a colour adjustment	Το `{id}` δεν είναι διόρθωση χρώματος
+@msg	missing `effect`	λείπει το `effect`
+@msg	`params` must be an object	Το `params` πρέπει να είναι αντικείμενο
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Εργαλεία ακρίβειας διαδρομών
+	Anchor Eraser Brush	Πινέλο διαγραφής σημείων αγκύρωσης (Anchor Eraser Brush)
+	Extend Path Tool	Επέκταση διαδρομής (Extend Path Tool)
+	Measure & Inspect Tool	Μέτρηση και επιθεώρηση (Measure & Inspect Tool)
+	Anchor Inspector	Επιθεωρητής σημείων αγκύρωσης
+	Add Points at Crossings	Προσθήκη σημείων στις διασταυρώσεις
+	Split at Crossings	Διαχωρισμός στις διασταυρώσεις
+	Extend Path	Επέκταση διαδρομής
+	Measure & Inspect	Μέτρηση και επιθεώρηση
+	Set Anchor	Ορισμός σημείου αγκύρωσης
+	Make Smooth	Μετατροπή σε ομαλό
+	Make Corner	Μετατροπή σε γωνία
+	Equalize Handles	Εξίσωση λαβών
+	Remove Points, Keep Shape	Αφαίρεση σημείων, διατήρηση σχήματος
+	Add Points to Segments…	Προσθήκη σημείων σε τμήματα…
+	Add Points to Segments	Προσθήκη σημείων σε τμήματα
+	Open a document to edit its anchor points.	Ανοίξτε ένα έγγραφο για να επεξεργαστείτε τα σημεία αγκύρωσής του.
+	Anchors selected: {count}	Επιλεγμένα σημεία αγκύρωσης: {count}
+	Direct-select anchor points to edit them.	Επιλέξτε απευθείας σημεία αγκύρωσης για να τα επεξεργαστείτε.
+	In:	Είσοδος:
+	Out:	Έξοδος:
+	Add Points	Προσθήκη σημείων
+	Points per segment	Σημεία ανά τμήμα
+	Close Path:	Κλείσιμο διαδρομής:
+	Keep Handles	Διατήρηση λαβών
+	Straight	Ευθύ
+	Stretch Curve	Τέντωμα καμπύλης
+@msg	direct-select the anchor points to remove	επιλέξτε απευθείας τα σημεία αγκύρωσης προς αφαίρεση
+@msg	select segments, or paths, to add points to	επιλέξτε τμήματα ή διαδρομές στα οποία θα προστεθούν σημεία
+@msg	select open paths to close	επιλέξτε ανοιχτές διαδρομές για κλείσιμο
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	οι διαδρομές είναι πάρα πολλές ή πολύ μπλεγμένες για να βρεθούν οι διασταυρώσεις τους (έως 10000 τμήματα)
+@msg	the paths have too many anchors to edit at once	οι διαδρομές έχουν πάρα πολλά σημεία αγκύρωσης για επεξεργασία με μία φορά
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Εργαλείο παραμετρικού σχήματος
+	Parametric Shape	Παραμετρικό σχήμα
+	Edit Parametric Shape	Επεξεργασία παραμετρικού σχήματος
+	Convert to Parametric Shape	Μετατροπή σε παραμετρικό σχήμα
+	Ring	Δακτύλιος
+	Heart	Καρδιά
+	Gear	Γρανάζι
+	Speech Bubble	Συννεφάκι ομιλίας
+	Count:	Πλήθος:
+	Thickness:	Πάχος:
+	Inner Radius:	Εσωτερική ακτίνα:
+	Head:	Κεφαλή:
+	Shaft:	Στέλεχος:
+	Point:	Μύτη:
+	Tooth Height:	Ύψος δοντιού:
+	Tail:	Ουρά:
+	Tip:	Άκρη:
+	Open a document to draw parametric shapes.	Ανοίξτε ένα έγγραφο για να σχεδιάσετε παραμετρικά σχήματα.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Επιλέξτε ένα παραμετρικό σχήμα για να το επεξεργαστείτε. Χωρίς επιλογή, αυτές οι τιμές ισχύουν για το επόμενο σχήμα.
+@msg	the object is not an editable parametric shape	το αντικείμενο δεν είναι επεξεργάσιμο παραμετρικό σχήμα
+@msg	select plain rectangles, ellipses or regular polygons to convert	επιλέξτε απλά ορθογώνια, ελλείψεις ή κανονικά πολύγωνα για μετατροπή
+@msg	the shape's numbers are out of range	οι τιμές του σχήματος είναι εκτός εύρους
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	Το `kind` πρέπει να είναι ένα από: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	Το `count` πρέπει να είναι ακέραιος από 3 έως 1000
+@msg	`{key}` must be from {lo} to {hi}	Το `{key}` πρέπει να είναι από {lo} έως {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Έξυπνη πένα
+	Smart Pen Tool	Έξυπνη πένα (Smart Pen Tool)
+	Smart Pen Panel	Πίνακας έξυπνης πένας
+	Next Segment	Επόμενο τμήμα
+	Curved	Καμπύλο
+	Retract Handles	Σύμπτυξη λαβών
+	Close or Join	Κλείσιμο ή ένωση
+	Open a document to draw with the Smart Pen.	Ανοίξτε ένα έγγραφο για να σχεδιάσετε με την έξυπνη πένα.
+	Straight or Curved Segment	Ευθύ ή καμπύλο τμήμα
+@msg	the path is locked or hidden	η διαδρομή είναι κλειδωμένη ή κρυφή
+@msg	`id` is not a path	Το `id` δεν είναι διαδρομή
+@msg	the path has no open subpath	η διαδρομή δεν έχει ανοιχτή υποδιαδρομή
+@msg	the subpath is closed	η υποδιαδρομή είναι κλειστή
+@msg	the subpath is closed or too short to close	η υποδιαδρομή είναι κλειστή ή πολύ μικρή για να κλείσει
+@msg	the path is too short to remove a point from	η διαδρομή είναι πολύ μικρή για να αφαιρεθεί σημείο
+@msg	the segment can't be bent that far	το τμήμα δεν μπορεί να καμφθεί τόσο
+@msg	give `{a}` and `{b}`	δώστε `{a}` και `{b}`
+@msg	`t` must be from 0 to 1	Το `t` πρέπει να είναι από 0 έως 1
+@msg	`segment` must be "straight" or "curved"	Το `segment` πρέπει να είναι "straight" ή "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	Το `mode` πρέπει να είναι "free", "keepAngles" ή "symmetric"
+@msg	`{key}` must be [x, y]	Το `{key}` πρέπει να είναι [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Επιλογή κατά είδος χρώματος
+	Objects with Spot Colors	Αντικείμενα με χρώματα spot
+	Objects with Color Effects	Αντικείμενα με εφέ χρώματος
+	RGB Images	Εικόνες RGB
+	CMYK Images	Εικόνες CMYK
+	Grayscale Images	Εικόνες σε κλίμακα του γκρι
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	Το `kind` πρέπει να είναι spotColors, colorEffects, rgbImages, cmykImages ή grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Χρώμα κουκκίδων από το γραφικό
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Δίτονο…
+	Duotone	Δίτονο
+	Print Ink Fixes…	Διορθώσεις μελανιών εκτύπωσης…
+	Print Ink Fixes	Διορθώσεις μελανιών εκτύπωσης
+	Inks	Μελάνια
+	Tone 1	Τόνος 1
+	Tone 2	Τόνος 2
+	Tone 3	Τόνος 3
+	Tone 4	Τόνος 4
+	Curve	Καμπύλη
+	Reset to Linear	Επαναφορά σε γραμμική
+	Reset to Inverse	Επαναφορά σε αντεστραμμένη
+	Skip Objects with Spot Colors	Παράλειψη αντικειμένων με χρώματα spot
+	Ink Limit	Όριο μελανιού
+	Exclude Pure Black	Εξαίρεση καθαρού μαύρου
+	Remove White Overprint	Αφαίρεση υπερεκτύπωσης λευκού
+	Overprint Black	Υπερεκτύπωση μαύρου
+	Text Only	Μόνο κείμενο
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	δώστε `inkLimit`, `removeWhiteOverprint` ή `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Οι διορθώσεις μελανιών εκτύπωσης ισχύουν σε έγγραφα CMYK: επιλέξτε πρώτα Αρχείο › Λειτουργία χρώματος εγγράφου › Χρώμα CMYK
+@msg	`{key}` must be 0..{max}	το `{key}` πρέπει να είναι 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Γωνίες (Corner Tool)
+	Slide Anchor Along Path	Ολίσθηση σημείου αγκύρωσης κατά μήκος διαδρομής
+	Set Corners	Ορισμός γωνιών
+	Remove Corners	Αφαίρεση γωνιών
+	Corners selected: {count}	Επιλεγμένες γωνίες: {count}
+	Apply to Selected Anchors	Εφαρμογή στα επιλεγμένα σημεία αγκύρωσης
+@msg	`radius` must be from 0 to 1000000 pt	το `radius` πρέπει να είναι από 0 έως 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	το `t` πρέπει να είναι αριθμός από -0.98 έως 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	επιλέξτε σημεία αγκύρωσης όπου δύο πλευρές συναντώνται υπό γωνία: μόνο αυτά δέχονται γωνία
+@msg	give `anchor`, the index of the anchor to slide	δώστε το `anchor`, τον δείκτη του σημείου αγκύρωσης προς ολίσθηση
+@msg	that anchor can't slide: an end of an open path has nowhere to go	αυτό το σημείο αγκύρωσης δεν μπορεί να ολισθήσει: το άκρο ανοιχτής διαδρομής δεν έχει πού να πάει
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Εργαλείο συγχώνευσης κοινής ακμής
+	Merge Shared Edge	Συγχώνευση κοινής ακμής
+	Keep Shared Points Together	Διατήρηση κοινών σημείων μαζί
+	Shared Edges	Κοινές ακμές
+	Coincidence:	Σύμπτωση:
+@msg	`a` and `b` must be two different paths	Τα `a` και `b` πρέπει να είναι δύο διαφορετικές διαδρομές
+@msg	`diameter` must be from 0.25 to 200 pt	Το `diameter` πρέπει να είναι από 0.25 έως 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	Το `tolerance` πρέπει να είναι από 0 έως 3 pt
+@msg	`follow` must be "average", "a" or "b"	Το `follow` πρέπει να είναι "average", "a" ή "b"
+@msg	the paths have nothing to merge there	οι διαδρομές δεν έχουν κάτι να συγχωνευθεί εδώ
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Διαίρεση κειμένου
+	Combine Point Text	Συνδυασμός κειμένου σημείου
+	Remove Breaks	Αφαίρεση αλλαγών
+	Split Text at Cursor	Διαίρεση κειμένου στον δρομέα
+	Set Alignment, Keep Position	Ορισμός στοίχισης με διατήρηση θέσης
+	Reset Text Transform	Επαναφορά μετασχηματισμού κειμένου
+	Replace Missing Fonts…	Αντικατάσταση γραμματοσειρών που λείπουν…
+	Replace Missing Fonts	Αντικατάσταση γραμματοσειρών που λείπουν
+	Remove Line Breaks	Αφαίρεση αλλαγών γραμμής
+	Remove Paragraph Breaks	Αφαίρεση αλλαγών παραγράφου
+	Break Text into Lines	Διαίρεση κειμένου σε γραμμές
+	Break Text into Paragraphs	Διαίρεση κειμένου σε παραγράφους
+	Break Text into Words	Διαίρεση κειμένου σε λέξεις
+	Break Text into Glyphs	Διαίρεση κειμένου σε γλύφους
+	Reset Text Transform and Scale	Επαναφορά μετασχηματισμού και κλίμακας κειμένου
+	Set Alignment, Keep Position:	Στοίχιση με διατήρηση θέσης:
+	Break Text into:	Διαίρεση κειμένου σε:
+	Split at Cursor	Διαίρεση στον δρομέα
+	Reset Transform	Επαναφορά μετασχηματισμού
+	Shift-click: break into paragraphs	Shift-κλικ: διαίρεση σε παραγράφους
+	Alt-click: reset the horizontal scale too	Alt-κλικ: επαναφορά και της οριζόντιας κλίμακας
+breakText	Lines	Γραμμές
+breakText	Words	Λέξεις
+breakText	Glyphs	Γλύφοι
+@msg	Click in type with a Type tool to split it	Κάντε κλικ σε κείμενο με ένα εργαλείο κειμένου για να το διαιρέσετε
+@msg	Too many type objects to change at once	Πάρα πολλά αντικείμενα κειμένου για αλλαγή ταυτόχρονα
+@msg	Too many pieces to make at once	Πάρα πολλά κομμάτια για δημιουργία ταυτόχρονα
+@msg	Select horizontal point or area type whose text fits	Επιλέξτε οριζόντιο κείμενο σημείου ή περιοχής του οποίου το κείμενο χωράει
+@msg	Nothing to split at the cursor	Δεν υπάρχει τίποτα για διαίρεση στον δρομέα
+@msg	Select two or more one-line point type objects on one baseline to combine	Επιλέξτε δύο ή περισσότερα μονογραμμικά αντικείμενα κειμένου σημείου στην ίδια γραμμή βάσης για να τα συνδυάσετε
+@msg	No line breaks to remove	Δεν υπάρχουν αλλαγές γραμμής για αφαίρεση
+@msg	No paragraph breaks to remove	Δεν υπάρχουν αλλαγές παραγράφου για αφαίρεση
+@msg	Too many breaks to remove at once	Πάρα πολλές αλλαγές για αφαίρεση ταυτόχρονα
+@msg	Select point type	Επιλέξτε κείμενο σημείου
+@msg	The point type is aligned that way already	Το κείμενο σημείου είναι ήδη στοιχισμένο έτσι
+@msg	The point type has no transform to reset	Το κείμενο σημείου δεν έχει μετασχηματισμό για επαναφορά
+@msg	No fonts are missing	Δεν λείπει καμία γραμματοσειρά
+@msg	the replacement font is not available	η γραμματοσειρά αντικατάστασης δεν είναι διαθέσιμη
+@msg	missing `align`	λείπει το `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	το `by` πρέπει να είναι lines, paragraphs, words ή glyphs, όχι {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	το `kind` πρέπει να είναι "line" ή "paragraph", όχι {other}
+@msg	`align` must be "left", "center" or "right", not {other}	το `align` πρέπει να είναι "left", "center" ή "right", όχι {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Mode	Λειτουργία
+	Path Effects	Εφέ διαδρομής
+	Reverse Direction	Αντιστροφή κατεύθυνσης
+	Align to Corners and Ends	Στοίχιση σε γωνίες και άκρα
+	Count	Πλήθος
+	Max Count	Μέγιστο πλήθος
+	Start Length	Μήκος αρχής
+	Start Percent	Ποσοστό αρχής
+	Start Shape	Σχήμα αρχής
+	End Length	Μήκος τέλους
+	End Percent	Ποσοστό τέλους
+	End Shape	Σχήμα τέλους
+	By Count	Κατά πλήθος
+	By Distance	Κατά απόσταση
+	Both	Και τα δύο
+	Shorter Than Length	Μικρότερες από το μήκος
+	Dashes to Geometry	Παύλες σε γεωμετρία
+	Dashes to Geometry…	Παύλες σε γεωμετρία…
+	Add Anchors	Προσθήκη σημείων αγκύρωσης
+	Add Anchors…	Προσθήκη σημείων αγκύρωσης…
+	Smooth Anchors	Εξομάλυνση σημείων αγκύρωσης
+	Smooth Anchors…	Εξομάλυνση σημείων αγκύρωσης…
+	Simplify Anchors	Απλοποίηση σημείων αγκύρωσης
+	Simplify Anchors…	Απλοποίηση σημείων αγκύρωσης…
+	Split at Anchors	Διαχωρισμός στα σημεία αγκύρωσης
+	Split at Anchors…	Διαχωρισμός στα σημεία αγκύρωσης…
+	Extend Path…	Επέκταση διαδρομής…
+	Close Path…	Κλείσιμο διαδρομής…
+	Retract Handles…	Σύμπτυξη λαβών…
+	Dash 1	Παύλα 1
+	Gap 1	Διάκενο 1
+	Dash 2	Παύλα 2
+	Gap 2	Διάκενο 2
+	Dash 3	Παύλα 3
+	Gap 3	Διάκενο 3
+	Dash 4	Παύλα 4
+	Gap 4	Διάκενο 4
+	Dash 5	Παύλα 5
+	Gap 5	Διάκενο 5

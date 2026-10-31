@@ -65,7 +65,7 @@ pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRA
 `CRAFT_FONTS_REQUIRED=1`, so releases embed its Japanese fonts and fail rather than ship without
 them (the web build embeds only the UI font, BIZ UDPGothic Regular, to stay small). The packages carry each embedded font's licence as `OFL-<family>.txt`
 (`copy_font_licences` in `packaging/env.sh`). Bump the pins deliberately, in every job at once.
-The rules are in craftrules `standards/fonts.md`, the build option in
+The build option is in
 [`docs/development.md`](development.md) › Fonts.
 
 ### macOS

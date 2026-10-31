@@ -455,7 +455,7 @@
 	Collect in New Layer	收集到新图层
 	Collect Links in a Separate Folder	将链接收集到单独的文件夹
 	Color	颜色
-	Color (,)	颜色 (,)
+	Color (, or <)	颜色 (, 或 <)
 	Color Adjustments	色彩调整
 	Color bars	色彩条
 	Color blindness – Deuteranopia-type	色盲 – 绿色盲型
@@ -1221,7 +1221,7 @@ file-filter	Templates	模板
 	GPL palettes keep solid colours only, as RGB.	GPL 调板仅保留为 RGB 的纯色。
 	GPU Performance	GPU 性能
 	Gradient	渐变
-	Gradient (.)	渐变 (.)
+	Gradient (. or >)	渐变 (. 或 >)
 	Gradient across stroke	横跨描边的渐变
 	Gradient along stroke	沿描边的渐变
 	Gradient and Mesh Resolution:	渐变和网格分辨率：
@@ -1362,6 +1362,7 @@ file-filter	Templates	模板
 	Delete Guides	删除参考线
 	Delete Slice	删除切片
 	Delete Style	删除样式
+	Delete Styles	删除样式
 	Delete Variables	删除变量
 	Delete View	删除视图
 	Done Editing Pattern	完成图案编辑
@@ -1811,6 +1812,7 @@ file-filter	Templates	模板
 	Move in Perspective	在透视中移动
 	Move Locked and Hidden Artwork with Artboard	随画板移动锁定和隐藏图稿
 	Move Mesh Point	移动网格点
+	Move Mesh Points	移动网格点
 	Move Plane	移动平面
 	Move Plane to Match Object	移动平面以符合对象
 	Move Slices	移动切片
@@ -2540,6 +2542,7 @@ font-script	Japanese	汉字
 	Repeat Tab	重复制表位
 	Repeat {name}	重复 {name}
 	Replace	替换
+	Replace:	替换：
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
@@ -4254,6 +4257,7 @@ imageTrace	Outline	轮廓
 @msg	no PNG encoder	没有 PNG 编码器
 @msg	no document open	没有打开的文档
 @msg	no effect applied yet	尚未应用任何效果
+@msg	no Pathfinder operation applied yet	尚未应用任何路径查找器操作
 @msg	no such perspective grid preset	没有此透视网格预设
 @msg	no such recent file	没有此最近使用的文件
 @msg	no such recent font	没有此最近使用的字体
@@ -5532,3 +5536,298 @@ axis	Y Axis	Y 轴
 	Glyph Bounds	字形边界
 	Proximity Guides	邻近参考线
 	Angular Guides	角度参考线
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	平均并连接…
+	Average & Join	平均并连接
+anchor	Points:	点：
+@msg	select two open path ends, or two open paths, to average and join	请选择两个开放路径的端点或两条开放路径以进行平均并连接
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	图稿清理
+	Simplify Anchors (Keep Shape)…	简化锚点（保持形状）…
+	Health Check	健康检查
+	Show Issue	显示问题
+	Fix All Issues	修复所有问题
+	Fix Issues	修复问题
+	Deep Ungroup…	取消所有层级编组…
+	Rejoin Path Pieces…	重新连接路径片段…
+	Document Health Check	文档健康检查
+	Check Selection	检查所选对象
+	Check Document	检查文档
+	No issues found.	未发现问题。
+	Changed since the last check.	自上次检查后已更改。
+	Fix Selected	修复所选
+	Fix All	全部修复
+	Issues fixed: {count}	已修复的问题：{count}
+	Open a document to check it for issues.	打开文档以检查其中的问题。
+	Empty Text	空文本
+	Unpainted Objects	无上色对象
+	Zero-Opacity Objects	不透明度为零的对象
+	Duplicate Objects	重复对象
+	Off-Artboard Art	画板外的图稿
+	Duplicate Anchors	重复锚点
+	Tiny Handles	极短手柄
+	Collinear Anchors	共线锚点
+	Nearly Coincident Anchors	几乎重合的锚点
+	Nearly Closed Paths	几乎闭合的路径
+	Filled Open Paths	填色的开放路径
+	Needless Clipping Groups	多余的剪切组
+	Needless Compound Paths	多余的复合路径
+	Needless Groups	多余的编组
+	Empty Artboards	空白画板
+	Protect Corners	保护尖角
+	Gap	间隙
+	Include Clip Groups	包括剪切组
+@msg	`tolerance` must be from 1 to 100	`tolerance` 必须介于 1 到 100 之间
+@msg	`gap` must be from 0 to 6 pt	`gap` 必须介于 0 到 6 pt 之间
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	简化锚点：路径的锚点太多，无法一次简化
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	重新连接路径片段：路径太多，无法一次连接
+@msg	None of these issues are left: check again	这些问题都已不存在：请重新检查
+@msg	`kinds` must be a list of issue kinds	`kinds` 必须是问题类型的列表
+@msg	missing `kind`	缺少 `kind`
+	Simplify Anchors (Keep Shape)	简化锚点（保持形状）
+	Deep Ungroup	取消所有层级编组
+	Rejoin Path Pieces	重新连接路径片段
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	颜色效果
+	Color Effects Panel	颜色效果面板
+	Exposure	曝光度
+	Exposure…	曝光度…
+	Desaturate	去色
+	Adjustment	调整
+	Add as Effect	添加为效果
+	Apply as Filter	作为滤镜应用
+	Select objects to adjust their colors.	选择对象以调整其颜色。
+	Brightness/Contrast	亮度/对比
+	Hue/Saturation	色相/饱和度
+	Temperature/Tint	色温/色调
+@msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
+@msg	missing `effect`	缺少 `effect`
+@msg	`params` must be an object	`params` 必须是对象
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	路径精确工具
+	Anchor Eraser Brush	锚点橡皮擦画笔
+	Extend Path Tool	延长路径工具
+	Measure & Inspect Tool	测量与检查工具
+	Anchor Inspector	锚点检查器
+	Add Points at Crossings	在交叉处添加锚点
+	Split at Crossings	在交叉处分割
+	Extend Path	延长路径
+	Measure & Inspect	测量与检查
+	Set Anchor	设置锚点
+	Make Smooth	转为平滑
+	Make Corner	转为尖角
+	Equalize Handles	等长手柄
+	Remove Points, Keep Shape	删除锚点并保持形状
+	Add Points to Segments…	在线段中添加锚点…
+	Add Points to Segments	在线段中添加锚点
+	Open a document to edit its anchor points.	打开文档以编辑其锚点。
+	Anchors selected: {count}	已选锚点：{count}
+	Direct-select anchor points to edit them.	直接选择锚点以编辑它们。
+	Length	长度
+	In:	入：
+	Out:	出：
+	Add Points	添加锚点
+	Points per segment	每段锚点数
+	Close Path:	闭合路径：
+	Keep Handles	保留手柄
+	Straight	直线
+	Stretch Curve	拉伸曲线
+@msg	direct-select the anchor points to remove	请直接选择要删除的锚点
+@msg	select segments, or paths, to add points to	请选择要添加锚点的线段或路径
+@msg	select open paths to close	请选择要闭合的开放路径
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	路径太多或太复杂，无法找到交叉处（最多 10000 段）
+@msg	the paths have too many anchors to edit at once	路径的锚点太多，无法一次编辑
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	参数化形状工具
+	Parametric Shape	参数化形状
+	Edit Parametric Shape	编辑参数化形状
+	Convert to Parametric Shape	转换为参数化形状
+	Ring	圆环
+	Arrow	箭头
+	Cross	十字
+	Heart	心形
+	Gear	齿轮
+	Speech Bubble	对话气泡
+	Count:	数量：
+	Thickness:	粗细：
+	Inner Radius:	内半径：
+	Head:	箭头头部：
+	Shaft:	箭杆：
+	Point:	尖端：
+	Tooth Height:	齿高：
+	Tail:	尾巴：
+	Tip:	尖端：
+	Open a document to draw parametric shapes.	打开文档以绘制参数化形状。
+	Select a parametric shape to edit it. With none selected, these set the next shape.	选择一个参数化形状以编辑它。未选择时，这些值用于下一个形状。
+@msg	the object is not an editable parametric shape	该对象不是可编辑的参数化形状
+@msg	select plain rectangles, ellipses or regular polygons to convert	请选择要转换的普通矩形、椭圆或正多边形
+@msg	the shape's numbers are out of range	形状的数值超出范围
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` 必须是以下之一：rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` 必须是 3 到 1000 之间的整数
+@msg	`{key}` must be from {lo} to {hi}	`{key}` 必须在 {lo} 到 {hi} 之间
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	智能钢笔
+	Smart Pen Tool	智能钢笔工具
+	Smart Pen Panel	智能钢笔面板
+	Next Segment	下一线段
+	Curved	曲线
+	Retract Handles	收回手柄
+	Close or Join	闭合或连接
+	Open a document to draw with the Smart Pen.	打开文档以使用智能钢笔绘制。
+	Straight or Curved Segment	直线或曲线线段
+@msg	the path is locked or hidden	路径已锁定或隐藏
+@msg	`id` is not a path	`id` 不是路径
+@msg	the path has no open subpath	路径没有开放的子路径
+@msg	the subpath is closed	子路径已闭合
+@msg	the subpath is closed or too short to close	子路径已闭合或太短，无法闭合
+@msg	the path is too short to remove a point from	路径太短，无法删除锚点
+@msg	the segment can't be bent that far	线段无法弯曲到这个程度
+@msg	give `{a}` and `{b}`	请提供 `{a}` 和 `{b}`
+@msg	`t` must be from 0 to 1	`t` 必须在 0 到 1 之间
+@msg	`segment` must be "straight" or "curved"	`segment` 必须是 "straight" 或 "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` 必须是 "free"、"keepAngles" 或 "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` 必须是 [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	按颜色类型选择
+	Objects with Spot Colors	使用专色的对象
+	Objects with Color Effects	带颜色效果的对象
+	RGB Images	RGB 图像
+	CMYK Images	CMYK 图像
+	Grayscale Images	灰度图像
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` 必须是 spotColors、colorEffects、rgbImages、cmykImages 或 grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	网点颜色取自图稿
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	双色调…
+	Duotone	双色调
+	Print Ink Fixes…	印刷油墨修正…
+	Print Ink Fixes	印刷油墨修正
+	Inks	油墨
+	Tone 1	色调 1
+	Tone 2	色调 2
+	Tone 3	色调 3
+	Tone 4	色调 4
+	Curve	曲线
+	Reset to Linear	重置为线性
+	Reset to Inverse	重置为反相
+	Skip Objects with Spot Colors	跳过使用专色的对象
+	Ink Limit	油墨限制
+	Exclude Pure Black	排除纯黑
+	Remove White Overprint	移除白色叠印
+	Overprint Black	黑色叠印
+	Text Only	仅文字
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	请指定 `inkLimit`、`removeWhiteOverprint` 或 `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷油墨修正适用于 CMYK 文档：请先选择 文件 › 文档颜色模式 › CMYK 颜色
+@msg	`{key}` must be 0..{max}	`{key}` 必须为 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	转角工具
+	Slide Anchor Along Path	沿路径滑动锚点
+	Set Corners	设置转角
+	Remove Corners	移除转角
+	Corners selected: {count}	已选转角：{count}
+	Apply to Selected Anchors	应用到所选锚点
+@msg	`radius` must be from 0 to 1000000 pt	`radius` 必须为 0 到 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` 必须是 -0.98 到 0.98 之间的数字
+@msg	choose anchors where two sides meet at an angle: only those take a corner	请选择两条边成角相交的锚点：只有这些锚点才能设置转角
+@msg	give `anchor`, the index of the anchor to slide	请提供 `anchor`，即要滑动的锚点索引
+@msg	that anchor can't slide: an end of an open path has nowhere to go	该锚点无法滑动：开放路径的端点无处可去
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	共享边合并工具
+	Merge Shared Edge	合并共享边
+	Keep Shared Points Together	保持共享点在一起
+	Shared Edges	共享边
+	Coincidence:	重合容差：
+@msg	`a` and `b` must be two different paths	`a` 和 `b` 必须是两条不同的路径
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` 必须为 0.25 到 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` 必须为 0 到 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` 必须是 "average"、"a" 或 "b"
+@msg	the paths have nothing to merge there	这里没有可合并的路径部分
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	拆分文本
+	Combine Point Text	合并点文字
+	Remove Breaks	删除换行
+	Split Text at Cursor	在光标处拆分文本
+	Set Alignment, Keep Position	设置对齐并保持位置
+	Reset Text Transform	重置文本变换
+	Replace Missing Fonts…	替换缺失的字体…
+	Replace Missing Fonts	替换缺失的字体
+	Remove Line Breaks	删除强制换行
+	Remove Paragraph Breaks	删除段落换行
+	Break Text into Lines	将文本拆分为行
+	Break Text into Paragraphs	将文本拆分为段落
+	Break Text into Words	将文本拆分为单词
+	Break Text into Glyphs	将文本拆分为字形
+	Reset Text Transform and Scale	重置文本变换和缩放
+	Set Alignment, Keep Position:	设置对齐并保持位置：
+	Break Text into:	将文本拆分为：
+	Split at Cursor	在光标处拆分
+	Reset Transform	重置变换
+	Shift-click: break into paragraphs	Shift+单击：拆分为段落
+	Alt-click: reset the horizontal scale too	Alt+点击：同时重置水平缩放
+breakText	Lines	行
+breakText	Words	单词
+breakText	Glyphs	字形
+@msg	Click in type with a Type tool to split it	请用文字工具在文字中单击以拆分
+@msg	Too many type objects to change at once	一次要更改的文字对象过多
+@msg	Too many pieces to make at once	一次要创建的部分过多
+@msg	Select horizontal point or area type whose text fits	请选择文本能完全容纳的横排点文字或区域文字
+@msg	Nothing to split at the cursor	光标处没有可拆分的内容
+@msg	Select two or more one-line point type objects on one baseline to combine	请选择同一基线上两个或更多单行点文字对象以合并
+@msg	No line breaks to remove	没有要删除的强制换行
+@msg	No paragraph breaks to remove	没有要删除的段落换行
+@msg	Too many breaks to remove at once	一次要删除的换行过多
+@msg	Select point type	请选择点文字
+@msg	The point type is aligned that way already	点文字已经是这种对齐方式
+@msg	The point type has no transform to reset	点文字没有可重置的变换
+@msg	No fonts are missing	没有缺失的字体
+@msg	the replacement font is not available	替换字体不可用
+@msg	missing `align`	缺少 `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` 必须是 lines、paragraphs、words 或 glyphs，而不是 {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` 必须是 "line" 或 "paragraph"，而不是 {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` 必须是 "left"、"center" 或 "right"，而不是 {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Path Effects	路径效果
+	Reverse Direction	反转方向
+	Align to Corners and Ends	对齐转角和端点
+	Count	数量
+	Max Count	最大数量
+	Start Length	起点长度
+	Start Percent	起点百分比
+	Start Shape	起点形状
+	End Length	终点长度
+	End Percent	终点百分比
+	End Shape	终点形状
+	By Count	按数量
+	By Distance	按距离
+	Both	两者
+	Shorter Than Length	短于长度
+	Dashes to Geometry	虚线转为几何图形
+	Dashes to Geometry…	虚线转为几何图形…
+	Add Anchors	添加锚点
+	Add Anchors…	添加锚点…
+	Smooth Anchors	平滑锚点
+	Smooth Anchors…	平滑锚点…
+	Simplify Anchors	简化锚点
+	Simplify Anchors…	简化锚点…
+	Split at Anchors	在锚点处分割
+	Split at Anchors…	在锚点处分割…
+	Extend Path…	延长路径…
+	Close Path…	闭合路径…
+	Retract Handles…	收回手柄…
+	Dash 1	虚线 1
+	Gap 1	间隔 1
+	Dash 2	虚线 2
+	Gap 2	间隔 2
+	Dash 3	虚线 3
+	Gap 3	间隔 3
+	Dash 4	虚线 4
+	Gap 4	间隔 4
+	Dash 5	虚线 5
+	Gap 5	间隔 5

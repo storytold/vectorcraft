@@ -72,13 +72,9 @@ impl<'a> Reader<'a> {
             "X+" => return Ok(()),
             _ => {}
         }
-        // What follows an object (its name, transparency and style) ends with anything else. The
-        // state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the `LB`.
-        if !matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
-            self.after_object = false;
-            self.layer_state = None;
-        }
+        self.state_block_continues(w);
         let group_ended = std::mem::take(&mut self.group_ended);
+        let mesh_ended = std::mem::take(&mut self.mesh_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
@@ -201,7 +197,7 @@ impl<'a> Reader<'a> {
                 }
             }
             // Transparency and state.
-            "Xy" => self.transparency(&vals),
+            "Xy" => self.transparency(&vals, mesh_ended),
             // A group's own state (`Xd`, `6 () XW`) without an `Xy` keeps the current transparency, as
             // the file's PDF part draws it. A look's group (`9 () XW`) has no state of its own.
             "Xd" if group_ended => {
@@ -212,7 +208,13 @@ impl<'a> Reader<'a> {
             }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
-            "XW" => self.style_marker(&vals, hidden),
+            "XW" => {
+                // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
+                if Self::nums(&vals).last() == Some(&6.0) && self.mesh_undo.take().is_some() {
+                    self.layer_state = None;
+                }
+                self.style_marker(&vals, hidden)
+            }
             // Gradients.
             "Bd" => self.gradient_def = GradientDef::begin(&vals),
             "Bs" | "BD" => {}
@@ -388,8 +390,26 @@ impl<'a> Reader<'a> {
         });
     }
 
-    /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too.
-    fn transparency(&mut self, vals: &[V]) {
+    /// Operator `w` ends what follows an object (its name, transparency and style) unless it is part
+    /// of a state block.
+    /// The state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the
+    /// `LB`, and can have the stroke style between its `Xy` and `Xd`: that keeps the layer's state,
+    /// and what a mesh or blend before it had (`mesh_undo`).
+    fn state_block_continues(&mut self, w: &str) {
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
+            return;
+        }
+        self.after_object = false;
+        if !matches!(w, "J" | "j" | "w" | "M" | "d" | "XR") {
+            self.layer_state = None;
+            self.mesh_undo = None;
+        }
+    }
+
+    /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
+    /// after a gradient mesh's `/End X!` or a blend's record (before their `Xd` and `6 () XW`),
+    /// theirs, unless the layer's `LB` follows: then it is the layer's (see `end_layer`).
+    fn transparency(&mut self, vals: &[V], mesh_ended: bool) {
         let n = Self::nums(vals);
         let [mode, opacity, rest @ ..] = n.as_slice() else { return };
         let gs = &mut self.gs;
@@ -403,7 +423,16 @@ impl<'a> Reader<'a> {
         };
         gs.knockout_shape = rest.get(2).is_some_and(|v| *v != 0.0);
         let gs = self.gs.clone();
-        if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+        let in_layer = matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }));
+        if let Some(n) =
+            self.last_object().filter(|n| (mesh_ended && matches!(n.kind, NodeKind::Mesh(_))) || matches!(n.kind, NodeKind::Blend { .. }))
+        {
+            // The mesh's or blend's, or the layer's when it is the layer's last object: kept for either.
+            let before = (n.opacity, n.blend, n.isolate, n.knockout);
+            (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+            self.mesh_undo = Some(before);
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+        } else if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
             if let Some(n) = self.last_object() {
                 n.opacity = gs.opacity;
                 n.blend = gs.blend;
@@ -415,8 +444,7 @@ impl<'a> Reader<'a> {
             // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
             // an operator that isn't part of the state block (or the `LB` that takes it) says the
             // art moves on, so a path's state before its paint isn't read as its layer's.
-            self.layer_state =
-                matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. })).then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
         }
     }
 
@@ -427,6 +455,10 @@ impl<'a> Reader<'a> {
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
         let style = vals.iter().rev().find_map(V::text).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
+        // An object's own state block ends `6 () XW` (a layer's `7 () XW`): an `Xy` before it isn't the layer's.
+        if code == 6.0 {
+            self.layer_state = None;
+        }
         if code == 9.0
             && let Some(look) = self
                 .frames

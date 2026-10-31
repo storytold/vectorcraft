@@ -5,6 +5,15 @@
 //! shortcuts, the ⌘K palette and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
+/// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update
+/// prompt shows both, and an AppImage's menu entry gets the icon.
+#[cfg(not(target_arch = "wasm32"))]
+pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
+    icon_png: Some(include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.vectorcraft.png")),
+    accent: Some([0xe8, 0x57, 0x3f]),
+    ..craft_update::suite::VECTORCRAFT
+};
+
 /// Translate a UI string literal into the language the UI is drawn in (see [`i18n`]).
 #[macro_export]
 macro_rules! tl {
@@ -13,6 +22,7 @@ macro_rules! tl {
     };
 }
 
+pub mod addons;
 pub mod background;
 mod brand;
 pub mod canvas;
@@ -124,6 +134,8 @@ pub struct VectorcraftApp {
     pub titlebar_inset: f32,
     /// Last applied effect (Effect → Apply Last Effect).
     pub last_effect: Option<(String, serde_json::Value)>,
+    /// Last successful destructive Pathfinder operation, repeated on the current selection.
+    pub last_pathfinder: Option<String>,
     /// Last confirmed Warp Options (bend, distortion, orientation) for the next new warp dialog.
     pub last_warp: Option<serde_json::Value>,
     /// The Character panel field that takes the keyboard focus when the panel next draws it
@@ -175,6 +187,9 @@ pub struct VectorcraftApp {
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
+    /// Whether a screen mode put the window full screen (`chrome::sync_fullscreen`), so Normal
+    /// Screen Mode takes it back out, and leaves a window the user made full screen as it is.
+    pub(crate) fullscreen_for_mode: bool,
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,

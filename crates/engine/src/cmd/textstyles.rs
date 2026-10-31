@@ -99,9 +99,17 @@ macro_rules! style_cmds {
                 concat!($p, ".delete"),
                 concat!("Delete ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name} (text keeps its look)",
+                "{name} | {names: [name…]} delete styles in one undo step (text keeps its look; never the Normal style)",
                 |s, p| delete(s, p, $kind),
                 true,
+            ),
+            spec(
+                concat!($p, ".unused"),
+                "Select All Unused",
+                &["Window", "Type", $menu],
+                "{} → {names: [the styles no text uses, in panel order; never the Normal style]} (the panel highlights them)",
+                |s, _| unused(s, $kind),
+                false,
             ),
         ]
     };
@@ -291,19 +299,31 @@ fn text_mut(d: &mut Document, id: NodeId) -> Option<&mut vectorcraft_doc::TextOb
     }
 }
 
-/// How many runs (char) or paragraphs (para) use `name`.
-fn uses(d: &Document, kind: Kind, name: &str) -> usize {
-    let target = (name != kind.normal()).then_some(name);
-    let mut n = 0;
-    d.walk(|node| {
-        if let NodeKind::Text(t) = &node.kind {
-            n += match kind {
-                Kind::Char => t.runs.iter().filter(|r| r.style.style_name.as_deref() == target).count(),
-                Kind::Para => (0..t.paragraph_count()).filter(|&i| t.para_at(i).style_name.as_deref() == target).count(),
-            };
-        }
-    });
+/// How many runs (char) or paragraphs (para) use each style, by style name (`None`: the Normal
+/// style). Type in the art (opacity masks included), symbols, graph designs, pattern tiles and the
+/// art of brushes counts.
+fn uses(d: &Document, kind: Kind) -> std::collections::HashMap<Option<String>, usize> {
+    let mut n = std::collections::HashMap::new();
+    let mut count = |name: &Option<String>| *n.entry(name.clone()).or_insert(0) += 1;
+    let brushes = vectorcraft_brush::library(d);
+    let trees = d.layers.iter().map(|l| &**l).chain(d.symbols.iter().map(|s| &*s.art)).chain(d.graph_designs.iter().map(|g| &*g.art));
+    let trees = trees.chain(d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a))).chain(brushes.iter().flat_map(|b| b.art()));
+    for tree in trees {
+        vectorcraft_doc::swatches::walk_with_masks(tree, &mut |node| {
+            if let NodeKind::Text(t) = &node.kind {
+                match kind {
+                    Kind::Char => t.runs.iter().for_each(|r| count(&r.style.style_name)),
+                    Kind::Para => (0..t.paragraph_count()).for_each(|i| count(&t.para_at(i).style_name)),
+                }
+            }
+        });
+    }
     n
+}
+
+/// How many runs (char) or paragraphs (para) use `name` (see [`uses`]).
+fn uses_of(uses: &std::collections::HashMap<Option<String>, usize>, kind: Kind, name: &str) -> usize {
+    uses.get(&(name != kind.normal()).then(|| name.to_string())).copied().unwrap_or(0)
 }
 
 /// Update every user of `name` from `old` to `new` attributes (overrides kept).
@@ -434,7 +454,8 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let mut names = vec![kind.normal().to_string()];
     names.extend(kind.defs(d).iter().map(|s| s.name.clone()).filter(|n| n != kind.normal()));
-    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses(d, kind, n) })).collect();
+    let uses = uses(d, kind);
+    let styles: Vec<Value> = names.iter().map(|n| json!({ "name": n, "attrs": kind.attrs(d, n), "uses": uses_of(&uses, kind, n) })).collect();
     Ok(json!({ "styles": styles }))
 }
 
@@ -616,16 +637,26 @@ fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 
 fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("delete");
-    let name = name_param(p, kind, "delete")?.to_string();
-    if name == kind.normal() || !kind.defs(&s.doc()?.doc).iter().any(|s| s.name == name) {
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => v
+            .as_array()
+            .and_then(|a| a.iter().map(|n| n.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+            .ok_or_else(|| bad(&c, "`names` must be an array of style names"))?,
+        None => vec![name_param(p, kind, "delete")?.to_string()],
+    };
+    if names.is_empty() {
+        return Err(bad(&c, "missing `name`"));
+    }
+    let defs = kind.defs(&s.doc()?.doc);
+    if let Some(name) = names.iter().find(|n| *n == kind.normal() || !defs.iter().any(|s| s.name == **n)) {
         return Err(bad(&c, format!("`{name}` can't be deleted")));
     }
-    s.edit("Delete Style", |d, _| {
-        kind.defs_mut(d).retain(|s| s.name != name);
+    s.edit(if names.len() > 1 { "Delete Styles" } else { "Delete Style" }, |d, _| {
+        kind.defs_mut(d).retain(|s| !names.contains(&s.name));
         for id in all_text(d) {
             let Some(t) = text_mut(d, id) else { continue };
             let fix = |n: &mut Option<String>| {
-                if n.as_deref() == Some(name.as_str()) {
+                if n.as_ref().is_some_and(|n| names.contains(n)) {
                     *n = None;
                 }
             };
@@ -637,6 +668,15 @@ fn delete(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// The styles no text uses (see [`uses`]), in the order the panel lists them, without the Normal
+/// style.
+fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let uses = uses(d, kind);
+    let names: Vec<&str> = kind.defs(d).iter().map(|s| s.name.as_str()).filter(|n| *n != kind.normal() && uses_of(&uses, kind, n) == 0).collect();
+    Ok(json!({ "names": names }))
 }
 
 #[cfg(test)]

@@ -495,7 +495,7 @@ font-technology	Variable	Променливи
 	Collect in New Layer	Събиране в нов слой
 	Collect Links in a Separate Folder	Събиране на връзките в отделна папка
 	Color	Цвят
-	Color (,)	Цвят (,)
+	Color (, or <)	Цвят (, или <)
 	Color Adjustments	Цветови корекции
 	Color bars	Цветови скали
 	Color blindness – Deuteranopia-type	Цветна слепота – тип девтеранопия
@@ -1236,7 +1236,7 @@ font-technology	Variable	Променливи
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
 	Gradient	Градиент
-	Gradient (.)	Градиент (.)
+	Gradient (. or >)	Градиент (. или >)
 	Gradient across stroke	Градиент напречно на щриха
 	Gradient along stroke	Градиент по дължината на щриха
 	Gradient and Mesh Resolution:	Разделителна способност на градиент и мрежа:
@@ -1380,6 +1380,7 @@ font-technology	Variable	Променливи
 	Delete Guides	Изтриване на водачи
 	Delete Slice	Изтриване на отрязък
 	Delete Style	Изтриване на стил
+	Delete Styles	Изтриване на стилове
 	Delete Variables	Изтриване на променливи
 	Delete View	Изтриване на изглед
 	Done Editing Pattern	Край на редактирането на мостра
@@ -1860,6 +1861,7 @@ font-technology	Variable	Променливи
 	Move in Perspective	Преместване в перспектива
 	Move Locked and Hidden Artwork with Artboard	Преместване на заключени и скрити обекти с работната област
 	Move Mesh Point	Преместване на точка от мрежата
+	Move Mesh Points	Преместване на точки от мрежата
 	Move Plane	Преместване на равнина
 	Move Plane to Match Object	Преместване на равнината според обекта
 	Move Rows	Преместване на редове
@@ -2582,6 +2584,7 @@ font-technology	Variable	Променливи
 	Repeat Tab	Повтаряне на табулатора
 	Repeat {name}	Повтаряне на {name}
 	Replace	Замяна
+	Replace:	Замяна:
 	Replace Font	Замяна на шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Заменете го с друг файл или го игнорирайте: неговите изображения ще продължат да показват записания с документа преглед.
 	Replace Spine	Замяна на оста
@@ -4038,6 +4041,7 @@ axis	Both	И двете
 @msg	no document	няма документ
 @msg	no document open	няма отворен документ
 @msg	no effect applied yet	все още няма приложен ефект
+@msg	no Pathfinder operation applied yet	все още няма приложена операция на Pathfinder
 @msg	no effect at index {k}	няма ефект на индекс {k}
 @msg	no end record	няма краен запис
 @msg	no file manager here	няма файлов мениджър тук
@@ -5583,3 +5587,296 @@ axis	Y Axis	Y ос
 	Glyph Bounds	Граници на глифа
 	Proximity Guides	Водачи за близост
 	Angular Guides	Ъглови водачи
+# Average & Join (Object › Path, Cmd+Alt+Shift+J).
+	Average & Join…	Усредняване и свързване…
+	Average & Join	Усредняване и свързване
+anchor	Points:	Точки:
+@msg	select two open path ends, or two open paths, to average and join	изберете два края на отворени пътища или два отворени пътя за усредняване и свързване
+
+# Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
+	Artwork Cleanup	Почистване на графиката
+	Simplify Anchors (Keep Shape)…	Опростяване на опорните точки (запазване на формата)…
+	Health Check	Проверка на състоянието
+	Show Issue	Показване на проблема
+	Fix All Issues	Отстраняване на всички проблеми
+	Fix Issues	Отстраняване на проблемите
+	Deep Ungroup…	Разгрупиране на всички нива…
+	Rejoin Path Pieces…	Повторно свързване на части от пътища…
+	Document Health Check	Проверка на състоянието на документа
+	Check Selection	Проверка на селекцията
+	Check Document	Проверка на документа
+	No issues found.	Не са открити проблеми.
+	Changed since the last check.	Променено след последната проверка.
+	Fix Selected	Отстраняване на избраните
+	Fix All	Отстраняване на всички
+	Issues fixed: {count}	Отстранени проблеми: {count}
+	Open a document to check it for issues.	Отворете документ, за да го проверите за проблеми.
+	Empty Text	Празен текст
+	Unpainted Objects	Обекти без цвят
+	Zero-Opacity Objects	Обекти с нулева непрозрачност
+	Duplicate Objects	Дублирани обекти
+	Off-Artboard Art	Графика извън работните области
+	Duplicate Anchors	Дублирани опорни точки
+	Tiny Handles	Миниатюрни дръжки
+	Collinear Anchors	Колинеарни опорни точки
+	Nearly Coincident Anchors	Почти съвпадащи опорни точки
+	Nearly Closed Paths	Почти затворени пътища
+	Filled Open Paths	Запълнени отворени пътища
+	Needless Clipping Groups	Излишни групи за изрязване
+	Needless Compound Paths	Излишни съставни пътища
+	Needless Groups	Излишни групи
+	Empty Artboards	Празни работни области
+	Protect Corners	Защита на ъглите
+	Gap	Разстояние
+	Include Clip Groups	Включване на групите за изрязване
+@msg	`tolerance` must be from 1 to 100	`tolerance` трябва да е от 1 до 100
+@msg	`gap` must be from 0 to 6 pt	`gap` трябва да е от 0 до 6 pt
+@msg	Simplify Anchors: the paths have too many anchors to simplify at once	Опростяване на опорните точки: пътищата имат твърде много опорни точки, за да се опростят наведнъж
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	Повторно свързване на части от пътища: твърде много пътища за свързване наведнъж
+@msg	None of these issues are left: check again	Не е останал нито един от тези проблеми: проверете отново
+@msg	`kinds` must be a list of issue kinds	`kinds` трябва да е списък с видове проблеми
+@msg	missing `kind`	липсва `kind`
+	Simplify Anchors (Keep Shape)	Опростяване на опорните точки (запазване на формата)
+	Deep Ungroup	Разгрупиране на всички нива
+	Rejoin Path Pieces	Повторно свързване на части от пътища
+
+# Color Effects add-on (Object › Plug-ins › Color Effects, Effect › Color Effects): its effects, panel and messages.
+	Color Effects	Цветови ефекти
+	Color Effects Panel	Панел „Цветови ефекти“
+	Exposure	Експонация
+	Exposure…	Експонация…
+	Desaturate	Обезцветяване
+	Adjustment	Корекция
+	Add as Effect	Добавяне като ефект
+	Apply as Filter	Прилагане като филтър
+	Select objects to adjust their colors.	Изберете обекти, за да коригирате цветовете им.
+	Brightness/Contrast	Яркост/Контраст
+	Hue/Saturation	Оттенък/Наситеност
+	Temperature/Tint	Температура/Нюанс
+@msg	`{id}` is not a colour adjustment	`{id}` не е цветова корекция
+@msg	missing `effect`	липсва `effect`
+@msg	`params` must be an object	`params` трябва да бъде обект
+# Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
+	Path Precision Tools	Инструменти за прецизни пътища
+	Anchor Eraser Brush	Четка за изтриване на опорни точки
+	Extend Path Tool	Инструмент „Удължаване на път“
+	Measure & Inspect Tool	Инструмент „Измерване и проверка“
+	Anchor Inspector	Инспектор на опорни точки
+	Add Points at Crossings	Добавяне на точки в пресичанията
+	Split at Crossings	Разделяне в пресичанията
+	Extend Path	Удължаване на път
+	Measure & Inspect	Измерване и проверка
+	Set Anchor	Задаване на опорна точка
+	Make Smooth	Направи гладка
+	Make Corner	Направи ъглова
+	Equalize Handles	Изравняване на дръжките
+	Remove Points, Keep Shape	Премахване на точки, запазване на формата
+	Add Points to Segments…	Добавяне на точки към сегменти…
+	Add Points to Segments	Добавяне на точки към сегменти
+	Open a document to edit its anchor points.	Отворете документ, за да редактирате опорните му точки.
+	Anchors selected: {count}	Избрани опорни точки: {count}
+	Direct-select anchor points to edit them.	Изберете опорните точки директно, за да ги редактирате.
+	In:	Вход:
+	Out:	Изход:
+	Add Points	Добавяне на точки
+	Points per segment	Точки на сегмент
+	Close Path:	Затваряне на пътя:
+	Keep Handles	Запазване на дръжките
+	Straight	Прав
+	Stretch Curve	Разтягане на кривата
+@msg	direct-select the anchor points to remove	изберете директно опорните точки за премахване
+@msg	select segments, or paths, to add points to	изберете сегменти или пътища, към които да се добавят точки
+@msg	select open paths to close	изберете отворени пътища за затваряне
+@msg	the paths are too many or too tangled to find where they cross (at most 10000 segments)	пътищата са твърде много или твърде заплетени, за да се намерят пресичанията им (най-много 10000 сегмента)
+@msg	the paths have too many anchors to edit at once	пътищата имат твърде много опорни точки, за да се редактират наведнъж
+# Path Precision Tools add-on: the Parametric Shape Tool, its panel, commands and messages.
+	Parametric Shape Tool	Инструмент „Параметрична форма“
+	Parametric Shape	Параметрична форма
+	Edit Parametric Shape	Редактиране на параметрична форма
+	Convert to Parametric Shape	Преобразуване в параметрична форма
+	Ring	Пръстен
+	Heart	Сърце
+	Gear	Зъбно колело
+	Speech Bubble	Балонче за реч
+	Count:	Брой:
+	Thickness:	Дебелина:
+	Inner Radius:	Вътрешен радиус:
+	Head:	Глава:
+	Shaft:	Стъбло:
+	Point:	Връх:
+	Tooth Height:	Височина на зъба:
+	Tail:	Опашка:
+	Tip:	Връх:
+	Open a document to draw parametric shapes.	Отворете документ, за да рисувате параметрични форми.
+	Select a parametric shape to edit it. With none selected, these set the next shape.	Изберете параметрична форма, за да я редактирате. Без избрана форма тези стойности важат за следващата.
+@msg	the object is not an editable parametric shape	обектът не е редактируема параметрична форма
+@msg	select plain rectangles, ellipses or regular polygons to convert	изберете обикновени правоъгълници, елипси или правилни многоъгълници за преобразуване
+@msg	the shape's numbers are out of range	стойностите на формата са извън допустимия обхват
+@msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` трябва да е едно от: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble
+@msg	`count` must be a whole number from 3 to 1000	`count` трябва да е цяло число от 3 до 1000
+@msg	`{key}` must be from {lo} to {hi}	`{key}` трябва да е от {lo} до {hi}
+# Smart Pen add-on (Object › Plug-ins › Smart Pen): its tool, panel, commands and messages.
+	Smart Pen	Интелигентно перо
+	Smart Pen Tool	Инструмент „Интелигентно перо“
+	Smart Pen Panel	Панел „Интелигентно перо“
+	Next Segment	Следващ сегмент
+	Curved	Крив
+	Retract Handles	Прибиране на дръжките
+	Close or Join	Затваряне или свързване
+	Open a document to draw with the Smart Pen.	Отворете документ, за да рисувате с интелигентното перо.
+	Straight or Curved Segment	Прав или крив сегмент
+@msg	the path is locked or hidden	пътят е заключен или скрит
+@msg	`id` is not a path	`id` не е път
+@msg	the path has no open subpath	пътят няма отворен подпът
+@msg	the subpath is closed	подпътят е затворен
+@msg	the subpath is closed or too short to close	подпътят е затворен или е твърде къс, за да се затвори
+@msg	the path is too short to remove a point from	пътят е твърде къс, за да се премахне точка от него
+@msg	the segment can't be bent that far	сегментът не може да се огъне толкова
+@msg	give `{a}` and `{b}`	задайте `{a}` и `{b}`
+@msg	`t` must be from 0 to 1	`t` трябва да е от 0 до 1
+@msg	`segment` must be "straight" or "curved"	`segment` трябва да е "straight" или "curved"
+@msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` трябва да е "free", "keepAngles" или "symmetric"
+@msg	`{key}` must be [x, y]	`{key}` трябва да е [x, y]
+
+# Color Effects add-on: Select by Color Kind.
+	Select by Color Kind	Избиране по вид цвят
+	Objects with Spot Colors	Обекти с плакатни цветове
+	Objects with Color Effects	Обекти с цветови ефекти
+	RGB Images	RGB изображения
+	CMYK Images	CMYK изображения
+	Grayscale Images	Изображения в нюанси на сивото
+@msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` трябва да е spotColors, colorEffects, rgbImages, cmykImages или grayImages
+
+# Color Effects add-on: Vector Halftone (Effect › Color Effects).
+	Dot Color from Art	Цвят на точките от илюстрацията
+
+# Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
+	Duotone…	Двутон…
+	Duotone	Двутон
+	Print Ink Fixes…	Корекции на мастилата за печат…
+	Print Ink Fixes	Корекции на мастилата за печат
+	Inks	Мастила
+	Tone 1	Тон 1
+	Tone 2	Тон 2
+	Tone 3	Тон 3
+	Tone 4	Тон 4
+	Curve	Крива
+	Reset to Linear	Връщане към линейна
+	Reset to Inverse	Връщане към обърната
+	Skip Objects with Spot Colors	Пропускане на обекти с плакатни цветове
+	Ink Limit	Лимит на мастилото
+	Exclude Pure Black	Без чисто черно
+	Remove White Overprint	Премахване на напечатването на бялото
+	Overprint Black	Напечатване на черното
+	Text Only	Само текст
+@msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
+@msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Корекциите на мастилата за печат работят върху CMYK документи: първо изберете Файл › Цветен режим на документа › CMYK цвят
+@msg	`{key}` must be 0..{max}	`{key}` трябва да е 0..{max}
+# Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
+	Corner Tool	Инструмент „Ъгли“
+	Slide Anchor Along Path	Плъзгане на опорна точка по пътя
+	Set Corners	Задаване на ъгли
+	Remove Corners	Премахване на ъгли
+	Corners selected: {count}	Избрани ъгли: {count}
+	Apply to Selected Anchors	Прилагане към избраните опорни точки
+@msg	`radius` must be from 0 to 1000000 pt	`radius` трябва да е от 0 до 1000000 pt
+@msg	`t` must be a number from -0.98 to 0.98	`t` трябва да е число от -0.98 до 0.98
+@msg	choose anchors where two sides meet at an angle: only those take a corner	изберете опорни точки, където две страни се срещат под ъгъл: само те могат да имат ъгъл
+@msg	give `anchor`, the index of the anchor to slide	посочете `anchor`, индекса на опорната точка за плъзгане
+@msg	that anchor can't slide: an end of an open path has nowhere to go	тази опорна точка не може да се плъзга: краят на отворен път няма накъде да отиде
+# Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together.
+	Shared Edge Merge Tool	Инструмент „Сливане на общ ръб“
+	Merge Shared Edge	Сливане на общ ръб
+	Keep Shared Points Together	Общите точки да остават заедно
+	Shared Edges	Общи ръбове
+	Coincidence:	Съвпадение:
+@msg	`a` and `b` must be two different paths	`a` и `b` трябва да са два различни пътя
+@msg	`diameter` must be from 0.25 to 200 pt	`diameter` трябва да е от 0.25 до 200 pt
+@msg	`tolerance` must be from 0 to 3 pt	`tolerance` трябва да е от 0 до 3 pt
+@msg	`follow` must be "average", "a" or "b"	`follow` трябва да е "average", "a" или "b"
+@msg	the paths have nothing to merge there	пътищата нямат какво да се слеят тук
+
+# Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
+	Break Text	Разделяне на текст
+	Combine Point Text	Обединяване на точков текст
+	Remove Breaks	Премахване на прекъсвания
+	Split Text at Cursor	Разделяне на текст при курсора
+	Set Alignment, Keep Position	Задаване на подравняване със запазване на позицията
+	Reset Text Transform	Нулиране на трансформацията на текста
+	Replace Missing Fonts…	Замяна на липсващите шрифтове…
+	Replace Missing Fonts	Замяна на липсващите шрифтове
+	Remove Line Breaks	Премахване на прекъсванията на редове
+	Remove Paragraph Breaks	Премахване на прекъсванията на абзаци
+	Break Text into Lines	Разделяне на текста на редове
+	Break Text into Paragraphs	Разделяне на текста на абзаци
+	Break Text into Words	Разделяне на текста на думи
+	Break Text into Glyphs	Разделяне на текста на глифи
+	Reset Text Transform and Scale	Нулиране на трансформацията и мащаба на текста
+	Set Alignment, Keep Position:	Подравняване със запазване на позицията:
+	Break Text into:	Разделяне на текста на:
+	Split at Cursor	Разделяне при курсора
+	Reset Transform	Нулиране на трансформацията
+	Shift-click: break into paragraphs	Shift-щракване: разделяне на абзаци
+	Alt-click: reset the horizontal scale too	Alt-щракване: нулиране и на хоризонталния мащаб
+breakText	Lines	Редове
+breakText	Words	Думи
+breakText	Glyphs	Глифи
+@msg	Click in type with a Type tool to split it	Щракнете в текст с инструмента „Текст“, за да го разделите
+@msg	Too many type objects to change at once	Твърде много текстови обекти за промяна наведнъж
+@msg	Too many pieces to make at once	Твърде много части за създаване наведнъж
+@msg	Select horizontal point or area type whose text fits	Изберете хоризонтален точков текст или текст в зона, чийто текст се побира
+@msg	Nothing to split at the cursor	При курсора няма какво да се раздели
+@msg	Select two or more one-line point type objects on one baseline to combine	Изберете два или повече едноредови обекта с точков текст на една базова линия, за да ги обедините
+@msg	No line breaks to remove	Няма прекъсвания на редове за премахване
+@msg	No paragraph breaks to remove	Няма прекъсвания на абзаци за премахване
+@msg	Too many breaks to remove at once	Твърде много прекъсвания за премахване наведнъж
+@msg	Select point type	Изберете точков текст
+@msg	The point type is aligned that way already	Точковият текст вече е подравнен така
+@msg	The point type has no transform to reset	Точковият текст няма трансформация за нулиране
+@msg	No fonts are missing	Няма липсващи шрифтове
+@msg	the replacement font is not available	заместващият шрифт не е наличен
+@msg	missing `align`	липсва `align`
+@msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` трябва да е lines, paragraphs, words или glyphs, а не {other}
+@msg	`kind` must be "line" or "paragraph", not {other}	`kind` трябва да е "line" или "paragraph", а не {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` трябва да е "left", "center" или "right", а не {other}
+
+# Path Precision Tools add-on: Path Effects (Effect › Path Effects).
+	Mode	Режим
+	Path Effects	Ефекти на пътя
+	Reverse Direction	Обръщане на посоката
+	Align to Corners and Ends	Подравняване към ъглите и краищата
+	Count	Брой
+	Max Count	Максимален брой
+	Start Length	Дължина в началото
+	Start Percent	Процент в началото
+	Start Shape	Форма в началото
+	End Length	Дължина в края
+	End Percent	Процент в края
+	End Shape	Форма в края
+	By Count	По брой
+	By Distance	По разстояние
+	Both	И двете
+	Shorter Than Length	По-къси от дължината
+	Dashes to Geometry	Тирета в геометрия
+	Dashes to Geometry…	Тирета в геометрия…
+	Add Anchors	Добавяне на опорни точки
+	Add Anchors…	Добавяне на опорни точки…
+	Smooth Anchors	Заглаждане на опорните точки
+	Smooth Anchors…	Заглаждане на опорните точки…
+	Simplify Anchors	Опростяване на опорните точки
+	Simplify Anchors…	Опростяване на опорните точки…
+	Split at Anchors	Разделяне в опорните точки
+	Split at Anchors…	Разделяне в опорните точки…
+	Extend Path…	Удължаване на път…
+	Close Path…	Затваряне на пътя…
+	Retract Handles…	Прибиране на дръжките…
+	Dash 1	Тире 1
+	Gap 1	Разстояние 1
+	Dash 2	Тире 2
+	Gap 2	Разстояние 2
+	Dash 3	Тире 3
+	Gap 3	Разстояние 3
+	Dash 4	Тире 4
+	Gap 4	Разстояние 4
+	Dash 5	Тире 5
+	Gap 5	Разстояние 5

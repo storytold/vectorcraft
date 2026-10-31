@@ -430,3 +430,95 @@ fn patterns_inside_pattern_tiles_share_one_tile_budget() {
     let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
     assert!(ops.len() < 300_000, "{} operations", ops.len());
 }
+
+/// A 24 pt tile clipped to itself, red on its left half and white on its right: the striped
+/// pattern of #3911.
+fn stripes(name: &str, extra: Option<Node>) -> PatternDef {
+    let cell = Rect::new(0.0, 0.0, 24.0, 24.0);
+    let clip = Node::new(
+        NodeId(0),
+        NodeKind::Path { path: shapes::rectangle(cell), rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: true, guide: false },
+    );
+    let mut children = vec![
+        Arc::new(clip),
+        Arc::new(path(shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 24.0)), red(), Paint::None, 0.0)),
+        Arc::new(path(shapes::rectangle(Rect::new(12.0, 0.0, 24.0, 24.0)), Paint::solid(Color::rgb8(255, 255, 255)), Paint::None, 0.0)),
+    ];
+    children.extend(extra.map(Arc::new));
+    let group = Node::new(NodeId(0), NodeKind::Group { children, clip: true });
+    let mut def = PatternDef::new(name, vec![Arc::new(group)]);
+    def.tile = cell;
+    def
+}
+
+/// A 360 × 260 pt rectangle filled with `def`, turned 45°.
+fn striped_doc(def: PatternDef) -> Document {
+    let paint = Paint::Pattern { pattern: def.name.clone(), xf: Affine::rotate(std::f64::consts::FRAC_PI_4) };
+    let mut d = doc_with(400.0, 300.0, vec![path(shapes::rectangle(Rect::new(20.0, 20.0, 380.0, 280.0)), paint, Paint::None, 0.0)]);
+    d.patterns.push(def);
+    d
+}
+
+fn fills(ops: &[crate::scene::Op]) -> Vec<(&vectorcraft_geom::BezPath, [u8; 3])> {
+    ops.iter()
+        .filter_map(|op| match op {
+            crate::scene::Op::Fill { path, rgb, .. } => Some((path, *rgb)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn clips(ops: &[crate::scene::Op]) -> usize {
+    ops.iter().filter(|op| matches!(op, crate::scene::Op::Clip { .. })).count()
+}
+
+/// #3911: a pattern whose tiles stay apart is written as one shape for each part of its tile,
+/// clipped once to what it fills, instead of every tile's parts in a clip of their own.
+#[test]
+fn pattern_tiles_that_stay_apart_are_one_shape_for_each_part() {
+    let d = striped_doc(stripes("stripes", None));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let f = fills(&ops);
+    assert_eq!(f.iter().map(|(_, rgb)| *rgb).collect::<Vec<_>>(), [[255, 0, 0], [255, 255, 255]], "red, then white");
+    assert_eq!(clips(&ops), 2, "the page's clip and one to the filled rectangle");
+    // Every tile's half is in the merged shape: one figure for each tile, red and white alike.
+    let figures = |bp: &vectorcraft_geom::BezPath| bp.elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+    let tiles = d.pattern("stripes").unwrap().instances_in(Affine::rotate(std::f64::consts::FRAC_PI_4), Rect::new(20.0, 20.0, 380.0, 280.0)).len();
+    assert!(tiles > 200, "{tiles} tiles");
+    assert_eq!((figures(f[0].0), figures(f[1].0)), (tiles, tiles));
+    assert!(warnings.iter().any(|w| w.contains("one shape for each part of the tile")), "{warnings:?}");
+    // The EMF: two fills and one saved clip, about half the bytes the tiles took apart.
+    let bytes = emf(&d).bytes;
+    let k = kinds(&emf_records(&bytes));
+    assert_eq!((count(&k, 62), count(&k, 33)), (2, 2), "FILLPATH and SAVEDC records");
+}
+
+/// Art reaching past its tile overlaps the next tile's, so the tiles keep their own shapes and
+/// clips, in paint order.
+#[test]
+fn pattern_art_past_its_tile_keeps_each_tile_apart() {
+    let mut def = stripes("wide", None);
+    // The tile is smaller than the art: neighbours overlap.
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let d = striped_doc(def);
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "{} fills", fills(&ops).len());
+    assert!(clips(&ops) > 200, "each tile's clip stays");
+    assert!(warnings.iter().any(|w| w.contains("one shape each")), "{warnings:?}");
+}
+
+/// Hex tilings overlap their tiles' boxes, and a stroke may reach past a clip: both keep each
+/// tile apart.
+#[test]
+fn hex_tilings_and_stroked_tiles_keep_each_tile_apart() {
+    let mut hex = stripes("hex", None);
+    hex.tile_type = vectorcraft_doc::TileType::HexByRow;
+    let d = striped_doc(hex);
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "hex: {} fills", fills(&ops).len());
+
+    let line = path(shapes::rectangle(Rect::new(4.0, 4.0, 20.0, 20.0)), Paint::None, blue(), 2.0);
+    let d = striped_doc(stripes("stroked", Some(line)));
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400 && clips(&ops) > 200, "stroked: {} fills, {} clips", fills(&ops).len(), clips(&ops));
+}

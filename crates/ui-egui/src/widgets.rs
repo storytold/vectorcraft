@@ -47,17 +47,18 @@ pub use dropdowns::{
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, opt_field, opt_field_named, range_field, range_field_named,
-    range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named,
-    spin_field_stops_named, spin_plain, spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, num_field_within, opt_field, opt_field_named, range_field,
+    range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named,
+    spin_field_named, spin_field_stops_named, spin_plain, spin_plain_named,
 };
 #[cfg(test)]
 use numeric::{decimal_point, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
-pub(crate) use numeric::{round_to, set_bare_numbers_are_points, typed_unit};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
-    arm_field_focus, dialog_focus_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter, set_dialog_open, take_dialog_focus,
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
+    reject_dialog_commit, set_dialog_open, take_dialog_focus,
 };
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
@@ -87,7 +88,7 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 }
 
 /// `parent.with(salt)` for a salt that needs only `Hash`.
-fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
+pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
 }
 
