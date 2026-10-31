@@ -902,6 +902,23 @@ fn the_isolation_bar_does_not_take_layout_height_from_the_canvas() {
     assert_eq!(top(&mut app), before, "isolation mode leaves the canvas where it was");
 }
 
+#[test]
+fn isolation_bar_renders_breadcrumb_icons() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": id})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    egui_extras::install_image_loaders(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+        super::isolation_bar(&mut app, ui, screen);
+    });
+    out.textures_delta.clear();
+    assert!(out.shapes.len() > 2);
+}
+
 /// #4468: In nested isolation, clicking the back button steps up one level in the hierarchy,
 /// and clicking ancestor breadcrumbs navigates directly to that isolation level.
 #[test]
