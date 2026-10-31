@@ -201,25 +201,37 @@ fn run_refuses_malformed_commands_naming_the_step() {
     assert_eq!(printed, 2);
 }
 
-/// `--help` and `-h` right after a subcommand print the usage that `vectorcraft-cli help` prints.
+/// `--help` and `-h` right after a subcommand print that subcommand's help (clap's, from the doc
+/// comments; `--help` the same as `help SUB`); the lists of readable and writable formats end it.
 #[test]
-fn help_after_a_subcommand_prints_the_usage() {
-    let usage = Command::new(BIN).arg("help").output().unwrap();
-    assert!(usage.status.success() && String::from_utf8_lossy(&usage.stdout).contains("USAGE:"));
+fn help_after_a_subcommand_prints_its_help() {
     for sub in ["mcp", "run", "commands", "convert", "info", "bench", "perf"] {
+        let by_name = Command::new(BIN).args(["help", sub]).stdin(Stdio::null()).output().unwrap();
+        assert!(by_name.status.success(), "help {sub}: {}", String::from_utf8_lossy(&by_name.stderr));
+        let text = String::from_utf8_lossy(&by_name.stdout);
+        assert!(text.contains(&format!("Usage: vectorcraft-cli {sub}")), "{sub}: {text}");
         for flag in ["--help", "-h"] {
             let out = Command::new(BIN).args([sub, flag]).stdin(Stdio::null()).output().unwrap();
             assert!(out.status.success(), "{sub} {flag}: {}", String::from_utf8_lossy(&out.stderr));
-            assert!(out.stdout == usage.stdout, "{sub} {flag}: {}", String::from_utf8_lossy(&out.stdout));
+            // `--help` is the long help, as `help SUB` is; `-h` the short one.
+            let same = flag == "-h" || out.stdout == by_name.stdout;
+            assert!(same && out.stderr.is_empty(), "{sub} {flag}: {}", String::from_utf8_lossy(&out.stdout));
+            assert!(String::from_utf8_lossy(&out.stdout).contains(&format!("Usage: vectorcraft-cli {sub}")), "{sub} {flag}");
         }
     }
+    let top = Command::new(BIN).arg("--help").output().unwrap();
+    let top = String::from_utf8_lossy(&top.stdout);
+    assert!(top.contains("Usage: vectorcraft-cli <COMMAND>") && top.contains("Writable formats: .vectorcraft, .svg"), "{top}");
+    let convert = Command::new(BIN).args(["convert", "--help"]).output().unwrap();
+    let convert = String::from_utf8_lossy(&convert.stdout);
+    assert!(convert.contains("Readable formats: .") && convert.contains(".png, .jpg"), "{convert}");
 }
 
-/// `--help` and `-h` after other arguments print the usage too, before the subcommand does anything
-/// with them.
+/// `--help` and `-h` after other arguments print the help of the subcommand too, even after a
+/// mistake, before the subcommand does anything with them.
 #[test]
-fn help_later_in_the_line_prints_the_usage() {
-    let usage = Command::new(BIN).arg("help").output().unwrap();
+fn help_later_in_the_line_prints_the_help() {
+    let help_of = |sub: &str| Command::new(BIN).args([sub, "--help"]).output().unwrap().stdout;
     let mut wrong = vec![];
     for args in [
         &["mcp", "--headless", "--help"][..],
@@ -241,22 +253,84 @@ fn help_later_in_the_line_prints_the_usage() {
         &["convert", "--decimals", "many", "--help"],
     ] {
         let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
-        if !out.status.success() || out.stdout != usage.stdout {
+        if !out.status.success() || out.stdout != help_of(args[0]) {
             wrong.push(format!("{args:?}: {}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout)));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// Further along the line, `-h` is the value of the option before it.
+/// A value that starts with `-` is written with `=`: `-h` after `--cmd` is the help, `--cmd=-h` the
+/// command named `-h`.
 #[test]
-fn help_as_an_option_value_goes_to_the_option() {
+fn a_value_starting_with_a_dash_goes_with_equals() {
     let out = Command::new(BIN).args(["run", "--cmd", "-h"]).output().unwrap();
+    assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).contains("Usage: vectorcraft-cli run"));
+    let out = Command::new(BIN).args(["run", "--cmd=-h"]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("vectorcraft-cli: step 0 (-h):") && out.stdout.is_empty(), "{err}");
-    let out = Command::new(BIN).args(["convert", "in.svg", "--range", "-h"]).output().unwrap();
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success() && err.contains("convert needs IN and OUT") && out.stdout.is_empty(), "{err}");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(err.starts_with("error: step 0 (-h):") && out.stdout.is_empty(), "{err}");
+    let out = Command::new(BIN).args(["run", "--cmd", "--export", "x.svg"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "{}", String::from_utf8_lossy(&out.stderr));
+}
+
+/// A mistake on the command line is a usage error, exit 2 with the message on stderr, found before
+/// anything is read or written.
+#[test]
+fn usage_errors_exit_2_before_any_work() {
+    let out_file = tmp("never-written.svg");
+    let _ = std::fs::remove_file(&out_file);
+    let out_file = out_file.to_str().unwrap();
+    let cases: &[(&[&str], &str)] = &[
+        (&[], "Usage: vectorcraft-cli"),
+        (&["frobnicate"], "unrecognized subcommand 'frobnicate'"),
+        (&["commands", "extra"], "unexpected argument 'extra'"),
+        (&["info"], "required arguments were not provided"),
+        (&["info", "a.svg", "b.svg"], "unexpected argument 'b.svg'"),
+        (&["convert", "a.svg"], "<OUT>"),
+        (&["convert", "a.svg", "b.png", "--artbord", "1"], "unexpected argument '--artbord'"),
+        (&["convert", "a.svg", "b.png", "--scale", "1", "--scale", "2"], "cannot be used multiple times"),
+        (&["convert", "a.svg", "b.png", "--scale", "fast"], "invalid value 'fast' for '--scale <N>'"),
+        (&["convert", "a.svg", "b.png", "--scale", "0"], "expected a number above 0"),
+        (&["convert", "a.svg", "b.png", "--artboard", "1", "--range", "1"], "cannot be used with"),
+        (&["convert", "a.svg", "b.png", "--ai-version", "8"], "invalid value '8'"),
+        (&["convert", "a.svg", "b.ait", "--artboard", "0"], "a .ait template holds every artboard"),
+        (&["run", "--scale", "2", "--scale", "3"], "cannot be used multiple times"),
+        (&["run", "--params", "{}"], "--params must follow a --cmd"),
+        (&["run", "--cmd", "a", "--params", "{}", "--params", "{}"], "--params is given twice"),
+        (&["run", "--cmd", "a", "--params", "[1]"], "expected a JSON object"),
+        (&["run", "--cmd", "a", "--params", "{oops"], "invalid value '{oops' for '--params <JSON>'"),
+        (&["run", "--bogus"], "unexpected argument '--bogus'"),
+        (&["mcp", "--connect", "a:1", "--headless"], "cannot be used with"),
+        (&["mcp", "--connect", "a:1", "--automation-read-root", "d"], "cannot be used with"),
+        (&["mcp", "--nope"], "unexpected argument '--nope'"),
+        (&["bench", "f.svg", "--size", "big"], "expected WIDTHxHEIGHT"),
+        (&["bench", "f.svg", "--iters", "0"], "invalid value '0'"),
+        (&["perf", "--paths", "many"], "invalid value 'many'"),
+        (&["perf", "--deep", "--deep"], "cannot be used multiple times"),
+    ];
+    for (args, wanted) in cases {
+        let mut args = args.to_vec();
+        if args.first() == Some(&"run") {
+            args.extend(["--export", out_file]);
+        }
+        let out = Command::new(BIN).args(&args).stdin(Stdio::null()).output().unwrap();
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {err}");
+        assert!(err.contains(wanted), "{args:?}: {err}");
+        assert!(out.stdout.is_empty(), "{args:?}: {}", String::from_utf8_lossy(&out.stdout));
+    }
+    assert!(!std::path::Path::new(out_file).exists(), "a usage error wrote a file");
+}
+
+/// `-V` and `--version` print the name and version, whatever else is on the line.
+#[test]
+fn version_prints_the_name_and_version() {
+    for flag in ["-V", "--version"] {
+        let out = Command::new(BIN).arg(flag).output().unwrap();
+        assert!(out.status.success(), "{flag}");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), format!("vectorcraft-cli {}\n", env!("CARGO_PKG_VERSION")));
+    }
 }
 
 #[test]
@@ -376,10 +450,10 @@ fn automation_roots(base: &std::path::Path) {
     };
     fails(&["mcp", "--automation-read-root", &dir("missing")], "cannot open the automation read root");
     fails(&["mcp", "--automation-read-root", &dir("in"), "--automation-read-root", &dir("missing")], "cannot open the automation read root");
-    fails(&["mcp", "--automation-write-root"], "needs a folder");
+    fails(&["mcp", "--automation-write-root"], "a value is required for '--automation-write-root <DIR>'");
     fails(
         &["mcp", "--connect", "127.0.0.1:1", &format!("--automation-write-root={}", dir("out"))],
-        "a running app enforces its own roots: start it with `vectorcraft --control <port>",
+        "the argument '--connect <ADDR>' cannot be used with",
     );
 
     let mut child = Command::new(BIN)
