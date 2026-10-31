@@ -19,6 +19,7 @@ use vectorcraft_doc::color::Color;
 
 mod build;
 mod cache;
+mod cjk;
 mod db;
 mod dirs;
 mod face;
@@ -28,6 +29,8 @@ mod names;
 mod scan;
 mod traits;
 mod wanted;
+
+pub use cjk::CjkPreference;
 
 pub use build::style_weight;
 #[cfg(test)]
@@ -103,6 +106,8 @@ pub struct FontDb {
     stamp: Mutex<Option<ScanStamp>>,
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
+    /// Which script's Han ideographs the interface asked for (see [`FontDb::set_cjk_preference`]).
+    cjk: RwLock<CjkPreference>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.
