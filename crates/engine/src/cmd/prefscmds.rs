@@ -195,6 +195,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
+    p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),
     p!("fontsFolder", "Type", "Options", "Additional Fonts Folder", text),
     // Units
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),

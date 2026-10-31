@@ -635,6 +635,51 @@ fn the_caret_follows_undo_and_redo_of_a_typed_list() {
     }
 }
 
+/// Type › Start Lists From Typed Markers off: a list marker and a space typed at the start of a
+/// paragraph stay as text and start no list; `text.startList` still starts one.
+#[test]
+fn typed_lists_off_leaves_typed_markers_as_text() {
+    let v = ViewInfo::default();
+    for typed in ["1.", "1)", "A.", "A)", "*", "#", ">", "+"] {
+        let mut s = session();
+        s.execute("prefs.set", &json!({"key": "typedLists", "value": false})).unwrap();
+        s.select_tool("type", v).unwrap();
+        click(&mut s, 200.0, 200.0);
+        let id = s.doc().unwrap().selection.objects[0];
+        for c in typed.chars().chain(" a".chars()) {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+        let t = obj(&s, id);
+        assert_eq!((t.plain_text(), t.para_at(0).list), (format!("{typed} a"), None), "{typed}");
+        assert!(!undo_labels(&s).iter().any(|l| l == "Bullets and Numbering"), "{typed}");
+    }
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "typedLists", "value": false})).unwrap();
+    let id = text(&mut s, "1. a");
+    let r = s.execute("text.startList", &json!({"id": id.0, "at": 3})).unwrap();
+    assert_eq!(r["started"], true);
+    assert_eq!(obj(&s, id).plain_text(), "a");
+    assert!(obj(&s, id).para_at(0).list.is_some());
+}
+
+/// `typedLists` is a Type preference, on by default: `prefs.list` lists it as a bool, and
+/// `prefs.reset` of the Type category turns it back on.
+#[test]
+fn typed_lists_is_a_type_preference_on_by_default() {
+    let mut s = Session::new();
+    assert!(s.prefs.typed_lists);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "typedLists").unwrap().clone();
+    assert_eq!(
+        (&row["category"], &row["kind"], &row["label"], &row["value"]),
+        (&json!("Type"), &json!("bool"), &json!("Start Lists From Typed Markers"), &json!(true))
+    );
+    s.execute("prefs.set", &json!({"key": "typedLists", "value": false})).unwrap();
+    assert!(!s.prefs.typed_lists);
+    s.execute("prefs.reset", &json!({"category": "Type"})).unwrap();
+    assert!(s.prefs.typed_lists);
+}
+
 /// The same characters later in a paragraph, without the space, typed in one piece with the space
 /// (a paste), or at the start of a paragraph that is already in a list start nothing.
 #[test]

@@ -436,7 +436,11 @@ impl TypeTool {
     /// from the start of the caret's paragraph up to it start a list ([`TextObject::typed_list_at`]),
     /// the typing session ends as one undo step with those characters, and `text.startList`
     /// removes them and makes the paragraph a list as the next one, so one Undo puts them back.
+    /// With Type › Start Lists From Typed Markers off, the characters stay as typed.
     fn start_typed_list(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !cx.typed_lists {
+            return vec![];
+        }
         let (Some(id), Some(ty)) = (self.editing, &self.typing) else { return vec![] };
         let Some(mut t) = Self::text(cx, id).cloned() else { return vec![] };
         // The document does not have the space yet (its preview is applied after this input).

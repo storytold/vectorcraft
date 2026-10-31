@@ -496,6 +496,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,
