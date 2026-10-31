@@ -132,13 +132,15 @@ fn runs_a_command(i: &egui::InputState, key: Key, cmd_only: bool) -> bool {
             _ => None,
         })
         .collect();
-    let shortcuts = all_shortcuts();
-    let bound = |m: &Modifiers| {
-        shortcuts
-            .iter()
-            .any(|(sc, ..)| sc.logical_key == key && (sc.modifiers.command || (!cmd_only && sc.modifiers.any())) && m.matches_logically(sc.modifiers))
-    };
-    !presses.is_empty() && presses.iter().all(bound)
+    !presses.is_empty() && presses.iter().all(|m| chord_runs_a_command(key, *m, cmd_only))
+}
+
+/// Is a command shortcut bound to `key` held with `m`, matched logically?
+/// `cmd_only`: only chords with Cmd count.
+fn chord_runs_a_command(key: Key, m: Modifiers, cmd_only: bool) -> bool {
+    all_shortcuts()
+        .iter()
+        .any(|(sc, ..)| sc.logical_key == key && (sc.modifiers.command || (!cmd_only && sc.modifiers.any())) && m.matches_logically(sc.modifiers))
 }
 
 /// Whether a key press runs a shortcut of the keymap in effect, the user's own included. The web
@@ -219,7 +221,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let composing = app.session.tool_composing();
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
+    // Enter in the Type tool types a line break, so it goes to the tool with the frame's text,
+    // below.
+    let enter_types = app.session.tool_wants_text();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)] {
+        if k == Key::Enter && enter_types {
+            continue;
+        }
         if !typing && !composing && ctx.input(|i| i.key_pressed(k)) {
             // A chord a command is bound to (Cmd+Enter) runs only that command, in the shortcuts
             // below, also when the tool claims the key. While the Type tool edits text only Cmd
@@ -455,26 +463,10 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
         ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_))));
         return;
     }
-    // A deferred pointer/navigation notice has not established its destination yet. Its
-    // clipboard suffix must not cut or paste at the old caret; only the notice's own actual
-    // handler (kept in the raw vector) may run.
-    if crate::ime::deferred(app, ctx) {
-        ctx.input_mut(|input| {
-            input.events.retain(|event| match event {
-                egui::Event::Cut | egui::Event::Paste(_) => false,
-                egui::Event::Key { key: egui::Key::X | egui::Key::V, pressed: true, modifiers, .. }
-                    if modifiers.command && !modifiers.shift && !modifiers.alt =>
-                {
-                    false
-                }
-                _ => true,
-            })
-        });
-    }
-    // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
-    crate::panels::character::route_type_input(app, ctx);
-    // Enter was already delivered above as ToolKey::Enter (newline). Only chords with the
-    // command key run commands: the rest type or edit.
+    // Cmd+A is Select All's, below: the text. Enter went to the tool in `type_text`, unless a
+    // command is bound to its chord, and so did the editing keys and the clipboard events (a
+    // cut or paste after a deferred pointer or navigation notice is dropped there). Only chords
+    // with the command key run commands: the rest type or edit.
     let hits = dispatch(app, ctx, |hit| hit.trigger.chord.mods.cmd);
     for c in hits {
         run_hit(app, ctx, &c);
