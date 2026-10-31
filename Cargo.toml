@@ -56,6 +56,10 @@ vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 kurbo = { version = "0.13", features = ["serde"] }
 peniko = "0.6"
 thiserror = "2"
+# Command lines (RFC-0012): clap derive for the CLI, and completions and man pages from its definition.
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4.6.11"
+clap_mangen = "0.3.3"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 log = "0.4"

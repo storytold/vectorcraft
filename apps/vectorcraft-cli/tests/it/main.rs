@@ -4,4 +4,5 @@
 
 mod cli;
 mod fileio;
+mod inprocess;
 mod mcp_e2e;

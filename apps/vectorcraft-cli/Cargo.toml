@@ -6,6 +6,10 @@ license.workspace = true
 publish = false
 description = "VectorCraft command line: MCP server (stdio) and headless batch runs"
 
+[lib]
+name = "vectorcraft_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "vectorcraft-cli"
 path = "src/main.rs"
@@ -23,6 +27,8 @@ vectorcraft-svg = { workspace = true }
 vectorcraft-mcp = { workspace = true }
 vectorcraft-render = { workspace = true }
 vectorcraft-text = { workspace = true }
+clap = { workspace = true }
+thiserror = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
@@ -44,5 +50,9 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 objc2-core-text = { version = "0.3", default-features = false, features = ["std", "CTFontManager"] }
 
 [dev-dependencies]
+# Shell completions and man pages (examples/man-and-completions.rs, for the packages); not in the
+# binary.
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 serde_json = { workspace = true }

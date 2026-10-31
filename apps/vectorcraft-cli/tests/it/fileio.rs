@@ -113,11 +113,8 @@ fn help_lists_readable_formats() {
 
 #[test]
 fn help_lists_perf_deep() {
-    let out = ok(&["--help"]);
-    assert!(
-        out.contains("vectorcraft-cli perf [--paths N] [--deep]") && out.contains("--deep also times") && out.contains("with the peak so far on"),
-        "{out}"
-    );
+    let out = ok(&["perf", "--help"]);
+    assert!(out.contains("--deep") && out.contains("Also time work") && out.contains("with the peak so far on"), "{out}");
 }
 
 /// `info` reports the import warnings: an EPS read only up to an error names it.
@@ -195,10 +192,14 @@ fn convert_writes_legacy_ai_with_its_options() {
     .unwrap();
     assert!(r["warnings"].to_string().contains("hidden objects are left out"), "{r}");
     assert!(std::fs::read(&one).unwrap().starts_with(b"%!PS-Adobe-3.0"));
-    // A value the engine doesn't take is an error.
+    // A value the option doesn't take is a usage error, before the file is read.
     let bad = Command::new(BIN).args(["convert", &src, &tmp("bad.ai"), "--ai-version", "7", "--hidden-objects", "behind"]).output().unwrap();
-    assert!(!bad.status.success());
-    assert!(String::from_utf8_lossy(&bad.stderr).contains("hiddenObjects"), "{}", String::from_utf8_lossy(&bad.stderr));
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&bad.stderr).contains("invalid value 'behind' for '--hidden-objects"),
+        "{}",
+        String::from_utf8_lossy(&bad.stderr)
+    );
 }
 
 /// convert and `run --export` write a `.ait` as Save as Template does: a PDF-compatible template of

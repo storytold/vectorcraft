@@ -30,6 +30,8 @@ claude mcp add vectorcraft-app -- vectorcraft-cli mcp --connect 127.0.0.1:7979
 ```
 
 Cargo installs a binary, not a symlink into `target/`, so it survives `cargo clean`.
+
+`vectorcraft-cli` follows [RFC-0012](https://github.com/storytold/craft-contrib/pull/18) (command-line conventions): clap parses every subcommand, so an unknown or repeated flag, a bad value or a conflicting pair of flags is a usage error (exit 2, on stderr) before any work starts; failures exit 1 as `error: …`; a value that starts with `-` is written `--cmd=-x`; `-V`/`--version` and generated `--help` work everywhere. `cargo run -p vectorcraft-cli --example man-and-completions -- DIR` writes the shell completions and man pages.
 Re-run the install command after updating the checkout.
 By default the executable goes in `$CARGO_HOME/bin` (`~/.cargo/bin` when unset), or
 `%USERPROFILE%\.cargo\bin` on Windows. If you set `--root`, `CARGO_INSTALL_ROOT`, or

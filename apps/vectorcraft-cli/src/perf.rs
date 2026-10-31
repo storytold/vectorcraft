@@ -4,6 +4,7 @@
 //! average above three quarters of the cores, or on Windows more than three quarters of the
 //! cores busy over a second) they are noise, and the report says so.
 
+use std::io::Write;
 use std::time::Instant;
 
 use serde_json::json;
@@ -11,6 +12,8 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, hit};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_render::{RenderOptions, Renderer};
+
+use crate::cli::PerfArgs;
 
 /// Deterministic xorshift in 0..1.
 struct Rng(u64);
@@ -189,7 +192,7 @@ fn budget_row(name: &str, ms: f64, budget: f64, ok: bool) -> String {
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
 /// selection, live effects, every Pathfinder operation, typing in a long story, and memory, with
 /// the peak so far where `rss_mb` reads one.
-fn deep(n: usize) -> Result<(), String> {
+fn deep(n: usize, out: &mut dyn Write) -> Result<(), PerfError> {
     let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut rows: Vec<(String, f64)> = vec![];
     let mut mem: Vec<(String, f64, Option<f64>)> = vec![];
@@ -326,48 +329,55 @@ fn deep(n: usize) -> Result<(), String> {
     let svg = vectorcraft_svg::export(&doc, &vectorcraft_svg::ExportOptions::default());
     let saved = vectorcraft_format::save_file(&doc);
     let reopened = vectorcraft_format::load(&saved).map_err(|e| e.to_string())?;
-    outln!("  output hash: SVG export {:016x}, save→open→save {:016x}", fnv(svg.as_bytes()), fnv(&vectorcraft_format::save_file(&reopened)));
+    writeln!(out, "  output hash: SVG export {:016x}, save→open→save {:016x}", fnv(svg.as_bytes()), fnv(&vectorcraft_format::save_file(&reopened)))?;
     note("after the SVG export and save→open→save");
-    outln!("  tracked (no budget yet)");
+    writeln!(out, "  tracked (no budget yet)")?;
     for (name, ms) in &rows {
-        outln!("{}", tracked_row(name, *ms));
+        writeln!(out, "{}", tracked_row(name, *ms))?;
     }
     // `rss_mb` reads the working set on Windows.
     let memory = if cfg!(windows) { "working set" } else { "memory" };
     for (what, mb, peak) in &mem {
-        outln!("{}", memory_row(&format!("{memory} {what}"), *mb, *peak));
+        writeln!(out, "{}", memory_row(&format!("{memory} {what}"), *mb, *peak))?;
     }
     Ok(())
 }
 
-pub fn run(args: &[String]) -> Result<(), String> {
-    if crate::help_requested(args, &["--paths"]) {
-        return crate::help();
+/// Why `perf` failed.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PerfError {
+    /// Building or measuring failed; the engine reports it as text.
+    #[error("{0}")]
+    Measure(String),
+    #[error("{0} budget(s) exceeded")]
+    OverBudget(usize),
+    #[error("can't write to stdout: {0}")]
+    Stdout(#[from] std::io::Error),
+}
+
+impl From<String> for PerfError {
+    fn from(message: String) -> Self {
+        Self::Measure(message)
     }
-    let mut n = 50_000usize;
-    let mut want_deep = false;
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--deep" => want_deep = true,
-            "--paths" => n = it.next().and_then(|v| v.parse().ok()).ok_or("--paths needs a number")?,
-            other => return Err(format!("unknown perf option `{other}`")),
-        }
-    }
+}
+
+/// Runs `vectorcraft-cli perf`, printing the report to `out`.
+pub(crate) fn run(args: &PerfArgs, out: &mut dyn Write) -> Result<(), PerfError> {
+    let (n, want_deep) = (args.paths, args.deep);
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     // The figure is the 1-minute load average, or on Windows the cores busy over one second.
     #[cfg(not(windows))]
     let (load, label) = (load_average(), "load average");
     #[cfg(windows)]
     let (load, label) = (busy_cores(cores), "cores busy");
-    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, {label} {}", load.map_or("?".into(), |l| format!("{l:.1}")));
+    writeln!(out, "VectorCraft performance budgets — {n} paths, {cores} cores, {label} {}", load.map_or("?".into(), |l| format!("{l:.1}")))?;
     let noisy = load.is_some_and(|l| l > cores as f64 * 0.75);
     if noisy {
-        outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
+        writeln!(out, "WARNING: the machine is busy; wall-clock timings below are not trustworthy.")?;
     }
     let t = Instant::now();
     let doc = synthetic(n)?;
-    outln!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
+    writeln!(out, "  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0)?;
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
     let opts = RenderOptions::default();
@@ -434,26 +444,26 @@ pub fn run(args: &[String]) -> Result<(), String> {
     rows.push(("handle drag, 5,000-anchor path (per move)", handle, 8.0));
     rows.push(("segment drag, 5,000-anchor path (per move)", segment, 8.0));
     if let Some(e) = failed {
-        return Err(e);
+        return Err(PerfError::Measure(e));
     }
     if want_deep {
-        deep(n)?;
+        deep(n, out)?;
     }
 
     let mut over = 0;
-    outln!("  {:<42} {:>10} {:>10}", "", "measured", "budget");
+    writeln!(out, "  {:<42} {:>10} {:>10}", "", "measured", "budget")?;
     for (name, ms, budget) in &rows {
         let ok = ms <= budget;
         over += usize::from(!ok);
-        outln!("{}", budget_row(name, *ms, *budget, ok));
+        writeln!(out, "{}", budget_row(name, *ms, *budget, ok))?;
     }
     match (over, noisy) {
         (0, _) => Ok(()),
         (_, true) => {
-            outln!("{over} over budget, but the machine is busy: re-run when idle.");
+            writeln!(out, "{over} over budget, but the machine is busy: re-run when idle.")?;
             Ok(())
         }
-        _ => Err(format!("{over} budget(s) exceeded")),
+        _ => Err(PerfError::OverBudget(over)),
     }
 }
 
