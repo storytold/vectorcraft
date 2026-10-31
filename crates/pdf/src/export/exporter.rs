@@ -83,6 +83,15 @@ pub(super) const MAX_FIELD_PX: f64 = 512.0;
 /// Most pixels along a side of a linear or radial gradient's image.
 pub(super) const MAX_GRADIENT_PX: f64 = 4096.0;
 
+/// The minimum requested resolution (ppi) for PDF raster effects and freeform gradients.
+/// Existing pixel budgets take precedence: large images can have a lower effective resolution.
+pub const MIN_RASTER_PPI: f64 = 150.0;
+
+/// The ppi to rasterise at: the document's, but at least [`MIN_RASTER_PPI`].
+pub fn pdf_raster_ppi(doc_ppi: f64) -> f64 {
+    if doc_ppi.is_finite() && doc_ppi >= MIN_RASTER_PPI { doc_ppi } else { MIN_RASTER_PPI }
+}
+
 /// The largest magnitude a coordinate, length or transform entry may have in the content stream it
 /// is drawn into (for glyph spacing, in thousandths of an em). Art that would go beyond it is left
 /// out. A PDF/A-2 file may hold only integers from -2,147,483,648 to 2,147,483,647 (ISO 19005-2,
