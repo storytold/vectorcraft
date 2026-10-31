@@ -12,7 +12,7 @@ fn new_id(v: &Value) -> u64 {
     v["id"].as_u64().or_else(|| v["ids"][0].as_u64()).unwrap_or_else(|| panic!("no id in {v}"))
 }
 
-fn rect(s: &mut Session, x: f64, y: f64) -> u64 {
+pub(super) fn rect(s: &mut Session, x: f64, y: f64) -> u64 {
     new_id(&s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 20, "height": 20})).unwrap())
 }
 

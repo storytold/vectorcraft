@@ -403,3 +403,32 @@ fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
     assert_eq!(comparable(&s.doc().unwrap().doc), before);
     assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
 }
+
+/// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+/// version 2 (#3260). A PDF saved with Preserve Editing carries the native document, so one from
+/// before that opens with the radius converted, drawing the same dots; one saved since opens as
+/// it was.
+#[test]
+fn a_preserve_editing_pdf_opens_with_its_halftone_radius_in_pixels() {
+    let halftone = |old: bool| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        s.execute("document.rasterEffectsSettings", &json!({"resolution": 300})).unwrap();
+        let r = super::tests_svgedit::rect(&mut s, 10.0, 10.0);
+        s.execute("effect.apply", &json!({"effect": "pixelate.colorHalftone", "params": {"maxRadius": 8}, "ids": [r]})).unwrap();
+        if old {
+            // As VectorCraft 0.18 wrote it: the document model's version 1, the radius in points.
+            std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).version = 1;
+        }
+        let pdf = b64(&s.execute("document.exportPdf", &json!({})).unwrap());
+        let opened = open(&mut s, "halftone.pdf", &pdf);
+        assert_eq!(opened["restored"], json!(true), "{opened}");
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.version, vectorcraft_doc::FORMAT_VERSION);
+        let n = d.node(vectorcraft_doc::NodeId(r)).unwrap();
+        n.appearance.effects.iter().find(|e| e.id == "pixelate.colorHalftone").and_then(|e| e.params["maxRadius"].as_f64()).unwrap()
+    };
+    // 8 pt at 300 ppi are 33⅓ px.
+    assert!((halftone(true) - 8.0 * 300.0 / 72.0).abs() < 1e-9, "{}", halftone(true));
+    assert_eq!(halftone(false), 8.0);
+}

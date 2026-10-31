@@ -607,6 +607,8 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     doc.migrate_overprint_black();
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
+    // A document before version 2: Color Halftone's Max Radius in points becomes pixels (#3260).
+    doc.migrate_halftone_radii();
     doc.fix_next_id();
     // Untrusted: the bleed and type proportions, within the ranges Document Setup takes.
     doc.setup.keep_in_range();
@@ -780,6 +782,29 @@ mod tests {
     }
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};
+
+    /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+    /// version 2 (#3260): a file from before opens with its radius in points converted, one saved
+    /// since opens as it was.
+    #[test]
+    fn halftone_radii_of_older_documents_open_in_pixels() {
+        let mut d = Document::new(100.0, 100.0);
+        d.raster_effects_ppi = 300.0;
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut look = Appearance::default_art();
+        look.effects.push(vectorcraft_doc::Effect {
+            id: "pixelate.colorHalftone".into(),
+            params: serde_json::json!({"maxRadius": 8.0}),
+            visible: true,
+        });
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), look)).unwrap();
+        let radius = |d: &Document| d.node(id).unwrap().appearance.effects[0].params["maxRadius"].as_f64().unwrap();
+        assert_eq!(radius(&load(&save(&d, false)).unwrap()), 8.0, "saved in pixels, opened in pixels");
+        d.version = 1;
+        let old = load(&save(&d, false)).unwrap();
+        assert_eq!(old.version, vectorcraft_doc::FORMAT_VERSION);
+        assert!((radius(&old) - 8.0 * 300.0 / 72.0).abs() < 1e-9, "8 pt at 300 ppi: {}", radius(&old));
+    }
 
     #[test]
     fn roundtrip() {

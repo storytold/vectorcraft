@@ -880,6 +880,8 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                             let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
                                 widgets::num_field(ui, id, Some(x), unit, 70.0)
+                            } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
+                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
                             } else {
                                 widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
                             };

@@ -384,6 +384,16 @@ pub(super) fn param_fields(
                     changed |= length_within(ui, d, &k, unit, 140.0, range);
                     return;
                 }
+                // A size in pixels of the raster effects resolution (Color Halftone's Max Radius)
+                // stays in pixels whatever the document's units, within its documented range.
+                if let Some(range) = vectorcraft_effects::raster_px_range(&d.str("__effect"), &k) {
+                    let x = v.as_f64().unwrap_or(*range.start());
+                    if let Some(x) = crate::widgets::range_field_named(ui, ("fx-px", &k), None, x, range, &unit_suffix("px"), 2, 140.0) {
+                        d.fields.insert(k.clone(), typed_number(x));
+                        changed = true;
+                    }
+                    return;
+                }
                 if let Some(options) = choices(&k) {
                     let cur = v.as_str().unwrap_or_default();
                     let label = options.iter().find(|(_, value)| *value == cur).map_or(cur, |(l, _)| choice_label(l));

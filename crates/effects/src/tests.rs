@@ -1210,14 +1210,29 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
 
 #[test]
 fn a_distance_parameters_range_comes_from_its_documentation() {
-    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert_eq!(length_range("stylize.glowingEdges", "edgeWidth"), Some(1.0..=14.0));
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("stylize.glowingEdges", "edgeBrightness"), None);
+    assert_eq!(length_range("no.such", "edgeWidth"), None);
+}
+
+#[test]
+fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
+    // Pixels of the Document Raster Effects resolution, as public documentation gives it (#3260):
+    // no unit setting changes it, so it isn't a distance in points.
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert!(!is_length("pixelate.colorHalftone", "maxRadius", false));
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), None);
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(raster_px_range("stylize.glowingEdges", "edgeWidth"), None);
     // The effect applies the range's floor to a radius below it.
     assert_eq!(
         crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
         crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
     );
-    // A distance documented without a range, and unknown effects and parameters, have none.
-    assert_eq!(length_range("path.offsetPath", "offset"), None);
-    assert_eq!(length_range("pixelate.colorHalftone", "channel1"), None);
-    assert_eq!(length_range("no.such", "maxRadius"), None);
+    // Scale Strokes & Effects scales it with the object, as it does distances.
+    let mut e = crate::new_effect("pixelate.colorHalftone", &json!({"maxRadius": 10})).unwrap();
+    crate::scale_effect(&mut e, 2.0);
+    assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
 }

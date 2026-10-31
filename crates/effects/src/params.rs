@@ -95,13 +95,16 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
 }
 
 /// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see
-/// [`EffectInfo::lengths`]). A distance left at its default is written out scaled; one the
-/// effect doesn't have (Outline Stroke's weight following its stroke) stays absent.
+/// [`EffectInfo::lengths`]), and its sizes in raster pixels ([`crate::raster_px_range`]), which
+/// keep their share of the object so. A distance left at its default is written out scaled; one
+/// the effect doesn't have (Outline Stroke's weight following its stroke) stays absent.
 pub fn scale_effect(e: &mut Effect, s: f64) {
     let Some(info) = catalog_index().get(e.id.as_str()) else { return };
     let merged = merged_params(&e.id, &e.params);
     let relative = util::flag(&merged, "relative", false);
-    for k in info.lengths.keys(relative) {
+    let mut keys: Vec<&str> = info.lengths.keys(relative).collect();
+    keys.extend(merged.as_object().into_iter().flat_map(|m| m.keys()).map(String::as_str).filter(|k| crate::raster_px_range(&e.id, k).is_some()));
+    for k in keys {
         let v = util::num(&merged, k, f64::NAN);
         if v.is_finite() {
             if !e.params.is_object() {
