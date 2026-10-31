@@ -1381,6 +1381,12 @@ lighting	Light	Światło
 	Axis	Oś
 	ICF Top/Right	ICF góra/prawo
 	ICF Bottom/Left	ICF dół/lewo
+	Show Font Height Options	Pokaż opcje wysokości czcionki
+	Hide Font Height Options	Ukryj opcje wysokości czcionki
+	Set Font Height Reference	Ustaw odniesienie wysokości czcionki
+	Em Box	Ramka firetowa
+	x-Height	Wysokość x
+	ICF Box	Ramka ICF
 	Copy Color Value (Hex)	Kopiuj wartość koloru (hex)
 	Create New Swatch…	Utwórz nową próbkę…
 	Name 40%	Nazwa 40%
@@ -4005,6 +4011,7 @@ imageTrace	Outline	Kontur
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	nie odczytano warstw pliku ({_1}): plik jest wczytywany jako jego strona, na jednej warstwie
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	nie odczytano warstw pliku z jego danych edycyjnych ({_1}): pochodzą z jego części PDF
 @msg	`to` must be "corner" or "smooth"	`to` musi mieć wartość "corner" lub "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` musi mieć wartość "emBox", "capHeight", "xHeight" lub "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Pliki BMP są w RGB lub skali szarości: colorModel rgb lub gray
 @msg	Blend colors: select at least three objects with filled colours	Przejście kolorów: zaznacz co najmniej trzy obiekty z wypełnieniem kolorem
 @msg	Combine Slices: the slices have no bounds	Połącz plasterki: plasterki nie mają granic

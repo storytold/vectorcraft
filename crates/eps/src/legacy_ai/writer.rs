@@ -719,11 +719,15 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
-    /// Type: a text object when the format can hold it as text, else its outlines.
+    /// Type: a text object when the format can hold it as text, else its outlines. A run whose
+    /// font size measures a height other than the em box is written at the em size it is drawn
+    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
+        let t = &*resolved;
         if !self.outline_text {
             if writable(t) {
                 return self.text_object(t);
@@ -849,7 +853,8 @@ impl<'a> Writer<'a> {
         ps::push_num(&mut self.body, finite(st.tracking, 0.0));
         self.line(" Tt");
         self.line(if st.kerning.is_none() { "1 TA" } else { "0 TA" });
-        ps::push_nums(&mut self.body, &[finite(st.effective_leading(), size * 1.2), finite(p.space_before, 0.0)]);
+        let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
+        ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
     }
 

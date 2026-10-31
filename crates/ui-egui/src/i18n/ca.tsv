@@ -5705,6 +5705,12 @@ theme	Appearance	Aparença
 	Glyph Bounds	Límits del glif
 	Proximity Guides	Guies de proximitat
 	Angular Guides	Guies angulars
+	Show Font Height Options	Mostra les opcions d’alçada de la font
+	Hide Font Height Options	Amaga les opcions d’alçada de la font
+	Set Font Height Reference	Estableix la referència d’alçada de la font
+	Em Box	Caixa em
+	x-Height	Alçada de la x
+	ICF Box	Caixa ICF
 # Average & Join (Object › Path, Cmd+Alt+Shift+J).
 	Average & Join…	Mitjana i unió…
 	Average & Join	Mitjana i unió

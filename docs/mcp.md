@@ -5009,6 +5009,27 @@ A digit the font lacks comes from a fallback font. Default and saved only when s
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"digits":"hindi"}}}
 ```
 
+## Font height reference
+
+`text.setFormat {fontHeightReference: "emBox"|"capHeight"|"xHeight"|"icfBox"}` (the selected type, or `ids`) and
+`text.setRangeStyle {id, start, end, fontHeightReference}` (a range) set the height of the font that the characters' font
+size measures, as the Character panel's Set Font Height Reference dropdown does (panel menu › Show Font Height Options).
+With `emBox`, the default, the font size is the size of the em square. With `capHeight`, `xHeight` or `icfBox`, the
+characters are set at the em size at which the font's cap height or x height (OS/2 `sCapHeight`, `sxHeight`), or the
+height of its ideographic character face (the BASE table's `icfb` and `icft`, else the ink of some ideographs and kana;
+across a vertical line, its width), equals the font size: 20 pt Cap Height type in a font whose capitals are 0.7 em
+tall is set at about 28.6 pt, and its font size stays 20 pt. With a font that has no such value, or one outside 0.1 to 2
+em, the size measures the em box. Auto leading, tracking and kerning follow the em size the characters are set at (the
+Character panel's Leading field shows that Auto leading, and `type.step {attribute: "leading"}` starts from it);
+explicit leading and baseline shift stay in points, and an inline graphic keeps its size.
+SVG, PDF and legacy `.ai` export and the CSS Properties rules write the em size. DXF export writes 0.7 times the em
+size as each TEXT entity's height (group 40, the height of its capitals).
+Saved only when not `emBox`. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"fontHeightReference":"capHeight"}}}
+```
+
 ## Touch Type
 
 The Touch Type tool (`touchType`, Shift+T) changes one character at a time. A click on a character of a type object

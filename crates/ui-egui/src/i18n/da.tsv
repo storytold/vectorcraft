@@ -1381,6 +1381,12 @@ lighting	Light	Lys
 	Axis	Akse
 	ICF Top/Right	ICF øverst/højre
 	ICF Bottom/Left	ICF nederst/venstre
+	Show Font Height Options	Vis indstillinger for skrifthøjde
+	Hide Font Height Options	Skjul indstillinger for skrifthøjde
+	Set Font Height Reference	Angiv reference for skrifthøjde
+	Em Box	Em-felt
+	x-Height	x-højde
+	ICF Box	ICF-felt
 	Copy Color Value (Hex)	Kopiér farveværdi (hex)
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%

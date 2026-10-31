@@ -1442,6 +1442,12 @@ lighting	Light	Svjetlo
 	Axis	Osa
 	ICF Top/Right	ICF vrh/desno
 	ICF Bottom/Left	ICF dno/lijevo
+	Show Font Height Options	Prikaži opcije visine fonta
+	Hide Font Height Options	Sakrij opcije visine fonta
+	Set Font Height Reference	Postavi referentnu visinu fonta
+	Em Box	Em okvir
+	x-Height	Visina malih slova
+	ICF Box	ICF okvir
 	Copy Color Value (Hex)	Kopiraj vrijednost boje (hex)
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%

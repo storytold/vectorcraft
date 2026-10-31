@@ -42,6 +42,13 @@ font-technology	Variable	バリアブル
 	Em Box Top/Right	仮想ボディの上 / 右
 	ICF Top/Right	平均字面の上 / 右
 	ICF Bottom/Left	平均字面の下 / 左
+	Show Font Height Options	フォントの高さオプションを表示
+	Hide Font Height Options	フォントの高さオプションを隠す
+	Set Font Height Reference	フォントの高さの基準を設定
+	Em Box	仮想ボディ
+	Cap Height	キャップハイト
+	x-Height	x ハイト
+	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
 	Character Direction	文字の方向
 	Digits	数字
@@ -3955,6 +3962,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Saving {_1}	{_1} を保存中
 @msg	Sent to {_1}	{_1} に送信しました
 @msg	`to` must be "corner" or "smooth"	`to` には "corner" または "smooth" を指定してください
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` には "emBox"、"capHeight"、"xHeight"、"icfBox" のいずれかを指定してください
 @msg	a layer couldn't be read	読み込めなかったレイヤーがあります
 @msg	it has more than one artboard	アートボードが複数あります
 @msg	its editing data has no layers	編集データにレイヤーがありません

@@ -834,6 +834,12 @@
 	Em Box Top/Right	Topo/Direita da Caixa Eme
 	ICF Top/Right	Topo/Direita do ICF
 	ICF Bottom/Left	Base/Esquerda do ICF
+	Show Font Height Options	Mostrar Opções de Altura da Fonte
+	Hide Font Height Options	Ocultar Opções de Altura da Fonte
+	Set Font Height Reference	Definir Referência de Altura da Fonte
+	Em Box	Caixa Eme
+	x-Height	Altura do x
+	ICF Box	Caixa ICF
 	Em Dash	Travessão
 	Em Space	Espaço Em
 	Embed	Incorporar
@@ -3460,6 +3466,7 @@ axis	Both	Ambos
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	as camadas do arquivo não foram lidas ({_1}): ele entra como sua página, em uma só camada
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	as camadas do arquivo não foram lidas dos seus dados de edição ({_1}): elas vêm da sua parte PDF
 @msg	`to` must be "corner" or "smooth"	`to` deve ser "corner" ou "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` deve ser "emBox", "capHeight", "xHeight" ou "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	arquivos BMP são RGB ou em tons de cinza: colorModel rgb ou gray
 @msg	Blend colors: select at least three objects with filled colours	Mesclar cores: selecione pelo menos três objetos com preenchimento de cor
 @msg	Combine Slices: the slices have no bounds	Combinar fatias: as fatias não têm limites

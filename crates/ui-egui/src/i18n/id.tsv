@@ -1381,6 +1381,12 @@ lighting	Light	Cahaya
 	Axis	Sumbu
 	ICF Top/Right	ICF atas/kanan
 	ICF Bottom/Left	ICF bawah/kiri
+	Show Font Height Options	Tampilkan opsi tinggi font
+	Hide Font Height Options	Sembunyikan opsi tinggi font
+	Set Font Height Reference	Atur acuan tinggi font
+	Em Box	Em Box
+	x-Height	Tinggi x
+	ICF Box	Kotak ICF
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%

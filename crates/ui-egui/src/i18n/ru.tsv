@@ -941,6 +941,12 @@ font-technology	Variable	Вариативные
 	Em Box Top/Right	Верх/право кегельной площадки
 	ICF Top/Right	Верх/право ICF
 	ICF Bottom/Left	Низ/лево ICF
+	Show Font Height Options	Показать параметры высоты шрифта
+	Hide Font Height Options	Скрыть параметры высоты шрифта
+	Set Font Height Reference	Задать опорную высоту шрифта
+	Em Box	Кегельная площадка
+	x-Height	Высота строчных
+	ICF Box	Рамка ICF
 	Em Dash	Длинное тире
 	Em Space	Круглая шпация
 	Embed	Внедрить
@@ -3909,6 +3915,7 @@ axis	Both	Оба
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	слои файла не прочитаны ({_1}): он открывается как его страница, на одном слое
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	слои файла не прочитаны из его данных для редактирования ({_1}): они взяты из его PDF-части
 @msg	`to` must be "corner" or "smooth"	`to` должно быть "corner" или "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` должно быть "emBox", "capHeight", "xHeight" или "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	файлы BMP бывают RGB или в оттенках серого: colorModel rgb или gray
 @msg	Blend colors: select at least three objects with filled colours	Смешивание цветов: выберите не менее трёх объектов с цветными заливками
 @msg	Combine Slices: the slices have no bounds	Объединение фрагментов: у фрагментов нет границ

@@ -90,20 +90,27 @@ pub(crate) fn shared_text_flag(app: &VectorcraftApp, f: impl Fn(&vectorcraft_doc
 /// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
 /// blank field) where they differ, or with no type.
 pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
-    shared_styles(app, |_, _, style| Some(f(style)))
+    shared_styles(app, |_, _, style, _| Some(f(style)))
 }
 
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
 /// compensated runs. Keep raw styles available to font/paragraph controls and style definitions,
 /// even if a collapsed affine prevents editing dimensions.
 fn shared_effective(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> f64) -> Option<f64> {
-    shared_styles(app, |t, _, style| t.effective_char_style(style).map(|s| Metric(f(&s)))).map(|v| v.0)
+    shared_styles(app, |t, _, style, _| t.effective_char_style(style).map(|s| Metric(f(&s)))).map(|v| v.0)
 }
 
-/// The Leading shown: each character's own, or for Auto leading the share of its size its
-/// paragraph's Justification › Auto Leading sets, as the layout uses.
+/// The Leading shown: each character's own, or for Auto leading the share of the em size their
+/// font height reference gives them ([`vectorcraft_text::FontDb::em_size`]) that their paragraph's
+/// Justification › Auto Leading sets, as the layout uses. An inline graphic keeps its size.
 fn shared_leading(app: &VectorcraftApp) -> Option<f64> {
-    shared_styles(app, |t, para, style| t.effective_char_style(style).map(|s| Metric(para.effective_leading(&s)))).map(|v| v.0)
+    let db = vectorcraft_text::FontDb::global();
+    shared_styles(app, |t, para, style, inline| {
+        let s = t.effective_char_style(style)?;
+        let em = if inline { s.size } else { db.em_size(&s, t.vertical) };
+        Some(Metric(para.effective_leading(&CharStyle { size: em, ..s })))
+    })
+    .map(|v| v.0)
 }
 
 pub(crate) struct Metric(pub(crate) f64);
@@ -114,11 +121,12 @@ impl PartialEq for Metric {
     }
 }
 
-/// `f` of each character style in the selection, with its text object and the paragraph the
-/// characters are in (a run that spans paragraphs counts once for each).
+/// `f` of each character style in the selection, with its text object, the paragraph the
+/// characters are in (a run that spans paragraphs counts once for each) and whether the run is an
+/// inline graphic.
 fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
-    f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle) -> Option<T>,
+    f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
     let st = app.session.active()?;
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
@@ -130,14 +138,14 @@ fn shared_styles<T: PartialEq>(
         let t = text(id)?;
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b));
+            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
         }
-        each_paragraph_run(t, Some((a, b)), |para, style| acc.add(f(t, para, style)));
+        each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline)));
     } else {
         for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             n.walk(&mut |c| {
                 if let NodeKind::Text(t) = &c.kind {
-                    each_paragraph_run(t, None, |para, style| acc.add(f(t, para, style)));
+                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
                 }
             });
         }
@@ -146,13 +154,14 @@ fn shared_styles<T: PartialEq>(
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
-/// paragraph's closing line break belongs to it): the pieces within bytes `a..b`, or with no
-/// range every run's, empty ones included. With no range, a final empty paragraph (the text ends
-/// in a line break) counts too, with the style of the run before it, as the caret there types.
+/// paragraph's closing line break belongs to it), and whether the run is an inline graphic: the
+/// pieces within bytes `a..b`, or with no range every run's, empty ones included. With no range, a
+/// final empty paragraph (the text ends in a line break) counts too, with the style of the run
+/// before it, as the caret there types.
 fn each_paragraph_run<'a>(
     t: &'a vectorcraft_doc::TextObject,
     range: Option<(usize, usize)>,
-    mut f: impl FnMut(&'a vectorcraft_doc::ParaStyle, &'a CharStyle),
+    mut f: impl FnMut(&'a vectorcraft_doc::ParaStyle, &'a CharStyle, bool),
 ) {
     let (mut end, mut para) = (0, 0);
     // The style of the last character and whether it is a line break: the paragraph after it has
@@ -161,7 +170,7 @@ fn each_paragraph_run<'a>(
     for r in &t.runs {
         if r.text.is_empty() {
             if range.is_none_or(|(a, b)| a < end && end < b) {
-                f(t.para_at(para), &r.style);
+                f(t.para_at(para), &r.style, r.inline.is_some());
             }
             continue;
         }
@@ -169,7 +178,7 @@ fn each_paragraph_run<'a>(
             let start = end;
             end += piece.len();
             if range.is_none_or(|(a, b)| start < b && end > a) {
-                f(t.para_at(para), &r.style);
+                f(t.para_at(para), &r.style, r.inline.is_some());
             }
             para += usize::from(piece.ends_with('\n'));
             last = Some((&r.style, piece.ends_with('\n')));
@@ -178,7 +187,7 @@ fn each_paragraph_run<'a>(
     if range.is_none()
         && let Some((style, true)) = last
     {
-        f(t.para_at(para), style);
+        f(t.para_at(para), style, false);
     }
 }
 
@@ -625,7 +634,8 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 
 /// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
 /// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
-/// shown). The Properties panel shows its first rows.
+/// shown). With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -641,6 +651,10 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             }
         });
         ui.end_row();
+        if pstate::<bool>(ui.ctx(), FONT_HEIGHT_OPTIONS) {
+            cell(ui, "T↕", tl!("Set Font Height Reference"), |ui| font_height_reference(app, ui, fw));
+            ui.end_row();
+        }
         cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
             let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
             if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
@@ -687,6 +701,30 @@ pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width:
     let size = shared_effective(app, |s| s.size);
     if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
+    }
+}
+
+/// The panel state of the Character panel menu's Show Font Height Options.
+const FONT_HEIGHT_OPTIONS: &str = "ch-font-height-options";
+
+/// The font height references the Set Font Height Reference dropdown lists, with their
+/// `text.setFormat` values.
+const FONT_HEIGHT_REFERENCES: [(vectorcraft_doc::FontHeightReference, &str); 4] = [
+    (vectorcraft_doc::FontHeightReference::EmBox, "emBox"),
+    (vectorcraft_doc::FontHeightReference::CapHeight, "capHeight"),
+    (vectorcraft_doc::FontHeightReference::XHeight, "xHeight"),
+    (vectorcraft_doc::FontHeightReference::IcfBox, "icfBox"),
+];
+
+/// The Set Font Height Reference dropdown, `width` wide: the height of the font that the Font Size
+/// measures, blank where the characters the panel acts on differ.
+fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
+    // The labels of [`FONT_HEIGHT_REFERENCES`], in its order.
+    let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
+    let current = shared(app, |s| s.font_height_reference);
+    let shown = FONT_HEIGHT_REFERENCES.iter().zip(labels).find(|(r, _)| Some(r.0) == current).map_or("", |(_, l)| l);
+    if let Some((_, key)) = widgets::dropdown_names(ui, "ch-font-height", shown, &labels, width).and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
+        format(app, json!({"fontHeightReference": key}));
     }
 }
 
@@ -965,6 +1003,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
         set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
     }
+    // Show Font Height Options shows the Set Font Height Reference dropdown under Font Size.
+    let heights: bool = pstate(ui.ctx(), FONT_HEIGHT_OPTIONS);
+    if menu_item(ui, if heights { tl!("Hide Font Height Options") } else { tl!("Show Font Height Options") }, true, false) {
+        set_pstate(ui.ctx(), FONT_HEIGHT_OPTIONS, !heights);
+    }
     ui.separator();
     let s = st.map(|x| x.0);
     for (label, key, on) in [
@@ -1097,8 +1140,8 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko and No Break off, the Default character
-/// direction and the Default digits, whether or not Show East Asian Options and Show Indic Options
-/// are on.
+/// direction, the Default digits and the Em Box font height reference, whether or not Show East
+/// Asian Options, Show Indic Options and Show Font Height Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
@@ -1108,7 +1151,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko, "noBreak": d.no_break, "charDirection": "default",
-            "digits": d.digits
+            "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
 }

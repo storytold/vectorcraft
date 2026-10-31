@@ -89,6 +89,102 @@ fn scaled_character_fields_show_document_sizes_and_mixed_group_values() {
     assert_eq!(shared_effective(&app, |s| s.h_scale), Some(100.0));
 }
 
+/// The Leading field shows the Auto leading the characters are set with, their paragraph's Auto
+/// Leading share (120% by default) of their em size: 20 pt type measuring a 0.7 em cap height
+/// is set at 20 / 0.7 pt. Paragraphs whose Auto leading differs show a blank field, and an
+/// explicit leading shows as it is.
+#[test]
+fn leading_shows_the_auto_leading_of_the_em_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let near = |l: Option<f64>, want: f64| l.is_some_and(|l| (l - want).abs() < 1e-9);
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"fontHeightReference": "capHeight"})).unwrap();
+    let cap = f64::from(HEIGHT_CAP) / 1000.0;
+    assert!(near(shared_leading(&app), 1.2 * 20.0 / cap), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"autoLeading": 150})).unwrap();
+    assert!(near(shared_leading(&app), 1.5 * 20.0 / cap), "{:?}", shared_leading(&app));
+    // The second paragraph ends in a two-byte character.
+    let two = app.run("text.create", json!({"x": 20, "y": 120, "text": "Hx\nHé", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [two]})).unwrap();
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"id": two, "start": 3, "end": 6, "autoLeading": 150})).unwrap();
+    assert_eq!(shared_leading(&app), None, "the second paragraph's Auto leading is 30 pt");
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setStyle", json!({"leading": 30})).unwrap();
+    assert!(near(shared_leading(&app), 30.0), "{:?}", shared_leading(&app));
+}
+
+/// An inline graphic keeps its size whatever the font height reference, so the Leading field
+/// shows 120% of that size for it: blank for 20 pt Cap Height type with a graphic in it, and
+/// 24 pt for the graphic alone.
+#[test]
+fn leading_of_an_inline_graphic_follows_its_own_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("shape.ellipse", json!({"x": 200, "y": 150, "width": 10, "height": 10})).unwrap();
+    app.run("symbol.new", json!({"name": "Dot"})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.insertInline", json!({"id": id, "at": 2, "symbol": "Dot"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 5, "fontHeightReference": "capHeight"})).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    assert_eq!(shared_leading(&app), None, "the type is set with 34.3 pt Auto leading and the graphic with 24 pt");
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 5}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((2, 5)));
+    let shown = shared_leading(&app);
+    assert!(shown.is_some_and(|l| (l - 24.0).abs() < 1e-9), "{shown:?}");
+}
+
+/// A selected text object that ends in a line break has an empty last paragraph, which the
+/// Leading field takes in; a Type tool selection of all the text does not.
+#[test]
+fn leading_of_a_whole_object_takes_in_the_empty_last_paragraph() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Ab\n", "size": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let near = |l: Option<f64>, want: f64| l.is_some_and(|l| (l - want).abs() < 1e-9);
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"id": id, "start": 3, "end": 3, "autoLeading": 150})).unwrap();
+    assert_eq!(shared_leading(&app), None, "the empty last paragraph's Auto leading is 30 pt");
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((0, 3)));
+    assert!(near(shared_leading(&app), 24.0), "a line break belongs to the paragraph it ends: {:?}", shared_leading(&app));
+}
+
+/// With the Type tool, the Leading field shows the Auto leading of the paragraphs the selection
+/// covers (a line break belongs to the paragraph it ends), and at a caret that of the caret's
+/// paragraph.
+#[test]
+fn leading_follows_the_paragraphs_the_type_tool_selection_covers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // é is two bytes, 4..6.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Ab\nCé", "size": 20})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 3, "end": 6, "autoLeading": 150})).unwrap();
+    let ranges = [((0, 2), Some(24.0)), ((0, 3), Some(24.0)), ((3, 6), Some(30.0)), ((1, 4), None), ((1, 6), None), ((4, 4), Some(30.0))];
+    for ((start, end), want) in ranges {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        let shown = shared_leading(&app);
+        assert_eq!(shown.is_some(), want.is_some(), "{start}..{end}: {shown:?}");
+        assert!(shown.zip(want).is_none_or(|(l, w)| (l - w).abs() < 1e-9), "{start}..{end}: {shown:?}");
+    }
+}
+
 #[test]
 fn scaled_range_fields_follow_the_type_tool_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -466,6 +562,48 @@ fn character_alignment_shows_with_the_east_asian_options() {
     assert_eq!(shown(&mut app), (true, true));
 }
 
+/// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
+/// which shows the selected type's reference and sets the one picked (one undo step); Hide
+/// Font Height Options hides it again.
+#[test]
+fn show_font_height_options_shows_the_font_height_reference() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    use vectorcraft_doc::FontHeightReference as R;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let reference = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.font_height_reference).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = |ctx: &egui::Context, app: &mut VectorcraftApp, f: fn(&mut VectorcraftApp, &mut Ui)| {
+        frame_events(ctx, app, vec![], f);
+        frame_events(ctx, app, vec![], f)
+    };
+    // A menu item's label is drawn after its check column (a check mark or spaces).
+    let item = |texts: &[(String, egui::Rect)], s: &str| texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == s).map(|(_, r)| r.center());
+    assert!(item(&texts(&ctx, &mut app, show), "Em Box").is_none());
+    let at = item(&texts(&ctx, &mut app, menu), "Show Font Height Options").unwrap();
+    click(&ctx, &mut app, at, menu);
+    assert!(item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").is_some());
+    let panel = texts(&ctx, &mut app, show);
+    assert!(item(&panel, "Em Box").is_some(), "{panel:?}");
+    // Pick Cap Height from the dropdown.
+    click(&ctx, &mut app, text_rect(&panel, "Em Box").center(), show);
+    let undo = app.session.active().unwrap().history.undo.len();
+    let open = texts(&ctx, &mut app, show);
+    click(&ctx, &mut app, text_rect(&open, "Cap Height").center(), show);
+    assert_eq!(reference(&app), [R::CapHeight]);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_some());
+    let at = item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").unwrap();
+    click(&ctx, &mut app, at, menu);
+    assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_none());
+}
+
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
 /// selected characters.
 #[test]
@@ -642,8 +780,8 @@ fn no_break_menu_item_toggles_the_selected_characters() {
 
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
-/// Metrics, Tate-chu-yoko, No Break, Character Direction and Digits included), in the selected
-/// type and in the text the Type tool has selected while it edits.
+/// Metrics, Tate-chu-yoko, No Break, Character Direction, Digits and the font height reference
+/// included), in the selected type and in the text the Type tool has selected while it edits.
 #[test]
 fn reset_panel_resets_every_attribute_but_the_font() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -673,6 +811,7 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
             s.digits != d.digits,
+            s.font_height_reference != d.font_height_reference,
         ]
     };
     let custom = |app: &mut VectorcraftApp| {
@@ -682,16 +821,16 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "noBreak": true,
-                "charDirection": "rightToLeft", "digits": "hindi"
+                "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 18]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 19]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 18]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 19]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

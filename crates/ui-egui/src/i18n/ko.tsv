@@ -36,6 +36,13 @@ font-technology	Variable	가변
 	Em Box Top/Right	엠 박스 위/오른쪽
 	ICF Top/Right	ICF 위/오른쪽
 	ICF Bottom/Left	ICF 아래/왼쪽
+	Show Font Height Options	글꼴 높이 옵션 표시
+	Hide Font Height Options	글꼴 높이 옵션 숨기기
+	Set Font Height Reference	글꼴 높이 기준 설정
+	Em Box	엠 박스
+	Cap Height	대문자 높이
+	x-Height	x 높이
+	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
 	Character Direction	문자 방향
 	Digits	숫자
@@ -3883,6 +3890,7 @@ theme	Appearance	외관
 @msg	Saving {_1}	{_1} 저장 중
 @msg	Sent to {_1}	{_1}(으)로 보냈습니다
 @msg	`to` must be "corner" or "smooth"	`to`는 "corner" 또는 "smooth"여야 합니다
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`는 "emBox", "capHeight", "xHeight" 또는 "icfBox"여야 합니다
 @msg	a layer couldn't be read	레이어를 읽을 수 없습니다
 @msg	it has more than one artboard	아트보드가 둘 이상입니다
 @msg	its editing data has no layers	편집 데이터에 레이어가 없습니다
