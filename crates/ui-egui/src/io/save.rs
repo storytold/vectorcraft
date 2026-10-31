@@ -398,7 +398,21 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     if app.background.busy_with(uid) {
         background::wait_all(app);
     }
-    let job = fileio::save_job(&mut app.session, plan).map_err(|e| e.to_string())?;
+    let planned = plan.path.clone();
+    let job = match fileio::save_job(&mut app.session, plan) {
+        Ok(job) => job,
+        Err(e) => {
+            // Refused before anything is written (a version it can't write): told like a failed write.
+            if let Some(path) = &planned {
+                let reason = match &e {
+                    EngineError::BadParams { msg, .. } => msg.clone(),
+                    e => e.to_string(),
+                };
+                report_write_error(app, false, path, &reason);
+            }
+            return Err(e.to_string());
+        }
+    };
     let (retargets, target) = (job.plan().retargets(), job.plan().path.clone());
     let (format, warnings) = (job.plan().format.id, job.known_warnings());
     let label = match &target {

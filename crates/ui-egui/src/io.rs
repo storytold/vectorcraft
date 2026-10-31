@@ -132,6 +132,35 @@ mod tests {
         assert!(app.ui.told.is_empty());
     }
 
+    /// #4931: a save refused before anything is written (a version VectorCraft can't write) is
+    /// reported in the same dialog as a save that can't write its file, with the reason and
+    /// without the command's name; nothing is written and the document stays modified.
+    #[test]
+    fn a_save_refused_before_writing_is_reported_in_a_dialog() {
+        let (mut app, written) = app();
+        app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        for (command, path) in [("file.saveAs", "/docs/Poster.vectorcraft"), ("file.saveCopy", "/docs/Copy.vectorcraft")] {
+            let e = app.run(command, json!({"path": path, "options": {"version": 60}})).unwrap_err();
+            assert!(e.contains("can't save version 60"), "{command}: {e}");
+            let d = app.ui.dialog.take().unwrap_or_else(|| panic!("{command}: a dialog says so"));
+            let name = fileio::file_name(path);
+            assert_eq!(
+                (d.kind.as_str(), d.str("message"), d.str("detail")),
+                (dialogs::confirm::MESSAGE, format!("Can't save “{name}”."), "can't save version 60: VectorCraft writes versions 1 to 4".to_string()),
+                "{command}"
+            );
+            let st = app.session.doc().unwrap();
+            assert_eq!((st.is_dirty(), st.path.clone()), (true, None), "{command}");
+        }
+        assert!(written.borrow().is_empty(), "nothing is written");
+        // An agent's request only gets the error.
+        app.ui.answering_control = true;
+        assert!(app.run("file.saveAs", json!({"path": "/docs/Poster.vectorcraft", "options": {"version": 60}})).is_err());
+        app.ui.answering_control = false;
+        assert!(app.ui.dialog.is_none());
+    }
+
     /// #1693: a browser download that can't be started is a failed save: the document stays
     /// modified and without a file, and Save Changes doesn't close it.
     #[test]
