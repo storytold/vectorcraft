@@ -824,6 +824,215 @@ fn top_level_placed_file_without_page_art_falls_back() {
     assert!(notes.iter().any(|n| n.contains("page art wasn't found")), "{notes:?}");
 }
 
+const BLACK: &str = "0 0 0 1";
+const YELLOW: &str = "0 0 1 0";
+const PAGE_CYAN: [f32; 4] = [1.0, 0.0, 0.0, 0.0];
+const PAGE_YELLOW: [f32; 4] = [0.0, 0.0, 1.0, 0.0];
+
+/// A square of 16 points at (`x`, 10) in the format's operators, painted in CMYK `cmyk`.
+fn square_16(x: u32, cmyk: &str) -> String {
+    format!("{cmyk} k\n{x} 10 m\n{} 10 L\n{} 26 L\n{x} 26 L\nf", x + 16, x + 16)
+}
+
+/// A 100 × 100 page with a square of 16 points at each (`x`, `y`, CMYK) of `squares`: at `y` 74
+/// where [`square_16`] puts the layers' squares.
+fn page_16(squares: &[(f64, f64, [f32; 4])]) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    for (i, (x, y, [c, m, ye, k])) in squares.iter().enumerate() {
+        let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(*x, *y, x + 16.0, y + 16.0));
+        let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(*c, *m, *ye, *k));
+        let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+        let n = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    d
+}
+
+/// Three squares on two layers, the middle one black in the layers and cyan on the page.
+fn middle_differs() -> (String, Document) {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    (art, page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]))
+}
+
+#[test]
+fn an_object_that_draws_differently_comes_in_as_the_page_art() {
+    let (art, page) = middle_differs();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[0]), ["path"]);
+    assert_eq!(kinds(&doc.layers[1]), ["group[1]", "path"]);
+    replacement_is_cyan(&doc, 1, 0);
+    let note = "objects that drew differently from the file's own page came in as its art: Front (1)";
+    assert!(notes.iter().any(|n| n == note && crate::is_loss(n)), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("weren't read")), "{notes:?}");
+}
+
+#[test]
+fn two_differing_objects_on_different_layers_are_both_replaced() {
+    let back = format!("{}\n{}", square_16(4, BLACK), square_16(28, YELLOW));
+    let front = format!("{}\n{}", square_16(52, YELLOW), square_16(76, BLACK));
+    let art = native(&(layer("Back", true, &back) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (28.0, 74.0, PAGE_YELLOW), (52.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[0]), ["group[1]", "path"]);
+    assert_eq!(kinds(&doc.layers[1]), ["path", "group[1]"]);
+    replacement_is_cyan(&doc, 0, 0);
+    replacement_is_cyan(&doc, 1, 1);
+    let note = "objects that drew differently from the file's own page came in as its art: Back (1), Front (1)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+}
+
+/// The text wrap options of a 2-point offset, for the object before them.
+const WRAP_OPTIONS: &str = "%_/ArtDictionary :\n%_0 /Bool (AI11TextWrapInvert) ,\n%_2 /Real (AI11TextWrapOffset) ,\n%_;\n%_\n";
+
+#[test]
+fn a_differing_wrap_object_keeps_its_wrap_options() {
+    let front = format!("{}\n{WRAP_OPTIONS}{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(kinds(&doc.layers[1]), ["group[1]", "path"]);
+    replacement_is_cyan(&doc, 1, 0);
+    let group = &doc.layers[1].children().unwrap()[0];
+    assert_eq!(group.extras().wrap, Some(vectorcraft_doc::TextWrap { offset: 2.0, invert: false }));
+}
+
+#[test]
+fn a_differing_group_holding_a_wrap_object_still_falls_back() {
+    let group = os1_group(&format!("{}\n{WRAP_OPTIONS}", square_16(40, BLACK)));
+    let front = format!("{group}\n{}", square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_page_that_differs_everywhere_still_comes_in_as_its_pdf_part() {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, BLACK));
+    let art = native(&(layer("Back", true, &square_16(4, BLACK)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("weren't read") && n.contains("differs from the page's")), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_page_object_outside_every_layer_object_still_falls_back() {
+    let front = format!("{}\n{}", square_16(40, YELLOW), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_YELLOW), (40.0, 20.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("differs from the page's")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_with_live_art_inside_falls_back() {
+    // The group reaches over the square between its own two.
+    let group = os1_group(&format!("{}\n{}", square_16(4, BLACK), square_16(40, YELLOW)));
+    let front = format!("{group}\n{}\n{}", square_16(22, YELLOW), square_16(76, YELLOW));
+    let art = native(&layer("Front", true, &front));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (22.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("differs from the page's")), "{notes:?}");
+}
+
+#[test]
+fn trusted_editing_data_keeps_a_differing_object() {
+    let (art, page) = middle_differs();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, true, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[1]), ["path", "path"]);
+    assert!(notes.iter().any(|n| n.ends_with("they come from its editing data all the same")), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_on_an_unnamed_layer_is_counted_under_its_panel_name() {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (_, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let note = "objects that drew differently from the file's own page came in as its art: <Layer> (1)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+}
+
+#[test]
+fn at_most_64_differing_objects_come_in_as_the_page_art() {
+    // 130 squares of 4 points, the first `black` of them black in the layers and cyan on the page.
+    let grid = |black: usize| {
+        let at = |i: usize| (4 + 7 * (i % 13) as u32, 4 + 7 * (i / 13) as u32);
+        let art: String = (0..130)
+            .map(|i| {
+                let (x, y) = at(i);
+                if i < black { format!("{BLACK} k\n{}", square_path(x, y)) } else { square(x, y) }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut page = Document::new(100.0, 100.0);
+        let layer_id = page.layers[0].id;
+        for i in 0..130 {
+            let (x, y) = at(i);
+            let (x, y) = (f64::from(x), 96.0 - f64::from(y));
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, y, x + 4.0, y + 4.0));
+            let color =
+                if i < black { vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0) } else { vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0) };
+            let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(color)));
+            let n = Node::path(page.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+            page.insert(Some(layer_id), i, n).unwrap();
+        }
+        crate::layered_ai(&private(&native(&layer("Grid", true, &art))), page, vec![], false, false, 1.0)
+    };
+    let (_, notes, read) = grid(64);
+    assert!(read, "{notes:?}");
+    let note = "objects that drew differently from the file's own page came in as its art: Grid (64)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+    let (doc, notes, read) = grid(65);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_under_the_type_of_a_text_object_that_stays_falls_back() {
+    // A black rectangle under area type whose frame reaches past it; the page draws the rectangle
+    // cyan, with the type on it.
+    let big = format!("{BLACK} k\n10 2 m\n60 2 L\n60 40 L\n10 40 L\nf");
+    let doc = document_of(&[area_frame(34.0, 26.0, 95.0, 38.0)], &[story("Hi\\r", &[0], "/0 0", "/1 8.0")]);
+    let art = native_with_text(&(layer("Art", true, &format!("{big}\n{}", frame_object(0, 0))) + &layer("Top", true, &square_16(76, YELLOW))), &doc);
+    let mut page = page_16(&[(76.0, 74.0, PAGE_YELLOW)]);
+    let layer_id = page.layers[0].id;
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 60.0, 60.0, 98.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+    let square = Node::path(page.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+    page.insert(Some(layer_id), 0, square).unwrap();
+    let style = vectorcraft_doc::CharStyle { size: 8.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(34.0, 69.0), "Hi", style);
+    let text = Node::new(page.alloc_id(), NodeKind::Text(Box::new(text)));
+    page.insert(Some(layer_id), 1, text).unwrap();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
 #[test]
 fn unread_object_on_second_artboard_takes_second_page_art() {
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\

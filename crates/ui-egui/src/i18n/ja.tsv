@@ -5859,6 +5859,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です

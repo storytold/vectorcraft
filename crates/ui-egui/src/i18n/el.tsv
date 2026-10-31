@@ -6126,6 +6126,7 @@ breakText	Glyphs	Γλύφοι
 	Gap 5	Διάκενο 5
 
 @msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	τα αντικείμενα που σχεδιάστηκαν διαφορετικά από την ίδια τη σελίδα του αρχείου εισήχθησαν ως γραφικά της σελίδας: {_1}
 
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
 @msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου

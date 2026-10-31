@@ -6162,6 +6162,7 @@ breakText	Glyphs	გლიფები
 	Gap 5	შუალედი 5
 
 @msg	{_1}: they came in as the page's art	{_1}: იმპორტირებულია გვერდის გამოსახულების სახით
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	ობიექტები, რომლებიც ფაილის საკუთარი გვერდისგან განსხვავებულად იხატებოდა, იმპორტირებულია გვერდის გამოსახულების სახით: {_1}
 
 @msg	You must choose a side pattern.	აირჩიეთ გვერდითი ნიმუში.
 @msg	invalid pattern tile choice	ნიმუშის ფილა არასწორად არის არჩეული

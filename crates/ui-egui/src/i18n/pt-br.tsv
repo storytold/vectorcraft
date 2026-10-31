@@ -6092,6 +6092,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Lacuna 5
 
 @msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	os objetos desenhados de forma diferente da própria página do arquivo foram importados como arte da página: {_1}
 
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.
 @msg	invalid pattern tile choice	escolha inválida de ladrilho de padrão

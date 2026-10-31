@@ -5775,6 +5775,7 @@ breakText	Glyphs	Glyph
 	Gap 5	Khoảng hở 5
 
 @msg	{_1}: they came in as the page's art	{_1}: đã được nhập dưới dạng hình vẽ của trang
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	các đối tượng được vẽ khác với trang riêng của tệp đã được nhập dưới dạng hình vẽ của trang: {_1}
 
 @msg	You must choose a side pattern.	Bạn phải chọn mẫu bên.
 @msg	invalid pattern tile choice	lựa chọn ô mẫu không hợp lệ

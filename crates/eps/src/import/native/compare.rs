@@ -182,6 +182,12 @@ impl PageView {
         let printed = as_printed(b);
         let b = printed.as_ref().unwrap_or(b);
         let y = comparison_render(&mut self.layers, b, rb, self.scale, self.samples);
+        let areas = self.counted_type(b, rb, reflow);
+        compared(&self.page, &y, &areas, &self.restyled)
+    }
+
+    /// Where [`Self::difference`] counts `b`'s and the page's pixels as type, in the page's pixels.
+    fn counted_type(&self, b: &Document, rb: Rect, reflow: bool) -> Vec<Rect> {
         let mut areas = vec![];
         type_areas(&b.layers, rb, self.scale, &mut areas);
         if reflow {
@@ -194,7 +200,7 @@ impl PageView {
         } else {
             areas.extend(&self.page_type);
         }
-        compared(&self.page, &y, &areas, &self.restyled)
+        areas
     }
 
     /// The share (0 to 1) of the pixels where `b` on `rb` draws another colour than the page
@@ -209,6 +215,52 @@ impl PageView {
         }
         let differing = self.page.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).filter(|(p, q)| differ_in_colour(p, q)).count();
         differing as f64 / (f64::from(y.width) * f64::from(y.height)).max(1.0)
+    }
+
+    /// How `b` on `rb` draws differently from the page ([`Self::difference`]), and the boxes (in
+    /// `b`'s terms) around each patch of the pixels counted in its `solid` share (they and all
+    /// their neighbors differ, away from type), neighbors touching corner to corner counting as one patch. `None` when the two
+    /// drawings aren't the same size.
+    pub(super) fn solid_regions(&mut self, b: &Document, rb: Rect, reflow: bool) -> Option<(Difference, Vec<Rect>)> {
+        let printed = as_printed(b);
+        let b = printed.as_ref().unwrap_or(b);
+        let y = comparison_render(&mut self.layers, b, rb, self.scale, self.samples);
+        let areas = self.counted_type(b, rb, reflow);
+        let (diff, mut solid) = compared_with_solid(&self.page, &y, &areas, &self.restyled);
+        let (w, h) = (y.width as usize, y.height as usize);
+        if solid.len() != w * h {
+            return None;
+        }
+        let mut regions = vec![];
+        let mut stack = vec![];
+        for start in 0..solid.len() {
+            if !solid.get(start).copied().unwrap_or(false) {
+                continue;
+            }
+            // The patch's pixels are cleared as they are taken, so each is taken once.
+            if let Some(s) = solid.get_mut(start) {
+                *s = false;
+            }
+            stack.push(start);
+            let (mut i0, mut j0, mut i1, mut j1) = (start % w, start / w, start % w, start / w);
+            while let Some(k) = stack.pop() {
+                let (i, j) = (k % w, k / w);
+                (i0, j0, i1, j1) = (i0.min(i), j0.min(j), i1.max(i), j1.max(j));
+                for n in j.saturating_sub(1)..=(j + 1).min(h - 1) {
+                    for m in i.saturating_sub(1)..=(i + 1).min(w - 1) {
+                        if let Some(s) = solid.get_mut(n * w + m).filter(|s| **s) {
+                            *s = false;
+                            stack.push(n * w + m);
+                        }
+                    }
+                }
+            }
+            let s = self.scale;
+            let at = |i: usize, j: usize| (rb.x0 + i as f64 / s, rb.y0 + j as f64 / s);
+            let ((x0, y0), (x1, y1)) = (at(i0, j0), at(i1 + 1, j1 + 1));
+            regions.push(Rect::new(x0, y0, x1, y1));
+        }
+        Some((diff, regions))
     }
 }
 
@@ -233,8 +285,14 @@ pub(super) fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> Diff
 /// at all ([`differ`]): the page of an RGB document is written in the colours' CMYK equivalents,
 /// and what the comparison looks for is art that is missing or out of place.
 pub(super) fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect], skip: &[Rect]) -> Difference {
+    compared_with_solid(x, y, areas, skip).0
+}
+
+/// [`compared`], and which of the pixels (row by row) are counted in its `solid` share: none when
+/// the drawings can't be compared.
+fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect], skip: &[Rect]) -> (Difference, Vec<bool>) {
     if x.width == 0 || x.height == 0 || x.width != y.width || x.height != y.height {
-        return Difference { any: 1.0, art: 1.0, solid: 1.0 };
+        return (Difference { any: 1.0, art: 1.0, solid: 1.0 }, vec![]);
     }
     let (w, h) = (x.width as usize, x.height as usize);
     // Pixels in `skip` count as alike.
@@ -245,12 +303,22 @@ pub(super) fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
     let typed = in_areas(areas, w, h);
     let art = differs.iter().zip(&typed).filter(|(d, t)| **d && !**t).count();
     // A pixel on the region's edge has neighbours outside it, which don't count as differing.
-    let solid = (1..h.saturating_sub(1))
-        .flat_map(|j| (1..w.saturating_sub(1)).map(move |i| (i, j)))
-        .filter(|&(i, j)| !typed.get(j * w + i).copied().unwrap_or(true) && (j - 1..=j + 1).all(|n| (i - 1..=i + 1).all(|m| at(m, n))))
-        .count();
+    let mut solid = vec![false; w * h];
+    for (i, j) in (1..h.saturating_sub(1)).flat_map(|j| (1..w.saturating_sub(1)).map(move |i| (i, j))) {
+        if !typed.get(j * w + i).copied().unwrap_or(true)
+            && (j - 1..=j + 1).all(|n| (i - 1..=i + 1).all(|m| at(m, n)))
+            && let Some(s) = solid.get_mut(j * w + i)
+        {
+            *s = true;
+        }
+    }
     let area = (w as f64 * h as f64).max(1.0);
-    Difference { any: differs.iter().filter(|d| **d).count() as f64 / area, art: art as f64 / area, solid: solid as f64 / area }
+    let shares = Difference {
+        any: differs.iter().filter(|d| **d).count() as f64 / area,
+        art: art as f64 / area,
+        solid: solid.iter().filter(|s| **s).count() as f64 / area,
+    };
+    (shares, solid)
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin

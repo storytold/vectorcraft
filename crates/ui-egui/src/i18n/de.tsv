@@ -5760,6 +5760,7 @@ breakText	Glyphs	Glyphen
 	Gap 5	Lücke 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	Objekte, die anders als die eigene Seite der Datei gezeichnet wurden, wurden als Seitengrafik importiert: {_1}
 
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
 @msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel

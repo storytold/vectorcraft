@@ -5812,6 +5812,7 @@ breakText	Glyphs	字符
 	Gap 5	間隙 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	與檔案本身頁面繪製不同的物件已作為頁面圖稿匯入：{_1}
 
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。
 @msg	invalid pattern tile choice	圖樣拼塊選項無效

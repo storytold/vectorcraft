@@ -6169,6 +6169,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.
 @msg	invalid pattern tile choice	choix de tuile de motif non valide
