@@ -346,14 +346,15 @@ fn main() -> std::process::ExitCode {
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
             create.instance_descriptor.backend_options.dx12.shader_compiler =
                 eframe::wgpu::Dx12Compiler::from_env().unwrap_or(eframe::wgpu::Dx12Compiler::Fxc);
-            // The window's surface may be as large as the adapter allows, not eframe's fixed
-            // 8192 px: a window stretched over several monitors, or grown by a display scale
-            // change, otherwise fails to configure its surface and the app closes (#1459).
+            // The device asks for no more than the adapter offers, so a GPU short of one of
+            // eframe's limits still gets a device (#2105). The window's surface may be as large as
+            // the adapter allows, not eframe's fixed 8192 px: a window stretched over several
+            // monitors, or grown by a display scale change, otherwise fails to configure its
+            // surface and the app closes (#1459).
             let device = create.device_descriptor.clone();
             create.device_descriptor = std::sync::Arc::new(move |adapter: &eframe::wgpu::Adapter| {
                 let mut descriptor = device(adapter);
-                let limit = &mut descriptor.required_limits.max_texture_dimension_2d;
-                *limit = gpu::surface_limit(*limit, adapter.limits().max_texture_dimension_2d);
+                descriptor.required_limits = gpu::device_limits(descriptor.required_limits, &adapter.limits());
                 descriptor
             });
         }
