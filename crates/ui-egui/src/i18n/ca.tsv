@@ -305,6 +305,7 @@
 	Appearance panel	Panell Aparença
 	Applied Filters	Filtres aplicats
 	Applies the next time VectorCraft starts.	S’aplica la propera vegada que s’iniciï VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mentre està definida, la variable d’entorn VECTORCRAFT_TITLEBAR determina la barra de títol.
 	Applies when the linked file is relinked or updated.	S’aplica quan el fitxer enllaçat es torna a enllaçar o s’actualitza.
 	Apply	Aplica
 	Apply Brush	Aplica el pinzell

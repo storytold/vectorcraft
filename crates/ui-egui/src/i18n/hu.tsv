@@ -288,6 +288,7 @@ font-technology	Variable	Változó
 	Appearance panel	Megjelenés panel
 	Appearance Panel	Megjelenés panel
 	Applies the next time VectorCraft starts.	A VectorCraft következő indításakor lép életbe.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	Applies when the linked file is relinked or updated.	A csatolt fájl újracsatolásakor vagy frissítésekor érvényes.
 	Apply	Alkalmaz
 	Apply Brush	Ecset alkalmazása

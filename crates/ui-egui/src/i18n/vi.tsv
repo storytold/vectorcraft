@@ -223,6 +223,7 @@ font-technology	Variable	Biến thiên
 	Appearance Panel	Bảng Diện mạo
 	Appearance panel	Bảng diện mạo
 	Applies the next time VectorCraft starts.	Áp dụng vào lần tiếp theo VectorCraft khởi động.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	Applies when the linked file is relinked or updated.	Áp dụng khi tệp liên kết được liên kết lại hoặc cập nhật.
 	Apply	Áp dụng
 	Apply Brush	Áp dụng cọ

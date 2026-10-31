@@ -129,8 +129,6 @@ fn the_image_trace_preview_setting_is_kept_across_a_restart() {
 
 #[test]
 fn the_system_title_bar_preference_keeps_the_window_decorations() {
-    use craft_window::{Frame, Layout};
-
     // The System Title Bar preference (Preferences › User Interface) is read the same way on
     // every platform; a missing or unreadable value is `false`.
     assert!(!super::opted_into_system_title_bar(None), "no preferences: the default");
@@ -139,31 +137,38 @@ fn the_system_title_bar_preference_keeps_the_window_decorations() {
     let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
     assert!(super::opted_into_system_title_bar(Some(&on)));
 
-    // The suite-wide mapping (Frame + preference -> whether VectorCraft draws its own title
-    // bar). The desktop frame (macOS, Windows, X11, KDE/Wayland, …) always keeps native
-    // decorations; the app frame (GNOME/Wayland, or a `VECTORCRAFT_TITLEBAR` override) draws
-    // our own title bar — unless the user opted into the system title bar, which forces the
-    // native frame back on.
-    let app = Frame::App(Layout::default());
-    let desktop = Frame::Desktop;
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        assert!(super::custom_titlebar_from(&app, false), "GNOME/Wayland: VectorCraft draws its own");
-        assert!(!super::custom_titlebar_from(&app, true), "System Title Bar preference forces native");
-        assert!(!super::custom_titlebar_from(&desktop, false), "KDE/X11/…: keep the compositor's frame");
-        assert!(!super::custom_titlebar_from(&desktop, true));
-    }
-    // macOS and Windows keep today's behavior, independent of the probed frame: the pref still
-    // forces the native frame back on where a custom one would otherwise be drawn.
+    // macOS and Windows: `VECTORCRAFT_TITLEBAR` is not read, and the preference turns the
+    // native frame back on where VectorCraft would draw its own.
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
-        assert_eq!(super::custom_titlebar_from(&desktop, false), super::CUSTOM_TITLEBAR);
-        assert_eq!(super::custom_titlebar_from(&app, false), super::CUSTOM_TITLEBAR, "the probe does not change macOS/Windows");
-        assert!(!super::custom_titlebar_from(&desktop, true));
+        assert_eq!(super::titlebar_override(), None);
+        for overridden in [None, Some(true), Some(false)] {
+            assert_eq!(super::custom_titlebar_from(overridden, false), super::CUSTOM_TITLEBAR, "{overridden:?}");
+            assert!(!super::custom_titlebar_from(overridden, true), "{overridden:?}");
+        }
     }
 
     assert_eq!(super::native_options(false).viewport.decorations, Some(true));
     assert_eq!(super::native_options(true).viewport.decorations, Some(false));
+}
+
+/// Linux and the BSDs: VectorCraft's own title bar on every desktop unless System Title Bar is
+/// on, and `VECTORCRAFT_TITLEBAR` decides over the preference for the run it is set in.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[test]
+fn every_linux_desktop_gets_the_app_title_bar_unless_system_title_bar_is_on() {
+    // What the `craft-window` probe reports: the desktop's frame on KDE Plasma, Sway, Hyprland,
+    // COSMIC and X11, the app's on GNOME's Wayland session; none of them sets the override.
+    for desktop in ["GNOME Wayland", "KDE Plasma", "Sway", "Hyprland", "COSMIC", "X11 window manager", "GNOME on X11"] {
+        assert!(super::custom_titlebar_from(None, false), "{desktop}: VectorCraft's own title bar");
+        assert!(!super::custom_titlebar_from(None, true), "{desktop}: System Title Bar keeps the desktop's frame");
+    }
+    // VECTORCRAFT_TITLEBAR=app draws VectorCraft's bar and =system (or =desktop) keeps the
+    // desktop's frame, whatever the preference says.
+    for opted_into_system in [false, true] {
+        assert!(super::custom_titlebar_from(Some(true), opted_into_system), "app, preference {opted_into_system}");
+        assert!(!super::custom_titlebar_from(Some(false), opted_into_system), "system, preference {opted_into_system}");
+    }
 }
 
 /// The file extensions the macOS bundle declares: its document types and its own exported type.

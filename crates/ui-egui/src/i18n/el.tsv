@@ -185,6 +185,7 @@ font-technology	Variable	Μεταβλητές
 	Appearance Panel	Πίνακας εμφάνισης
 	Appearance panel	Πίνακας εμφάνισης
 	Applies the next time VectorCraft starts.	Εφαρμόζεται στην επόμενη εκκίνηση του VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	Apply	Εφαρμογή
 	Apply Brush	Εφαρμογή πινέλου
 	Apply Character Style	Εφαρμογή στυλ χαρακτήρων

@@ -192,6 +192,7 @@ font-technology	Variable	Променливи
 	Appearance panel	Панел „Външен вид“
 	Applies when the linked file is relinked or updated.	Прилага се, когато свързаният файл бъде пресвързан или актуализиран.
 	Applies the next time VectorCraft starts.	Прилага се при следващото стартиране на VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
 	Apply	Прилагане
 	Apply Brush	Прилагане на четка
 	Apply Character Style	Прилагане на стил на знаци

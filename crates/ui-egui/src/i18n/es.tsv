@@ -206,6 +206,7 @@ font-technology	Variable	Variables
 	Appearance panel	Panel Apariencia
 	Applies when the linked file is relinked or updated.	Se aplica al volver a vincular o actualizar el archivo vinculado.
 	Applies the next time VectorCraft starts.	Se aplica la próxima vez que se inicie VectorCraft.
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mientras está definida, la variable de entorno VECTORCRAFT_TITLEBAR elige la barra de título.
 	Apply	Aplicar
 	Apply Brush	Aplicar pincel
 	Apply Character Style	Aplicar estilo de carácter
