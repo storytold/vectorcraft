@@ -213,16 +213,15 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    let mut index = 0;
     let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", 0, |fx, _| {
         fx.push(effect.clone());
-        index = fx.len() - 1;
         true
     })?;
     // The item the effect landed on in the object whose row the item is (the first selected object
-    // for the active item, which applies where it fits).
+    // for the active item, which applies where it fits), and the effect's index in that object.
     let first = ids.get(item.anchor(s, &ids)).and_then(|id| s.doc().ok()?.doc.node(*id));
     let landed = first.and_then(|n| item.effects_item(&n.appearance, C).ok().flatten());
+    let index = first.and_then(|n| n.appearance.effects_at(landed)).map_or(0, |fx| fx.len().saturating_sub(1));
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": landed }))
 }
 
