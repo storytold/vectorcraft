@@ -596,6 +596,11 @@ fn import_basic_shapes() {
     assert_eq!(a[3].appearance.fill_paint().color().unwrap().to_hex(), "#008000");
     assert!(!a[4].path_data().unwrap().is_closed());
     assert_eq!(a[5].path_data().unwrap().anchor_count(), 2);
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("<rect "), "{s}");
+    assert!(s.contains("<circle "), "{s}");
+    assert!(s.contains("<ellipse "), "{s}");
+    assert!(s.contains("<path "), "a polygon stays a path: {s}");
 }
 
 #[test]

@@ -219,6 +219,7 @@ fn save_writes_svg_and_remembers_its_options() {
     s.execute("document.save", &json!({})).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("<style>") && vectorcraft_testkit::svg_shapes(&text) == 2, "Save reuses the options: {text}");
+    assert!(text.contains("<rect") && text.contains("<circle"), "simple shapes stay elements: {text}");
     assert!(s.execute("document.save", &json!({"path": dir.join("x.png").to_string_lossy()})).is_err(), "PNG is an export");
     // A native save switches back.
     let native = dir.join("doc.vectorcraft").to_string_lossy().to_string();

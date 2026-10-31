@@ -546,7 +546,7 @@ fn svg_export_writes_pattern_def() {
     // The tile art is inside the pattern.
     let start = svg.find("<pattern").unwrap();
     let end = svg.find("</pattern>").unwrap();
-    assert!(vectorcraft_testkit::svg_shapes(&svg[start..end]) > 0);
+    assert!(vectorcraft_testkit::svg_shapes(&svg[start..end]) > 0, "{svg}");
 }
 
 /// A pattern fill is written as a PDF tiling pattern, which PDF import reads back as a pattern

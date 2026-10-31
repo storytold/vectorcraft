@@ -48,7 +48,7 @@ fn many_css_styles_preserve_first_use_numbers() {
         for (i, path) in paths.iter().enumerate() {
             let number = if i < 256 { i + 1 } else { [1, 129, 256][i - 256] };
             let expected = if styling == Styling::InternalCss { format!("class=\"cls-{number}\"") } else { format!("style=\"&st{number};\"") };
-            assert!(path.contains(&expected), "path {i} should reference {expected}: {path}");
+            assert!(path.contains(&expected), "shape {i} should reference {expected}: {path}");
         }
         assert_eq!(svg.matches(definition_marker).count(), 256, "{styling:?}");
     }
