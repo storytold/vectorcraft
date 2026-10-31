@@ -13,6 +13,7 @@ use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LI
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::patternlib::{self, PATTERN_LIBRARIES};
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
