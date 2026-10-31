@@ -194,3 +194,16 @@ fn pathfinder_operations_take_the_area() {
     let n = node(&s, NodeId(out["ids"][0].as_u64().unwrap()));
     assert!((node_area(&n) - 10_000.0).abs() < 0.5, "the 50 × 100 area and the 50 × 100 rectangle: {}", node_area(&n));
 }
+
+#[test]
+fn make_and_expand_respects_explicit_ids() {
+    let (mut s, back, front) = two_squares();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.doc().unwrap().selection.is_empty());
+    let res = s.execute("object.compoundShape.make", &json!({"ids": [back.0, front.0], "mode": "add"})).unwrap();
+    let gid = res["id"].as_u64().unwrap();
+    assert!(node(&s, NodeId(gid)).is_compound_shape());
+    s.execute("select.none", &json!({})).unwrap();
+    let exp = s.execute("object.compoundShape.expand", &json!({"ids": [gid]})).unwrap();
+    assert!(!exp["ids"].as_array().unwrap().is_empty());
+}

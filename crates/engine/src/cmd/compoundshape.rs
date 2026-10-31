@@ -12,7 +12,7 @@ use vectorcraft_render::effects;
 
 use super::edit::{roots_of, selected_roots};
 use super::pathops::{pf_leaves, shape_node, style_of};
-use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_multi};
+use super::{CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, has_multi};
 
 const MODE_NAMES: [&str; 4] = ["add", "subtract", "intersect", "exclude"];
 
@@ -132,7 +132,10 @@ fn ids_json(ids: &[NodeId]) -> Value {
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.compoundShape.make";
     let mode = mode_param(p, C, Some(ShapeMode::Add))?;
-    let roots = selected_roots(s)?;
+    let roots = match p.get("ids") {
+        Some(_) => roots_of(&s.doc()?.doc, checked_ids_param(s, p, "ids", C)?),
+        None => selected_roots(s)?,
+    };
     if roots.len() < 2 {
         return Err(bad(C, "select at least two objects"));
     }
@@ -180,7 +183,10 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_mode(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.compoundShape.setMode";
     let mode = mode_param(p, C, None)?;
-    let members = selected_members(s)?;
+    let members = match p.get("ids") {
+        Some(_) => checked_ids_param(s, p, "ids", C)?,
+        None => selected_members(s)?,
+    };
     if members.is_empty() {
         return Err(bad(C, "select members of a compound shape"));
     }
@@ -198,10 +204,14 @@ fn set_mode(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(ids_json(&members))
 }
 
-fn release(s: &mut Session, _: &Value) -> Result<Value> {
-    let shapes = selected_shapes(s)?;
+fn release(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.compoundShape.release";
+    let shapes = match p.get("ids") {
+        Some(_) => checked_ids_param(s, p, "ids", C)?,
+        None => selected_shapes(s)?,
+    };
     if shapes.is_empty() {
-        return Err(bad("object.compoundShape.release", "select a compound shape"));
+        return Err(bad(C, "select a compound shape"));
     }
     let ids = s.edit("Release Compound Shape", |d, sel| {
         let (mut items, mut released) = (vec![], vec![]);
@@ -225,11 +235,15 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
-fn expand(s: &mut Session, _: &Value) -> Result<Value> {
+fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     const LABEL: &str = "Expand Compound Shape";
-    let shapes = selected_shapes(s)?;
+    const C: &str = "object.compoundShape.expand";
+    let shapes = match p.get("ids") {
+        Some(_) => checked_ids_param(s, p, "ids", C)?,
+        None => selected_shapes(s)?,
+    };
     if shapes.is_empty() {
-        return Err(bad("object.compoundShape.expand", "select a compound shape"));
+        return Err(bad(C, "select a compound shape"));
     }
     let ids = s.edit(LABEL, |d, sel| {
         let (mut items, mut made) = (vec![], vec![]);
