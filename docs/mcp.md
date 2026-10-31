@@ -5660,10 +5660,12 @@ opacity mask and appearance (Release on a group around the keys and spine when t
 the path in their order on the canvas, column by column from left to right and top to bottom in each column. The first
 one sits on the path's first anchor, the last one sits on the end of an open path, and the others are spread evenly
 between them by length; on a closed path the gaps run all the way round. The attachment point of each object (`pivot`,
-0 to 8 row by row from the top left of its bounds without strokes; default 4, the center) sits on the path, and the
-object is turned to the path's direction there. An object rotated by other than a multiple of 90° is first turned to
-the nearest multiple. `rotate` tilts every object by that many degrees counter-clockwise. Without `path`, the command
-chooses the Objects on Path tool (`objectsOnPath`), whose click on a path sends `{path}`. As the path, the command
+0 to 8 row by row from the top left of its bounds without strokes) sits on the path, and the object is turned to the
+path's direction there. An object rotated by other than a multiple of 90° is first turned to the nearest multiple.
+`rotate` tilts every object by that many degrees counter-clockwise. Without `pivot` or `rotate`, the command uses the
+Objects on Path tool's options (4, the center, and 0 until they are changed). Without `path`, the command chooses the
+Objects on Path tool (`objectsOnPath`), whose click on a path sends `{path, pivot, rotate}` from its options. As the
+path, the command
 refuses a guide, a compound path, type, a path without length, a path already in an Objects on Path group, a
 clipping path, and a path inside a compound path, blend, envelope, repeat or Intertwine group. As objects, it skips
 layers and refuses graphs, objects already in an Objects on Path group, clipping paths, and objects inside a blend,
@@ -5680,7 +5682,15 @@ on Path groups or objects in them), or on the groups of the selection when `ids`
 the group with an `objects_on_path` record; SVG, PDF and the other exports write the path and the objects as plain
 art.
 
+In the desktop app, double-clicking the Objects on Path tool (`tool.options {tool: "objectsOnPath"}`) opens Objects on
+Path Tool Options (dialog `objectsOnPathOptions`): the nine-point Pivot grid and the Rotate field (°). Save sets the
+tool's options (`tool.setOption {tool: "objectsOnPath", values: {pivot, rotate}}`), which the objects attached next
+use; groups attached before keep their Pivot and Rotate. Reset (or Cancel while Alt, Option on macOS, is held, or
+`ui.dialogReset`) puts the center and 0 back and keeps the dialog open. The options last across tool switches and are
+saved with the preferences.
+
 ```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"pivot":7,"rotate":15}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.expand","params":{}}}

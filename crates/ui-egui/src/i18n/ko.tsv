@@ -1755,6 +1755,8 @@ font-technology	Variable	가변
 	Attach	부착
 	Objects on Path Options	패스 위 개체 옵션
 	Objects on Path Tool	패스 위 개체 도구
+	Pivot:	피벗:
+	Rotate:	회전:
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
 	Release Live Paint	라이브 페인트 해제

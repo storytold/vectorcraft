@@ -65,6 +65,8 @@ const ROWS: &[Row] = &[
             "highlightColor",
         ],
     ),
+    // Objects on Path Tool Options: the Pivot and Rotate of the objects attached next.
+    (&["objectsOnPath"], None, &["pivot", "rotate"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
     // The add-ons' tools (`crate::addons`).
     (&[crate::addons::anchor_eraser::ID], None, &["size", "tolerance", "pressure"]),

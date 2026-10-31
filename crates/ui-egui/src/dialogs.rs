@@ -66,6 +66,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
+pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
 pub(crate) mod path_ops;
@@ -377,6 +378,7 @@ registry! {
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
+    ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,

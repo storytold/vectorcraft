@@ -1600,6 +1600,8 @@ lighting	Light	Valo
 	Attach	Kiinnitä
 	Objects on Path Options	Objektit polulla -asetukset
 	Objects on Path Tool	Objektit polulla -työkalu
+	Pivot:	Kiertopiste:
+	Rotate:	Kierto:
 	Attach Objects on Path	Kiinnitä objektit polulle
 	Expand Objects on Path	Laajenna objektit polulla
 	Release Live Paint	Vapauta elävä maalaus

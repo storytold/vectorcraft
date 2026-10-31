@@ -1412,6 +1412,8 @@ file-filter	Templates	模板
 	Attach	附加
 	Objects on Path Options	路径上的对象选项
 	Objects on Path Tool	路径上的对象工具
+	Pivot:	枢轴：
+	Rotate:	旋转：
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
 	Release Live Paint	释放实时上色
