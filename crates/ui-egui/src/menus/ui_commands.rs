@@ -1054,6 +1054,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.exportCdr",
+        "Export As CDR…",
+        "",
+        "{path?, version?, textToOutlines?, validate?, rasterizeEffects?} ask where to write a CorelDRAW file, then CorelDRAW Export Options (dialog `cdrOptions`); OK writes and validates it",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",

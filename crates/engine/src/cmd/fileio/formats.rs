@@ -1,4 +1,6 @@
-use super::{Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, svg, text, unsupported};
+use super::{
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, cdr, dxf, eps, json, metafile, native, pdf, svg, text, unsupported,
+};
 
 /// One option a format's encoder reads from the export params.
 #[derive(Clone, Copy, Debug)]
@@ -491,6 +493,17 @@ pub const FORMATS: &[Format] = &[
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
     // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    // CorelDRAW: versions 3 to 26 read, 7 to 22 written (vectorcraft-cdr).
+    Format {
+        id: "cdr",
+        label: "CorelDRAW",
+        extensions: &["cdr"],
+        mime: "application/vnd.corel-draw",
+        read: true,
+        write: true,
+        raster: false,
+        options: cdr::OPTIONS,
+    },
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -527,14 +540,15 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa or PCX type (File › Open and Place still read them all). On Linux the
-/// desktop entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer
-/// VectorCraft for it.
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "pcx"];
+/// `.epsf`, `.ps`, Targa, PCX or CorelDRAW type (File › Open and Place still read them all). On
+/// Linux the desktop entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers
+/// offer VectorCraft for it.
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "pcx", "cdr"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -593,6 +607,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
     "txt",
     "rtf",
     "docx",

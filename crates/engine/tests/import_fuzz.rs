@@ -6,7 +6,8 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor CorelDRAW
+//! documents (garbage, truncated and mutated RIFF files and ZIP packages), nor the
 //! font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -4550,5 +4551,40 @@ proptest! {
         let far = ai_private(&blend_text(steps).replace(" 40 m\n", " 1e300 m\n").replace(" 50 L\n", " -1e300 L\n"));
         survive("a .ai blend far out", || Some(vectorcraft_eps::layered_ai(&far, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
         survive("mutated .ai blend", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+// ---------- CorelDRAW ----------
+
+/// The rich document written as CDR of `version` (12 is a RIFF file, 20 a ZIP package).
+fn cdr_sample(version: u16) -> Vec<u8> {
+    vectorcraft_cdr::export(&rich_doc(), &vectorcraft_cdr::ExportOptions { version, ..vectorcraft_cdr::ExportOptions::default() }).unwrap().bytes
+}
+
+fn load_cdr(bytes: &[u8]) -> Option<Document> {
+    vectorcraft_engine::cmd::fileio::load("x.cdr", bytes).ok().map(|l| l.doc)
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cdr_garbage_never_panics(riff in any::<bool>(), tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = if riff { b"RIFF\0\0\0\0CDRCvrsn".to_vec() } else { b"PK\x03\x04".to_vec() };
+        bytes.extend(tail);
+        survive("CDR garbage", || load_cdr(&bytes))?;
+    }
+
+    #[test]
+    fn cdr_mutated_files_render_and_export_without_panicking(
+        zip in any::<bool>(),
+        cut in any::<prop::sample::Index>(),
+        edits in prop::collection::vec((any::<prop::sample::Index>(), any::<u8>()), 0..16),
+    ) {
+        let mut bytes = cdr_sample(if zip { 20 } else { 12 });
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at.index(n)] = b; }
+        bytes.truncate(cut.index(n + 1));
+        survive("CDR mutated", || load_cdr(&bytes))?;
     }
 }

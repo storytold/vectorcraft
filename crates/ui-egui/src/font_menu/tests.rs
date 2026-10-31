@@ -293,7 +293,8 @@ fn the_variable_filter_lists_only_variable_families() {
     let variable = click(&mut st, &favorites);
     assert!(st.variable_only, "the click turns the filter on");
     assert!(has(&variable, TWO_AXIS_FAMILY), "{variable:?}");
-    assert!(!has(&variable, "Source Sans 3") && !has(&variable, "Inter") && !has(&variable, "JetBrains Mono"), "static families: {variable:?}");
+    let static_families: Vec<_> = all.iter().filter(|family| !db.family_traits(family).variable).cloned().collect();
+    assert!(static_families.iter().all(|family| !has(&variable, family)), "static families: {static_families:?}");
     assert!(variable.iter().all(|f| db.family_traits(f).variable), "{variable:?}");
     // With the kind, script and favourites filters: each must pass.
     st.class = Some(FontClass::Sans);

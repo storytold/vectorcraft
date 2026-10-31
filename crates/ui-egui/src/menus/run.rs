@@ -154,6 +154,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.recentFiles" => Ok(json!(io::recent_files(app))),
         "file.place" => crate::place::run(app, p),
         "file.place.queue" => crate::place::queue(app, p),
+        "file.exportCdr" => crate::dialogs::cdr_options::export_command(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
             Ok(Value::Null)

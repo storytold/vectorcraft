@@ -71,6 +71,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
+    if vectorcraft_cdr::is_cdr(bytes) {
+        return format("cdr");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -351,6 +354,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "emf" | "wmf" => {
             let (doc, warnings) = super::metafile::import(bytes)?;
+            (doc, warnings, false)
+        }
+        "cdr" => {
+            let (doc, warnings) = super::cdr::import(&title, bytes, &opts.cdr)?;
             (doc, warnings, false)
         }
         "affinity" => {

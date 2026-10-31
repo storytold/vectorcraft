@@ -24,6 +24,7 @@
 mod action_batch;
 mod affinity;
 mod batch;
+pub mod cdr;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
@@ -210,3 +211,6 @@ mod tests_pdfwebview;
 
 #[cfg(test)]
 mod tests_pdf13;
+
+#[cfg(test)]
+mod tests_cdr;
