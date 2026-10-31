@@ -2324,6 +2324,10 @@ lighting	Light	სინათლე
 	< 1 sec	< 1 წმ
 	[Unnamed]	[უსახელო]
 	Amount:	რაოდენობა:
+	Anti-aliasing Method	ანტიალიასინგის მეთოდი
+	Sharp	მკვეთრი
+	Crisp	მკაფიო
+	Strong	ძლიერი
 	Anti-aliasing:	ანტიალიასინგი:
 	Artboard:	სამუშაო დაფა:
 	Color Table	ფერების ცხრილი
@@ -3732,6 +3736,7 @@ font-technology	Variable	ცვლადი
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები
 @msg	Targa files are RGB: colorModel rgb	Targa ფაილები RGB-ა: colorModel rgb
 @msg	Text Wrap: select a wrap object	ტექსტის შემოვლება: მონიშნეთ შემოსავლელი ობიექტი
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` უნდა იყოს "none", "sharp", "crisp" ან "strong"
 @msg	`aspect` must be a number (%)	`aspect` უნდა იყოს რიცხვი (%)
 @msg	`at` must be [x, y]	`at` უნდა იყოს [x, y]
 @msg	`color` must be a colour	`color` უნდა იყოს ფერი

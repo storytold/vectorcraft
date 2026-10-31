@@ -212,6 +212,10 @@
 	Anti-Alias	Khử răng cưa
 	Anti-alias Rasters	Khử răng cưa ảnh raster
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
+	Anti-aliasing Method	Phương pháp khử răng cưa
+	Sharp	Sắc nét
+	Crisp	Rõ nét
+	Strong	Đậm
 	Anti-aliasing:	Khử răng cưa:
 	Any Kind	Bất kỳ loại
 	Font Technology	Công nghệ phông chữ
@@ -4115,6 +4119,7 @@ effect	Soft	Mềm
 lighting	Light	Đèn
 theme	Appearance	Giao diện
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" không phải là màu: viết dưới dạng #rrggbb
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` phải là "none", "sharp", "crisp" hoặc "strong"
 @msg	`aspect` must be a number (%)	`aspect` phải là một số (%)
 @msg	`at` must be [x, y]	`at` phải là [x, y]
 @msg	`color` must be a colour	`color` phải là một màu

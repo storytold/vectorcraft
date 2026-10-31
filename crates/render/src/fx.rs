@@ -73,13 +73,13 @@ pub(crate) use bounds::visual_bounds;
 pub(crate) use bounds::{cull_bounds, drawn_outline, painted_reach};
 #[cfg(test)]
 pub(crate) use entries::Drawn;
-pub(crate) use entries::{DocInputs, FxGeom, Reads, ShadowEntry};
+pub(crate) use entries::{DocInputs, FxGeom, Inputs, Reads, ShadowEntry};
 pub(crate) use predicates::{has_fx, has_object_fx};
-pub(crate) use raster::PixelEntry;
 #[cfg(test)]
 pub(crate) use raster::RASTERIZED;
 #[cfg(test)]
-use raster::{DRAG_PIXEL_BUDGET, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+use raster::{DRAG_PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+pub(crate) use raster::{PIXEL_BUDGET, PixelEntry, linear_key};
 
 #[cfg(test)]
 mod tests;

@@ -194,6 +194,10 @@
 	Anti-Alias	Suavizado
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
+	Anti-aliasing Method	Método de suavizado
+	Sharp	Nítido
+	Crisp	Definido
+	Strong	Fuerte
 	Anti-aliasing:	Suavizado:
 	Any Kind	Cualquier tipo
 	Font Technology	Tecnología de fuente
@@ -3940,6 +3944,7 @@ axis	Both	Ambos
 @msg	Targa files are RGB: colorModel rgb	los archivos Targa son RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ceñir texto: selecciona un objeto para ceñir
 @msg	This shortcut file is in a form VectorCraft can't read.	Este archivo de métodos abreviados tiene un formato que VectorCraft no puede leer.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` debe ser "none", "sharp", "crisp" o "strong"
 @msg	`aspect` must be a number (%)	`aspect` debe ser un número (%)
 @msg	`at` must be [x, y]	`at` debe ser [x, y]
 @msg	`color` must be a colour	`color` debe ser un color

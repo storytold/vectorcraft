@@ -930,6 +930,10 @@ font-technology	Variable	가변
 	Anti-alias	안티 앨리어싱
 	Anti-alias Rasters	래스터 안티 앨리어싱
 	Anti-aliased Artwork	안티 앨리어싱 아트워크
+	Anti-aliasing Method	안티 앨리어싱 방식
+	Sharp	날카롭게
+	Crisp	또렷하게
+	Strong	강하게
 	Anti-aliasing:	안티 앨리어싱:
 	Appearance Item	모양새 항목
 	Appearance Panel	모양새 패널
@@ -4026,6 +4030,7 @@ theme	Appearance	외관
 @msg	no point {i} (the gradient has {_1})	점 {i}이(가) 없습니다(그레이디언트의 점 수: {_1})
 @msg	no segment {segment} on line {line}	선 {line}에 세그먼트 {segment}이(가) 없습니다
 @msg	unknown freeform mode `{m}` (points, lines)	알 수 없는 자유형 모드 `{m}`(points, lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias`는 "none", "sharp", "crisp" 또는 "strong"이어야 합니다
 @msg	`aspect` must be a number (%)	`aspect`는 숫자(%)여야 합니다
 @msg	`gradient` must be an object	`gradient`는 개체여야 합니다
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다

@@ -2611,6 +2611,10 @@ lighting	Light	Svjetlo
 	< 1 sec	< 1 sek.
 	[Unnamed]	[Bez naziva]
 	Amount:	Količina:
+	Anti-aliasing Method	Metoda zaglađivanja ivica
+	Sharp	Oštro
+	Crisp	Jasno
+	Strong	Snažno
 	Anti-aliasing:	Zaglađivanje ivica:
 	Artboard:	Radna ploča:
 	Color Table	Tabela boja

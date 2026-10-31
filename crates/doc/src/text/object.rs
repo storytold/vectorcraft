@@ -1,7 +1,7 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
 use super::para_style::ParaStyle;
-use super::runs::{RubySpan, TextKind, TextRun, move_anchors, reverse_from_end};
+use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
 use super::tabs_lists::ParaList;
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
 
@@ -85,6 +85,7 @@ impl TextObject {
             path_spacing: 0.0,
             wrap: Vec::new(),
             optical_margin: false,
+            anti_alias: TypeAntiAlias::Sharp,
             system_layout: false,
             fractional_widths: true,
             list_count: 0,

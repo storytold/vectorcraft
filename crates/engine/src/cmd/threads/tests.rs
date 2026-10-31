@@ -985,6 +985,65 @@ fn a_thread_takes_its_first_frames_optical_margin_alignment() {
     assert_eq!([a, b, c].map(|id| optical(&s, id).0), [true; 3]);
 }
 
+/// The anti-aliasing method (`text.setFormat {antiAlias}`) belongs to each frame and is saved
+/// only when not Sharp. A range sets its frame in one undo step. Threading and opening preserve
+/// different methods on the frames of a thread.
+#[test]
+fn the_anti_aliasing_method_is_set_for_each_frame_of_a_thread() {
+    use vectorcraft_doc::text::TypeAntiAlias::{self, Crisp, None as Hard, Sharp, Strong};
+    let method = |s: &Session, id: u64| text_of(&s.doc().unwrap().doc, NodeId(id)).map(|t| t.anti_alias);
+    let saved = |s: &Session, id: u64| serde_json::to_value(text_of(&s.doc().unwrap().doc, NodeId(id)).unwrap()).unwrap().get("antiAlias").cloned();
+    let (mut s, a, b) = quoted_thread();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Sharp)));
+    assert_eq!(saved(&s, a), None, "Sharp is not saved");
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    let err = s.execute("text.setFormat", &json!({"antiAlias": "smooth"})).unwrap_err().to_string();
+    assert!(err.contains("`antiAlias` must be"), "{err}");
+    s.execute("text.setFormat", &json!({"antiAlias": "crisp"})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Crisp)), "only the selected frame takes it");
+    assert_eq!(saved(&s, b), Some(json!("crisp")));
+    // A range of characters sets its whole frame.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 1, "antiAlias": "none"})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Hard), Some(Crisp)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((method(&s, a), method(&s, b)), (Some(Sharp), Some(Crisp)), "one undo step");
+    // A new frame does not change the methods of the existing frames.
+    s.execute("text.setFormat", &json!({"ids": [b], "antiAlias": "strong"})).unwrap();
+    let c = new_id(s.execute("text.thread.add", &json!({"from": b, "at": [400, 10]})).unwrap());
+    assert_eq!([a, b, c].map(|id| method(&s, id)), [Some(Sharp), Some(Strong), Some(Strong)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Threading existing frames with different methods preserves both.
+    let (mut joined, first_id, second_id) = quoted_thread();
+    joined.execute("text.thread.remove", &json!({})).unwrap();
+    joined.execute("text.setFormat", &json!({"ids": [first_id], "antiAlias": "crisp"})).unwrap();
+    joined.execute("text.setFormat", &json!({"ids": [second_id], "antiAlias": "strong"})).unwrap();
+    joined.execute("select.set", &json!({"ids": [first_id, second_id]})).unwrap();
+    joined.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)));
+    joined.execute("text.editRange", &json!({"id": first_id, "start": 0, "end": 0, "insert": "New "})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)), "reflow keeps both methods");
+    joined.execute("text.thread.remove", &json!({})).unwrap();
+    assert_eq!((method(&joined, first_id), method(&joined, second_id)), (Some(Crisp), Some(Strong)), "unthreading keeps both methods");
+    let first: [TypeAntiAlias; 2] = [Crisp, Hard];
+    for (one, name) in [(first, "old.vectorcraft"), ([Hard, Crisp], "old.vectorcraft"), (first, "old.eps"), ([Hard, Crisp], "old.eps")] {
+        for (id, m) in [(a, one[0]), (b, one[1])] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.anti_alias = m;
+        }
+        let bytes = if name.ends_with(".eps") {
+            let r = s.execute("document.exportEps", &json!({})).unwrap();
+            vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+        } else {
+            vectorcraft_format::save(&s.doc().unwrap().doc, false)
+        };
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+        assert_eq!(threads(&s), [[a, b]], "{name}");
+        assert_eq!((method(&s, a), method(&s, b)), (Some(one[0]), Some(one[1])), "{name}, frame methods");
+    }
+}
+
 /// A file saved with the frames of one thread set differently opens with the first frame's
 /// setting in every frame: a native file, and an EPS file restored from the document it carries.
 #[test]

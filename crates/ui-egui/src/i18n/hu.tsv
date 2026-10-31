@@ -276,6 +276,10 @@
 	Anti-Alias	Élsimítás
 	Anti-alias Rasters	Raszterek élsimítása
 	Anti-aliased Artwork	Élsimított grafika
+	Anti-aliasing Method	Élsimítási módszer
+	Sharp	Éles
+	Crisp	Tiszta
+	Strong	Erős
 	Anti-aliasing:	Élsimítás:
 	Any except extracting pages	Bármi, kivéve az oldalak kinyerését
 	Any Kind	Bármilyen típus
@@ -4465,6 +4469,7 @@ imageTrace	Outline	Körvonal
 
 # Status and error messages
 @msg	"{0}" is not a colour: write it as #rrggbb	nem szín: "{0}"; #rrggbb alakban add meg
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias`: "none", "sharp", "crisp" vagy "strong" kell
 @msg	`aspect` must be a number (%)	`aspect`: szám kell (%)
 @msg	`at` must be [x, y]	`at`: [x, y] kell
 @msg	`color` must be a colour	`color`: szín kell

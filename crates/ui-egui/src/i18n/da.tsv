@@ -2433,6 +2433,10 @@ lighting	Light	Lys
 	< 1 sec	< 1 sek
 	[Unnamed]	[Unavngiven]
 	Amount:	Mængde:
+	Anti-aliasing Method	Antialiaseringsmetode
+	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Antialiasering:
 	Artboard:	Tegnebræt:
 	Color Table	Farvetabel

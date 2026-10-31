@@ -2640,6 +2640,10 @@ lighting	Light	Světlo
 	< 1 sec	< 1 s
 	[Unnamed]	[Bez názvu]
 	Amount:	Míra:
+	Anti-aliasing Method	Metoda vyhlazování
+	Sharp	Ostré
+	Crisp	Jasné
+	Strong	Silné
 	Anti-aliasing:	Vyhlazování:
 	Artboard:	Pracovní plocha:
 	Color Table	Tabulka barev
@@ -4247,6 +4251,7 @@ imageTrace	Outline	Obrys
 @msg	Split Into Grid: select paths large enough for the grid	Rozdělit do mřížky: vyberte cesty dost velké pro mřížku
 @msg	Targa files are RGB: colorModel rgb	soubory Targa jsou RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Obtékání textu: vyberte objekt obtékání
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` musí být "none", "sharp", "crisp" nebo "strong"
 @msg	`aspect` must be a number (%)	`aspect` musí být číslo (%)
 @msg	`at` must be [x, y]	`at` musí být [x, y]
 @msg	`color` must be a colour	`color` musí být barva

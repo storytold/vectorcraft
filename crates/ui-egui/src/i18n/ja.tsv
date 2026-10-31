@@ -939,6 +939,10 @@ font-technology	Variable	バリアブル
 	Anti-alias	アンチエイリアス
 	Anti-alias Rasters	ラスターをアンチエイリアス
 	Anti-aliased Artwork	アートワークをアンチエイリアス
+	Anti-aliasing Method	アンチエイリアスの方式
+	Sharp	シャープ
+	Crisp	くっきり
+	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
@@ -4098,6 +4102,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no point {i} (the gradient has {_1})	ポイント {i} はありません (このグラデーションのポイントは {_1} 個です)
 @msg	no segment {segment} on line {line}	ライン {line} にセグメント {segment} はありません
 @msg	unknown freeform mode `{m}` (points, lines)	`{m}` は不明なフリーフォームのモードです (points、lines)
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` には "none"、"sharp"、"crisp" または "strong" を指定してください
 @msg	`aspect` must be a number (%)	`aspect` には数値 (%) を指定してください
 @msg	`gradient` must be an object	`gradient` にはオブジェクトを指定してください
 @msg	`groupColors` must be an array	`groupColors` には配列を指定してください

@@ -295,6 +295,10 @@
 	Anti-alias Rasters	Antialiàsing de ràsters
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
+	Anti-aliasing Method	Mètode d'antialiàsing
+	Sharp	Nítid
+	Crisp	Definit
+	Strong	Intens
 	Any except extracting pages	Qualsevol excepte extreure pàgines
 	Any Kind	Qualsevol tipus
 	Appearance	Aparença
@@ -5856,6 +5860,7 @@ anchor	Points:	Punts:
 	CMYK Images	Imatges CMYK
 	Grayscale Images	Imatges en escala de grisos
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` ha de ser spotColors, colorEffects, rgbImages, cmykImages o grayImages
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` ha de ser "none", "sharp", "crisp" o "strong"
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Color dels punts de la il·lustració
