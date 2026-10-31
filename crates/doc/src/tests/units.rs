@@ -144,3 +144,59 @@ fn mixed_mul_div() {
     assert_eq!(Unit::Points.parse("10*2/5"), Some(4.0));
     assert_eq!(Unit::Points.parse("10*2/5 px"), Some(Unit::Pixels.to_pt(4.0)));
 }
+
+/// Q and Ha are a quarter of a millimetre each, written back and read in any field, with or
+/// without their suffix.
+#[test]
+fn q_and_ha_are_a_quarter_millimetre() {
+    for u in [Unit::Q, Unit::Ha] {
+        assert!((u.points() - Unit::Millimeters.points() / 4.0).abs() < 1e-12, "{u:?}");
+        assert!((u.to_pt(4.0) - Unit::Millimeters.to_pt(1.0)).abs() < 1e-12, "{u:?}");
+        let tol = 0.0005 * u.points() + 1e-9;
+        for pt in [0.0, 1.0, 12.5, 72.0, 100.0, 595.28, 1234.5678, -36.0] {
+            let shown = u.format(pt);
+            let back = u.parse(&shown).unwrap_or_else(|| panic!("{u:?} can't read back `{shown}`"));
+            assert!((back - pt).abs() <= tol, "{u:?}: {pt} → `{shown}` → {back}");
+            let bare = u.parse(&u.number(pt)).unwrap();
+            assert!((bare - pt).abs() <= tol, "{u:?}: bare `{}` → {bare}", u.number(pt));
+            let pts = Unit::Points.parse(&shown).unwrap();
+            assert!((pts - pt).abs() <= tol, "{u:?}: `{shown}` in a points field → {pts}");
+        }
+    }
+    assert_eq!(Unit::Q.format(72.0 / 25.4), "4 Q");
+    assert_eq!(Unit::Ha.format(Unit::Millimeters.to_pt(2.5)), "10 H");
+    // 13 Q is 3.25 mm, however it is typed.
+    let want = Unit::Millimeters.to_pt(3.25);
+    for typed in ["13q", "13 Q", "13Q+0", "26/2 q"] {
+        let got = Unit::Points.parse(typed).unwrap_or_else(|| panic!("`{typed}` reads as nothing"));
+        assert!((got - want).abs() < 1e-9, "`{typed}` → {got}");
+    }
+    assert!((Unit::Q.parse("13").unwrap() - want).abs() < 1e-9, "a bare number is in the field's unit");
+    assert!((Unit::Millimeters.parse("13 h").unwrap() - want).abs() < 1e-9, "a typed unit wins over the field's");
+    for typed in ["13h", "13 H", "13Ha", "13 ha"] {
+        assert!((Unit::Points.parse(typed).unwrap() - want).abs() < 1e-9, "`{typed}`");
+    }
+    // Mixed with other units.
+    assert!((Unit::Points.parse("4q+1mm").unwrap() - Unit::Millimeters.to_pt(2.0)).abs() < 1e-9);
+}
+
+/// Only Preferences › Units › East Asian Type offers Q and Ha: the list every other place shares
+/// leaves them out, and `named` answers for it alone.
+#[test]
+fn only_the_east_asian_type_list_names_q_and_ha() {
+    assert_eq!(Unit::EAST_ASIAN[..10], Unit::ALL);
+    assert_eq!(Unit::EAST_ASIAN[10..], [Unit::Q, Unit::Ha]);
+    for u in Unit::EAST_ASIAN {
+        assert_eq!(Unit::named_east_asian(u.label()), Some(u));
+        assert_eq!(Unit::named_east_asian(u.key()), Some(u));
+        assert_eq!(Unit::named_east_asian(&u.label().to_uppercase()), Some(u));
+        assert_eq!(Unit::named_east_asian(u.suffix()), if u == Unit::FeetInches { Some(Unit::Feet) } else { Some(u) });
+    }
+    for name in ["q", "Q", "ha", "Ha", "H", "h"] {
+        assert_eq!(Unit::named(name), None, "`{name}`");
+    }
+    assert_eq!(Unit::named_east_asian("Q"), Some(Unit::Q));
+    assert_eq!(Unit::named_east_asian("h"), Some(Unit::Ha));
+    assert_eq!(Unit::named_east_asian("Ha"), Some(Unit::Ha));
+    assert_eq!(Unit::named_east_asian("furlongs"), None);
+}

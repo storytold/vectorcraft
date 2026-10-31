@@ -3319,11 +3319,17 @@ Commands take and return lengths in points (the distances of `object.path.offset
 string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
 `"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
-three: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
-(weights, dashes) and Type (font size, leading, baseline shift). General is the active document's units
+four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
+(weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (the same font size, leading and
+baseline shift fields while the text they act on holds East Asian characters). General is the active document's units
 (`document.inspect` → `units`): `document.setUnits {units}` (Document Setup) sets it for that document, and
 `prefs.set {key: "unitsGeneral", value}` sets it for the active document too (one undo step) and is the units
-`file.new` starts in when it gets no `units`. Stroke and Type are the preferences `unitsStroke` and `unitsType`.
+`file.new` starts in when it gets no `units`. Stroke, Type and East Asian Type are the preferences `unitsStroke`,
+`unitsType` and `unitsAsianType`. Only `unitsAsianType` also takes `q` (Q, `Q`) and `ha` (Ha, `Ha`), each a quarter of
+a millimetre (0.709 pt); the other preferences, `document.setUnits` and the rulers do not list them, and it is Points
+by default. A length typed with a unit
+reads `13q` or `13h` (also `13 Q`, `13Ha`) in any field or string param (`text.setStyle {size: "13 Q"}`): the value
+is stored in points.
 `document.switchUnits` (Cmd/Ctrl+Alt+Shift+U) sets the active document's units to the next unit in the order a
 right-click on a ruler lists them (Points, Picas, Inches, Millimeters, Centimeters, Pixels, Feet & Inches, Meters,
 Yards, Feet, then Points again), in one undo step, and replies `{units}`.

@@ -89,7 +89,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui,
             crate::i18n::fmt(
                 tl!("Size: {size}  Tracking: {tracking}"),
-                &[("size", &app.session.type_unit().format(st.size)), ("tracking", &format!("{:.0}", st.tracking))],
+                &[("size", &super::character::type_unit_of(app, tx).format(st.size)), ("tracking", &format!("{:.0}", st.tracking))],
             ),
         );
     }

@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Path Precision Tools add-on: Shared Edge Merge Tool; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -196,6 +196,7 @@ tools, never checked side by side) isn't captured row by row.
 | Arithmetic in fields (`+ - * /`, and `%` of the value before it: `3cm*50%`, `50pt+25%`) and unit suffixes (`3 mm`, `1in`, `2p6`) | done | `Unit::parse`; mixed units in one expression not verified |
 | Numeric fields: focus click selects the whole value; dragging selects from the pressed character | partial | #1326; select-all waits for click release; px/pt/plain/optional fields, both directions and replacement text tested; native API input, 17 px partial replacement, Undo/Redo, saved-file round trip and screenshots verified; Tab, double-click, arrows and wheel preserved; short movements still classified as clicks can select all and remain open |
 | Units: pt, pc, in, mm, cm, px, ft-in, m, yd, ft; General/Stroke/Type units | done | units preference reverting to points on SVG output reported (#864) |
+| Units › East Asian Type (Q and Ha) | done | #394: `unitsAsianType` offers every unit and Q and Ha, a quarter of a millimetre each ([Scripting Guide's Measurement Units](https://ai-scripting.docsforadobe.dev/scripting/measurementUnits/): 0.709 pt per Q; [InDesign's unit notation](https://helpx.adobe.com/in/indesign/desktop/layout-and-grid-tools/rulers-and-measure-tools/change-ruler-measurement-units.html): `q`, `h`); only it lists Q and Ha. The public pages do not say which fields use it: VectorCraft reads the Font Size, Leading and Baseline Shift fields (Character panel, Properties, Control bar) and the Info panel's size in it for East Asian text, in Units › Type otherwise; the document stays in points. Tests `q_and_ha_are_a_quarter_millimetre`, `east_asian_type_unit_*`, `east_asian_text_sizes_follow_units_east_asian_type`, `typed_east_asian_sizes_are_stored_in_points` |
 | Field precision: 3 decimals for steps; values kept as f64 | done | |
 | Scrubby labels (beyond Illustrator) | done | #400 |
 | 3D Lighting Color picker, preview, reset dot and Reset all | initial | One to ten opaque RGB lights for Revolve, Extrude & Bevel, Inflate and Rotate; select, add or delete a light and edit its settings or gizmo; Standard, Diffuse, Top Left and Right select original rigs, with Custom for manual changes; Cancel restores all lights |
@@ -321,7 +322,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Swatch, graphic style and symbol library panels: each library opens in a panel of its own, several at once, that floats, groups, docks and closes like any panel; opening an open library brings its panel forward; Previous / Next Library change the library in place; the panel menu's Persistent reopens the panel at startup with its view and find field (a library loaded from a file is read again; when its file is missing the panel reopens showing the file's path with Locate Library…, and the status bar names the file) | done | #2603; panel ids `library:<kind>:<id>`, `ui.libraryPanel {panel, library?, view?, showFind?, persistent?}`, `ui.libraryPanel.locate {panel, path?}`; the library panels have no sort option, as before |
 | DXF export/import preserves intended curve closure | done | #1299; R13–2018 closed SPLINE bit set/read; an open curve ending at its start stays open; knots and control points unchanged; native CIRCLE/ARC export and CNC preset remain pending |
 | macOS save sheet: choose the format from a menu | done | #866; the save panel is VectorCraft's own `NSSavePanel` with its Format menu set before the sheet opens (`apps/vectorcraft/src/mac_save_format.rs`); #1855 had withdrawn the menu that was added after the sheet began, which made Save As, Save a Copy and the first Save show no sheet |
-| Preferences: every option acts | partial | 5 stored but unused (#394, audited 2026-10-30): Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard; the rest act. General › Corner Radius drives the Rounded Rectangle tool and follows its ↑/↓ (2026-10-24) |
+| Preferences: every option acts | partial | 4 stored but unused (#394, audited 2026-10-30): Open Documents As Tabs, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard; the rest act (Units › East Asian Type since 2026-10-31). General › Corner Radius drives the Rounded Rectangle tool and follows its ↑/↓ (2026-10-24) |
 | Preferences › General › Constrain Angle | done | arrow keys and Shift drags along the turned axes; the Rectangle, Rounded Rectangle, Ellipse and grid tools, point and area type and the shape size dialogs draw along them with the bounding box turned; Shift-drawn polygons and stars keep the turned base orientation; the Line Segment tool's Shift steps count from it (#394, <https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>); arcs, spirals, flares and Pen paths are not turned |
 | Tabs panel: a stop drags from where the press landed, a stop just added included | done | #1458 |
 | Outline view keeps template layers in Preview, dimmed | done | #1486; a picture placed to be traced stays visible under the outlines |
@@ -375,6 +376,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers, and the Font Size, Leading and Baseline Shift fields and the Info panel's size read in it for East Asian text; 4 Preferences options remain stored but unused; scores and estimates unchanged |
 | 2026-10-31 | minor | Path Precision Tools add-on: the Shared Edge Merge Tool and Keep Shared Points Together; scores and estimates unchanged |
 | 2026-10-31 | minor | Path Precision Tools add-on: live Path Effects in Effect › Path Effects; scores and estimates unchanged |
 | 2026-10-31 | minor | Path Precision Tools add-on: the Corner Tool (editable corners, panel section) and Slide Anchor Along Path; scores and estimates unchanged |

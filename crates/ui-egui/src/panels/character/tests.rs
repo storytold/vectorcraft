@@ -740,3 +740,35 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     toggle(&mut app, "Hide Snap to Glyph Options");
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
 }
+
+/// The Type tool's selection decides the unit of the size fields: East Asian characters in the
+/// selected range (at a caret, the one before it, or at the start the one after) read in Units ›
+/// East Asian Type, anything else in Units › Type.
+#[test]
+fn the_type_tool_selection_picks_the_type_unit() {
+    use vectorcraft_doc::Unit;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("prefs.set", json!({"values": {"unitsType": "inches", "unitsAsianType": "q"}})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // "A", then two three-byte characters: bytes 0, 1..4 and 4..7.
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "Aあ日", "size": 12})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(text_editing(&app).is_some());
+    for (range, want) in [
+        ((0, 1), Unit::Inches),
+        ((1, 4), Unit::Q),
+        ((0, 7), Unit::Q),
+        ((4, 7), Unit::Q),
+        ((0, 0), Unit::Inches),
+        ((1, 1), Unit::Inches),
+        ((4, 4), Unit::Q),
+        ((7, 7), Unit::Q),
+    ] {
+        app.session.set_tool_option("select", &json!({"start": range.0, "end": range.1}));
+        assert_eq!(type_unit(&app), want, "{range:?}");
+    }
+    app.run("prefs.set", json!({"key": "unitsAsianType", "value": "points"})).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 4}));
+    assert_eq!(type_unit(&app), Unit::Points, "the East Asian Type unit, whatever it is");
+}

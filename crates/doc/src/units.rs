@@ -14,6 +14,11 @@ pub enum Unit {
     Meters,
     Yards,
     Feet,
+    /// Q (級), a quarter of a millimetre: the Japanese typesetting unit of type size.
+    Q,
+    /// Ha (歯), also a quarter of a millimetre: the Japanese unit of spacing, leading and
+    /// positions.
+    Ha,
 }
 
 impl Unit {
@@ -29,6 +34,23 @@ impl Unit {
         Unit::Yards,
         Unit::Feet,
     ];
+    /// The units Preferences › Units › East Asian Type offers: all of [`Unit::ALL`], then Q and
+    /// Ha. Only that preference lists Q and Ha; rulers, documents and the other Units
+    /// preferences stay on [`Unit::ALL`].
+    pub const EAST_ASIAN: [Unit; 12] = [
+        Unit::Points,
+        Unit::Picas,
+        Unit::Inches,
+        Unit::Millimeters,
+        Unit::Centimeters,
+        Unit::Pixels,
+        Unit::FeetInches,
+        Unit::Meters,
+        Unit::Yards,
+        Unit::Feet,
+        Unit::Q,
+        Unit::Ha,
+    ];
     /// Points per unit.
     pub fn points(self) -> f64 {
         match self {
@@ -37,6 +59,8 @@ impl Unit {
             Unit::Inches => 72.0,
             Unit::Millimeters => 72.0 / 25.4,
             Unit::Centimeters => 72.0 / 2.54,
+            // 0.25 mm each.
+            Unit::Q | Unit::Ha => 72.0 / 101.6,
             Unit::Meters => 72.0 / 0.0254,
             Unit::Yards => 72.0 * 36.0,
             Unit::Feet | Unit::FeetInches => 72.0 * 12.0,
@@ -53,6 +77,8 @@ impl Unit {
             Unit::FeetInches | Unit::Feet => "ft",
             Unit::Meters => "m",
             Unit::Yards => "yd",
+            Unit::Q => "Q",
+            Unit::Ha => "H",
         }
     }
     pub fn label(self) -> &'static str {
@@ -66,6 +92,8 @@ impl Unit {
             Unit::FeetInches => "Feet & Inches",
             Unit::Meters => "Meters",
             Unit::Yards => "Yards",
+            Unit::Q => "Q",
+            Unit::Ha => "Ha",
             Unit::Feet => "Feet",
         }
     }
@@ -115,12 +143,13 @@ impl Unit {
     pub fn number(self, pt: f64) -> String {
         // Three decimals for the small units (`595.276 pt`), four for the large ones (`8.2677 in`,
         // `35.2778 mm`, the `0.0078 in` stroke preset); trailing zeros are trimmed (`1 pt` is `1`).
-        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas) { 3 } else { 4 };
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
         let s = format!("{:.*}", decimals, self.from_pt(pt));
         let s = s.trim_end_matches('0').trim_end_matches('.');
         if s == "-0" { "0".into() } else { s.into() }
     }
-    /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
+    /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), `6q` (Q) and `6h` (Ha), simple
+    /// `+ - * /` arithmetic.
     ///
     /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
     /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
@@ -144,19 +173,29 @@ impl Unit {
             Unit::Meters => "meters",
             Unit::Yards => "yards",
             Unit::Feet => "feet",
+            Unit::Q => "q",
+            Unit::Ha => "ha",
         }
     }
-    /// The unit `name` names: its label, suffix or [`Unit::key`] in any case, ignoring spaces and
-    /// punctuation (`Millimeters`, `mm`, `Feet & Inches`, `feetInches`).
+    /// The unit of [`Unit::ALL`] that `name` names: its label, suffix or [`Unit::key`] in any
+    /// case, ignoring spaces and punctuation (`Millimeters`, `mm`, `Feet & Inches`, `feetInches`).
+    /// Q and Ha are named by [`Unit::named_east_asian`] only.
     pub fn named(name: &str) -> Option<Unit> {
+        Self::named_in(&Unit::ALL, name)
+    }
+    /// [`Unit::named`] among the units of Preferences › Units › East Asian Type
+    /// ([`Unit::EAST_ASIAN`]): also `Q` and `Ha` (`q`, `H`).
+    pub fn named_east_asian(name: &str) -> Option<Unit> {
+        Self::named_in(&Unit::EAST_ASIAN, name)
+    }
+    fn named_in(units: &[Unit], name: &str) -> Option<Unit> {
         let letters = |s: &'static str| s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
         let given = || name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
         // Feet and Feet & Inches share the suffix `ft`: it names the plain unit, so Feet & Inches
         // is left to its label and key.
-        Unit::ALL
-            .into_iter()
-            .find(|u| letters(u.label()).eq(given()))
-            .or_else(|| Unit::ALL.into_iter().filter(|u| *u != Unit::FeetInches).find(|u| u.suffix().chars().eq(given())))
+        units.iter().copied().find(|u| letters(u.label()).eq(given())).or_else(|| {
+            units.iter().copied().filter(|u| *u != Unit::FeetInches).find(|u| u.suffix().chars().map(|c| c.to_ascii_lowercase()).eq(given()))
+        })
     }
     /// A point value as the canvas measurement labels show it: two decimals and the suffix
     /// (`12.50 mm`).
@@ -251,6 +290,8 @@ fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
         "ft" | "'" => Some(Unit::Feet),
         "yd" => Some(Unit::Yards),
         "p" | "pc" => Some(Unit::Picas),
+        "q" | "Q" => Some(Unit::Q),
+        "h" | "H" | "ha" | "Ha" => Some(Unit::Ha),
         _ => return None,
     };
     Some((v, unit))

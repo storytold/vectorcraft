@@ -171,3 +171,90 @@ fn new_document_cards_follow_the_chosen_units() {
     assert!(shows(&t, "288 × 432 px") && !shows(&t, "101.6 × 152.4 mm"), "Postcard in px: {t:?}");
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["preset"], json!("Postcard"));
 }
+
+/// Two lines of type, East Asian and Latin, both 24 pt, the East Asian one selected; returns
+/// their ids.
+fn app_with_east_asian_and_latin_text() -> (VectorcraftApp, u64, u64) {
+    let mut app = app_with_rect();
+    let jp = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "日本語", "size": 24}))["id"].as_u64().unwrap();
+    let latin = run(&mut app, "text.create", json!({"x": 10, "y": 180, "text": "Hi", "size": 24}))["id"].as_u64().unwrap();
+    run(&mut app, "select.set", json!({ "ids": [jp] }));
+    (app, jp, latin)
+}
+
+#[test]
+fn east_asian_text_sizes_follow_units_east_asian_type() {
+    let (mut app, jp, latin) = app_with_east_asian_and_latin_text();
+    app.run("prefs.set", json!({"values": {"unitsType": "inches", "unitsAsianType": "q"}})).unwrap();
+    let (q, inches) = (Unit::Q.format(24.0), Unit::Inches.format(24.0));
+    for (name, surface) in [
+        ("Character panel", character::show as fn(&mut VectorcraftApp, &mut Ui)),
+        ("Properties panel", properties::show),
+        ("Control bar", crate::chrome::control_bar),
+    ] {
+        let t = texts(&mut app, surface);
+        assert!(shows(&t, &q) && !shows(&t, &inches), "{name}: {t:?}");
+    }
+    let t = texts(&mut app, info::show);
+    assert!(shows(&t, &format!("Size: {q}  Tracking: 0")), "Info panel: {t:?}");
+    // The Latin line stays in the Type unit; a selection of both lines holds East Asian text.
+    run(&mut app, "select.set", json!({ "ids": [latin] }));
+    let t = texts(&mut app, character::show);
+    assert!(shows(&t, &inches) && !shows(&t, &q), "Latin: {t:?}");
+    run(&mut app, "select.set", json!({ "ids": [jp, latin] }));
+    assert!(shows(&texts(&mut app, character::show), &q), "both lines");
+    // East Asian Type at Points is a choice like any other: Type's inches do not apply to East Asian text.
+    run(&mut app, "select.set", json!({ "ids": [jp] }));
+    app.run("prefs.set", json!({"key": "unitsAsianType", "value": "points"})).unwrap();
+    let t = texts(&mut app, character::show);
+    assert!(shows(&t, "24 pt") && !shows(&t, &inches), "East Asian Type at Points: {t:?}");
+    // Ha reads as a quarter of a millimetre too.
+    app.run("prefs.set", json!({"key": "unitsAsianType", "value": "ha"})).unwrap();
+    assert!(shows(&texts(&mut app, character::show), &Unit::Ha.format(24.0)));
+}
+
+/// Typing into the Font Size field of East Asian text reads a bare number in the East Asian Type
+/// unit and stores points; a typed unit wins.
+#[test]
+fn typed_east_asian_sizes_are_stored_in_points() {
+    use egui::{Event, Key, Modifiers, PointerButton};
+    fn field(app: &mut VectorcraftApp, ui: &mut Ui) {
+        ui.horizontal(|ui| character::size_field(app, ui, "size", 120.0));
+    }
+    // Type `value` into the field showing `shown` and press Enter.
+    fn type_size(app: &mut VectorcraftApp, shown: &str, value: &str) {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            time += 1.0;
+            super::tests_appearance::frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, field)
+        };
+        frame(app, vec![]);
+        let at = frame(app, vec![]).iter().find(|(s, _)| s == shown).unwrap_or_else(|| panic!("no `{shown}` field")).1.center();
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        frame(app, vec![Event::PointerMoved(at), button(true), button(false)]);
+        frame(app, vec![]);
+        frame(app, vec![Event::Text(value.into())]);
+        let enter = Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        frame(app, vec![enter]);
+    }
+    let size = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.first_style().size,
+        _ => panic!("not type"),
+    };
+    let (mut app, jp, latin) = app_with_east_asian_and_latin_text();
+    app.run("prefs.set", json!({"key": "unitsAsianType", "value": "q"})).unwrap();
+    type_size(&mut app, &Unit::Q.format(24.0), "17");
+    assert!((size(&app, jp) - 17.0 * 72.0 / 101.6).abs() < 1e-9, "17 Q: {}", size(&app, jp));
+    assert_eq!(size(&app, latin), 24.0, "the other line is untouched");
+    let shown = Unit::Q.format(size(&app, jp));
+    type_size(&mut app, &shown, "18 pt");
+    assert_eq!(size(&app, jp), 18.0);
+    type_size(&mut app, &Unit::Q.format(18.0), "20h");
+    assert!((size(&app, jp) - 20.0 * 72.0 / 101.6).abs() < 1e-9);
+    // Latin text still reads bare numbers as points (the Type unit).
+    run(&mut app, "select.set", json!({ "ids": [latin] }));
+    type_size(&mut app, "24 pt", "17");
+    assert_eq!(size(&app, latin), 17.0);
+}

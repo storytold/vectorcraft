@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (G13: gradient presets done; G1: Average & Join with a corner or smooth choice, Cmd+Alt+Shift+J, done; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -394,18 +394,36 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (2026-10-21, #394):** General › Constrain Angle turns the arrow keys' axes (guides stay on the page's), holds Shift drags of the Selection, Direct Selection, Free Transform, Slice Selection, Reshape and Measure tools and the Pen's handles to the turned axes, and new rectangles, rounded rectangles, ellipses, grids, point and area type, Shift-drawn polygons and stars and the shape size dialogs are drawn along it with their bounding box turned; 0° and whole turns are exactly as before, quarter turns exact (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>). Arcs, spirals, flares and the Pen's new paths are not turned yet. Estimate unchanged. **2026-10-24:** General › Corner Radius is the Rounded Rectangle tool's radius: the tool takes the preference when chosen and when it changes while the tool is active (or lent a selection tool for a drag), and the radius ↑/↓ set while drawing one, or a Tool Options value, becomes the preference, clamped to its 0–1296 pt range (<https://helpx.adobe.com/illustrator/using/drawing-simple-lines-shapes.html>). Estimate unchanged.
 - **Done (2026-10-17):** Background Export shows its progress in a dialog with Cancel and Continue in Background (#2564), on the shared cancel token (#2546); a cancelled export writes no file. Save As, Export for Screens and Export Selection don't show it yet. Estimate unchanged.
 - **Done:** quick Image Trace presets trace at once and leave the panel as it was; the Image Trace button (Control bar, Properties) opens the controls with Threshold and Advanced (Paths, Corners, Noise), as the public documentation describes (<https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html>). Other context-specific Properties gaps remain.
-- **Audited (2026-10-30, #394):** every Preferences dialog option but the five below is read by shipped code, by
-  its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
+- **Done (2026-10-31, #394):** Units › East Asian Type is read, and Q and Ha are units. 1 Q and 1 Ha are each a
+  quarter of a millimetre (0.709 pt), the Japanese typesetting units: the [Illustrator Scripting Guide's
+  Measurement Units table](https://ai-scripting.docsforadobe.dev/scripting/measurementUnits/) gives 0.709 pt per Q
+  (its "0.23 millimeter" is a slip: 0.709 pt is 0.25 mm, [the metric quart](https://en.wikipedia.org/wiki/Metric_typographic_units)),
+  [InDesign's unit notation table](https://helpx.adobe.com/in/indesign/desktop/layout-and-grid-tools/rulers-and-measure-tools/change-ruler-measurement-units.html)
+  lists `q` and `h` as the Q and Ha suffixes a field takes, and Ha is the same length as Q, used for spacing
+  instead of type size ([Toshi Omagari on Q and Ha](https://tosche.net/jp/blog/font-size-in-the-metric-system)). The
+  public pages do not say which fields follow East Asian Type, so VectorCraft applies it only where it can tell
+  East Asian text: the Font Size, Leading and Baseline Shift fields (Character panel, Properties, Control bar) and
+  the Info panel's size read in it while the text they act on (the Type tool's selection, at a caret the character
+  before it, else the selected type) holds East Asian characters, and in Units › Type otherwise. It offers Points,
+  Picas, Inches, Millimeters, Centimeters, Pixels, Feet & Inches, Meters, Yards, Feet, Q and Ha (`unitsAsianType`,
+  Points by default: with Units › Type on another unit, East Asian text reads in Points until this is set too); only
+  it lists Q and Ha, not the rulers, Document Setup or
+  the other Units preferences. The model stays in points; any length field reads `13q` or `13h` (`Ha`, `H`) with or
+  without a space. Not done: the Size/Leading and Baseline Shift keyboard increments (Preferences › Type) stay in
+  Units › Type, and the size presets are the point ladder converted. Tests `east_asian_*` and `q_and_ha_*` in
+  `crates/doc`, `crates/engine` and `crates/ui-egui`. Estimate unchanged.
+- **Audited (2026-10-30, #394):** every Preferences dialog option but the four below is read by shipped code,
+  by its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
   (tool previews wait for the commit), Show Tool Tips, Anti-aliased Artwork, Use Precise Cursors and Devices ›
   Enable Touch Workspace and Touch Gestures included.
-- **Missing:** 5 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
+- **Missing:** 4 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   User Interface › Open Documents As Tabs (off would open documents in floating windows; one window per
-  document is G7), Units › East Asian Type (nothing is measured in it yet, and the Q and Ha units aren't in the
-  unit lists), Hyphenation › Default Language (hyphenation is English-only, with no per-language dictionaries),
-  Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to disk), and
-  Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and Overprints choice
-  (Illustrator's own clipboard flavour, which has no public specification). Also Properties panel per
-  context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG Interactivity.
+  document is G7), Hyphenation › Default Language (hyphenation is English-only, with no per-language
+  dictionaries), Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
+  disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
+  Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
+  panel per context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG
+  Interactivity.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
@@ -659,6 +677,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers, and the Font Size, Leading and Baseline Shift fields and the Info panel's size read in it for East Asian text; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
 | 2026-10-30 | minor | G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | G1: Object › Path › Average & Join… (`path.averageJoin`, Cmd+Alt+Shift+J) moves two open path ends to their midpoint and joins them there, the joined anchor a corner or a smooth point as its dialog's Points choice asks, in one undo step; the "Average and Join in one step" entry is done. Estimate unchanged |
 | 2026-10-30 | minor | G12: Preferences audit (#394): 5 options are stored but not acted on (Open Documents As Tabs, Units › East Asian Type, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard), each waiting on a subsystem; Highlight Alternate Glyphs, Real-time Drawing and the Devices options act. Estimate unchanged. |

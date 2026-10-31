@@ -5845,3 +5845,6 @@ breakText	Glyphs	Glify
 	Gap 4	Odstęp 4
 	Dash 5	Kreska 5
 	Gap 5	Odstęp 5
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha

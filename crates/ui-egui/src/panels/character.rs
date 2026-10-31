@@ -86,6 +86,51 @@ pub(crate) fn shared_text_flag(app: &VectorcraftApp, f: impl Fn(&vectorcraft_doc
     if !saw || mixed { None } else { value }
 }
 
+/// Does the text `t` hold an East Asian character ([`vectorcraft_text::is_cjk`]) in `range` (byte
+/// offsets; with no range anywhere in it)? A caret (an empty range) asks about the character
+/// before it, or at the start of the text the one after it.
+fn has_east_asian(t: &vectorcraft_doc::TextObject, range: Option<(usize, usize)>) -> bool {
+    let mut at = 0;
+    let mut chars = t.runs.iter().flat_map(move |r| {
+        let base = at;
+        at += r.text.len();
+        r.text.char_indices().map(move |(i, c)| (base + i, c))
+    });
+    match range {
+        None => chars.any(|(_, c)| vectorcraft_text::is_cjk(c)),
+        Some((a, b)) if a < b => chars.any(|(p, c)| p >= a && p < b && vectorcraft_text::is_cjk(c)),
+        Some((0, _)) => chars.next().is_some_and(|(_, c)| vectorcraft_text::is_cjk(c)),
+        Some((a, _)) => chars.find(|(p, c)| p + c.len_utf8() == a).is_some_and(|(_, c)| vectorcraft_text::is_cjk(c)),
+    }
+}
+
+/// The unit the Font Size, Leading and Baseline Shift fields show in: Units › Type, or Units › East
+/// Asian Type while the text they act on (the Type tool's selection or caret, else the selected
+/// type) holds East Asian characters. Both are Points until set, so nothing reads differently
+/// while they agree.
+pub(crate) fn type_unit(app: &VectorcraftApp) -> vectorcraft_doc::Unit {
+    let east_asian = || {
+        let Some(st) = app.session.active() else { return false };
+        if let Some((id, a, b)) = text_editing(app) {
+            return matches!(st.doc.node(id).map(|n| &n.kind), Some(NodeKind::Text(t)) if has_east_asian(t, Some((a, b))));
+        }
+        let mut found = false;
+        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+            n.walk(&mut |c| found = found || matches!(&c.kind, NodeKind::Text(t) if has_east_asian(t, None)));
+        }
+        found
+    };
+    let (plain, east_asian_unit) = (app.session.type_unit(), app.session.east_asian_type_unit());
+    // The two preferences agree (both Points until one is changed): the text needs no look.
+    if plain == east_asian_unit || !east_asian() { plain } else { east_asian_unit }
+}
+
+/// [`type_unit`] for the text `t` as a whole (the Info panel's).
+pub(crate) fn type_unit_of(app: &VectorcraftApp, t: &vectorcraft_doc::TextObject) -> vectorcraft_doc::Unit {
+    let (plain, east_asian_unit) = (app.session.type_unit(), app.session.east_asian_type_unit());
+    if plain == east_asian_unit || !has_east_asian(t, None) { plain } else { east_asian_unit }
+}
+
 /// `f` of the character styles the panels act on: the runs the Type tool's selection covers (the
 /// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
 /// blank field) where they differ, or with no type.
@@ -628,7 +673,7 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// shown). The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
-    let unit = app.session.type_unit();
+    let unit = type_unit(app);
     egui::Grid::new(id).num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
         cell(ui, "T", tl!("Font Size"), |ui| size_field(app, ui, "ch-size", fw));
         cell(ui, "A↕", tl!("Leading"), |ui| {
@@ -685,7 +730,7 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
 /// picked from the presets, in the type unit, blank where the selected text's sizes differ.
 pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
     let size = shared_effective(app, |s| s.size);
-    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+    if let Some(v) = widgets::spin_field(ui, id, size, type_unit(app), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
     }
 }
