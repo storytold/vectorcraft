@@ -550,18 +550,20 @@ fn list_markers(s: &Session, id: NodeId) -> Vec<String> {
 }
 
 /// Typed list detection: at the start of a paragraph, "1.", "1)", "A." or "A)" and a space start
-/// a numbered list, and "*", "#", ">" or "+" and a space start a bulleted list with the filled dot.
-/// The typed characters go, the paragraph takes the hanging indent, and the text typed next is the
-/// list item's. One Undo puts the typed characters back with no list, and typing goes on after
-/// them, also after a Backspace that deleted nothing.
+/// a numbered list, and "*", "+", "#" or ">" and a space start a bulleted list with the filled dot,
+/// the hollow circle, the filled square or the dash. The typed characters go, the paragraph takes
+/// the hanging indent, and the text typed next is the list item's. One Undo puts the typed
+/// characters back with no list, and typing goes on after them, also after a Backspace that
+/// deleted nothing.
 #[test]
 fn typing_a_list_start_and_a_space_starts_a_list() {
     use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
     let v = ViewInfo::default();
-    let (arabic, letters, dot) =
-        (ParaList::numbered(NumberStyle::Arabic), ParaList::numbered(NumberStyle::UpperLetters), ParaList::bulleted(Bullet::Dot));
+    let (arabic, letters) = (ParaList::numbered(NumberStyle::Arabic), ParaList::numbered(NumberStyle::UpperLetters));
     let cases = [("1.", arabic, "1."), ("1)", arabic, "1."), ("A.", letters, "A."), ("A)", letters, "A.")];
-    let bullets = ["*", "#", ">", "+"].map(|b| (b, dot, "\u{2022}"));
+    let bullets =
+        [("*", Bullet::Dot, "\u{2022}"), ("+", Bullet::Circle, "\u{25E6}"), ("#", Bullet::Square, "\u{25AA}"), (">", Bullet::Dash, "\u{2013}")]
+            .map(|(b, bullet, marker)| (b, ParaList::bulleted(bullet), marker));
     for (typed, list, marker) in cases.into_iter().chain(bullets) {
         let mut s = session();
         s.select_tool("type", v).unwrap();
@@ -639,7 +641,7 @@ fn the_caret_follows_undo_and_redo_of_a_typed_list() {
 /// (a paste), or at the start of a paragraph that is already in a list start nothing.
 #[test]
 fn list_starts_typed_elsewhere_or_pasted_start_no_list() {
-    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
     let v = ViewInfo::default();
     let mut s = session();
     s.select_tool("type", v).unwrap();
@@ -654,12 +656,26 @@ fn list_starts_typed_elsewhere_or_pasted_start_no_list() {
     for c in "1.Pears".chars() {
         s.tool_text(&c.to_string(), v).unwrap();
     }
-    key(&mut s, ToolKey::Enter, Mods::default());
-    s.tool_text("* ", v).unwrap();
+    for pasted in ["* ", "+ ", "# ", "> "] {
+        key(&mut s, ToolKey::Enter, Mods::default());
+        s.tool_text(pasted, v).unwrap();
+    }
     let t = obj(&s, id);
-    assert_eq!(t.plain_text(), "Fruit 1. * A) x\n1. Apples\n1.Pears\n* ");
-    assert_eq!((0..4).map(|i| t.para_at(i).list).collect::<Vec<_>>(), [None, None, None, None]);
+    assert_eq!(t.plain_text(), "Fruit 1. * A) x\n1. Apples\n1.Pears\n* \n+ \n# \n> ");
+    assert!((0..7).all(|i| t.para_at(i).list.is_none()));
     assert!(!undo_labels(&s).iter().any(|l| l == "Bullets and Numbering"));
+    // A paragraph in a bulleted list keeps its bullet when another list start is typed before it.
+    let id = text(&mut s, "Item");
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "bullet", "bullet": "dot"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    click(&mut s, 101.0, 95.0);
+    s.set_tool_option("select", &json!({"start": 0, "end": 0}));
+    for c in "+ ".chars() {
+        s.tool_text(&c.to_string(), v).unwrap();
+    }
+    let t = obj(&s, id);
+    assert_eq!((t.plain_text().as_str(), t.para_at(0).list), ("+ Item", Some(ParaList::bulleted(Bullet::Dot))));
+    assert_eq!(list_markers(&s, id), ["\u{2022}"]);
     // A paragraph in a list keeps its list, and the typed characters stay as text.
     let id = text(&mut s, "Item");
     s.execute("text.setFormat", &json!({"ids": [id.0], "list": "number"})).unwrap();
@@ -694,7 +710,7 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     let id = text(&mut s, "x\n# ");
     let r = s.execute("text.startList", &json!({"id": id.0})).unwrap();
     assert_eq!((r["started"].clone(), obj(&s, id).plain_text()), (json!(true), "x\n".to_string()));
-    assert_eq!(obj(&s, id).para_at(1).list, Some(ParaList::bulleted(Bullet::Dot)));
+    assert_eq!(obj(&s, id).para_at(1).list, Some(ParaList::bulleted(Bullet::Square)));
     let steps = undo_labels(&s).len();
     let id = text(&mut s, "1.x");
     assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": 3})).unwrap()["started"], json!(false));

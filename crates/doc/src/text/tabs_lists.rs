@@ -232,13 +232,16 @@ impl ParaList {
 
     /// The list that the Type tool starts when `typed` and a space are typed at the start of a
     /// paragraph: "1." or "1)" starts a numbered list in 1, 2, 3, "A." or "A)" starts one in A, B,
-    /// C, and "*", "#", ">" or "+" starts a bulleted list with the filled dot. Any other text starts
-    /// none.
+    /// C, and "*" starts a bulleted list with the filled dot, "+" one with the hollow circle, "#"
+    /// one with the filled square and ">" one with the dash. Any other text starts none.
     pub fn typed(typed: &str) -> Option<ParaList> {
         match typed {
             "1." | "1)" => Some(Self::numbered(NumberStyle::Arabic)),
             "A." | "A)" => Some(Self::numbered(NumberStyle::UpperLetters)),
-            "*" | "#" | ">" | "+" => Some(Self::bulleted(Bullet::Dot)),
+            "*" => Some(Self::bulleted(Bullet::Dot)),
+            "+" => Some(Self::bulleted(Bullet::Circle)),
+            "#" => Some(Self::bulleted(Bullet::Square)),
+            ">" => Some(Self::bulleted(Bullet::Dash)),
             _ => None,
         }
     }
