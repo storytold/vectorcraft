@@ -16,6 +16,7 @@ pub(super) const LAYERS_UNREAD: &str = "the file's layers weren't read";
 pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
+        || note.ends_with("they came in as the page's art")
         || [ART_LEFT_OUT, LAYERS_UNREAD, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
 }
 

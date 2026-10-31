@@ -5583,6 +5583,9 @@ breakText	Glyphs	글리프
 	Gap 4	간격 4
 	Dash 5	대시 5
 	Gap 5	간격 5
+
+@msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	배치 도구
 	Arrange in Grid…	격자로 배치…

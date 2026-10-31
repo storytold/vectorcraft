@@ -34,7 +34,7 @@ use crate::ps;
 
 pub(crate) use frames::text_frames;
 pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
-pub(crate) use read::{slot_frame, slot_of};
+pub(crate) use read::{join_and, slot_frame, slot_of};
 
 #[cfg(test)]
 mod tests;
