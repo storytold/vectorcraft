@@ -314,10 +314,11 @@ fn sliding_and_flipping_type_round_a_circle_leaves_the_circle_alone() {
     }
 }
 
-/// Arabic made into type on a path starts where right-to-left text begins, as new point type does
-/// (new type aligns to the start of its paragraph's direction): at the right end of a line drawn
-/// left to right, and on a circle with its first letter by the start bracket. Skipped without an
-/// installed Arabic font.
+/// Arabic made into type on a path aligns to the end of its span, where right-to-left text begins
+/// (new type aligns to the start of its paragraph's direction), and Latin to its start: from a start
+/// bracket at the beginning of a line drawn left to right the Arabic runs back from the line's end and
+/// the Latin forward from its start; on a circle the Arabic's first letter is by the start bracket.
+/// Skipped without an installed Arabic font.
 #[test]
 fn arabic_type_on_a_path_starts_at_the_right_to_left_end() {
     let db = vectorcraft_text::FontDb::global();
@@ -338,6 +339,11 @@ fn arabic_type_on_a_path_starts_at_the_right_to_left_end() {
     let id = make(&mut s, "M100 300 L500 300", [100.0, 300.0]);
     let b = ink(&s, id);
     assert!(b.x1 > 495.0 && b.x0 > 400.0, "at the right end: {b:?}");
+    // Latin from the same start runs forward from it.
+    let pid = s.execute("path.create", &json!({ "d": "M100 300 L500 300" })).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Latin", "size": 24, "at": [100.0, 300.0]})).unwrap();
+    let b = ink(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(b.x0 < 105.0 && b.x1 < 250.0, "from the start: {b:?}");
     let id = make(
         &mut s,
         "M300 100 C355 100 400 145 400 200 C400 255 355 300 300 300 C245 300 200 255 200 200 C200 145 245 100 300 100 Z",
