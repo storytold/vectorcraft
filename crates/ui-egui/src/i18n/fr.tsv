@@ -3370,6 +3370,7 @@ font-technology	Variable	Variables
 	Tile Range:	Plage de carreaux :
 	Tile Type:	Type de carreau :
 	tile {number}	carreau {number}
+	Copies per Sheet (as many as fit, in a grid)	Copies par feuille (autant qu’il en tient, en grille)
 	Tiles are numbered across, then down; leave the range empty for every tile.	Les carreaux sont numérotés de gauche à droite, puis de haut en bas ; laissez la plage vide pour tous les carreaux.
 	Tint	Teinte
 	Tip extends past the end point	La pointe dépasse le point d’extrémité

@@ -3301,6 +3301,7 @@ font-technology	Variable	Variabla
 	Tile Type:	Ruttyp:
 	tile {number}	ruta {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras från vänster till höger och sedan nedåt. Lämna omfånget tomt för att få med alla rutor.
+	Copies per Sheet (as many as fit, in a grid)	Kopior per ark (så många som får plats, i ett rutnät)
 	Tint	Färgton
 	Tip extends past the end point	Spetsen sträcker sig förbi slutpunkten
 	Tip on the end point	Spetsen på slutpunkten

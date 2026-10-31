@@ -3108,6 +3108,8 @@ mark-style	Japanese	日本式
 	Tile Range:	分割範囲:
 	Tile Type:	タイルの種類:
 	Tiles are numbered across, then down; leave the range empty for every tile.	タイルは左から右、上から下の順に番号が付きます。範囲を空にするとすべてのタイルが対象です。
+	Copies per Sheet (as many as fit, in a grid)	用紙ごとに複数コピー (収まるだけグリッド状に配置)
+	Gutter:	間隔:
 	Toggle Fill/Stroke Focus	塗り／線の切り替え
 	Toggle Selection	選択を切り替え
 	Toggle single/double column	1 列／2 列を切り替え

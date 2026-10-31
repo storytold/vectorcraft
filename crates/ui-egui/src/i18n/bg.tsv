@@ -3301,6 +3301,7 @@ font-technology	Variable	Променливи
 	Tile Type:	Тип плочка:
 	tile {number}	плочка {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Плочките се номерират напречно, след това надолу; оставете диапазона празен за всяка плочка.
+	Copies per Sheet (as many as fit, in a grid)	Копия на лист (колкото се побират, в мрежа)
 	Tint	Оттенък
 	Tip extends past the end point	Връхът продължава след крайната точка
 	Tip on the end point	Връх върху крайната точка

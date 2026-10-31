@@ -3237,6 +3237,7 @@ font-script	Japanese	汉字
 	Tile Type:	拼贴类型：
 	tile {number}	拼贴 {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	拼贴先由左至右再由上至下编号；范围留空表示全部拼贴。
+	Copies per Sheet (as many as fit, in a grid)	每张纸印多份 (尽量排满，按网格排列)
 	Tint	色调
 	Tip extends past the end point	箭头超出端点
 	Tip on the end point	箭头位于端点

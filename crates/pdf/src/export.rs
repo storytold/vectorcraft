@@ -112,6 +112,9 @@ pub(crate) struct Exporter<'a> {
     /// Objects the symbol instances written held, together
     /// ([`vectorcraft_doc::MAX_SYMBOL_NODES`]).
     symbol_nodes: u64,
+    /// The most [`Self::symbol_nodes`] may reach: [`vectorcraft_doc::MAX_SYMBOL_NODES`], or less
+    /// while one of the copies on a sheet is drawn ([`Writer::page`]).
+    pub(crate) symbol_limit: u64,
 }
 
 #[cfg(test)]

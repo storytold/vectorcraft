@@ -3373,6 +3373,8 @@ font-technology	Variable	Variables
 	Tile Type:	Tipo de mosaico:
 	tile {number}	mosaico {number}
 	Tiles are numbered across, then down; leave the range empty for every tile.	Los mosaicos se numeran de izquierda a derecha y luego hacia abajo; deja el rango vacío para todos.
+	Copies per Sheet (as many as fit, in a grid)	Copias por hoja (tantas como quepan, en cuadrícula)
+	Gutter:	Medianil:
 	Tint	Matiz
 	Tip extends past the end point	La punta se extiende más allá del punto final
 	Tip on the end point	Punta en el punto final
