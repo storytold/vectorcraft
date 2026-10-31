@@ -5549,6 +5549,9 @@ axis	Y Axis	Y-as
 	Packaged {n} file(s) in {folder}	{n} bestand(en) verpakt in {folder}
 	Packaged {n} file(s) {note}	{n} bestand(en) verpakt {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} bestand(en) in {folder}. De pakketmap openen?
+	Reading	Leeswijze
+	Overhang	Overhang
+	applied	Toegepast
 	Clockwise	Met de klok mee
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Fijne ruis verbergt banden in de verloopvulling

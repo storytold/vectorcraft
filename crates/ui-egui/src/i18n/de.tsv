@@ -5158,6 +5158,9 @@ axis	Y Axis	Y-Achse
 	Packaged {n} file(s) in {folder}	{n} Datei(en) in {folder} verpackt
 	Packaged {n} file(s) {note}	{n} Datei(en) verpackt {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} Datei(en) in {folder}. Paketordner anzeigen?
+	Reading	Lesung
+	Overhang	Überhang
+	applied	Angewendet
 	Clockwise	Im Uhrzeigersinn
 	Dither	Dithering
 	Fine noise hides banding in the gradient fill	Feines Rauschen verbirgt Streifen in der Verlaufsfläche

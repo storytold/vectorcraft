@@ -5505,6 +5505,9 @@ axis	Y Axis	Y-akse
 	Packaged {n} file(s) in {folder}	Pakkede {n} fil(er) i {folder}
 	Packaged {n} file(s) {note}	Pakkede {n} fil(er) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} fil(er) i {folder}. Vis pakkemappen?
+	Reading	Læsning
+	Overhang	Overhæng
+	applied	Anvendt
 	Clockwise	Med uret
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Fin støj skjuler striber i gradientfyldet

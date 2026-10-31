@@ -5211,6 +5211,9 @@ axis	Y Axis	Y 軸
 	Packaged {n} file(s) in {folder}	已將 {n} 個檔案封裝到 {folder}
 	Packaged {n} file(s) {note}	已封裝 {n} 個檔案 {note}
 	{count} file(s) in {folder}. Show the package folder?	{folder} 中有 {count} 個檔案。要顯示封裝資料夾嗎？
+	Reading	讀音
+	Overhang	懸掛
+	applied	已套用
 	Clockwise	順時針
 	Dither	仿色
 	Fine noise hides banding in the gradient fill	細微雜色可隱藏漸層填色中的色帶

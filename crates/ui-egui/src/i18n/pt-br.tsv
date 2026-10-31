@@ -5494,6 +5494,9 @@ axis	Y Axis	Eixo Y
 	Packaged {n} file(s) in {folder}	{n} arquivo(s) empacotado(s) em {folder}
 	Packaged {n} file(s) {note}	{n} arquivo(s) empacotado(s) {note}
 	{count} file(s) in {folder}. Show the package folder?	{count} arquivo(s) em {folder}. Mostrar a pasta do pacote?
+	Reading	Leitura
+	Overhang	Transbordamento
+	applied	Aplicado
 	Clockwise	Sentido horário
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Um ruído fino esconde as faixas do preenchimento em gradiente
