@@ -5996,7 +5996,7 @@ breakText	Glyphs	Glyphes
 	File + Data Set Name	Fichier + nom du jeu de données
 	Data Set Name	Nom du jeu de données
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` doit être `fileNumber`, `fileDataSetName` ou `dataSetName`
-@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	« Enregistrer et fermer » ne peut pas traiter les jeux de données : choisissez « Dossier » pour enregistrer chaque jeu de données dans son propre fichier
+@msg	Save and Close cannot batch data sets: choose Folder to save each data set to its own file	« Enregistrer et fermer » ne peut pas traiter les jeux de données : choisissez « Dossier » pour enregistrer chaque jeu de données dans son propre fichier
 @msg	no free data set file name in destination folder	Aucun nom de fichier libre pour le jeu de données dans le dossier de destination
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
