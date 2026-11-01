@@ -58,13 +58,13 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | Set type: point and area type, Character and Paragraph styles, threading, outlines | yes | type core 80%; styles, threading, Create Outlines and font matching tested ([type-parity.md](type-parity.md)); justification options missing (not blocking) | 0 |
 | Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; Art Optimized supersample closes ghost borders (#983 / #1037) | 0 |
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
-| Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951) and lose guides (#779); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data (#868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. EPS legacy mesh corners, vector opacity masks and raster print-page comparison now preserve editable art under synthetic regressions. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
+| Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data (#868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. EPS legacy mesh corners, vector opacity masks and raster print-page comparison now preserve editable art under synthetic regressions. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
 
 ## Current focus
 
 1. **Interaction-fidelity pass** (G1) by tool, from [ui-parity.md](ui-parity.md): Pen and Curvature, Direct
    Selection, smart guides and snapping first. 60–90 h, parallel by tool.
-2. **`.ai` files from real users** (G9): layer structure (#951), guides (#779). 10–20 h.
+2. **`.ai` files from real users** (G9): layer structure (#951). 10–20 h.
 3. **Launch and stability** (G10): the Windows and Linux start-up reports. 20–35 h.
 4. **Core-tool bugs** (G11): SVG units reverting to points (#864) and a Transform effect in a fill's or stroke's own effects (#885). Shape Builder regions (#937), Asset Export ghost borders (#983 / #1037) and the stalling bezier drag preview (#834) are fixed. 8–15 h.
 5. **Raster effects** (G2) alongside: the Effect Gallery's filter thumbnails and in-dialog preview area (the gallery and every Photoshop-style filter are in), 1–2 h.
