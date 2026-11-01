@@ -416,8 +416,10 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
         let b = b.inflate(1.0, 1.0);
         a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
     };
-    // Choose a cell size from the painted extent and path count. Large boxes stay in a separate
-    // list, keeping the index bounded even when a path covers most of the document.
+    // Choose a cell size from the painted extent and path count. A box over more than eight cells
+    // across but at most eight down (a stripe) is indexed by its rows, one the other way round by
+    // its columns, and one over more than eight both ways stays in a separate list, keeping the
+    // index bounded even when a path covers most of the document.
     let items: Vec<_> = items
         .into_iter()
         .map(|item| {
@@ -427,22 +429,21 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
         .collect();
     let extent = items.iter().filter_map(|(_, b)| *b).reduce(|a, b| a.union(b));
     let cell_size = extent.map_or(1.0, |r| ((r.x1 - r.x0).abs() * (r.y1 - r.y0).abs() / items.len().max(1) as f64).sqrt().max(1.0));
-    let cells = |r: Rect| -> Option<Vec<(i64, i64)>> {
+    // The first and last column and row of the cells `r` covers; `None` when it isn't finite.
+    let span = |r: Rect| -> Option<(i64, i64, i64, i64)> {
         let coord = |v: f64| (v / cell_size).floor() as i64;
-        if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) {
-            return None;
-        }
-        let (x0, y0, x1, y1) = (coord(r.x0), coord(r.y0), coord(r.x1), coord(r.y1));
-        if i128::from(x1) - i128::from(x0) >= 8 || i128::from(y1) - i128::from(y0) >= 8 {
-            return None;
-        }
-        Some((y0..=y1).flat_map(|y| (x0..=x1).map(move |x| (x, y))).collect())
+        [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()).then(|| (coord(r.x0), coord(r.y0), coord(r.x1), coord(r.y1)))
     };
+    let count = |first: i64, last: i64| i128::from(last) - i128::from(first) + 1;
+    // A box over more cells than this is checked against every box.
+    const MAX_CELLS: i128 = 1024;
     let mut groups: Vec<Run> = vec![];
     let mut latest: HashMap<PaintKey, usize> = HashMap::new();
     // An item can join an earlier group, so insertion order is not group-index order. Index
     // boxes by group to skip older groups without scanning their entries.
     let mut spatial: HashMap<(i64, i64), BTreeMap<usize, Vec<Rect>>> = HashMap::new();
+    let mut rows: HashMap<i64, BTreeMap<usize, Vec<Rect>>> = HashMap::new();
+    let mut columns: HashMap<i64, BTreeMap<usize, Vec<Rect>>> = HashMap::new();
     let mut large: BTreeMap<usize, Vec<Rect>> = BTreeMap::new();
     let mut all_boxes: BTreeMap<usize, Vec<Rect>> = BTreeMap::new();
     for (item, bounds) in items {
@@ -475,9 +476,14 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
                         })
                     })
                 };
-                match cells(b) {
-                    Some(places) => places.iter().filter_map(|c| spatial.get(c)).any(overlaps_later) || overlaps_later(&large),
-                    None => overlaps_later(&all_boxes),
+                match span(b) {
+                    Some((x0, y0, x1, y1)) if count(x0, x1) * count(y0, y1) <= MAX_CELLS => {
+                        (y0..=y1).flat_map(|y| (x0..=x1).map(move |x| (x, y))).filter_map(|c| spatial.get(&c)).any(overlaps_later)
+                            || (y0..=y1).filter_map(|y| rows.get(&y)).any(overlaps_later)
+                            || (x0..=x1).filter_map(|x| columns.get(&x)).any(overlaps_later)
+                            || overlaps_later(&large)
+                    }
+                    _ => overlaps_later(&all_boxes),
                 }
             })
         };
@@ -494,13 +500,23 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
         if let Some(b) = bounds {
             let index = if new { groups.len() - 1 } else { at.unwrap_or_default() };
             all_boxes.entry(index).or_default().push(b);
-            match cells(b.inflate(1.0, 1.0)) {
-                Some(places) => {
-                    for place in places {
+            match span(b.inflate(1.0, 1.0)) {
+                Some((x0, y0, x1, y1)) if count(x0, x1) <= 8 && count(y0, y1) <= 8 => {
+                    for place in (y0..=y1).flat_map(|y| (x0..=x1).map(move |x| (x, y))) {
                         spatial.entry(place).or_default().entry(index).or_default().push(b);
                     }
                 }
-                None => large.entry(index).or_default().push(b),
+                Some((_, y0, _, y1)) if count(y0, y1) <= 8 => {
+                    for y in y0..=y1 {
+                        rows.entry(y).or_default().entry(index).or_default().push(b);
+                    }
+                }
+                Some((x0, _, x1, _)) if count(x0, x1) <= 8 => {
+                    for x in x0..=x1 {
+                        columns.entry(x).or_default().entry(index).or_default().push(b);
+                    }
+                }
+                _ => large.entry(index).or_default().push(b),
             }
         }
     }
@@ -964,9 +980,29 @@ mod color_group_tests {
     }
 
     #[test]
+    fn separate_stripes_of_alternating_colors_visit_bounded_candidates() {
+        const COUNT: usize = 2000;
+        let mut d = Document::new(1000.0, 4000.0);
+        let colors = [Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0)];
+        for tall in [false, true] {
+            let items = (0..COUNT)
+                .map(|i| {
+                    let at = i as f64 * 2.0;
+                    if tall { area(&mut d, at, 0.0, at + 0.5, 1000.0, colors[i % 2]) } else { area(&mut d, 0.0, at, 1000.0, at + 0.5, colors[i % 2]) }
+                })
+                .collect();
+            CANDIDATE_VISITS.with(|n| n.set(0));
+            let groups = color_groups("imageTrace.makeAndExpand", &mut d, items).unwrap();
+            let visits = CANDIDATE_VISITS.with(std::cell::Cell::get);
+            assert_eq!(groups.len(), 2, "tall {tall}");
+            assert!(visits < COUNT * 32, "tall {tall}: {visits} candidate visits for {COUNT} stripes");
+        }
+    }
+
+    #[test]
     fn spatial_color_groups_match_simple_scan() {
         let colors = [Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0)];
-        for layout in 0..4 {
+        for layout in 0..6 {
             let mut d = Document::new(200.0, 200.0);
             let items: Vec<_> = (0..90)
                 .map(|i| {
@@ -974,15 +1010,25 @@ mod color_group_tests {
                         0 => i as f64 * 2.0,
                         1 => (i % 10) as f64 * 5.0,
                         2 => (i % 7) as f64 * 3.0,
-                        _ => (i % 13) as f64 * 9.0,
+                        3 => (i % 13) as f64 * 9.0,
+                        4 => (i % 4) as f64 * 10.0,
+                        _ => i as f64 * 1.5,
                     };
                     let y = match layout {
                         0 => 0.0,
                         1 => (i / 10) as f64 * 5.0,
                         2 => (i / 7) as f64 * 3.0,
-                        _ => (i / 13) as f64 * 9.0,
+                        3 => (i / 13) as f64 * 9.0,
+                        4 => i as f64 * 1.5,
+                        _ => (i % 4) as f64 * 10.0,
                     };
-                    area(&mut d, x, y, x + 3.0, y + 3.0, colors[i % 3])
+                    // Layouts 4 and 5: wide and tall stripes, some meeting their neighbors.
+                    let (w, h) = match layout {
+                        4 => (150.0, 1.0),
+                        5 => (1.0, 150.0),
+                        _ => (3.0, 3.0),
+                    };
+                    area(&mut d, x, y, x + w, y + h, colors[i % 3])
                 })
                 .collect();
             let mut expected: Vec<(String, Vec<(NodeId, Rect)>)> = vec![];
