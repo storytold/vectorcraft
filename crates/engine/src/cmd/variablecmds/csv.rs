@@ -152,17 +152,19 @@ fn csv_escape(s: &str) -> String {
     if s.is_empty() || s.contains([',', '"', '\n', '\r']) || s != s.trim() { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
 }
 
-/// A visibility cell: true/false, 1/0, yes/no (ASCII, case-insensitive).
-fn parse_visible_cell(s: &str, var: &str, cmd: &str) -> Result<bool> {
+/// A visibility cell: true/false, 1/0, yes/no (ASCII, case-insensitive). An error names the
+/// file line `line`.
+fn parse_visible_cell(s: &str, var: &str, line: usize, cmd: &str) -> Result<bool> {
     match s.trim().to_ascii_lowercase().as_str() {
         "true" | "1" | "yes" => Ok(true),
         "false" | "0" | "no" => Ok(false),
-        _ => Err(bad(cmd, format!("value for `{var}` must be true or false"))),
+        _ => Err(bad(cmd, format!("line {line}: value for `{var}` must be true or false"))),
     }
 }
 
-/// The value of a cell. A quoted empty text cell is an empty text value; any other empty cell is no value.
-fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &str) -> Result<Option<DataValue>> {
+/// The value of a cell on file line `line`. A quoted empty text cell is an empty text value; any
+/// other empty cell is no value. An error names the line and the reason.
+fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, line: usize, cmd: &str) -> Result<Option<DataValue>> {
     // A text cell is not trimmed here (the parser trims unquoted cells); image, graph and
     // visibility cells are trimmed.
     let t = if kind == VariableKind::Text { cell } else { cell.trim() };
@@ -173,8 +175,8 @@ fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &
         VariableKind::Text => DataValue::Text(t.to_string()),
         VariableKind::Image => DataValue::Image(t.to_string()),
         VariableKind::Graph if t.len() <= MAX_GRAPH_CSV => DataValue::Graph(t.to_string()),
-        VariableKind::Graph => return Err(bad(cmd, format!("value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
-        VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, cmd)?),
+        VariableKind::Graph => return Err(bad(cmd, format!("line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
+        VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, line, cmd)?),
     }))
 }
 
@@ -310,12 +312,8 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         for &(col, ref var, kind) in &columns {
             let cell = row.get(col).map(String::as_str).unwrap_or("");
             let was_quoted = quoted.get(col).copied().unwrap_or(false);
-            match cell_to_value(kind, cell, was_quoted, var, C) {
-                Ok(Some(v)) => {
-                    values.insert(var.clone(), v);
-                }
-                Ok(None) => {}
-                Err(_) => return Err(bad(C, format!("line {line}: value for `{var}` must match its variable kind"))),
+            if let Some(v) = cell_to_value(kind, cell, was_quoted, var, line, C)? {
+                values.insert(var.clone(), v);
             }
         }
         parsed.push(DataSet { name, values });

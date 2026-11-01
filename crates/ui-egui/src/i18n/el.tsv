@@ -4119,6 +4119,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	join needs open paths	η ένωση απαιτεί ανοιχτές διαδρομές
 @msg	lang must be one of {_1}	η γλώσσα πρέπει να είναι μία από τις {_1}
 @msg	layers can't be wrap objects	τα επίπεδα δεν μπορούν να είναι αντικείμενα αναδίπλωσης
+@msg	line {line}: value for `{var}` must be true or false	γραμμή {line}: η τιμή για το `{var}` πρέπει να είναι true ή false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	γραμμή {line}: η τιμή για το `{var}` είναι μεγαλύτερη από {MAX_GRAPH_CSV} byte
 @msg	missing `folder`	λείπει το `folder`
 @msg	missing `id` (see plugin.list)	λείπει το `id` (δείτε plugin.list)
 @msg	missing `name`	λείπει το `name`

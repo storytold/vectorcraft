@@ -1931,6 +1931,8 @@ file-filter	Templates	範本
 @msg	node {_1} is not text	節點 {_1} 不是文字
 @msg	Text Wrap: select a wrap object	文字繞圖：請選取繞圖物件
 @msg	layers can't be wrap objects	圖層不能作為繞圖物件
+@msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必須是 true 或 false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	第 {line} 行：`{var}` 的值超過 {MAX_GRAPH_CSV} 位元組
 @msg	no threaded text selected	未選取串連文字
 @msg	Create Outlines: select text objects	建立外框：請選取文字物件
 @msg	paste unavailable	無法貼上

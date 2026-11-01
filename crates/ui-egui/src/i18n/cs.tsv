@@ -4472,6 +4472,8 @@ imageTrace	Outline	Obrys
 @msg	join needs open paths	spojení vyžaduje otevřené cesty
 @msg	lang must be one of {_1}	lang musí být jedno z {_1}
 @msg	layers can't be wrap objects	vrstvy nemohou být objekty obtékání
+@msg	line {line}: value for `{var}` must be true or false	řádek {line}: hodnota pro `{var}` musí být true nebo false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	řádek {line}: hodnota pro `{var}` je delší než {MAX_GRAPH_CSV} bajtů
 @msg	missing `folder`	chybí `folder`
 @msg	missing `id` (see plugin.list)	chybí `id` (viz plugin.list)
 @msg	missing `name`	chybí `name`

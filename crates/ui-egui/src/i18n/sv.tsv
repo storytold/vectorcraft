@@ -4070,6 +4070,8 @@ axis	Both	Båda
 @msg	join needs open paths	foga samman kräver öppna banor
 @msg	lang must be one of {_1}	lang måste vara något av {_1}
 @msg	layers can't be wrap objects	lager kan inte vara radbrytningsobjekt
+@msg	line {line}: value for `{var}` must be true or false	rad {line}: värdet för `{var}` måste vara true eller false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	rad {line}: värdet för `{var}` är längre än {MAX_GRAPH_CSV} byte
 @msg	missing `folder`	`folder` saknas
 @msg	missing `id` (see plugin.list)	`id` saknas (se plugin.list)
 @msg	missing `name`	`name` saknas

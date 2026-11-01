@@ -3932,6 +3932,8 @@ axis	Both	Her İkisi
 @msg	join needs open paths	katılmak için açık yollara ihtiyaç var
 @msg	lang must be one of {_1}	dil {_1}'den biri olmalıdır
 @msg	layers can't be wrap objects	katmanlar sarma nesneleri olamaz
+@msg	line {line}: value for `{var}` must be true or false	satır {line}: `{var}` değeri true veya false olmalıdır
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	satır {line}: `{var}` değeri {MAX_GRAPH_CSV} bayttan uzun
 @msg	missing `folder`	'klasör' eksik
 @msg	missing `id` (see plugin.list)	`kimlik` eksik (bkz. eklenti.liste)
 @msg	missing `name`	"isim" eksik
