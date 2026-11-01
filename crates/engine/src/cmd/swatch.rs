@@ -601,7 +601,7 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
 /// keeps the fields of `raw` that `base` leaves out, and drops the fields that `base` holds and
 /// `new` leaves out. An array takes the length of `new`, each element merged with the element at
 /// the same index in `raw`.
-fn merge_stored(raw: Value, base: &Value, new: Value) -> Value {
+pub(super) fn merge_stored(raw: Value, base: &Value, new: Value) -> Value {
     match (raw, new) {
         (Value::Object(mut raw), Value::Object(new)) => {
             let mut out = serde_json::Map::new();
