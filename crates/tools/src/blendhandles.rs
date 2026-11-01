@@ -6,7 +6,7 @@
 //! with a dark outline, like the other on-canvas handles (`ui-egui::canvas::tool_overlays`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{BlendSpec, Spine, blend_key_stops, blend_step_count};
+use vectorcraft_doc::live::{BlendEase, BlendEaseType, BlendSpec, Spine, blend_key_stops, blend_step_count};
 use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox, Selection};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -138,7 +138,7 @@ impl BlendHandles {
         let total = spine.length();
         let easing = (total > 1e-9).then(|| {
             let (a, b) = (stops.first().copied().unwrap_or(0.0) / total, stops.get(1).copied().unwrap_or(total) / total);
-            let (ease, angle) = spine.at(a + (b - a) * spec.ease.apply(0.5));
+            let (ease, angle) = spine.at(a + (b - a) * ease_half(spec.ease.kind, spec.ease.ramp));
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
             EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
@@ -190,7 +190,7 @@ impl BlendHandles {
     fn ease_params(&self, p: Point) -> Value {
         let local = self.local_at(p);
         let (kind, ramp) = ease_at(local);
-        json!({ "easingType": kind, "ramp": ramp * 100.0 })
+        json!({ "easingType": kind.id(), "ramp": ramp * 100.0 })
     }
 
     /// The colour Shift the pointer at `p` gives, in its pair.
@@ -292,15 +292,24 @@ fn nearest_fraction(spine: &Spine, p: Point) -> f64 {
     best
 }
 
+/// Where the Ease knob rests for `kind` at `ramp`: the shape's halfway point between two keys.
+/// The inverse for In and Out is [`ease_at`]; In Out and Out In rest at the middle.
+fn ease_half(kind: BlendEaseType, ramp: f64) -> f64 {
+    let half = match kind {
+        BlendEaseType::In => 0.25,
+        BlendEaseType::Out => 0.75,
+        BlendEaseType::InOut | BlendEaseType::OutIn => 0.5,
+    };
+    0.5 + ramp.clamp(0.0, 1.0) * (half - 0.5)
+}
+
 /// The easing Type and Ramp whose halfway point sits at `local` (0..1) between two keys, so the
 /// knob rests where it is dropped: Ease In bunches the steps toward the first key, Ease Out
 /// toward the second; Ramp 1 is the strongest either way.
-fn ease_at(local: f64) -> (&'static str, f64) {
-    if local < 0.5 {
-        ("easeIn", (-local.max(1e-6).log2() - 1.0).clamp(0.0, 1.0))
-    } else {
-        ("easeOut", (-(1.0 - local.min(1.0 - 1e-6)).log2() - 1.0).clamp(0.0, 1.0))
-    }
+fn ease_at(local: f64) -> (BlendEaseType, f64) {
+    let local = local.clamp(0.0, 1.0);
+    let ramp = (4.0 * (local - 0.5).abs()).clamp(0.0, 1.0);
+    if local <= 0.5 { (BlendEaseType::In, ramp) } else { (BlendEaseType::Out, ramp) }
 }
 
 /// The colour Shift whose halfway point sits at `local` (0..1) between two keys.
@@ -524,6 +533,30 @@ mod tests {
     }
 
     #[test]
+    fn the_ease_knob_and_its_drag_map_round_trip() {
+        for (kind, ramp, local) in [
+            (BlendEaseType::In, 1.0, 0.25),
+            (BlendEaseType::In, 0.5, 0.375),
+            (BlendEaseType::In, 0.0, 0.5),
+            (BlendEaseType::Out, 0.5, 0.625),
+            (BlendEaseType::Out, 1.0, 0.75),
+        ] {
+            assert!((ease_half(kind, ramp) - local).abs() < 1e-9, "{kind:?} {ramp}: {}", ease_half(kind, ramp));
+            assert_eq!(ease_at(local), (kind, ramp));
+        }
+        // The knob rests where the drag reads it back, so the first move does not snap the ramp.
+        let (d, b) = blend_with(BlendSpec {
+            ease: BlendEase { kind: BlendEaseType::In, ramp: 0.5 },
+            spine_mode: BlendSpineMode::Always,
+            ..Default::default()
+        });
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let e = h.easing_handles().unwrap();
+        assert!(e.ease.distance(Point::new(10.0 + 100.0 * 0.375, 10.0)) < 1e-6, "{:?}", e.ease);
+        assert_eq!(h.ease_params(e.ease), json!({"easingType": "easeIn", "ramp": 50.0}));
+    }
+
+    #[test]
     fn the_steps_handle_rests_at_the_count_height_on_the_edge() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
@@ -573,8 +606,8 @@ mod tests {
         let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
         // Toward the second key: Ease Out; toward the first: Ease In; Ramp 1 at the keys.
-        assert_eq!(ease_at(0.75), ("easeOut", 1.0));
-        assert_eq!(ease_at(0.25), ("easeIn", 1.0));
+        assert_eq!(ease_at(0.75), (BlendEaseType::Out, 1.0));
+        assert_eq!(ease_at(0.25), (BlendEaseType::In, 1.0));
         // With the default Ease In at Ramp 0, the knob is at the spine's middle and the colour
         // handle 14 pt below.
         let e = h.easing_handles().unwrap();
@@ -625,10 +658,10 @@ mod tests {
         assert!(
             matches!(&acts[..], [Action::Begin(_), Action::Preview(id, p)]
                 if id == "object.blend.options" && p["easingType"] == json!("easeOut")
-                    && (p["ramp"].as_f64().unwrap_or_default() - 73.7).abs() < 0.1),
+                    && (p["ramp"].as_f64().unwrap_or_default() - 80.0).abs() < 0.1),
             "{acts:?}"
         );
-        assert_eq!(drag.label(), Some((Point::new(80.0, 10.0), "Ease Out 74%".into())));
+        assert_eq!(drag.label(), Some((Point::new(80.0, 10.0), "Ease Out 80%".into())));
         assert_eq!(drag.finish(), vec![Action::Commit]);
         // The colour shift leans the colours late.
         let mut drag = BlendDrag::hit_any(&c, Point::new(60.0, 24.0), Mods::default()).unwrap();
