@@ -43,7 +43,7 @@
       });
     in
     {
-      devShells = forAllSystems ({ pkgs, ... }: {
+      devShells = forAllSystems ({ pkgs, ... }:
         let
           rust = pkgs.rust-bin.stable.latest.default.override {
             extensions = [ "rustfmt" "clippy" "rust-src" ];
@@ -75,8 +75,8 @@
               libxcb
             ]);
           };
-        };
-      });
+        }
+      );
 
       packages = forAllSystems ({ pkgs, ... }: {
         default = pkgs.rustPlatform.buildRustPackage {
