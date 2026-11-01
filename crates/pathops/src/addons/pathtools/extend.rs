@@ -44,7 +44,7 @@ const MAX_RADIUS: f64 = 1e6;
 /// The farthest (in its parameter) [`ExtendMode::Bezier`] stretches a segment.
 const MAX_STRETCH: f64 = 1024.0;
 
-fn finite(sp: &SubPath) -> bool {
+pub(super) fn finite(sp: &SubPath) -> bool {
     let ok = |p: Point| p.x.is_finite() && p.y.is_finite();
     sp.anchors.iter().all(|a| ok(a.p) && ok(a.h_in) && ok(a.h_out))
 }

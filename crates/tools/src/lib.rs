@@ -507,6 +507,7 @@ pub(crate) mod testutil {
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            precise_cursors: false,
         }
     }
 }
@@ -553,7 +554,13 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            assert_eq!(c.stand_in(), Some(if id == "mesh" { Cursor::PenAdd } else { Cursor::Crosshair }), "{id}");
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            let stand_in = match id {
+                "mesh" => Some(Cursor::PenAdd),
+                "blobBrush" | "eraser" => None,
+                _ => Some(Cursor::Crosshair),
+            };
+            assert_eq!(c.stand_in(), stand_in, "{id}");
         }
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.

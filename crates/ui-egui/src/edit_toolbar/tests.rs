@@ -379,7 +379,10 @@ fn drop_targets_follow_the_buttons_edges() {
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
-    assert_eq!(addon, ["anchorEraserBrush", "extendPath", "measureInspect", "parametricShape", "smartPen"]);
+    assert_eq!(
+        addon,
+        ["anchorEraserBrush", "extendPath", "measureInspect", "parametricShape", "cornerTool", "slideAnchor", "sharedEdge", "smartPen"]
+    );
     for advanced in [false, true] {
         if advanced {
             app.run("window.toolbarAdvanced", json!({})).unwrap();
@@ -389,7 +392,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let listed = |id: &str| {
         sections().iter().find(|(_, tools)| tools.iter().any(|t| t.id == id)).map(|(h, tools)| (*h, tools.iter().map(|t| t.id).collect::<Vec<_>>()))
     };
-    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..4].to_vec())));
+    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
     for tool in ["extendPath", "smartPen"] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();

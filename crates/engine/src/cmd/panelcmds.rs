@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\" (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\" (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, as text.setRangeStyle), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), language?: name|tag (Character panel › Language, as text.setRangeStyle), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
             has_doc,
             set_format
         ),
@@ -323,7 +323,13 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     let kerning = match p.get("kerning") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(C, "kerning must be a number or \"auto\""))?.clamp(-1000.0, 10000.0))),
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("optical") => None,
+        Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(C, "kerning must be a number, \"auto\", or \"optical\""))?.clamp(-1000.0, 10000.0))),
+    };
+    let optical_kerning = match p.get("kerning") {
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(false),
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("optical") => Some(true),
+        _ => None,
     };
     let keys = [
         "kerning",
@@ -364,8 +370,10 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "charDirection",
         "proportionalMetrics",
         "tateChuYoko",
+        "standardVerticalRoman",
         "noBreak",
         "digits",
+        "language",
         "fontAxes",
         "burasagari",
         "romanHangingPunctuation",
@@ -387,6 +395,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     let char_align = super::textedit::char_align_param(p, C)?;
     let char_direction = super::textedit::char_direction_param(p, C)?;
     let digits = super::textedit::digits_param(p, C)?;
+    let language = super::textedit::language_param(p, C)?;
     let font_axes = super::textedit::font_axes_param(p, C)?;
     let mojikumi = match p.get("mojikumi") {
         None => None,
@@ -479,6 +488,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(k) = kerning {
             st.kerning = k;
         }
+        if let Some(v) = optical_kerning {
+            st.optical_kerning = v;
+        }
         if let Some(v) = baseline_shift {
             st.baseline_shift = v;
         }
@@ -515,11 +527,17 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(v) = digits {
             st.digits = v;
         }
+        if let Some(v) = &language {
+            st.language.clone_from(v);
+        }
         if let Some(v) = flag("proportionalMetrics") {
             st.proportional_metrics = v;
         }
         if let Some(v) = flag("tateChuYoko") {
             st.tate_chu_yoko = v;
+        }
+        if let Some(v) = flag("standardVerticalRoman") {
+            st.standard_vertical_roman = v;
         }
         if let Some(v) = flag("noBreak") {
             st.no_break = v;
@@ -649,7 +667,11 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    let mut result = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() });
+    if let Some(kerning) = p.get("kerning") {
+        result["kerning"] = kerning.clone();
+    }
+    Ok(result)
 }
 
 /// The part of a story paragraph in one frame, as [`convert_list_to_text`] reads it: the frame,

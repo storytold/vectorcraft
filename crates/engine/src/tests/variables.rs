@@ -1103,6 +1103,35 @@ fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
     assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
 }
 
+/// An empty text value is not a missing value: it comes back from the exported CSV as an empty
+/// text, so selecting the data set still clears the bound text.
+#[test]
+fn datasets_csv_keeps_an_empty_text_value() {
+    let mut s = session();
+    let t = text(&mut s, "One");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": ""}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let value = s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get("Name")).cloned();
+    assert_eq!(value, Some(vectorcraft_doc::DataValue::Text(String::new())));
+    s.execute("dataset.import", &json!({"csv": "name,Name\nB,\nC,\"\"\n"})).unwrap();
+    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    assert_eq!(value("C"), Some(vectorcraft_doc::DataValue::Text(String::new())));
+    // Compatibility rule for files written before empty text was quoted: a bare empty cell stays "no value".
+    assert_eq!(value("B"), None);
+    // A data set with no value for the variable exports a bare cell and stays without a value.
+    s.execute("dataset.new", &json!({"name": "D", "values": {}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    assert!(csv.contains("\nD,\n"), "{csv:?}");
+    s.execute("dataset.delete", &json!({"names": ["D"]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    assert_eq!(value("D"), None);
+}
+
 /// A quoted text cell keeps its leading and trailing spaces, so a padded value comes back from
 /// the exported CSV as it went out; an unquoted cell, and spaces after a closing quote, are trimmed.
 #[test]

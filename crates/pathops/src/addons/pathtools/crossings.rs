@@ -22,7 +22,7 @@ const END: f64 = 1e-6;
 /// A place on a path: (subpath, segment, t).
 pub type Place = (usize, usize, f64);
 
-fn control_box(c: &CubicBez) -> Rect {
+pub(super) fn control_box(c: &CubicBez) -> Rect {
     Rect::from_points(c.p0, c.p1).union_pt(c.p2).union_pt(c.p3)
 }
 

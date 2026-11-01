@@ -187,6 +187,34 @@ fn pivot_picks_the_point_that_sits_on_the_path() {
 }
 
 #[test]
+fn the_tool_options_set_pivot_and_rotate_for_the_objects_attached_next_only() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let other = line(&mut s, (50.0, 380.0), (350.0, 380.0));
+    let third = line(&mut s, (50.0, 200.0), (350.0, 200.0));
+    let before = attach(&mut s, path, &[left], json!({}));
+    let rec = |s: &Session, g: NodeId| {
+        let r = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().map(|r| (r.pivot, r.rotate));
+        r.unwrap()
+    };
+    assert_eq!(rec(&s, before), (4, 0.0), "the center, upright");
+    // Objects on Path Tool Options' Save (`tool.setOption`): the tool keeps them while another tool
+    // is chosen.
+    let values = |v: Value| v.as_object().cloned().unwrap_or_default();
+    s.set_tool_options(Some("objectsOnPath"), &values(json!({"pivot": 7, "rotate": 30})));
+    assert_eq!(s.tool_options_of("objectsOnPath"), json!({"pivot": 7, "rotate": 30.0}));
+    let next = attach(&mut s, other, &[middle], json!({}));
+    assert_eq!(rec(&s, next), (7, 30.0), "the objects attached next take them");
+    assert_eq!(rec(&s, before), (4, 0.0), "the ones already attached keep theirs");
+    // Values given to the command win over the tool's.
+    let given = attach(&mut s, third, &[right], json!({"pivot": 1, "rotate": 0}));
+    assert_eq!(rec(&s, given), (1, 0.0));
+    // Reset puts the center and 0 back.
+    s.set_tool_options(Some("objectsOnPath"), &values(json!({"pivot": 4, "rotate": 0})));
+    assert_eq!(s.tool_options_of("objectsOnPath"), json!({"pivot": 4, "rotate": 0.0}));
+}
+
+#[test]
 fn a_closed_path_spreads_the_objects_all_the_way_round_from_its_first_anchor() {
     let mut s = session();
     let ids: Vec<NodeId> = (0..4).map(|i| rect(&mut s, 10.0 + 40.0 * f64::from(i), 0.0, 10.0, 10.0)).collect();

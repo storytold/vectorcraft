@@ -339,6 +339,7 @@ mod portable {
     }
 
     /// What a write of a picture says where the clipboard carries text only.
+    #[cfg(target_os = "linux")]
     const TEXT_ONLY: &str = "this clipboard carries text only";
 
     impl Backend {

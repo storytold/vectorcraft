@@ -455,3 +455,34 @@ fn perceptual_gradients_draw_as_pixels() {
         assert!(GradientPaint::new(radial).draws_as_pixels(fill));
     }
 }
+
+/// A Perceptual gradient of an ink's tints as tints: its stops keep their tints, and each tint on
+/// the curve has the lightness of the color mixed there, so the tints between the stops are not
+/// a straight line.
+#[test]
+fn ink_tints_follow_the_perceptual_curve() {
+    use crate::libraries::srgb_to_oklab;
+    let ink = Color::cmyk(0.0, 1.0, 0.0, 0.0);
+    let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, ink.tinted(0.8)), GradientStop::new(1.0, Color::WHITE)]);
+    g.method = GradientMethod::Perceptual;
+    assert!(g.fits_ink_tints());
+    let tints = g.ink_tints(&ink).expect("a magenta ink's tints differ in lightness");
+    assert!(tints.len() > 2, "the curve's stops: {tints:?}");
+    let (first, last) = (tints[0], tints[tints.len() - 1]);
+    assert!((first.0, last.0) == (0.0, 1.0) && (first.1 - 0.8).abs() < 1e-4 && last.1 < 1e-4, "{tints:?}");
+    assert!(tints.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 >= w[1].1), "in order, lighter along the way: {tints:?}");
+    let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+    for (t, tint, _) in &tints {
+        let want = lightness(&g.sample(*t).0);
+        assert!((lightness(&ink.tinted(*tint)) - want).abs() < 1e-3, "at {t}: tint {tint}");
+    }
+    let mid = tints.iter().find(|s| (s.0 - 0.5).abs() < 1e-6).expect("the midpoint");
+    assert!((mid.1 - 0.4).abs() > 0.01, "not halfway in tint: {mid:?}");
+    // A white ink's tints all have paper white's lightness: no tints by lightness.
+    assert_eq!(g.ink_tints(&Color::WHITE), None);
+    // More stops on the curve than MAX_INK_TINTS: no tints.
+    let n = MAX_INK_TINTS + 1;
+    g.stops = (0..n).map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { ink } else { Color::WHITE })).collect();
+    assert_eq!(g.ink_tints(&ink), None);
+    assert!(!g.fits_ink_tints());
+}

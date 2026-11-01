@@ -583,14 +583,16 @@ look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClos
 [[cursor]]
 id = "BlobBrush"
 group = "Drawing and editing tools"
-shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. No brush-size outline shows while hovering."]
+shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while painting; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The brush centre."
+look = "Only a small dot at the centre: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Eraser"
 group = "Drawing and editing tools"
-shown_when = ["The Eraser tool: a drag erases the area it covers. No size outline shows while hovering."]
+shown_when = ["The Eraser tool: a drag erases the area it covers. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while erasing; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The eraser's centre."
+look = "Only a small dot at the centre, as the Blob Brush's: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Smooth"
@@ -701,6 +703,24 @@ id = "ParametricShape"
 group = "Drawing and editing tools"
 shown_when = ["The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a re-editable shape out from its centre; a click selects one and shows its handles."]
 hotspot = "Exact: the centre of the shape being drawn."
+
+[[cursor]]
+id = "CornerTool"
+group = "Drawing and editing tools"
+shown_when = ["The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor where two sides meet cuts a corner there; a drag on a corner's marker resizes it; an Alt-drag cuts corners on every anchor inside the marquee."]
+hotspot = "Exact: the anchor or marker being picked."
+
+[[cursor]]
+id = "SlideAnchor"
+group = "Drawing and editing tools"
+shown_when = ["The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag moves an anchor along the curve it sits on."]
+hotspot = "Exact: the anchor being dragged follows it along the path."
+
+[[cursor]]
+id = "SharedEdge"
+group = "Drawing and editing tools"
+shown_when = ["The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the touching edges of two paths under the round brush, or brings their anchors together there."]
+hotspot = "Exact: the centre of the brush, drawn by the app as a circle around the cursor."
 
 # ── Symbolism tools ───────────────────────────────────────────────────────────────────────────────
 # The brush size is drawn by the app as a circle around the cursor.

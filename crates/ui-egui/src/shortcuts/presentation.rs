@@ -34,13 +34,14 @@ pub(super) fn escape_press(ctx: &egui::Context) -> Option<bool> {
 }
 
 /// Does this Escape reset the view's rotation? It does when the view is rotated, no popup is open,
-/// the ruler origin is not being dragged, and the press is the second of a pair (`second`) or the
-/// Rotate View tool is chosen.
+/// neither a ruler-origin drag nor a floating Tools move is ending, and the press is the second of
+/// a pair (`second`) or the Rotate View tool is chosen.
 pub(super) fn escape_resets_rotation(app: &VectorcraftApp, ctx: &egui::Context, second: bool) -> bool {
     app.view().is_some_and(|v| v.rotation != 0.0)
         && (second || app.session.tool_id() == "rotateView")
         && !egui::Popup::is_any_open(ctx)
         && !crate::canvas::ruler_origin_dragging(ctx)
+        && !crate::tools_float::escape_cancelled_move(ctx)
 }
 
 /// The keys in Presentation Mode, where nothing is edited: Escape leaves the mode, and ← and → go to

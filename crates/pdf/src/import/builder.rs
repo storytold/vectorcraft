@@ -48,13 +48,11 @@ impl<'p> Builder<'p> {
             taken: vec![],
             scan: Scan::default(),
             tag_at: 0,
-            group_at: 0,
             paint_at: 0,
             aligned: true,
             route,
             unsure: false,
             marked: vec![],
-            pending: false,
             nested: 0,
             white_images: false,
             last_fill: None,
@@ -103,8 +101,7 @@ impl<'p> Builder<'p> {
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
-        self.pending = false;
-        (self.scan, self.tag_at, self.group_at, self.aligned, self.paint_at) = (scan, 0, 0, true, 0);
+        (self.scan, self.tag_at, self.aligned, self.paint_at) = (scan, 0, true, 0);
         if self.scan.overprints && self.scan.zero_mode {
             self.warn(OVERPRINT_ZERO_MODE);
         }
@@ -478,14 +475,12 @@ impl<'p> Builder<'p> {
             blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
-            pending: std::mem::take(&mut self.pending),
         };
         self.nested += 1;
         read(self);
         let art = self.close_frames();
         self.nested -= 1;
-        (self.stack, self.root_groups, self.blend, self.mask, self.page, self.pending) =
-            (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page, saved.pending);
+        (self.stack, self.root_groups, self.blend, self.mask, self.page) = (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page);
         Some(art)
     }
 

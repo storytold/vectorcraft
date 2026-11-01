@@ -1,6 +1,8 @@
 #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
 use super::gpu;
 use super::prefs::{save_prefs, save_prefs_soon};
+#[cfg(not(target_os = "macos"))]
+use super::single_instance;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access, window};
@@ -66,6 +68,9 @@ impl eframe::App for App {
         // macOS converts the frame from sRGB to the display's profile (#2249).
         #[cfg(all(target_os = "macos", feature = "wgpu"))]
         super::mac_color_space::tag(ui);
+        if let Some(on) = self.host_caps_lock.read_transition() {
+            self.app.set_caps_lock(on);
+        }
         file_access::unconfined(|| self.app.ui(ui));
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
@@ -105,11 +110,13 @@ impl App {
             vectorcraft_ui_egui::background::wait_all(&mut self.app);
             return;
         }
-        // Files from the Finder and the Dock wait while a file dialog is open: what asked for it runs
-        // again on its document when it answers.
-        #[cfg(target_os = "macos")]
+        // Files from the Finder and the Dock (macOS) or from later launches (#4892) wait while a file
+        // dialog is open: what asked for it runs again on its document when it answers.
         if !self.app.file_dialog_open() {
+            #[cfg(target_os = "macos")]
             let files = open_documents::take();
+            #[cfg(not(target_os = "macos"))]
+            let files = single_instance::take();
             if !files.is_empty() {
                 bring_window_forward(ctx);
             }
@@ -147,15 +154,15 @@ fn end_before_teardown(frames: u64) {
     }
 }
 
-/// Show the window when files are opened from the Finder or the Dock: a minimized window comes back
-/// out of the Dock and the app takes focus, as a document-based Mac app does (#3769).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// Show the window when files are opened from the Finder or the Dock, or handed over by a later
+/// launch (#4892): a minimized window comes back and the app takes focus, as a document-based app
+/// does (#3769).
 pub(crate) fn bring_window_forward(ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
 }
 
-/// Open files handed to the app (command line, macOS Finder and Dock) as documents. A file that
+/// Open files handed to the app (command line, macOS Finder and Dock, later launches) as documents. A file that
 /// can't be opened is reported to the user and on stderr; the others still open.
 pub(crate) fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
     for f in files {

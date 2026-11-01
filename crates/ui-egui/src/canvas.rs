@@ -164,6 +164,11 @@ enum Drag {
     Present,
 }
 
+/// Whether the canvas is holding a pointer drag across frames.
+pub(crate) fn dragging(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+}
+
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -288,7 +293,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // decode, once per image in the process.
     let undecoded = vectorcraft_render::newly_undecodable(doc.images.values());
     if undecoded > 0 {
-        app.status(format!("{undecoded} image(s) couldn't be decoded and show as crossed boxes"));
+        app.status(crate::i18n::msg_n(
+            undecoded as u64,
+            "{n} image couldn't be decoded and shows as a crossed box",
+            "{n} images couldn't be decoded and show as crossed boxes",
+            &[],
+        ));
     }
     fill_uncovered(app, ui.ctx(), &painter, &key, &doc, rect, &xf);
     reproject_frame(app, &painter, &xf, rect, (key.doc, v.rotation));

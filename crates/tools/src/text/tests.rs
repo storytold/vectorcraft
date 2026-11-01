@@ -899,6 +899,65 @@ fn marked_text_is_underlined_with_the_converting_clause_thick() {
 }
 
 #[test]
+fn spacing_arrows_follow_each_text_objects_orientation() {
+    let cases = [
+        (ToolKey::Down, ALT, "kerning", 1.0),
+        (ToolKey::Up, ALT, "kerning", -1.0),
+        (ToolKey::Left, ALT, "leading", 1.0),
+        (ToolKey::Right, ALT, "leading", -1.0),
+        (ToolKey::Right, SHIFT_ALT, "baselineShift", 1.0),
+        (ToolKey::Left, SHIFT_ALT, "baselineShift", -1.0),
+        (ToolKey::Down, SHIFT_ALT, "kerning", 1.0),
+        (ToolKey::Up, SHIFT_ALT, "kerning", -1.0),
+        (ToolKey::Down, Mods { cmd: true, ..ALT }, "kerning", 5.0),
+        (ToolKey::Up, Mods { cmd: true, ..ALT }, "kerning", -5.0),
+    ];
+    for kind in 0..3 {
+        for selected in [false, true] {
+            let (mut d, id, mut tool) = editing("abcd");
+            let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+            t.vertical = true;
+            let path = vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1));
+            t.kind = match kind {
+                1 => TextKind::Area { frame: path },
+                2 => TextKind::OnPath { path, start: 0.0, end: None },
+                _ => TextKind::Point,
+            };
+            tool.caret = 2;
+            tool.anchor = if selected { 1 } else { 2 };
+            for (key_code, mods, caret_attribute, by) in cases {
+                let before = (tool.anchor, tool.caret);
+                let actions = key(&mut tool, &d, key_code, mods);
+                let step = actions
+                    .iter()
+                    .find_map(|action| match action {
+                        Action::Exec(command, params) if command == "type.step" => Some(params),
+                        _ => None,
+                    })
+                    .expect("spacing command");
+                assert_eq!(
+                    step["attribute"],
+                    if selected && caret_attribute == "kerning" { "tracking" } else { caret_attribute },
+                    "kind {kind}, selected {selected}"
+                );
+                assert_eq!(step["by"], by);
+                assert_eq!((tool.anchor, tool.caret), before);
+            }
+        }
+    }
+    let (mut d, id, mut tool) = editing("abcd");
+    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text") };
+    t.vertical = true;
+    key(&mut tool, &d, ToolKey::Down, SHIFT);
+    assert_eq!((tool.anchor, tool.caret), (0, 1));
+    let (d, _, mut tool) = editing("abcd");
+    let actions = key(&mut tool, &d, ToolKey::Right, ALT);
+    assert!(actions.iter().any(
+        |action| matches!(action, Action::Exec(command, params) if command == "type.step" && params["attribute"] == "kerning" && params["by"] == 1.0)
+    ));
+}
+
+#[test]
 fn arrows_follow_the_columns_of_vertical_type() {
     let (mut d, id) = doc_with_text("§§§\n§§§");
     if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {

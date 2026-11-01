@@ -35,11 +35,9 @@ impl<'a> Device<'a> for Builder<'_> {
         self.flush_glyphs();
         let walked = self.walked(false);
         if self.hold_glyph_stroke(path, transform, paint, draw_mode, walked) {
-            self.pending = false;
             return;
         }
         self.flush_text();
-        self.pending = false;
         let overprint = self.path_overprint();
         let mut bp = path.clone();
         bp.apply_affine(transform);
@@ -140,17 +138,6 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn push_clip_path(&mut self, clip_path: &ClipPath) {
         self.flush();
-        // A form's box right after its transparency group: the group's isolate and knockout
-        // flags are the next ones read from the file.
-        if std::mem::take(&mut self.pending) {
-            let flags = self.scan.groups.get(self.group_at).copied();
-            self.group_at += 1;
-            if let Some((i, k)) = flags
-                && let Some(Frame { kind: FrameKind::Group { isolate, knockout, .. }, .. }) = self.stack.last_mut()
-            {
-                (*isolate, *knockout) = (i, k);
-            }
-        }
         // Clips that contain the whole page do nothing visible; don't create groups for them. Only
         // a polygon that really covers it counts: a diamond touching the page edges has the page
         // as its bounding box but cuts its corners away (#1542).
@@ -165,7 +152,6 @@ impl<'a> Device<'a> for Builder<'_> {
         self.flush();
         let mask = mask.map(|m| self.soft_mask(&m));
         self.stack.push(Frame::new(FrameKind::Group { opacity, blend: blend(blend_mode), mask, isolate: false, knockout: false }));
-        self.pending = self.nested == 0;
         // Blend mode applies to the group as a whole, not to its children.
         self.blend = BlendMode::Normal;
     }
@@ -182,7 +168,6 @@ impl<'a> Device<'a> for Builder<'_> {
         if matches!(draw_mode, GlyphDrawMode::Clip) {
             return;
         }
-        self.pending = false;
         let stroke = match draw_mode {
             // Invisible text (a scanned page's recognized text, over the scan) draws nothing but
             // is still text: type with neither fill nor stroke, so it stays searchable.
@@ -241,7 +226,6 @@ impl<'a> Device<'a> for Builder<'_> {
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
         self.flush_glyphs();
         self.flush_text();
-        self.pending = false;
         match image {
             Image::Raster(r) => {
                 let white = self.white_images;
@@ -328,13 +312,25 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn pop_clip_path(&mut self) {
         self.flush();
-        self.pending = false;
         self.pop_frame();
+    }
+
+    // The interpreter tells the flags of a form's group right after pushing it. (It draws a group
+    // that adds nothing straight onto its parent, without pushing it.)
+    fn set_knockout(&mut self) {
+        if let Some(Frame { kind: FrameKind::Group { knockout, .. }, .. }) = self.stack.last_mut() {
+            *knockout = true;
+        }
+    }
+
+    fn set_isolated(&mut self) {
+        if let Some(Frame { kind: FrameKind::Group { isolate, .. }, .. }) = self.stack.last_mut() {
+            *isolate = true;
+        }
     }
 
     fn pop_transparency_group(&mut self) {
         self.flush();
-        self.pending = false;
         self.pop_frame();
     }
 
