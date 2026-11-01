@@ -5874,6 +5874,11 @@ anchor	Points:	Σημεία:
 	Case	Πεζά και κεφαλαία
 @msg	{label} must be a number	Το {label} πρέπει να είναι αριθμός
 @msg	{label} must be a number of at least 0.1	Το {label} πρέπει να είναι αριθμός τουλάχιστον 0,1
+	Advanced Character Formats	Σύνθετες μορφές χαρακτήρων
+	Horizontal Scale	Οριζόντια κλίμακα
+	Vertical Scale	Κατακόρυφη κλίμακα
+@msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+@msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

@@ -5909,6 +5909,11 @@ anchor	Points:	Pontok:
 	Case	Kis- és nagybetűk
 @msg	{label} must be a number	{label}: szám kell
 @msg	{label} must be a number of at least 0.1	{label} legalább 0,1 értékű szám kell legyen
+	Advanced Character Formats	Speciális karakterformátumok
+	Horizontal Scale	Vízszintes méretezés
+	Vertical Scale	Függőleges méretezés
+@msg	{label} must be a number from {min} to {max}	{label} {min} és {max} közötti szám kell legyen
+@msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen
 @msg	no character style `{name}`	A(z) `{name}` karakterstílus nem található
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

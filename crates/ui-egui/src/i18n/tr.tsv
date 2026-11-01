@@ -5880,6 +5880,11 @@ anchor	Points:	Noktalar:
 	Case	Büyük küçük harf
 @msg	{label} must be a number	{label} bir sayı olmalıdır
 @msg	{label} must be a number of at least 0.1	{label} en az 0,1 olan bir sayı olmalıdır
+	Advanced Character Formats	Gelişmiş karakter biçimleri
+	Horizontal Scale	Yatay Ölçek
+	Vertical Scale	Dikey Ölçek
+@msg	{label} must be a number from {min} to {max}	{label} {min} ile {max} arasında bir sayı olmalıdır
+@msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

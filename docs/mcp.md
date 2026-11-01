@@ -5264,16 +5264,22 @@ Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the n
 attribute map in one undo step. `to` is trimmed and must be unique. The command updates text using the style
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
-`position`, `underline`, `strikethrough`, `charAlign`, `section`, and `preview`. An empty field leaves its
+`position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `rotation`,
+`language`, `section` (`general`, `basic` or `advanced`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
+Advanced Character Formats holds `h_scale` and `v_scale` (percent, above 0 and at most 4000000),
+`baseline_shift` (points, -4000000 to 4000000), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
+already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
+or spelling.
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
 Without selected text, the New Paragraph Style dialog sends no `attrs`, and the engine gives the new style the
 paragraph defaults for the interface language. Reset Panel in Basic Character
-Formats removes those fields from the definition.
-`ui.charStyleOptions.resetPanel {}` performs that reset when Basic Character Formats is selected in
-either character-style dialog; it is disabled on General.
+Formats removes those fields from the definition, and Reset Panel in Advanced Character Formats removes its five.
+`ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
+dialog; it is disabled on General.
 
 In the native file a text object's `para` holds the first paragraph's attributes and `paras` (left out when every
 paragraph is alike) one entry per paragraph, so older readers keep the first paragraph's. SVG export anchors each

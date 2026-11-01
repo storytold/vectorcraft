@@ -5953,6 +5953,11 @@ anchor	Points:	Pisteet:
 	Case	Kirjainkoko
 @msg	{label} must be a number	{label} on oltava luku
 @msg	{label} must be a number of at least 0.1	{label} on oltava vähintään 0,1
+	Advanced Character Formats	Merkkien lisämuotoilut
+	Horizontal Scale	Vaakaskaalaus
+	Vertical Scale	Pystyskaalaus
+@msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+@msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

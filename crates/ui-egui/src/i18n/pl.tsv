@@ -5777,6 +5777,11 @@ anchor	Points:	Punkty:
 	Case	Wielkość liter
 @msg	{label} must be a number	{label} musi być liczbą
 @msg	{label} must be a number of at least 0.1	{label} musi być liczbą co najmniej 0,1
+	Advanced Character Formats	Zaawansowane formaty znaków
+	Horizontal Scale	Skala pozioma
+	Vertical Scale	Skala pionowa
+@msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

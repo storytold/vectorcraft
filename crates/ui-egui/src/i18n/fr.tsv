@@ -5920,6 +5920,11 @@ anchor	Points:	Points :
 	Case	Casse
 @msg	{label} must be a number	{label} doit être un nombre
 @msg	{label} must be a number of at least 0.1	{label} doit être un nombre d’au moins 0,1
+	Advanced Character Formats	Formats de caractère avancés
+	Horizontal Scale	Mise à l’échelle horizontale
+	Vertical Scale	Échelle verticale
+@msg	{label} must be a number from {min} to {max}	{label} doit être un nombre compris entre {min} et {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} doit être un nombre supérieur à 0 et au plus égal à {max}
 @msg	no character style `{name}`	Style de caractère `{name}` introuvable
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

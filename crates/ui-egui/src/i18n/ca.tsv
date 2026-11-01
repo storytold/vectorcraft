@@ -5911,6 +5911,11 @@ anchor	Points:	Punts:
 	Case	Majúscules i minúscules
 @msg	{label} must be a number	{label} ha de ser un nombre
 @msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
+	Advanced Character Formats	Formats avançats de caràcters
+	Horizontal Scale	Escala horitzontal
+	Vertical Scale	Escala vertical
+@msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

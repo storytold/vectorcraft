@@ -5505,6 +5505,11 @@ anchor	Points:	포인트:
 	Case	대소문자
 @msg	{label} must be a number	{label}은(는) 숫자여야 합니다
 @msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
+	Advanced Character Formats	고급 문자 형식
+	Horizontal Scale	가로 비율
+	Vertical Scale	세로 비율
+@msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{label} must be a number above 0 and at most {max}	{label}은(는) 0 초과 {max} 이하의 숫자여야 합니다
 @msg	no character style `{name}`	문자 스타일 `{name}`을 찾을 수 없습니다
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
