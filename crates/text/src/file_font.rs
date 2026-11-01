@@ -378,6 +378,27 @@ mod tests {
         }
     }
 
+    /// The file's font's licence flags travel with the font built from its glyphs, so an export
+    /// treats it as the file's font was treated (#4568): a restricted licence keeps its outlines
+    /// out of an SVG's `@font-face`, a missing one reads as print and preview, which may embed.
+    #[test]
+    fn a_file_fonts_licence_flags_carry_over_to_the_font_built_from_it() {
+        use crate::embed::Embedding;
+        let from = glyphs("Hamburg");
+        for (fs_type, want) in [
+            (Some(2), Embedding::Forbidden),
+            (Some(0x0200), Embedding::Forbidden),
+            (Some(4), Embedding::Subset),
+            (Some(0x0108), Embedding::Whole),
+            (None, Embedding::Subset),
+        ] {
+            let bytes = build_file_font(&FileFontInfo { fs_type, ..info() }, &from).unwrap();
+            let db = FontDb::with_font_dirs(vec![]);
+            assert!(db.keep_file_font("kept", Arc::new(bytes)));
+            assert_eq!(db.file_font("kept").unwrap().embedding(), want, "fsType {fs_type:?}");
+        }
+    }
+
     #[test]
     fn glyphs_that_cannot_be_written_are_left_out() {
         let mut from = glyphs("ab");
