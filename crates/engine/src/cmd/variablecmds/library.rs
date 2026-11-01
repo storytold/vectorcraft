@@ -249,7 +249,8 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
 }
 
 /// Load Variable Library: replace the document's variables and data sets with a variable library's
-/// ([`parse_library`]) in one undo step. Every variable of the document is deleted with its bindings
+/// ([`parse_library`]) in one undo step, or none when the document already holds what the library
+/// gives. Every variable of the document is deleted with its bindings
 /// and values, and every data set is deleted. The library's text variables are then defined,
 /// unbound, and its data sets are added. The library's variables of other kinds are left out, named
 /// in `skipped` and in a warning.
@@ -268,13 +269,18 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let added: Vec<Variable> = lib.text.iter().map(|n| Variable { name: n.clone(), kind: VariableKind::Text }).collect();
     let names: Vec<String> = lib.datasets.iter().map(|d| d.name.clone()).collect();
-    s.edit("Load Variable Library", |d, _| {
-        d.variables.prune(&deleted);
-        d.variables.variables.extend(added);
-        d.variables.datasets = lib.datasets;
-        d.variables.active_dataset = None;
-        Ok(())
-    })?;
+    let mut vars = s.doc()?.doc.variables.clone();
+    vars.prune(&deleted);
+    vars.variables.extend(added);
+    vars.datasets = lib.datasets;
+    vars.active_dataset = None;
+    // A load that leaves the variables and data sets as they were adds no undo step.
+    if vars != s.doc()?.doc.variables {
+        s.edit("Load Variable Library", |d, _| {
+            d.variables = vars;
+            Ok(())
+        })?;
+    }
     // A highlight of a variable that is gone highlights nothing.
     let st = s.doc_mut()?;
     if st.variables_highlight.as_ref().is_some_and(|h| st.doc.variables.variable(h).is_none()) {

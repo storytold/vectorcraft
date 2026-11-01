@@ -1647,7 +1647,8 @@ already walks Image Trace. Short agent entry points:
   data files) is refused. The reply's `defined` lists the variables the import defined. While the variables are
   locked, an import whose header would define a variable fails with "variables are locked".
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
-  Library…) replaces the document's variables and data sets with a variable library's in one undo step. The library
+  Library…) replaces the document's variables and data sets with a variable library's in one undo step. A load, like a
+  `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
   variable of the document is deleted with its bindings and values, and every data set is deleted. Then the library's
