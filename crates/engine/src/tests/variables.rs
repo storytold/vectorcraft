@@ -1728,3 +1728,24 @@ fn a_variables_command_that_changes_nothing_records_no_undo_step() {
     s.execute("dataset.next", &json!({})).unwrap();
     assert_eq!((super::history(&s), plain(&s, t)), ((undo + 1, 0, true), "Cy".to_string()));
 }
+
+/// Applying the active data set again to a graph whose data already matches the row records no
+/// undo step, and a row with other data still rebuilds the graph in one.
+#[test]
+fn applying_a_graph_row_again_records_no_undo_step() {
+    let mut s = session();
+    let graph = json!({"type": "column", "x": 10, "y": 10, "width": 120, "height": 80, "csv": ",Sales\nA,1\nB,2"});
+    let id = s.execute("graph.create", &graph).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("variable.makeGraphDynamic", &json!({})).unwrap();
+    let name = s.execute("variable.list", &json!({})).unwrap()["variables"][0]["name"].as_str().unwrap().to_string();
+    s.execute("dataset.new", &json!({"name": "A", "values": {name.clone(): ",Sales\nA,10\nB,20"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {name: ",Sales\nA,3\nB,4"}})).unwrap();
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    super::select_with_a_step_to_redo(&mut s, &[NodeId(id)]);
+    let before = super::history(&s);
+    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), super::history(&s)), (Some(1), before));
+    s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!(super::history(&s), (before.0 + 1, 0, true));
+}
