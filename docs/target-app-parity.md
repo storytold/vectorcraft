@@ -1594,10 +1594,15 @@ A double-click on a Repeat (Radial, Grid or Mirror) with the Selection tool ente
 
 With area type selected, the Properties panel's Paragraph section and the Control panel show Align Top, Align Center, Align Bottom and Justify Vertically buttons, as the public documentation places them ([Align text](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/align-text.html)). They set the type's vertical alignment in its frame (`text.areaOptions {verticalAlign}`, as Area Type Options does) on every selected frame in one undo step, each frame keeping its other options; the shared alignment shows selected, none when the frames differ (#3759). As that page limits vertical alignment to area type without rows, columns or threads, the buttons are turned off while a selected frame has rows or columns or is threaded; Area Type Options and `text.areaOptions` still align each row/column cell (a VectorCraft extension, unchanged here). Tests: `panels::properties::tests::vertical_alignment_buttons_align_the_selected_area_type`.
 
+## Copy and paste ruler guides (2026-11-01)
+
+Edit › Copy and Cut put the selected ruler guides on the clipboard, with the selected objects or on their own, so they paste into another artboard or document (#3226). Pasted guides go on the layer new art goes to and are selected; with objects they move as the objects do, and alone they keep their places, while Paste in Place, in Front and in Back put them on the active artboard as they lay on theirs and Paste on All Artboards on every artboard. Tests: `tests::guide_clipboard`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Copy and paste ruler guides (#3226); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Area type vertical alignment buttons in the Properties panel's Paragraph section and the Control panel, off for columns, rows and threaded frames (#3759); evidence added; scores unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso is an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-02 | minor | Wheel input over closed font-family fields changes selected text (#5253); public documentation and application choices distinguished; scores and estimates unchanged. |

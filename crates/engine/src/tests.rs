@@ -67,6 +67,7 @@ mod gradient;
 mod gradpanel;
 mod gradpresets;
 mod gradspan;
+mod guide_clipboard;
 mod halftone;
 mod history_mem;
 mod ids_without_selection;
