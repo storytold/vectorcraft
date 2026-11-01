@@ -537,6 +537,58 @@ fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
     assert_eq!(r["swatches"], json!(["Leaf"]));
 }
 
+/// A row's `tint` gives the art linked to the row's spot color that share of its tint;
+/// randomize without a change keeps it on the row, and a tint that is not a number is refused.
+#[test]
+fn a_rows_tint_tints_the_spot_color_the_art_links_to() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink 101", "color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}, "spot": true}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink 101"], "name": "Inks"}))["data"].as_str().unwrap().to_string();
+    let lib = run(&mut s, "swatch.library.load", json!({"data": data, "name": "inks.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Ink 101"]}));
+    let red = rect(&mut s, json!("#e02010"));
+    select_all(&mut s);
+    let map = json!([{"from": ["rgb 224 32 16"], "to": "cmyk 0 100 0 0", "tint": 40}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "limitTo": lib}));
+    match s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => {
+            assert_eq!(swatch.as_deref(), Some("Ink 101"), "linked to the spot color");
+            assert!((tint - 0.4).abs() < 1e-4, "at the row's tint: {tint}");
+            assert!(close(color, Color::cmyk(0.0, 1.0, 0.0, 0.0).tinted(0.4)), "{color:?}");
+        }
+        p => panic!("{p:?}"),
+    }
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": false}));
+    assert_eq!(r["map"][0]["tint"], json!(40.0), "{r}");
+    let e = s.execute("recolor.apply", &json!({"map": [{"from": ["rgb 224 32 16"], "to": "#ff0000", "tint": "40"}]})).unwrap_err();
+    assert!(e.to_string().contains("`tint` must be a number"), "{e}");
+}
+
+/// Randomize order moves a row's tint with its new color; changing saturation and brightness
+/// drops the tint of every color it changes.
+#[test]
+fn randomize_moves_a_tint_with_its_color_and_drops_it_when_the_color_changes() {
+    let mut s = session();
+    let map = json!([
+        {"from": ["rgb 255 0 0"], "to": "cmyk 0 100 0 0", "tint": 40},
+        {"from": ["rgb 0 255 0"], "to": "rgb 0 255 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    let mut moved = false;
+    for seed in 0..20 {
+        let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": seed}));
+        for row in r["map"].as_array().unwrap() {
+            let spot = row["to"] == json!("cmyk 0 100 0 0");
+            assert_eq!(row.get("tint").cloned(), spot.then(|| json!(40.0)), "seed {seed}: the tint goes with its color: {r}");
+        }
+        moved |= r["map"][0]["to"] != map[0]["to"];
+    }
+    assert!(moved, "some seed moves the tinted color to another row");
+    let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true}));
+    assert_ne!(sb["map"][0]["to"], map[0]["to"], "{sb}");
+    assert!(sb["map"][0].get("tint").is_none(), "a changed color has no tint: {sb}");
+}
+
 #[test]
 fn model_param_chooses_the_model_of_the_new_colour() {
     // RGB art in a CMYK document: by default a CMYK replacement comes out RGB (#2170).
@@ -570,6 +622,40 @@ fn model_param_must_be_a_string_when_given() {
         assert!(s.execute("recolor.apply", &json!({"map": {"#1a1a1a": "#ff0000"}, "model": bad})).is_err(), "{bad}");
     }
     assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
+}
+
+/// A row's own `model` takes the place of the command's for that row's colors; a bad one fails
+/// before editing; `recolor.randomize` moves it with its new color.
+#[test]
+fn a_rows_model_applies_to_its_own_colors() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, json!("#ff00ff")), rect(&mut s, json!("#00ffff")));
+    select_all(&mut s);
+    let row = |from: &str, to: Value| json!({"from": [from], "to": to});
+    let mut first = row("#ff00ff", json!({"c": 0, "m": 1, "y": 0, "k": 0}));
+    first["model"] = json!("new");
+    let map = json!([first, row("#00ffff", json!({"c": 1, "m": 0, "y": 0, "k": 0}))]);
+    run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!(fill(&s, a), Color::cmyk(0.0, 1.0, 0.0, 0.0), "the row with `new` takes the CMYK color");
+    assert_eq!(fill(&s, b).model(), vectorcraft_color::cms::Model::Rgb, "the other row keeps RGB");
+    run(&mut s, "edit.undo", json!({}));
+    let mut keep = map.clone();
+    keep[0]["model"] = json!("keep");
+    run(&mut s, "recolor.apply", json!({"map": keep, "model": "new"}));
+    assert_eq!(fill(&s, a).model(), vectorcraft_color::cms::Model::Rgb, "the row's `keep` wins over the command's `new`");
+    assert_eq!(fill(&s, b), Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    run(&mut s, "edit.undo", json!({}));
+    for bad in [json!("nope"), json!(42)] {
+        let mut m = map.clone();
+        m[0]["model"] = bad.clone();
+        assert!(s.execute("recolor.apply", &json!({"map": m})).is_err(), "{bad}");
+    }
+    assert_eq!(fill(&s, a).to_hex(), "#ff00ff", "nothing changed");
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    let out = r["map"].as_array().unwrap();
+    let moved = out.iter().find(|r| r.get("model").is_some()).expect("the model stays on a row");
+    assert_eq!((&moved["to"], &moved["model"]), (&json!("cmyk 0 100 0 0"), &json!("new")), "{r}");
+    assert_eq!(out.iter().filter(|r| r.get("model").is_some()).count(), 1, "{r}");
 }
 
 /// Recolor Artwork's commands refuse a parameter of the wrong form, such as `limitTo: 5` or

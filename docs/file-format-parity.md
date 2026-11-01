@@ -49,6 +49,8 @@ private editing data. VectorCraft:
   A PDF-compatible `.ai` opens on its PDF part's trim boxes (its artboards), the bleed boxes round them
   becoming the document's bleed, so art in the bleed shows outside the artboard, within the bleed guide (#1266).
   A PDF saved with its editing data (`AIPDFPrivateData`) opens the same way.
+  The swatches of a version 7 `.ai` palette, which carry no names, come in named by their spot color, gradient or
+  values.
 - **Writes** a PDF-compatible `.ai` (Save As › `ai`): Illustrator opens it as plain art. It never writes
   Illustrator's private editing data, which is undocumented.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
