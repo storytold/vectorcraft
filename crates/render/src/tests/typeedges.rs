@@ -190,6 +190,47 @@ fn the_methods_reshape_each_paint_on_its_own() {
     }
 }
 
+/// Crisp and Strong reshape the inner edge of a character stroke, where the stroke lies on the
+/// characters' fill in another color: at a pixel the fill covers wholly, the stroke shows the
+/// method's share of its own coverage.
+#[test]
+fn the_methods_reshape_a_character_strokes_inner_edge() {
+    let opts = RenderOptions::default();
+    // "Hamburg" with the characters' fill `fill` and a 1.5 pt stroke `stroke`, drawn with `m`.
+    let draw = |m: TypeAntiAlias, fill: Paint, stroke: Paint| {
+        let mut d = page(m, None);
+        let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            let s = &mut t.runs[0].style;
+            (s.fill, s.stroke, s.stroke_width) = (fill, stroke, 1.5);
+        }
+        Renderer::new().render(&d, W, H, Affine::IDENTITY, &opts).pixels
+    };
+    let black = || Paint::solid(Color::BLACK);
+    let alpha = |p: Vec<u8>| p.chunks(4).map(|p| p[3]).collect::<Vec<u8>>();
+    let fill = alpha(draw(TypeAntiAlias::Sharp, black(), Paint::None));
+    let stroke = alpha(draw(TypeAntiAlias::Sharp, Paint::None, black()));
+    // Pixels inside the fill that the stroke covers in part: the stroke's inner edge.
+    let inner: Vec<usize> = (0..fill.len()).filter(|i| fill[*i] == 255 && stroke[*i] > 8 && stroke[*i] < 247).collect();
+    assert!(inner.len() > 50, "{} pixels on the stroke's inner edge", inner.len());
+    for m in [TypeAntiAlias::Crisp, TypeAntiAlias::Strong] {
+        let drawn = draw(m, Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+        let wrong: Vec<_> = inner
+            .iter()
+            .filter(|i| {
+                let c = stroke[**i];
+                let near = [c.saturating_sub(1), c, c.saturating_add(1)].map(|c| edge_coverage(m, c));
+                let (lo, hi) = (near.iter().min().copied().unwrap_or(0), near.iter().max().copied().unwrap_or(255));
+                let red = drawn[**i * 4];
+                red < lo.saturating_sub(2) || red > hi.saturating_add(2)
+            })
+            .take(5)
+            .map(|i| (*i, stroke[*i], drawn[*i * 4]))
+            .collect();
+        assert!(wrong.is_empty(), "{m:?}: (pixel, stroke coverage, red) {wrong:?}");
+    }
+}
+
 /// Crisp and Strong type with several faint fills of the object draws the pixels inside the
 /// characters as Sharp draws them: the fills are composited there before their colors are rounded.
 #[test]

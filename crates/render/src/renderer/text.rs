@@ -553,9 +553,10 @@ const MAX_TYPE_PAINTS: usize = 8;
 /// own fills and strokes below the characters, the runs' fills and strokes, then the object's own
 /// fills and strokes above the characters. Each of the object's own fills and strokes is a group,
 /// and so is each fill and stroke of a run, except that fills and strokes of runs one after
-/// another in solid colors are one group when colors are drawn opaque (`opaque`). Paints that
-/// draw nothing are left out. `None` for type with more than [`MAX_TYPE_PAINTS`] groups, which is
-/// drawn as one.
+/// another in solid colors are one group when colors are drawn opaque (`opaque`). A run's stroke
+/// starts a new group rather than join its own fill's, so the stroke's edges inside the characters
+/// take the method too. Paints that draw nothing are left out. `None` for type with more than
+/// [`MAX_TYPE_PAINTS`] groups, which is drawn as one.
 fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<Vec<Vec<TypePaint>>> {
     let shown = |i: &AppearanceItem| i.visible() && !i.paint().is_none() && !matches!(i, AppearanceItem::Stroke(st) if st.width <= 0.0);
     let items = &n.appearance.items;
@@ -571,8 +572,10 @@ fn type_paints(n: &Node, t: &TextObject, g: &TextGeom, opaque: bool) -> Option<V
         let stroke = run.style.has_stroke().then_some((TypePaint::Stroke(i), &run.style.stroke));
         for (p, paint) in [fill, stroke].into_iter().flatten() {
             let solid = opaque && matches!(paint, vectorcraft_color::Paint::Solid { .. });
+            // A run's fill and stroke overlap along every outline, so they never share a group.
+            let own_fill = matches!(p, TypePaint::Stroke(_)) && groups.last().is_some_and(|last| last.contains(&TypePaint::Fill(i)));
             match groups.last_mut() {
-                Some(last) if joins && solid => last.push(p),
+                Some(last) if joins && solid && !own_fill => last.push(p),
                 _ => groups.push(vec![p]),
             }
             joins = solid;

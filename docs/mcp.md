@@ -5065,7 +5065,9 @@ inline graphics or color glyphs (bitmap or COLR), when its own fills or strokes 
 stroke or a blend mode other than Normal, when it overprints while Overprint Preview is on, and on the canvas while it
 shows a substitution highlight.
 With Preferences › General › Anti-aliased Artwork off, the canvas draws all its art with hard edges, type included, and
-so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export are unchanged and carry no setting.
+so does an export whose own Anti-aliasing option is None. SVG, PDF and EPS export draw the type unchanged. The native
+document such a file carries (an EPS VectorCraft wrote, or an SVG or PDF saved with Preserve Editing) keeps each frame's
+method, and opening the file restores it.
 Reset Panel sets Sharp. Saved as `antiAlias` only when not `sharp`. One undo step.
 
 ```json
