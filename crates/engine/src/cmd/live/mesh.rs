@@ -59,7 +59,14 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
             };
             let Some(mut m) = m else { continue };
             if let Some(q) = at {
-                index = m.add_lines_at(q, tol);
+                // A point the new mesh can't place its lines at leaves the object as it is.
+                match m.add_lines_at(q, tol) {
+                    Some(i) => index = Some(i),
+                    None => {
+                        refused.get_or_insert("point is outside the object");
+                        continue;
+                    }
+                }
             }
             let mut mn = Node::new(n.id, NodeKind::Mesh(m));
             mn.name = n.name.clone();
