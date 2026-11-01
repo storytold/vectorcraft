@@ -74,6 +74,16 @@ fn guides_paste_in_place_onto_another_artboard_and_cut_removes_them() {
     assert!(s.doc().unwrap().doc.node(NodeId(rect)).is_none());
     assert_eq!(guides(&s).len(), before - 1, "the selected guide goes too");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    // Cut with direct-selected anchors and a guide: the anchors and the guide go, one undo step.
+    let path = run(&mut s, "shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    run(&mut s, "guide.add", json!({"vertical": false, "pos": 90}));
+    let n = guides(&s).len();
+    run(&mut s, "select.anchors", json!({"id": path, "anchors": [[0, 0]], "mode": "set"}));
+    run(&mut s, "guide.select", json!({"indexes": [n - 1], "toggle": true}));
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "edit.cut", json!({}));
+    assert_eq!(guides(&s).len(), n - 1, "the guide goes with the anchors");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     // Nothing selected: Copy is off.
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("edit.copy", &json!({})).is_err());
