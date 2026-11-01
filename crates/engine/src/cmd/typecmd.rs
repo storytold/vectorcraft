@@ -1074,16 +1074,32 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, &t.area)))
         .map(|(id, own)| merged(own).map(|o| (id, o)))
         .collect::<Result<_>>()?;
+    let apply = |t: &mut TextObject, opts: &vectorcraft_doc::AreaOptions| {
+        t.area = opts.clone();
+        // Auto Size sets the height (Illustrator's dialog turns the Height field off).
+        let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
+        // A resized frame has laid its text out again; otherwise the new options do here.
+        if !size_area(t, w, h) {
+            refresh_bounds(t);
+        }
+    };
+    // Options that change nothing (the vertical alignment already set, `fitMinPercent` on frames
+    // without Shrink Text) add no undo step and keep redo, frame sizes and Auto Size included.
+    let unchanged = planned.iter().all(|(id, opts)| match d.node(*id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => {
+            let mut after = t.clone();
+            apply(&mut after, opts);
+            after == *t
+        }
+        _ => true,
+    });
+    if unchanged {
+        return options(s);
+    }
     s.edit("Area Type Options", |d, _| {
         for (id, opts) in &planned {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
-                t.area = opts.clone();
-                // Auto Size sets the height (Illustrator's dialog turns the Height field off).
-                let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
-                // A resized frame has laid its text out again; otherwise the new options do here.
-                if !size_area(t, w, h) {
-                    refresh_bounds(t);
-                }
+                apply(t, opts);
             }
         }
         Ok(())

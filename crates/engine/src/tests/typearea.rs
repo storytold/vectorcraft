@@ -508,3 +508,25 @@ fn area_type_options_set_the_text_flow() {
     assert_eq!((text(&s, id).area.flow, second(&s)), (TextFlow::Columns, (0.0, 160.0)));
     assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("flow?: columns|rows"));
 }
+
+/// #3759 review: options that change nothing (the vertical alignment already set, or
+/// `fitMinPercent` alone on a frame without Shrink Text) add no undo step and keep redo; a size
+/// change with them still applies.
+#[test]
+fn unchanged_area_type_options_add_no_undo_step() {
+    let mut s = session();
+    let id = area(&mut s, 40.0, 40.0, 200.0, 300.0, "Short story");
+    sel(&mut s, &[id]);
+    s.execute("text.areaOptions", &json!({"verticalAlign": "bottom"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("text.areaOptions", &json!({"verticalAlign": "center"})).unwrap();
+    let n = undo_len(&s);
+    let before = text(&s, id);
+    s.execute("text.areaOptions", &json!({"verticalAlign": "center"})).unwrap();
+    s.execute("text.areaOptions", &json!({"fitMinPercent": 40})).unwrap();
+    assert_eq!(undo_len(&s), n, "no step for options already set");
+    assert_eq!(text(&s, id), before);
+    // A real change still counts, and a new width with an unchanged option too.
+    s.execute("text.areaOptions", &json!({"verticalAlign": "center", "width": 180})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+}

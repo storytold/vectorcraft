@@ -77,7 +77,7 @@ fn area_options_set_and_report_the_fit() {
     let n = undo_len(&s);
     let again = s.execute("text.areaOptions", &q).unwrap();
     assert_eq!(again, q);
-    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(undo_len(&s), n, "options that change nothing add no undo step");
     // Undo back to no fit.
     while text(&s, id).area.fit != AreaFit::None {
         s.execute("edit.undo", &json!({})).unwrap();
