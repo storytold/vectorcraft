@@ -3514,9 +3514,12 @@ Actions panel plays an action as a `command.batch`, omitting steps whose playbac
 cleared. An action set saved as `.vcactions` keeps each excluded step with `excluded: true`; loading
 an earlier version 1 set without that flag includes every step. The Actions panel menu's Batch… runs
 `action.batch`: the same steps on every readable file in a folder (or every data set of the open document), with
-destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. A Data Sets source does not
-take `saveAndClose`: `action.batch` refuses it before it selects a data set or runs a step, and the dialog offers
-None and Folder only. For a Data Sets source,
+destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. With a Data Sets source,
+`saveAndClose` saves the open document over its own file after each data set, so the file keeps only the last one,
+and a document that was never saved is refused before a data set is selected. The result carries `warning` when
+every data set saves over the same file: with `saveAndClose`, or with a Save, Save a Copy, Save as Template or
+Export step that writes a file and that the batch does not point into `destinationFolder`. The dialog shows the same
+warning. For a Data Sets source,
 `datasetFileNaming?: fileNumber | fileDataSetName | dataSetName` chooses File + Number (`source001`),
 File + Data Set Name (`source_Alpha`), or Data Set Name (`Alpha`). An omitted parameter keeps File + Data Set Name
 for existing callers; the dialog starts with File + Number. A folder source ignores this parameter. The folder
