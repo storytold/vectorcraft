@@ -316,14 +316,14 @@ fn an_effect_not_read_here_keeps_the_drawn_look() {
 }
 
 /// The style `Fx`: effect `name` on the whole object, its dictionary holding `keys`.
-fn effect_style(name: &str, keys: &str) -> ArtStyle {
+fn distort_effect_style(name: &str, keys: &str) -> ArtStyle {
     let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[basic(name, keys)]));
     art_styles(data.as_bytes()).remove("Fx").unwrap_or_default()
 }
 
 /// The params of effect `name` with `keys`, `None` when the style keeps the drawn look.
 fn read_effect(name: &str, keys: &str) -> Option<serde_json::Value> {
-    let st = effect_style(name, keys);
+    let st = distort_effect_style(name, keys);
     if !st.plain {
         return None;
     }
@@ -423,7 +423,7 @@ fn unit_corners(p: &serde_json::Value) -> Vec<[f64; 2]> {
     p["corners"].as_array().unwrap().iter().map(|c| [c[0].as_f64().unwrap(), c[1].as_f64().unwrap()]).collect()
 }
 
-fn near(a: &[[f64; 2]], b: &[[f64; 2]]) -> bool {
+fn corners_near(a: &[[f64; 2]], b: &[[f64; 2]]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9)
 }
 
@@ -434,13 +434,13 @@ fn free_distort_measures_its_corners_in_its_own_frame() {
     // A frame wider than the object (its stroke's): the corners are fractions of that frame.
     let p = read_effect("Adobe Free Distort", &corners([[195.0, 305.0], [305.0, 305.0], [195.0, 245.0], [305.0, 245.0]], dst)).unwrap();
     let want = [[-15.0 / 110.0, -5.0 / 60.0], [125.0 / 110.0, 5.0 / 60.0], [0.5, 0.75], [15.0 / 110.0, 65.0 / 60.0]];
-    assert!(near(&unit_corners(&p), &want), "{p}");
+    assert!(corners_near(&unit_corners(&p), &want), "{p}");
     // A unit frame: the same corners measured in it, far outside the unit box.
     let p = read_effect("Adobe Free Distort", &corners([[0.0, 0.0], [1.0, 0.0], [0.0, -1.0], [1.0, -1.0]], dst)).unwrap();
-    assert!(near(&unit_corners(&p), &[[180.0, -310.0], [320.0, -300.0], [250.0, -260.0], [210.0, -240.0]]), "{p}");
+    assert!(corners_near(&unit_corners(&p), &[[180.0, -310.0], [320.0, -300.0], [250.0, -260.0], [210.0, -240.0]]), "{p}");
     // No corners: no change.
     let p = read_effect("Adobe Free Distort", "").unwrap();
-    assert!(near(&unit_corners(&p), &[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]), "{p}");
+    assert!(corners_near(&unit_corners(&p), &[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]), "{p}");
 }
 
 #[test]
