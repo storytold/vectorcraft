@@ -325,10 +325,10 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(done)
     })?;
-    // The reply names the object whose row the active item is (the first selected object, which
-    // need not paint first), as `effect.apply` does; the first target otherwise.
-    let anchor = if matches!(src, ItemTarget::Item { explicit: false, .. }) { src } else { dst };
-    let (index, item) = landed.get(anchor.anchor(s, &ids)).copied().unzip();
+    // The reply names the object whose row the destination is: the first selected object for the
+    // active item (which need not paint first), as `effect.apply` does; the first target for an
+    // explicit `toItem` or the object's effects.
+    let (index, item) = landed.get(dst.anchor(s, &ids)).copied().unzip();
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": item.flatten() }))
 }
 
