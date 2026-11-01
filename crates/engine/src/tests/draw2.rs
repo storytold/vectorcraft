@@ -360,8 +360,8 @@ fn pencil_redraws_the_section_of_a_selected_path_between_its_ends() {
     }
 }
 
-/// On a closed path the stroke replaces the shorter way between where it starts and ends, and the
-/// path stays closed; a stroke that doesn't end on the path draws a new one.
+/// On a closed path the stroke replaces the way it runs along (here the shorter way) between where
+/// it starts and ends, and the path stays closed; a stroke that doesn't end on the path draws a new one.
 #[test]
 fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     let mut s = session();
@@ -384,6 +384,36 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     assert_eq!(paths(&s).len(), 2);
     assert_eq!(path(&s, id), before);
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
+}
+
+/// A stroke that grows a closed path replaces the part it runs along, even when that part is the
+/// longer way round (#5157): the rest of the outline stays, and no crescent is left.
+#[test]
+fn pencil_redraws_the_part_of_a_closed_path_the_stroke_runs_along() {
+    // From the left side below the middle, out and over the top, to the right side above it: the
+    // way over the top (310 pt) is longer than the way under the bottom (290 pt).
+    let dome = [(-30.0, 40.0), (-20.0, 0.0), (40.0, -35.0), (100.0, -45.0), (160.0, -35.0), (225.0, 0.0), (230.0, 20.0), (200.0, 40.0)];
+    // The same stroke with many samples lingering near its start, below it.
+    let lingering = (0..300).map(|k| (-1.0, 70.0 + f64::from(k) * 0.05));
+    for start in [vec![(0.0, 70.0)], std::iter::once((0.0, 70.0)).chain(lingering).collect()] {
+        let mut s = session();
+        let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let pts: Vec<[f64; 2]> = start.iter().chain(&dome).map(|&(x, y)| [x, y]).collect();
+        s.execute("path.freehand", &json!({"points": pts, "redraw": {"id": id.0, "within": 4}})).unwrap();
+        assert_eq!(paths(&s).len(), 1);
+        let sp = &path(&s, id).subpaths[0];
+        assert!(sp.closed);
+        let ps: Vec<Point> = sp.anchors.iter().map(|a| a.p).collect();
+        for corner in [(200.0, 100.0), (0.0, 100.0)] {
+            assert!(ps.iter().any(|p| near(*p, Point::new(corner.0, corner.1))), "{corner:?} kept: {ps:?}");
+        }
+        for corner in [(0.0, 0.0), (200.0, 0.0)] {
+            assert!(!ps.iter().any(|p| near(*p, Point::new(corner.0, corner.1))), "{corner:?} replaced: {ps:?}");
+        }
+        let b = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+        assert!(b.y0 < -35.0 && b.y1 > 99.0 && b.x0 < -20.0 && b.x1 > 220.0, "the grown outline: {b:?}");
+    }
 }
 
 /// With Keep selected off, the path a stroke draws or continues is not selected afterwards, the

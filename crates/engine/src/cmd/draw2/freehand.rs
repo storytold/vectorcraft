@@ -62,12 +62,12 @@ fn stroke_subpath(pts: &[Point], tol: Option<f64>, closed: bool) -> SubPath {
 }
 
 /// Pencil's Edit Selected Paths in the middle of a path: a stroke from one point of a subpath of
-/// `pd` to another, each within `within` of it, replaces the section between them (the shorter
-/// way round a closed subpath) with the stroke fitted at `tol` (with no `tol`, unfitted). The
+/// `pd` to another, each within `within` of it, replaces the section between them (round a
+/// closed subpath, the way the stroke lies along) with the stroke fitted at `tol` (with no `tol`, unfitted). The
 /// subpath's index and its new shape; None when the stroke doesn't start and end on the same
 /// subpath, or meets it once.
 fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -> Option<(usize, SubPath)> {
-    use kurbo::ParamCurveArclen;
+    use kurbo::{ParamCurveArclen, ParamCurveNearest};
     let (first, last) = (*pts.first()?, *pts.last()?);
     let (si, _, _, _, d_a) = pd.nearest(first)?;
     let (sj, _, _, _, d_b) = pd.nearest(last)?;
@@ -103,10 +103,45 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     let n = sp.anchors.len();
     // The length of the run of segments from anchor i forward to anchor j.
     let run = |i: usize, j: usize| (0..(j + n - i) % n).map(|k| sp.segment((i + k) % n).arclen(0.01)).sum::<f64>();
+    // About 32 points spread evenly along the stroke's length, however densely it was sampled.
+    let total: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let mut samples = vec![];
+    let (mut along, mut next, mut prev) = (0.0, 0.0, first);
+    for &q in pts {
+        along += prev.distance(q);
+        prev = q;
+        if along >= next {
+            samples.push(q);
+            next = along + (total / 32.0).max(f64::MIN_POSITIVE);
+        }
+    }
+    // How far the stroke lies from that run: the sum of the samples' distances to it. A segment
+    // whose control points' box is farther than the nearest found so far is skipped.
+    let away = |i: usize, j: usize| {
+        let segs: Vec<_> = (0..(j + n - i) % n)
+            .map(|k| {
+                let c = sp.segment((i + k) % n);
+                (c, kurbo::Rect::from_points(c.p0, c.p1).union_pt(c.p2).union_pt(c.p3))
+            })
+            .collect();
+        let dist = |q: Point| {
+            let mut best = f64::INFINITY;
+            for (c, r) in &segs {
+                let (dx, dy) = ((r.x0 - q.x).max(q.x - r.x1).max(0.0), (r.y0 - q.y).max(q.y - r.y1).max(0.0));
+                if dx * dx + dy * dy < best {
+                    best = best.min(c.nearest(q, 0.01).distance_sq);
+                }
+            }
+            best.sqrt()
+        };
+        samples.iter().map(|&q| dist(q)).sum::<f64>()
+    };
     // The stroke goes from `start` to `end` and replaces the run between them; `kept` runs from
     // `end` round to `start`, then the stroke's inner anchors follow.
     let (start, end, reversed) = if sp.closed {
-        if run(from, to) <= run(to, from) { (from, to, false) } else { (to, from, true) }
+        // Round a closed subpath, the run the stroke lies along, else the shorter one.
+        let order = away(from, to).total_cmp(&away(to, from)).then_with(|| run(from, to).total_cmp(&run(to, from)));
+        if order.is_le() { (from, to, false) } else { (to, from, true) }
     } else if from < to {
         (from, to, false)
     } else {
