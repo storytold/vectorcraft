@@ -13,8 +13,10 @@ use super::{
 pub(super) enum LpHover {
     #[default]
     None,
-    /// A face (or edge) of an existing Live Paint group.
+    /// A face of an existing Live Paint group.
     Part(BezPath),
+    /// An edge of an existing Live Paint group.
+    Edge(BezPath),
     /// A region of the (not yet live) selection.
     Region(usize),
 }
@@ -66,7 +68,8 @@ fn lp_selectable(cx: &ToolContext, id: NodeId) -> bool {
 /// region is highlighted.
 fn lp_hover(cx: &ToolContext, cache: Option<&mut RegionCache>, p: Point, edge: bool, takes: &dyn Fn(NodeId) -> bool) -> LpHover {
     if let Some((_, part)) = lp_part_at(cx.doc, p, cx.tol(4.0), edge, takes) {
-        return part.and_then(|n| n.path_data()).map(|pd| LpHover::Part(pd.to_bezpath())).unwrap_or_default();
+        let path = part.and_then(|n| n.path_data()).map(|pd| pd.to_bezpath());
+        return path.map(|bp| if edge { LpHover::Edge(bp) } else { LpHover::Part(bp) }).unwrap_or_default();
     }
     let sel_is_live = cx.selection.objects.iter().any(|id| cx.doc.node(*id).is_some_and(is_live_paint));
     if !sel_is_live && let Some(i) = cache.and_then(|c| c.ready(cx, true)).and_then(|m| m.region_at(p)) {
@@ -75,11 +78,13 @@ fn lp_hover(cx: &ToolContext, cache: Option<&mut RegionCache>, p: Point, edge: b
     LpHover::None
 }
 
-/// The highlight of `h`, `width` screen pixels wide in `color`.
-fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32) -> Vec<Overlay> {
+/// The highlight of `h` in `color`: a face or region `width` screen pixels wide, an edge
+/// `edge_width` screen pixels wide.
+fn lp_overlays(h: &LpHover, cache: &RegionCache, color: [u8; 3], width: f32, edge_width: f32) -> Vec<Overlay> {
     match h {
         LpHover::None => vec![],
         LpHover::Part(bp) => vec![Overlay::Path { path: bp.clone(), color, width, dashed: false }],
+        LpHover::Edge(bp) => vec![Overlay::Path { path: bp.clone(), color, width: edge_width, dashed: false }],
         LpHover::Region(i) => {
             cache.map.regions.get(*i).map(|(_, bp, _)| vec![Overlay::Path { path: bp.clone(), color, width, dashed: false }]).unwrap_or_default()
         }
@@ -91,6 +96,10 @@ pub const LP_BUCKET_WIDTH: f64 = 4.0;
 
 /// The least and greatest highlight width (screen pixels) the Live Paint Bucket takes.
 pub const LP_BUCKET_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
+
+/// The width of the Live Paint Bucket's edge highlight, as a fraction of its Width setting: a
+/// face is outlined at the Width and an edge at this fraction of it.
+pub const LP_BUCKET_EDGE_FRACTION: f64 = 0.5;
 
 /// What a Live Paint Bucket click paints.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -110,7 +119,8 @@ enum LpPaint {
 /// Clicking selected ordinary paths without Alt makes them a Live Paint group first. Its Tool
 /// Options (double-click the tool) are `paintFills` (on) and `paintStrokes` (off), `highlight`
 /// (on), the highlight `color` (`#rrggbb`, red by default) and its `width` ([`LP_BUCKET_WIDTH`]
-/// pixels). With Paint Strokes alone on, a click paints the edge nearest the pointer and
+/// pixels): a face is outlined at the width and an edge at [`LP_BUCKET_EDGE_FRACTION`] of it.
+/// With Paint Strokes alone on, a click paints the edge nearest the pointer and
 /// Shift-click fills the face. With both on, a click paints the edge nearest the pointer when one
 /// is within 4 pixels, else it fills the face, and Shift-click fills the face. With both off, a
 /// click paints nothing. With Highlight off, the face or edge under the pointer is not
@@ -167,7 +177,7 @@ impl LivePaintBucketTool {
             // A click paints no region of the selection, so none is highlighted.
             LpPaint::Strokes => lp_hover(cx, None, p, true, &takes),
             LpPaint::Both => match lp_part_at(cx.doc, p, cx.tol(4.0), true, &takes) {
-                Some((_, Some(e))) => e.path_data().map(|pd| LpHover::Part(pd.to_bezpath())).unwrap_or_default(),
+                Some((_, Some(e))) => e.path_data().map(|pd| LpHover::Edge(pd.to_bezpath())).unwrap_or_default(),
                 _ => lp_hover(cx, Some(&mut self.cache), p, false, &takes),
             },
         }
@@ -235,7 +245,7 @@ impl Tool for LivePaintBucketTool {
     }
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32)
+        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32)
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
@@ -416,7 +426,7 @@ impl Tool for LivePaintSelectionTool {
             PointerKind::Move => {
                 // Only the parts of Live Paint groups highlight, so no map of the selection is built.
                 self.hover = match edge.map(|e| lp_hover(cx, None, p, e, &|id| lp_selectable(cx, id))) {
-                    Some(h @ LpHover::Part(_)) => h,
+                    Some(h @ (LpHover::Part(_) | LpHover::Edge(_))) => h,
                     _ => LpHover::None,
                 };
                 vec![]
@@ -479,7 +489,7 @@ impl Tool for LivePaintSelectionTool {
         if let Some(r) = self.drag.and_then(|d| d.marquee(cx)) {
             return vec![Overlay::Marquee(r)];
         }
-        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32)
+        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, self.width as f32)
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
