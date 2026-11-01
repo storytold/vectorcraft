@@ -417,9 +417,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             PathEffect::StairStep => stair,
             // The middle of the glyph's baseline (a joined block's) on the path, x axis along the
             // tangent there, vertical edges pointing at the path's centre (on the glyph's up side).
-            // On a circle that is Rainbow, as the public help says ("Applying the Gravity effect to
-            // text on a perfectly circular path creates a result that looks like the default
-            // Rainbow effect", [Create type on a path](https://web.archive.org/web/20220127000000/https://helpx.adobe.com/illustrator/using/creating-type-path.html)).
+            // On a perfectly circular path that looks like Rainbow, as the public help notes
+            // ([Create type on a path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)).
             // Where the line from the centre runs nearly along the path the glyph leans far and thins:
             // that is the effect, not capped here.
             PathEffect::Gravity => {
