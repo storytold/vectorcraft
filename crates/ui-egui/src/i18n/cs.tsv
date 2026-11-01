@@ -6051,6 +6051,9 @@ breakText	Glyphs	Glyfy
 	Gap 4	Mezera 4
 	Dash 5	Čárka 5
 	Gap 5	Mezera 5
+
+@msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
 @msg	invalid pattern tile choice	neplatná volba dlaždice vzorku
 @msg	no pattern named `{choice}`	vzorek s názvem `{choice}` neexistuje
@@ -6081,6 +6084,9 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Rozložit čárky na cesty
+@msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Nástroje dokumentu
 	Save a Timestamped Copy	Uložit kopii s datem a časem
@@ -6103,6 +6109,11 @@ breakText	Glyphs	Glyfy
 	Odia	Urijština
 	Urdu	Urdština
 	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
+	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
+@msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol
