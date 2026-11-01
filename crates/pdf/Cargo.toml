@@ -31,9 +31,9 @@ serde = { workspace = true }
 # The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
 roxmltree = "0.21"
 # PDF security (encrypt.rs): pure Rust, MIT OR Apache-2.0, builds for wasm.
-aes = "0.8"
-md-5 = { version = "0.10", default-features = false }
-sha2 = { version = "0.10", default-features = false }
+aes = "0.9"
+md-5 = { version = "0.11", default-features = false }
+sha2 = { version = "0.11", default-features = false }
 # The seed of the file key, salts and IVs (encrypt.rs).
 getrandom = "0.4"
 
