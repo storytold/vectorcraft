@@ -718,6 +718,155 @@ fn artboards() {
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
 }
 
+/// The document data of artboards side by side, 100 points wide, each with the entries `extra`.
+fn boards_with(extra: &[&str]) -> String {
+    let boards: String = extra
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let x = i * 100;
+            format!(
+                "%_/Dictionary :\n{e}%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+                x + 100
+            )
+        })
+        .collect();
+    format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n")
+}
+
+#[test]
+fn artboards_keep_their_display_options() {
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let options = |extra: &[&str]| {
+        read_ok(&format!("{}{square}", boards_with(extra)))
+            .doc
+            .artboards
+            .iter()
+            .map(|a| (a.show_center_mark, a.show_cross_hairs, a.show_video_safe_areas, a.video_ruler_pixel_aspect_ratio))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        options(&["%_1 /Int (DisplayMark) ,\n%_1.33 /Real (PAR) ,\n", "%_6 /Int (DisplayMark) ,\n%_2 /Real (PAR) ,\n"]),
+        [(true, false, false, 1.33), (false, true, true, 2.0)],
+        "each artboard has its own"
+    );
+    assert_eq!(options(&["%_7 /Int (DisplayMark) ,\n%_1 /Real (PAR) ,\n"]), [(true, true, true, 1.0)]);
+    // Values of another type or out of range leave the defaults.
+    for bad in [
+        "%_1 /Real (DisplayMark) ,\n%_1 /Int (PAR) ,\n",
+        "%_-1 /Int (DisplayMark) ,\n%_20 /Real (PAR) ,\n",
+        "%_1.5 /Int (DisplayMark) ,\n%_0.05 /Real (PAR) ,\n",
+        "%_1 2 /Int (DisplayMark) ,\n%_(2) /Real (PAR) ,\n",
+    ] {
+        assert_eq!(options(&[bad]), [(false, false, false, 1.0)], "{bad}");
+    }
+}
+
+/// The document data with the Document Raster Effects Settings `entries`.
+fn raster_settings(entries: &str) -> String {
+    format!("%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n{entries}%_; (AI Auto Rasterize) ,\n%_; /NotRecorded ,\n%_;\n")
+}
+
+#[test]
+fn document_raster_effects_settings_come_from_the_document() {
+    use vectorcraft_doc::{Background, RasterColorModel, RasterEffectsSettings};
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let settings = |entries: &str| {
+        let doc = read_ok(&format!("{}{square}", raster_settings(entries))).doc;
+        (doc.raster_effects_ppi, doc.raster_effects)
+    };
+    let all = "%_6 /Int (colr) ,\n%_0 /Bool (spot) ,\n%_150 /Int (dpi.) ,\n%_1 /Bool (mask) ,\n%_0 /Bool (alis) ,\n%_7 /Real (padd) ,\n";
+    assert_eq!(
+        settings(all),
+        (
+            150.0,
+            RasterEffectsSettings {
+                color_model: RasterColorModel::Grayscale,
+                background: Background::Transparent,
+                anti_alias: false,
+                clipping_mask: true,
+                add_around: 7.0,
+                preserve_spot_colors: false,
+            }
+        )
+    );
+    let (_, white) = settings("%_0 /Int (colr) ,\n");
+    assert_eq!((white.color_model, white.background), (RasterColorModel::Document, Background::White));
+    let (_, document) = settings("%_4 /Int (colr) ,\n");
+    assert_eq!((document.color_model, document.background), (RasterColorModel::Document, Background::Transparent));
+    // Values of another type, out of range or unknown leave the defaults.
+    let defaults = (72.0, RasterEffectsSettings::default());
+    for bad in [
+        "%_150 /Real (dpi.) ,\n%_1 /Int (mask) ,\n%_7 /Int (padd) ,\n%_6 /Real (colr) ,\n",
+        "%_5000 /Int (dpi.) ,\n%_2 /Bool (alis) ,\n%_-1 /Real (padd) ,\n%_3 /Int (colr) ,\n",
+        "%_0 /Int (dpi.) ,\n%_(0) /Bool (spot) ,\n%_2000 /Real (padd) ,\n%_1 /Int (colr) ,\n",
+        "%_150.5 /Int (dpi.) ,\n%_0.5 /Bool (mask) ,\n%_4.5 /Int (colr) ,\n",
+    ] {
+        assert_eq!(settings(bad), defaults, "{bad}");
+    }
+}
+
+/// Editing data whose header has the comments `header` before `%%EndComments`.
+fn stream_with_header(header: &str, body: &str) -> String {
+    stream(body).replacen("%%EndComments", &format!("{header}%%EndComments"), 1)
+}
+
+#[test]
+fn the_header_gives_the_author_and_custom_colors() {
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let header = "%%For: (Ann \\(QA\\) Lee) (Studio)\n%%DocumentCustomColors: (Ink A)\n%%+ (Ink B)\n%%+ (Ink C)\n\
+                  %%CMYKCustomColor: 0.1 0.2 0.3 0.4 (Ink A)\n%%+ 0 1 0 0 (Ink B)\n%%RGBCustomColor: 1 0.5 0 (Ink C)\n\
+                  %%+ 2 0 0 (Too bright)\n%%CMYKCustomColor: 0.1 0.2 0.3 (Too few)\n%%+ 0 0 0 1 (Unended\n";
+    let after = "%%CMYKCustomColor: 0 0 0 1 (After the header)\n%%For: (Someone else) ()\n";
+    let r = read(stream_with_header(header, &format!("{after}{square}")).as_bytes()).unwrap();
+    assert_eq!(r.doc.metadata.author, "Ann (QA) Lee");
+    let ink = |name: &str| r.doc.swatches.iter().find(|s| s.name == name).map(|s| (s.paint.color(), s.global, s.spot));
+    assert_eq!(ink("Ink A"), Some((Some(Color::cmyk(0.1, 0.2, 0.3, 0.4)), true, true)));
+    assert_eq!(ink("Ink B"), Some((Some(Color::cmyk(0.0, 1.0, 0.0, 0.0)), true, true)));
+    assert_eq!(ink("Ink C"), Some((Some(Color::rgb(1.0, 0.5, 0.0)), true, true)));
+    for name in ["Too bright", "Too few", "Unended", "After the header"] {
+        assert_eq!(ink(name), None, "{name}");
+    }
+    // A color the art defines keeps its definition.
+    let used = layer(&format!("0.5 0 0 0 (Ink A) 0 x\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read(stream_with_header(header, &used).as_bytes()).unwrap();
+    let a: Vec<_> = r.doc.swatches.iter().filter(|s| s.name == "Ink A").map(|s| s.paint.color()).collect();
+    assert_eq!(a, [Some(Color::cmyk(0.5, 0.0, 0.0, 0.0))]);
+    // A color with the name of a default swatch takes its place in a file without a palette,
+    // whether the header or the art defines it.
+    let red = "%%CMYKCustomColor: 0 0.5 0.5 0 (Red)\n%%+ 0 0 0 1 ([None])\n";
+    let r = read(stream_with_header(red, &square).as_bytes()).unwrap();
+    let reds: Vec<_> = r.doc.swatches.iter().filter(|s| s.name == "Red").map(|s| (s.paint.color(), s.spot)).collect();
+    assert_eq!(reds, [(Some(Color::cmyk(0.0, 0.5, 0.5, 0.0)), true)]);
+    assert!(matches!(r.doc.swatch("[None]").map(|s| &s.paint), Some(Paint::None)), "a reserved name keeps its swatch");
+    let art_red = layer(&format!("0 0.5 0.5 0 (Red) 0 x\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read(stream(&art_red).as_bytes()).unwrap();
+    let reds: Vec<_> = r.doc.swatches.iter().filter(|s| s.name == "Red").map(|s| (s.paint.color(), s.spot)).collect();
+    assert_eq!(reds, [(Some(Color::cmyk(0.0, 0.5, 0.5, 0.0)), true)]);
+    // Without the comments: no author, the default swatches.
+    let plain = read_ok(&square).doc;
+    assert_eq!(plain.metadata.author, "");
+    assert!(plain.swatches.iter().all(|s| !s.name.starts_with("Ink")));
+}
+
+#[test]
+fn an_older_files_template_box_places_its_artboard() {
+    let old =
+        format!("%!PS-Adobe-3.0\n%AI5_ArtSize: 600 400\n%%TemplateBox: 300.5 199.5 300.5 199.5\n%%EndComments\n{}", layer("10 10 m\n20 20 L\nS\n"));
+    let r = read(old.as_bytes()).unwrap();
+    assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
+    assert_eq!(r.template, Some([300.5, 199.5, 300.5, 199.5]));
+}
+
+#[test]
+fn art_after_the_printers_crop_marks_reads() {
+    // GUARDS: the crop marks between `%AI3_BeginCrops` and `%AI3_EndCrops` are skipped, and the art
+    // after them is read.
+    let crops = format!("%AI3_BeginCrops\n{}S\n%AI3_EndCrops\n", rect_path(-20.0, -20.0, -10.0, -10.0));
+    let doc = read_ok(&format!("{crops}{}", layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0))))).doc;
+    assert_eq!(art(&doc).len(), 1);
+}
+
 /// A variable library in the document data isn't read: a note gives how many variables and data
 /// sets it has, counting the elements of the library alone (a data set's element for a variable named
 /// `variable` isn't a variable).

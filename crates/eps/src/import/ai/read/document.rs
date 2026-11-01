@@ -20,6 +20,92 @@ fn ruler_unit(v: u8) -> Option<Unit> {
     })
 }
 
+/// An artboard of the `/Document`'s `ArtboardArray`: its name, its rect in art space and its
+/// display options.
+#[derive(Clone, Debug)]
+pub(super) struct AiArtboard {
+    pub name: String,
+    pub rect: Rect,
+    pub center_mark: bool,
+    pub cross_hairs: bool,
+    pub safe_areas: bool,
+    /// The video ruler's pixel aspect ratio.
+    pub par: f64,
+}
+
+impl AiArtboard {
+    fn new(name: String, rect: Rect) -> Self {
+        Self { name, rect, center_mark: false, cross_hairs: false, safe_areas: false, par: 1.0 }
+    }
+}
+
+/// The number of entry `key` in `o` when it is written as one finite number of the type `ty`
+/// (`/Int`, `/Real`, `/Bool`; a whole number unless `/Real`), else `None`.
+fn typed(o: &Obj, key: &str, ty: &str) -> Option<f64> {
+    match o.get(key)? {
+        [V::Num(v), V::Name(t)] if t == ty && v.is_finite() && (ty == "Real" || v.fract() == 0.0) => Some(*v),
+        _ => None,
+    }
+}
+
+/// The `/Bool` entry `key` of `o`: 0 or 1.
+fn boolean(o: &Obj, key: &str) -> Option<bool> {
+    match typed(o, key, "Bool")? {
+        0.0 => Some(false),
+        1.0 => Some(true),
+        _ => None,
+    }
+}
+
+/// An `ArtboardArray` entry's display options: `DisplayMark` (`/Int`, bits: 1 the center mark,
+/// 2 cross hairs, 4 video safe areas) and `PAR` (`/Real`, the video ruler's pixel aspect ratio,
+/// 0.1 to 10). A value of another type or out of range leaves the option off, or 1.
+fn display_options(ab: &Obj, board: &mut AiArtboard) {
+    if let Some(mark) = typed(ab, "DisplayMark", "Int").filter(|m| (0.0..=f64::from(u32::MAX)).contains(m)) {
+        let mark = mark as u32;
+        (board.center_mark, board.cross_hairs, board.safe_areas) = (mark & 1 != 0, mark & 2 != 0, mark & 4 != 0);
+    }
+    if let Some(par) = typed(ab, "PAR", "Real").filter(|p| (0.1..=10.0).contains(p)) {
+        board.par = par;
+    }
+}
+
+/// The `AI Auto Rasterize` dictionary of the `/Document` (Document Raster Effects Settings) into
+/// `doc`: `dpi.` the resolution (`/Int`, 1 to 2400), `mask`, `alis` and `spot` the clipping mask,
+/// anti-aliasing and Preserve Spot Colors (`/Bool`), `padd` the room added around the object
+/// (`/Real`, points), and `colr` the color model and background (`/Int`: 0 the document's model on
+/// white, 4 the document's model, transparent, 6 grayscale, transparent). A value of another type,
+/// out of range or not one of these leaves the setting as it is.
+fn raster_settings(r: &Obj, doc: &mut Document) {
+    use vectorcraft_doc::rastersettings::{MAX_ADD_AROUND, RasterColorModel};
+    use vectorcraft_doc::setup::Background;
+    if let Some(ppi) = typed(r, "dpi.", "Int").filter(|p| (1.0..=2400.0).contains(p)) {
+        doc.raster_effects_ppi = ppi;
+    }
+    let s = &mut doc.raster_effects;
+    if let Some(on) = boolean(r, "mask") {
+        s.clipping_mask = on;
+    }
+    if let Some(on) = boolean(r, "alis") {
+        s.anti_alias = on;
+    }
+    if let Some(on) = boolean(r, "spot") {
+        s.preserve_spot_colors = on;
+    }
+    if let Some(pad) = typed(r, "padd", "Real").filter(|p| (0.0..=MAX_ADD_AROUND).contains(p)) {
+        s.add_around = pad;
+    }
+    let model = match typed(r, "colr", "Int") {
+        Some(0.0) => Some((RasterColorModel::Document, Background::White)),
+        Some(4.0) => Some((RasterColorModel::Document, Background::Transparent)),
+        Some(6.0) => Some((RasterColorModel::Grayscale, Background::Transparent)),
+        _ => None,
+    };
+    if let Some((model, background)) = model {
+        (s.color_model, s.background) = (model, background);
+    }
+}
+
 /// The name of the empty group that stands for a text object, followed by the number of its
 /// story in the text document when the file says.
 pub(crate) const TEXT_SLOT: &str = "\u{0}text";
@@ -125,7 +211,7 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
             r.document(o);
         }
     }
-    r.artboards
+    r.artboards.into_iter().map(|b| (b.name, b.rect)).collect()
 }
 
 /// How many variables and data sets the variable library of the editing data has: XML nodes
@@ -174,6 +260,34 @@ pub fn variables(data: &[u8]) -> VariableLibrary {
         let _ = r.run();
         r.variables
     })
+}
+
+impl<'a> Reader<'a> {
+    /// Take the author and custom colors that the header of the program `ps` gives (its comment
+    /// lines up to `%%EndComments`), where the editing data's own header gives none: the program of
+    /// an EPS whose editing data is kept apart from it.
+    pub(super) fn program_header(&mut self, ps: &[u8]) {
+        let mut end = 0;
+        for line in ps.split_inclusive(|&b| b == b'\n' || b == b'\r') {
+            if !line.starts_with(b"%") && !line.trim_ascii().is_empty() {
+                break;
+            }
+            end += line.len();
+            if line.trim_ascii_end() == b"%%EndComments" {
+                break;
+            }
+        }
+        let mut outer = Reader::new(ps.get(..end).unwrap_or_default());
+        let _ = outer.run();
+        if self.author.is_none() {
+            self.author = outer.author;
+        }
+        for n in outer.custom_colors {
+            if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
+                self.custom_colors.push(n);
+            }
+        }
+    }
 }
 
 /// The `variableSets` XML node of the editing data `data`, from its `/XMLNode :` line to the line
@@ -279,11 +393,15 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// The `/Document` dictionary: the artboards, how many variables and data sets its variable
-    /// library has, and its Objects on Path records.
+    /// The `/Document` dictionary: the artboards and their display options, Document Raster Effects
+    /// Settings, how many variables and data sets its variable library has, and its Objects on
+    /// Path records.
     pub(super) fn document(&mut self, o: &Obj) {
         variable_library(o, 0, &mut self.variables);
         self.constraint_data(o);
+        if let Some(r) = find_entry(o, "AI Auto Rasterize", 0) {
+            raster_settings(r, &mut self.doc);
+        }
         let Some(list) = find_entry(o, "ArtboardArray", 0) else { return };
         for (i, ab) in list.items().enumerate().take(1000) {
             let (p1, p2) = (ab.nums("PositionPoint1"), ab.nums("PositionPoint2"));
@@ -293,7 +411,9 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let name = ab.text("Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
-            self.artboards.push((name, r));
+            let mut board = AiArtboard::new(name, r);
+            display_options(ab, &mut board);
+            self.artboards.push(board);
         }
     }
 
@@ -314,7 +434,7 @@ impl<'a> Reader<'a> {
 
     /// The first artboard: the `/Document`'s first, else the crop marks, else [`Self::sized_board`].
     fn first_board(&self) -> Option<Rect> {
-        self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board())
+        self.artboards.first().map(|b| b.rect).or(self.cropmarks).or_else(|| self.sized_board())
     }
 
     /// The page the art is compared with in the document's space, once the art has started.
@@ -407,24 +527,24 @@ impl<'a> Reader<'a> {
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
-        let boards: Vec<(String, Rect)> = if self.artboards.is_empty() {
-            artboard.or_else(|| self.bbox_board()).map(|r| vec![("Artboard 1".to_string(), r)]).unwrap_or_default()
+        let boards: Vec<AiArtboard> = if self.artboards.is_empty() {
+            artboard.or_else(|| self.bbox_board()).map(|r| vec![AiArtboard::new("Artboard 1".to_string(), r)]).unwrap_or_default()
         } else {
-            self.artboards.clone()
+            std::mem::take(&mut self.artboards)
         };
-        let board_rects: Vec<Rect> = boards.iter().map(|(_, r)| *r).collect();
+        let board_rects: Vec<Rect> = boards.iter().map(|b| b.rect).collect();
         doc.artboards = boards
             .into_iter()
             .enumerate()
-            .map(|(i, (name, r))| Artboard {
+            .map(|(i, b)| Artboard {
                 id: i as u32 + 1,
-                name,
-                rect: to_doc.transform_rect_bbox(r),
+                name: b.name,
+                rect: to_doc.transform_rect_bbox(b.rect),
                 locked: false,
-                show_center_mark: false,
-                show_cross_hairs: false,
-                show_video_safe_areas: false,
-                video_ruler_pixel_aspect_ratio: 1.0,
+                show_center_mark: b.center_mark,
+                show_cross_hairs: b.cross_hairs,
+                show_video_safe_areas: b.safe_areas,
+                video_ruler_pixel_aspect_ratio: b.par,
                 color: None,
             })
             .collect();
@@ -467,15 +587,35 @@ impl<'a> Reader<'a> {
             doc.units = u;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
-        if let Some((swatches, groups)) = self.palette_swatches(&doc.patterns) {
-            (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
-        }
-        // The colour operators' definitions first: a gradient, defined before the art, names a
-        // global process colour as a stop and would otherwise make it an ink (#1771).
-        for n in self.spots.iter().chain(&self.stop_spots) {
-            if doc.swatch(&n.name).is_none() {
-                doc.swatches.push(Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot: n.spot });
+        let own_palette = match self.palette_swatches(&doc.patterns) {
+            Some((swatches, groups)) => {
+                (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+                true
             }
+            None => false,
+        };
+        // The colour operators' definitions first: a gradient, defined before the art, names a
+        // global process colour as a stop and would otherwise make it an ink (#1771). The header's
+        // custom colors follow. The first definition of a name makes its swatch, and takes the place
+        // of a default swatch of that name when the file has no palette of its own (a reserved name
+        // in brackets, such as `[None]`, keeps its swatch).
+        let mut defined = std::collections::HashSet::new();
+        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        for (n, spot) in colors {
+            let first = defined.insert(n.name.clone());
+            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
+            if doc.swatch(&n.name).is_none() {
+                doc.swatches.push(swatch);
+            } else if first
+                && !own_palette
+                && !(n.name.starts_with('[') && n.name.ends_with(']'))
+                && let Some(default) = doc.swatch_mut(&n.name)
+            {
+                *default = swatch;
+            }
+        }
+        if let Some(author) = self.author.take() {
+            doc.metadata.author = author;
         }
         for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
             if doc.swatch(&name).is_none() {
