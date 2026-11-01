@@ -1513,10 +1513,15 @@ Edit › Keyboard Shortcuts lists every item of the Effect menu under its menu p
 
 While a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the kind of the corners being edited (Round, Inverted Round, Chamfer, in turn, from the pressed corner's), shown live with the radius and kept, with it, as one undo step when the drag ends; a press with an arrow and no drag changes just the kind (#2898). Alt-clicking a widget still cycles it as before. Test: `tests::livecorners::arrows_while_dragging_a_corner_widget_change_the_corner_kind`.
 
+## Repeat: edit the source art in isolation mode (2026-11-01)
+
+A double-click on a Repeat (Radial, Grid or Mirror) with the Selection tool enters isolation mode on it ([isolate objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/select-objects/isolate-objects.html): a double-click with the Selection tool isolates an object; [repeat patterns overview](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/repeat-patterns-overview.html): every instance follows edits to the original object); there the source art is selected and edited as usual (a double-click on type in it switches to the Type tool on that text) and every copy follows, with the repeat's settings kept (#5054). Test: `tests::repeat_edit::a_double_click_on_a_repeat_isolates_it_to_edit_its_text`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Repeat: a double-click isolates it to edit its source art, text included (#5054); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Live Corners: Up/Down while dragging a corner widget step the corner kind (#2898); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Shortcuts for Effect menu items (#3296); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); evidence added; scores unchanged. |
