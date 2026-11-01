@@ -160,6 +160,8 @@ fn crop_marks_effect_follows_the_object() {
     // SVG export and Expand Appearance draw the marks as shapes.
     let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
     assert_eq!(vectorcraft_testkit::svg_shapes(&svg), 9, "{svg}");
+    assert_eq!(svg.matches("<path").count(), 8, "eight trim marks: {svg}");
+    assert_eq!(svg.matches("<rect").count(), 1, "the marked object: {svg}");
     run(&mut s, "effect.expandAppearance", json!({}));
     let n = node(&s, a);
     assert!(n.appearance.effects.is_empty() && n.children().unwrap().len() == 2, "a group of the object and its marks");
