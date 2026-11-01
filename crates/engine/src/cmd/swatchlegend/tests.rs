@@ -45,7 +45,7 @@ fn a_legend_draws_a_labelled_chip_per_colour_swatch_in_one_undo_step() {
     let chips: Vec<&Node> = kids.iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).map(|n| &**n).collect();
     let doc = &s.doc().unwrap().doc;
     for (chip, w) in chips.iter().zip(doc.swatches_iter().filter(|w| w.paint.color().is_some())) {
-        assert_eq!(chip.appearance.fill_paint(), w.paint, "{}", w.name);
+        assert_eq!(chip.appearance.fill_paint().color(), w.paint.color(), "{}", w.name);
         assert_eq!(chip.name.as_deref(), Some(w.name.as_str()));
     }
     let b = |i: usize| chips[i].geometric_bounds().unwrap();
@@ -82,6 +82,7 @@ fn a_legend_takes_names_values_and_a_position() {
         json!({"names": "Signal"}),
         json!({"values": ["xyz"]}),
         json!({"columns": 0}),
+        json!({"columns": 2.5}),
         json!({"size": 2}),
         json!({"gap": -1}),
         json!({"x": f64::MAX}),
@@ -90,4 +91,24 @@ fn a_legend_takes_names_values_and_a_position() {
         assert!(s.execute("swatch.legend", &bad).is_err(), "{bad}");
     }
     assert_eq!(s.doc().unwrap().history.undo.len(), before);
+}
+
+/// A chip of a global swatch is linked to it: editing the swatch recolours the chip. Each label is
+/// area type inside its chip that shrinks a long name to fit (#4919 review).
+#[test]
+fn chips_stay_linked_and_labels_stay_on_their_chips() {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "A Rather Long Brand Colour Name", "color": "#2050a0", "global": true})).unwrap();
+    let r = s.execute("swatch.legend", &json!({"names": ["A Rather Long Brand Colour Name"], "size": 40, "values": ["hex", "rgb", "cmyk"]})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    s.execute("swatch.edit", &json!({"name": "A Rather Long Brand Colour Name", "color": "#a02050"})).unwrap();
+    let g = group(&s, id);
+    let kids = g.children().unwrap();
+    let chip = kids.iter().find(|n| matches!(n.kind, NodeKind::Path { .. })).unwrap();
+    assert_eq!(chip.appearance.fill_paint().color().map(|c| c.to_hex()), Some("#a02050".into()), "the edit reached the chip");
+    let label = kids.iter().find(|n| matches!(n.kind, NodeKind::Text(_))).unwrap();
+    let NodeKind::Text(t) = &label.kind else { unreachable!() };
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) && matches!(t.area.fit, vectorcraft_doc::AreaFit::ShrinkText { .. }));
+    let (c, l) = (chip.geometric_bounds().unwrap(), label.geometric_bounds().unwrap());
+    assert!(l.x0 >= c.x0 - 1e-6 && l.y0 >= c.y0 - 1e-6 && l.x1 <= c.x1 + 1e-6 && l.y1 <= c.y1 + 1e-6, "label {l:?} inside chip {c:?}");
 }

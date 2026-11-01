@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint, cms::Model};
-use vectorcraft_doc::{Appearance, Node, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, AreaFit, Node, NodeKind, TextKind, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
 use super::{CommandSpec, Result, Session, bad, cmd, has_doc};
@@ -62,7 +62,8 @@ fn value_lines(c: Color, values: &[String], spot: bool) -> Vec<String> {
                 format!("L={} a={} b={}", l.l.round() as i32, l.a.round() as i32, l.b.round() as i32)
             }
             _ => {
-                let k = match c {
+                // As Edit Colors › Convert to Grayscale and the Color panel convert it.
+                let k = match c.in_model(Model::Gray) {
                     Color::Gray { k } => k,
                     _ => 1.0 - c.to_lab().l / 100.0,
                 };
@@ -78,7 +79,11 @@ fn value_lines(c: Color, values: &[String], spot: bool) -> Vec<String> {
 
 fn legend(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.legend";
-    let columns = number(p, "columns", 4.0, 1.0..=50.0, C)? as usize;
+    let columns = number(p, "columns", 4.0, 1.0..=50.0, C)?;
+    if columns.fract() != 0.0 {
+        return Err(bad(C, "`columns` must be a whole number 1..50"));
+    }
+    let columns = columns as usize;
     let size = number(p, "size", 72.0, 8.0..=1000.0, C)?;
     let gap = number(p, "gap", 12.0, 0.0..=1000.0, C)?;
     let values: Vec<String> = match p.get("values") {
@@ -125,17 +130,17 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
     let pad = (size / 12.0).clamp(1.0, 8.0);
     let style = super::create::new_type_style(s, &json!({ "size": text_size }));
     let count = swatches.len();
+    // Each chip's fill links to its swatch, as paint.setFill {swatch} links art: editing a global or
+    // spot swatch then recolours the legend too.
+    let fills: Vec<Paint> = swatches.iter().map(|w| super::paint::swatch_solid(doc, &w.name, None).unwrap_or_else(|_| w.paint.clone())).collect();
     let gid = s.edit("Create Swatch Legend", |d, sel| {
         let mut children = Vec::with_capacity(count * 2);
-        for (i, w) in swatches.iter().enumerate() {
+        for (i, (w, fill)) in swatches.iter().zip(fills).enumerate() {
             let Some(c) = w.paint.color() else { continue };
             let (col, row) = (i % columns, i / columns);
             let (x, y) = (x0 + col as f64 * (size + gap), y0 + row as f64 * (size + gap));
-            let mut chip = Node::path(
-                d.alloc_id(),
-                shapes::rectangle(Rect::new(x, y, x + size, y + size)),
-                Appearance::basic(w.paint.clone(), Paint::None, 0.0),
-            );
+            let mut chip =
+                Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + size, y + size)), Appearance::basic(fill, Paint::None, 0.0));
             chip.name = Some(w.name.clone());
             children.push(std::sync::Arc::new(chip));
             let mut lines = vec![w.name.clone()];
@@ -143,7 +148,12 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
             let mut label_style = style.clone();
             label_style.fill = Paint::solid(if c.to_lab().l < 50.0 { Color::WHITE } else { Color::BLACK });
             label_style.stroke = Paint::None;
-            let mut t = TextObject::point(Point::new(x + pad, y + pad + text_size), &lines.join("\n"), label_style);
+            // Area type the size of the chip (less its inset) that shrinks text to fit, so a long
+            // name or value line stays on its chip.
+            let mut t = TextObject::point(Point::new(x + pad, y + pad), &lines.join("\n"), label_style);
+            let inner = (size - 2.0 * pad).max(1.0);
+            t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, inner, inner)) };
+            t.area.fit = AreaFit::ShrinkText { min_percent: AreaFit::MIN_PERCENT };
             t.para = super::create::new_type_para();
             t.system_layout = system_layout;
             super::typecmd::refresh_bounds(&mut t);
