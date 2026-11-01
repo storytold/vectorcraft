@@ -493,13 +493,15 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
             // another way since then (Window › Tools, Window › Control). Panels shown with Shift+Tab
             // in between stay shown. Switching workspaces clears the record (`workspaces::apply`).
-            let hid = ui.tab_hid.take().filter(|h| (h.dock || h.toolbar || h.control_bar) && !ui.toolbar && !ui.control_bar);
+            // A shown toolbar made with New Toolbar counts as a bar Tab hides and shows.
+            let custom = ui.custom_toolbars.iter().any(|b| b.shown);
+            let hid = ui.tab_hid.take().filter(|h| (h.dock || h.toolbar || h.control_bar || custom) && !ui.toolbar && !ui.control_bar);
             let on = if let Some(h) = hid {
                 ui.dock |= h.dock;
                 ui.toolbar = h.toolbar;
                 ui.control_bar = h.control_bar;
                 true
-            } else if ui.dock || ui.toolbar || ui.control_bar {
+            } else if ui.dock || ui.toolbar || ui.control_bar || custom {
                 ui.tab_hid = Some(crate::state::TabHid { dock: ui.dock, toolbar: ui.toolbar, control_bar: ui.control_bar });
                 ui.dock = false;
                 ui.toolbar = false;

@@ -163,10 +163,13 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let bar = find_mut(&mut app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
             bar.shown = show.unwrap_or(!bar.shown);
             let (shown, name) = (bar.shown, bar.name.clone());
-            // The drawer beside a toolbar that is hidden closes with it.
-            if !shown && drawer_target(&app.ui) == Some(name.as_str()) {
-                app.ui.tools_drawer = false;
-                app.ui.drawer_toolbar = None;
+            // The drawer beside a toolbar that is hidden closes with it, and so does an open flyout.
+            if !shown {
+                app.ui.flyout = None;
+                if drawer_target(&app.ui) == Some(name.as_str()) {
+                    app.ui.tools_drawer = false;
+                    app.ui.drawer_toolbar = None;
+                }
             }
             Ok(json!(shown))
         })(),
@@ -757,8 +760,10 @@ mod tests {
         frames(&mut app);
         assert!(drawn(&ctx, egui::Id::unique(("tool-floating", "pen")).with(key("Mine")), egui::Order::Middle));
         assert!(!drawn(&ctx, egui::Id::unique(("tool-floating", "rectangle")), egui::Order::Middle));
-        // Hidden with the toolbar it was torn off, and shown again with it.
+        // Hidden with the toolbar it was torn off, and shown again with it; an open flyout closes.
+        app.ui.flyout = Some(0);
         app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
+        assert_eq!(app.ui.flyout, None, "the flyout closes with the toolbar");
         frames(&mut app);
         assert!(!drawn(&ctx, egui::Id::unique(("tool-floating", "pen")).with(key("Mine")), egui::Order::Middle));
         app.run("window.toolbar.custom", json!({"name": "Mine", "show": true})).unwrap();
@@ -770,6 +775,17 @@ mod tests {
         app.run("window.dock", json!({})).unwrap();
         frames(&mut app);
         assert!(drawn(&ctx, area_id("Mine"), egui::Order::Middle), "a second Tab shows it");
+        // With the dock, the Tools panel and the Control bar all off, Tab still hides it first, and
+        // a second Tab shows it alone.
+        (app.ui.dock, app.ui.toolbar, app.ui.control_bar) = (false, false, false);
+        app.run("window.dock", json!({})).unwrap();
+        frames(&mut app);
+        assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle), "Tab hides it with the other bars off");
+        assert!(!app.ui.dock && !app.ui.toolbar && !app.ui.control_bar);
+        app.run("window.dock", json!({})).unwrap();
+        frames(&mut app);
+        assert!(drawn(&ctx, area_id("Mine"), egui::Order::Middle), "a second Tab shows it again");
+        assert!(!app.ui.dock && !app.ui.toolbar && !app.ui.control_bar, "and only it");
     }
 
     /// A group's button shows the tool chosen last from it however it was chosen (its flyout, a
