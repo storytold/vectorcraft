@@ -4,10 +4,10 @@
 //!
 //! Colors come back as sRGB whenever the decoder converts them without a color management
 //! system: XYB-encoded images, every color space a JPEG XL header names, and embedded ICC
-//! profiles that describe one of them. Any other image with an embedded ICC profile comes back
-//! with its samples as stored, as PNG and JPEG files with an embedded profile are drawn, and with
-//! the profile when it is an RGB one. Gray images with an ICC profile the decoder cannot convert
-//! are refused. 16-bit and floating-point samples become 8 bits, alpha comes back straight,
+//! profiles that describe one of them. Any other image with an embedded RGB ICC profile comes
+//! back with its samples as stored, as PNG and JPEG files with an embedded profile are drawn, and
+//! with the profile. Gray images, and images whose profile is not an RGB one, are refused when the
+//! decoder cannot convert their ICC profile. 16-bit and floating-point samples become 8 bits, alpha comes back straight,
 //! and CMYK images are refused. The file is untrusted: the decoder is given only a container's
 //! image boxes, the image's size is checked from its header before any pixels are decoded, and the
 //! decoder's image buffers are capped.
@@ -235,13 +235,17 @@ fn to_srgb_without_cms(xyb: bool, icc: Option<&[u8]>) -> bool {
 }
 
 /// The embedded RGB profile when the decoder leaves colors in it. Gray colors without a
-/// conversion to sRGB cannot be stored as RGB without changing their profile.
+/// conversion to sRGB cannot be stored as RGB without changing their profile, and neither can
+/// colors left in a profile that is not an RGB one.
 pub(crate) fn output_profile(xyb: bool, grayscale: bool, icc: Option<&[u8]>) -> Result<Option<Vec<u8>>, String> {
     let converts = to_srgb_without_cms(xyb, icc);
     if grayscale && !converts {
         return Err(unreadable("unsupported grayscale ICC profile"));
     }
-    Ok(icc.filter(|icc| icc.get(16..20) == Some(b"RGB ") && !converts).map(<[u8]>::to_vec))
+    if !converts && icc.and_then(|icc| icc.get(16..20)) != Some(b"RGB ") {
+        return Err(unreadable("unsupported ICC profile color space"));
+    }
+    Ok(icc.filter(|_| !converts).map(<[u8]>::to_vec))
 }
 
 /// The decoder's error `e` as a message. When the decoder's buffers needed more than they were

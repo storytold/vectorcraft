@@ -295,6 +295,11 @@ fn colors_left_in_their_icc_profile_keep_it() {
         None
     );
     assert_eq!(output_profile(false, false, None).unwrap(), None);
+    // A color image left in a profile that is not an RGB one can't be stored as RGB.
+    let mut lab = rgb.clone();
+    lab[16..20].copy_from_slice(b"Lab ");
+    assert_eq!(output_profile(false, false, Some(&lab)).unwrap_err(), "the JPEG XL file can't be read: unsupported ICC profile color space");
+    assert_eq!(output_profile(true, false, Some(&lab)).unwrap(), None, "XYB-encoded colors become sRGB");
     // The PNG carries the profile, the pixels and the resolution.
     let img = image::RgbaImage::from_raw(2, 1, vec![200, 100, 50, 255, 9, 9, 9, 0]).unwrap();
     for icc in [Some(rgb), None] {
