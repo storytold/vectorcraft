@@ -4077,9 +4077,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Release Guides: no guides	ガイドを解除: ガイドがありません
 @msg	variables are locked	変数がロックされています
 @msg	variables that aren't text were left out: {kinds}	テキスト以外の変数は除外されました: {kinds}
-@msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
-@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
-@msg	data set `{name}` holds a control character, which a variable library can't hold	データセット `{name}` に変数ライブラリに保存できない制御文字が含まれています
 @msg	guides are locked	ガイドがロックされています
 @msg	handle must be in or out	handle には in または out を指定してください
 @msg	no saved selection recalled	保存した選択範囲を呼び出していません
@@ -5120,6 +5117,9 @@ lighting	Light	ライト
 	Export Data Sets…	データセットを書き出し…
 	Load Variable Library…	変数ライブラリを読み込み…
 	Save Variable Library…	変数ライブラリを保存…
+@msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
+@msg	data set `{name}` holds a control character, which a variable library can't hold	データセット `{name}` に変数ライブラリに保存できない制御文字が含まれています
 	Make Graph Dynamic	グラフを動的にする
 	Batch…	バッチ…
 	Source Folder:	ソースフォルダー:

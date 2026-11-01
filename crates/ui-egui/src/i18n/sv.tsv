@@ -4380,9 +4380,6 @@ axis	Both	Båda
 @msg	unsupported: {0}	stöds inte: {0}
 @msg	variables are locked	variablerna är låsta
 @msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
-@msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
-@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
-@msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` och `options.{key}: {inner}` stämmer inte överens: ange alternativet bara en gång
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	filer i version {0} kan inte komprimeras: endast version {COMPRESSED_SINCE} och senare kan öppna komprimerade filer
 @msg	width and height are at least 1 pixel	bredd och höjd är minst 1 pixel
@@ -5325,6 +5322,9 @@ theme	Appearance	Utseende
 	Export Data Sets…	Exportera datauppsättningar…
 	Load Variable Library…	Läs in variabelbibliotek…
 	Save Variable Library…	Spara variabelbibliotek…
+@msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
 	Filter	Filter
 	Filter Layers Panel Rows	Filtrera rader i panelen Lager
 	Flatten	Platta till

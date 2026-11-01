@@ -5110,6 +5110,9 @@ imageTrace	Outline	კონტური
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
 	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
+@msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
+@msg	data set `{name}` holds a control character, which a variable library can't hold	მონაცემთა ნაკრები `{name}` შეიცავს მმართველ სიმბოლოს, რომელსაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
 	Make Graph Dynamic	დიაგრამის დინამიკურად ქცევა
 	Batch…	პაკეტური დამუშავება…
 	Source Folder:	წყარო საქაღალდე:
@@ -5419,9 +5422,6 @@ imageTrace	Outline	კონტური
 @msg	too many library panels were opened in this session	ამ სესიაში ზედმეტად ბევრი ბიბლიოთეკის პანელი გაიხსნა
 @msg	variables are locked	ცვლადები ჩაკეტილია
 @msg	variables that aren't text were left out: {kinds}	ცვლადები, რომლებიც ტექსტი არ არის, გამოტოვებულია: {kinds}
-@msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
-@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
-@msg	data set `{name}` holds a control character, which a variable library can't hold	მონაცემთა ნაკრები `{name}` შეიცავს მმართველ სიმბოლოს, რომელსაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
 @msg	x and y must be finite	x და y სასრული უნდა იყოს
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის

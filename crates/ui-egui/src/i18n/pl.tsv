@@ -4613,9 +4613,6 @@ imageTrace	Outline	Kontur
 @msg	unsupported: {0}	nieobsługiwane: {0}
 @msg	variables are locked	zmienne są zablokowane
 @msg	variables that aren't text were left out: {kinds}	pominięto zmienne, które nie są tekstowe: {kinds}
-@msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
-@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
-@msg	data set `{name}` holds a control character, which a variable library can't hold	zestaw danych `{name}` zawiera znak sterujący, którego biblioteka zmiennych nie może zawierać
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` są sprzeczne: podaj opcję tylko raz
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	plików w wersji {0} nie można kompresować: skompresowane pliki otwierają tylko wersje {COMPRESSED_SINCE} i nowsze
 @msg	width and height are at least 1 pixel	szerokość i wysokość muszą wynosić co najmniej 1 piksel
@@ -5315,6 +5312,9 @@ mark-style	Japanese	Japońskie
 	Export Data Sets…	Eksportuj zestawy danych…
 	Load Variable Library…	Wczytaj bibliotekę zmiennych…
 	Save Variable Library…	Zapisz bibliotekę zmiennych…
+@msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	zestaw danych `{name}` zawiera znak sterujący, którego biblioteka zmiennych nie może zawierać
 	Make Graph Dynamic	Uczyń wykres dynamicznym
 	Batch…	Przetwarzanie wsadowe…
 	Source Folder:	Folder źródłowy:

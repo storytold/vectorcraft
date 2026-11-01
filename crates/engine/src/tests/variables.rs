@@ -1602,36 +1602,6 @@ fn a_variable_library_expands_entities_of_plain_text() {
     assert_eq!(value, Some(vectorcraft_doc::DataValue::Text("x-y \"z\"-x&a;".into())));
 }
 
-/// While the variables are locked, a library that would delete or define a variable is refused, as
-/// Delete Variable and New Variable are, and the document keeps its variables and data sets. That
-/// covers a library whose only variable is a text variable the document already has, and one
-/// without text variables loaded into a document with variables. A library without text variables
-/// loads into a document without variables, replacing its data sets.
-#[test]
-fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
-    let mut s = session();
-    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
-    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Old"}})).unwrap();
-    s.execute("variable.lock", &json!({"locked": true})).unwrap();
-    let before = s.doc().unwrap().doc.variables.clone();
-    for vars in [&[("Name", "textcontent")][..], &[("Shown", "other")][..]] {
-        let e = s.execute("variable.loadLibrary", &json!({"xml": library(vars, &[("B", &[])])})).unwrap_err();
-        assert!(matches!(&e, EngineError::Disabled(cmd, why) if cmd == "variable.loadLibrary" && why == "variables are locked"), "{e}");
-        assert_eq!(s.doc().unwrap().doc.variables, before);
-    }
-
-    let mut s = session();
-    s.execute("dataset.new", &json!({"name": "A"})).unwrap();
-    s.execute("variable.lock", &json!({"locked": true})).unwrap();
-    let e = s.execute("variable.loadLibrary", &json!({"xml": library(&[("Name", "textcontent")], &[])})).unwrap_err();
-    assert!(matches!(&e, EngineError::Disabled(_, why) if why == "variables are locked"), "{e}");
-    let r = s.execute("variable.loadLibrary", &json!({"xml": library(&[("Shown", "other")], &[("B", &[])])})).unwrap();
-    assert_eq!((r["deletedDataSets"].clone(), r["names"].clone()), (json!(["A"]), json!(["B"])));
-    let vars = &s.doc().unwrap().doc.variables;
-    assert!(vars.variables.is_empty() && vars.locked);
-    assert_eq!(vars.datasets.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["B"]);
-}
-
 /// Save Variable Library writes what Load Variable Library reads back: the text variables in their
 /// order, every data set by name and in order, and each text value as it was, with several lines,
 /// markup characters, quotes, a carriage return and an empty value. Variables of other kinds are
@@ -1823,6 +1793,36 @@ fn a_saved_variable_library_near_the_size_cap_loads_back() {
     assert_eq!(full.len(), 8 << 20);
     let e = other.execute("variable.loadLibrary", &json!({"xml": full})).unwrap_err().to_string();
     assert!(e.contains("entities expand to more than"), "{e}");
+}
+
+/// While the variables are locked, a library that would delete or define a variable is refused, as
+/// Delete Variable and New Variable are, and the document keeps its variables and data sets. That
+/// covers a library whose only variable is a text variable the document already has, and one
+/// without text variables loaded into a document with variables. A library without text variables
+/// loads into a document without variables, replacing its data sets.
+#[test]
+fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Old"}})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    let before = s.doc().unwrap().doc.variables.clone();
+    for vars in [&[("Name", "textcontent")][..], &[("Shown", "other")][..]] {
+        let e = s.execute("variable.loadLibrary", &json!({"xml": library(vars, &[("B", &[])])})).unwrap_err();
+        assert!(matches!(&e, EngineError::Disabled(cmd, why) if cmd == "variable.loadLibrary" && why == "variables are locked"), "{e}");
+        assert_eq!(s.doc().unwrap().doc.variables, before);
+    }
+
+    let mut s = session();
+    s.execute("dataset.new", &json!({"name": "A"})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    let e = s.execute("variable.loadLibrary", &json!({"xml": library(&[("Name", "textcontent")], &[])})).unwrap_err();
+    assert!(matches!(&e, EngineError::Disabled(_, why) if why == "variables are locked"), "{e}");
+    let r = s.execute("variable.loadLibrary", &json!({"xml": library(&[("Shown", "other")], &[("B", &[])])})).unwrap();
+    assert_eq!((r["deletedDataSets"].clone(), r["names"].clone()), (json!(["A"]), json!(["B"])));
+    let vars = &s.doc().unwrap().doc.variables;
+    assert!(vars.variables.is_empty() && vars.locked);
+    assert_eq!(vars.datasets.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["B"]);
 }
 
 #[test]

@@ -4460,9 +4460,6 @@ digits	Malayalam	馬來亞拉姆數字
 	Unlock Variables	解除鎖定變數
 @msg	variables are locked	變數已鎖定
 @msg	variables that aren't text were left out: {kinds}	已略過非文字變數：{kinds}
-@msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
-@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
-@msg	data set `{name}` holds a control character, which a variable library can't hold	資料集 `{name}` 包含變數資料庫無法儲存的控制字元
 	List Variables	列出變數
 	Bind Variable	綁定變數
 	Unbind Variable	解除變數綁定
@@ -5117,6 +5114,9 @@ lighting	Light	光源
 	Export Data Sets…	匯出資料集…
 	Load Variable Library…	載入變數資料庫…
 	Save Variable Library…	儲存變數資料庫…
+@msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
+@msg	data set `{name}` holds a control character, which a variable library can't hold	資料集 `{name}` 包含變數資料庫無法儲存的控制字元
 	Make Graph Dynamic	使圖表動態化
 	Batch…	批次處理…
 	Source Folder:	來源資料夾：
