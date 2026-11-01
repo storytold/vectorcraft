@@ -5976,6 +5976,9 @@ breakText	Glyphs	Glifos
 	Gap 4	Lacuna 4
 	Dash 5	Traço 5
 	Gap 5	Lacuna 5
+
+@msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.
 @msg	invalid pattern tile choice	escolha inválida de ladrilho de padrão
 @msg	no pattern named `{choice}`	não há padrão chamado `{choice}`
@@ -6006,6 +6009,9 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Expandir traços em demarcadores
+@msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -6028,6 +6034,11 @@ breakText	Glyphs	Glifos
 	Odia	Oriá
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} e posteriores (versão {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Exportar todos os documentos abertos como PDF
+	Export All Open Documents as SVG	Exportar todos os documentos abertos como SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} documento exportado|{n} documentos exportados
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} documento exportado; {title} não foi gravado: {error}|{n} documentos exportados; {title} não foi gravado: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipo de símbolo:
 	Dynamic Symbol	Símbolo dinâmico

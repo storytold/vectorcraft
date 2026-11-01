@@ -243,10 +243,20 @@ impl<'a> Reader<'a> {
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
                     n.extras_mut().mask = Some(Box::new(value));
                 } else if !on("Disabled") {
-                    self.unreadable("opacity masks without an owning object");
+                    self.unreadable("opacity masks without an owning object", false);
+                }
+                // What the art doesn't read matters only when the mask shapes what shows.
+                for what in &mask.unread {
+                    if on("Disabled") {
+                        self.hidden_unread.insert(what.clone());
+                    } else if let Some(op) = what.strip_prefix('`').and_then(|w| w.strip_suffix('`')) {
+                        self.note_unknown(op, false);
+                    } else {
+                        self.unreadable(what, false);
+                    }
                 }
             } else if mask.nums("Disabled").first().copied() != Some(1.0) {
-                self.unreadable("opacity masks without readable art");
+                self.unreadable("opacity masks without readable art", false);
             }
         }
         let name = match o.text("AIArtName") {
@@ -453,6 +463,8 @@ impl<'a> Reader<'a> {
             artboard,
             template: self.template,
             hidden_unread: self.hidden_unread,
+            unread: self.unread,
+            unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
             placed_elsewhere: self.placed_elsewhere,

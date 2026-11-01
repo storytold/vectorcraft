@@ -6014,6 +6014,9 @@ breakText	Glyphs	Glifler
 	Gap 4	Boşluk 4
 	Dash 5	Çizgi 5
 	Gap 5	Boşluk 5
+
+@msg	{_1}: they came in as the page's art	{_1}: sayfanın çizimi olarak içe aktarıldılar
+
 @msg	You must choose a side pattern.	Bir yan desen seçmelisiniz.
 @msg	invalid pattern tile choice	geçersiz desen döşemesi seçimi
 @msg	no pattern named `{choice}`	`{choice}` adlı desen yok
@@ -6044,6 +6047,9 @@ breakText	Glyphs	Glifler
 	Remove Gaps	Boşlukları Kaldır
 @msg	that makes too many pieces (at most 100000): make the dashes longer	bu çok fazla parça oluşturur (en fazla 100000): tireleri uzatın
 @msg	select paths, or segments, to divide	bölünecek yolları veya bölümleri seçin
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Tireleri Yollara Genişlet
+@msg	select paths with dashed strokes to expand	genişletilecek kesikli konturlu yolları seçin
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
@@ -6066,6 +6072,11 @@ breakText	Glyphs	Glifler
 	Odia	Oriya dili
 	Urdu	Urduca
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
+	Export All Open Documents as SVG	Tüm Açık Belgeleri SVG Olarak Dışa Aktar
+@msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Sembol Türü:
 	Dynamic Symbol	Dinamik Sembol
