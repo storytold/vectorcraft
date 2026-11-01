@@ -178,12 +178,21 @@ fn the_titlebar_variable_decides_the_frame_before_the_window_opens() {
     const CHILD: &str = "VECTORCRAFT_TEST_TITLEBAR_CHILD";
     if std::env::var_os(CHILD).is_none() {
         for value in ["app", "system", "desktop", "unknown"] {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
+            // Linux and the BSDs: hold `spawning` while the child starts, so it does not keep a
+            // copy of a GPU start test's locked start file (see `CHILD_SPAWN`).
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            let spawning = super::spawning();
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", "tests::the_titlebar_variable_decides_the_frame_before_the_window_opens", "--nocapture"])
                 .env(CHILD, "1")
                 .env("VECTORCRAFT_TITLEBAR", value)
-                .output()
-                .unwrap();
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            drop(spawning);
+            let output = child.unwrap().wait_with_output().unwrap();
             assert!(
                 output.status.success(),
                 "VECTORCRAFT_TITLEBAR={value}\n{}\n{}",
