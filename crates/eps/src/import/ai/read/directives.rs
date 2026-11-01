@@ -1,5 +1,7 @@
 use super::art::{four, sane, two};
-use super::types::{FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED};
+use super::types::{
+    FLIP, Kind, MAX_HEX, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED, VERSIONED_UNENDED,
+};
 use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
 
 impl<'a> Reader<'a> {
@@ -114,6 +116,23 @@ impl<'a> Reader<'a> {
             // One that `~` didn't end isn't read.
             if self.place.is_some() {
                 self.end_place(hidden)?;
+            }
+        } else if m == "BeginPlacedRelativePath" {
+            let at = self.stack.len();
+            if let Some(p) = self.place.as_mut() {
+                p.folder_at = Some(at);
+            }
+        } else if m == "EndPlacedRelativePath" {
+            // The folder is the string between the markers, taken off the stack.
+            let base = self.frames.last().map_or(0, |f| f.base);
+            if let Some(at) = self.place.as_mut().and_then(|p| p.folder_at.take()).filter(|at| (base..=self.stack.len()).contains(at)) {
+                let vals = self.stack.split_off(at);
+                if let Some(p) = self.place.as_mut() {
+                    p.folder = vals
+                        .iter()
+                        .find_map(|v| if let V::Str(s) = v { Some(super::obj::text(s)) } else { None })
+                        .filter(|f| f.len() <= MAX_PLACED_FOLDER);
+                }
             }
         } else if self.frames.is_empty()
             && let Some(v) = line.strip_prefix("%HiResBoundingBox:")
