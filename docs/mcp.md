@@ -5035,8 +5035,8 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 (the selected type) accept `kerning: "auto" | "optical" | number` (1/1000 em). Auto uses the font's
 pair metrics; Optical spaces horizontal pairs from their glyph shapes. Vertical text uses font
 metrics in either mode. A number sets a manual pair value,
-replacing that pair's automatic correction while tracking remains additive. Choosing Optical keeps
-existing manual pair values; choosing `"auto"` clears them. New text and files without an Optical setting use Auto. The Character
+replacing that pair's automatic correction while tracking remains additive. Choosing `"optical"` or
+`"auto"` clears existing manual pair values in the text it applies to. New text and files without an Optical setting use Auto. The Character
 panel offers both automatic modes.
 
 ## Small Caps, Superscript and Subscript
