@@ -208,9 +208,10 @@ pub struct Session {
     /// Where folder searches may go; `None`: this computer's rules ([`cmd::findfiles::Rules`]).
     /// Tests set it.
     pub search_rules: Option<cmd::findfiles::Rules>,
-    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`]); cleared
-    /// when the preview params change or the interaction ends.
-    pub(crate) deferred_overlay_cache: Option<(String, Value, Vec<vectorcraft_tools::Overlay>)>,
+    /// Canvas feedback cached for the pending deferred preview ([`Session::overlays`],
+    /// [`Session::deferred_transform_box`]); cleared when the preview params change or the
+    /// interaction ends.
+    pub(crate) deferred_overlay_cache: Option<tooling::DeferredFeedback>,
     /// The walker threads a folder search starts; `None`: [`cmd::findfiles::threads`]. Tests set
     /// it.
     pub search_threads: Option<usize>,

@@ -3638,6 +3638,96 @@ fn hidden_corner_widgets_do_not_answer_the_pointer() {
     assert!(radius(&app).is_some_and(|r| r > 0.0), "{:?}", radius(&app));
 }
 
+/// One headless canvas frame → the bounding box drawn: its outline's corners on screen (the
+/// closed four-point line in the layer color; `None` when it is hidden) and the number of its
+/// handles (white 6 px squares).
+fn bounding_box_drawn(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Option<Vec<Pos2>>, usize) {
+    let st = app.session.active().unwrap();
+    let layer = egui::epaint::ColorMode::Solid(c32(st.doc.layer_color(st.selection.objects[0])));
+    let drawn = shapes(app, ctx);
+    let outline = drawn.iter().find_map(|s| match s {
+        Shape::Path(ps) if ps.closed && ps.points.len() == 4 && ps.stroke.color == layer => Some(ps.points.clone()),
+        _ => None,
+    });
+    let handle = |s: &&Shape| matches!(s, Shape::Rect(r) if r.rect.size() == vec2(6.0, 6.0) && r.fill == Color32::WHITE);
+    (outline, drawn.iter().filter(handle).count())
+}
+
+/// The selection's bounding box corners on screen, as measured from the document.
+fn box_corners(app: &mut VectorcraftApp) -> Vec<Pos2> {
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    app.selection_box().unwrap().corners().iter().map(|q| xf.to_screen(*q)).collect()
+}
+
+/// Do two outlines have the same corners, to 0.01 px?
+fn same_corners(a: &[Pos2], b: &[Pos2]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 0.01)
+}
+
+/// #3526: a resize by a bounding-box handle keeps the bounding box and its handles drawn at the
+/// bounds the drag gives, with Real-time Drawing on and off (off, the document stays at the drag's
+/// snapshot until the release).
+#[test]
+fn a_resize_drag_keeps_the_bounding_box_at_the_new_bounds() {
+    for real_time in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("selection");
+        let before = box_corners(&mut app);
+        let (outline, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert!(outline.is_some_and(|o| same_corners(&o, &before)) && handles == 8, "real time {real_time}: the box at rest");
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 160.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 263.0, 211.0), view).unwrap();
+        assert!(app.session.tool_resizing(), "real time {real_time}: the handle was hit");
+        let (during, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert_eq!(handles, 8, "real time {real_time}: the handles show during the resize");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 263.0, 211.0), view).unwrap();
+        let after = box_corners(&mut app);
+        assert!(!same_corners(&after, &before), "real time {real_time}: the drag resized the ellipse");
+        assert!(during.as_ref().is_some_and(|o| same_corners(o, &after)), "real time {real_time}: {during:?}, resized to {after:?}");
+        let (outline, handles) = bounding_box_drawn(&mut app, &ctx);
+        assert!(outline.is_some_and(|o| same_corners(&o, &after)) && handles == 8, "real time {real_time}: the box after the release");
+    }
+}
+
+/// A move, a rotation and a corner-radius drag keep hiding the bounding box and its handles until
+/// the release (#712, #1229).
+#[test]
+fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("selection");
+    let drag = |app: &mut VectorcraftApp, from: Point, to: Point| {
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), view).unwrap();
+        assert!(app.session.tool_transforming() && !app.session.tool_resizing());
+        let during = bounding_box_drawn(app, &ctx);
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), view).unwrap();
+        during
+    };
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8);
+    assert_eq!(drag(&mut app, Point::new(150.0, 150.0), Point::new(160.0, 160.0)), (None, 0), "a move");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the move");
+    let offset = 10.0 / app.view_info().zoom;
+    assert_eq!(drag(&mut app, Point::new(210.0 + offset, 210.0 + offset), Point::new(260.0, 160.0)), (None, 0), "a rotation");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the rotation");
+    let corner = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+    };
+    assert_eq!(drag(&mut app, corner, corner + vectorcraft_geom::Vec2::new(10.0, 10.0)), (None, 0), "a corner-radius drag");
+    assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the corner-radius drag");
+}
+
 /// View › Hide Edges hides the bounding box and the type widget beside it, and the Selection
 /// tool then answers neither: a double-click on the widget's place leaves point type as it is,
 /// and a drag from a corner handle's place does not scale. With edges shown, both answer.
