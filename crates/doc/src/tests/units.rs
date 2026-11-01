@@ -207,3 +207,24 @@ fn readout_has_no_negative_zero() {
     assert_eq!(Unit::Points.readout(-0.0), "0.00 pt");
     assert_eq!(Unit::Points.readout(-12.5), "-12.50 pt");
 }
+
+/// Q and Ha take the suffixes `q` and `h` (`ha` too) without taking anyone else's: every unit's
+/// own suffix still reads as that unit in a points field, a Q or Ha value is never read as
+/// another unit, and `h`, `ha` and `q` mean nothing to a unit that is not offered Q and Ha when
+/// they are typed as words that are not suffixes (`1hr`, `1hq`, `1qt`).
+#[test]
+fn q_and_ha_suffixes_do_not_take_other_units_suffixes() {
+    for u in Unit::EAST_ASIAN {
+        if matches!(u, Unit::FeetInches) {
+            continue;
+        }
+        let typed = format!("3{}", u.suffix());
+        let got = Unit::Points.parse(&typed).unwrap_or_else(|| panic!("`{typed}` reads as nothing"));
+        assert!((got - u.to_pt(3.0)).abs() < 1e-9, "`{typed}` is 3 {u:?}: {got}");
+    }
+    for typed in ["1hr", "1hq", "1qt", "1qq", "1hh", "1hm", "1hectare"] {
+        assert_eq!(Unit::Points.parse(typed), None, "`{typed}`");
+    }
+    // A suffix after math covers the whole expression, as for the other units.
+    assert!((Unit::Points.parse("26/2 q").unwrap() - Unit::Q.to_pt(13.0)).abs() < 1e-9);
+}
