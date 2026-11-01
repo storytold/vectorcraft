@@ -2,10 +2,13 @@ use super::bounds::{cull_bounds, effected_path};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
-    DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor, shade,
+    DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
     shade_filter, shadow_filter, silhouette,
 };
-use super::*;
+use super::{
+    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, Vec2, blend_mode,
+    effects, fill_rule, peniko,
+};
 
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
@@ -59,6 +62,10 @@ impl Renderer {
             Some(e) => {
                 e.stamp = stamp;
                 self.stats.moved += usize::from(e.moved);
+                crate::paint::add_decode_failures(e.failed);
+                if e.image_left_out {
+                    self.image_left_out = self.image_left_out.map(|_| true);
+                }
                 let p = f.view * e.anchor;
                 (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round(), e.scale, e.moved, e.view.map(|v| v.served(f.view)))
             }
@@ -112,9 +119,16 @@ impl Renderer {
                 let view = Affine::scale(1.0 / scale) * Affine::translate((-x0, -y0)) * f.view;
                 // Art is culled against the raster's own area: members of a group outside the view cast their shadows in it.
                 let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
-                let crop = Frame { mt: false, view, visible, ..*f };
+                let ink = darkness.map_or(f.ink, |d| f.ink.darkened(d));
+                let crop = Frame { mt: false, view, visible, ink, ..*f };
                 let before = self.stats.moved;
+                let decoded = crate::paint::decode_failures();
+                let outer_image_left_out = self.image_left_out.replace(false);
+                let pattern_images_left_out = crate::pattern::images_left_out();
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
+                let failed = crate::paint::decode_failures() - decoded;
+                let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
+                self.image_left_out = outer_image_left_out.map(|outer| outer || image_left_out);
                 // A silhouette drawn over moved rasters makes a moved shadow.
                 let moved = self.stats.moved > before;
                 off.flush();
@@ -125,9 +139,8 @@ impl Renderer {
                     Made { pixels: silhouette(&pm, darkness.is_some()), fx: vec![fx.clone()], size: reach.size(), channels: None, outline: None };
                 let (wu, hu) = (w as usize, h as usize);
                 let sigma = blur / 2.0 / f.px / scale;
-                if let Some(darkness) = darkness {
+                if darkness.is_some() {
                     // The object's own colors, blurred, with the black Darkness adds (premultiplied).
-                    let keep = 1.0 - shade(f.ink, darkness);
                     let mut planes: [Vec<f32>; 4] = [
                         pm.data().iter().map(|p| p.r as f32).collect(),
                         pm.data().iter().map(|p| p.g as f32).collect(),
@@ -140,7 +153,7 @@ impl Renderer {
                     let [r, g, b, a] = &planes;
                     for (k, px) in pm.data_mut().iter_mut().enumerate() {
                         let al = (a[k] * opacity).clamp(0.0, 255.0).round();
-                        let value = |plane: &Vec<f32>| (plane[k] * opacity * keep).round().clamp(0.0, al) as u8;
+                        let value = |plane: &Vec<f32>| (plane[k] * opacity).round().clamp(0.0, al) as u8;
                         *px = vello_cpu::color::PremulRgba8 { r: value(r), g: value(g), b: value(b), a: al as u8 };
                     }
                 } else {
@@ -162,7 +175,10 @@ impl Renderer {
                 let node = Drawn::of(n, owner);
                 let rel = (x0 - p.x, y0 - p.y);
                 let view = cropped.map(|room| ViewCrop::of(f.view, room));
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, stamp });
+                self.shadows.insert(
+                    key,
+                    ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, failed, image_left_out, stamp },
+                );
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
                 (image, x0, y0, scale, moved, cropped)
             }
@@ -216,15 +232,9 @@ impl Renderer {
         self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
-            paint(r, c, &shifted(fr, dx, dy));
-            // Darkness: black over the object's own colors, keeping their alpha.
-            if let Some(black) = darkness.map(|d| shade(f.ink, d)).filter(|d| *d > 0.0) {
-                c.set_transform(fr.view);
-                c.set_blend_mode(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::SrcAtop));
-                c.set_paint(peniko::Color::new([0.0, 0.0, 0.0, black]));
-                c.fill_rect(&reach);
-                c.set_blend_mode(blend_mode(vectorcraft_doc::color::BlendMode::Normal));
-            }
+            let ink = darkness.map_or(fr.ink, |d| fr.ink.darkened(d));
+            let source = Frame { ink, ..*fr };
+            paint(r, c, &shifted(&source, dx, dy));
             c.pop_layer();
         });
     }
@@ -275,7 +285,11 @@ impl Renderer {
         let view = Affine::scale(1.0 / scale) * Affine::translate((-(p.x + rel.0), -(p.y + rel.1))) * f.view;
         // Culled against the raster's area, as `shadow_raster` draws the silhouette.
         let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
-        let crop = Frame { mt: false, view, visible, ..*f };
+        let ink = match fx {
+            RasterFx::DropShadow { darkness: Some(d), .. } => f.ink.darkened(*d),
+            _ => f.ink,
+        };
+        let crop = Frame { mt: false, view, visible, ink, ..*f };
         self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
@@ -369,8 +383,13 @@ impl Renderer {
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
         self.made_again = outer || !kept;
-        // With Crop Marks, the object inside the art paints its own raster effects.
-        let rfx = if effects::has_crop_marks(a) { vec![] } else { effects::raster_effects(&a.appearance.effects) };
+        // With Crop Marks, the object inside the art paints its own raster effects; Vector
+        // Halftone samples them with the object.
+        let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
+            vec![]
+        } else {
+            effects::raster_effects(&a.appearance.effects)
+        };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
                 // Feather, Inner Glow and Rasterize with Create Clipping Mask clip to the art's outline.
@@ -425,6 +444,7 @@ impl Renderer {
         };
         let container = is_container(a);
         let art = match effects::crop_marks_art(a)
+            .or_else(|| crate::addons::halftone::art(doc, a))
             .or_else(|| effects::revolve_art(a))
             .or_else(|| effects::solid_art(a))
             .or_else(|| effects::reshape(Some(doc), a, symbol.as_ref()))
@@ -435,7 +455,9 @@ impl Renderer {
             None => effects::outline_art(Some(doc), a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
         let art = if effects::has_revolve(a) || effects::has_solid(a) { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
-        let mut art = self.adjusted_art(art, effects::color_map(&a.appearance.effects).as_ref());
+        // Vector Halftone samples the object with its colour adjustments: its dots keep their inks.
+        let outer = if effects::addons::halftone::has_halftone(a) { None } else { effects::color_map(&a.appearance.effects) };
+        let mut art = self.adjusted_art(doc, art, outer.as_ref());
         // A path's geometry effects still apply when it is drawn.
         let path = matches!(art.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
         art.appearance.effects.retain(|e| path && effects::is_geometry(&e.id));
@@ -468,12 +490,15 @@ impl Renderer {
     }
 
     /// `art` with the colour adjustments inside it applied, then `outer` (its object's own) on
-    /// everything ([`effects::adjust`]). Embedded images become recoloured copies, cached with the
-    /// decoded images under a key naming the adjustment.
-    fn adjusted_art(&mut self, mut art: Node, outer: Option<&effects::ColorMap>) -> Node {
+    /// everything ([`effects::adjust`]), with `doc`'s swatches. Embedded images become recoloured
+    /// copies, cached with the decoded images under a key naming the adjustment.
+    fn adjusted_art(&mut self, doc: &vectorcraft_doc::Document, mut art: Node, outer: Option<&effects::ColorMap>) -> Node {
         art.appearance.effects.retain(|e| !effects::is_adjustment(&e.id));
         let mut wanted: Vec<(String, String, u64, effects::ColorMap)> = vec![];
-        let adjusted = effects::adjust(&art, outer, &mut |key, map| {
+        // shortcut: art kept by `fx_arts` isn't made again when only a swatch's kind (spot or
+        // process) changes, which Duotone reads; editing the object makes it again.
+        let swatches = |name: &str| effects::addons::duotone::swatch_kind(doc, name);
+        let adjusted = effects::adjust(&art, outer, &swatches, &mut |key, map| {
             let mut h = std::hash::DefaultHasher::new();
             std::hash::Hash::hash(&format!("{map:?}"), &mut h);
             let hash = std::hash::Hasher::finish(&h);
@@ -691,5 +716,47 @@ impl Renderer {
                 }
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RenderOptions;
+    use vectorcraft_color::Color;
+    use vectorcraft_doc::{Document, color::BlendMode};
+
+    #[test]
+    fn uncached_darkness_shadow_subtracts_before_separate_opacity() {
+        let doc = Document::new(100.0, 100.0);
+        let symbols = doc.symbol_boxes().quick();
+        let opts = RenderOptions::default();
+        let frame = Frame {
+            mt: false,
+            doc: &doc,
+            symbols: &symbols,
+            view: Affine::IDENTITY,
+            visible: Rect::new(0.0, 0.0, 100.0, 100.0),
+            px: 1.0,
+            opts: &opts,
+            ink: Ink::Display,
+            plates: None,
+        };
+        let mut ctx = frame.offscreen_context(100, 100);
+        let mut r = Renderer::new();
+        let fx =
+            RasterFx::DropShadow { mode: BlendMode::Normal, opacity: 0.5, dx: 40.0, dy: 0.0, blur: 0.0, color: Color::BLACK, darkness: Some(0.25) };
+        let source = Rect::new(10.0, 10.0, 30.0, 30.0);
+        r.draw_shadow_filter(&mut ctx, &frame, &fx, source, &mut |_, c, f| {
+            c.set_transform(f.view);
+            c.set_paint(f.ink.color(&Color::rgb(0.8, 0.4, 0.2), 1.0));
+            c.fill_rect(&source);
+        });
+        ctx.flush();
+        let mut pm = vello_cpu::Pixmap::new(100, 100);
+        ctx.render(&mut pm, &mut r.resources);
+        let px = pm.data()[20 * 100 + 60];
+        assert!(px.r.abs_diff(70) <= 1 && px.g.abs_diff(19) <= 1 && px.b == 0 && px.a.abs_diff(128) <= 1, "{px:?}");
+        assert!(r.shadows.is_empty());
     }
 }

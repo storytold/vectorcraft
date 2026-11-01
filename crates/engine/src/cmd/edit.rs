@@ -8,7 +8,11 @@ use vectorcraft_doc::{Document, Node, NodeId, RulerMode, Unit};
 use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
-use super::*;
+use super::{
+    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
+    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_or_artboard_tool, has_selection_or_guides, id_param, index, ok, point_param,
+    str_param,
+};
 use crate::{Clipboard, EngineError, inspect};
 
 /// Register editing commands, including document-to-document artwork drops and their parameter contracts.
@@ -37,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{units: \"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Pixels\"|\"Feet & Inches\"|\"Meters\"|\"Yards\"|\"Feet\"} the document's units: every length the UI shows and reads (General)",
             has_doc,
             set_units
+        ),
+        cmd!(
+            "document.switchUnits",
+            "Switch Units",
+            [],
+            Some("Cmd+Alt+Shift+U"),
+            "{} the document's units become the next of Points, Picas, Inches, Millimeters, Centimeters, Pixels, Feet & Inches, Meters, Yards and Feet (the order a right-click on a ruler lists them), Feet going back to Points; one undo step → {units}",
+            has_doc,
+            switch_units
         ),
         cmd!(
             query "document.rulerOrigin",
@@ -328,6 +341,14 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Switch Units: the unit after the document's in [`Unit::ALL`], wrapping around.
+fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
+    let now = s.doc()?.doc.units;
+    let next = Unit::ALL.iter().position(|u| *u == now).and_then(|i| Unit::ALL.get((i + 1) % Unit::ALL.len())).copied().unwrap_or_default();
+    s.set_document_units(next)?;
+    Ok(json!({ "units": next.label() }))
+}
+
 /// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.
 fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
     let index = match p.get("artboard") {
@@ -545,17 +566,29 @@ pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
 /// rest still go to the compound path, which holds the paint.
 pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
-    Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), true))
+    Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_| true))
+}
+
+/// [`selected_roots`] for the selected objects inside the isolated object `root`
+/// ([`super::inside_isolation`]): `root` itself and objects outside it are left out before the
+/// objects held by another selected object are dropped. A selected path of a compound path stands
+/// for its compound unless the compound is `root` or `members` is set (as in
+/// [`selected_roots_to_transform`]).
+pub(crate) fn selected_roots_inside(s: &Session, root: NodeId, members: bool) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    let ids = st.selection.in_paint_order(&st.doc).into_iter().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect();
+    Ok(roots_within(&st.doc, ids, |compound| members || compound == root))
 }
 
 /// The top-level objects among `ids` (in paint order): compound-path members stand for their
 /// compound, and ids whose ancestor is also listed, and layers, are dropped.
 pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
-    roots_within(doc, ids, false)
+    roots_within(doc, ids, |_| false)
 }
 
-/// [`roots_of`]; with `members`, a compound path's member listed stays itself.
-fn roots_within(doc: &Document, ids: Vec<NodeId>, members: bool) -> Vec<NodeId> {
+/// [`roots_of`]; a compound path's member listed stays itself when `members` holds for the
+/// compound's id.
+fn roots_within(doc: &Document, ids: Vec<NodeId>, members: impl Fn(NodeId) -> bool) -> Vec<NodeId> {
     // Every id's place in the tree, found in one walk (a lookup per id is a walk per id).
     let paths = doc.index_paths(ids.iter().copied());
     // A compound-path member acts as its compound (compounds are one object).
@@ -565,7 +598,7 @@ fn roots_within(doc: &Document, ids: Vec<NodeId>, members: bool) -> Vec<NodeId> 
             let path = paths.get(&id);
             let parent = path.and_then(|p| p.split_last()).map(|(_, up)| up).filter(|up| !up.is_empty());
             match parent.and_then(|up| doc.node_at(up).map(|n| (up, n))) {
-                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) && !members => (n.id, Some(up.to_vec())),
+                Some((up, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) && !members(n.id) => (n.id, Some(up.to_vec())),
                 _ => (id, path.cloned()),
             }
         })

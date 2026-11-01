@@ -15,7 +15,7 @@ use vectorcraft_pathops::BoolOp;
 use super::draw2::{components, erase_outline, ids_json, replace_with_pieces};
 use super::edit::selected_roots;
 use super::pathops::{Beside, node_path};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, cmd, finite_numbers, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

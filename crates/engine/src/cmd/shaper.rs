@@ -2,9 +2,12 @@
 //! art retained underneath. Recipes select topology regions; source edits re-evaluate them in
 //! the same undo transaction. Rendering and exporters only see ordinary groups and paths.
 use super::pathops::Beside;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, point_param};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use vectorcraft_doc::shaper::{EdgeEdit, FILL_PREFIX, FaceEdit, FaceSelector, SOURCES, STROKE_PREFIX, ShaperSpec};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, Shape as _};
@@ -31,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Shaper Face",
             [],
             None,
-            "{point: [x,y], source?: bool} click selects a group, then a face; source enters construction isolation and selects an original; while a group's originals are isolated, it selects one of that group's originals → {id}",
+            "{point: [x,y], source?: bool} click selects a group, then a face; source enters construction isolation and selects an original (while an opacity mask or a pattern is edited, it selects the original and the editing layer stays isolated); while a group's originals are isolated, it selects one of that group's originals → {id}",
             has_doc,
             select
         ),
@@ -52,6 +55,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id? (default: selection)} keep the visible result as ordinary paths → {id}",
             has_doc,
             expand
+        ),
+        cmd!(
+            "shaper.releaseSource",
+            "Remove from Shaper Group",
+            [],
+            None,
+            "{source: id, group?: id (default: the Shaper Group that holds `source`)} take one original shape out of its Shaper Group: it becomes a path just above the group, keeps its look and is selected, and Construction mode ends; the group's result is computed again from the shapes left, and a group left with none is removed. In Construction mode, a Selection-tool move that ends with an original shape wholly outside the bounds the group's original shapes had does the same in the move's undo step (object.transform's `releaseOutside`) → {id}",
+            has_doc,
+            release_source
         ),
     ]
 }
@@ -377,17 +389,37 @@ fn generated(d: &mut Document, src: &[Arc<Node>], spec: &ShaperSpec, map: &Build
     Ok(out)
 }
 
-/// Re-evaluate only groups whose original art changed. Errors reach Session::edit's rollback.
-pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
-    let mut ids = vec![];
-    d.walk(|n| {
-        if n.extras().shaper.is_some() {
-            ids.push(n.id)
+fn changed_shaper_groups(before: &[Arc<Node>], after: &[Arc<Node>], out: &mut Vec<NodeId>) {
+    let mut by_id: Option<HashMap<NodeId, &Arc<Node>>> = None;
+    for (i, a) in after.iter().enumerate() {
+        let b = match before.get(i) {
+            Some(b) if b.id == a.id => Some(b),
+            _ => by_id.get_or_insert_with(|| before.iter().map(|b| (b.id, b)).collect()).get(&a.id).copied(),
+        };
+        if b.is_some_and(|b| Arc::ptr_eq(b, a)) {
+            continue;
         }
-    });
+        if a.extras().shaper.is_some() {
+            out.push(a.id);
+        }
+        if let Some(children) = a.children() {
+            changed_shaper_groups(b.and_then(|b| b.children()).map_or(&[], Vec::as_slice), children, out);
+        }
+    }
+}
+
+/// Re-evaluate only groups whose original art changed. Errors reach Session::edit's rollback.
+/// Returns whether any Shaper group's artwork was rebuilt or modified.
+pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<bool> {
+    let mut ids = vec![];
+    changed_shaper_groups(&before.layers, &d.layers, &mut ids);
+    if ids.is_empty() {
+        return Ok(false);
+    }
     // Groups whose source art is all gone are removed through `emptied`, which is made when the
     // first one is found.
     let mut emptied: Option<Beside> = None;
+    let mut rebuilt_any = false;
     for &id in &ids {
         let Some(current) = d.node(id).cloned() else { continue };
         let Some(old) = before.node(id) else { continue };
@@ -404,6 +436,7 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
         }
         if src.is_empty() {
             emptied.get_or_insert_with(|| Beside::replacing(d, &ids)).put(d, id, vec![])?;
+            rebuilt_any = true;
             continue;
         }
         let map = map_of(&src)?;
@@ -501,8 +534,10 @@ pub(crate) fn refresh(before: &Document, d: &mut Document) -> Result<()> {
         if let Some(ch) = n.children_mut() {
             *ch = children;
         }
+        rebuilt_any = true;
     }
-    emptied.map_or(Ok(()), |e| e.finish(d))
+    emptied.map_or(Ok(()), |e| e.finish(d))?;
+    Ok(rebuilt_any)
 }
 
 fn candidates(s: &Session, p: &Value, points: &[Point], tolerance: f64) -> Result<Vec<NodeId>> {
@@ -678,7 +713,7 @@ fn scribble(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([id]);
         Ok(id)
     })?;
-    s.doc_mut()?.isolation = None;
+    end_isolation(s)?;
     Ok(json!({"id": id.0, "regions": touched.len(), "strokes": strokes}))
 }
 
@@ -730,12 +765,24 @@ fn select(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         group
     };
-    let isolation = source.then(|| source_group(node).map(|n| n.id)).flatten();
+    // While an opacity mask or a pattern is edited, the source pick leaves its editing layer isolated.
+    let isolation = source.then(|| source_group(node).map(|n| n.id)).flatten().filter(|_| editing_layer(&st.doc).is_none());
     s.select(|_, sel| sel.set([target]))?;
     if let Some(id) = isolation {
         s.doc_mut()?.isolation = Some(id);
     }
     Ok(json!({"id": target.0}))
+}
+/// The layer an opacity mask or a pattern is edited in, which stays isolated while that mode is on.
+fn editing_layer(d: &Document) -> Option<NodeId> {
+    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer))
+}
+/// Leave isolation mode, Construction mode included. While an opacity mask or a pattern is edited,
+/// its editing layer stays isolated.
+fn end_isolation(s: &mut Session) -> Result<()> {
+    let st = s.doc_mut()?;
+    st.isolation = editing_layer(&st.doc);
+    Ok(())
 }
 fn target(s: &Session, p: &Value) -> Result<NodeId> {
     let id = id_param(p, "id")
@@ -757,7 +804,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set(ids.iter().copied());
         Ok(ids)
     })?;
-    s.doc_mut()?.isolation = None;
+    end_isolation(s)?;
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 fn expand(s: &mut Session, p: &Value) -> Result<Value> {
@@ -774,6 +821,108 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([id]);
         Ok(())
     })?;
-    s.doc_mut()?.isolation = None;
+    end_isolation(s)?;
     Ok(json!({"id": id.0}))
+}
+
+/// The editable Shaper Group whose original shapes include `source`.
+fn holder(d: &Document, source: NodeId) -> Option<NodeId> {
+    let sources = d.parent_of(source)?;
+    let group = d.parent_of(sources)?;
+    (d.node(group).and_then(source_group).is_some_and(|g| g.id == sources) && d.is_editable(source)).then_some(group)
+}
+
+/// Take each of `shapes` (group, original shape) out of its Shaper Group and put it just above that
+/// group; the shapes taken out are selected, alone when `only`, else along with what was
+/// selected. [`refresh`] then computes each group's result again, or removes a group that holds no
+/// shape any more. Construction mode ends when one of those groups was in it.
+fn take_out(s: &mut Session, shapes: &[(NodeId, NodeId)], only: bool) -> Result<()> {
+    let sources: Vec<NodeId> = {
+        let d = &s.doc()?.doc;
+        shapes.iter().filter_map(|(group, _)| d.node(*group).and_then(source_group).map(|n| n.id)).collect()
+    };
+    s.edit("Remove from Shaper Group", |d, sel| {
+        // The topmost shape goes first, so each one put just above its group goes below the ones
+        // that were above it.
+        let mut order = shapes.to_vec();
+        order.sort_by_key(|(_, source)| std::cmp::Reverse(d.position(*source).map_or(0, |p| p.1)));
+        for (group, source) in order {
+            let node = d.remove(source)?;
+            let (parent, index, _) = d.position(group).ok_or(EngineError::NoNode(group))?;
+            d.insert(parent, index + 1, Arc::unwrap_or_clone(node))?;
+        }
+        if only {
+            sel.set(shapes.iter().map(|(_, source)| *source));
+        }
+        for &(_, source) in shapes {
+            if !sel.contains(source) {
+                sel.objects.push(source);
+            }
+        }
+        Ok(())
+    })?;
+    let st = s.doc_mut()?;
+    if st.isolation.is_some_and(|i| sources.contains(&i)) {
+        st.isolation = None;
+    }
+    Ok(())
+}
+
+fn release_source(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shaper.releaseSource";
+    let source = id_param(p, "source").ok_or_else(|| bad(C, "source must be the id of a Shaper Group's original shape"))?;
+    let held = holder(&s.doc()?.doc, source);
+    let group = match p.get("group") {
+        None | Some(Value::Null) => held,
+        Some(_) => Some(id_param(p, "group").ok_or_else(|| bad(C, "group must be the id of a Shaper Group"))?),
+    };
+    let group = group.filter(|g| held == Some(*g)).ok_or_else(|| bad(C, "the shape is not an editable original shape of that Shaper Group"))?;
+    take_out(s, &[(group, source)], true)?;
+    Ok(json!({"id": source.0}))
+}
+
+/// What `object.transform`'s `releaseOutside` checks once the move is made: each of `ids` that is
+/// an original shape of an editable Shaper Group, with that group and the bounds the group's
+/// original shapes have before the move.
+pub(crate) fn moving_sources(s: &Session, ids: &[NodeId]) -> Result<Vec<(NodeId, NodeId, Rect)>> {
+    let d = &s.doc()?.doc;
+    Ok(ids
+        .iter()
+        .filter_map(|&id| {
+            let group = holder(d, id)?;
+            Some((group, id, d.node(group).and_then(source_group).and_then(Node::geometric_bounds)?))
+        })
+        .collect())
+}
+
+/// Do bounds `b` lie wholly outside `bounds`? Bounds that touch an edge, and flat bounds (a
+/// horizontal or vertical line's) on the same line as flat `bounds`, are not outside.
+pub(crate) fn wholly_outside(b: Rect, bounds: Rect) -> bool {
+    b.x0 > bounds.x1 || b.x1 < bounds.x0 || b.y0 > bounds.y1 || b.y1 < bounds.y0
+}
+
+/// Take out of their Shaper Groups the `moved` shapes ([`moving_sources`]) that now lie wholly
+/// outside the bounds their group's original shapes had before the move. Inside a drag the step
+/// is named for that. → whether any shape was taken out.
+pub(crate) fn release_outside(s: &mut Session, moved: &[(NodeId, NodeId, Rect)]) -> Result<bool> {
+    let outside: Vec<(NodeId, NodeId)> = {
+        let d = &s.doc()?.doc;
+        moved
+            .iter()
+            .filter(|(_, id, before)| d.node(*id).and_then(Node::geometric_bounds).is_some_and(|b| wholly_outside(b, *before)))
+            .map(|(group, id, _)| (*group, *id))
+            .collect()
+    };
+    if outside.is_empty() {
+        return Ok(false);
+    }
+    // Shapes the group can't be computed from without the ones taken out keep it as it is: the
+    // edit is rolled back, and the move stays a plain move.
+    if take_out(s, &outside, false).is_err() {
+        return Ok(false);
+    }
+    if let Some(it) = &mut s.doc_mut()?.interaction {
+        it.label = "Remove from Shaper Group".into();
+    }
+    Ok(true)
 }

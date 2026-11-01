@@ -1,5 +1,8 @@
 use super::ops::MAX_DATA;
-use super::*;
+use super::{
+    DecodeSettings, Decoder, DecoderContext, DictRef, EncodingMode, ImageBlob, Key, Obj, PsError, Rc, Res, find, hex_decode, jpeg_components, ps,
+    ps_err,
+};
 
 /// A file object: the program itself, or data a filter decoded.
 #[derive(Debug)]

@@ -343,19 +343,85 @@ pub enum PatternFit {
     Approximate,
 }
 
+/// What a pattern brush draws at a kind of corner it has no corner art for: no tile, or a tile
+/// made from the side tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerSource {
+    /// No corner tile: the side tiles run up to the corner.
+    None,
+    /// One side tile stretched around the corner and centered on it.
+    AutoCentered,
+    /// A side tile on each side reaching into the corner, stretched so the two meet on the
+    /// corner's diagonal.
+    AutoBetween,
+    /// A side tile on each side cut on the corner's diagonal, the two meeting like a mitered frame.
+    AutoSliced,
+    /// A side tile on each side running past the corner, the two overlapping there.
+    AutoOverlap,
+}
+
+impl CornerSource {
+    pub const ALL: [CornerSource; 5] =
+        [CornerSource::None, CornerSource::AutoCentered, CornerSource::AutoBetween, CornerSource::AutoSliced, CornerSource::AutoOverlap];
+
+    /// The id in a brush definition and in `brush.options` params.
+    pub fn id(self) -> &'static str {
+        match self {
+            CornerSource::None => "none",
+            CornerSource::AutoCentered => "autoCentered",
+            CornerSource::AutoBetween => "autoBetween",
+            CornerSource::AutoSliced => "autoSliced",
+            CornerSource::AutoOverlap => "autoOverlap",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CornerSource> {
+        CornerSource::ALL.into_iter().find(|a| a.id() == s)
+    }
+}
+
 /// Pattern brush: tiles repeated along the path, with corner and end tiles.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PatternBrush {
     pub side: Node,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_swatch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outer_corner: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_corner_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_corner_swatch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inner_corner: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_corner_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_corner_swatch: Option<String>,
+    /// What the outer corners take when there is no `outer_corner` art. Without art or a source,
+    /// they take the `inner_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_source: Option<CornerSource>,
+    /// What the inner corners take when there is no `inner_corner` art. Without art or a source,
+    /// they take the `outer_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inner_source: Option<CornerSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_swatch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_swatch: Option<String>,
     /// Scale in percent.
     pub scale: f64,
     /// Space between tiles in percent of the tile width.
@@ -376,10 +442,22 @@ impl Default for PatternBrush {
     fn default() -> Self {
         Self {
             side: defaults::stitch_tile(),
+            side_frame: None,
+            side_swatch: None,
             outer_corner: None,
+            outer_corner_frame: None,
+            outer_corner_swatch: None,
             inner_corner: None,
+            inner_corner_frame: None,
+            inner_corner_swatch: None,
+            outer_source: None,
+            inner_source: None,
             start: None,
+            start_frame: None,
+            start_swatch: None,
             end: None,
+            end_frame: None,
+            end_swatch: None,
             scale: 100.0,
             spacing: 0.0,
             fit: PatternFit::Stretch,
@@ -450,6 +528,14 @@ fn within(v: f64, (lo, hi): (f64, f64), fallback: f64) -> f64 {
 
 fn within_pair((a, b): (f64, f64), range: (f64, f64), fallback: f64) -> (f64, f64) {
     (within(a, range, fallback), within(b, range, fallback))
+}
+
+fn valid_tile_frame(frame: Rect) -> bool {
+    [frame.x0, frame.y0, frame.x1, frame.y1].into_iter().all(f64::is_finite)
+        && frame.width().is_finite()
+        && frame.height().is_finite()
+        && frame.width() > 1e-9
+        && frame.height() > 1e-9
 }
 
 impl Colorization {
@@ -552,6 +638,11 @@ impl Brush {
             BrushKind::Pattern(p) => {
                 p.scale = within(p.scale, PatternBrush::SCALE_RANGE, 100.0);
                 p.spacing = within(p.spacing, PatternBrush::SPACING_RANGE, 0.0);
+                for frame in [&mut p.side_frame, &mut p.outer_corner_frame, &mut p.inner_corner_frame, &mut p.start_frame, &mut p.end_frame] {
+                    if frame.is_some_and(|f| !valid_tile_frame(f)) {
+                        *frame = None;
+                    }
+                }
                 p.colorization.sanitize();
             }
             BrushKind::Bristle(b) => {

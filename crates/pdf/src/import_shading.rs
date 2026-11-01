@@ -21,8 +21,8 @@ use crate::import_color::{Colors, Native};
 use crate::import_mask::{contains, is_rectangle, luminance};
 
 /// The most mesh patches (or triangles) imported per shading: past it, the shading is a flat
-/// colour.
-const MAX_PATCHES: usize = 4096;
+/// colour. (Illustrator writes meshes of up to 14,355 in files users sent.)
+const MAX_PATCHES: usize = 16_384;
 
 /// An axial or radial shading as a gradient paint, with whether it extends past its start and
 /// its end. `inks`: the colorant names of its space, from the page's walk ([`Colors::solid`]).
@@ -45,6 +45,10 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
     for i in 0..=N {
         let t = i as f32 / N as f32;
         pts.push((t, sample(t)?.to_rgb()));
+        // An ink that paints only at samples dropped below is still a spot swatch.
+        if let Some(v) = at(t) {
+            colors.mark_inks(space, &v);
+        }
     }
     let ts: Vec<f32> = linear_keep(&pts).iter().filter_map(|&k| pts.get(k)).map(|p| p.0).collect();
     let mut stop_at = |t: f32, offset: f32| -> GradientStop {

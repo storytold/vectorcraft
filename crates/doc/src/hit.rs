@@ -110,6 +110,72 @@ pub fn hit_test_visible(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit
     hit_test_skipping(doc, p, opt, &|_| false, false)
 }
 
+/// [`hit_test_visible`] passing over the nodes `skip` names (and their contents): what lies below
+/// them at `p`. A skipped clipping path still clips.
+pub fn hit_test_visible_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool) -> Option<Hit> {
+    hit_test_skipping(doc, p, opt, skip, false)
+}
+
+/// The object of `selected` (topmost first) whose own art lies under `p` where a clipping mask
+/// hides it: a clip group (or a layer with a clipping mask) holding it doesn't clip to `p`. A
+/// click there hits nothing ([`hit_test`]), so the selection tools grab the selection by that
+/// art instead of starting a marquee: an image in a mask, picked in the Layers panel, can be
+/// dragged by its hidden part, whose frame shows while it is selected. An object that a click
+/// can't hit anyway doesn't count: hidden, locked, a template, a guide while guides are locked
+/// or hidden, in a Shaper group's part a click can't reach, outside the isolated container
+/// (`opt.scope`) or on a locked artboard. On a layer whose Preview is off it counts by its
+/// outline, as a click there hits it.
+pub fn selected_hidden_at(doc: &Document, p: Point, opt: HitOptions, selected: &[NodeId]) -> Option<NodeId> {
+    let symbols = doc.symbol_boxes();
+    let locks = doc.locked_artboards();
+    selected.iter().rev().copied().find(|&id| {
+        let Some(chain) = doc.ancestry(id) else { return false };
+        let nodes: Vec<&Node> = chain.iter().filter_map(|a| doc.node(*a)).collect();
+        if nodes.len() != chain.len()
+            || nodes.iter().any(|n| !n.visible || n.locked || n.is_template())
+            || opt.scope.is_some_and(|s| !chain.contains(&s))
+            || locks.holds_id(id)
+        {
+            return false;
+        }
+        // How a click reaches it, if one does.
+        let Some(opt) = path_options(&nodes, &chain, opt) else { return false };
+        // Hidden by a mask: one of the containers around it clips, and not to `p`.
+        let masked = nodes
+            .iter()
+            .rev()
+            .skip(1)
+            .any(|n| n.clips() && n.children().and_then(|c| c.first()).is_some_and(|clip| clip.id != id && !clip_contains(clip, p)));
+        // A click may reach it there ([`may_hit`]: not a guide while guides are locked or
+        // hidden, nor a Shaper group's hidden part), and its own art is what a click would hit
+        // in it: a group's hidden, locked or masked contents don't count.
+        let [.., parent, n] = nodes.as_slice() else { return false };
+        let reachable =
+            parent.children().and_then(|c| c.iter().position(|c| c.id == id)).is_some_and(|i| may_hit(parent, i, n, p, opt, &symbols, true));
+        masked && reachable && object_hit(n, p, opt, &symbols, true)
+    })
+}
+
+/// The options a click goes down `nodes` (an object's ancestry, `chain`, the layer first) with, as
+/// [`hit_test`] goes: from the isolated container (`opt.scope`), else from the layer, in outline
+/// below a layer whose Preview is off. `None` when a Shaper group's part it can't reach lies on
+/// the way ([`shaper_hides`]).
+fn path_options(nodes: &[&Node], chain: &[NodeId], opt: HitOptions) -> Option<HitOptions> {
+    let scope_at = opt.scope.and_then(|s| chain.iter().position(|a| *a == s));
+    let child_index = |parent: &Node, child: &Node| parent.children().and_then(|c| c.iter().position(|c| c.id == child.id));
+    let hidden = nodes.windows(2).skip(scope_at.unwrap_or(0)).any(|w| match w {
+        [parent, child] => child_index(parent, child).is_some_and(|i| shaper_hides(parent, i, opt.scope)),
+        _ => false,
+    });
+    if hidden {
+        return None;
+    }
+    // The isolated container's own Preview doesn't count: a click starts inside it.
+    let below = scope_at.map_or(0, |i| i + 1);
+    let outline = nodes.iter().skip(below).any(|n| matches!(n.kind, NodeKind::Layer { preview: false, .. }));
+    Some(if outline { HitOptions { outline: true, ..opt } } else { opt })
+}
+
 /// The objects under `p` that [`Hit::top_object`] picks in `scope` (isolation mode), topmost
 /// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
 pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
@@ -277,7 +343,14 @@ fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
 
 /// Would a click at `p` hit the locked object `n` if it were not locked?
 fn locked_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> bool {
-    let inside = || hit_children(n, p, opt, symbols, &|_| false, &mut Vec::new(), false).is_some();
+    object_hit(n, p, opt, symbols, false)
+}
+
+/// Would a click at `p` hit the object `n`, wherever it is? A container is hit by its contents as
+/// [`hit_test`] tries them (its own clipping mask, and with `editable_only` none of its hidden,
+/// locked or template contents).
+fn object_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editable_only: bool) -> bool {
+    let inside = || hit_children(n, p, opt, symbols, &|_| false, &mut Vec::new(), editable_only).is_some();
     match &n.kind {
         NodeKind::Group { .. } | NodeKind::Intertwine { .. } | NodeKind::Envelope { editing: true, .. } => inside(),
         NodeKind::Blend { .. } => inside() || hit_leaf(n, p, opt, symbols).is_some(),
@@ -471,20 +544,15 @@ fn hit_children(
 }
 
 /// The order a click at `p` tries the children of `parent` in, front first: their stacking order
-/// from the top, except that in an Intertwine group the members drawn over the others at `p`
-/// come first (from the top among them too).
+/// from the top, except that in an Intertwine group the members are tried in the order they are
+/// drawn at `p`, from the top ([`crate::intertwine::tier_at`]).
 fn hit_order<'a>(parent: &Node, children: &'a [std::sync::Arc<Node>], p: Point) -> impl Iterator<Item = usize> + 'a {
-    let over: Vec<usize> = if matches!(parent.kind, NodeKind::Intertwine { .. }) {
-        let contains = |a: &vectorcraft_geom::PathData| fill_contains(&a.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p);
-        (0..children.len()).rev().filter(|i| children.get(*i).and_then(|c| crate::intertwine::over_area(c)).is_some_and(contains)).collect()
-    } else {
-        vec![]
-    };
-    let rest = (0..children.len()).rev().filter({
-        let over = over.clone();
-        move |i| !over.contains(i)
-    });
-    over.into_iter().chain(rest)
+    let mut order: Vec<usize> = (0..children.len()).rev().collect();
+    if matches!(parent.kind, NodeKind::Intertwine { .. }) {
+        let tier = |i: usize| children.get(i).map_or(0, |c| crate::intertwine::tier_at(c, p));
+        order.sort_by_cached_key(|i| std::cmp::Reverse((tier(*i), *i)));
+    }
+    order.into_iter()
 }
 
 /// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke

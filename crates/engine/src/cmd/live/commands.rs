@@ -7,8 +7,8 @@ use super::envelope::{
     env_edit_contents, env_expand, env_info, env_make_mesh, env_make_top, env_make_warp, env_options, env_release, env_reset_mesh, env_reset_warp,
     env_set_mesh_point,
 };
-use super::mesh::{mesh_add_line, mesh_create, mesh_delete_point, mesh_expand, mesh_move_point, mesh_set_color};
-use super::*;
+use super::mesh::{mesh_add_line, mesh_create, mesh_delete_point, mesh_expand, mesh_move_point, mesh_move_points, mesh_set_color};
+use super::{CommandSpec, always, cmd, has_doc, has_multi, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -236,7 +236,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Gradient Mesh…",
             ["Object"],
             None,
-            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y], columns?: as cols} convert filled paths into gradient meshes in their fill colour (a gradient fill: the colour it paints at each point), lightened per `appearance` (with `at`: 1×1 mesh plus lines through that point); an embedded image becomes a mesh over its rectangle (its transform kept) whose points take the average colour and opacity of the picture around them (a linked image is refused: embed it first) → {ids, index?}",
+            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y], tolerance?: pt (0), columns?: as cols} convert filled paths into gradient meshes in their fill colour (a gradient fill: the colour it paints at each point), lightened per `appearance` (with `at`: 1×1 mesh plus lines through that point, or through the nearest point of the edge when `at` is outside within `tolerance`); an embedded image becomes a mesh over its rectangle (its transform kept) whose points take the average colour and opacity of the picture around them (a linked image is refused: embed it first) → {ids, index?}",
             has_selection,
             mesh_create
         ),
@@ -245,7 +245,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index, color, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour of one mesh point",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color?, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
             has_doc,
             mesh_set_color
         ),
@@ -259,11 +259,20 @@ pub fn specs() -> Vec<CommandSpec> {
             mesh_move_point
         ),
         cmd!(
+            "object.mesh.movePoints",
+            "Move Mesh Points",
+            [],
+            None,
+            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh envelopes by (dx, dy), their handles with them (one undo step; an index out of range changes nothing)",
+            has_doc,
+            mesh_move_points
+        ),
+        cmd!(
             "object.mesh.addLine",
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color?, keepModel?: bool (as paint.setFill)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope → {index}",
+            "{id, x, y, color?, keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
             has_doc,
             mesh_add_line
         ),

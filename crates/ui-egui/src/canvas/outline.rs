@@ -1,4 +1,4 @@
-use super::*;
+use super::{BezPath, Color32, Node, NodeKind, PathEl, Point, Pos2, Shape, Stroke, SymbolBoxes, VectorcraftApp, Xf, pos2};
 
 pub(super) fn to_screen_path(bp: &BezPath, xf: &Xf) -> Vec<Vec<Pos2>> {
     // Flatten for drawing: a polyline per subpath (tolerance ~0.25 screen px).

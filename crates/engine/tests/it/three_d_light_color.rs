@@ -48,7 +48,7 @@ fn all_four_light_colors_save_reopen_undo_and_expand_without_editing_source() {
         assert_eq!(doc(&s), &red);
         let svg = s.execute("document.serialize", &json!({"format":"svg"})).unwrap();
         let text = svg["text"].as_str().unwrap();
-        assert!(text.contains("<path") && !text.contains("<image"), "{effect}");
+        assert!(vectorcraft_testkit::svg_shapes(text) > 0 && !text.contains("<image"), "{effect}");
         if effect == "threeD.rotate" {
             assert!(text.contains("#ff4040"), "front plane is white under red light and neutral 25% ambient: {text}");
         }

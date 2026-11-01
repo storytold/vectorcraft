@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, str_param};
 use crate::Prefs;
 use crate::units::Measure;
 use vectorcraft_doc::{GridPrefs, Unit};
@@ -89,8 +89,9 @@ pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
 /// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
 /// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
-/// (winit 0.30 has no Wayland drag and drop, #1151); `x11WithPen` does the same only when a pen is
-/// attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse (#2028).
+/// (winit 0.30 has no Wayland drag and drop, #1151); `automatic` and `x11WithPen` do the same only
+/// when a pen is attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse
+/// (#2028, #4967).
 const LINUX_DISPLAY_SERVERS: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("x11", "X11 (XWayland)"), ("x11WithPen", "X11 (XWayland) When a Pen Is Attached")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
@@ -377,6 +378,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
+    p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
+    p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -385,10 +389,11 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
-/// Perspective Grid Options (`perspective.widget.options`) and the Pathfinder Options
-/// (`object.pathfinder.options`). `prefs.get` and `prefs.set` take them by key (a partial object
-/// updates what it names) and `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder"];
+/// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
+/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
+/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
+/// `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -399,6 +404,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "pathfinder" => {
             let cur: super::PathfinderOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "glyphSnap" => {
+            let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -556,6 +565,9 @@ impl Session {
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
+        if p.trace_presets != self.prefs.trace_presets {
+            self.trace_preset_changes.replaced();
+        }
         self.prefs = p;
         if corner_radius_changed {
             // General › Corner Radius is the Rounded Rectangle tool's radius (#394): a tool already

@@ -14,6 +14,12 @@ use vectorcraft_geom::{Anchor, FillRule, PathData, SubPath};
 use crate::PathOpsError;
 use crate::fit::{end_tangent, fit_single, is_straight, sample, start_tangent};
 
+#[cfg(test)]
+thread_local! {
+    /// The contour passes made over an arrangement on this thread, each of which walks all of it.
+    pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Default curve-refit tolerance (document points) used to merge split curve pieces back together.
 /// Similar in spirit to Illustrator's Pathfinder "Precision" option (0.028 pt).
 pub const DEFAULT_PRECISION: f64 = 0.01;
@@ -314,11 +320,13 @@ impl Arrangement {
 
     /// [`Arrangement::contours`] with the test on the windings themselves (see [`Self::covered`]).
     pub(crate) fn contours_where(&self, pred: impl Fn(&Multi) -> bool) -> Contours {
+        #[cfg(test)]
+        CONTOUR_PASSES.with(|n| n.set(n.get() + 1));
         self.top.contours(pred)
     }
 
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
-        self.top.contours(|w| pred(&self.mask(w)))
+        self.contours_where(|w| pred(&self.mask(w)))
     }
 
     /// All distinct non-empty coverage masks that occur next to some edge, sorted.
@@ -648,8 +656,10 @@ pub(crate) fn normalize_bez(bp: &BezPath, rule: FillRule) -> Result<Contours, Pa
     if !crate::budget::sweep_fits([&bp]) {
         return Err(PathOpsError::TooComplex);
     }
-    let top = Topology::<i32>::from_path(&bp, eps).map_err(|_| PathOpsError::OpenPath)?;
-    Ok(top.contours(|w| inside(rule, *w)))
+    // As in `Sweep::new`, a panic in the sweep on near-degenerate input becomes an error.
+    let swept =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Topology::<i32>::from_path(&bp, eps).map(|top| top.contours(|w| inside(rule, *w)))));
+    swept.map_err(|_| PathOpsError::Degenerate)?.map_err(|_| PathOpsError::OpenPath)
 }
 
 /// Boolean operation between two filled paths. Returns an empty path on invalid (non-finite) input.

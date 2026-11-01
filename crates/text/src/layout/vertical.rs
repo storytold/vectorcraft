@@ -1,6 +1,6 @@
 use super::flow::flow;
 use super::region::Region;
-use super::*;
+use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, is_cjk, punct};
 
 /// System Layout on or Fractional Widths off: each character that takes space advances by a whole
 /// number of points, at least one, so small type does not collapse onto itself. A zero advance (a
@@ -23,7 +23,7 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 /// before the automatic digit rule.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
 pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> (f64, bool)) {
-    let manual: Vec<bool> = g.iter().map(|gl| style(gl).1).collect();
+    let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).1).collect();
     let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
     let mut i = 0;
     while i < g.len() {
@@ -218,6 +218,12 @@ pub(super) const QUARTER_TURN: Affine = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0
 /// their side when the font has none (Unicode's Vertical_Orientation Tr).
 /// Fullwidth !/? instead keep the nominal glyph upright (Tu fallback, UAX #50 §3.1):
 /// <https://www.unicode.org/reports/tr50/#vo>.
+///
+/// Standard Vertical Roman Alignment (Character panel menu): a marked Latin letter, digit or other
+/// character outside the classes above stands upright instead of lying on its side, except spaces
+/// and control characters (they keep their width down the column) and the glyphs of a
+/// tate-chu-yoko block, which stays across the column.
+/// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
 pub(super) fn stands_upright(g: &SGlyph) -> bool {
     let c = g.ch as u32;
     let upright = matches!(c,
@@ -230,7 +236,7 @@ pub(super) fn stands_upright(g: &SGlyph) -> bool {
         | 0xE000..=0xFAFF | 0xFE10..=0xFE1F | 0xFE30..=0xFE4F | 0xFE50..=0xFE6F | 0xFF00..=0xFFE7
         | 0x1F000..=0x1FAFF | 0x20000..=0x3FFFF);
     if !upright {
-        return false;
+        return g.vertical_roman && g.tcy.is_none() && g.inline.is_none() && !g.ch.is_whitespace() && !g.ch.is_control();
     }
     let needs_vertical_form = matches!(c,
         0x3001 | 0x3002 | 0x3008..=0x3011 | 0x3013..=0x301F | 0x3030 | 0x30A0 | 0x30FC
@@ -242,28 +248,8 @@ pub(super) fn stands_upright(g: &SGlyph) -> bool {
 
 pub(super) fn finish_bounds(out: &mut TextLayout) {
     let xf = out.line_xf;
-    let mut b: Option<Rect> = None;
+    let mut b: Option<Rect> = out.ink_bounds();
     let mut add = |r: Rect| b = Some(b.map_or(r, |b| b.union(r)));
-    for g in &out.glyphs {
-        if !g.outline.elements().is_empty() {
-            add(g.outline.bounding_box());
-        }
-        if let Some((image, xf)) = g.placed_image() {
-            add(xf.transform_rect_bbox(image.rect()));
-        }
-        if let Some(b) = g.colour.as_ref().and_then(|c| c.geometric_bounds()) {
-            add(g.xf.transform_rect_bbox(b));
-        }
-    }
-    // Ruby: covered by its line's ascent, but its ink can overhang sideways past the line.
-    for g in &out.ruby {
-        if !g.outline.elements().is_empty() {
-            add(g.outline.bounding_box());
-        }
-    }
-    for i in &out.inlines {
-        add(i.bounds);
-    }
     if !out.on_path {
         for l in &out.lines {
             add(xf.transform_rect_bbox(Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent)));

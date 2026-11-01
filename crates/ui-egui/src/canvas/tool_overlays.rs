@@ -1,6 +1,6 @@
 use super::grid::{clip_segment, pref_color};
 use super::outline::{OVERLAY_MAX_ANCHORS, c32, stroke_path};
-use super::*;
+use super::{Color32, CornerRadius, Node, NodeKind, Overlay, Point, Pos2, Rect, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, pos2, vec2};
 
 /// Type → Show Hidden Characters: spaces as dots, ¶ at paragraph ends, # at the end of a story.
 /// The marks of each text object are kept from one frame to the next ([`HiddenChars`]).

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Key, Modifiers, all_shortcuts};
 
 /// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
 const PASTE_KEYS: [Key; 2] = [Key::V, Key::Paste];

@@ -287,16 +287,18 @@ fn global_edit_needs_one_supported_object() {
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
     assert!(e.contains("no similar objects") && e.contains("rotated"), "{e}");
     assert!(s.doc().unwrap().global_edit.is_none());
-    // A group of two squares is refused, though another such group exists.
+    // A group holding type is refused, though another such group exists.
     let group = |s: &mut Session, x: f64| {
-        let (p, q) = (rect(s, x, 100.0, 10.0, 10.0), rect(s, x + 20.0, 100.0, 10.0, 10.0));
-        sel(s, &[p, q]);
-        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+        let p = rect(s, x, 100.0, 10.0, 10.0);
+        let t = NodeId(s.execute("text.create", &json!({"x": x, "y": 150, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        group_of(s, &[p, t])
     };
     let (g, _) = (group(&mut s, 600.0), group(&mut s, 700.0));
     sel(&mut s, &[g]);
+    // The menu only checks that it is a group; starting refuses its contents.
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err();
-    assert!(matches!(e, EngineError::Disabled(..)) && e.to_string().contains("paths, compound paths and symbol instances"), "{e}");
+    assert!(e.to_string().contains("symbol instances and groups of them"), "{e}");
+    assert!(s.doc().unwrap().global_edit.is_none());
 }
 
 #[test]
@@ -442,4 +444,149 @@ fn an_edit_that_takes_a_member_past_the_canvas_is_refused_whole() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
     s.execute("object.move", &json!({"dx": 3000, "dy": 0})).unwrap();
     assert!(close(bounds(&s, big), Rect::new(3.0e6, 0.0, 3.0e6 + 2000.0, 2000.0)), "{:?}", bounds(&s, big));
+}
+
+fn group_of(s: &mut Session, objects: &[NodeId]) -> NodeId {
+    sel(s, objects);
+    NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// A group of a square, a circle and a bar, `k` times the size, at `x` → the group and its objects.
+fn card(s: &mut Session, x: f64, k: f64) -> (NodeId, [NodeId; 3]) {
+    let sq = rect(s, x, 0.0, 40.0 * k, 40.0 * k);
+    let dot = NodeId(
+        s.execute("shape.ellipse", &json!({"x": x + 50.0 * k, "y": 0, "width": 40.0 * k, "height": 40.0 * k})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let bar = rect(s, x, 50.0 * k, 90.0 * k, 20.0 * k);
+    (group_of(s, &[sq, dot, bar]), [sq, dot, bar])
+}
+
+fn kids(s: &Session, g: NodeId) -> Vec<NodeId> {
+    node(s, g).children().unwrap().iter().map(|c| c.id).collect()
+}
+
+#[test]
+fn start_global_edit_on_a_group_takes_the_groups_like_it() {
+    let mut s = session();
+    let (g, [sq, ..]) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    // Two of the three objects; the same three with the bar moved; a lone square like the first.
+    let (p, q) = (rect(&mut s, 0.0, 300.0, 40.0, 40.0), rect(&mut s, 0.0, 400.0, 90.0, 20.0));
+    let pair = group_of(&mut s, &[p, q]);
+    let (moved, [.., bar]) = card(&mut s, 300.0, 1.0);
+    sel(&mut s, &[bar]);
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    rect(&mut s, 600.0, 300.0, 40.0, 40.0);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small], "not the pair {pair} nor the group with the bar moved {moved}");
+    // A group alone among groups of other contents: nothing to edit with it.
+    sel(&mut s, &[pair]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("no similar objects"), "{e}");
+    // Size leaves out the smaller group; Appearance looks at each object in the groups.
+    assert_eq!(start(&mut s, g, json!({"size": true})), [g, copy]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    sel(&mut s, &[sq]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    sel(&mut s, &[g]);
+    let e = s.execute("select.globalEdit", &json!({"appearance": true})).unwrap_err().to_string();
+    assert!(e.contains("no similar objects"), "the square in the first group has another fill now: {e}");
+}
+
+#[test]
+fn an_edit_inside_one_group_reaches_the_same_object_in_the_others_as_one_undo_step() {
+    let mut s = session();
+    let (g, [sq, dot, bar]) = card(&mut s, 0.0, 1.0);
+    let (copy, [csq, cdot, cbar]) = card(&mut s, 300.0, 1.0);
+    let (_, [ssq, sdot, _]) = card(&mut s, 500.0, 0.5);
+    start(&mut s, g, json!({}));
+    let before = (*s.doc().unwrap().doc).clone();
+    let steps = s.doc().unwrap().history.undo.len();
+    let (sq_fill, bar_fill) = (fill(&s, csq), fill(&s, cbar));
+    // The circle inside the first group, selected on its own.
+    sel(&mut s, &[dot]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "the other groups are highlighted, not the one being edited");
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!((fill(&s, cdot), fill(&s, sdot)), ("#12ab34".to_string(), "#12ab34".to_string()));
+    assert_eq!((fill(&s, csq), fill(&s, cbar)), (sq_fill, bar_fill), "the other objects keep theirs");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    // The square's height halved from the top: each copy's in proportion.
+    sel(&mut s, &[sq]);
+    s.execute("object.setBounds", &json!({"height": 20, "reference": 0})).unwrap();
+    assert!(close(bounds(&s, csq), Rect::new(300.0, 0.0, 340.0, 20.0)), "{:?}", bounds(&s, csq));
+    assert!(close(bounds(&s, ssq), Rect::new(500.0, 0.0, 520.0, 10.0)), "{:?}", bounds(&s, ssq));
+    assert!(placed(&s, bar, cbar, Affine::translate((300.0, 0.0))), "the bar is left alone");
+    assert_eq!(kids(&s, copy), [csq, cdot, cbar], "each object keeps its id");
+    s.execute("edit.undo", &json!({})).unwrap();
+    crate::tests_large_edits::undo_gives_back(&mut s, &before);
+}
+
+#[test]
+fn an_object_added_to_the_group_is_added_to_the_others() {
+    let mut s = session();
+    let (g, [sq, ..]) = card(&mut s, 0.0, 1.0);
+    let (copy, [csq, ..]) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    start(&mut s, g, json!({}));
+    sel(&mut s, &[sq]);
+    let added = s
+        .edit("add", |d, _| {
+            let id = d.alloc_id();
+            let path = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 80.0, 10.0, 90.0));
+            d.insert(Some(g), usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+                .map_err(|e| EngineError::Other(e.to_string()))
+        })
+        .unwrap();
+    let (theirs, smalls) = (kids(&s, copy), kids(&s, small));
+    assert_eq!((theirs.len(), smalls.len()), (4, 4));
+    assert_eq!(theirs.first(), Some(&csq), "the member keeps its own ids in order");
+    assert!(placed(&s, added, theirs[3], Affine::translate((300.0, 0.0))));
+    assert!(placed(&s, added, smalls[3], Affine::translate((500.0, 0.0)) * Affine::scale(0.5)));
+}
+
+#[test]
+fn global_edit_takes_at_most_max_members() {
+    use crate::cmd::globaledit::MAX_MEMBERS;
+    let mut s = session();
+    let first = s
+        .edit("many", |d, _| {
+            let layer = d.default_layer();
+            let mut first = None;
+            for i in 0..MAX_MEMBERS + 5 {
+                let (x, y) = ((i % 70) as f64 * 10.0, (i / 70 % 50) as f64 * 10.0);
+                let id = d.alloc_id();
+                let path = vectorcraft_geom::shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0));
+                d.insert(layer, usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+                    .map_err(|e| EngineError::Other(e.to_string()))?;
+                first.get_or_insert(id);
+            }
+            first.ok_or_else(|| EngineError::Other("none".into()))
+        })
+        .unwrap();
+    assert_eq!(start(&mut s, first, json!({})).len(), MAX_MEMBERS);
+}
+
+#[test]
+fn groups_nested_as_deep_as_a_document_allows_are_edited_together() {
+    let mut s = session();
+    let nest = |s: &mut Session, x: f64| {
+        let inner = rect(s, x, 0.0, 10.0, 10.0);
+        let side = rect(s, x + 20.0, 0.0, 10.0, 10.0);
+        let mut top = group_of(s, &[inner, side]);
+        // Group until the document refuses to go deeper.
+        for _ in 0..2 * vectorcraft_doc::MAX_DEPTH {
+            sel(s, &[top]);
+            match s.execute("object.group", &json!({})) {
+                Ok(r) => top = NodeId(r["id"].as_u64().unwrap()),
+                Err(_) => break,
+            }
+        }
+        (top, inner)
+    };
+    let ((g, inner), (other, other_inner)) = (nest(&mut s, 0.0), nest(&mut s, 300.0));
+    assert_eq!(start(&mut s, g, json!({})), [g, other]);
+    sel(&mut s, &[inner]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!(fill(&s, other_inner), "#12ab34");
 }

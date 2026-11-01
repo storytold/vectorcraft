@@ -1,9 +1,99 @@
 use super::paint::is_mesh;
 use super::state::{GState, Space};
-use super::*;
+use super::{
+    Affine, Color, FillRule, Interp, Key, LineCap, LineJoin, MAX_DASH_ENTRIES, MAX_DASHES, MAX_GSAVE, MAX_PATH, Obj, Op, Paint, Point, PsError, Rc,
+    Res, Shape, Vec2, matrix_obj, ps_err,
+};
 
 impl Interp<'_> {
     // ---------- the operators ----------
+
+    fn replace_path_with_stroke_outline(&mut self) -> Res {
+        let bp = self.take_path();
+        let mut st = self.stroke_layer()?;
+        // A dash pattern far finer than the path would make countless pieces.
+        let period: f64 = st.dash.as_ref().map_or(0.0, |d| d.pattern.iter().sum());
+        let periods = if st.dash.is_some() && period > 0.0 { bp.perimeter(1e-3) / period } else { 0.0 };
+        if st.dash.is_some() && !(period > 0.0 && periods < MAX_DASHES) {
+            st.dash = None;
+        }
+        let tol = (0.01 / self.scale().max(1e-9)).clamp(1e-4, 1.0);
+        let outline = vectorcraft_effects::stroke::line_outline(&bp, &st, st.width, tol);
+        // The path, each entry of the dash pattern in each period, and the outline count as elements.
+        let dashes = st.dash.as_ref().map_or(0.0, |d| periods * d.pattern.len() as f64) as usize;
+        self.spend_elements(bp.elements().len().saturating_add(dashes).saturating_add(outline.elements().len()))?;
+        if outline.elements().len() >= MAX_PATH {
+            return Err(PsError::Limit("a path has too many points"));
+        }
+        self.g.cur = outline.elements().iter().rev().find_map(|e| e.end_point());
+        self.g.start = self.g.cur;
+        self.g.path = outline;
+        Ok(())
+    }
+
+    fn push_hsb_color(&mut self) -> Res {
+        let [r, g, b] = self.current_rgb();
+        let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+        let d = max - min;
+        let h = if d <= 0.0 {
+            0.0
+        } else if max == r {
+            ((g - b) / d).rem_euclid(6.0) / 6.0
+        } else if max == g {
+            ((b - r) / d + 2.0) / 6.0
+        } else {
+            ((r - g) / d + 4.0) / 6.0
+        };
+        let s = if max > 0.0 { d / max } else { 0.0 };
+        for v in [h, s, max] {
+            self.push_num(f64::from(v))?;
+        }
+        Ok(())
+    }
+
+    fn set_current_color(&mut self) -> Res {
+        if let Space::Pattern(base) = &*self.g.space {
+            self.set_pattern(base.clone())?;
+        } else {
+            let mut components = vec![0.0; self.g.space.n()];
+            for slot in components.iter_mut().rev() {
+                *slot = self.pop_num()?;
+            }
+            self.set_comps(components)?;
+        }
+        Ok(())
+    }
+
+    fn transform_point(&mut self, op: Op) -> Res {
+        let m = match self.stack.last() {
+            Some(Obj::Array { .. }) => self.pop_matrix()?,
+            _ => self.g.ctm,
+        };
+        let [x, y] = self.nums()?;
+        let inverse = matches!(op, Op::ITransform | Op::IDTransform);
+        if inverse && m.determinant().abs() < 1e-12 {
+            return ps_err("undefinedresult", "");
+        }
+        let m = if inverse { m.inverse() } else { m };
+        let p = if matches!(op, Op::DTransform | Op::IDTransform) {
+            let v = m * Point::new(x, y) - m * Point::ZERO;
+            Point::new(v.x, v.y)
+        } else {
+            m * Point::new(x, y)
+        };
+        self.push_num(p.x)?;
+        self.push_num(p.y)
+    }
+
+    // `[/Pattern <current space>] setcolorspace setcolor`, unless already in a pattern space.
+    fn set_pattern_color(&mut self) -> Res {
+        if !matches!(*self.g.space, Space::Pattern(_)) {
+            self.g.space = Rc::new(Space::Pattern(Some(self.g.space.clone())));
+            self.g.space_obj = Obj::array(vec![Obj::name("Pattern"), self.g.space_obj.clone()]);
+        }
+        let Space::Pattern(base) = &*self.g.space else { return ps_err("typecheck", "") };
+        self.set_pattern(base.clone())
+    }
 
     pub fn graphics_op(&mut self, op: Op) -> Res {
         use Op::*;
@@ -26,28 +116,7 @@ impl Interp<'_> {
                 self.g.clips.clear();
             }
             ExecForm => self.exec_form()?,
-            StrokePath => {
-                let bp = self.take_path();
-                let mut st = self.stroke_layer()?;
-                // A dash pattern far finer than the path would make countless pieces.
-                let period: f64 = st.dash.as_ref().map_or(0.0, |d| d.pattern.iter().sum());
-                let periods = if st.dash.is_some() && period > 0.0 { bp.perimeter(1e-3) / period } else { 0.0 };
-                if st.dash.is_some() && !(period > 0.0 && periods < MAX_DASHES) {
-                    st.dash = None;
-                }
-                let tol = (0.01 / self.scale().max(1e-9)).clamp(1e-4, 1.0);
-                let outline = vectorcraft_effects::stroke::line_outline(&bp, &st, st.width, tol);
-                // The path, each entry of the dash pattern in each period, and the outline count
-                // as elements.
-                let dashes = st.dash.as_ref().map_or(0.0, |d| periods * d.pattern.len() as f64) as usize;
-                self.spend_elements(bp.elements().len().saturating_add(dashes).saturating_add(outline.elements().len()))?;
-                if outline.elements().len() >= MAX_PATH {
-                    return Err(PsError::Limit("a path has too many points"));
-                }
-                self.g.cur = outline.elements().iter().rev().find_map(|e| e.end_point());
-                self.g.start = self.g.cur;
-                self.g.path = outline;
-            }
+            StrokePath => self.replace_path_with_stroke_outline()?,
             PathForAll => self.path_for_all()?,
             UFill | UEoFill | UStroke => self.paint_user_path(op)?,
             UAppend => {
@@ -58,24 +127,7 @@ impl Interp<'_> {
             SetBBox => {
                 self.nums::<4>()?;
             }
-            CurrentHsbColor => {
-                let [r, g, b] = self.current_rgb();
-                let (max, min) = (r.max(g).max(b), r.min(g).min(b));
-                let d = max - min;
-                let h = if d <= 0.0 {
-                    0.0
-                } else if max == r {
-                    ((g - b) / d).rem_euclid(6.0) / 6.0
-                } else if max == g {
-                    ((b - r) / d + 2.0) / 6.0
-                } else {
-                    ((r - g) / d + 4.0) / 6.0
-                };
-                let s = if max > 0.0 { d / max } else { 0.0 };
-                for v in [h, s, max] {
-                    self.push_num(f64::from(v))?;
-                }
-            }
+            CurrentHsbColor => self.push_hsb_color()?,
             CurrentColorRendering => {
                 let d = crate::import::obj::Dict::from([(Key::name("ColorRenderingType"), Obj::Int(1))]);
                 self.push(Obj::dict(d))?;
@@ -201,32 +253,13 @@ impl Interp<'_> {
                 };
                 self.push(o)?;
             }
-            SetColor => {
-                if let Space::Pattern(base) = &*self.g.space {
-                    self.set_pattern(base.clone())?;
-                } else {
-                    let n = self.g.space.n();
-                    let mut c = vec![0.0; n];
-                    for slot in c.iter_mut().rev() {
-                        *slot = self.pop_num()?;
-                    }
-                    self.set_comps(c)?;
-                }
-            }
+            SetColor => self.set_current_color()?,
             CurrentColor => {
                 for v in self.g.comps.clone() {
                     self.push_num(v)?;
                 }
             }
-            // `[/Pattern <current space>] setcolorspace setcolor`, unless in a pattern space already.
-            SetPattern => {
-                if !matches!(*self.g.space, Space::Pattern(_)) {
-                    self.g.space = Rc::new(Space::Pattern(Some(self.g.space.clone())));
-                    self.g.space_obj = Obj::array(vec![Obj::name("Pattern"), self.g.space_obj.clone()]);
-                }
-                let Space::Pattern(base) = &*self.g.space else { return ps_err("typecheck", "") };
-                self.set_pattern(base.clone())?;
-            }
+            SetPattern => self.set_pattern_color()?,
             MakePattern => {
                 let m = self.pop_matrix()?;
                 let d = self.pop_dict()?;
@@ -347,26 +380,7 @@ impl Interp<'_> {
                     None => self.g.ctm *= m,
                 }
             }
-            Transform | ITransform | DTransform | IDTransform => {
-                let m = match self.stack.last() {
-                    Some(Obj::Array { .. }) => self.pop_matrix()?,
-                    _ => self.g.ctm,
-                };
-                let [x, y] = self.nums()?;
-                let inverse = matches!(op, ITransform | IDTransform);
-                if inverse && m.determinant().abs() < 1e-12 {
-                    return ps_err("undefinedresult", "");
-                }
-                let m = if inverse { m.inverse() } else { m };
-                let p = if matches!(op, DTransform | IDTransform) {
-                    let v = m * Point::new(x, y) - m * Point::ZERO;
-                    Point::new(v.x, v.y)
-                } else {
-                    m * Point::new(x, y)
-                };
-                self.push_num(p.x)?;
-                self.push_num(p.y)?;
-            }
+            Transform | ITransform | DTransform | IDTransform => self.transform_point(op)?,
             InvertMatrix => {
                 let out = self.pop_array()?;
                 let m = self.pop_matrix()?;

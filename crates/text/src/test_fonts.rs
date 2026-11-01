@@ -343,8 +343,149 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`lam_alef_font`] whose lam-alef ligature is in `feature`.
+pub fn lam_alef_family(feature: &[u8; 4]) -> &'static str {
+    match feature {
+        b"liga" => "Lamtest Liga",
+        b"rlig" => "Lamtest Rlig",
+        _ => "Lamtest Other",
+    }
+}
+
+/// The glyph [`lam_alef_font`]'s `salt` gives its lam + alef ligature (H): M.
+pub const LAM_ALEF_SALT: char = 'M';
+
+/// A test-only Arabic cmap over bundled Source Sans 3: lam uses l, alef I, alef with hamza above
+/// J, beh b and fatha the combining acute (a mark in the font's `GDEF`). The `GSUB` table's `arab`
+/// script has one ligature lookup, under `feature`, that skips marks and joins lam + alef into H
+/// and lam + alef with hamza above into K, and a `salt` lookup that turns H into
+/// [`LAM_ALEF_SALT`]. Older fonts put the mandatory lam-alef ligature in `liga` rather than
+/// `rlig`; this builds either, without an OS font. `None` when it can't be built.
+pub fn lam_alef_font(feature: &[u8; 4]) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{
+        CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, LookupFlag, Script, ScriptList, ScriptRecord,
+    };
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('\u{0644}', 'l'), ('\u{0627}', 'I'), ('\u{0623}', 'J'), ('\u{0628}', 'b'), ('\u{064E}', '\u{0301}')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = lam_alef_family(feature);
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let coverage = CoverageFormat1::new(vec![gid('l')?]);
+    let ligatures = vec![Ligature::new(gid('H')?, vec![gid('I')?]), Ligature::new(gid('K')?, vec![gid('J')?])];
+    let subst = LigatureSubstFormat1::new(coverage.into(), vec![LigatureSet::new(ligatures)]);
+    let salt = SingleSubstFormat2::new(CoverageFormat1::new(vec![gid('H')?]).into(), vec![gid(LAM_ALEF_SALT)?]);
+    // Features sorted by tag, as OpenType requires: `liga` / `rlig`, then `salt`.
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(feature), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1])),
+    ]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Ligature(Lookup::new(LookupFlag::IGNORE_MARKS, vec![subst])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`pair_kerning_font`].
 pub const PAIR_KERNING_FAMILY: &str = "Pairtest Sans";
+
+/// The family of [`no_pair_kerning_font`].
+pub const NO_PAIR_KERNING_FAMILY: &str = "No Pairtest Sans";
+
+/// A font with the bundled Source Sans 3 outlines and no `GPOS` or `kern` table.
+pub fn no_pair_kerning_font() -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let family = NO_PAIR_KERNING_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "No Pairtest Sans Regular"), (6, "NoPairtestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !matches!(tag, t if t == Tag::new(b"name") || t == Tag::new(b"GPOS") || t == Tag::new(b"kern")) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`right_to_left_optical_font`].
+pub const RIGHT_TO_LEFT_OPTICAL_FAMILY: &str = "Right-to-left Profile Sans";
+
+/// Two Hebrew characters mapped to the bundled Source Sans 3 A and V outlines.
+pub fn right_to_left_optical_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('א', 'A'), ('ב', 'V')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = RIGHT_TO_LEFT_OPTICAL_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Right-to-left Profile Sans Regular"), (6, "RtlProfileSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GPOS") && tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`soft_hyphen_outline_font`].
+pub const SOFT_HYPHEN_OUTLINE_FAMILY: &str = "Soft Hyphen Profile Sans";
+
+/// A face that maps the invisible soft hyphen to the bundled hyphen outline.
+pub fn soft_hyphen_outline_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mappings = [('A', 'A'), ('V', 'V'), ('-', '-'), ('\u{00AD}', '-')]
+        .into_iter()
+        .map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = SOFT_HYPHEN_OUTLINE_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Soft Hyphen Profile Sans Regular"), (6, "SoftHyphenProfileSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GPOS") && tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
 
 /// The bundled Source Sans 3 Regular as family [`PAIR_KERNING_FAMILY`], its `GPOS` replaced by two
 /// `kern` pairs, A followed by V and S followed by S: each takes 60 units off the first glyph's

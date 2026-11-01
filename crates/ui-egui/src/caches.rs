@@ -1,4 +1,4 @@
-use super::*;
+use super::{canvas, cursors, render_worker};
 
 /// Cached canvas raster.
 pub struct CanvasCache {
@@ -24,6 +24,12 @@ pub struct CanvasCache {
     /// The cache key the canvas last asked for and when it first asked for it (seconds, egui's
     /// input time), kept while [`Self::waits_for_still`] is set.
     pub still: Option<(CacheKey, f64)>,
+    /// The low-resolution frame that covers the parts of the canvas the frame shown leaves
+    /// uncovered while it is drawn for a view it was not rendered for ([`canvas::Fill`]).
+    pub fill: Option<canvas::Fill>,
+    /// The thread that renders [`Self::fill`], beside [`Self::worker`]. None on wasm, which has no
+    /// fill.
+    pub fill_worker: Option<render_worker::Worker>,
     pub worker: Option<render_worker::Worker>,
     pub worker_started: bool,
     /// The slices as laid out for (document uid, revision): the canvas draws them every frame.
@@ -49,6 +55,9 @@ pub struct CanvasCache {
     /// The cursor the active tool last gave over the canvas, with the tool and the modifier keys
     /// it was for: kept while the view moves.
     pub hover_cursor: Option<(&'static str, vectorcraft_tools::Mods, vectorcraft_tools::Cursor)>,
+    /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
+    /// again when the rect changes (the window going full screen).
+    pub presented: Option<egui::Rect>,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).

@@ -1,7 +1,10 @@
 use super::controls::collect_for_export_menu;
 use super::model::{Place, Row, opens, painted_name};
 use super::thumbs::{node_arc, real_thumb, thumb};
-use super::*;
+use super::{
+    Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, SQUARE_X, Sense, Stroke, StrokeKind,
+    TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
+};
 
 /// Stable id for the layers panel's per-name UI state.
 pub(super) fn key(name: &str) -> egui::Id {
@@ -153,6 +156,47 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     }
 }
 
+/// The row of the spine of blend `item` (#4820): a path mark and `<Path>`, the selection square
+/// while the blend is selected. A click selects the blend, whose spine Direct Selection then edits
+/// on the canvas; Shift or Cmd adds it to (or takes it from) the selection. The spine of a hidden
+/// or locked blend can't be selected.
+fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let (t, h) = (&view.t, view.h);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    if editable && resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
+    }
+    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    let mut x = r.left() + 2.0 * COLUMN + 2.0;
+    colour_bar(ui, &item.node, r, x, item.colour);
+    x += 6.0 + item.depth as f32 * INDENT + 16.0;
+    // The path mark: a short diagonal between two anchor dots.
+    let (a, b) = (egui::pos2(x + 2.0, r.center().y + 5.0), egui::pos2(x + 14.0, r.center().y - 5.0));
+    ui.painter().line_segment([a, b], Stroke::new(1.5, t.accent));
+    for p in [a, b] {
+        ui.painter().rect_filled(egui::Rect::from_center_size(p, vec2(3.0, 3.0)), 0.0, t.accent);
+    }
+    x += 22.0;
+    let name = format!("<{}>", tl!("Path"));
+    let color = if item.dim { t.text_dim } else { t.text };
+    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
+    let col_x = r.right() - 43.5;
+    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
+    if selected {
+        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
+        ui.painter().rect_filled(q, 0.0, item.colour);
+        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
+    }
+    if editable && resp.clicked() {
+        let m = ui.input(|i| i.modifiers);
+        let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
+        out.actions.push((action.into(), json!({"ids": [blend.0]})));
+    }
+}
+
 /// Guide rows `guides` dragged over row `r` (`resp`) of layer `layer`: the row lights up, and the
 /// release puts them on that layer (`guide.setLayer`, one undo step).
 fn guide_drop(ui: &Ui, view: &View, guides: &[usize], layer: NodeId, r: egui::Rect, resp: &egui::Response, out: &mut Out) {
@@ -162,10 +206,49 @@ fn guide_drop(ui: &Ui, view: &View, guides: &[usize], layer: NodeId, r: egui::Re
     }
 }
 
+/// The row's fill (selected, current or hovered), its bottom edge and the current layer's marker.
+fn row_background(ui: &Ui, view: &View, n: &Node, r: egui::Rect, resp: &egui::Response) {
+    let t = &view.t;
+    // Highlighted rows (else the current layer's).
+    let highlighted = if view.rows.is_empty() { n.is_layer() && Some(n.id) == view.current } else { view.rows.contains(&n.id) };
+    if highlighted {
+        ui.painter().rect_filled(r, 0.0, t.row_selected);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
+    }
+    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    if n.is_layer() && Some(n.id) == view.current {
+        // Current-layer marker: a small triangle in the top-right corner.
+        let c = r.right_top();
+        ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-6.0, 0.0), c + vec2(0.0, 6.0)], t.text, Stroke::NONE));
+    }
+}
+
+/// The disclosure triangle of a row at `(r, x)`; Alt opens or closes everything inside too.
+fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: bool, out: &mut Out) {
+    let t = &view.t;
+    let dr = egui::Rect::from_min_size(egui::pos2(x, r.center().y - 8.0), vec2(14.0, 16.0));
+    let dresp = ui.interact(dr, ui.scope_id().with(("disc", n.id.0)), Sense::click());
+    icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, dr, t.text_dim);
+    if dresp.clicked() {
+        out.toggle.push((n.id, !open));
+        if ui.input(|i| i.modifiers.alt) {
+            n.walk(&mut |c| {
+                if c.id != n.id && opens(c, &view.opts) {
+                    out.toggle.push((c.id, !open));
+                }
+            });
+        }
+    }
+}
+
 /// The widgets of row `item`.
 pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     if let Some(i) = item.guide {
         return guide_row(ui, view, item, i, out);
+    }
+    if item.spine {
+        return spine_row(ui, view, item, out);
     }
     let n = &*item.node;
     let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);
@@ -183,39 +266,14 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             n.walk(&mut |c| any |= c.id != n.id && view.sel.contains(&c.id));
             any
         });
-    // Highlighted rows (else the current layer's).
-    let highlighted = if view.rows.is_empty() { n.is_layer() && Some(n.id) == view.current } else { view.rows.contains(&n.id) };
-    if highlighted {
-        ui.painter().rect_filled(r, 0.0, t.row_selected);
-    } else if resp.hovered() {
-        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
-    }
-    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-    if n.is_layer() && Some(n.id) == view.current {
-        // Current-layer marker: a small triangle in the top-right corner.
-        let c = r.right_top();
-        ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-6.0, 0.0), c + vec2(0.0, 6.0)], t.text, Stroke::NONE));
-    }
+    row_background(ui, view, n, r, &resp);
     eye_and_lock(ui, view, n, r, out);
     // Layer colour bar (every row shows the colour of its layer).
     let mut x = r.left() + 2.0 * COLUMN + 2.0;
     colour_bar(ui, n, r, x, color);
     x += 6.0 + depth as f32 * INDENT;
-    // Disclosure triangle; Alt opens or closes everything inside too.
     if has_children {
-        let dr = egui::Rect::from_min_size(egui::pos2(x, r.center().y - 8.0), vec2(14.0, 16.0));
-        let dresp = ui.interact(dr, ui.scope_id().with(("disc", n.id.0)), Sense::click());
-        icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, dr, t.text_dim);
-        if dresp.clicked() {
-            out.toggle.push((n.id, !open));
-            if ui.input(|i| i.modifiers.alt) {
-                n.walk(&mut |c| {
-                    if c.id != n.id && opens(c, &view.opts) {
-                        out.toggle.push((c.id, !open));
-                    }
-                });
-            }
-        }
+        disclosure(ui, view, n, (r, x), open, out);
     }
     x += 16.0;
     // Thumbnail.
@@ -236,7 +294,9 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             let field = rename_id().with("field");
             let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-            let te = child.add(egui::TextEdit::singleline(&mut buf).id(field).desired_width(name_rect.width()).font(font.clone()));
+            let te = child.add(
+                egui::TextEdit::singleline(&mut buf).id(field).align(egui::Align2::LEFT_CENTER).desired_width(name_rect.width()).font(font.clone()),
+            );
             // Focus the field as it opens. Asking every frame took the focus back from Enter,
             // Escape or a click elsewhere, so the rename never ended.
             if !te.has_focus() && !te.lost_focus() {
@@ -296,15 +356,21 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Art);
     }
     let m = ui.input(|i| i.modifiers);
+    let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
     if tresp.clicked() {
         out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if sq_resp.clicked() {
         out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if resp.clicked() {
         out.click = Some((n.id, m));
+        // Alt-click on a layer's or sublayer's name also selects its art, as its selection square does.
+        // Only the drawn text counts, not the wider rename target of a short name.
+        let on_text = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x >= name_rect.left() && p.x <= name_end.min(name_rect.right()));
+        if m.alt && !m.shift && !m.command && n.is_layer() && on_text {
+            out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0})));
+        }
     }
     if resp.double_clicked() {
-        let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
         let on_thumb = thumb_rect.is_some_and(|th| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| th.contains(p)));
         if on_name && !on_thumb {
             ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, n.identify_label(view.identify_xml_id))));

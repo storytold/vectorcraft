@@ -9,7 +9,7 @@ use vectorcraft_geom::{Point, Rect};
 
 use crate::merged_params;
 use crate::pixel::{self, PixelFx, PixelSpace};
-use crate::util::*;
+use crate::util::{flag, num, text};
 
 /// Effect › Rasterize's id.
 pub const RASTERIZE: &str = "rasterize";
