@@ -4,10 +4,10 @@
 //! variable, anything to a `visibility` variable, a linked image to an `image`
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
-//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names); import also reads tab-separated files, files without the
-//! `name` column, and header cells that define new variables (`#` for visibility, `@` for
-//! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
+//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: one
+//! variable name per column); import replaces the datasets, names the rows Data Set 1, 2…,
+//! also reads tab-separated files, and reads header cells that define new variables (`#` for
+//! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library. Agents reach every command through `run_command`, like all engine commands.
 
@@ -723,7 +723,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so is a header that would define a variable while the variables are locked. Rows whose name already exists are replaced → {imported, updated, names, defined}",
+            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so is a header that would define a variable while the variables are locked → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
         ),
@@ -732,7 +732,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then variables); without path → {csv, datasets}",
+            "{path?} write every dataset as CSV (header: one column per variable, no dataset names); without path → {csv, datasets}",
             has_doc,
             dataset_export
         ),
