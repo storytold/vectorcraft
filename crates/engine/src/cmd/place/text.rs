@@ -96,7 +96,7 @@ fn decode(bytes: &[u8], o: TextOptions) -> String {
 }
 
 /// Byte `b` of Windows-1252.
-pub(super) fn windows_1252(b: u8) -> char {
+pub(in crate::cmd) fn windows_1252(b: u8) -> char {
     const HIGH: [char; 32] = [
         '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8D}', 'Ž', '\u{8F}', //
         '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9D}', 'ž', 'Ÿ',

@@ -2,6 +2,7 @@ use super::{
     BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, Variables, absolute_path, bad,
     json, read_file_head, str_param, variables_unlocked, write_file,
 };
+use crate::cmd::place::text::windows_1252;
 
 /// Cap on a graph variable's CSV (MCP and files are untrusted).
 pub(super) const MAX_GRAPH_CSV: usize = 256 * 1024;
@@ -27,6 +28,16 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
         return Err(bad(cmd, format!("CSV is larger than {MAX_CSV_BYTES} bytes")));
     }
     Ok(bytes)
+}
+
+/// The text of a datasets CSV: UTF-8, with or without a byte-order mark, else Windows-1252. A
+/// file that starts with the UTF-8 byte-order mark must be UTF-8.
+fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok(text.to_string()),
+        Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),
+        Err(_) => Ok(bytes.iter().map(|&b| windows_1252(b)).collect()),
+    }
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.
@@ -255,8 +266,8 @@ fn header_variable(
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
     let bytes = datasets_csv_bytes(p, C)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| bad(C, "CSV is not UTF-8"))?;
-    let rows = parse_datasets_csv(text, C)?;
+    let text = datasets_csv_text(&bytes, C)?;
+    let rows = parse_datasets_csv(&text, C)?;
     let Some((_, header, _)) = rows.first() else {
         return Err(bad(C, "CSV is empty"));
     };
