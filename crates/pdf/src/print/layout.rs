@@ -238,12 +238,14 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
         let place_at = |trim: Rect| {
             Affine::translate(trim.origin().to_vec2()) * Affine::scale_non_uniform(scale.0, scale.1) * Affine::translate(-r.origin().to_vec2())
         };
-        // The page's boxes: the trim box within the bleed box within the page.
-        let boxes = |view: Affine, trim: Rect| {
+        // The page's boxes: the trim box within the bleed box within the page; `None` when none of
+        // the trim box is on the page.
+        let visible = |view: Affine, trim: Rect| {
             let b = view.transform_rect_bbox(outset(trim, bleed_s)).intersect(page);
             let t = view.transform_rect_bbox(trim).intersect(b);
-            if t.area() > 0.0 { (t, b) } else { (page, page) }
+            (t.area() > 0.0).then_some((t, b))
         };
+        let boxes = |view: Affine, trim: Rect| visible(view, trim).unwrap_or((page, page));
         let base = |view, window, place, area, trim, (page_trim, page_bleed), tile, copies| Layout {
             artboard,
             tile,
@@ -297,8 +299,12 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let copies: Vec<Vec2> = grid.map_or_else(Vec::new, |(cols, rows)| {
                 (0..rows).flat_map(|j| (0..cols).map(move |i| Vec2::new(i as f64 * step.0, j as f64 * step.1))).collect()
             });
-            let page_boxes =
-                copies.iter().map(|m| boxes(turn, trim + *m)).reduce(|a, b| (a.0.union(b.0), a.1.union(b.1))).unwrap_or_else(|| boxes(turn, trim));
+            // The boxes hold the copies on the page; copies off it are left out.
+            let page_boxes = copies
+                .iter()
+                .filter_map(|m| visible(turn, trim + *m))
+                .reduce(|a, b| (a.0.union(b.0), a.1.union(b.1)))
+                .unwrap_or_else(|| boxes(turn, trim));
             pages.push(base(turn, None, place_at(trim), bleed_box, trim, page_boxes, None, copies));
             continue;
         }
