@@ -253,6 +253,9 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
+    /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
+    pub precise_cursors: bool,
 }
 
 impl ToolContext<'_> {

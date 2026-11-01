@@ -38,7 +38,7 @@ fn replace_fonts() -> Value {
 /// modifier click does, command, params).
 type TextRow = (Option<&'static str>, Vec<(&'static str, Option<&'static str>, &'static str, Value)>);
 
-fn text_rows() -> [TextRow; 4] {
+fn text_rows() -> [TextRow; 5] {
     let align = |a: &str| json!({ "align": a });
     let by = |b: &str| json!({ "by": b });
     [
@@ -66,6 +66,7 @@ fn text_rows() -> [TextRow; 4] {
             ],
         ),
         (None, vec![("Combine Point Text", None, "addon.cleanup.combineText", json!({}))]),
+        (None, vec![("Join Point Text", None, "addon.cleanup.joinText", json!({}))]),
     ]
 }
 
@@ -98,6 +99,7 @@ pub fn menu() -> Vec<Item> {
     let align = |a: &str| json!({ "align": a });
     items.extend([
         Item::Cmd("Combine Point Text", "addon.cleanup.combineText", json!({})),
+        Item::Cmd("Join Point Text", "addon.cleanup.joinText", json!({})),
         Item::Cmd("Break Text into Lines", "addon.cleanup.breakText", by("lines")),
         Item::Cmd("Break Text into Paragraphs", "addon.cleanup.breakText", by("paragraphs")),
         Item::Cmd("Break Text into Words", "addon.cleanup.breakText", by("words")),

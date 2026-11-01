@@ -200,7 +200,7 @@ fn art_outside_the_layers_counts_too() {
     let mut art = paths_doc(1, anchors_for(1, 2 * PRETTY_MAX_BYTES));
     let path = Arc::clone(&art.layers[0]);
     art.layers.clear();
-    d.symbols.push(Symbol { name: "Leaves".into(), art: path });
+    d.symbols.push(Symbol { dynamic: false, name: "Leaves".into(), art: path });
     assert!(!SaveOptions::for_doc(&d).pretty);
     let bytes = save_file(&d);
     assert!(!is_pretty(&bytes));

@@ -227,6 +227,6 @@ pub(crate) use text_geom::is_opentype_alternate;
 #[cfg(test)]
 use text_geom::text_geom;
 pub(crate) use threads::single_threaded_context;
-pub use threads::{default_threads, set_default_threads};
+pub use threads::{default_threads, set_default_threads, set_usable_cores};
 #[cfg(test)]
 mod tests;

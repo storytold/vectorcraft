@@ -47,7 +47,7 @@ const WHITE: u32 = 8;
 
 /// Do two pixels look different: in lightness, or one inked (as a light yellow is) where the other
 /// is white?
-pub(super) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
+pub(in crate::import) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
     let (p, q) = (on_white(p), on_white(q));
     let (a, b) = (ink(p), ink(q));
     lightness(p).abs_diff(lightness(q)) > SAME_PIXEL || (a.min(b) <= WHITE && a.abs_diff(b) > SAME_PIXEL)
@@ -59,7 +59,7 @@ const SAME_COLOUR: u32 = 64;
 
 /// Are two pixels different colours ([`differ`] also takes a red and a dark red of about the same
 /// lightness to be alike)?
-pub(super) fn differ_in_colour(p: &[u8; 4], q: &[u8; 4]) -> bool {
+pub(in crate::import) fn differ_in_colour(p: &[u8; 4], q: &[u8; 4]) -> bool {
     let (p, q) = (on_white(p), on_white(q));
     p.iter().zip(q).any(|(a, b)| a.abs_diff(b) > SAME_COLOUR)
 }
@@ -75,8 +75,16 @@ pub(super) struct Difference {
     pub(super) solid: f64,
 }
 
+impl Difference {
+    /// The share [`compare`] holds to [`MAX_DIFFERENCE`]: every pixel that differs, or with `reflow`
+    /// (type laid out again from the file's text) those away from type.
+    pub(super) fn weighed(&self, reflow: bool) -> f64 {
+        if reflow { self.art } else { self.any }
+    }
+}
+
 /// The scale the comparisons draw a region at: about 400 pixels along its longer side.
-fn compare_scale(r: Rect) -> f64 {
+pub(in crate::import) fn compare_scale(r: Rect) -> f64 {
     (400.0 / r.width().max(r.height()).max(1.0)).min(4.0)
 }
 
@@ -129,6 +137,8 @@ pub(super) struct PageView {
     /// rendering of the style there, the layers VectorCraft's live effects, and the two aren't
     /// held to look alike.
     restyled: Vec<Rect>,
+    /// Where the page draws anything (its type, or its own outlines of type) or has its type.
+    page_marks: Shares,
     layers: vectorcraft_render::Renderer,
     scale: f64,
     samples: u32,
@@ -144,7 +154,11 @@ impl PageView {
         let page = comparison_render(&mut vectorcraft_render::Renderer::new(), frame.page, ra, scale, samples);
         let mut page_type = vec![];
         type_areas(&frame.page.layers, ra, scale, &mut page_type);
-        Self { page, page_type, restyled: vec![], layers: vectorcraft_render::Renderer::new(), scale, samples }
+        let (w, h) = (page.width as usize, page.height as usize);
+        let typed = in_areas(&page_type, w, h);
+        let marks: Vec<bool> = page.pixels.as_chunks::<4>().0.iter().zip(&typed).map(|(p, t)| *t || ink(on_white(p)) > WHITE).collect();
+        let page_marks = Shares::of(&marks, w, h);
+        Self { page, page_type, restyled: vec![], page_marks, layers: vectorcraft_render::Renderer::new(), scale, samples }
     }
 
     /// Leave the drawn looks in `looks` (on `region`, the page's area in the layers' document) out
@@ -159,13 +173,27 @@ impl PageView {
     }
 
     /// How `b` on `rb` (a rectangle the page's size) draws differently from the page ([`compared`]).
-    pub(super) fn difference(&mut self, b: &Document, rb: Rect) -> Difference {
+    /// With `reflow` (`b`'s type laid out again from the file's text), type counts as type only where
+    /// both have something: `b`'s where the page has type or draws anything in at least [`MARKED`]
+    /// of it, the page's where at least half of it lies where `b` has a text object, shown or not,
+    /// or a placed file. Elsewhere it is art the other lacks.
+    pub(super) fn difference(&mut self, b: &Document, rb: Rect, reflow: bool) -> Difference {
         // The page doesn't print what isn't printed.
         let printed = as_printed(b);
         let b = printed.as_ref().unwrap_or(b);
         let y = comparison_render(&mut self.layers, b, rb, self.scale, self.samples);
-        let mut areas = self.page_type.clone();
+        let mut areas = vec![];
         type_areas(&b.layers, rb, self.scale, &mut areas);
+        if reflow {
+            areas.retain(|r| self.page_marks.share(r) >= MARKED);
+            let mut texts = vec![];
+            all_type_areas(&b.layers, rb, self.scale, &mut texts);
+            let (w, h) = (self.page.width as usize, self.page.height as usize);
+            let on_layers = Shares::of(&in_areas(&texts, w, h), w, h);
+            areas.extend(self.page_type.iter().filter(|r| on_layers.share(r) >= 0.5));
+        } else {
+            areas.extend(&self.page_type);
+        }
         compared(&self.page, &y, &areas, &self.restyled)
     }
 
@@ -241,6 +269,62 @@ fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>
     }
 }
 
+/// Where every text object in `nodes` is, shown or not, as [`type_areas`] gives it, and every placed
+/// file (whose preview draws the type it has).
+fn all_type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>) {
+    for n in nodes {
+        let placed = matches!(&n.kind, NodeKind::Image(im) if im.link.is_some());
+        if (placed || matches!(n.kind, NodeKind::Text(_)))
+            && let Some(b) = n.visual_bounds()
+        {
+            let b = b.inflate(OUTLINE_REACH, OUTLINE_REACH);
+            out.push(Rect::new((b.x0 - region.x0) * scale, (b.y0 - region.y0) * scale, (b.x1 - region.x0) * scale, (b.y1 - region.y0) * scale));
+        } else if let Some(c) = n.children() {
+            all_type_areas(c, region, scale, out);
+        }
+    }
+}
+
+/// Which of `w` × `h` pixels are marked, counted so that the share of any rectangle's pixels that
+/// are is read at once.
+pub(super) struct Shares {
+    /// How many of the marked pixels lie above and left of each pixel corner.
+    sums: Vec<u32>,
+    w: usize,
+    h: usize,
+}
+
+impl Shares {
+    /// The pixels `marks` marks (row by row).
+    pub(super) fn of(marks: &[bool], w: usize, h: usize) -> Self {
+        let stride = w + 1;
+        let mut sums = vec![0u32; stride * (h + 1)];
+        for (k, marked) in marks.iter().enumerate().take(w * h) {
+            let (i, j) = (k % w.max(1), k / w.max(1));
+            let left = sums.get((j + 1) * stride + i).copied().unwrap_or(0);
+            let up = sums.get(j * stride + i + 1).copied().unwrap_or(0);
+            let corner = sums.get(j * stride + i).copied().unwrap_or(0);
+            if let Some(s) = sums.get_mut((j + 1) * stride + i + 1) {
+                *s = (left + up + u32::from(*marked)).saturating_sub(corner);
+            }
+        }
+        Self { sums, w, h }
+    }
+
+    /// The share (0 to 1) of `r`'s pixels that are marked: 0 for one with none of the pixels.
+    pub(super) fn share(&self, r: &Rect) -> f64 {
+        let (w, h, stride) = (self.w, self.h, self.w + 1);
+        let clamp = |v: f64, max: usize| if v.is_finite() { v.clamp(0.0, max as f64) as usize } else { 0 };
+        let (x0, y0, x1, y1) = (clamp(r.x0.floor(), w), clamp(r.y0.floor(), h), clamp(r.x1.ceil(), w), clamp(r.y1.ceil(), h));
+        if !r.is_finite() || x1 <= x0 || y1 <= y0 {
+            return 0.0;
+        }
+        let at = |x: usize, y: usize| self.sums.get(y * stride + x).copied().unwrap_or(0);
+        let inside = (at(x1, y1) + at(x0, y0)).saturating_sub(at(x0, y1) + at(x1, y0));
+        f64::from(inside) / ((x1 - x0) as f64 * (y1 - y0) as f64)
+    }
+}
+
 /// Which of `w` × `h` pixels (row by row) lie in one of `areas`.
 fn in_areas(areas: &[Rect], w: usize, h: usize) -> Vec<bool> {
     // Each area adds one inside it: corners marked, then summed along the rows and down the columns.
@@ -272,26 +356,32 @@ fn in_areas(areas: &[Rect], w: usize, h: usize) -> Vec<bool> {
     (0..h).flat_map(|j| (0..w).map(move |i| (i, j))).map(|(i, j)| count.get(j * stride + i).is_some_and(|c| *c > 0)).collect()
 }
 
+/// The least share of a text object's area (with the margin round it) where the page draws anything
+/// or has type, for its type laid out again to count as type.
+const MARKED: f64 = 0.05;
+
 /// More of the page than this differing between the layers' art and the page's own, and the
 /// layers aren't used.
-pub(super) const MAX_DIFFERENCE: f64 = 0.05;
+pub(in crate::import) const MAX_DIFFERENCE: f64 = 0.05;
 
 /// More than this and the import says so.
 const NOTABLE_DIFFERENCE: f64 = 0.002;
 
 /// More of the page than this where one draws an object that the other doesn't (see
 /// [`Difference`]), and the layers aren't used: about a centimetre square on a letter page.
-pub(super) const MAX_SOLID_DIFFERENCE: f64 = 0.001;
+pub(in crate::import) const MAX_SOLID_DIFFERENCE: f64 = 0.001;
 
 /// How far (points) the art the layers print may reach past a page that holds it all.
 const PAST_THE_PAGE: f64 = 1.0;
 
 /// Do the layers' art and the page's own look alike (where the page holds all the art that prints,
-/// also round it)? An error says they don't; `Ok` has the note to give when they differ a little:
+/// also round it)? An error says they don't; `Ok` has the notes to give when they differ a little:
 /// with the share of the pixels that differ away from type when that is notable, otherwise with the
-/// share of those that differ in the type's areas.
-pub(super) fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document) -> Result<Option<String>, String> {
-    let mut diff = view.difference(layered, frame.rect);
+/// share of those that differ in the type's areas. With `type_reflow` (all the type laid out again
+/// from the file's text, which may show in another font), type that differs doesn't make them
+/// differ: only art away from type does, and the type's share is a note of its own.
+pub(super) fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document, type_reflow: bool) -> Result<Vec<String>, String> {
+    let mut diff = view.difference(layered, frame.rect, type_reflow);
     if frame.whole
         && let Some(art) = vectorcraft_render::encode::art_bounds(as_printed(layered).as_ref().unwrap_or(layered))
             .filter(|a| !frame.rect.inflate(PAST_THE_PAGE, PAST_THE_PAGE).contains_rect(*a))
@@ -302,21 +392,24 @@ pub(super) fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document
         let round = difference(frame.page, Rect::new(all.x0 + dx, all.y0 + dy, all.x1 + dx, all.y1 + dy), layered, all);
         diff = Difference { any: diff.any.max(round.any), art: diff.art.max(round.art), solid: diff.solid.max(round.solid) };
     }
-    if diff.any > MAX_DIFFERENCE || diff.solid > MAX_SOLID_DIFFERENCE {
-        return Err(format!("the art on them differs from the page's in {:.1}% of it", diff.any * 100.0));
+    if diff.weighed(type_reflow) > MAX_DIFFERENCE || diff.solid > MAX_SOLID_DIFFERENCE {
+        return Err(format!("the art on them differs from the page's in {:.1}% of it", diff.weighed(type_reflow) * 100.0));
     }
     if diff.any <= NOTABLE_DIFFERENCE {
-        return Ok(None);
+        return Ok(vec![]);
     }
-    Ok(Some(if diff.art > NOTABLE_DIFFERENCE {
-        format!(
-            "the art on the layers differs from the file's own page in about {:.1}% of it (brush strokes, live effects and the like that the layers' data doesn't describe)",
-            diff.art * 100.0
-        )
-    } else {
-        format!(
-            "the type on the layers differs from the file's own page in about {:.1}% of it (type laid out again from the file's text, or drawn in another font)",
-            (diff.any - diff.art) * 100.0
-        )
-    }))
+    let art = format!(
+        "the art on the layers differs from the file's own page in about {:.1}% of it (brush strokes, live effects and the like that the layers' data doesn't describe)",
+        diff.art * 100.0
+    );
+    let typed = format!(
+        "the type on the layers differs from the file's own page in about {:.1}% of it (type laid out again from the file's text, or drawn in another font)",
+        (diff.any - diff.art) * 100.0
+    );
+    let art_notable = diff.art > NOTABLE_DIFFERENCE;
+    Ok(match (art_notable, type_reflow && diff.any - diff.art > NOTABLE_DIFFERENCE) {
+        (true, true) => vec![art, typed],
+        (true, false) => vec![art],
+        (false, _) => vec![typed],
+    })
 }

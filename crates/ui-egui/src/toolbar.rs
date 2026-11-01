@@ -68,7 +68,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
 
 pub(crate) fn tip(t: &ToolInfo) -> String {
     match crate::shortcut_editor::tool_shortcut(t.id) {
-        Some(s) => format!("{} ({})", tl!(t.label), s),
+        Some(s) => format!("{} ({})", tl!(t.label), crate::shortcut_editor::as_typed(s)),
         None => tl!(t.label).to_string(),
     }
 }
@@ -153,7 +153,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
         egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
         if hresp.hovered() { t.text_strong } else { t.text },
     );
-    let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::drag());
+    // Not focusable (`Sense::drag()` is): only the pointer drags the grip, so Tab does not stop on it.
+    let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::DRAG);
     for k in 0..6 {
         ui.painter().line_segment(
             [pos2(grip.center().x - 9.0, grip.top() + 1.5 + k as f32 * 0.6), pos2(grip.center().x + 9.0, grip.top() + 1.5 + k as f32 * 0.6)],
@@ -326,8 +327,8 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
-/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser and Shape Builder tools' are
-/// their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
+/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
+/// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
 /// ([`crate::dialogs::shapes::open_options`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
@@ -361,6 +362,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
         "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // The Objects on Path tool: the Pivot and Rotate of the objects it attaches next.
+        "objectsOnPath" => Ok(crate::dialogs::objects_on_path_options::open(app)),
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
@@ -374,6 +377,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         _ if crate::dialogs::freehand::TOOLS.contains(&tool) => crate::dialogs::freehand::open(app, tool),
         // The Live Paint Selection tool: its Tool Options (what a click selects, the highlight).
         "livePaintSelection" => crate::dialogs::live_paint_selection::open(app),
+        // The Live Paint Bucket: its options (what a click paints, the highlight).
+        "livePaintBucket" => crate::dialogs::live_paint_bucket::open(app),
         // The Symbolism tools: the brush they share.
         _ if vectorcraft_tools::settings::SYMBOLISM.contains(&tool) => Ok(crate::dialogs::symbolism_options::open(app, tool)),
         // The graph tools: Graph Type for the selected graph.
@@ -486,7 +491,9 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
             ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
             ui.spacing_mut().item_spacing.x = gap;
             let mut clicked = None;
-            for (tip, cmd) in [("Color (, or <)", "paint.lastColor"), ("Gradient (. or >)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+            for (tip, cmd) in
+                [("Color (, or Shift+,)", "paint.lastColor"), ("Gradient (. or Shift+.)", "paint.lastGradient"), ("None (/)", "paint.none")]
+            {
                 let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
                 match cmd {
                     "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
@@ -629,7 +636,8 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
         } else {
             bar
         };
-        let resp = ui.interact(grip, bar_id(key), Sense::drag());
+        // Not focusable (`Sense::drag()` is): only the pointer drags the bar, so Tab does not stop on it.
+        let resp = ui.interact(grip, bar_id(key), Sense::DRAG);
         let half = (grip.height() / 2.0 - 3.0).clamp(0.0, 9.0);
         for k in 0..3 {
             let x = grip.center().x - 2.0 + k as f32 * 2.0;
@@ -692,7 +700,10 @@ const ROW_END: f32 = 18.0;
 /// The name of `tool` in `lang` and its shortcut in brackets, as a flyout row draws them.
 fn row_text(ui: &Ui, lang: crate::i18n::Lang, tool: &ToolInfo, color: Color32) -> RowText {
     let lay = |s: String| ui.painter().layout_no_wrap(s, egui::FontId::proportional(13.0), color);
-    (lay(crate::i18n::tr(lang, tool.label).to_string()), crate::shortcut_editor::tool_shortcut(tool.id).map(|sc| lay(format!("({sc})"))))
+    (
+        lay(crate::i18n::tr(lang, tool.label).to_string()),
+        crate::shortcut_editor::tool_shortcut(tool.id).map(|sc| lay(format!("({})", crate::shortcut_editor::as_typed(sc)))),
+    )
 }
 
 /// The width of a flyout's rows: 250 pt, or what its longest name needs to stay clear of its

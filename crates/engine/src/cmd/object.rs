@@ -32,7 +32,7 @@ mod transform;
 
 pub(crate) use align::choice;
 pub(crate) use arrange::group_nodes;
-pub(crate) use bounds::bounds_rewrite;
+pub(crate) use bounds::{bounds_rewrite, object_bounds_transform};
 pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
 pub(super) use shape::recut;

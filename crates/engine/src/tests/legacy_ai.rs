@@ -546,7 +546,7 @@ fn a_colorized_grayscale_image_pattern_fill_is_expanded() {
     let keys = crate::cmd::flatten::see_through_images(d);
     assert!(keys.is_empty());
     let layer = d.layers[0].id;
-    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys).unwrap(), 1);
+    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys, &|_, _| true).unwrap(), 1);
     let mut patterns = 0;
     let mut tile_images = 0;
     d.walk(|n| {
@@ -688,7 +688,7 @@ fn only_the_transparent_pattern_fill_of_a_leaf_is_expanded() {
     let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
     let keys = crate::cmd::flatten::see_through_images(d);
     let layer = d.layers[0].id;
-    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys).unwrap(), 1);
+    assert_eq!(crate::cmd::expand::expand_transparent_image_patterns(d, layer, &keys, &|_, _| true).unwrap(), 1);
     let mut patterns = vec![];
     let mut images = 0;
     d.walk(|n| {
@@ -703,4 +703,305 @@ fn only_the_transparent_pattern_fill_of_a_leaf_is_expanded() {
     });
     assert_eq!(patterns.len(), 1, "{patterns:?}");
     assert!(images > 0);
+}
+
+/// A pattern fill whose expanded art would hold more objects than the budget stays a pattern fill:
+/// the 32 pt tiles over the 128 pt square are 25 copies of the tile art's 3 objects, which are not
+/// made with a smaller budget, and the clip group around them counts too.
+#[test]
+fn a_transparent_image_pattern_past_the_budget_stays() {
+    let expand = |budget: usize| {
+        let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 255, 255, 0]), 1.0);
+        assert_eq!(s.doc().unwrap().doc.patterns[0].art.iter().map(|a| a.count_with_masks()).sum::<usize>(), 3);
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let keys = crate::cmd::flatten::see_through_images(d);
+        let layer = d.layers[0].id;
+        let before = d.layers[0].count_with_masks();
+        let n = crate::cmd::expand::expand_transparent_image_patterns_within(d, layer, &keys, &|_, _| true, budget).unwrap();
+        // The objects the expansion made, with the square it replaced.
+        (n, images(d).0, d.layers[0].count_with_masks() + 1 - before)
+    };
+    let (n, tiles, made) = expand(usize::MAX);
+    assert_eq!((n, tiles), (1, 25));
+    assert!(made > 75, "{made}");
+    assert_eq!(expand(made), (1, 25, made));
+    assert_eq!(expand(made - 1).0, 0);
+    assert_eq!(expand(74).0, 0);
+}
+
+/// On a shape with two transparent image pattern fills, both expand with a budget their tiles and
+/// the group around them fit, and one expands with one object less.
+#[test]
+fn two_transparent_image_pattern_fills_expand_within_the_budget() {
+    let expand = |budget: usize| {
+        let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 255, 255, 0]), 1.0);
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let mut square = None;
+        d.walk(|n| {
+            if n.appearance.items.iter().any(
+                |i| matches!(i, vectorcraft_doc::appearance::AppearanceItem::Fill(f) if matches!(f.paint, vectorcraft_color::Paint::Pattern { .. })),
+            ) {
+                square = Some(n.id);
+            }
+        });
+        let n = d.node_mut(square.unwrap()).unwrap();
+        assert_eq!(n.appearance.items.len(), 1);
+        let fill = n.appearance.items[0].clone();
+        n.appearance.items.push(fill);
+        let keys = crate::cmd::flatten::see_through_images(d);
+        let layer = d.layers[0].id;
+        let before = d.layers[0].count_with_masks();
+        let n = crate::cmd::expand::expand_transparent_image_patterns_within(d, layer, &keys, &|_, _| true, budget).unwrap();
+        (n, images(d).0, d.layers[0].count_with_masks() + 1 - before)
+    };
+    let (n, tiles, made) = expand(usize::MAX);
+    assert_eq!((n, tiles), (1, 50));
+    assert_eq!(expand(made), (1, 50, made));
+    assert_eq!(expand(made - 1).1, 25);
+}
+
+#[test]
+fn pdf13_flattens_see_through_pattern_tile_images() {
+    let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 255, 255, 0]), 1.0);
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportPdf", &json!({"compatibility": "1.3"})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let page = vectorcraft_pdf::import(&bytes).unwrap();
+    let after = [colour_at(&page, 72.0, 72.0), colour_at(&page, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn pdf13_flattens_colorized_pattern_tile_images() {
+    let mut s = colorized_pattern_over_blue();
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportPdf", &json!({"compatibility": "1.3"})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let page = vectorcraft_pdf::import(&bytes).unwrap();
+    let after = [colour_at(&page, 72.0, 72.0), colour_at(&page, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn eps_level3_writes_see_through_pattern_tile_images() {
+    let mut s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 255, 255, 0]), 1.0);
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": true, "level": 3})).unwrap();
+    s.execute("document.open", &json!({"name": "p.eps", "dataBase64": r["dataBase64"], "editingData": false})).unwrap();
+    let page = &s.doc().unwrap().doc;
+    let after = [colour_at(page, 72.0, 72.0), colour_at(page, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn eps_writes_colorized_pattern_tile_images_in_their_colors() {
+    let mut s = colorized_pattern_over_blue();
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": true, "level": 3})).unwrap();
+    s.execute("document.open", &json!({"name": "p.eps", "dataBase64": r["dataBase64"], "editingData": false})).unwrap();
+    let after = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn flattening_that_keeps_colorize_leaves_colorized_pattern_tile_images_alone() {
+    let s = colorized_pattern_over_blue();
+    let d = &s.doc().unwrap().doc;
+    assert!(crate::cmd::flatten::flatten_document(d, &crate::cmd::FlattenOptions::default()).unwrap().is_some());
+    let o = crate::cmd::FlattenOptions { keeps_colorize: true, ..Default::default() };
+    assert!(crate::cmd::flatten::flatten_document(d, &o).unwrap().is_none(), "the pattern isn't expanded for a colorize paint alone");
+}
+
+/// EPS export expands pattern tile images once: flattening the expanded
+/// document leaves the patterns the expansion kept, past its object limit, as they are.
+#[test]
+fn flattening_an_expanded_document_does_not_expand_patterns_again() {
+    let s = colorized_pattern_over_blue();
+    let d = &s.doc().unwrap().doc;
+    assert!(crate::cmd::flatten::flatten_expanded(d, &crate::cmd::FlattenOptions::default()).unwrap().is_none());
+}
+
+#[test]
+fn eps_flattens_colorized_image_in_a_see_through_pattern_tile_group_and_warns() {
+    let mut s = colorized_pattern_over_blue();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let id = d.alloc_id();
+    let art = std::mem::take(&mut d.patterns[0].art);
+    let mut group = vectorcraft_doc::Node::group(id, art);
+    group.opacity = 0.5;
+    d.patterns[0].art.push(std::sync::Arc::new(group));
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": true, "level": 3})).unwrap();
+    assert!(warnings(&r).iter().any(|w| w.contains("transparency is flattened")), "{:?}", warnings(&r));
+    s.execute("document.open", &json!({"name": "p.eps", "dataBase64": r["dataBase64"], "editingData": false})).unwrap();
+    let after = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn postscript_print_warns_for_colorized_pattern_tile_image() {
+    let mut s = colorized_pattern_over_blue();
+    let r = s.execute("file.print", &json!({"format": "postscript"})).unwrap();
+    assert!(warnings(&r).iter().any(|w| w.contains("transparency is flattened")), "{:?}", warnings(&r));
+}
+
+#[test]
+fn eps_pattern_does_not_flatten_a_separate_see_through_image() {
+    let mut output = vec![];
+    for tile in [checker([0, 200, 0, 255], [255, 230, 0, 255]), checker([0, 200, 0, 255], [255, 255, 255, 0])] {
+        let mut s = pattern_over_blue(&tile, 1.0);
+        s.execute("shape.rectangle", &json!({"x": 8, "y": 8, "width": 24, "height": 24})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        let p = json!({"name": "i.png", "dataBase64": vectorcraft_format::base64_encode(&png(20, 20, [0, 0, 0, 128])), "at": [20, 20]});
+        s.execute("file.place", &p).unwrap();
+        let r =
+            s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": true, "level": 3, "flattenerPreset": "high"})).unwrap();
+        let image_warning = warnings(&r).iter().any(|w| w.contains("partly transparent"));
+        s.execute("document.open", &json!({"name": "p.eps", "dataBase64": r["dataBase64"], "editingData": false})).unwrap();
+        output.push((colour_at(&s.doc().unwrap().doc, 20.0, 20.0), image_warning));
+    }
+    assert_eq!(output[0], output[1], "EPS layer image changed when a see-through pattern tile was present: {output:?}");
+}
+
+#[test]
+fn opaque_pattern_tile_images_do_not_change_during_export_flattening() {
+    let s = pattern_over_blue(&checker([0, 200, 0, 255], [255, 230, 0, 255]), 1.0);
+    let d = &s.doc().unwrap().doc;
+    assert!(crate::cmd::flatten::flatten_document(d, &crate::cmd::FlattenOptions::default()).unwrap().is_none());
+    let o = crate::cmd::FlattenOptions { no_transparency: Some(crate::cmd::flatten::see_through_images(d)), ..Default::default() };
+    assert!(crate::cmd::flatten::flatten_document(d, &o).unwrap().is_none());
+}
+
+/// The id of the square [`pattern_over_blue`] fills with its pattern.
+fn pattern_square(s: &Session) -> vectorcraft_doc::NodeId {
+    let mut id = None;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.appearance.items.iter().any(|i| matches!(i.paint(), vectorcraft_color::Paint::Pattern { .. })) {
+            id = Some(n.id);
+        }
+    });
+    id.unwrap()
+}
+
+/// PDF 1.3 draws `s` as the canvas draws it at two points of the pattern square.
+fn assert_pdf13_draws_pattern_square_as_canvas(s: &mut Session) {
+    let before = [colour_at(&s.doc().unwrap().doc, 72.0, 72.0), colour_at(&s.doc().unwrap().doc, 88.0, 72.0)];
+    let r = s.execute("document.exportPdf", &json!({"compatibility": "1.3"})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let page = vectorcraft_pdf::import(&bytes).unwrap();
+    let after = [colour_at(&page, 72.0, 72.0), colour_at(&page, 88.0, 72.0)];
+    for (a, b) in before.iter().zip(after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 4), "before {before:?} after {after:?}");
+    }
+}
+
+#[test]
+fn pdf13_flattens_colorized_pattern_tile_images_in_a_repeat() {
+    let mut s = colorized_pattern_over_blue();
+    let square = pattern_square(&s);
+    s.execute("object.repeat.grid", &json!({"ids": [square.0]})).unwrap();
+    assert!(s.doc().unwrap().doc.layers[0].count() > 3);
+    let d = &s.doc().unwrap().doc;
+    let mut repeats = 0;
+    d.walk(|n| repeats += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_))));
+    assert_eq!(repeats, 1);
+    assert!(crate::cmd::flatten::flatten_document(d, &crate::cmd::FlattenOptions::default()).unwrap().is_some());
+    assert_pdf13_draws_pattern_square_as_canvas(&mut s);
+}
+
+/// A repeat whose art would take the expanded art past the budget stays live.
+#[test]
+fn a_repeat_past_the_budget_stays_live() {
+    for (budget, live) in [(1, 1), (usize::MAX, 0)] {
+        let mut s = colorized_pattern_over_blue();
+        let square = pattern_square(&s);
+        s.execute("object.repeat.grid", &json!({"ids": [square.0]})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let layer = d.layers[0].id;
+        crate::cmd::expand::expand_transparent_image_patterns_within(d, layer, &Default::default(), &|_, _| true, budget).unwrap();
+        let mut repeats = 0;
+        d.walk(|n| repeats += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Repeat(_))));
+        assert_eq!(repeats, live, "budget {budget}");
+    }
+}
+
+/// [`colorized_pattern_over_blue`] with the square filled with a pattern named `outer` whose tile
+/// art is a 32 pt square filled with the colorized image pattern.
+fn nested_colorized_pattern_over_blue() -> Session {
+    let mut s = colorized_pattern_over_blue();
+    let square = pattern_square(&s);
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 32, "height": 32})).unwrap();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let inner = d.patterns[0].name.clone();
+    let rect = d.layers[0].children().unwrap().last().unwrap().id;
+    let mut tile = d.remove(rect).unwrap();
+    let paint = vectorcraft_color::Paint::Pattern { pattern: inner, xf: Default::default() };
+    let tile_node = std::sync::Arc::make_mut(&mut tile);
+    tile_node.appearance.items.retain(|i| matches!(i, vectorcraft_doc::appearance::AppearanceItem::Fill(_)));
+    for i in &mut tile_node.appearance.items {
+        if let vectorcraft_doc::appearance::AppearanceItem::Fill(f) = i {
+            f.paint = paint.clone();
+        }
+    }
+    let mut outer = d.patterns[0].clone();
+    outer.name = "outer".into();
+    outer.art = vec![tile];
+    d.patterns.push(outer);
+    for i in &mut d.node_mut(square).unwrap().appearance.items {
+        if let vectorcraft_doc::appearance::AppearanceItem::Fill(f) = i {
+            f.paint = vectorcraft_color::Paint::Pattern { pattern: "outer".into(), xf: Default::default() };
+        }
+    }
+    s
+}
+
+#[test]
+fn pdf13_flattens_colorized_image_in_a_pattern_nested_in_tile_art() {
+    let mut s = nested_colorized_pattern_over_blue();
+    assert_eq!(colour_at(&s.doc().unwrap().doc, 72.0, 72.0), [255, 0, 0]);
+    assert!(crate::cmd::flatten::flatten_document(&s.doc().unwrap().doc, &crate::cmd::FlattenOptions::default()).unwrap().is_some());
+    assert_pdf13_draws_pattern_square_as_canvas(&mut s);
+}
+
+#[test]
+fn flattening_skips_a_pattern_nested_in_hidden_tile_art() {
+    let mut s = nested_colorized_pattern_over_blue();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let outer = d.pattern_mut("outer").unwrap();
+    std::sync::Arc::make_mut(&mut outer.art[0]).visible = false;
+    let d = &s.doc().unwrap().doc;
+    assert!(crate::cmd::flatten::flatten_document(d, &crate::cmd::FlattenOptions::default()).unwrap().is_none());
+}
+
+#[test]
+fn pdf13_leaves_a_hidden_shape_with_a_colorized_pattern_tile_image_hidden() {
+    let mut s = colorized_pattern_over_blue();
+    let square = pattern_square(&s);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(square).unwrap().visible = false;
+    assert_pdf13_draws_pattern_square_as_canvas(&mut s);
+}
+
+#[test]
+fn flattening_skips_pattern_tile_images_on_hidden_and_template_layers() {
+    for template in [false, true] {
+        let mut s = colorized_pattern_over_blue();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+        match &mut layer.kind {
+            vectorcraft_doc::NodeKind::Layer { template: t, .. } if template => *t = true,
+            _ => layer.visible = false,
+        }
+        let d = &s.doc().unwrap().doc;
+        assert!(crate::cmd::flatten::flatten_document(d, &crate::cmd::FlattenOptions::default()).unwrap().is_none(), "template {template}");
+    }
 }

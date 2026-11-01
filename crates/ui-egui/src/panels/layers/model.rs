@@ -63,6 +63,8 @@ pub(super) struct Row {
     pub(super) dim: bool,
     /// A ruler guide on the layer `node` (its index in the document's guides): the guide's row.
     pub(super) guide: Option<usize>,
+    /// The spine of blend `node`: its row, below the blend's key objects (#4820).
+    pub(super) spine: bool,
 }
 
 /// An object kind under the Filter's By Object (`ui.layersFilter`'s `objects`).
@@ -262,16 +264,41 @@ pub(super) fn push_rows(
     let opens = opens(n, opts) || !guides.is_empty();
     let open = opens && (narrowing || open_rows.contains(n.id));
     let at = out.len();
-    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template(), guide: None });
+    out.push(Row { node: n.clone(), depth, clip_path, opens, open, colour, dim: !shown || n.is_template(), guide: None, spine: false });
     if open {
         for i in guides.into_iter().rev() {
-            out.push(Row { node: n.clone(), depth: depth + 1, clip_path: false, opens: false, open: false, colour, dim: !shown, guide: Some(i) });
+            out.push(Row {
+                node: n.clone(),
+                depth: depth + 1,
+                clip_path: false,
+                opens: false,
+                open: false,
+                colour,
+                dim: !shown,
+                guide: Some(i),
+                spine: false,
+            });
         }
     }
     if open && let Some(children) = n.children() {
         for (i, c) in children.iter().enumerate().rev() {
             push_rows(c, depth + 1, i == 0 && n.clips(), (colour, shown), cx, out);
         }
+    }
+    // A blend's spine is a row in it, below its key objects, as Release leaves it (not while
+    // searching or filtering: it is no object of its own).
+    if open && !narrowing && matches!(n.kind, NodeKind::Blend { .. }) {
+        out.push(Row {
+            node: n.clone(),
+            depth: depth + 1,
+            clip_path: false,
+            opens: false,
+            open: false,
+            colour,
+            dim: !shown,
+            guide: None,
+            spine: true,
+        });
     }
     // Searching or filtering, a row stays for a match of its own (its name holds the search text
     // and the filter keeps it) or for a row it keeps inside it.

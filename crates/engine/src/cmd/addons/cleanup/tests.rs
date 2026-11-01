@@ -226,6 +226,26 @@ fn each_check_finds_and_fixes_its_issue_and_leaves_clean_art_alone() {
     }
 }
 
+/// Type set twice in the same place (from a PDF, or for a fake bold) is a duplicate within a point:
+/// Show selects the upper copy and Fix removes it. Other text, or the same text further off, stays.
+#[test]
+fn doubled_type_within_a_point_is_a_duplicate() {
+    let mut s = session();
+    let text = |s: &mut Session, x: f64, text: &str| id_of(&s.execute("text.create", &json!({"x": x, "y": 100, "text": text})).unwrap());
+    let base = text(&mut s, 20.0, "Total");
+    let doubled = text(&mut s, 20.4, "Total");
+    let other = text(&mut s, 20.0, "Subtotal");
+    let far = text(&mut s, 23.0, "Subtotal");
+    assert_eq!(found(&mut s, "duplicateObjects", "document"), 1);
+    let shown = s.execute("addon.cleanup.show", &json!({"kind": "duplicateObjects", "scope": "document"})).unwrap();
+    assert_eq!(shown["ids"], json!([doubled.0]));
+    s.execute("addon.cleanup.fix", &json!({"kinds": ["duplicateObjects"], "scope": "document"})).unwrap();
+    assert!(node(&s, doubled).is_none());
+    for id in [base, other, far] {
+        assert!(node(&s, id).is_some(), "{id:?} stays");
+    }
+}
+
 #[test]
 fn fix_all_is_one_undo_step() {
     let mut s = session();

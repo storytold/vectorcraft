@@ -1,12 +1,14 @@
 //! The Objects on Path tool (#2545): a click on a path attaches the selected objects to it
 //! (`object.objectsOnPath.attach`). A path they can attach to is highlighted under the pointer,
-//! and the pointer shows [`Cursor::ObjectsOnPath`] over it.
+//! and the pointer shows [`Cursor::ObjectsOnPath`] over it. The tool's options, `pivot` (0-8, row
+//! by row from the top left; 4, the center) and `rotate` (degrees), go with each attach, so they
+//! set how the objects attached next attach; groups attached before keep theirs.
 //!
 //! Behavior: <https://helpx.adobe.com/illustrator/using/objects-on-path.html>.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
-use vectorcraft_doc::objects_on_path::{attachable_path, is_objects_on_path};
+use vectorcraft_doc::objects_on_path::{CENTER, attachable_path, is_objects_on_path};
 use vectorcraft_geom::{BezPath, Point};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -31,12 +33,21 @@ pub fn target(cx: &ToolContext, p: Point) -> Option<(NodeId, BezPath)> {
     cx.selection.objects.iter().any(|id| *id != h.leaf).then(|| (h.leaf, path.to_bezpath()))
 }
 
-#[derive(Default)]
 pub struct ObjectsOnPathTool {
     /// The path under the pointer the selection can attach to, and its outline.
     hover: Option<(NodeId, BezPath)>,
     /// Where the press was, while the button is down.
     press: Option<Point>,
+    /// The reference point of each object attached next (0-8, row by row from the top left).
+    pivot: u8,
+    /// The angle of each object attached next, in degrees counter-clockwise from upright on the path.
+    rotate: f64,
+}
+
+impl Default for ObjectsOnPathTool {
+    fn default() -> Self {
+        Self { hover: None, press: None, pivot: CENTER, rotate: 0.0 }
+    }
 }
 
 impl Tool for ObjectsOnPathTool {
@@ -60,7 +71,7 @@ impl Tool for ObjectsOnPathTool {
                 let Some(start) = self.press.take().filter(|q| q.distance(p) < cx.tol(3.0)) else { return vec![] };
                 let Some((path, _)) = target(cx, start) else { return vec![] };
                 self.hover = None;
-                vec![Action::Exec("object.objectsOnPath.attach".into(), json!({ "path": path.0 }))]
+                vec![Action::Exec("object.objectsOnPath.attach".into(), json!({ "path": path.0, "pivot": self.pivot, "rotate": self.rotate }))]
             }
             _ => vec![],
         }
@@ -81,6 +92,28 @@ impl Tool for ObjectsOnPathTool {
             self.hover = None;
         }
         vec![]
+    }
+
+    fn options(&self) -> Value {
+        json!({ "pivot": self.pivot, "rotate": self.rotate })
+    }
+
+    /// `pivot` takes a whole number from 0 to 8 and `rotate` a finite number, clamped to -360 to
+    /// 360; other values are ignored.
+    fn set_option(&mut self, key: &str, value: &Value) {
+        match key {
+            "pivot" => {
+                if let Some(n) = value.as_u64().filter(|n| *n <= 8) {
+                    self.pivot = n as u8;
+                }
+            }
+            "rotate" => {
+                if let Some(r) = value.as_f64().filter(|r| r.is_finite()) {
+                    self.rotate = r.clamp(-360.0, 360.0);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn busy(&self) -> bool {
@@ -130,6 +163,32 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Down, on.x, on.y));
         let acts = t.pointer(&cx, &ev(PointerKind::Up, on.x, on.y));
         assert!(matches!(acts.as_slice(), [Action::Exec(id, p)] if id == "object.objectsOnPath.attach" && p["path"] == line.0), "{acts:?}");
+    }
+
+    #[test]
+    fn the_click_sends_the_tool_options_pivot_and_rotate() {
+        let (d, _, square) = doc();
+        let mut sel = Selection::default();
+        sel.set([square]);
+        let paint = paint();
+        let cx = cx(&d, &sel, &paint);
+        let mut t = ObjectsOnPathTool::default();
+        assert_eq!(t.options(), json!({ "pivot": 4, "rotate": 0.0 }), "the center, upright");
+        t.set_option("pivot", &json!(0));
+        t.set_option("rotate", &json!(45.5));
+        // Values out of range are ignored.
+        t.set_option("pivot", &json!(9));
+        t.set_option("rotate", &json!("x"));
+        assert_eq!(t.options(), json!({ "pivot": 0, "rotate": 45.5 }));
+        // Rotate is kept within the dialog's -360 to 360.
+        t.set_option("rotate", &json!(450));
+        assert_eq!(t.options()["rotate"], 360.0);
+        t.set_option("rotate", &json!(-720.5));
+        assert_eq!(t.options()["rotate"], -360.0);
+        t.set_option("rotate", &json!(45.5));
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 300.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 300.0));
+        assert!(matches!(acts.as_slice(), [Action::Exec(_, p)] if p["pivot"] == 0 && p["rotate"] == 45.5), "{acts:?}");
     }
 
     #[test]

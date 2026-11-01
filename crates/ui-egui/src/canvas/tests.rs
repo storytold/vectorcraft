@@ -75,6 +75,26 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
     }
 }
 
+/// A change to Caps Lock or to Use Precise Cursors through `app.run` (the host, the control channel,
+/// MCP) refreshes the pointer over the canvas without the pointer moving.
+#[test]
+fn command_cursor_settings_refresh_hover_cursor_while_view_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.session.select_tool("pen", vectorcraft_engine::ViewInfo::default()).unwrap();
+    app.hover_doc = Some(Point::new(200.0, 150.0));
+    let mods = Mods::default();
+    let view = vectorcraft_engine::ViewInfo::default();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+
+    app.run("view.capsLock", json!({"on": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+    app.run("view.capsLock", json!({"on": false})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Pen));
+    app.run("prefs.set", json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    assert_eq!(hover_cursor(&mut app, mods, view, false), Some(Cursor::Crosshair));
+}
+
 /// #826: in a turned view each ruler still has ticks along its whole length; at 0° the top one
 /// reads x where the canvas has it.
 #[test]
@@ -1995,7 +2015,7 @@ fn undecodable_images_are_marked_and_reported_once() {
     app.status("");
     frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.shown.as_ref().is_some_and(|(_, o)| o.mark_undecoded_images), "the canvas marks them");
-    assert_eq!(app.ui.status, "2 image(s) couldn't be decoded and show as crossed boxes");
+    assert_eq!(app.ui.status, "2 images couldn't be decoded and show as crossed boxes");
     app.status("");
     app.session.doc_mut().unwrap().revision += 1;
     frame(&mut app, &ctx, vec![]);
@@ -6839,7 +6859,8 @@ fn the_task_bar_shows_a_stroke_chip_beside_fill() {
     let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let bar = task_bar_rect(&ctx).expect("the task bar shows");
-    // Right to left: the frame's margin, More Options, Lock, Recolor, then Stroke and Fill.
+    // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), Recolor,
+    // then Stroke and Fill.
     let stroke_x = bar.right() - 8.0 - 3.0 * (30.0 + 6.0) - 13.0;
     let fill_x = stroke_x - 26.0 - 6.0;
     let blue = Color32::from_rgb(0x22, 0x44, 0xcc);
@@ -6896,7 +6917,8 @@ fn the_task_bar_chips_follow_the_proxies_and_show_swatches_anywhere() {
         out.textures_delta.clear();
         out.shapes
     };
-    // Right to left: the frame's margin, More Options, Lock, Recolor, then Stroke and Fill.
+    // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), Recolor,
+    // then Stroke and Fill.
     let stroke_x = |bar: egui::Rect| bar.right() - 8.0 - 3.0 * (30.0 + 6.0) - 13.0;
     let chip_with = |shapes: &[egui::epaint::ClippedShape], bar: egui::Rect, x: f32, color: Color32| {
         shapes.iter().any(|c| match &c.shape {
@@ -6948,7 +6970,7 @@ fn the_task_bar_recolors_coloured_art() {
         frame(app, &ctx, vec![]);
         frame(app, &ctx, vec![]);
         let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Right to left: the frame's margin, More Options, Lock, then Recolor.
+        // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), then Recolor.
         let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 30.0 - 6.0 - 15.0, bar.center().y);
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
@@ -6969,15 +6991,18 @@ fn the_task_bar_recolors_coloured_art() {
     assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
 }
 
-/// The Contextual Task Bar's Lock button is off in isolation mode, as Object › Lock › Selection
-/// is: a click locks nothing and shows no error. Outside isolation mode it locks the selection.
+/// The Contextual Task Bar's Lock button locks the selected member in isolation mode and the
+/// selected group outside isolation mode.
 #[test]
-fn the_task_bar_lock_button_is_off_in_isolation_mode() {
+fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
-    let b = app.session.execute("shape.rectangle", &json!({"x": 210, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
-    app.session.execute("select.set", &json!({"ids": [a.clone(), b]})).unwrap();
+    // Plain paths: a basic shape shows its properties in Lock's place.
+    let square =
+        |x: f64| json!({"anchors": [{"x": x, "y": 130}, {"x": x + 40.0, "y": 130}, {"x": x + 40.0, "y": 170}, {"x": x, "y": 170}], "closed": true});
+    let a = app.session.execute("path.create", &square(150.0)).unwrap()["id"].clone();
+    let b = app.session.execute("path.create", &square(210.0)).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [a.clone(), b.clone()]})).unwrap();
     let g = app.session.execute("object.group", &json!({})).unwrap()["id"].clone();
     app.select_tool("selection");
     let ctx = egui::Context::default();
@@ -6998,7 +7023,8 @@ fn the_task_bar_lock_button_is_off_in_isolation_mode() {
     app.session.execute("object.isolate", &json!({"id": g.clone()})).unwrap();
     app.session.execute("select.set", &json!({"ids": [a.clone()]})).unwrap();
     click_lock(&mut app);
-    assert!(!locked(&app, &a), "nothing is locked in isolation mode");
+    assert!(locked(&app, &a), "the selected member is locked in isolation mode");
+    assert!(!locked(&app, &b), "the other member stays unlocked");
     assert_eq!(app.ui.status, "", "no error");
     app.session.execute("object.exitIsolation", &json!({})).unwrap();
     app.session.execute("select.set", &json!({"ids": [g.clone()]})).unwrap();
