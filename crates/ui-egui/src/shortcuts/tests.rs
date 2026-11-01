@@ -1987,3 +1987,43 @@ fn all_registered_shortcuts_parse() {
         }
     }
 }
+
+/// #2898 review: Up and Down change the corner kind only while a corner widget is pressed. With
+/// none pressed, a plain Up still nudges the selected rectangle and leaves its corners alone; with
+/// one pressed, Up steps the kind and the rectangle stays where it is.
+#[test]
+fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
+    use vectorcraft_doc::{LiveShape, NodeId, NodeKind};
+    use vectorcraft_geom::shapes::CornerKind;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&[id], false).unwrap();
+        let NodeKind::Path { live: Some(l), .. } = &st.doc.node(id).unwrap().kind else { panic!("not live") };
+        let LiveShape::Rectangle { kinds, .. } = &**l else { panic!("not a rectangle") };
+        ((b.x0, b.y0), kinds[0])
+    };
+    let ((x, y), kind) = state(&app);
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    let ((x1, y1), kind1) = state(&app);
+    assert_eq!(x1, x, "no sideways move");
+    assert!((y1 - y).abs() > 0.5, "a plain Up nudges the rectangle: {y} → {y1}");
+    assert_eq!(kind1, kind, "and leaves its corners alone");
+    // Press a corner widget: now Up steps the corner kind and the rectangle stays put.
+    let view = app.view_info();
+    let st = app.session.active().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, view.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), view).unwrap();
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), view).unwrap();
+    let ((x2, y2), kind2) = state(&app);
+    assert_eq!((x2, y2), (x1, y1), "no nudge while the widget is pressed");
+    assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
+}
