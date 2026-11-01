@@ -705,17 +705,48 @@ mod tests {
                             ui.button("Hover me").on_hover_text("Tip text");
                         });
                         out.textures_delta.clear();
-                        tip = out.shapes.iter().find_map(|c| match &c.shape {
-                            egui::Shape::Text(s) if s.galley.text() == "Tip text" => Some(s.fallback_color),
+                        // The tool tip's text color, and the fill of the box drawn behind it.
+                        let mut shapes: Vec<&egui::Shape> = Vec::new();
+                        let mut open: Vec<&egui::Shape> = out.shapes.iter().rev().map(|c| &c.shape).collect();
+                        while let Some(shape) = open.pop() {
+                            match shape {
+                                egui::Shape::Vec(inner) => open.extend(inner.iter().rev()),
+                                shape => shapes.push(shape),
+                            }
+                        }
+                        tip = shapes.iter().enumerate().find_map(|(n, shape)| match shape {
+                            egui::Shape::Text(s) if s.galley.text() == "Tip text" => {
+                                let fill = shapes[..n].iter().rev().find_map(|behind| match behind {
+                                    egui::Shape::Rect(r) if r.rect.contains(s.pos) && r.fill.a() > 0 => Some(r.fill),
+                                    _ => None,
+                                });
+                                Some((s.fallback_color, fill))
+                            }
                             _ => None,
                         });
                     }
                     let v = ctx.global_style().visuals.clone();
-                    assert_eq!((v.window_fill, v.override_text_color), (t.panel, Some(t.text)), "{scheme:?} {b:?}, system {first:?} then {then:?}");
-                    assert_eq!(tip, Some(t.text), "{scheme:?} {b:?}, system {first:?} then {then:?}: the tool tip's text");
+                    let what = format!("{scheme:?} {b:?}, system {first:?} then {then:?}");
+                    assert_eq!((v.window_fill, v.override_text_color), (t.panel, Some(t.text)), "{what}");
+                    assert_eq!(tip, Some((t.text, Some(t.panel))), "{what}: the tool tip's text and box");
+                    assert!(contrast(t.text, t.panel) >= 4.5, "{what}: the tool tip's text against its box, {}", contrast(t.text, t.panel));
                 }
             }
         }
+    }
+
+    /// The contrast ratio of two opaque colors, from 1 (the same) to 21 (black on white), as WCAG 2
+    /// defines it.
+    fn contrast(a: egui::Color32, b: egui::Color32) -> f32 {
+        let luminance = |c: egui::Color32| {
+            let channel = |v: u8| {
+                let v = f32::from(v) / 255.0;
+                if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+            };
+            0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+        };
+        let (a, b) = (luminance(a), luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
 
     /// Changing brightness keeps the interface settings made after the theme was applied, such as
