@@ -30,9 +30,23 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// The text of a datasets CSV: UTF-8, with or without a byte-order mark, else Windows-1252. A
-/// file that starts with the UTF-8 byte-order mark must be UTF-8.
+/// The text of a datasets CSV: UTF-16 after a UTF-16 byte-order mark, else UTF-8, with or
+/// without a byte-order mark, else Windows-1252. A file that starts with a byte-order mark must
+/// be valid in its encoding, and a file without one must not hold NUL bytes (UTF-16 without a
+/// byte-order mark).
 fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
+    let utf16 = |rest: &[u8], le: bool| {
+        let (units, odd) = rest.as_chunks::<2>();
+        let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+        let text = char::decode_utf16(units).collect::<std::result::Result<String, _>>();
+        text.ok().filter(|_| odd.is_empty()).ok_or_else(|| bad(cmd, "CSV is not UTF-16"))
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false),
+        _ if bytes.contains(&0) => return Err(bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark")),
+        _ => {}
+    }
     match std::str::from_utf8(bytes) {
         Ok(text) => Ok(text.to_string()),
         Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),

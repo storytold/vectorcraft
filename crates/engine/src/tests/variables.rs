@@ -1397,6 +1397,34 @@ fn datasets_csv_reads_windows_1252_files() {
     assert_eq!(value(&s, "E"), None);
 }
 
+/// A CSV that starts with a UTF-16 byte-order mark is read as UTF-16, and
+/// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark is refused.
+#[test]
+fn datasets_csv_reads_utf16_files() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "City", "kind": "text"})).unwrap();
+    let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    let utf16 = |bom: &[u8], text: &str, le: bool| -> Vec<u8> {
+        let units = text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() });
+        bom.iter().copied().chain(units).collect()
+    };
+    import(&mut s, &utf16(b"\xff\xfe", "name\tCity\r\nA\tZoë 😀\r\n", true)).unwrap();
+    assert_eq!(value(&s, "A"), text_value("Zoë 😀"));
+    import(&mut s, &utf16(b"\xfe\xff", "name,City\nB,José\n", false)).unwrap();
+    assert_eq!(value(&s, "B"), text_value("José"));
+    let mut odd = utf16(b"\xff\xfe", "name,City\nC,x\n", true);
+    odd.push(b'y');
+    let e = import(&mut s, &odd).unwrap_err().to_string();
+    assert!(e.contains("CSV is not UTF-16"), "{e}");
+    let e = import(&mut s, &[b"\xff\xfe".as_slice(), "name,City\nD,".as_bytes(), b"\x00\xd8"].concat()).unwrap_err().to_string();
+    assert!(e.contains("CSV is not UTF-16"), "{e}");
+    let e = import(&mut s, &utf16(b"", "name,City\nE,x\n", true)).unwrap_err().to_string();
+    assert!(e.contains("CSV holds NUL bytes"), "{e}");
+    assert_eq!((value(&s, "C"), value(&s, "D"), value(&s, "E")), (None, None, None));
+}
+
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.
 type LibrarySet<'a> = (&'a str, &'a [(&'a str, &'a [&'a str])]);
 
