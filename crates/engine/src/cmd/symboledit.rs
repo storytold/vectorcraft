@@ -112,10 +112,19 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // Editing another symbol (one from the Symbols panel, or through the API): the current edit
-    // ends first.
+    // ends first, once the new placement is known to be valid, so a refused switch keeps it open.
     if st.doc.symbol_edit.is_some() {
         if instance.is_some_and(|i| st.doc.symbol_edit.as_ref().is_some_and(|e| st.doc.ancestry(i).unwrap_or_default().contains(&e.layer))) {
             return Err(bad(C, "exit isolation mode first"));
+        }
+        let mut trial = Document::clone(&st.doc);
+        let mut sel = Selection::default();
+        begin(&mut trial, &mut sel, &name, xf, instance)?;
+        if trial.too_deep(Some(&st.doc)) {
+            return Err(EngineError::Other(crate::TOO_DEEP.into()));
+        }
+        if !crate::sanity::doc_sane(&trial, &sel) {
+            return Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()));
         }
         leave(s, &json!({}))?;
     }
