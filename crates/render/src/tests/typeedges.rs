@@ -77,6 +77,14 @@ fn each_method_draws_the_share_of_each_pixel_it_defines() {
         assert!(wrong.is_empty(), "{m:?}: (pixel, Sharp, drawn) {wrong:?}");
     }
     assert_eq!(partial(&alphas(&page(TypeAntiAlias::None, None), &opts)), 0, "None paints whole pixels");
+    // The same text drawn with each of the four methods gives four different pictures.
+    let methods = [TypeAntiAlias::None, TypeAntiAlias::Sharp, TypeAntiAlias::Crisp, TypeAntiAlias::Strong];
+    let drawn: Vec<Vec<u8>> = methods.iter().map(|m| alphas(&page(*m, None), &opts)).collect();
+    for (i, a) in drawn.iter().enumerate() {
+        for (j, b) in drawn.iter().enumerate().skip(i + 1) {
+            assert_ne!(a, b, "{:?} and {:?} draw alike", methods[i], methods[j]);
+        }
+    }
 }
 
 /// `edge_coverage` gives each method the share its documentation defines: None shows all of a
