@@ -74,6 +74,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if let Some(r) = crate::shortcut_editor::run_command(app, id, p)
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
+        .or_else(|| crate::custom_toolbars::command(app, id, p))
     {
         return Some(r);
     }
@@ -423,11 +424,21 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.toolbar" => flag(&mut app.ui.toolbar),
-        "window.toolbarColumns" => opt_bool(p, "double").map(|on| {
-            let on = on.unwrap_or(!app.ui.toolbar_double);
-            app.ui.toolbar_double = on;
-            json!(on)
-        }),
+        "window.toolbarColumns" => {
+            let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
+                Ok(t) => t,
+                Err(e) => return Some(Err(e)),
+            };
+            let double = match toolbar.as_deref().and_then(|name| crate::custom_toolbars::find_mut(&mut app.ui, name)) {
+                Some(b) => &mut b.double,
+                None => &mut app.ui.toolbar_double,
+            };
+            opt_bool(p, "double").map(|on| {
+                let on = on.unwrap_or(!*double);
+                *double = on;
+                json!(on)
+            })
+        }
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
         "imageTrace.preview" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.image_trace_preview);
@@ -440,7 +451,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Err(e) => return Some(Err(e)),
             };
             let Some(tool) = s("tool") else { return Some(Err("tool (a tool id) is required".into())) };
-            crate::toolbar::float_group(app, &tool, floating).map(Value::Bool)
+            let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
+                Ok(t) => t,
+                Err(e) => return Some(Err(e)),
+            };
+            crate::toolbar::float_group(app, &tool, floating, toolbar.as_deref()).map(Value::Bool)
         }
         _ => return None,
     };
@@ -478,13 +493,16 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
             // another way since then (Window › Tools, Window › Control). Panels shown with Shift+Tab
             // in between stay shown. Switching workspaces clears the record (`workspaces::apply`).
-            let hid = ui.tab_hid.take().filter(|h| (h.dock || h.toolbar || h.control_bar) && !ui.toolbar && !ui.control_bar);
+            // A shown toolbar made with New Toolbar counts as a bar Tab hides, so a record with none
+            // of the three bars is of the toolbars made with New Toolbar alone.
+            let custom = ui.custom_toolbars.iter().any(|b| b.shown);
+            let hid = ui.tab_hid.take().filter(|_| !ui.toolbar && !ui.control_bar);
             let on = if let Some(h) = hid {
                 ui.dock |= h.dock;
                 ui.toolbar = h.toolbar;
                 ui.control_bar = h.control_bar;
                 true
-            } else if ui.dock || ui.toolbar || ui.control_bar {
+            } else if ui.dock || ui.toolbar || ui.control_bar || custom {
                 ui.tab_hid = Some(crate::state::TabHid { dock: ui.dock, toolbar: ui.toolbar, control_bar: ui.control_bar });
                 ui.dock = false;
                 ui.toolbar = false;
