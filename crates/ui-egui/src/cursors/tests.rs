@@ -334,6 +334,9 @@ fn focus_frame(app: &mut VectorcraftApp, ctx: &egui::Context, focused: bool, eve
 fn the_canvas_hands_the_tool_cursor_to_the_os_and_idles_while_the_pointer_rests() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    // Every frame renders on this thread, however long it takes: a frame finished by the render
+    // worker during the idle frames asks for a repaint.
+    app.canvas.worker_started = true;
     let ctx = egui::Context::default();
     for _ in 0..3 {
         frame(&mut app, &ctx, vec![]);

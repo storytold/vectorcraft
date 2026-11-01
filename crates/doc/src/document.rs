@@ -3,7 +3,10 @@ use super::graphic_style::default_graphic_styles;
 use super::guides::{GridPrefs, RulerMode};
 use super::limits::{DocError, FORMAT_VERSION, MAX_COORD, MAX_NEXT_ID};
 use super::units::{ColorMode, Unit};
-use super::*;
+use super::{
+    Arc, BTreeMap, ColorProfiles, DocMetadata, DocSetup, Document, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, PatternDef, Places, Point,
+    RasterEffectsSettings, Rect, Vec2,
+};
 
 impl Document {
     /// Is everything but the layers the same in `other`, as the next version of the document after
@@ -44,6 +47,7 @@ impl Document {
             patterns,
             pattern_edit,
             mask_edit,
+            symbol_edit,
             next_id: _,
             unknown,
             page_isolate,
@@ -110,6 +114,7 @@ impl Document {
                 (a, b) => a.is_none() && b.is_none(),
             }
             && *mask_edit == other.mask_edit
+            && *symbol_edit == other.symbol_edit
             && *unknown == other.unknown
             && *page_isolate == other.page_isolate
             && *page_knockout == other.page_knockout
@@ -218,6 +223,7 @@ impl Document {
             patterns: vec![],
             pattern_edit: None,
             mask_edit: None,
+            symbol_edit: None,
             next_id: 1,
             unknown: Default::default(),
             page_isolate: false,

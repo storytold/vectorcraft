@@ -1,5 +1,8 @@
 use super::entry::RgbInCmyk;
-use super::*;
+use super::{
+    Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
+    PathBuilder, PathEl, Rect, Shape, Standard, Surface, Transform, cmyk, krilla, luma, rgb,
+};
 
 /// How deep inline graphics nest before they are left out.
 pub(super) const MAX_INLINE_DEPTH: u32 = 4;
@@ -11,6 +14,9 @@ pub(super) const MAX_PATTERN_DEPTH: u32 = 4;
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
+/// The warning for an image whose placement cannot be written.
+pub(super) const UNWRITABLE_IMAGE: &str = "an image couldn't be written and is missing from the picture";
+
 impl<'a> Exporter<'a> {
     /// An exporter of `doc` writing images as `set` says; layers whose Print option is off are
     /// left out.
@@ -20,6 +26,7 @@ impl<'a> Exporter<'a> {
             symbols: doc.symbol_boxes().quick().with_brush_art(),
             warnings: vec![],
             images: HashMap::new(),
+            image_left_out: None,
             brushes: None,
             knockout: doc.page_knockout,
             lab_spots: vec![],

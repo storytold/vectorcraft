@@ -7,7 +7,7 @@ use vectorcraft_doc::{NodeKind, TextKind, TextObject};
 use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_text::TextLayout;
 use vectorcraft_tools::bbox::Handle;
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
 
@@ -192,6 +192,87 @@ fn direct_selection_drags_a_frame_corner_or_edge() {
     drag(&mut s, "directSelection", Point::new(160.0, 60.0), Point::new(180.0, 60.0));
     assert_eq!(frame(&s, id), Rect::new(0.0, 0.0, 140.0, 40.0));
     assert_eq!(text(&s, id).runs[0].style.size, 12.0);
+}
+
+/// Direct Selection's marquee selects the frame anchors of area type inside it: a drag of one moves
+/// only those, the arrow keys nudge them, and Shift-click takes one out.
+#[test]
+fn direct_selection_marquee_selects_frame_anchors() {
+    let mut s = session();
+    let id = area(&mut s, 40.0, 40.0, 120.0, 40.0, STORY);
+    let other = area(&mut s, 300.0, 40.0, 120.0, 40.0, STORY);
+    s.execute("select.none", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    let shift = Mods { shift: true, ..Mods::default() };
+    // A marquee round the right-hand corners, (160, 40) and (160, 80).
+    drag(&mut s, "directSelection", Point::new(150.0, 20.0), Point::new(180.0, 100.0));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    let n = undo_len(&s);
+    drag(&mut s, "directSelection", Point::new(160.0, 80.0), Point::new(180.0, 100.0));
+    assert_eq!(undo_len(&s), n + 1, "one step");
+    assert_eq!(last_step(&s), "Reshape Type Area");
+    assert_eq!(corners(&s, id), vec![Point::ZERO, Point::new(140.0, 20.0), Point::new(140.0, 60.0), Point::new(0.0, 40.0)]);
+    // The arrow keys nudge them, each press one step, and Shift-click takes (179, 60) out.
+    assert!(s.tool_claims_key(ToolKey::Left, v));
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(undo_len(&s), n + 2);
+    assert_eq!(corners(&s, id), vec![Point::ZERO, Point::new(139.0, 20.0), Point::new(139.0, 60.0), Point::new(0.0, 40.0)]);
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 179.0, 60.0).with_mods(shift), v).unwrap();
+    }
+    s.tool_key(ToolKey::Down, shift, v).unwrap();
+    assert_eq!(corners(&s, id), vec![Point::ZERO, Point::new(139.0, 20.0), Point::new(139.0, 70.0), Point::new(0.0, 40.0)]);
+    // A marquee across both frames' facing corners moves both frames in one step.
+    drag(&mut s, "directSelection", Point::new(170.0, 10.0), Point::new(310.0, 65.0));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    let n = undo_len(&s);
+    drag(&mut s, "directSelection", Point::new(300.0, 40.0), Point::new(300.0, 30.0));
+    assert_eq!(undo_len(&s), n + 1, "one step");
+    assert_eq!(corners(&s, id)[1], Point::new(139.0, 10.0));
+    assert_eq!(corners(&s, other), vec![Point::new(0.0, -10.0), Point::new(120.0, 0.0), Point::new(120.0, 40.0), Point::new(0.0, 40.0)]);
+    // Shift-click on the other frame's only selected corner deselects that type; the corner of the
+    // first frame still nudges.
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 300.0, 30.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    assert_eq!(corners(&s, id)[1], Point::new(139.0, 9.0));
+    // Deselect, then the same two selected again: they are selected whole, so the arrow keys move
+    // them as objects.
+    s.execute("select.none", &json!({})).unwrap();
+    sel(&mut s, &[id, other]);
+    assert!(!s.tool_claims_key(ToolKey::Left, v));
+    // A click on empty canvas deselects; the arrow keys are then no longer the tool's.
+    drag(&mut s, "directSelection", Point::new(600.0, 500.0), Point::new(600.0, 500.0));
+    assert!(!s.tool_claims_key(ToolKey::Left, v));
+}
+
+/// `text.reshapeArea` with `items` moves several frames' anchors in one step, and fails whole.
+#[test]
+fn reshape_area_moves_the_anchors_of_several_frames() {
+    let mut s = session();
+    let a = area(&mut s, 40.0, 40.0, 120.0, 40.0, STORY);
+    let b = area(&mut s, 300.0, 40.0, 120.0, 40.0, STORY);
+    let n = undo_len(&s);
+    let items = json!([{"id": a.0, "anchors": [[0, 2]]}, {"id": b.0, "anchors": [[0, 0], [0, 3]]}]);
+    s.execute("text.reshapeArea", &json!({"items": items, "dx": -10, "dy": 5})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "one step");
+    assert_eq!(corners(&s, a)[2], Point::new(110.0, 45.0));
+    assert_eq!(corners(&s, b), vec![Point::new(-10.0, 5.0), Point::new(120.0, 0.0), Point::new(120.0, 40.0), Point::new(-10.0, 45.0)]);
+    for bad in [
+        json!({"items": [], "dx": 1, "dy": 1}),
+        json!({"items": {"id": a.0}, "dx": 1, "dy": 1}),
+        json!({"items": [{"id": a.0, "anchors": [[0, 2]]}], "id": a.0, "dx": 1, "dy": 1}),
+        json!({"items": [{"id": a.0, "anchors": [[0, 2]]}, {"id": a.0, "anchors": [[0, 1]]}], "dx": 1, "dy": 1}),
+        // A bad item fails the whole step: the good one does not move either.
+        json!({"items": [{"id": a.0, "anchors": [[0, 2]]}, {"id": b.0, "anchors": [[0, 9]]}], "dx": 1, "dy": 1}),
+        json!({"items": [{"id": a.0, "anchors": [[0, 2]]}, {"anchors": [[0, 1]]}], "dx": 1, "dy": 1}),
+    ] {
+        assert!(s.execute("text.reshapeArea", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(undo_len(&s), n + 1, "nothing more changed");
+    assert_eq!(corners(&s, a)[2], Point::new(110.0, 45.0));
 }
 
 #[test]
@@ -394,4 +475,36 @@ fn area_type_options_align_the_lines_vertically() {
     assert_eq!(layout(&s, id).lines[0].baseline, top);
     assert_eq!(text(&s, id).cached_bounds, before);
     assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("verticalAlign?: top|center|bottom|justify"));
+}
+
+/// Area Type Options › Text Flow (#4978): `flow` fills the cells by columns (the default) or by
+/// rows, is reported back, refuses other values and undoes.
+#[test]
+fn area_type_options_set_the_text_flow() {
+    use vectorcraft_doc::TextFlow;
+    let mut s = session();
+    let id = area(&mut s, 0.0, 0.0, 420.0, 300.0, &"Words flow from cell to cell in order. ".repeat(40));
+    sel(&mut s, &[id]);
+    let r = s.execute("text.areaOptions", &json!({"rows": 2, "columns": 2, "gutter": 20})).unwrap();
+    assert_eq!(r["flow"], "columns");
+    // Where the second cell sits from the first.
+    let second = |s: &Session| {
+        let f = layout(s, id).frames;
+        (f[1].x0 - f[0].x0, f[1].y0 - f[0].y0)
+    };
+    assert_eq!(second(&s), (0.0, 160.0), "by columns the second cell is below the first");
+    let n = undo_len(&s);
+    assert_eq!(s.execute("text.areaOptions", &json!({"flow": "rows"})).unwrap()["flow"], "rows");
+    assert_eq!(text(&s, id).area.flow, TextFlow::Rows);
+    assert_eq!(second(&s), (220.0, 0.0), "by rows the second cell is beside the first");
+    let l = layout(&s, id);
+    assert!(l.lines.iter().any(|li| li.region == 1 && li.x0 >= l.frames[1].x0 - 1e-6), "text reaches it");
+    assert_eq!((undo_len(&s), last_step(&s).as_str()), (n + 1, "Area Type Options"));
+    for bad in [json!({"flow": "diagonal"}), json!({"flow": "Rows"}), json!({"flow": 1}), json!({"flow": null})] {
+        assert!(s.execute("text.areaOptions", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((undo_len(&s), text(&s, id).area.flow), (n + 1, TextFlow::Rows));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((text(&s, id).area.flow, second(&s)), (TextFlow::Columns, (0.0, 160.0)));
+    assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("flow?: columns|rows"));
 }

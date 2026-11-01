@@ -1,6 +1,7 @@
 //! Separations: the inks of a job ([`print_inks`]) and the document as one ink's plate, every
 //! colour (and image pixel) replaced by the grey of that ink's coverage.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use vectorcraft_color::Color;
@@ -8,7 +9,7 @@ use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{ColorMode, Document, Node};
+use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
@@ -99,10 +100,20 @@ impl<'a> Separator<'a> {
     pub fn plate(&self, plate: &str) -> Document {
         let mut d = self.doc.clone();
         let discard_white = d.setup.discard_white_overprint;
+        let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
             darken_overprints(n, discard_white);
             self.node(plate, Arc::make_mut(n));
+            keep_colorized_pixels(n, &mut colorized);
+        }
+        // A colorized image's pixels say where its color prints, on every plate: they are kept
+        // under their own key, and only the color is separated.
+        let mut kept = BTreeMap::new();
+        for key in colorized {
+            if let Some(blob) = d.images.get(&key) {
+                kept.insert(colorized_key(&key), blob.clone());
+            }
         }
         for blob in d.images.values_mut() {
             let gray = blob.map_rgb(|[r, g, b]| {
@@ -114,8 +125,35 @@ impl<'a> Separator<'a> {
                 *blob = gray;
             }
         }
+        d.images.extend(kept);
         // Every colour is a grey now: nothing to separate on the way out.
         d.color_mode = ColorMode::Rgb;
         d
+    }
+}
+
+/// The key a plate keeps colorized image `key`'s own pixels under.
+fn colorized_key(key: &str) -> String {
+    format!("{key}\u{0}colorized")
+}
+
+/// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
+/// `keys`.
+fn keep_colorized_pixels(n: &mut Arc<Node>, keys: &mut BTreeSet<String>) {
+    let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
+    if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
+        return;
+    }
+    let node = Arc::make_mut(n);
+    if colorized(node)
+        && let NodeKind::Image(im) = &mut node.kind
+    {
+        keys.insert(im.key.clone());
+        im.key = colorized_key(&im.key);
+    }
+    if let Some(ch) = node.children_mut() {
+        for c in ch.iter_mut() {
+            keep_colorized_pixels(c, keys);
+        }
     }
 }

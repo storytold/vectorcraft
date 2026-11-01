@@ -39,8 +39,8 @@ use dnd::drag_of;
 use dnd::highlighted;
 pub(crate) use dnd::{click_selection, drag_preview};
 pub(crate) use libraries::{
-    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, limit_key, limit_name, load_library, open_library, other_library, user_library,
-    window_menu,
+    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_label, library_list, limit_key, limit_name, load_library, open_library,
+    other_library, user_library, window_menu,
 };
 #[cfg(test)]
 pub(crate) use tiles::describe;
@@ -187,9 +187,15 @@ fn swatch_params(e: &Entry) -> Option<Value> {
 
 /// Apply a clicked swatch to the active proxy (Alt: the inactive one). An Alt-click on a color
 /// swatch with a gradient stop selected recolors the stop as dropping the swatch on it does,
-/// and with a freeform gradient point selected it recolors the point.
+/// and with a freeform gradient point selected it recolors the point. A color swatch also becomes
+/// the Color Guide's base color.
 fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
     let Some(params) = swatch_params(e) else { return };
+    if let Entry::Swatch { paint, .. } = e
+        && let Some(c) = paint.color()
+    {
+        super::color_guide::choose_base(app, c);
+    }
     if super::alt_held(ui)
         && let Some(c) = drag_of(e, vec![]).color()
         && super::gradient::recolor_selected(app, c, &params)

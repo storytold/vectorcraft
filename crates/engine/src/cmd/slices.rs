@@ -12,7 +12,10 @@ use vectorcraft_doc::slices::valid_rect;
 use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKind, Slice, SliceKind, SliceOptions};
 use vectorcraft_geom::{Rect, shapes};
 
-use super::*;
+use super::{
+    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
+    targets,
+};
 
 /// The most slices one Divide Slices makes.
 const MAX_PIECES: usize = 1000;

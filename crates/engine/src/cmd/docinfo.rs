@@ -9,7 +9,7 @@ use vectorcraft_doc::{ColorMode, Document, Node, NodeId, NodeKind, RepeatKind, R
 use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_text::embed::Embedding;
 
-use super::*;
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, has_selection, str_param, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

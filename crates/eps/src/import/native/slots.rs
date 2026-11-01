@@ -1,5 +1,5 @@
 use super::build::MADE;
-use super::*;
+use super::{AppearanceItem, Arc, BTreeSet, BlendMode, Document, Node, NodeId, NodeKind, PathData, Point, Rect, ai, slot_of};
 
 /// The notes that say the import left out something the file has (see [`is_loss`]).
 pub(super) const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
@@ -9,13 +9,24 @@ pub(super) const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn'
 
 pub(super) const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
 
+/// The page's type that no text object takes, left out.
+pub(super) const PAGE_TYPE_LEFT_OUT: &str = "some of the page's type has no text object in the layers, so it is left out";
+
+/// The page's type, too much to check against the text objects (it may have some that none takes).
+pub(super) const PAGE_TYPE_UNCHECKED: &str =
+    "the page's type wasn't checked against the text objects, as there is too much of it: some of it may have no text object";
+
 pub(super) const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
 /// Does this import note say that the file has something the document doesn't (hidden text, art or
-/// layers that could not be read)? Writing the document over the file would lose it for good.
+/// layers that could not be read, or the page's type that no text object takes or may not take)?
+/// Writing the document over the file would lose it for good.
 pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
+        || note.ends_with("they came in as the page's art")
+        || note == PAGE_TYPE_LEFT_OUT
+        || note == PAGE_TYPE_UNCHECKED
         || [ART_LEFT_OUT, LAYERS_UNREAD, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
 }
 
@@ -163,10 +174,9 @@ pub(super) fn assign(objects: &[Vec<Arc<Node>>], slots: usize) -> Vec<Vec<&[Arc<
 pub(super) enum Content {
     /// Text objects (with the strokes round them) of the page.
     Page(Vec<Arc<Node>>),
-    /// A text object made from the file's text document, where it lies on the document, whether
-    /// the page has type where it is, and the page's type of no text object that is nearest it
-    /// (kept after it).
-    Made(Box<Node>, Option<Rect>, bool, Vec<Arc<Node>>),
+    /// A text object made from the file's text document, where it draws on the document (when it
+    /// shows), and whether the page has type where it is.
+    Made(Box<Node>, Option<Rect>, bool),
     /// Nothing the file lets this read.
     Empty,
     /// Its type is on the page with another text object's; there is nothing to put here.
@@ -252,7 +262,7 @@ pub(super) fn fill_slots(
                     i += n;
                     continue;
                 }
-                Some(Content::Made(mut text, _, seen, extra)) => {
+                Some(Content::Made(mut text, _, seen)) => {
                     text.id = doc.alloc_id();
                     if let Some(story) = story {
                         made.push((story, frame, text.id));
@@ -265,20 +275,12 @@ pub(super) fn fill_slots(
                     }
                     // Type the page shows is kept; other made type is weighed against the page.
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
-                    let extra: Vec<Arc<Node>> = extra.iter().map(|p| reid(doc, p)).collect();
-                    // The type takes the slot's transparency; the page's type kept after it, where it has
-                    // none of its own, goes into a group with it that has the transparency instead.
-                    let parts: Vec<Arc<Node>> = if transparent && !extra.is_empty() && !extra.iter().any(|p| see_through(p)) {
-                        let mut group = Node::group(doc.alloc_id(), std::iter::once(Arc::new(*text)).chain(extra).collect());
-                        (group.opacity, group.blend, group.isolate, group.knockout) = state;
-                        vec![Arc::new(group)]
-                    } else {
-                        (text.opacity, text.blend, text.isolate, text.knockout) = state;
-                        std::iter::once(Arc::new(*text)).chain(extra).collect()
-                    };
-                    let n = parts.len();
-                    nodes.splice(i..=i, parts);
-                    i += n;
+                    // The type takes the slot's transparency.
+                    (text.opacity, text.blend, text.isolate, text.knockout) = state;
+                    if let Some(slot) = nodes.get_mut(i) {
+                        *slot = Arc::new(*text);
+                    }
+                    i += 1;
                     continue;
                 }
                 Some(Content::Merged) => {
@@ -321,6 +323,13 @@ const SAME_PLACE: f64 = 0.75;
 /// Its letters and digits, which is what is compared of type (the page may spell a mark another way).
 pub(super) fn letters(s: &str) -> String {
     s.chars().filter(char::is_ascii_alphanumeric).collect()
+}
+
+/// The [`letters`] of each word of `s`, the empty ones left out. Type is compared word by word:
+/// the page draws a right-to-left paragraph's words in the order they show (" 120.5 mm " as
+/// "mm 120.5"), its text object keeps them in the order they are typed.
+pub(super) fn words(s: &str) -> Vec<String> {
+    s.split_whitespace().map(letters).filter(|w| !w.is_empty()).collect()
 }
 
 /// Does `n` hold type that is where `story` lays one of its lines out: the line, or a piece of it

@@ -1,7 +1,7 @@
 use super::build::base_values;
 use super::names::{localized, name};
 use super::traits::{FaceKeys, FontTraits};
-use super::*;
+use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
@@ -214,6 +214,11 @@ impl FontFace {
     pub fn vertical_metrics(&self) -> (f64, f64) {
         (self.ascent, self.descent)
     }
+    /// The height of the lowercase letters in font units, positive (estimated from the ascent
+    /// when the font has no OS/2 value).
+    pub fn x_height(&self) -> f64 {
+        self.x_height
+    }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).
     pub fn line_gap(&self) -> f64 {
@@ -272,6 +277,26 @@ impl FontFace {
     /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
     pub fn icf_margins(&self) -> IcfMargins {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// The height of the face that a font size measures with `reference`, in ems: 1 for the em
+    /// box; the cap height or x height of its OS/2 table; the height of its ideographic character
+    /// face ([`Self::icf_margins`]), or across a `vertical` line its width. None for a face whose
+    /// font has no such value (an OS/2 table without the heights, no ICF), or one outside 0.1 to
+    /// 2 ems.
+    pub fn font_height(&self, reference: vectorcraft_doc::FontHeightReference, vertical: bool) -> Option<f64> {
+        use vectorcraft_doc::FontHeightReference as R;
+        let units = |v: Option<f32>| v.map(f64::from).map(|v| v / self.upem);
+        let h = match reference {
+            R::EmBox => Some(1.0),
+            R::CapHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height),
+            R::XHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).x_height),
+            R::IcfBox => {
+                let m = self.icf_margins();
+                (m != IcfMargins::default()).then_some(if vertical { 1.0 - m.left - m.right } else { 1.0 - m.top - m.bottom })
+            }
+        };
+        h.filter(|h| (0.1..=2.0).contains(h))
     }
 
     /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else

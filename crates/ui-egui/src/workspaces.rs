@@ -43,6 +43,9 @@ pub struct Workspace {
     pub docking: Option<craft_ui::docking::Layout<String>>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub docking_hidden: std::collections::BTreeMap<String, craft_ui::docking::Location<String>>,
+    /// Tabs closed together by a panel shortcut.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docking_hidden_groups: Vec<Vec<String>>,
     /// Panels dropped on the icon column, in older workspaces (read only).
     #[serde(default, skip_serializing)]
     pub docking_icons: std::collections::BTreeSet<String>,
@@ -184,6 +187,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         floating_panels: Vec::new(),
         docking: ui.docking.clone(),
         docking_hidden: ui.docking_hidden.clone(),
+        docking_hidden_groups: ui.docking_hidden_groups.clone(),
         docking_icons: Default::default(),
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
@@ -209,6 +213,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.docking_generation = ui.docking_generation.wrapping_add(1);
     ui.docking = w.docking.clone().filter(crate::panel_docking::valid);
     ui.docking_hidden = w.docking_hidden.clone();
+    ui.docking_hidden_groups = w.docking_hidden_groups.clone();
     ui.toolbar_pos = w.toolbar_pos;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
@@ -453,7 +458,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let sel = d.str("selected");
             ui.horizontal(|ui| {
                 let mut name = d.str("name");
-                if ui.add(egui::TextEdit::singleline(&mut name).desired_width(180.0)).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut name).align(egui::Align2::LEFT_CENTER).desired_width(180.0)).changed() {
                     d.fields.insert("name".into(), json!(name));
                 }
                 if ui.button(tl!("New")).on_hover_text(tl!("Save the current layout under this name")).clicked() {
@@ -472,7 +477,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
                 let mut name = d.str("name");
-                let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(240.0));
+                let r = ui.add(egui::TextEdit::singleline(&mut name).align(egui::Align2::LEFT_CENTER).desired_width(240.0));
                 if r.changed() {
                     d.fields.insert("name".into(), json!(name));
                 }

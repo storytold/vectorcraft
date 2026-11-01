@@ -43,7 +43,7 @@ pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Opti
     let coloured = ["currentColor", "currentcolor", "context-fill", "context-stroke"].iter().any(|k| svg.contains(k));
     // usvg resolves `context-fill` and `context-stroke` only for markers.
     let svg = svg.replace("context-fill", &hex(fill)).replace("context-stroke", &stroke.map_or_else(|| "none".into(), hex));
-    let (doc, _) = crate::import::import(&svg, &ImportOptions::default()).ok()?;
+    let (doc, _) = crate::import::import(&svg, &ImportOptions::default(), crate::MAX_NODES).ok()?;
     let mut art = if whole {
         Node::group(NodeId(0), doc.layers.iter().map(|l| Arc::new(Node::group(NodeId(0), l.children().cloned().unwrap_or_default()))).collect())
     } else {

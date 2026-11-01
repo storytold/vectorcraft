@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Arc, Document, EngineError, Interaction, LastTransform, NamedStep, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden, doc_sane,
+    objects_in_range,
+};
 
 impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -16,6 +19,7 @@ impl Session {
         let doc = Arc::make_mut(&mut st.doc);
         // The Global Edit members the edit reached besides the selection.
         let mut spread = vec![];
+        let mut dim_changed = false;
         // Objects attached to a path follow it, and dimensions follow the art they measure.
         let result = match f(doc, &mut st.selection).and_then(|v| {
             // Global Edit: the other members take what the edit changed about the one it edited.
@@ -23,18 +27,24 @@ impl Session {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
             cmd::objects_on_path::refresh(&before, doc);
-            cmd::dimension::refresh(&before, doc)?;
+            dim_changed = cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
             Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
                 Err(e) => Err(e),
-                Ok(()) => {
+                Ok(shaper_changed) => {
                     // Attached Shaper groups whose art was rebuilt go back on their path.
-                    cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                    if shaper_changed || dim_changed {
+                        cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                    }
+                    // Symbol editing: the symbol follows its art on the editing layer, before
+                    // inline graphics follow their symbols.
+                    let symbol_synced =
+                        if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
-                    cmd::textwrap::refresh(Arc::make_mut(&mut st.doc));
+                    cmd::textwrap::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Type in no thread numbers its list paragraphs from 1 (before the mask copies
                     // its editing layer's art).
                     cmd::threads::restart_unthreaded_counts(&mut st.doc);
@@ -54,7 +64,9 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if st.doc.too_deep(Some(&before)) {
+                    if let Err(e) = symbol_synced {
+                        Err(e)
+                    } else if st.doc.too_deep(Some(&before)) {
                         // Deeper trees overflow the stack of what walks them.
                         Err(EngineError::Other(TOO_DEEP.into()))
                     } else if doc_sane(&st.doc, &st.selection) && objects_in_range(&st.doc, &spread) {
@@ -76,6 +88,21 @@ impl Session {
                 // The art on a locked artboard can't stay selected, however it got there, except
                 // the new art this edit made and new art still selected.
                 st.protect_locked_artboards(&before_sel.objects, &before_sel.new_art, Some(&*before));
+                // Symbol or opacity mask editing ended because the edit deleted its layer:
+                // isolation on the layer or inside it leaves too, out of symbol editing to what it
+                // was before.
+                let mode_layer = before.symbol_edit.as_ref().map(|e| e.layer).or(before.mask_edit.map(|m| m.layer));
+                if let Some(layer) = mode_layer
+                    && st.doc.node(layer).is_none()
+                    && st.isolation.is_some_and(|i| i == layer || st.doc.node(i).is_none())
+                {
+                    if let Some(se) = &before.symbol_edit {
+                        cmd::symboledit::go_back(st, se);
+                    } else {
+                        st.isolation = None;
+                        st.active_layer = st.doc.default_layer();
+                    }
+                }
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -248,6 +275,11 @@ impl Session {
         // A preview that left the document as it was records no Transform Again either (as
         // `keep_interaction` records no undo step): the last real transformation stands.
         let changed = !Arc::ptr_eq(&it.doc, &st.doc);
+        // How far a drag of direct-selected anchors moved them (`path.moveAnchors`).
+        let moved = vectorcraft_geom::Vec2::new(
+            preview.1.get("dx").and_then(Value::as_f64).unwrap_or(0.0),
+            preview.1.get("dy").and_then(Value::as_f64).unwrap_or(0.0),
+        );
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
@@ -262,6 +294,16 @@ impl Session {
                 st.last_transform = Some(LastTransform::Matrix(m, options));
                 st.last_perspective = None;
             }
+        } else if preview.0 == "path.moveAnchors" && (moved.x != 0.0 || moved.y != 0.0) {
+            // A drag of direct-selected anchors (from an anchor, or from a fill with anchors
+            // selected): Transform Again moves the selected anchors and the objects selected whole
+            // by the same distance. A drag that ends where it began leaves the last transform.
+            let mut options = serde_json::json!({ "copy": false });
+            if let Some(patterns) = preview.1.get("patterns") {
+                options["patterns"] = patterns.clone();
+            }
+            st.last_transform = Some(LastTransform::Matrix(vectorcraft_geom::Affine::translate(moved), options));
+            st.last_perspective = None;
         } else if preview.0 == "object.transformEach" && changed {
             // Transform Again repeats it as it stood when OK was pressed.
             st.last_transform = Some(LastTransform::Each(preview.1.clone()));

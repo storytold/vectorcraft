@@ -1,6 +1,6 @@
 use super::document_ext::free_id;
 use super::guides::Guide;
-use super::*;
+use super::{Affine, Arc, Document, Node, NodeId, NodeKind, PatternDef, Point, Rect, Selection, SymbolBoxes, Vec2, artboard_holds};
 
 impl Document {
     /// Union of the geometric bounds of `ids` (their visual bounds when `visual`), with symbol

@@ -349,6 +349,9 @@ fn heading(id: &str) -> &'static str {
     if let Some((cat, _)) = crate::toolbar::BASIC.iter().find(|(_, slots)| slots.iter().any(|s| s.contains(&id))) {
         return cat;
     }
+    if let Some(addon) = vectorcraft_tools::addons::heading(id) {
+        return addon;
+    }
     match id {
         _ if id.starts_with("symbol") => "Symbols",
         _ if id.ends_with("Graph") => "Graph",
@@ -365,7 +368,7 @@ fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
     static SECTIONS: OnceLock<Vec<(&'static str, Vec<&'static ToolInfo>)>> = OnceLock::new();
     SECTIONS.get_or_init(|| {
         let mut out: Vec<(&'static str, Vec<&'static ToolInfo>)> = crate::toolbar::BASIC.iter().map(|(cat, _)| (*cat, vec![])).collect();
-        for tool in TOOL_GROUPS.iter().flat_map(|g| g.iter()) {
+        for tool in vectorcraft_tools::catalog::all_tools() {
             let h = heading(tool.id);
             match out.iter_mut().find(|(c, _)| *c == h) {
                 Some((_, tools)) => tools.push(tool),
@@ -387,7 +390,7 @@ fn groups() -> &'static [Heading] {
     static GROUPS: OnceLock<Vec<Heading>> = OnceLock::new();
     GROUPS.get_or_init(|| {
         let mut out: Vec<Heading> = sections().iter().map(|(cat, _)| (*cat, vec![])).collect();
-        for g in TOOL_GROUPS {
+        for g in TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS) {
             let Some(first) = g.first() else { continue };
             let count = |h: &str| g.iter().filter(|t| heading(t.id) == h).count();
             let h = g.iter().map(|t| heading(t.id)).fold(heading(first.id), |best, h| if count(h) > count(best) { h } else { best });
@@ -599,7 +602,7 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     let icon = Rect::from_center_size(rect.left_center() + vec2(8.0 + ICON / 2.0, 0.0), vec2(ICON, ICON));
     icons::paint(ui, icons::tool_icon(tool.icon), icon, if dimmed || on { color } else { t.icon });
     let painter = ui.painter().with_clip_rect(rect);
-    let shortcut = crate::shortcut_editor::tool_shortcut(tool.id);
+    let shortcut = crate::shortcut_editor::tool_shortcut(tool.id).map(crate::shortcut_editor::as_typed);
     let keys_w = shortcut.as_ref().map_or(0.0, |k| {
         let keys = if on {
             t.text_strong

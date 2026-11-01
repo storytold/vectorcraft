@@ -5,7 +5,8 @@
 //! pointer sample so far (and its pen pressure while Use Pressure Pen is on), so the result is a
 //! pure function of the parameters (replay reproduces it exactly). Holding the brush still with
 //! Twirl, Pucker or Bloat repeats the last sample every [`HOLD_EVERY`] seconds of [`Tool::tick`]
-//! time: one more dab there each time.
+//! time: one more dab there each time. Escape during a stroke cancels it, and Escape during an
+//! Alt-drag that sizes the brush puts the brush size back.
 //!
 //! The kernel resamples the stroke into dabs spaced a fraction of the brush apart ([`Dabber`]:
 //! more samples only add dabs, so a growing stroke can be applied as it grows). For each dab it
@@ -19,7 +20,7 @@ use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, Rect, SubPath, Vec2};
 
 use super::ellipse_path;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiquifyKind {
@@ -813,6 +814,27 @@ impl Tool for LiquifyTool {
             }
         }
     }
+    /// The tool claims Escape during an Alt-drag that sizes the brush.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.sizing.is_some()
+    }
+    /// Escape during a stroke cancels it: the art goes back to how the press found it. During an
+    /// Alt-drag sizing the brush, Escape puts the brush size back.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape {
+            return vec![];
+        }
+        if let Some(s) = self.sizing.take() {
+            (self.params.width, self.params.height) = (s.width, s.height);
+            return vec![];
+        }
+        if !std::mem::take(&mut self.active) {
+            return vec![];
+        }
+        self.points.clear();
+        (self.held, self.previewed) = (0.0, 0);
+        vec![Action::Cancel]
+    }
     fn busy(&self) -> bool {
         self.active
     }
@@ -959,5 +981,42 @@ mod tests {
         assert_eq!(p, q);
         let r = LiquifyParams::from_json(&json!({"tool": "warp", "diameter": 40, "intensity": 80})).unwrap();
         assert_eq!((r.width, r.height, r.intensity), (40.0, 40.0, 0.8));
+    }
+
+    #[test]
+    fn escape_cancels_a_stroke_or_a_brush_size_drag() {
+        use crate::testutil::{cx, doc_with_rect, paint};
+        let (d, id) = doc_with_rect();
+        let s = vectorcraft_doc::Selection { objects: vec![id], ..Default::default() };
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let ev = |kind, x, y, mods| PointerEvent::new(kind, x, y).with_mods(mods);
+        for tool in ["warp", "twirl"] {
+            let mut t = LiquifyTool::new(tool);
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}: no stroke, Escape is the shortcut's");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 190.0, 150.0, Mods::default()))[0], Action::Begin(_)), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 220.0, 150.0, Mods::default()));
+            assert!(t.busy(), "{tool}");
+            assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{tool}");
+            assert!(!t.busy() && !t.wants_ticks(), "{tool}");
+            // The rest of the stroke does nothing.
+            assert!(t.tick(&c, 1.0).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 240.0, 150.0, Mods::default())).is_empty(), "{tool}");
+            // Alt-drag sizes the brush; Escape puts the size back and the rest of that drag does nothing.
+            let size = (t.params.width, t.params.height);
+            t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0, alt));
+            t.pointer(&c, &ev(PointerKind::Drag, 180.0, 170.0, alt));
+            assert_ne!((t.params.width, t.params.height), size, "{tool}");
+            assert!(t.claims_key(&c, ToolKey::Escape), "{tool}");
+            assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+            assert!(!t.claims_key(&c, ToolKey::Escape), "{tool}");
+            t.pointer(&c, &ev(PointerKind::Drag, 200.0, 200.0, alt));
+            assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0, alt)).is_empty(), "{tool}");
+            assert_eq!((t.params.width, t.params.height), size, "{tool}");
+        }
     }
 }

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Builder, Cursor, Document, Result, err, raster_doc};
 
 /// What an Affinity file opened as.
 pub(in super::super) struct Imported {
