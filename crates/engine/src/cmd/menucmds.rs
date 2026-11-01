@@ -138,6 +138,15 @@ pub fn specs() -> Vec<CommandSpec> {
             crop_image
         ),
         cmd!(
+            "image.removeBackground",
+            "Remove Background",
+            ["Object"],
+            None,
+            "{color?: \"#rrggbb\" (background to erase; default: the average of the image's four corners), tolerance?: 0-255 (max channel distance from that colour; default 32)} make matching pixels transparent on the selected image (RGB/PNG only; CMYK is unchanged) → {id, width, height, cleared}",
+            has_image,
+            remove_image_background
+        ),
+        cmd!(
             "object.maskImage",
             "Mask",
             [],
@@ -966,6 +975,95 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
+}
+
+/// Pixels within `tol` of `bg` on every RGB channel (opaque pixels only).
+fn matches_background(p: image::Rgba<u8>, bg: [u8; 3], tol: u8) -> bool {
+    p[3] > 0 && (p[0].abs_diff(bg[0]) <= tol && p[1].abs_diff(bg[1]) <= tol && p[2].abs_diff(bg[2]) <= tol)
+}
+
+fn corner_background(px: &image::RgbaImage) -> [u8; 3] {
+    let (w, h) = px.dimensions();
+    if w == 0 || h == 0 {
+        return [255, 255, 255];
+    }
+    let corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)];
+    let mut sum = [0u32; 3];
+    for (x, y) in corners {
+        let p = px.get_pixel(x, y);
+        sum[0] += p[0] as u32;
+        sum[1] += p[1] as u32;
+        sum[2] += p[2] as u32;
+    }
+    [(sum[0] / 4) as u8, (sum[1] / 4) as u8, (sum[2] / 4) as u8]
+}
+
+fn remove_image_background(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "image.removeBackground";
+    let st = s.doc()?;
+    let id = st
+        .selection
+        .objects
+        .iter()
+        .copied()
+        .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
+        .ok_or_else(|| bad(C, "select an image"))?;
+    let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    let blob = st.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image's pixels are missing"))?;
+    if blob.is_cmyk() {
+        return Ok(json!({ "id": id.0, "width": im.width, "height": im.height, "cleared": 0 }));
+    }
+    let reader = || {
+        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+            .with_guessed_format()
+            .map_err(|_| bad(C, "the image's pixels can't be read"))
+    };
+    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?;
+    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    let mut reader = reader()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let mut px = reader.decode().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?.to_rgba8();
+    let bg = match p.get("color").and_then(Value::as_str) {
+        Some(s) => {
+            let c = Color::from_hex(s.trim()).ok_or_else(|| bad(C, format!("unknown colour {s}")))?;
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            [r, g, b]
+        }
+        None => corner_background(&px),
+    };
+    let tol = p.get("tolerance").and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|x| x.round() as u64))).map(|t| t.min(255) as u8).unwrap_or(32);
+    let mut cleared = 0u64;
+    for p in px.pixels_mut() {
+        if matches_background(*p, bg, tol) {
+            p[3] = 0;
+            cleared += 1;
+        }
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
+    let (w, h) = px.dimensions();
+    s.edit("Remove Background", |d, _| {
+        let key = unique_key(d, "bg");
+        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
+        if let Some(n) = d.node_mut(id) {
+            n.kind = NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: w,
+                height: h,
+                xf: im.xf,
+                link: im.link.clone(),
+                placement: im.placement,
+                pixels: None,
+            }));
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0, "width": w, "height": h, "cleared": cleared }))
 }
 
 /// The Control bar's Mask for an image: a clip group of the image and a clipping path on its

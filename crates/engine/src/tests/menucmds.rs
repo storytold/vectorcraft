@@ -3899,6 +3899,48 @@ fn crop_image_trim_checks_the_rgba_size_before_decoding() {
 }
 
 #[test]
+fn remove_background_makes_corner_colour_transparent() {
+    let mut px = image::RgbaImage::from_pixel(40, 30, image::Rgba([240, 240, 240, 255]));
+    for y in 8..22 {
+        for x in 10..30 {
+            px.put_pixel(x, y, image::Rgba([200, 40, 40, 255]));
+        }
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "logo.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    let r = s.execute("image.removeBackground", &json!({"tolerance": 5})).unwrap();
+    assert_eq!(r["cleared"].as_u64(), Some(40 * 30 - 14 * 20));
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out.get_pixel(0, 0)[3], 0);
+    assert_eq!(out.get_pixel(15, 15)[3], 255);
+    assert_eq!(out.get_pixel(15, 15)[0], 200);
+}
+
+#[test]
+fn remove_background_uses_an_explicit_colour() {
+    let mut px = image::RgbaImage::new(4, 4);
+    for p in px.pixels_mut() {
+        *p = image::Rgba([10, 20, 30, 255]);
+    }
+    px.put_pixel(2, 2, image::Rgba([250, 250, 250, 255]));
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "chip.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("image.removeBackground", &json!({"color": "#0a141e", "tolerance": 0})).unwrap();
+    let NodeKind::Image(im) = &node(&s, selected(&s)[0]).kind else { panic!() };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out.get_pixel(0, 0)[3], 0);
+    assert_eq!(out.get_pixel(2, 2)[3], 255);
+}
+
+#[test]
 fn crop_image_trim_leaves_a_cmyk_image_alone() {
     // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
     let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
