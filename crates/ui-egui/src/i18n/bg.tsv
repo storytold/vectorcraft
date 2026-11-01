@@ -4348,6 +4348,9 @@ axis	Both	И двете
 @msg	unsupported: {0}	не се поддържа: {0}
 @msg	variables are locked	променливите са заключени
 @msg	variables that aren't text were left out: {kinds}	променливите, които не са текстови, бяха пропуснати: {kinds}
+@msg	a variable library holds text variables, and the document has none	библиотеката с променливи съдържа текстови променливи, а документът няма такива
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	променливата `{name}` не може да бъде запазена в библиотека с променливи: преименувайте я така, че да започва с буква или `_`, без интервали и символи, различни от `-`, `_` и `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	наборът от данни `{name}` съдържа управляващ знак, който библиотеката с променливи не може да съдържа
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	файловете от версия {0} не могат да бъдат компресирани: само версия {COMPRESSED_SINCE} и по-нови отварят компресирани файлове
 @msg	width and height are at least 1 pixel	ширината и височината са най-малко 1 пиксел
 @msg	workspace name can't be empty	името на работното пространство не може да бъде празно
@@ -5372,6 +5375,7 @@ theme	Appearance	Външен вид
 	Import Data Sets…	Импортиране на набори от данни…
 	Export Data Sets…	Експортиране на набори от данни…
 	Load Variable Library…	Зареждане на библиотека с променливи…
+	Save Variable Library…	Запазване на библиотека с променливи…
 	Make Graph Dynamic	Динамична диаграма
 	Batch…	Пакет…
 	Source Folder:	Изходна папка:

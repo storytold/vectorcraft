@@ -5149,6 +5149,7 @@ mark-style	Japanese	Japans
 	Import Data Sets…	Gegevenssets importeren…
 	Export Data Sets…	Gegevenssets exporteren…
 	Load Variable Library…	Variabelenbibliotheek laden…
+	Save Variable Library…	Variabelenbibliotheek opslaan…
 	Make Graph Dynamic	Grafiek dynamisch maken
 	Batch…	Batch…
 	Source Folder:	Bronmap:
@@ -5493,6 +5494,9 @@ swatch	Bright Violet	Felviolet
 @msg	the spine has no segments	de as heeft geen segmenten
 @msg	variables are locked	variabelen zijn vergrendeld
 @msg	variables that aren't text were left out: {kinds}	variabelen die geen tekst zijn, zijn weggelaten: {kinds}
+@msg	a variable library holds text variables, and the document has none	een variabelenbibliotheek bevat tekstvariabelen, en het document heeft er geen
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabele `{name}` kan niet in een variabelenbibliotheek worden opgeslagen: geef haar een naam die met een letter of `_` begint, zonder spaties of andere symbolen dan `-`, `_` en `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	gegevensset `{name}` bevat een stuurteken, dat een variabelenbibliotheek niet kan bevatten
 @msg	x and y must be finite	x en y moeten eindig zijn
 @msg	Persistent libraries not found: {files}	Permanente bibliotheken niet gevonden: {files}
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` is geen bibliotheekpaneel (zie window.swatchLibrary)

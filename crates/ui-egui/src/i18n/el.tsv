@@ -4429,6 +4429,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unsupported: {0}	δεν υποστηρίζεται: {0}
 @msg	variables are locked	οι μεταβλητές είναι κλειδωμένες
 @msg	variables that aren't text were left out: {kinds}	οι μεταβλητές που δεν είναι κειμένου παραλείφθηκαν: {kinds}
+@msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	τα `{key}: {top}` και `options.{key}: {inner}` διαφέρουν: δώστε την επιλογή μόνο μία φορά
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	τα αρχεία έκδοσης {0} δεν μπορούν να συμπιεστούν: μόνο η έκδοση {COMPRESSED_SINCE} και νεότερες ανοίγουν συμπιεσμένα αρχεία
 @msg	width and height are at least 1 pixel	το πλάτος και το ύψος πρέπει να είναι τουλάχιστον 1 εικονοστοιχείο
@@ -5317,6 +5320,7 @@ effect	Points	Σημεία
 	Editable	Επεξεργάσιμο
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
 	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
+	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
 	Filter	Φίλτρο
 	Filter Layers Panel Rows	Φιλτράρισμα γραμμών πίνακα επιπέδων
 	Flatten	Ισοπέδωση

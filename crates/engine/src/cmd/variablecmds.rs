@@ -9,7 +9,8 @@
 //! `name` column, and header cells that define new variables (`#` for visibility, `@` for
 //! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
-//! Variable Library. Agents reach every command through `run_command`, like all engine commands.
+//! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
+//! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -25,7 +26,7 @@ mod csv;
 mod library;
 
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
-use library::load_library;
+use library::{load_library, save_library};
 
 /// The longest variable or dataset name, in characters (names arrive from MCP and files).
 const MAX_NAME: usize = 255;
@@ -744,6 +745,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step. Every variable of the document is deleted with its bindings and values, and every data set is deleted; then variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
             has_doc,
             load_library
+        ),
+        cmd!(
+            query "variable.saveLibrary",
+            "Save Variable Library…",
+            ["Window", "Variables"],
+            None,
+            "{path?} write the document's text variables and every data set as a variable library, the XML that variable.loadLibrary reads: a `variable` element with `varName` and `trait=\"textcontent\"` per text variable, and a `sampleDataSet` element with `dataSetName` per data set, holding an element named after each text variable it has a value for, with one `p` element per line of the value. Variables of other kinds are left out with their values and named in `skipped` and `warning`. Refused without a text variable, for a text variable whose name isn't an XML name (letters, digits, `-`, `_` and `.`, starting with a letter or `_`), for a data set name or value that holds a control character, and past variable.loadLibrary's caps (256 variables, 1,000 data sets, 8 MiB). Without path → {xml, variables, datasets, skipped, warning?}; with it → {path, variables, datasets, skipped, warning?}",
+            has_doc,
+            save_library
         ),
     ]
 }

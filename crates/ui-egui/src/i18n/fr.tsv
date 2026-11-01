@@ -4471,6 +4471,9 @@ axis	Both	Les deux
 @msg	unsupported: {0}	non pris en charge : {0}
 @msg	variables are locked	les variables sont verrouillées
 @msg	variables that aren't text were left out: {kinds}	les variables qui ne sont pas du texte ({kinds}) ont été ignorées
+@msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	le jeu de données `{name}` contient un caractère de contrôle, qu’une bibliothèque de variables ne peut pas contenir
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` et `options.{key}: {inner}` ne concordent pas. Indiquez l’option une seule fois
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	les fichiers de version {0} ne peuvent pas être compressés : seules les versions {COMPRESSED_SINCE} et ultérieures ouvrent les fichiers compressés
 @msg	width and height are at least 1 pixel	la largeur et la hauteur valent au moins 1 pixel
@@ -5456,6 +5459,7 @@ theme	Appearance	Apparence
 	Import Data Sets…	Importer des jeux de données…
 	Export Data Sets…	Exporter des jeux de données…
 	Load Variable Library…	Charger une bibliothèque de variables…
+	Save Variable Library…	Enregistrer une bibliothèque de variables…
 	Make Graph Dynamic	Rendre le graphe dynamique
 	Batch…	Traitement par lots…
 	Source Folder:	Dossier source :

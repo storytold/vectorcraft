@@ -4522,6 +4522,9 @@ axis	Both	Entrambi
 @msg	unsupported: {0}	non supportato: {0}
 @msg	variables are locked	le variabili sono bloccate
 @msg	variables that aren't text were left out: {kinds}	le variabili che non sono di testo sono state escluse: {kinds}
+@msg	a variable library holds text variables, and the document has none	una libreria di variabili contiene variabili di testo e il documento non ne ha
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variabile `{name}` non può essere salvata in una libreria di variabili: rinominala in modo che inizi con una lettera o `_`, senza spazi né simboli diversi da `-`, `_` e `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	il set di dati `{name}` contiene un carattere di controllo, che una libreria di variabili non può contenere
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` e `options.{key}: {inner}` non coincidono: indicare l'opzione una sola volta
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	i file della versione {0} non possono essere compressi: solo la versione {COMPRESSED_SINCE} e successive aprono file compressi
 @msg	width and height are at least 1 pixel	larghezza e altezza sono di almeno 1 pixel
@@ -5071,6 +5074,7 @@ lighting	Light	Luce
 	Import Data Sets…	Importa set di dati…
 	Export Data Sets…	Esporta set di dati…
 	Load Variable Library…	Carica libreria di variabili…
+	Save Variable Library…	Salva libreria di variabili…
 	Make Graph Dynamic	Rendi grafico dinamico
 	Batch…	Elaborazione batch…
 	Source Folder:	Cartella di origine:

@@ -4747,6 +4747,9 @@ imageTrace	Outline	Obris
 @msg	unsupported: {0}	nepodržano: {0}
 @msg	variables are locked	varijable su zaključane
 @msg	variables that aren't text were left out: {kinds}	izostavljene su varijable koje nisu tekst: {kinds}
+@msg	a variable library holds text variables, and the document has none	biblioteka varijabli sadrži tekstualne varijable, a dokument ih nema
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	varijabla `{name}` ne može se sačuvati u biblioteci varijabli: preimenujte je tako da počinje slovom ili sa `_`, bez razmaka i simbola osim `-`, `_` i `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	skup podataka `{name}` sadrži kontrolni znak, koji biblioteka varijabli ne može sadržavati
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` i `options.{key}: {inner}` se ne slažu: navedite opciju jednom
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	datoteke verzije {0} ne mogu se komprimirati: komprimirane datoteke otvaraju samo verzija {COMPRESSED_SINCE} i novije
 @msg	width and height are at least 1 pixel	širina i visina su najmanje 1 piksel
@@ -5396,6 +5399,7 @@ mark-style	Japanese	Japanski
 	Import Data Sets…	Uvezi skupove podataka…
 	Export Data Sets…	Izvezi skupove podataka…
 	Load Variable Library…	Učitaj biblioteku varijabli…
+	Save Variable Library…	Sačuvaj biblioteku varijabli…
 	Make Graph Dynamic	Učini grafikon dinamičkim
 	Batch…	Paketna obrada…
 	Source Folder:	Izvorni folder:

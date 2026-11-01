@@ -1,7 +1,15 @@
 use super::{
     BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, absolute_path, bad, json, named,
-    read_file_head, str_param, variables_unlocked,
+    read_file_head, str_param, variables_unlocked, write_file,
 };
+
+/// The namespace of a variable library's elements, the default namespace of its data sets' values,
+/// and the `category` of its text variables.
+const NS_VARIABLES: &str = "http://ns.adobe.com/Variables/1.0/"; // brand-ok: the namespace variable libraries use
+
+const NS_CUSTOM: &str = "http://ns.adobe.com/GenericCustomNamespace/1.0/"; // brand-ok: the namespace variable libraries use
+
+const NS_FLOWS: &str = "http://ns.adobe.com/Flows/1.0/"; // brand-ok: the namespace variable libraries use
 
 /// Caps on a variable library (paths and MCP payloads are untrusted): its size, its XML nodes, how
 /// deep its elements nest, and the entities, variables and data sets it declares.
@@ -285,17 +293,181 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({
         "variables": lib.text, "deleted": deleted, "deletedDataSets": deleted_sets, "names": names, "skipped": skipped,
     });
-    // Each `trait` once, in the order the library first uses it, with how many variables have it.
-    let mut kinds: Vec<(&str, usize)> = Vec::new();
-    for (_, t) in &lib.other {
-        match kinds.iter_mut().find(|(k, _)| k == t) {
+    if let Some(warning) = left_out_warning(lib.other.iter().map(|(_, t)| t.as_str())) {
+        out["warning"] = json!(warning);
+    }
+    Ok(out)
+}
+
+/// The warning about variables that aren't text and were left out, given the kind of each: every
+/// kind once, in the order it first comes, with how many variables have it. `None` without any.
+fn left_out_warning<'a>(kinds: impl Iterator<Item = &'a str>) -> Option<String> {
+    let mut counted: Vec<(&str, usize)> = Vec::new();
+    for t in kinds {
+        match counted.iter_mut().find(|(k, _)| *k == t) {
             Some((_, n)) => *n += 1,
-            None => kinds.push((t, 1)),
+            None => counted.push((t, 1)),
         }
     }
-    if !kinds.is_empty() {
-        let kinds = kinds.iter().map(|(k, n)| format!("{k} ({n})")).collect::<Vec<_>>().join(", ");
-        out["warning"] = json!(format!("variables that aren't text were left out: {kinds}"));
+    if counted.is_empty() {
+        return None;
+    }
+    let kinds = counted.iter().map(|(k, n)| format!("{k} ({n})")).collect::<Vec<_>>().join(", ");
+    Some(format!("variables that aren't text were left out: {kinds}"))
+}
+
+/// Whether `name` can name an element: an XML name without a colon (XML 1.0, productions 4, 4a and
+/// 5). A data set holds a text variable's value in an element named after the variable.
+fn element_name(name: &str) -> bool {
+    let start = |c: char| {
+        matches!(c, 'A'..='Z' | '_' | 'a'..='z' | '\u{C0}'..='\u{D6}' | '\u{D8}'..='\u{F6}' | '\u{F8}'..='\u{2FF}' | '\u{370}'..='\u{37D}'
+            | '\u{37F}'..='\u{1FFF}' | '\u{200C}'..='\u{200D}' | '\u{2070}'..='\u{218F}' | '\u{2C00}'..='\u{2FEF}' | '\u{3001}'..='\u{D7FF}'
+            | '\u{F900}'..='\u{FDCF}' | '\u{FDF0}'..='\u{FFFD}' | '\u{10000}'..='\u{EFFFF}')
+    };
+    let more = |c: char| start(c) || matches!(c, '-' | '.' | '0'..='9' | '\u{B7}' | '\u{300}'..='\u{36F}' | '\u{203F}'..='\u{2040}');
+    let mut chars = name.chars();
+    chars.next().is_some_and(start) && chars.all(more)
+}
+
+/// Whether XML can hold `c` (XML 1.0, production 2): tab, line feed, carriage return, and the
+/// characters from U+0020 on except U+FFFE and U+FFFF.
+fn xml_char(c: char) -> bool {
+    matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}')
+}
+
+/// `s` escaped for XML text, or with `attribute` for a quoted attribute value. `&`, `<` and `>`
+/// become entity references, and so do quotes in an attribute value. A carriage return, and a tab
+/// or line feed in an attribute value, become character references, which the parser reads back
+/// as they are.
+fn escaped(s: &str, attribute: bool) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        push_escaped(&mut out, c, attribute);
+    }
+    out
+}
+
+/// `c` added to `out`, escaped as [`escaped`] says.
+fn push_escaped(out: &mut String, c: char, attribute: bool) {
+    match c {
+        '&' => out.push_str("&amp;"),
+        '<' => out.push_str("&lt;"),
+        '>' => out.push_str("&gt;"),
+        '\r' => out.push_str("&#13;"),
+        '"' if attribute => out.push_str("&quot;"),
+        '\'' if attribute => out.push_str("&apos;"),
+        '\t' if attribute => out.push_str("&#9;"),
+        '\n' if attribute => out.push_str("&#10;"),
+        c => out.push(c),
+    }
+}
+
+/// Save Variable Library: the document's text variables and its data sets as a variable library in
+/// the layout [`parse_library`] reads, so Load Variable Library reads back the same text variables,
+/// data set names and text values. A text value is written as one `p` element per line. Variables
+/// of other kinds are left out with their values, named in `skipped` and in a warning. A text
+/// variable whose name can't name an element ([`element_name`]), a data set name or text value that
+/// holds a character XML can't hold, and a library past the caps Load Variable Library reads are
+/// refused. With `path` the library is written to the file; without it the reply carries it as
+/// `xml`.
+pub(super) fn save_library(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.saveLibrary";
+    let vars = &s.doc()?.doc.variables;
+    if vars.variables.is_empty() {
+        return Err(bad(C, "define a variable first"));
+    }
+    let (text, other): (Vec<&Variable>, Vec<&Variable>) = vars.variables.iter().partition(|v| v.kind == VariableKind::Text);
+    if text.is_empty() {
+        return Err(bad(C, "a variable library holds text variables, and the document has none"));
+    }
+    if let Some(name) = text.iter().map(|v| &v.name).find(|n| !element_name(n)) {
+        return Err(bad(
+            C,
+            format!(
+                "variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`"
+            ),
+        ));
+    }
+    if text.len() > MAX_LIBRARY_VARIABLES {
+        return Err(bad(C, format!("the variable library declares more than {MAX_LIBRARY_VARIABLES} variables")));
+    }
+    if vars.datasets.len() > MAX_LIBRARY_DATASETS {
+        return Err(bad(C, format!("the variable library declares more than {MAX_LIBRARY_DATASETS} data sets")));
+    }
+    fn text_value<'a>(ds: &'a DataSet, var: &str) -> Option<&'a str> {
+        match ds.values.get(var) {
+            Some(DataValue::Text(t)) => Some(t.as_str()),
+            _ => None,
+        }
+    }
+    let mut xml = format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
+         <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\" [\n\
+         \t<!ENTITY ns_vars \"{NS_VARIABLES}\">\n\
+         \t<!ENTITY ns_custom \"{NS_CUSTOM}\">\n\
+         \t<!ENTITY ns_flows \"{NS_FLOWS}\">\n\
+         ]>\n\
+         <svg>\n\
+         <variableSets xmlns=\"&ns_vars;\">\n\
+         \t<variableSet varSetName=\"binding1\" locked=\"none\">\n\
+         \t\t<variables>\n"
+    );
+    for v in &text {
+        xml += &format!("\t\t\t<variable varName=\"{}\" trait=\"textcontent\" category=\"&ns_flows;\"></variable>\n", v.name);
+    }
+    xml += "\t\t</variables>\n\t\t<v:sampleDataSets xmlns:v=\"&ns_vars;\" xmlns=\"&ns_custom;\">\n";
+    // Load Variable Library caps the file and the text its entity references expand to: one
+    // `&ns_flows;` per variable, two `&ns_vars;` and one `&ns_custom;`. The library stays within
+    // the cap less what the references add.
+    let grows = |value: &str, reference: &str| value.len().saturating_sub(reference.len());
+    let growth = text.len() * grows(NS_FLOWS, "&ns_flows;") + 2 * grows(NS_VARIABLES, "&ns_vars;") + grows(NS_CUSTOM, "&ns_custom;");
+    let room = MAX_LIBRARY_BYTES.saturating_sub(growth);
+    let too_large = || bad(C, format!("the variable library is larger than {MAX_LIBRARY_BYTES} bytes"));
+    for ds in &vars.datasets {
+        let name = &ds.name;
+        if !name.chars().all(xml_char) || text.iter().filter_map(|v| text_value(ds, &v.name)).any(|t| !t.chars().all(xml_char)) {
+            return Err(bad(C, format!("data set `{name}` holds a control character, which a variable library can't hold")));
+        }
+        xml += &format!("\t\t\t<v:sampleDataSet dataSetName=\"{}\">\n", escaped(name, true));
+        for v in &text {
+            let Some(t) = text_value(ds, &v.name) else { continue };
+            xml += &format!("\t\t\t\t<{}>\n", v.name);
+            for line in t.split('\n') {
+                xml += "\t\t\t\t\t<p>";
+                // A value can be larger than the cap, so the text stops growing once it passes it.
+                for c in line.chars() {
+                    push_escaped(&mut xml, c, false);
+                    if xml.len() > room {
+                        return Err(too_large());
+                    }
+                }
+                xml += "</p>\n";
+            }
+            xml += &format!("\t\t\t\t</{}>\n", v.name);
+        }
+        xml += "\t\t\t</v:sampleDataSet>\n";
+        if xml.len() > room {
+            return Err(too_large());
+        }
+    }
+    xml += "\t\t</v:sampleDataSets>\n\t</variableSet>\n</variableSets>\n</svg>\n";
+    if xml.len() > room {
+        return Err(too_large());
+    }
+    let skipped: Vec<Value> = other.iter().map(|v| json!({"name": v.name, "kind": v.kind.label()})).collect();
+    let mut out = json!({
+        "variables": text.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), "datasets": vars.datasets.len(), "skipped": skipped,
+    });
+    if let Some(warning) = left_out_warning(other.iter().map(|v| v.kind.label())) {
+        out["warning"] = json!(warning);
+    }
+    match str_param(p, "path") {
+        Some(path) => {
+            let path = absolute_path(path);
+            write_file(&path, xml.as_bytes())?;
+            out["path"] = json!(path);
+        }
+        None => out["xml"] = json!(xml),
     }
     Ok(out)
 }

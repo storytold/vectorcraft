@@ -4787,6 +4787,9 @@ imageTrace	Outline	Obrys
 @msg	unsupported: {0}	nepodporováno: {0}
 @msg	variables are locked	proměnné jsou zamčené
 @msg	variables that aren't text were left out: {kinds}	proměnné, které nejsou textové, byly vynechány: {kinds}
+@msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
+@msg	data set `{name}` holds a control character, which a variable library can't hold	sada dat `{name}` obsahuje řídicí znak, který knihovna proměnných nemůže obsahovat
 @msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` a `options.{key}: {inner}` si odporují: zadejte volbu jen jednou
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	soubory verze {0} nelze komprimovat: komprimované soubory otevírá až verze {COMPRESSED_SINCE} a novější
 @msg	width and height are at least 1 pixel	šířka i výška jsou alespoň 1 obrazový bod
@@ -5459,6 +5462,7 @@ mark-style	Japanese	Japonské
 	Import Data Sets…	Importovat sady dat…
 	Export Data Sets…	Exportovat sady dat…
 	Load Variable Library…	Načíst knihovnu proměnných…
+	Save Variable Library…	Uložit knihovnu proměnných…
 	Make Graph Dynamic	Nastavit graf jako dynamický
 	Batch…	Dávka…
 	Source Folder:	Zdrojová složka:

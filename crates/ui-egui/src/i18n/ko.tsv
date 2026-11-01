@@ -4004,6 +4004,9 @@ theme	Appearance	외관
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	variables are locked	변수가 잠겨 있습니다
 @msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
+@msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
 @msg	guides are locked	안내선이 잠겨 있습니다
 @msg	handle must be in or out	handle은 in 또는 out이어야 합니다
 @msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
@@ -5034,6 +5037,7 @@ lighting	Light	광원
 	Import Data Sets…	데이터 세트 가져오기…
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
+	Save Variable Library…	변수 라이브러리 저장…
 	Make Graph Dynamic	그래프를 동적으로 만들기
 	Batch…	일괄 처리…
 	Source Folder:	소스 폴더:

@@ -1662,6 +1662,17 @@ already walks Image Trace. Short agent entry points:
   comments, processing instructions and up to 64 entity declarations whose values are plain text (no `<`, `&` or
   `%`). A declaration that holds anything else, and entity references that expand the library past 8 MiB, are
   refused. So are a variable or data set declared twice and a value for a variable the library doesn't declare.
+  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's text variables and
+  every data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with
+  `varName` and `trait="textcontent"` for each text variable, and a `sampleDataSet` element with `dataSetName` for
+  each data set, holding an element named after each text variable it has a value for, with one `p` element per line
+  of the value. Loading the file gives back the same text variables, data set names and text values. Variables of
+  other kinds are left out with their values: the reply lists them in `skipped` (`name`, `kind`), and its `warning`
+  names each kind with its count. Saving is refused for a document without a text variable, for a text variable whose
+  name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and `.`), for a
+  data set whose name or text value holds a control character, and past `variable.loadLibrary`'s caps (256
+  variables, 1,000 data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
+  with it, the file is written and the reply is `{path, variables, datasets, skipped, warning?}`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override

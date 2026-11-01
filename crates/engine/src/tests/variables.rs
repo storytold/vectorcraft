@@ -1632,6 +1632,199 @@ fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
     assert_eq!(vars.datasets.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["B"]);
 }
 
+/// Save Variable Library writes what Load Variable Library reads back: the text variables in their
+/// order, every data set by name and in order, and each text value as it was, with several lines,
+/// markup characters, quotes, a carriage return and an empty value. Variables of other kinds are
+/// left out with their values, named in `skipped` and in the warning. The library is written while
+/// the variables are locked too, to a file with `path`.
+#[test]
+fn a_saved_variable_library_loads_back_the_text_variables_and_data_sets() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    for (name, kind) in [("Name", "text"), ("Shown", "visibility"), ("Note", "text"), ("Photo", "image"), ("Badge", "visibility")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "First", "values": {"Name": "Bravo", "Note": "One\nTwo & <three>\r\n'four' \"five\"", "Shown": true}}))
+        .unwrap();
+    s.execute("dataset.new", &json!({"name": "Say \"hi\" & <go>\tnow", "values": {"Name": "", "Photo": "a.png"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Empty"})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    let before = s.doc().unwrap().doc.variables.clone();
+
+    let saved = s.execute("variable.saveLibrary", &json!({})).unwrap();
+    assert_eq!(saved["variables"], json!(["Name", "Note"]));
+    assert_eq!(saved["datasets"], json!(3));
+    assert_eq!(
+        saved["skipped"],
+        json!([{"name": "Shown", "kind": "visibility"}, {"name": "Photo", "kind": "image"}, {"name": "Badge", "kind": "visibility"}])
+    );
+    assert_eq!(saved["warning"], "variables that aren't text were left out: visibility (2), image (1)");
+    assert_eq!(s.doc().unwrap().doc.variables, before, "saving changes nothing");
+
+    let mut other = session();
+    let loaded = other.execute("variable.loadLibrary", &json!({"xml": saved["xml"]})).unwrap();
+    assert_eq!((loaded["skipped"].clone(), loaded.get("warning")), (json!([]), None));
+    let vars = &other.doc().unwrap().doc.variables;
+    assert_eq!(vars.variables.iter().map(|v| (v.name.as_str(), v.kind.label())).collect::<Vec<_>>(), [("Name", "text"), ("Note", "text")]);
+    let text_only: Vec<vectorcraft_doc::DataSet> = before
+        .datasets
+        .iter()
+        .map(|d| {
+            let mut d = d.clone();
+            d.values.retain(|k, _| k == "Name" || k == "Note");
+            d
+        })
+        .collect();
+    assert_eq!(vars.datasets, text_only);
+
+    let dir = Folder::new("vars-save-library");
+    let path = dir.file("library.xml");
+    let written = s.execute("variable.saveLibrary", &json!({"path": path})).unwrap();
+    assert_eq!(written["path"], json!(path));
+    assert!(written.get("xml").is_none());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), saved["xml"].as_str().unwrap());
+    let mut from_file = session();
+    from_file.execute("variable.loadLibrary", &json!({"path": path})).unwrap();
+    assert_eq!(from_file.doc().unwrap().doc.variables.datasets, text_only);
+}
+
+/// The library is the XML of the public grammar: a document type declaration with the namespace
+/// entities, `variableSets` › `variableSet` › `variables` with a `textcontent` variable per text
+/// variable, and `sampleDataSets` with a `sampleDataSet` per data set, holding an element per text
+/// variable it has a value for, with a `p` element per line. Markup characters, a carriage return,
+/// and a tab or quote in a data set name are escaped. A document with text variables and no data
+/// sets writes an empty `sampleDataSets`.
+#[test]
+fn a_saved_variable_library_has_the_library_layout() {
+    let mut s = session();
+    for (name, kind) in [("Name", "text"), ("Shown", "visibility"), ("Note", "text")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    let head = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
+                <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\" [\n\
+                \t<!ENTITY ns_vars \"http://ns.adobe.com/Variables/1.0/\">\n\
+                \t<!ENTITY ns_custom \"http://ns.adobe.com/GenericCustomNamespace/1.0/\">\n\
+                \t<!ENTITY ns_flows \"http://ns.adobe.com/Flows/1.0/\">\n\
+                ]>\n\
+                <svg>\n\
+                <variableSets xmlns=\"&ns_vars;\">\n\
+                \t<variableSet varSetName=\"binding1\" locked=\"none\">\n\
+                \t\t<variables>\n\
+                \t\t\t<variable varName=\"Name\" trait=\"textcontent\" category=\"&ns_flows;\"></variable>\n\
+                \t\t\t<variable varName=\"Note\" trait=\"textcontent\" category=\"&ns_flows;\"></variable>\n\
+                \t\t</variables>\n\
+                \t\t<v:sampleDataSets xmlns:v=\"&ns_vars;\" xmlns=\"&ns_custom;\">\n";
+    let tail = "\t\t</v:sampleDataSets>\n\t</variableSet>\n</variableSets>\n</svg>\n";
+    let empty = s.execute("variable.saveLibrary", &json!({})).unwrap();
+    assert_eq!(empty["xml"].as_str().unwrap(), format!("{head}{tail}"));
+    assert_eq!(empty["datasets"], json!(0));
+
+    s.execute("dataset.new", &json!({"name": "A &\t\"B\"", "values": {"Name": "x\r\ny < z", "Shown": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "C", "values": {"Note": ""}})).unwrap();
+    let xml = s.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].as_str().unwrap().to_string();
+    let sets = "\t\t\t<v:sampleDataSet dataSetName=\"A &amp;&#9;&quot;B&quot;\">\n\
+                \t\t\t\t<Name>\n\
+                \t\t\t\t\t<p>x&#13;</p>\n\
+                \t\t\t\t\t<p>y &lt; z</p>\n\
+                \t\t\t\t</Name>\n\
+                \t\t\t</v:sampleDataSet>\n\
+                \t\t\t<v:sampleDataSet dataSetName=\"C\">\n\
+                \t\t\t\t<Note>\n\
+                \t\t\t\t\t<p></p>\n\
+                \t\t\t\t</Note>\n\
+                \t\t\t</v:sampleDataSet>\n";
+    assert_eq!(xml, format!("{head}{sets}{tail}"));
+}
+
+/// Save Variable Library refuses a document without variables or without text variables, a text
+/// variable whose name can't name an element, a data set name or text value with a character XML
+/// can't hold, and a library past the caps that Load Variable Library reads. A refused save writes
+/// no file.
+#[test]
+fn save_variable_library_refuses_what_a_library_cant_hold() {
+    let dir = Folder::new("vars-save-refused");
+    let path = dir.file("library.xml");
+    let refused = |s: &mut Session, why: &str| {
+        let e = s.execute("variable.saveLibrary", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains(why), "{why}: {e}");
+        assert!(!std::path::Path::new(&path).exists(), "{why}: a file was written");
+    };
+
+    let mut s = session();
+    refused(&mut s, "define a variable first");
+    s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
+    refused(&mut s, "holds text variables, and the document has none");
+
+    for name in ["First Name", "1st", "a:b", "x/y", "-dash"] {
+        let mut s = session();
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+        refused(&mut s, &format!("variable `{name}` can't be saved in a variable library"));
+    }
+    for name in ["Ünïcode", "_x", "a.b-c_d", "名前"] {
+        let mut s = session();
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+        s.execute("dataset.new", &json!({"name": "A", "values": {name: "v"}})).unwrap();
+        let xml = s.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].clone();
+        let mut other = session();
+        other.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+        assert_eq!(other.doc().unwrap().doc.variables.datasets, s.doc().unwrap().doc.variables.datasets, "{name}");
+    }
+
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "bell \u{7}"}})).unwrap();
+    refused(&mut s, "data set `A` holds a control character");
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B\u{1}"})).unwrap();
+    refused(&mut s, "holds a control character");
+
+    let mut s = session();
+    for i in 0..257 {
+        s.execute("variable.define", &json!({"name": format!("V{i}"), "kind": "text"})).unwrap();
+    }
+    refused(&mut s, "more than 256 variables");
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    for i in 0..1001 {
+        s.execute("dataset.new", &json!({"name": format!("D{i}")})).unwrap();
+    }
+    refused(&mut s, "more than 1000 data sets");
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "x".repeat(9 << 20)}})).unwrap();
+    refused(&mut s, "larger than 8388608 bytes");
+}
+
+/// A library near the size cap is saved only when Load Variable Library reads it back, after its
+/// entity references expand: each text variable's `&ns_flows;`, two `&ns_vars;` and one
+/// `&ns_custom;` grow by 20, 25 and 36 bytes.
+#[test]
+fn a_saved_variable_library_near_the_size_cap_loads_back() {
+    let mut s = session();
+    for i in 0..200 {
+        s.execute("variable.define", &json!({"name": format!("V{i}"), "kind": "text"})).unwrap();
+    }
+    s.execute("dataset.new", &json!({"name": "A", "values": {"V0": ""}})).unwrap();
+    let base = s.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].as_str().unwrap().len();
+    let room = (8 << 20) - (200 * 20 + 2 * 25 + 36);
+    s.execute("dataset.set", &json!({"name": "A", "values": {"V0": "x".repeat(room - base + 1)}})).unwrap();
+    let e = s.execute("variable.saveLibrary", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("larger than 8388608 bytes"), "{e}");
+    s.execute("dataset.set", &json!({"name": "A", "values": {"V0": "x".repeat(room - base)}})).unwrap();
+    let xml = s.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].clone();
+    assert_eq!(xml.as_str().map(str::len), Some(room));
+    let mut other = session();
+    other.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(other.doc().unwrap().doc.variables.datasets, s.doc().unwrap().doc.variables.datasets);
+    // The same library with the value grown to a file of exactly 8 MiB doesn't load back.
+    let full = xml.as_str().unwrap().replacen("<p>x", &format!("<p>{}x", "x".repeat((8 << 20) - room)), 1);
+    assert_eq!(full.len(), 8 << 20);
+    let e = other.execute("variable.loadLibrary", &json!({"xml": full})).unwrap_err().to_string();
+    assert!(e.contains("entities expand to more than"), "{e}");
+}
+
 #[test]
 fn graph_variable_applies_csv_and_captures() {
     let mut s = session();
