@@ -233,6 +233,9 @@ pub struct ParaStyle {
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
     pub kinsoku: Kinsoku,
+    /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
+    /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
+    pub kinsoku_type: KinsokuShoriType,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -315,6 +318,8 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku: Kinsoku,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kinsoku_type: KinsokuShoriType,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
@@ -346,6 +351,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
             ..
@@ -370,6 +376,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
         }
@@ -398,6 +405,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
             ..
@@ -421,6 +429,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_type,
             roman_hanging,
             kashida,
         }
@@ -483,6 +492,25 @@ pub enum Kinsoku {
     /// As Hard, except that 々, the prolonged sound mark ー and small kana may start a line
     /// (JLREQ's level 3 line-breaking rules, Appendix C.3).
     Soft,
+}
+
+/// How a line keeps the characters [`Kinsoku`] rules out of its start and end (Kinsoku Shori
+/// Type). Pushing in sets the characters that would start the next line (or that an opening
+/// bracket ending this line would pull with it) on this line, with the line's gaps next to CJK
+/// characters closed to make room, each by the same share of the em of the character before it
+/// and by at most a tenth of that em; pushing out moves the character before them to the next
+/// line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KinsokuShoriType {
+    /// Push in when the line can close up enough, else push out.
+    PushInFirst,
+    /// Push out, unless that would leave the line more than an em short (of the character before
+    /// the break): then push in when the line can close up enough.
+    PushOutFirst,
+    /// Always push out; never push in.
+    #[default]
+    PushOutOnly,
 }
 
 /// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)

@@ -699,6 +699,57 @@ fn kinsoku_set_decides_whether_a_small_kana_may_start_a_line() {
     }
 }
 
+/// Kinsoku Shori Type: in a measure of fifteen ems, the closing bracket after the fifteenth
+/// character ends the first line with Push In First, which closes the line's gaps to keep it inside
+/// the frame whatever its alignment; Push Out Only moves the fifteenth character to the next line
+/// with the bracket. Horizontal and vertical. Needs a font with full-width Japanese (skipped
+/// without one).
+#[test]
+fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
+    use vectorcraft_doc::KinsokuShoriType;
+    let text = "一二三四五六七八九十一二三四五」六";
+    let lay = |ty: KinsokuShoriType, justify: Justify, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.kinsoku_type = ty;
+        t.para.justify = justify;
+        let frame = if vertical_type { Rect::new(0.0, 0.0, 200.0, 300.0) } else { Rect::new(0.0, 0.0, 300.0, 200.0) };
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame.to_path(0.1)) };
+        layout(FontDb::global(), &t)
+    };
+    if (lay(KinsokuShoriType::PushOutOnly, Justify::Left, false).glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    for vertical_type in [false, true] {
+        let lines = |ty| lay(ty, Justify::Left, vertical_type).glyphs.iter().map(|g| g.line).collect::<Vec<_>>();
+        let mut pushed_in = vec![0; 16];
+        pushed_in.push(1);
+        assert_eq!(lines(KinsokuShoriType::PushInFirst), pushed_in, "vertical {vertical_type}");
+        let mut pushed_out = vec![0; 14];
+        pushed_out.extend([1, 1, 1]);
+        assert_eq!(lines(KinsokuShoriType::PushOutOnly), pushed_out, "vertical {vertical_type}");
+        assert_eq!(lines(KinsokuShoriType::PushOutFirst), pushed_out, "vertical {vertical_type}: a push-out leaves one em");
+    }
+    for justify in [Justify::Left, Justify::Center, Justify::Right, Justify::JustifyLeft] {
+        let l = lay(KinsokuShoriType::PushInFirst, justify, false);
+        let (first, bracket) = (&l.glyphs[0], &l.glyphs[15]);
+        assert!(first.origin.x.abs() < 0.01, "{justify:?}: the line starts at the frame's left: {:?}", first.origin);
+        assert!(bracket.origin.x + bracket.advance <= 300.01, "{justify:?}: 」 ends inside the frame: {:?}", bracket.origin);
+        assert!(l.glyphs[1].origin.x < 20.0 - 0.5, "{justify:?}: the gaps close up");
+        for g in &l.glyphs[..15] {
+            assert!(g.advance >= 18.0 - 0.01, "{justify:?}: a gap closes by at most a tenth of an em: {}", g.advance);
+        }
+    }
+    // A No Break run wider than the frame did not push anything in, and keeps its gaps.
+    let mut t = TextObject::point(Point::ZERO, "一二三四五六七八九十", CharStyle { size: 20.0, no_break: true, ..CharStyle::default() });
+    t.xf = Affine::IDENTITY;
+    t.para.kinsoku_type = KinsokuShoriType::PushInFirst;
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 150.0, 200.0).to_path(0.1)) };
+    let l = layout(FontDb::global(), &t);
+    assert!((l.glyphs[1].origin.x - 20.0).abs() < 0.01, "{:?}", l.glyphs[1].origin);
+}
+
 /// Proportional Metrics in vertical type (#966): upright glyphs take the font's proportional
 /// heights (`vpal`, from shaping them top to bottom) and move with them, so each glyph's ink stays in
 /// its shorter cell. Line-end Punctuation Half Width takes nothing more off the punctuation `vpal`

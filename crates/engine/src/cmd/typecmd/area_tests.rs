@@ -98,6 +98,43 @@ fn kinsoku_set_is_set_per_paragraph_and_saved_only_when_not_hard() {
     assert_eq!(old.kinsoku, Kinsoku::Hard);
 }
 
+/// Paragraph panel menu › Kinsoku Shori Type: `text.setFormat {kinsokuType}` sets it per
+/// paragraph in one undo step, refuses unknown values, saves it only when it is not Push Out Only
+/// (new type's and older documents' type), reopens with the file, and paragraph styles carry it.
+#[test]
+fn kinsoku_shori_type_is_set_per_paragraph_and_saved_only_when_not_push_out_only() {
+    use vectorcraft_doc::KinsokuShoriType;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "あ」\nい", "area": {"width": 100, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(text(&s).para_at(0).kinsoku_type, KinsokuShoriType::PushOutOnly);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kinsoku_type").is_none());
+    s.execute("text.setFormat", &json!({"id": id, "start": 0, "end": 1, "kinsokuType": "pushInFirst"})).unwrap();
+    assert_eq!((text(&s).para_at(0).kinsoku_type, text(&s).para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["kinsoku_type"], "pushInFirst");
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).kinsoku_type, back.para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert!(s.execute("text.setFormat", &json!({"id": id, "kinsokuType": "pushIn"})).is_err());
+    assert_eq!(text(&s).para_at(0).kinsoku_type, KinsokuShoriType::PushInFirst, "an unknown value changes nothing");
+    s.execute("text.setFormat", &json!({"id": id, "kinsokuType": "pushOutFirst"})).unwrap();
+    assert_eq!(text(&s).para_at(1).kinsoku_type, KinsokuShoriType::PushOutFirst);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((text(&s).para_at(0).kinsoku_type, text(&s).para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Pushed in", "attrs": {"kinsoku_type": "pushOutFirst"}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Pushed in", "id": id})).unwrap();
+    assert_eq!(text(&s).para_at(1).kinsoku_type, KinsokuShoriType::PushOutFirst);
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert_eq!(old.kinsoku_type, KinsokuShoriType::PushOutOnly);
+}
+
 #[test]
 fn burasagari_is_set_per_paragraph_and_saved_only_when_on() {
     use vectorcraft_doc::Burasagari;
