@@ -480,13 +480,21 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
     d.fields.get(PARENT).and_then(|v| serde::Deserialize::deserialize(v).ok())
 }
 
-/// `ui.dialog.set` changed `field` of the open dialog: a choice that sets other fields sets them as
-/// choosing it in the dialog does (Export for Screens' `exportPreset`).
-pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str) -> Result<(), String> {
-    if field == "exportPreset" && app.ui.dialog.as_ref().is_some_and(|d| d.kind == export_for_screens::KIND) {
-        export_for_screens::preset_set(app)
-    } else {
-        Ok(())
+/// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), and a change
+/// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
+/// the dialog.
+pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
+    match field {
+        "exportPreset" => export_for_screens::preset_set(app),
+        "subfolders" | "subfolderBy" => {
+            if d.fields.get(field) != old {
+                d.fields.remove("__itemFolders");
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 

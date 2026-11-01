@@ -330,10 +330,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 // A field that fails leaves the dialog as it was before the request.
                 let before = app.ui.dialog.clone();
                 for (f, value) in fields {
+                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
                     if let Some(d) = app.ui.dialog.as_mut() {
                         crate::dialogs::set_field(d, f.clone(), value);
                     }
-                    if let Err(e) = crate::dialogs::field_set(app, &f) {
+                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
                         app.ui.dialog = before;
                         return err(e);
                     }

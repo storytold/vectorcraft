@@ -959,9 +959,10 @@ fn saving_an_applied_preset_keeps_its_bleed_and_fill() {
 
 /// A preset that puts each item in its own folder (`item` or `itemFormat`, which the dialog has no
 /// control for) keeps that folder mode when it is exported or saved again from the dialog, until
-/// the sub-folder controls change.
+/// the sub-folder controls change (in the dialog or by `ui.dialog.set`).
 #[test]
 fn an_applied_preset_keeps_its_item_folders() {
+    use crate::control::{ControlRequest, Outcome};
     use export_for_screens::PresetPick;
     for mode in ["item", "itemFormat"] {
         let (mut app, _) = app(2, false);
@@ -978,9 +979,14 @@ fn an_applied_preset_keeps_its_item_folders() {
         let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Items").unwrap_or_else(|| panic!("{}", app.ui.status));
         assert_eq!(saved.settings.get("folders"), Some(&json!(mode)), "saved");
 
-        set(&mut app, "subfolders", json!(false));
-        let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
-        assert_eq!(p["folders"], json!("none"), "unchecked");
+        // `ui.dialog.set` of the sub-folder controls, as a change in the dialog, ends the item folders.
+        for (on, folders) in [(false, "none"), (true, "rows")] {
+            let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "subfolders", "value": on}));
+            let Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+            assert_eq!(r["ok"], true, "{r}");
+            let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+            assert_eq!(p["folders"], json!(folders), "subfolders {on}");
+        }
     }
 }
 
