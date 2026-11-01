@@ -256,8 +256,83 @@ fn off_without_a_selection() {
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 20.0, 10.0);
     s.execute("select.none", &json!({})).unwrap();
-    for c in ["addon.arrange.grid", "addon.arrange.swap", "addon.arrange.replace", "addon.arrange.size"] {
+    for c in ["addon.arrange.grid", "addon.arrange.swap", "addon.arrange.replace", "addon.arrange.size", "addon.arrange.groupOverlapping"] {
         assert!(!enabled(&s, c), "{c}");
     }
     assert!(!enabled(&Session::new(), "addon.arrange.swap"));
+}
+
+fn ids_of(v: &Value) -> Vec<NodeId> {
+    v.as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+fn children(s: &Session, id: NodeId) -> Vec<NodeId> {
+    s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|n| n.id).collect()
+}
+
+#[test]
+fn group_overlapping_groups_chains_and_leaves_loners() {
+    let mut s = session();
+    // a–b–c a chain (c only touches b), d alone, e over f.
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let d = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 15.0, 15.0, 20.0, 20.0);
+    let e = rect(&mut s, 100.0, 100.0, 30.0, 30.0);
+    let c = rect(&mut s, 35.0, 0.0, 10.0, 20.0);
+    let f = rect(&mut s, 110.0, 110.0, 5.0, 5.0);
+    select(&mut s, &[a, b, c, d, e, f]);
+    let n = steps(&s);
+    let r = s.execute("addon.arrange.groupOverlapping", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert_eq!(r["grouped"], json!(5));
+    let groups = ids_of(&r["groups"]);
+    assert_eq!(groups.len(), 2);
+    assert_eq!(children(&s, groups[0]), [a, b, c], "members keep their stacking order");
+    assert_eq!(children(&s, groups[1]), [e, f]);
+    // Each group where its frontmost member was: a d [abc] [ef] → d, group(abc) above it, then (ef).
+    let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, [d, groups[0], groups[1]]);
+    let sel = &s.doc().unwrap().selection.objects;
+    assert!(sel.contains(&groups[0]) && sel.contains(&groups[1]) && sel.contains(&d) && sel.len() == 3, "{sel:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 6);
+}
+
+#[test]
+fn group_overlapping_keeps_layers_apart_and_measures_visual_bounds() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let gap = rect(&mut s, 22.0, 0.0, 20.0, 20.0);
+    s.execute("layer.new", &json!({})).unwrap();
+    let other = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    select(&mut s, &[a, gap, other]);
+    // 2 pt apart: nothing overlaps within a layer, and a and `other` are in different layers.
+    let n = steps(&s);
+    let r = s.execute("addon.arrange.groupOverlapping", &json!({})).unwrap();
+    assert_eq!((r["grouped"].clone(), steps(&s)), (json!(0), n), "no groups, no step");
+    // A 4 pt stroke reaches 2 pt out: the two in the first layer now touch.
+    select(&mut s, &[a, gap]);
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    select(&mut s, &[a, gap, other]);
+    let r = s.execute("addon.arrange.groupOverlapping", &json!({})).unwrap();
+    let groups = ids_of(&r["groups"]);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(children(&s, groups[0]), [a, gap]);
+    let doc = &s.doc().unwrap().doc;
+    assert_ne!(doc.layer_of(other), doc.layer_of(a), "left in its own layer");
+}
+
+#[test]
+fn group_overlapping_is_off_with_one_object_and_scales_to_many() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    select(&mut s, &[a]);
+    assert!(!enabled(&s, "addon.arrange.groupOverlapping"));
+    // A long row of pairs: each pair overlaps, neighbouring pairs don't.
+    let rects: Vec<(usize, Rect)> =
+        (0..4000).map(|i| (0, Rect::new(i as f64 * 10.0, 0.0, i as f64 * 10.0 + if i % 2 == 0 { 12.0 } else { 3.0 }, 5.0))).collect();
+    let sets = super::overlapping(&rects);
+    assert_eq!(sets.len(), 2000);
+    assert!(sets.iter().all(|s| s.len() == 2 && s[1] == s[0] + 1));
 }

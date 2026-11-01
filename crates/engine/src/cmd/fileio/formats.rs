@@ -491,6 +491,8 @@ pub const FORMATS: &[Format] = &[
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
     // ZSoft PCX images, read by `pcxread` and stored as PNG; exports don't write them.
     reader("pcx", "PCX", &["pcx"], "image/x-pcx", true),
+    // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
+    reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -515,6 +517,12 @@ pub const OPEN_EXTS: &[&str] = &[
     "icb",
     "vst",
     "pcx",
+    "jpf",
+    "jpx",
+    "jp2",
+    "j2k",
+    "j2c",
+    "jpc",
     "psd",
     "psb",
     "vctemplate",
@@ -531,10 +539,10 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa or PCX type (File › Open and Place still read them all). On Linux the
+/// `.epsf`, `.ps`, Targa, PCX or JPEG 2000 type (File › Open and Place still read them all). On Linux the
 /// desktop entry's EPS type (shared-mime-info's) also covers `.epsf`, so file managers offer
 /// VectorCraft for it.
-pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "pcx"];
+pub const UNASSOCIATED_EXTS: &[&str] = &["psd", "psb", "epsf", "ps", "tga", "vda", "icb", "vst", "pcx", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -558,8 +566,14 @@ pub const RTF_EXTS: &[&str] = &["rtf"];
 /// Word documents: File → Place sets them as area type with their formatting.
 pub const DOCX_EXTS: &[&str] = &["docx"];
 
-/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`] and
-/// [`DOCX_EXTS`].
+/// Word 97-2003 documents: File → Place sets them as area type with their formatting.
+pub const DOC_EXTS: &[&str] = &["doc"];
+
+/// The Place dialog's Word filter: Word documents and Word 97-2003 documents.
+const WORD_EXTS: &[&str] = &["docx", "doc"];
+
+/// Every extension File → Place reads: [`OPEN_EXTS`], [`TEXT_EXTS`], [`RTF_EXTS`],
+/// [`DOCX_EXTS`] and [`DOC_EXTS`].
 pub const PLACE_EXTS: &[&str] = &[
     "vectorcraft",
     "drawcraft",
@@ -581,6 +595,12 @@ pub const PLACE_EXTS: &[&str] = &[
     "icb",
     "vst",
     "pcx",
+    "jpf",
+    "jpx",
+    "jp2",
+    "j2k",
+    "j2c",
+    "jpc",
     "psd",
     "psb",
     "vctemplate",
@@ -596,6 +616,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "txt",
     "rtf",
     "docx",
+    "doc",
 ];
 
 /// One dialog filter per readable format.
@@ -631,13 +652,13 @@ pub fn library_open_filters(
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
-/// RTF and Word.
+/// RTF and Word (`.docx` and `.doc`).
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All placeable files", PLACE_EXTS))
         .chain(format_filters().filter(|(_, exts)| exts.iter().all(|ext| PLACE_EXTS.contains(ext))))
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
-        .chain(std::iter::once(("Word", DOCX_EXTS)))
+        .chain(std::iter::once(("Word", WORD_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in

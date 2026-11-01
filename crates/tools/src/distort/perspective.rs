@@ -449,7 +449,7 @@ impl PerspectiveGrid {
     pub fn transform_map(&self, plane: Plane, depth: f64, m: Affine, dz: f64) -> Option<Homography> {
         let h = self.homography_at(plane, depth)?;
         let to = self.homography_at(plane, depth + dz)?;
-        Some(to.then_after(&Homography::from_affine(m)).then_after(&h.inverse()?))
+        to.checked_then_after(&Homography::from_affine(m))?.checked_then_after(&h.inverse()?)
     }
 
     /// Where object `id` is attached (plane, depth): its own record, else the one a grid stored
@@ -529,7 +529,7 @@ impl PerspectiveGrid {
         let sy = if b.height().abs() > 1e-9 { (c.y - a.y) / b.height() } else { sx.abs() * if c.y < a.y { -1.0 } else { 1.0 } };
         let sx = if b.width().abs() > 1e-9 { sx } else { sy.abs() };
         let m = Affine::new([sx, 0.0, 0.0, sy, a.x - b.x0 * sx, a.y - b.y0 * sy]);
-        Some(h.then_after(&Homography::from_affine(m)))
+        h.checked_then_after(&Homography::from_affine(m))
     }
 
     /// The map that puts flat art drawn at `at` onto `plane` keeping its sizes in plane units (a
@@ -544,7 +544,7 @@ impl PerspectiveGrid {
         let sx = if h.apply(q + Vec2::new(1.0, 0.0))?.x < at.x { -1.0 } else { 1.0 };
         let sy = if h.apply(q + Vec2::new(0.0, 1.0))?.y < at.y { -1.0 } else { 1.0 };
         let m = Affine::new([sx, 0.0, 0.0, sy, q.x - sx * at.x, q.y - sy * at.y]);
-        Some(h.then_after(&Homography::from_affine(m)))
+        h.checked_then_after(&Homography::from_affine(m))
     }
 
     /// The map that slides art lying on `plane` by the plane-space offset between `from` and `to`.

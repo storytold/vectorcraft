@@ -108,7 +108,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
     let roots = appearance_targets(s, p)?;
     let d = &s.doc()?.doc;
-    let per = item.per_target(d, &roots);
+    let per = item.per_target(s, &roots);
     let shared = if aligned(p) { shared_stack(d, &roots) } else { None };
     let mut out = Vec::with_capacity(roots.len());
     for (k, (id, item)) in roots.iter().zip(per).enumerate() {
@@ -213,15 +213,15 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    let mut index = 0;
     let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", 0, |fx, _| {
         fx.push(effect.clone());
-        index = fx.len() - 1;
         true
     })?;
-    // The item the effect landed on in the first object (the active item applies where it fits).
-    let first = ids.first().and_then(|id| s.doc().ok()?.doc.node(*id));
+    // The item the effect landed on in the object whose row the item is (the first selected object
+    // for the active item, which applies where it fits), and the effect's index in that object.
+    let first = ids.get(item.anchor(s, &ids)).and_then(|id| s.doc().ok()?.doc.node(*id));
     let landed = first.and_then(|n| item.effects_item(&n.appearance, C).ok().flatten());
+    let index = first.and_then(|n| n.appearance.effects_at(landed)).map_or(0, |fx| fx.len().saturating_sub(1));
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": landed }))
 }
 
@@ -681,10 +681,12 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
                 // Type, images, symbol instances, live objects (and paths whose Transform effect copies
                 // them with a gradient or changes their fills and strokes): through their outlines.
                 let symbol = match &n.kind {
-                    NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+                    NodeKind::SymbolInstance { symbol, .. } => {
+                        d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, &n))
+                    }
                     _ => None,
                 };
-                effects::expand_outlined(Some(&*d), &v, symbol.as_deref()).map(|mut m| {
+                effects::expand_outlined(Some(&*d), &v, symbol.as_ref()).map(|mut m| {
                     expand_pieces(d, &mut m, true, brushes, &mut stroke_art);
                     m
                 })

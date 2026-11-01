@@ -45,7 +45,10 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     if sp.anchors.len() < 3 {
         return sp;
     }
-    let fitted = po::simplify_with(&PathData::single(sp.clone()), &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false });
+    let fitted = po::simplify_with(
+        &PathData::single(sp.clone()),
+        &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false, ..Default::default() },
+    );
     fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
 }
 

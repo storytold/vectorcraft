@@ -719,5 +719,29 @@ fn proportional_metrics_kern_the_glyphs_they_respace() {
     };
     let (auto, manual) = (lay(true, None), lay(true, Some(0.0)));
     assert!(auto.iter().zip(&manual).any(|(a, b)| (a - b).abs() > 0.01), "kerned: {auto:?} {manual:?}");
+    let optical = {
+        let s = CharStyle { font_family: "Noto Sans CJK SC".into(), optical_kerning: true, ..st(true, None) };
+        layout(&db, &vertical_styled("「カタカナ」とトップ、ヤッホー。", s)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    assert!(auto.iter().zip(&optical).all(|(a, b)| (a - b).abs() < 0.01), "vertical Optical uses font metrics: {auto:?} {optical:?}");
     assert!(lay(false, None).iter().all(|a| (a - 20.0).abs() < 0.01), "off: an em each, as before");
+}
+
+#[test]
+fn vertical_optical_to_auto_keeps_the_fonts_pair() {
+    use crate::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(pair_kerning_font().unwrap());
+    let style = CharStyle { font_family: PAIR_KERNING_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let positions =
+        |t: &TextObject| layout(&db, t).glyphs.iter().map(|g| (g.advance, g.origin, g.xf.as_coeffs()[4], g.xf.as_coeffs()[5])).collect::<Vec<_>>();
+    let auto = vertical_styled("AV", style.clone());
+    let mut mixed = auto.clone();
+    edit::style_range(&mut mixed.runs, 0, 1, |s| s.optical_kerning = true);
+    let mut unkerned = auto.clone();
+    edit::style_range(&mut unkerned.runs, 0, 1, |s| s.kerning = Some(0.0));
+    let expected = positions(&auto);
+    assert_eq!(expected.len(), 2);
+    assert_ne!(expected, positions(&unkerned), "the font's A-V pair changes vertical positions");
+    assert_eq!(positions(&mixed), expected, "vertical Optical keeps the A-V font pair across the style boundary");
 }

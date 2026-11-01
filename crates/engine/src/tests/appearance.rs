@@ -463,6 +463,77 @@ fn reduce_to_basic_keeps_the_active_row_of_the_first_selected_object() {
     assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#0000ff");
 }
 
+/// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1
+/// and 2 equal a's rows 0 and 1.
+fn reversed_pair(s: &mut Session) -> (NodeId, NodeId) {
+    let a = rect(s, 50.0);
+    let b = rect(s, 200.0);
+    run(s, "appearance.addFill", json!({}));
+    run(s, "appearance.moveItem", json!({"from": 2, "to": 0}));
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#ff0000"}));
+    run(s, "select.set", json!({"ids": [b.0, a.0]}));
+    (a, b)
+}
+
+/// The active row is a row of the first selected object also for paint, stroke and effect edits
+/// when that object paints above the others.
+#[test]
+fn edits_change_the_active_row_of_the_first_selected_object() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0})); // b's red fill
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(*fill_paint(&nb, 1), Paint::solid(Color::WHITE));
+    // a shares no red row, so its fill row 0 changes, as for an active row the objects don't share.
+    assert_eq!(fill_paint(&na, 0).color().unwrap().to_hex(), "#00ff00");
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    let nb = node(&s, b);
+    assert_eq!((nb.appearance.items[0].effects().len(), nb.appearance.items[1].effects().len()), (1, 0));
+
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1})); // b's white fill, a's row 0
+    run(&mut s, "paint.editGradient", json!({"kind": "radial"}));
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert!(matches!(fill_paint(&nb, 1), Paint::Gradient(_)), "b's white fill takes the gradient");
+    assert!(matches!(fill_paint(&na, 0), Paint::Gradient(_)), "so does a's equal fill");
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#ff0000");
+    assert!(!matches!(stroke(&nb, 2).paint, Paint::Gradient(_)) && !matches!(stroke(&na, 1).paint, Paint::Gradient(_)));
+    // The effect goes on the equal rows, and the reply names the active row of b.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 2})); // b's stroke, a's row 1
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    assert_eq!(r["item"], 2);
+    let (na, nb) = (node(&s, a), node(&s, b));
+    assert_eq!((stroke(&nb, 2).effects.len(), stroke(&na, 1).effects.len()), (1, 1));
+    // With nothing selected an aligned item is an error, not a crash.
+    run(&mut s, "select.set", json!({"ids": []}));
+    let e = s.execute("effect.remove", &json!({"index": 0, "item": 0, "aligned": true})).unwrap_err().to_string();
+    assert!(!e.contains("internal error"), "{e}");
+}
+
+/// `effect.apply`'s reply names the new effect by its index in the object whose row `item` is,
+/// also when the objects painted after it already have effects there.
+#[test]
+fn apply_reports_the_index_in_the_object_whose_row_it_names() {
+    let mut s = session();
+    let (a, b) = reversed_pair(&mut s);
+    let c = rect(&mut s, 350.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    // b's red fill row is not shared, so each object's row 0 takes the effect: c's second one.
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0, c.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 2);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(0)), "b's row 0 holds one effect");
+    // An explicit item is a row of the first target, a, which paints below c.
+    run(&mut s, "select.set", json!({"ids": [c.0, a.0]}));
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 0}));
+    assert_eq!(node(&s, c).appearance.items[0].effects().len(), 3);
+    assert_eq!((r["item"].clone(), r["index"].clone()), (json!(0), json!(1)), "a's row 0 holds two effects");
+}
+
 /// How many steps there are to undo and to redo, and whether the document has unsaved changes.
 fn history(s: &Session) -> (usize, usize, bool) {
     let st = s.doc().unwrap();

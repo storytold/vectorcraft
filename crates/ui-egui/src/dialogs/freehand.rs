@@ -253,16 +253,16 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 const TIP_PREVIEW: f32 = 64.0;
 
 /// The Blob Brush's tip preview: a square with the tip at its Angle and Roundness and a line along
-/// its long axis (a drag in the square sets the Angle), and beside it three dabs of the tip, the
-/// middle one darker.
+/// its long axis, and beside it three dabs of the tip, the middle one darker. A click or a drag in
+/// the square points the Angle at the pointer and gives the square the keyboard focus; screen
+/// readers get it as the Angle slider, and its keys step the Angle as a dialog slider's do
+/// ([`widgets::stepped_area`]) within -180° to 180°.
 fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(CONTENT_W, TIP_PREVIEW), egui::Sense::hover());
     let square = egui::Rect::from_min_size(rect.min, egui::vec2(TIP_PREVIEW, TIP_PREVIEW));
-    let response = ui.interact(square, ui.scope_id().with("freehand-tip-angle"), egui::Sense::drag());
-    if response.dragged()
-        && let Some(p) = response.interact_pointer_pos()
-    {
+    let response = ui.interact(square, ui.scope_id().with("freehand-tip-angle"), egui::Sense::click_and_drag());
+    if let Some((p, _)) = widgets::pointer_phase(&response) {
         let delta = p - square.center();
         if delta.length_sq() > 1.0 {
             d.fields.insert("angle".into(), json!(f64::from((-delta.y).atan2(delta.x)).to_degrees().round()));
@@ -271,6 +271,11 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(square, 2.0, t.input);
     painter.rect_stroke(square, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // After the square's frame, so the focus outline draws over it.
+    let shown = widgets::SliderValue::field(d.f64("angle", 0.0), -180.0..=180.0, "°", 0);
+    if let Some(a) = widgets::stepped_area(ui, &response, tl!("Angle"), Some(shown)) {
+        d.fields.insert("angle".into(), json!(a));
+    }
     let a = d.f64("angle", 0.0).clamp(-180.0, 180.0).to_radians();
     // The long axis on screen (y down: a positive angle tilts it up to the right) and the short one.
     let u = egui::vec2(a.cos() as f32, -a.sin() as f32);

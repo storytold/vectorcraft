@@ -22,9 +22,9 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Affine, Point};
 
-use super::{FEEDBACK, blob_area, eraser_area, points_json, polyline};
+use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -116,6 +116,9 @@ pub struct GestureTool {
     pub close_within: f64,
     /// Smart Guides for the Pencil's ends.
     snap: DrawSnap,
+    /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
+    /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
+    tip_at: Option<Point>,
 }
 
 /// The paths a stroke can redraw for selected object `id`: the path itself, or a compound path's
@@ -191,6 +194,7 @@ impl GestureTool {
             edit_within: 12.0,
             close_within: 15.0,
             snap: DrawSnap::default(),
+            tip_at: None,
         }
     }
 
@@ -272,6 +276,22 @@ impl GestureTool {
             };
         }
         start + vectorcraft_geom::constrain_angle_from(p - start, 180.0, self.shift_line.unwrap_or(cx.constrain_angle))
+    }
+
+    /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
+    /// `size` across at its angle and roundness, at the zoom, black on a white halo so it reads on
+    /// any art. Precise cursors show only the crosshair, and smoothing shows no tip.
+    fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
+        let tip = if self.id == "blobBrush" { blob_tip(self.angle, self.roundness) } else { eraser_tip(self.angle, self.roundness) };
+        let r = self.size / 2.0;
+        // A tolerance relative to the radius: four arcs at any size or zoom.
+        let circle = kurbo::Shape::to_path(&kurbo::Circle::new(Point::ORIGIN, r), 0.1 * r.max(1e-6));
+        let path = Affine::translate(at.to_vec2()) * tip * circle;
+        vec![
+            Overlay::Path { path: path.clone(), color: [0xff, 0xff, 0xff], width: 3.0, dashed: false },
+            Overlay::Path { path, color: [0, 0, 0], width: 1.0, dashed: false },
+        ]
     }
 
     /// Forget the stroke.
@@ -476,6 +496,9 @@ impl Tool for GestureTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        if self.varies_size() {
+            self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
+        }
         match ev.kind {
             PointerKind::Move if self.snaps() => {
                 self.snap.hover(cx, p, &[], None);
@@ -665,8 +688,12 @@ impl Tool for GestureTool {
             _ => vec![],
         }
     }
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.tip_at = None;
+    }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
+        self.tip_at = None;
         // Drags past the last preview are in the stroke kept, too, and with Live curve fitting
         // off the stroke kept is fitted.
         let stale = (began && (self.previewed != self.points.len() || !self.live_fit) && self.draws_path() && !self.smoothing)
@@ -685,6 +712,7 @@ impl Tool for GestureTool {
         let mut o = self.snap.guides().to_vec();
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
+            o.extend(self.tip_outline(cx));
             return o;
         }
         // A Blob Brush drag that smooths shows the Smooth tool's thin line.
@@ -727,6 +755,8 @@ impl Tool for GestureTool {
             let length = self.points.windows(2).map(|w| w[0].distance(w[1])).sum();
             o.push(Overlay::Measure { p: last + vectorcraft_geom::Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("L: {}", cx.len(length)) });
         }
+        // Over the stroke's footprint, which reaches the tip's edge at the pointer.
+        o.extend(self.tip_outline(cx));
         o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {

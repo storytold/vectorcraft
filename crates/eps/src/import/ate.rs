@@ -8,9 +8,9 @@
 //! The format isn't documented. What is read here was worked out from the files of the project's
 //! users, used locally and never committed, by comparing it with the type their pages draw: the
 //! meaning of each key below was checked against the page's own type in more than a thousand text
-//! objects, and it is only used for the keys that matched. A story the reader doesn't recognise (area
-//! type, type on a path, anything with a frame that has more than a point and a matrix) is left
-//! alone: it has no text, and the importer says so.
+//! objects, and it is only used for the keys that matched. Point type, area type and type on a path
+//! are read; a story in a frame of any other kind is left alone: it has no text, and the importer
+//! says so.
 //!
 //! Where type sits: a story lays its lines out round a point `F` (the anchor: the start of a line of
 //! left-aligned type, the middle of a centred one, the end of a right-aligned one), each line with an
@@ -654,11 +654,6 @@ impl Story {
         self.text.len()
     }
 
-    /// The story's characters, with `\r` ending paragraphs and `\x03` ending lines.
-    pub(super) fn text(&self) -> &str {
-        &self.text
-    }
-
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
     fn matrix(&self) -> [f64; 6] {
         match self.frames.first() {
@@ -749,10 +744,20 @@ impl Story {
                 (1.0, Affine::IDENTITY, TextKind::OnPath { path: path_of(segments, template, to_doc), start: length_fraction(segments, *start), end })
             }
         };
+        // A `\x03` ends a line inside its paragraph: a forced line break (U+2028), which the
+        // paragraph's style runs over.
         let text: String = if threaded {
             String::new()
         } else {
-            self.text.trim_end_matches('\r').chars().map(|c| if matches!(c, '\r' | '\x03') { '\n' } else { c }).collect()
+            self.text
+                .trim_end_matches('\r')
+                .chars()
+                .map(|c| match c {
+                    '\r' => '\n',
+                    '\x03' => '\u{2028}',
+                    c => c,
+                })
+                .collect()
         };
         if text.trim().is_empty() && !threaded {
             return None;
@@ -1251,6 +1256,21 @@ mod tests {
         assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
         // One line has no distance to read.
         assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
+    }
+
+    /// A `\x03` ends a line inside its paragraph: it comes in as a forced line break, and the
+    /// paragraph's style runs over it to the paragraph's end.
+    #[test]
+    fn a_soft_return_is_a_line_break_in_its_paragraph() {
+        let para = Para { space_before: 4.0, space_after: 2.0, first_indent: 6.0, ..Para::default() };
+        let mut s = story("A\x03B\rC\r", &[0.0, 15.6, 31.2], &para);
+        s.paras[1].1 = Para { left_indent: 3.0, ..para.clone() };
+        let node = s.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        let NodeKind::Text(t) = &node.kind else { panic!("not text") };
+        assert_eq!(t.plain_text(), "A\u{2028}B\nC");
+        assert_eq!(t.paras.len(), 2, "{:?}", t.paras);
+        assert_eq!((t.paras[0].first_line_indent, t.paras[0].left_indent, t.paras[0].space_before), (6.0, 0.0, 4.0));
+        assert_eq!((t.paras[1].first_line_indent, t.paras[1].left_indent), (6.0, 3.0));
     }
 
     #[test]

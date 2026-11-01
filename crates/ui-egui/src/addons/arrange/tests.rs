@@ -40,6 +40,7 @@ fn the_plugins_submenu_lists_the_tools() {
         ("Swap Objects and Sizes", "addon.arrange.swap"),
         ("Replace with Top Object…", "addon.arrange.replace"),
         ("Set Size of Each…", "addon.arrange.size"),
+        ("Group Overlapping Objects", "addon.arrange.groupOverlapping"),
         ("Zoom to Selection", ZOOM),
     ] {
         assert_eq!(under(label).and_then(|e| e.command.as_deref()), Some(id), "{label}");
@@ -124,4 +125,17 @@ fn zoom_to_selection_fits_the_selection_in_the_view() {
     app.run("select.none", json!({})).unwrap();
     assert!(!menus::enabled(&app, ZOOM));
     assert!(app.run(ZOOM, json!({})).is_err());
+}
+
+#[test]
+fn group_overlapping_objects_runs_directly() {
+    let (mut app, a, b) = app();
+    let c = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 5, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.all", json!({})).unwrap();
+    click(&mut app, "Group Overlapping Objects");
+    assert!(app.ui.dialog.is_none());
+    let doc = &app.session.doc().unwrap().doc;
+    let g = doc.parent_of(a).unwrap();
+    assert_eq!(doc.parent_of(c), Some(g), "a and c overlap: grouped");
+    assert_ne!(doc.parent_of(b), Some(g), "b is left alone");
 }

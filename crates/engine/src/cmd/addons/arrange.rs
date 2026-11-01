@@ -2,14 +2,17 @@
 //! out in rows and columns, a row or a column; Swap Objects swaps the places (and sizes) of two;
 //! Replace with Top Object puts a copy of the topmost selected object in place of each of the
 //! others; and Set Size of Each gives every selected object an exact width and height. Places and
-//! sizes are measured and set as `object.setBounds` does. Its submenu (Object › Plug-ins › Arrange
+//! sizes are measured and set as `object.setBounds` does. Group Overlapping Objects groups the
+//! objects whose visual bounds overlap. Its submenu (Object › Plug-ins › Arrange
 //! Tools), its dialogs and Zoom to Selection (a view command) are the UI's.
 
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, OrientedBox};
+use vectorcraft_doc::{Node, NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_render::effects;
 
@@ -25,6 +28,8 @@ const LIMIT: f64 = 1e6;
 const LEAST: f64 = 0.001;
 /// The most columns Arrange in Grid takes.
 const MAX_COLUMNS: u64 = 10_000;
+/// The most objects Group Overlapping Objects looks at.
+const MAX_OBJECTS: usize = 20_000;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -63,6 +68,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{width?: pt, height?: pt (at least one; each 0.001..1000000), proportional?: false (with only one of them given, the other follows in proportion; else it stays), reference?: 0..8 (the 9-point grid row by row from the top-left; 4, the centre: the point of each object that stays put), scaleStrokes?: the Scale Strokes & Effects preference} give each selected object (the top-level ones) that width and height, measured as object.setBounds measures them (Use Preview Bounds), as one undo step → {count}",
             has_selection,
             size
+        ),
+        cmd!(
+            "addon.arrange.groupOverlapping",
+            "Group Overlapping Objects",
+            ["Object", "Plug-ins", "Arrange Tools"],
+            None,
+            "{} group the selected objects (the top-level ones, at most 20000) wherever their visual bounds overlap or touch, chains included (when A overlaps B and B overlaps C, all three go in one group), as one undo step. Only objects in the same layer or group are grouped together, objects that overlap nothing stay as they are, and each new group goes where its frontmost member was in the stacking order; the new groups and the objects left alone stay selected → {groups: [id…], grouped (how many objects went into groups)}",
+            has_multi,
+            group_overlapping
         ),
     ]
 }
@@ -269,4 +283,76 @@ fn size(s: &mut Session, p: &Value) -> Result<Value> {
     }
     transform_each(s, "Set Size of Each", strokes, &xfs)?;
     Ok(json!({ "count": xfs.len() }))
+}
+
+/// The sets of two or more of `items` (each in the order given) whose rects overlap or touch,
+/// chains included, among items of the same key (parent). A sweep along x: only the rects still
+/// open where each one starts are compared with it.
+fn overlapping<K: PartialEq>(items: &[(K, Rect)]) -> Vec<Vec<usize>> {
+    fn root(up: &mut [usize], mut i: usize) -> usize {
+        while up[i] != i {
+            up[i] = up[up[i]];
+            i = up[i];
+        }
+        i
+    }
+    let mut up: Vec<usize> = (0..items.len()).collect();
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by(|a, b| items[*a].1.x0.total_cmp(&items[*b].1.x0));
+    let mut open: Vec<usize> = vec![];
+    for i in order {
+        let (key, r) = (&items[i].0, items[i].1);
+        open.retain(|&j| items[j].1.x1 >= r.x0);
+        for &j in &open {
+            let (k, o) = (&items[j].0, items[j].1);
+            if k == key && o.y0 <= r.y1 && r.y0 <= o.y1 {
+                let (a, b) = (root(&mut up, i), root(&mut up, j));
+                up[a] = b;
+            }
+        }
+        open.push(i);
+    }
+    let mut sets: Vec<Vec<usize>> = vec![vec![]; items.len()];
+    for i in 0..items.len() {
+        let r = root(&mut up, i);
+        sets[r].push(i);
+    }
+    sets.retain(|s| s.len() > 1);
+    sets.sort_by_key(|s| s.first().copied());
+    sets
+}
+
+fn group_overlapping(s: &mut Session, _: &Value) -> Result<Value> {
+    const C: &str = "addon.arrange.groupOverlapping";
+    let roots = selected_roots(s)?;
+    if roots.len() > MAX_OBJECTS {
+        return Err(bad(C, "too many objects selected (at most 20000)"));
+    }
+    let d = &s.doc()?.doc;
+    let items: Vec<(NodeId, (Option<NodeId>, Rect))> =
+        roots.iter().filter_map(|id| Some((*id, (d.parent_of(*id), effects::preview::bounds_of(d, &[*id], true)?)))).collect();
+    let keyed: Vec<(Option<NodeId>, Rect)> = items.iter().map(|(_, k)| *k).collect();
+    let sets: Vec<Vec<NodeId>> = overlapping(&keyed).into_iter().map(|set| set.iter().filter_map(|i| Some(items.get(*i)?.0)).collect()).collect();
+    if sets.is_empty() {
+        return Ok(json!({ "groups": [], "grouped": 0 }));
+    }
+    let grouped: std::collections::HashSet<NodeId> = sets.iter().flatten().copied().collect();
+    let groups = s.edit("Group Overlapping Objects", |d, sel| {
+        // Every group at once: the members behind each front one go, then each front one is
+        // replaced by its group (one pass over the tree each, however many groups).
+        let (mut places, mut behind, mut groups) = (vec![], vec![], vec![]);
+        for set in &sets {
+            let Some((&front, rest)) = set.split_last() else { continue };
+            let children: Vec<Arc<Node>> = set.iter().filter_map(|id| d.node(*id).cloned().map(Arc::new)).collect();
+            let gid = d.alloc_id();
+            places.push((front, vec![Node::group(gid, children)]));
+            behind.extend_from_slice(rest);
+            groups.push(gid);
+        }
+        d.remove_many(&behind)?;
+        d.insert_beside(places, true)?;
+        sel.set(groups.iter().copied().chain(roots.iter().copied().filter(|id| !grouped.contains(id))));
+        Ok(groups)
+    })?;
+    Ok(json!({ "groups": groups.iter().map(|i| i.0).collect::<Vec<_>>(), "grouped": grouped.len() }))
 }
