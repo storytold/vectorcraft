@@ -72,6 +72,7 @@ pub(super) fn build_from(
         restyled,
         placed_elsewhere,
         envelopes_drawn,
+        styles_read,
         warnings,
     } = structure;
     // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
@@ -83,7 +84,7 @@ pub(super) fn build_from(
     let units = |v: &Document| in_units(board, v, unit) || (!same_size(board, v) && in_units(art, v, unit));
     let small = visible.filter(|v| matches!(page, Page::Artboard) && units(v)).map(|v| {
         let mut v = v.clone();
-        scale_document(&mut v, 1.0 / unit);
+        scale_document(&mut v, 1.0 / unit, false);
         v
     });
     let visible = small.as_ref().or(visible);
@@ -323,7 +324,7 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     if small.is_some() {
-        scale_document(&mut doc, unit);
+        scale_document(&mut doc, unit, styles_read);
     }
     Ok((doc, notes))
 }
@@ -982,8 +983,9 @@ fn drop_guides_off_boards(doc: &mut Document) {
 }
 
 /// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
-/// strokes, effects and pattern tiles.
-fn scale_document(doc: &mut Document, k: f64) {
+/// strokes, effects and pattern tiles, and with `styles` the strokes and effects of its graphic
+/// styles.
+fn scale_document(doc: &mut Document, k: f64, styles: bool) {
     let a = Affine::scale(k);
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
     for layer in &mut doc.layers {
@@ -994,6 +996,12 @@ fn scale_document(doc: &mut Document, k: f64) {
     }
     for guide in &mut doc.guides {
         guide.pos *= k;
+    }
+    if styles {
+        for g in doc.graphic_styles.iter_mut() {
+            g.appearance.scale_strokes(k);
+            g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+        }
     }
 }
 

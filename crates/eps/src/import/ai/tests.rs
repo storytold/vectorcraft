@@ -1850,6 +1850,154 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
+fn fill_style(name: &str, xa: &str) -> String {
+    fill_style_with(name, xa, "")
+}
+
+/// [`fill_style`] with the filters `extra` after its fills.
+fn fill_style_with(name: &str, xa: &str, extra: &str) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n{extra};\n"
+    )
+}
+
+/// An art style named `name` with a drop shadow and no fills or strokes.
+fn shadow_style(name: &str) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n3 /Real (horz) ,\n4 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n"
+    )
+}
+
+/// The art styles `defs` and the style list of `listed` (each written between parentheses as given).
+fn styles_and_list(defs: &[String], listed: &[&str]) -> String {
+    let list: String = listed.iter().map(|n| format!("({n})\n")).collect();
+    format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n{list}%AI9_EndArtStyleList\n", defs.concat())
+}
+
+/// A red square with its drawn look, read as itself with the art style `name` (`1 (name) XW`).
+fn styled_square(name: &str) -> String {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    format!("0 Ae\nu\n{RED}{}f\nU\n%_{hidden_rect}f\n1 ({name}) XW\n", rect_path(0.0, 0.0, 10.0, 10.0))
+}
+
+fn style_names(doc: &Document) -> Vec<(String, u32)> {
+    doc.graphic_styles.iter().map(|g| (g.name.clone(), g.id)).collect()
+}
+
+#[test]
+fn listed_styles_replace_the_default_graphic_styles_and_link_their_objects() {
+    let defs = [fill_style("Red", "0 0 0 0 1 0 0 Xa\n"), fill_style("Blue", "0 0 0 0 0 0 1 Xa\n"), shadow_style("Shadow")];
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["Red", "Blue", "Shadow"]), layer(&styled_square("Blue"))));
+    assert_eq!(style_names(&r.doc), [("Red".to_string(), 1), ("Blue".to_string(), 2), ("Shadow".to_string(), 3)]);
+    let blue = &r.doc.graphic_styles[1];
+    assert_eq!(blue.appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let shadow = &r.doc.graphic_styles[2];
+    assert_eq!(shadow.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert_eq!(a[0].extras().graphic_style, Some(2));
+}
+
+#[test]
+fn only_listed_styles_that_are_defined_and_read_come_in_once() {
+    // `Lit` paints with a gradient placed on each object; `Missing` has no definition.
+    let defs = [fill_style("Blue", "0 0 0 0 0 0 1 Xa\n"), ART_STYLES.lines().filter(|l| !l.starts_with('%')).map(|l| format!("{l}\n")).collect()];
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["Blue", "Missing", "", "Lit", "Blue"]), layer("")));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+}
+
+#[test]
+fn a_style_the_list_does_not_have_is_no_link() {
+    let defs = [fill_style("Blue", "0 0 0 0 0 0 1 Xa\n"), fill_style("Anon", "0 0 0 0 0 1 0 Xa\n")];
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["Blue"]), layer(&styled_square("Anon"))));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 1.0, 0.0)), "the object still takes its appearance");
+    assert_eq!(a[0].extras().graphic_style, None);
+}
+
+#[test]
+fn a_group_with_a_listed_style_is_linked() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let group = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n1 (Shadow) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{}", styles_and_list(&[shadow_style("Shadow")], &["Shadow"]), layer(&group)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(a[0].extras().graphic_style, Some(1));
+}
+
+#[test]
+fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let square =
+        format!("0 Ae\nu\n{RED}{}f\nU\n1 0.6 0 2 0 Xy\n6 () XW\n%_0 1 0 0 0 Xy\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{}", styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]), layer(&square)));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(a[0].opacity, 0.6);
+    assert_eq!(a[0].extras().graphic_style, None, "the style has full opacity");
+}
+
+#[test]
+fn a_listed_style_keeps_its_transparency_and_links_objects_that_have_it() {
+    let blend = "/BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                 /BlendStyle : 1 0.6 1 1 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n";
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let square =
+        format!("0 Ae\nu\n{RED}{}f\nU\n1 0.6 1 1 0 Xy\n6 () XW\n%_0 1 0 0 0 Xy\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{}", styles_and_list(&[fill_style_with("Blue", "0 0 0 0 0 0 1 Xa\n", blend)], &["Blue"]), layer(&square)));
+    let g = &r.doc.graphic_styles[0];
+    assert_eq!((g.name.as_str(), g.opacity, g.blend, g.isolate, g.knockout), ("Blue", 0.6, BlendMode::Multiply, true, Knockout::On));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(a[0].extras().graphic_style, Some(1), "{a:#?}");
+}
+
+#[test]
+fn a_path_with_a_listed_style_that_fills_below_the_contents_is_linked() {
+    let below = "/KnownStyle :\n(Under) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+                 /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+                 ;\n /Part ,\n;\n";
+    let r = read_ok(&format!("{}{}", styles_and_list(&[below.to_string()], &["Under"]), layer(&styled_square("Under"))));
+    assert_eq!(r.doc.graphic_styles[0].appearance.contents_index, Some(1));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(a[0].extras().graphic_style, Some(1), "{a:#?}");
+}
+
+#[test]
+fn a_style_name_outside_ascii_links_its_objects() {
+    // The list writes the name with escapes; the object's marker writes its UTF-8 bytes.
+    let defs = [fill_style("Caf\u{e9} \u{3a9}", "0 0 0 0 0 0 1 Xa\n")];
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["Caf\\303\\251 \\316\\251"]), layer(&styled_square("Caf\u{e9} \u{3a9}"))));
+    assert_eq!(style_names(&r.doc), [("Caf\u{e9} \u{3a9}".to_string(), 1)]);
+    assert_eq!(art(&r.doc)[0].extras().graphic_style, Some(1));
+}
+
+#[test]
+fn without_a_style_list_the_default_graphic_styles_stay() {
+    let defaults = style_names(&Document::new(1.0, 1.0));
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&styled_square("Blue"))));
+    assert_eq!(style_names(&r.doc), defaults);
+    assert_eq!(art(&r.doc)[0].extras().graphic_style, None);
+    let r = read_ok(&format!("{}{}", styles_and_list(&[shadow_style("Shadow")], &["Missing"]), layer("")));
+    assert_eq!(style_names(&r.doc), defaults, "a list naming no style it can read");
+}
+
 #[test]
 fn an_object_with_a_feather_style_comes_in_with_a_live_effect() {
     let feather_style = "%AI9_BeginArtStyles\n\

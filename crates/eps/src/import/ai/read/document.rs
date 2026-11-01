@@ -1,11 +1,12 @@
 use super::art::{element_name, elements, join_and, sane};
 use super::containers::drop_commented_copies;
+use super::ops::appearance_from_art_style;
 use super::types::{FLIP, Kind, MAX_DEPTH};
 use super::{
-    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure,
-    Swatch, Unit, V, obj,
+    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
+    Structure, Swatch, Unit, V, obj,
 };
-use vectorcraft_doc::{Guide, ImageBlob, PatternDef};
+use vectorcraft_doc::{GraphicStyle, Guide, ImageBlob, PatternDef};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -385,6 +386,35 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The graphic styles of the style list, in its order: each listed name the art styles define with
+    /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
+    /// defined is left out), with ids from 1. Also the id of each kept name.
+    fn graphic_styles(&self) -> (Vec<GraphicStyle>, HashMap<String, u32>) {
+        let mut styles: Vec<GraphicStyle> = vec![];
+        let mut ids = HashMap::new();
+        for raw in &self.style_list {
+            let name = obj::text(raw);
+            if name.is_empty() || ids.contains_key(&name) {
+                continue;
+            }
+            let Some(st) = self.styles.get(&name) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
+            if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
+                appearance.scale_strokes(s);
+                appearance.scale_effects(s, vectorcraft_effects::scale_effect);
+            }
+            let id = u32::try_from(styles.len() + 1).unwrap_or(u32::MAX);
+            ids.insert(name.clone(), id);
+            let mut style = GraphicStyle { id, ..GraphicStyle::new(name, appearance) };
+            if let Some((opacity, blend, isolate, knockout)) = st.transparency {
+                (style.opacity, style.blend, style.isolate, style.knockout) = (opacity, blend, isolate, knockout);
+            }
+            styles.push(style);
+        }
+        (styles, ids)
+    }
+
     pub(super) fn finish(mut self) -> Result<Structure, String> {
         // Envelopes whose plugin never closed them keep their drawn art.
         if !self.envelopes.is_empty() {
@@ -482,6 +512,16 @@ impl<'a> Reader<'a> {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
+        // The file's graphic styles in place of the defaults, and the objects linked to them.
+        let (styles, ids) = self.graphic_styles();
+        let styles_read = !styles.is_empty();
+        if styles_read {
+            let links: HashMap<NodeId, u32> = self.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
+            if !links.is_empty() {
+                link_styles(&mut doc.layers, &links, &styles, 0);
+            }
+            doc.graphic_styles = styles.into();
+        }
         let mut warnings = self.warnings;
         if self.drawn_looks > 0 {
             warnings.push(format!(
@@ -503,8 +543,38 @@ impl<'a> Reader<'a> {
             restyled: self.restyled,
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
+            styles_read,
             warnings,
         })
+    }
+}
+
+/// Link the objects of `links` among `nodes` to their graphic style's id, each only when it has its
+/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order). A path, which
+/// has no contents, takes the style's contents slot.
+fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[GraphicStyle], depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    for n in nodes {
+        if let Some(id) = links.get(&n.id)
+            && let Some(g) = id.checked_sub(1).and_then(|i| styles.get(usize::try_from(i).ok()?)).filter(|g| g.id == *id)
+        {
+            let mut appearance = (*n.appearance).clone();
+            if !n.is_container() && !matches!(n.kind, NodeKind::Text(_) | NodeKind::Image(_)) {
+                appearance.contents_index = g.appearance.contents_index;
+            }
+            if g.transparency_matches(n) && g.appearance_on(n).approx_eq(&appearance) {
+                let n = Arc::make_mut(n);
+                n.appearance = appearance.into();
+                n.extras_mut().graphic_style = Some(*id);
+            }
+        }
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(c) = Arc::make_mut(n).children_mut()
+        {
+            link_styles(c, links, styles, depth + 1);
+        }
     }
 }
 

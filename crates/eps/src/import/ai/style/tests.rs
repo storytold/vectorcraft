@@ -326,3 +326,16 @@ fn a_hidden_fill_comes_in_hidden() {
     assert!(st.plain, "{st:?}");
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
 }
+
+#[test]
+fn a_style_list_keeps_its_strings_in_order() {
+    let list = art_style_list(b"(A)\n(B\\)C)\n(D(E))\n/Name 3 x\n(Caf\\303\\251)\n(F");
+    let want: [&[u8]; 4] = [b"A", b"B)C", b"D(E)", "Caf\u{e9}".as_bytes()];
+    assert_eq!(list, want, "the string the data ends inside is left out");
+    assert!(art_style_list(b"").is_empty());
+    let unended: [&[u8]; 1] = [b"A"];
+    assert_eq!(art_style_list(b"(A)\n(B\\)"), unended, "an escaped `)` doesn't end the string");
+    assert_eq!(art_style_list(b"(A)\n(B(C)"), unended, "nor does one that closes a nested pair");
+    assert_eq!(art_style_list(format!("({})", "x".repeat(MAX_LISTED_NAME + 1)).as_bytes()), Vec::<Vec<u8>>::new());
+    assert_eq!(art_style_list("(x)\n".repeat(MAX_LISTED + 5).as_bytes()).len(), MAX_LISTED);
+}

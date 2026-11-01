@@ -1135,6 +1135,26 @@ fn editing_data_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
     assert!(near(first(&d, 0), [100.0, 860.0, 140.0, 900.0]), "{:?}", first(&d, 0));
 }
 
+/// The graphic styles of a `.ai` whose editing data is in the units of a `UserUnit` page come in
+/// with their stroke weights as large as the art's; the default styles stay as they are.
+#[test]
+fn graphic_styles_in_the_units_of_a_user_unit_page_come_in_at_the_pages_size() {
+    let line = "/KnownStyle :\n(Line) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = format!("%AI9_BeginArtStyles\n{line}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Line)\n%AI9_EndArtStyleList\n");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let art = native(&format!("{styles}{}", layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110))));
+    let (d, w, read) = crate::layered_ai(&private(&art), page.clone(), vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    let widths: Vec<(&str, f64)> = d.graphic_styles.iter().map(|g| (g.name.as_str(), g.appearance.stroke_width())).collect();
+    assert_eq!(widths, [("Line", 20.0)]);
+    let art = native(&(layer("Jig", true, &square(10, 10)) + &layer("Parts", true, &square(30, 110))));
+    let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 10.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.graphic_styles, Document::new(1.0, 1.0).graphic_styles);
+}
+
 /// #779: a `.ai`'s ruler guides come in as guides of their layers, at the page's size when the
 /// editing data is in the units of a `UserUnit` page.
 #[test]
@@ -1387,6 +1407,27 @@ fn a_large_canvas_eps_keeps_its_layers_at_the_pages_size() {
     let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &square(10, 10)));
     let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
     assert!(read && names(&d) == ["Art"], "{w:?}");
+}
+
+/// The graphic styles of a Large Canvas editing copy come in at the page's size, as its art does, and
+/// an object drawn with one stays linked to it.
+#[test]
+fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
+    let line = "/KnownStyle :\n(Line) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j 0.2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = format!("%AI9_BeginArtStyles\n{line}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Line)\n%AI9_EndArtStyleList\n");
+    let square = "5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\n";
+    let hidden: String = square.lines().map(|l| format!("%_{l}\n")).collect();
+    let styled = format!("0 Ae\nu\n0 0 1 0 K\n0.2 w\n{square}s\nU\n{hidden}%_n\n1 (Line) XW\n");
+    let art = native_large_canvas(10.0, 10.0, &format!("{styles}{}", layer("Art", true, &styled)));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    let d = &r.document;
+    assert_eq!(names(d), ["Art"], "{:?}", r.warnings);
+    let widths: Vec<(&str, f64)> = d.graphic_styles.iter().map(|g| (g.name.as_str(), g.appearance.stroke_width())).collect();
+    assert_eq!(widths, [("Line", 2.0)]);
+    let object = &d.layers[0].children().unwrap()[0];
+    assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
 }
 
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
@@ -2954,6 +2995,25 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     check(&r.document, &r.warnings);
+}
+
+#[test]
+fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let list = "%AI9_BeginArtStyleList\n(Comic)\n%AI9_EndArtStyleList\n";
+    let art = native_with_text(&(comic_style() + list + &layer("Art", true, &format!("{look}{own}1 (Comic) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(d.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect::<Vec<_>>(), [("Comic", 1)]);
+    let mut texts = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            texts.push(n.extras().graphic_style);
+        }
+    });
+    assert_eq!(texts, [Some(1)], "{notes:?}");
 }
 
 #[test]
