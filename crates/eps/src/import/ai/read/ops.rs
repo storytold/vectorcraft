@@ -1,9 +1,9 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, IGNORED, Kind, MAX_DEPTH};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, HashMap, HashSet, Instance, Knockout,
-    LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
+    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -77,6 +77,9 @@ impl<'a> Reader<'a> {
         let mesh_ended = std::mem::take(&mut self.mesh_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
+        if self.graph_record(w, hidden) {
+            return Ok(());
+        }
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
         // the operator is one the reader doesn't know, as before.
         if w != "Bh" && !self.frames.is_empty() && vals.iter().any(|v| matches!(v, V::Num(n) if n.is_nan())) {
@@ -136,7 +139,14 @@ impl<'a> Reader<'a> {
                     a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
                 }
             }
-            "LB" => self.end_layer()?,
+            "LB" => {
+                // A graph started in this layer that hasn't ended doesn't go on past it.
+                if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
+                    self.graph = None;
+                    self.warn(GRAPH_UNENDED);
+                }
+                self.end_layer()?
+            }
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
             "h" => close(&mut self.path),
@@ -308,6 +318,33 @@ impl<'a> Reader<'a> {
             _ => self.note_unknown(w, hidden),
         }
         Ok(())
+    }
+
+    /// A graph's records (version 7 specification §17 and appendix A): `%_Gs` starts the graph on
+    /// a layer, `GS` ends it, and its data and settings (the operators in [`GRAPH_OPS`], and any
+    /// operator on a `%_` line between `Gt` and `GT`) are left out with their operands. Its drawn
+    /// art, and anything else, is read as usual. `true` when `w` was one of them.
+    fn graph_record(&mut self, w: &str, hidden: bool) -> bool {
+        let Some(g) = self.graph.as_mut() else {
+            // Outside a graph, its operators stay ones the reader doesn't know.
+            if w == "Gs" && hidden && !self.frames.is_empty() {
+                self.graph = Some(Graph { settings: false, frames: self.frames.len() });
+                self.warn(GRAPH_PLAIN);
+                return true;
+            }
+            return false;
+        };
+        match w {
+            // A graph doesn't start inside another: the one being read goes on.
+            "Gs" => self.warn(GRAPH_UNENDED),
+            "GS" => self.graph = None,
+            "Gt" => g.settings = true,
+            "GT" => g.settings = false,
+            _ if GRAPH_OPS.contains(&w) => {}
+            _ if hidden && g.settings => {}
+            _ => return false,
+        }
+        true
     }
 
     /// `… Lb`: a layer's options, `visible preview unlocked printing dimmed`, then the colour index

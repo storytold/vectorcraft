@@ -3102,3 +3102,145 @@ fn an_objects_on_path_group_in_versioned_content_opens_once() {
     assert_eq!(kids[0].children().unwrap().len(), 5);
     assert!(kids[0].extras().objects_on_path.is_some());
 }
+
+use read::{GRAPH_PLAIN, GRAPH_UNENDED};
+
+/// Editing data in the legacy format (version 7 specification, chapter 2): `%AI5_FileFormat 2.0`,
+/// the art size and the template box in the header, then `body`.
+fn stream7(body: &str) -> String {
+    format!(
+        "%!PS-Adobe-3.0\n%%Creator: test\n%AI5_FileFormat 2.0\n%AI5_ArtSize: 612 792\n%AI3_TemplateBox: 306 396 306 396\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n{body}\n%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n"
+    )
+}
+
+/// One layer named `name` in the legacy format (ten operands before `Lb`) holding `art`.
+fn layer7(name: &str, art: &str) -> String {
+    format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n({name}) Ln\n0 A\n{art}\nLB\n%AI5_EndLayer--\n")
+}
+
+/// A graph's data on `%_` lines, in the order the version 7 specification's chapter 17 gives:
+/// bounds, style and dialog settings, a subscription, three axes, a column width and the table
+/// (two rows of two cells, one of them empty).
+const GRAPH_DATA: &str = "%_Gs\n%_10 10 110 90 Gb\n%_3 0 0 12 1 1 0 0 2 30 0 Gy\n%_6 1 1 0 80 70 0\n%_ 50 60 80 70 Gd\n%_0 1 Gj\n\
+    %_1 () Ga 0 12 0 0 0 0 0 () 0 0 GA\n%_2 () Ga 0 12 0 1 0.5 0 1 () 0 0 GA\n%_3 () Ga 0 12 0 4 1 0 0 () 0 0 GA\n%_40 Gw\n\
+    %_2 2 1 1 Gz\n%_() Gc (East) Gc\n%_(Q1) Gc 7 Gc GC\n";
+
+/// A graph's settings (`Gt` … `GT`): a design's name and paint operators on `%_` lines.
+const GRAPH_SETTINGS: &str = "%_Gt\n%_(Bars) GD\n%_0.5 G\n%_0 g\n%_1 0 Gv\n%_GT\n";
+
+/// A graph whose drawn art is `art` (in its group, then `%_GS`).
+fn graph(settings: &str, art: &str) -> String {
+    format!("{GRAPH_DATA}{settings}u\n{art}U\n%_GS\n")
+}
+
+/// A filled bar of a graph, with its `Go` tag.
+fn bar(x: f64) -> String {
+    format!("0 0 0 1 k\n{}f\n%_2 0 0 0 Go\n", rect_path(x, 10.0, x + 20.0, 50.0))
+}
+
+/// The gray (`k`) of `n`'s stroke.
+fn stroke_k(n: &Node) -> Option<f32> {
+    match n.appearance.stroke().and_then(|s| s.paint.color()) {
+        Some(Color::Gray { k }) => Some(k),
+        _ => None,
+    }
+}
+
+/// A graph opens as its drawn art: the bar comes in, in its group, with one note.
+#[test]
+fn a_graph_opens_as_its_drawn_art() {
+    let r = read(stream7(&layer7("Graph", &graph(GRAPH_SETTINGS, &bar(10.0)))).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(children.len(), 1);
+    assert!(matches!(children[0].kind, NodeKind::Path { .. }));
+    assert_eq!(fill(&children[0]).color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+    assert!(r.hidden_unread.is_empty(), "the records aren't unread art: {:?}", r.hidden_unread);
+    // Two graphs, the second without settings: one note still.
+    let two = format!("{}{}", graph(GRAPH_SETTINGS, &bar(10.0)), graph("", &bar(40.0)));
+    let r = read(stream7(&layer7("Graph", &two)).as_bytes()).unwrap();
+    assert_eq!(art(&r.doc).len(), 2);
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+    // A graph with only the records a minimal one needs (bounds and table), and the newer header.
+    let minimal = "%_Gs\n%_0 0 50 50 Gb\n%_1 1 1 1 Gz\n%_3 Gc GC\n";
+    let r = read_ok(&layer(&format!("{minimal}u\n{}U\n%_GS\n", bar(0.0))));
+    assert_eq!(art(&r.doc).len(), 1);
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+}
+
+/// Paint operators on `%_` lines in a graph's settings set nothing; the same operators in its drawn
+/// art, and after it, paint as usual.
+#[test]
+fn a_graphs_settings_paint_nothing_and_its_drawn_art_paints_as_usual() {
+    let stroked = |x: f64| format!("{}S\n", rect_path(x, 60.0, x + 5.0, 70.0));
+    let drawn = format!("{}0.25 G\n{}", stroked(0.0), stroked(10.0));
+    let body = format!("0.75 G\n{}0.5 G\n{}", graph(GRAPH_SETTINGS, &drawn), stroked(20.0));
+    let r = read(stream7(&layer7("Graph", &body)).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2);
+    let kids = a[0].children().unwrap();
+    assert_eq!(stroke_k(&kids[0]), Some(0.25), "the gray set before the graph, not its settings' `%_0.5 G`");
+    assert_eq!(stroke_k(&kids[1]), Some(0.75), "a gray set in the drawn art");
+    assert_eq!(stroke_k(&a[1]), Some(0.5), "a gray set after the graph");
+}
+
+/// Graph operators outside a graph stay operators the reader doesn't know: an error on a layer that
+/// shows, noted as unread on `%_` lines (as any operator there), and no graph note.
+#[test]
+fn graph_operators_outside_a_graph_are_unknown() {
+    for stray in ["Gs\n", "Go\n", "1 2 Gc\n"] {
+        let err = read(stream7(&layer7("L", &format!("{}{stray}", rect_path(0.0, 0.0, 5.0, 5.0)))).as_bytes()).unwrap_err();
+        assert!(err.contains("operators VectorCraft doesn't know"), "{stray}: {err}");
+    }
+    for (stray, op) in [("%_2 0 0 0 Go\n", "`Go`"), ("%_GS\n", "`GS`"), ("%_1 2 Gc\n", "`Gc`")] {
+        let r = read(stream7(&layer7("L", &format!("{}f\n{stray}", rect_path(0.0, 0.0, 5.0, 5.0)))).as_bytes()).unwrap();
+        assert!(r.hidden_unread.contains(op), "{stray}: {:?}", r.hidden_unread);
+        assert!(r.warnings.is_empty(), "{stray}: {:?}", r.warnings);
+    }
+}
+
+/// A graph that starts inside another is noted and the first goes on; one that doesn't end stops at
+/// its layer's end, with the art read so far, and the next layer reads as usual.
+#[test]
+fn malformed_graphs_keep_their_art() {
+    let nested = format!("{GRAPH_DATA}u\n{}%_Gs\n{}U\n%_GS\n", bar(0.0), bar(30.0));
+    let r = read(stream7(&layer7("Graph", &nested)).as_bytes()).unwrap();
+    assert_eq!(art(&r.doc)[0].children().unwrap().len(), 2);
+    assert_eq!(r.warnings, [GRAPH_PLAIN, GRAPH_UNENDED]);
+
+    let unended = format!("{GRAPH_DATA}%_Gt\nu\n{}U\n", bar(0.0));
+    let next = format!("%_0.5 G\n{}S\n", rect_path(0.0, 60.0, 5.0, 70.0));
+    let r = read(stream7(&format!("{}{}", layer7("Graph", &unended), layer7("Next", &next))).as_bytes()).unwrap();
+    assert_eq!(art(&r.doc).len(), 1, "the drawn art read before the layer ended");
+    let after = r.doc.layers[1].children().unwrap();
+    assert_eq!(stroke_k(&after[0]), Some(0.5), "the next layer isn't in the graph's settings");
+    assert_eq!(r.warnings, [GRAPH_PLAIN, GRAPH_UNENDED]);
+
+    // One that doesn't end before the file does.
+    let cut = stream7(&layer7("Graph", &format!("{GRAPH_DATA}u\n{}U\n", bar(0.0)))).replace("LB\n%AI5_EndLayer--\n", "");
+    assert!(read(cut.as_bytes()).is_err(), "a layer that doesn't end is still an error");
+}
+
+/// A graph's records in the shapes the specification's appendix A gives: several cells on one line,
+/// strings, arrays and names as operands, and empty groups among its drawn art.
+#[test]
+fn a_graphs_records_take_their_operands() {
+    let settings = "%_Gt\n%_(Bars) GD [1 2 3] 0 Ge\n%_/Name 1 Gi (a) (b) Gl\n%_1 2 3 4 Gm 0 Gp 1 Gr 0 G+ 2 G1 0 Gf 0 Gg 0 Gx 1 GX\n%_GT\n";
+    let drawn = format!("u\nU\nu\nu\nU\nU\n{}", bar(10.0));
+    let r = read(stream7(&layer7("Graph", &graph(settings, &drawn))).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    let kids = a[0].children().unwrap();
+    fn paths(n: &Node) -> usize {
+        match n.children() {
+            Some(c) => c.iter().map(|c| paths(c)).sum(),
+            None => usize::from(matches!(n.kind, NodeKind::Path { .. })),
+        }
+    }
+    assert!(matches!(kids.last().map(|k| &k.kind), Some(NodeKind::Path { .. })), "the bar is kept after the empty groups: {kids:?}");
+    assert_eq!(paths(&a[0]), 1, "the empty groups hold no art");
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+}

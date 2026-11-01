@@ -43,6 +43,10 @@
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
 //!
+//! - Graphs (version 7 specification §17): `%_Gs`, the graph's data and settings on `%_` lines,
+//!   its drawn art as ordinary groups, paths and type (each object followed by `%_… Go`), `%_GS`.
+//!   The drawn art is read; the data and settings are left out, with a note.
+//!
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
@@ -84,9 +88,9 @@ use art::preview_png;
 pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, Raster};
+use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
 #[cfg(test)]
-pub use types::{NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
@@ -272,6 +276,8 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// The graph being read (see [`Reader::graph_record`]).
+    graph: Option<Graph>,
 }
 
 /// A section comment's marker without its `AI<version>_` prefix and value (`AI14_BeginSymbol` →
@@ -364,6 +370,7 @@ impl<'a> Reader<'a> {
             pattern_tiles: HashMap::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            graph: None,
         }
     }
 

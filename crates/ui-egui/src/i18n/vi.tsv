@@ -4276,6 +4276,7 @@ theme	Appearance	Giao diện
 @msg	add a format to export	thêm định dạng để xuất
 @msg	already editing a pattern	đang chỉnh sửa họa tiết
 @msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
+@msg	graphs come in as plain art, without their data or settings	biểu đồ được nhập dưới dạng hình vẽ thường, không kèm dữ liệu và thiết lập của chúng
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa

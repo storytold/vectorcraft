@@ -289,3 +289,28 @@ pub const NON_NATIVE_ART_UNREAD: &str = "non-native art (a placed PDF's content)
 
 /// The name of the group a `/ForeignObject`'s art comes in as.
 pub const NON_NATIVE_ART: &str = "Non-native art";
+
+/// The note for a file with a graph (`%_Gs` … `%_GS`): its drawn art comes in, its data and
+/// settings don't.
+pub const GRAPH_PLAIN: &str = "graphs come in as plain art, without their data or settings";
+
+/// The note for a graph that starts inside another or doesn't end before its layer does: the art
+/// read so far is kept, and what follows the layer is read as usual.
+pub const GRAPH_UNENDED: &str = "a graph's records don't end where they should: its art was read as it is";
+
+/// A graph's records (the version 7 specification's chapter 17 and appendix A): two-letter
+/// operators starting with `G`, read and left out with their operands.
+pub(super) const GRAPH_OPS: &[&str] = &[
+    "G1", "G+", "Ga", "GA", "Gb", "Gc", "GC", "Gd", "GD", "Ge", "Gf", "Gg", "Gi", "Gj", "Gl", "Gm", "Go", "Gp", "Gr", "Gs", "GS", "Gt", "GT", "Gv",
+    "Gw", "GX", "Gx", "Gy", "Gz",
+];
+
+/// A graph being read (`%_Gs` … `%_GS`).
+#[derive(Debug)]
+pub(super) struct Graph {
+    /// Between `Gt` and `GT`, where the graph's settings may use paint and type operators on `%_`
+    /// lines too.
+    pub(super) settings: bool,
+    /// How many frames were open at its `Gs`: a layer that ends with fewer ends the graph.
+    pub(super) frames: usize,
+}

@@ -386,6 +386,9 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
+        if self.graph.take().is_some() {
+            self.warn(super::types::GRAPH_UNENDED);
+        }
         // Envelopes whose plugin never closed them keep their drawn art.
         if !self.envelopes.is_empty() {
             self.envelopes.clear();
