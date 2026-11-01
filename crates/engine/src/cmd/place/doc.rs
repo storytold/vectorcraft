@@ -38,9 +38,12 @@
 //! changed, once: pictures and objects, fields, fields left out (no result, or nested too deep), the
 //! other stories, tracked changes and tables. A stream larger than [`MAX_STREAM`] bytes, a main
 //! text longer than [`text::MAX_TEXT`] characters, more than [`MAX_PIECES`] pieces or
-//! [`MAX_PAGES`] property pages, and placed type of more than [`MAX_PARAGRAPHS`] paragraphs or
-//! [`MAX_RUNS`] runs are refused, and so are a structure that lies outside its stream, property
-//! pages whose runs are listed twice or overlap, and styles based on each other in a loop.
+//! [`MAX_PAGES`] property pages, more than [`MAX_RUNS`] runs of character or of paragraph
+//! properties, more than [`MAX_PRL_BYTES`] bytes of properties in the styles and property runs,
+//! more than [`MAX_PARAGRAPHS`] paragraphs (hidden and deleted ones and those in field
+//! instructions included), and placed type of more than [`MAX_RUNS`] runs are refused, and so are
+//! a structure that lies outside its stream, property pages whose runs are listed twice or
+//! overlap, and styles based on each other in a loop.
 
 use std::io::{Cursor, Read};
 
@@ -78,8 +81,12 @@ const MAX_FONTS: usize = 0x7FF0;
 const MAX_NAME: usize = 256;
 /// The most paragraphs placed type takes from one Word document.
 const MAX_PARAGRAPHS: usize = 100_000;
-/// The most runs of one character formatting placed type takes from one Word document.
+/// The most runs of one character formatting placed type takes from one Word document, and the
+/// most runs of character or of paragraph properties read from its property pages.
 const MAX_RUNS: usize = 100_000;
+/// The most bytes of properties (Prls) read from the style sheet's styles and the property runs;
+/// each style's and each run's properties are applied once.
+const MAX_PRL_BYTES: usize = 16 << 20;
 /// The deepest nesting of fields read; deeper ones are left out with their results.
 const MAX_FIELDS: usize = 64;
 /// `istdBase` of a style that is based on none.
@@ -112,16 +119,17 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<(Story, Vec<String>)> {
     let table = stream(&mut file, table_name, cmd)?.ok_or_else(|| damaged(cmd, format!("it has no {table_name} stream")))?;
     let clx = fib.part(&table, CLX, cmd)?.ok_or_else(|| damaged(cmd, "it has no piece table"))?;
     let text = main_text(&wd, &pieces(clx, cmd)?, fib.ccp_text, cmd)?;
+    let mut prl_left = MAX_PRL_BYTES;
     let chpx = match fib.part(&table, PLCF_BTE_CHPX, cmd)? {
-        Some(plc) => runs(&wd, plc, Fkp::Chpx, cmd)?,
+        Some(plc) => runs(&wd, plc, Fkp::Chpx, &mut prl_left, cmd)?,
         None => vec![],
     };
     let papx = match fib.part(&table, PLCF_BTE_PAPX, cmd)? {
-        Some(plc) => runs(&wd, plc, Fkp::Papx, cmd)?,
+        Some(plc) => runs(&wd, plc, Fkp::Papx, &mut prl_left, cmd)?,
         None => vec![],
     };
     let sheet = match fib.part(&table, STSHF, cmd)? {
-        Some(stsh) => Sheet::read(stsh, cmd)?,
+        Some(stsh) => Sheet::read(stsh, &mut prl_left, cmd)?,
         None => Sheet::default(),
     };
     let fonts = match fib.part(&table, STTBF_FFN, cmd)? {
@@ -137,6 +145,15 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<(Story, Vec<String>)> {
 /// The error for a Word document whose structures can't be read.
 fn damaged(cmd: &str, why: impl std::fmt::Display) -> EngineError {
     bad(cmd, format!("can't read this Word document: {why}"))
+}
+
+/// Takes `bytes` of properties from `left`, the bytes of the [`MAX_PRL_BYTES`] not yet read; an
+/// error when fewer are left.
+fn spend(left: &mut usize, bytes: usize, cmd: &str) -> Result<()> {
+    *left = left
+        .checked_sub(bytes)
+        .ok_or_else(|| bad(cmd, format!("the Word document has more than {} MB of formatting properties, too many to place", MAX_PRL_BYTES >> 20)))?;
+    Ok(())
 }
 
 /// The stream `name` of the compound file; None when it has no such stream.
@@ -371,8 +388,9 @@ struct Run<'a> {
 /// the WordDocument stream `wd`, ordered by file position. The bin table's file positions rise
 /// ("MUST be sorted in ascending order", and a PlcBteChpx "MUST NOT contain duplicate stream
 /// offsets"), and so do the runs of its pages one after another: a page listed twice, or pages
-/// whose runs overlap, are damaged.
-fn runs<'a>(wd: &'a [u8], plc: &[u8], kind: Fkp, cmd: &str) -> Result<Vec<Run<'a>>> {
+/// whose runs overlap, are damaged. More than [`MAX_RUNS`] runs are refused, and each run's
+/// properties are taken from `prl_left`.
+fn runs<'a>(wd: &'a [u8], plc: &[u8], kind: Fkp, prl_left: &mut usize, cmd: &str) -> Result<Vec<Run<'a>>> {
     let broken = || damaged(cmd, "its character or paragraph properties are damaged");
     if plc.len() < 4 || !(plc.len() - 4).is_multiple_of(8) {
         return Err(broken());
@@ -397,6 +415,10 @@ fn runs<'a>(wd: &'a [u8], plc: &[u8], kind: Fkp, cmd: &str) -> Result<Vec<Run<'a
         if before.zip(out.get(first)).is_some_and(|(end, r)| r.start < end) {
             return Err(broken());
         }
+        if out.len() > MAX_RUNS {
+            return Err(bad(cmd, format!("the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place")));
+        }
+        spend(prl_left, out.get(first..).unwrap_or_default().iter().map(|r| r.grpprl.len()).sum(), cmd)?;
     }
     Ok(out)
 }
@@ -500,8 +522,8 @@ struct Sheet {
 }
 
 impl Sheet {
-    /// The style sheet STSH (§2.9.271).
-    fn read(stsh: &[u8], cmd: &str) -> Result<Self> {
+    /// The style sheet STSH (§2.9.271); its styles' properties are taken from `prl_left`.
+    fn read(stsh: &[u8], prl_left: &mut usize, cmd: &str) -> Result<Self> {
         let broken = || damaged(cmd, "its style sheet is damaged");
         let size = usize::from(u16_at(stsh, 0).ok_or_else(broken)?);
         let stshi = bytes_at(stsh, 2, size).ok_or_else(broken)?;
@@ -521,6 +543,7 @@ impl Sheet {
             // LPStd records start on even offsets.
             at += 2 + usize::from(len) + usize::from(len) % 2;
         }
+        spend(prl_left, styles.iter().flatten().map(|s| s.papx.len() + s.chpx.len()).sum(), cmd)?;
         let root = (Para::default(), Chars { font, ..Chars::default() });
         let paragraph = resolve(&styles, 1, root, |(mut para, chars), s| {
             para.apply(&s.papx);
@@ -1024,6 +1047,8 @@ struct Reader<'a> {
     cell_tab: bool,
     /// The fields open: true while their instructions are being read.
     fields: Vec<bool>,
+    /// The fields of `fields` whose instructions are being read.
+    in_instructions: usize,
     /// Fields begun past [`MAX_FIELDS`] and not yet ended.
     field_overflow: usize,
     /// The text, in runs of one character formatting; paragraphs end with `\n`.
@@ -1048,6 +1073,7 @@ impl<'a> Reader<'a> {
             cell_end: None,
             cell_tab: false,
             fields: vec![],
+            in_instructions: 0,
             field_overflow: 0,
             spans: vec![],
             len: 0,
@@ -1063,6 +1089,8 @@ impl<'a> Reader<'a> {
         // Each property run's formatting, worked out the first time the text reaches it.
         let mut paragraphs: Vec<Option<(Para, Chars)>> = vec![None; papx.len()];
         let mut changes: Vec<Option<CharsChange>> = vec![None; chpx.len()];
+        // The paragraphs read, shown or not: each paragraph's segment and each line break.
+        let mut paragraphs_read = 0usize;
         let mut start = 0;
         while start < text.len() && !self.full {
             // A paragraph runs to its mark: a paragraph or cell mark, or a page or section break at
@@ -1073,6 +1101,11 @@ impl<'a> Reader<'a> {
             };
             let end = text.get(start..).and_then(|rest| rest.iter().position(ends)).map_or(text.len(), |at| start + at + 1);
             let segment = text.get(start..end).unwrap_or_default();
+            paragraphs_read += 1 + segment.iter().filter(|&&(c, _, _)| c == '\u{B}').count();
+            if paragraphs_read > MAX_PARAGRAPHS {
+                self.full = true;
+                return;
+            }
             let mark_fc = segment.last().map(|&(_, fc, _)| fc).unwrap_or_default();
             let run = run_at(papx, mark_fc).and_then(|i| Some((papx.get(i)?, paragraphs.get_mut(i)?)));
             let (para, base) = match run {
@@ -1134,6 +1167,7 @@ impl<'a> Reader<'a> {
             '\u{13}' => {
                 if self.fields.len() < MAX_FIELDS && self.field_overflow == 0 {
                     self.fields.push(true);
+                    self.in_instructions += 1;
                 } else {
                     self.seen.unread_fields = true;
                     self.field_overflow += 1;
@@ -1142,7 +1176,9 @@ impl<'a> Reader<'a> {
             }
             '\u{14}' if self.field_overflow == 0 => {
                 if let Some(instructions) = self.fields.last_mut() {
-                    *instructions = false;
+                    if std::mem::take(instructions) {
+                        self.in_instructions = self.in_instructions.saturating_sub(1);
+                    }
                     self.seen.fields = true;
                 }
                 return;
@@ -1152,13 +1188,14 @@ impl<'a> Reader<'a> {
                     self.field_overflow -= 1;
                 } else if self.fields.pop() == Some(true) {
                     // A field that ends without a separator has no result.
+                    self.in_instructions = self.in_instructions.saturating_sub(1);
                     self.seen.unread_fields = true;
                 }
                 return;
             }
             _ => {}
         }
-        if self.field_overflow > 0 || self.fields.contains(&true) || chars.hidden {
+        if self.field_overflow > 0 || self.in_instructions > 0 || chars.hidden {
             return;
         }
         let para = self.para;
@@ -1256,7 +1293,7 @@ impl<'a> Reader<'a> {
             out.push("the Word document's fields were placed as the text of their results".to_string());
         }
         // A field still in its instructions when the text ends has no result either.
-        if self.seen.unread_fields || self.fields.contains(&true) {
+        if self.seen.unread_fields || self.in_instructions > 0 {
             out.push("the Word document's fields without a result that could be read were left out".to_string());
         }
         if self.seen.revisions {

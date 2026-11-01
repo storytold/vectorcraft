@@ -486,6 +486,8 @@ struct Word97 {
     pieces: Vec<(&'static str, bool)>,
     /// Character properties of characters `start..end`.
     chpx: Vec<(u32, u32, Vec<u8>)>,
+    /// The character properties of character `cp`, instead of `chpx`'s.
+    chpx_fn: Option<fn(u32) -> Vec<u8>>,
     /// The paragraph style and properties of the paragraph whose mark is character `cp`; a
     /// character's paragraph is the first one whose mark is at or after it.
     papx: Vec<(u32, u16, Vec<u8>)>,
@@ -567,7 +569,10 @@ impl Word97 {
             let w = if *compressed { 1 } else { 2 };
             chars.extend((0..text.encode_utf16().count() as u32).map(|k| (at + k * w, w)));
         }
-        let chpx_of = |cp: u32| (0u32, self.chpx.iter().rev().find(|(s, e, _)| (*s..*e).contains(&cp)).map(|r| r.2.clone()).unwrap_or_default());
+        let chpx_of = |cp: u32| match self.chpx_fn {
+            Some(f) => (0u32, f(cp)),
+            None => (0u32, self.chpx.iter().rev().find(|(s, e, _)| (*s..*e).contains(&cp)).map(|r| r.2.clone()).unwrap_or_default()),
+        };
         let papx_of = |cp: u32| {
             let p = self.papx.iter().filter(|(mark, _, _)| *mark >= cp).min_by_key(|(mark, _, _)| *mark);
             p.map_or((u32::MAX, vec![0, 0]), |(mark, istd, g)| (*mark, [istd.to_le_bytes().to_vec(), g.clone()].concat()))
@@ -936,6 +941,40 @@ fn doc_styles_are_worked_out_once_however_many_paragraphs_use_them() {
     let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
     let NodeKind::Text(t) = &n.kind else { panic!("not type") };
     assert_eq!(t.runs.iter().map(|r| (r.text.as_str(), r.style.size)).collect::<Vec<_>>(), [("a\nb", 12.0)]);
+}
+
+#[test]
+fn doc_property_runs_paragraphs_and_properties_read_are_limited() {
+    let mut s = session();
+    let place = |s: &mut Session, doc: &Word97| {
+        s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc.build())})).map_err(|e| e.to_string())
+    };
+    // 100,001 hidden characters whose properties alternate between two lists that give the same
+    // formatting: more than 100,000 runs of character properties, though the type placed is one run.
+    let text: &'static str = format!("{}x\r", "a".repeat(100_001)).leak();
+    let alternate = |cp: u32| match cp {
+        100_001.. => vec![],
+        cp if cp % 2 == 0 => prls(&[(0x083C, &[1])]),
+        _ => prls(&[(0x083C, &[1]), (0x0835, &[0])]),
+    };
+    let e = place(&mut s, &Word97 { pieces: vec![(text, true)], chpx_fn: Some(alternate), ..Word97::default() }).unwrap_err();
+    assert!(e.contains("more than 100000 runs of character or paragraph properties"), "{e}");
+    // More than 100,000 paragraphs that are hidden, deleted or in a field's instructions.
+    let marks = "\r".repeat(100_001);
+    for (text, chpx) in [
+        (format!("{marks}x\r"), vec![(0, 100_001, prls(&[(0x083C, &[1])]))]),
+        (format!("{marks}x\r"), vec![(0, 100_001, prls(&[(0x0800, &[1])]))]),
+        (format!("\u{13}{marks}\u{14}x\u{15}\r"), vec![]),
+    ] {
+        let e = place(&mut s, &Word97 { pieces: vec![(text.leak(), true)], chpx, ..Word97::default() }).unwrap_err();
+        assert!(e.contains("at most 100000 paragraphs"), "{e}");
+    }
+    // 270 character styles of 64,800 bytes of properties each: more than 16 MB.
+    let filler = prls(&[(0x0835, &[0])]).repeat(21_600);
+    let styles = (0..270).map(|_| Some((2, 0x0FFF, vec![], filler.clone()))).collect();
+    let e = place(&mut s, &Word97 { pieces: vec![("words\r", true)], styles, ..Word97::default() }).unwrap_err();
+    assert!(e.contains("more than 16 MB of formatting properties"), "{e}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), 0, "failed places leave no undo step");
 }
 
 #[test]
