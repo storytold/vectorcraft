@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageObject, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Point};
 
-use super::super::fileio;
 use super::super::place::pt_per_px;
+use super::super::{fileio, links};
 use super::{Clipboard, CommandSpec, Result, Session, always, bad, cmd, f64_or, has_doc, looks_like_svg, point_param, str_param};
 
 /// Plain text: a type-only copy's text, else the SVG markup (Include SVG Code).
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Image into Clipboard",
             [],
             None,
-            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste",
+            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
             has_doc,
             import_image
         ),
@@ -418,7 +418,9 @@ fn import_image(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(m) = str_param(p, "mime").filter(|m| !m.starts_with("image/") || *m == SVG) {
         return Err(bad(C, format!("`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText")));
     }
-    let img = fileio::raster_image(&data_param(p, C)?).map_err(|e| bad(C, e.to_string()))?;
+    let data = data_param(p, C)?;
+    let mut img = fileio::raster_image(&data).map_err(|e| bad(C, e.to_string()))?;
+    img.blob = links::readable_and_kept(img.blob, links::kept_unread(&data), false).map_err(|e| bad(C, e.to_string()))?;
     let (sx, sy) = pt_per_px(img.ppi);
     let (w, h) = (img.width, img.height);
     let image = ImageObject {

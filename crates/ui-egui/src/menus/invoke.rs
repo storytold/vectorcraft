@@ -13,6 +13,16 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
 }
 
+/// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
+/// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
+/// that hold the selected objects (`scope: "group"`).
+pub(super) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
+    match target.0.as_str() {
+        "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        _ => target,
+    }
+}
+
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
 /// are.
@@ -27,6 +37,9 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
 
 /// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
 pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
+    if let Some(found) = crate::addons::arrange::dialog(app, id) {
+        return Some(found);
+    }
     Some(match id {
         // Move opens on the offset moved last and the checkboxes it was last confirmed with.
         "object.move" => ("move", crate::dialogs::transform::move_fields(app)),
@@ -37,6 +50,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
         "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
         "path.average" => ("average", json!({"axis": "both"})),
+        // Average & Join opens on the joined anchor chosen last (Corner the first time).
+        "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
+        "path.averageJoin" => ("averageJoin", json!({"to": "corner"})),
         // Offset Path opens on the values it was last confirmed with.
         "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
@@ -44,6 +60,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         // "Open this dialog with these settings next time" was ticked.
         "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
         "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields(app)),
+        "object.path.smooth" => (crate::dialogs::smooth_slider::KIND, crate::dialogs::smooth_slider::fields()),
         "object.path.splitIntoGrid" => {
             // The grid starts at the size of the selection.
             let size =
@@ -51,7 +68,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
-        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::fields()),
+        crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
+        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })
 }
@@ -109,7 +128,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
-    if SUBJECT_COMMANDS.contains(&id) && p.get("ids").is_none() && p.get("id").is_none() && !has_subject(app) {
+    if SUBJECT_COMMANDS.contains(&id)
+        && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
+        && p.get("id").is_none()
+        && !has_subject(app)
+    {
         return;
     }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
@@ -134,6 +157,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && p.as_object().is_some_and(|o| !o.contains_key("to"))
         && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
     let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    // Image Trace traces off the UI thread, with its progress (#3098).
+    if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+        if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
     if let Err(e) = app.run(id, p) {
         app.status(e);
     } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
@@ -231,8 +261,8 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     false
 }
 
-/// The dialogs the selection, raster, wrap, blend and Expand commands open when called without params; whether `id`
-/// was one of them.
+/// The dialogs the selection, raster, wrap, blend and Expand commands open, and the panel the Asset Export commands
+/// open, when called without params; whether `id` was one of them.
 fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -286,6 +316,15 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Expand…: its dialog.
     if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::expand::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
+    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
+    // shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }
         return true;

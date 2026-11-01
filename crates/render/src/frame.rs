@@ -95,6 +95,10 @@ pub(crate) static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sy
 pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
+    /// How many times the frame's symbol boxes measured symbol art ([`SymbolBoxes::art_measured`]):
+    /// the art boxes of symbols and how far the effects in their art paint past it. Pattern tiles
+    /// and placed documents measure with symbol boxes of their own, which are not counted.
+    pub symbol_art: usize,
     /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
     /// their object moved, or made over such rasters ([`RenderOptions::interacting`]), and those it
     /// drew at a drag's lower resolution ([`Self::previewed`]).
@@ -123,6 +127,8 @@ pub(crate) struct Frame<'a> {
     pub(crate) opts: &'a RenderOptions,
     /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
     pub(crate) ink: Ink,
+    /// With Separations Preview, the tables placed images show the visible plates through.
+    pub(crate) plates: Option<&'a crate::proof::PlateLut>,
 }
 
 impl Frame<'_> {

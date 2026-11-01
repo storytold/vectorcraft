@@ -205,10 +205,10 @@ drag-and-drop, set **Preferences › Performance › Linux Display Server** to *
 the app with `WAYLAND_DISPLAY= vectorcraft`: the window then opens through XWayland, where drops work
 (see [`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
 
-On Linux with Wayland, under KDE Plasma 6.3 or later and under GNOME, VectorCraft doesn't respond to a drawing tablet's
-pen yet (#491, #2028). Open the window through XWayland instead, where the pen works as a mouse and the app reads its
-pressure: set the same preference to **X11 (XWayland)**, or to **X11 (XWayland) When a Pen Is Attached** to use
-XWayland only when a pen is attached as VectorCraft starts, and restart; or start the app with
+On Linux with Wayland, under KDE Plasma 6.3 or later and under GNOME, VectorCraft can't get a drawing tablet's pen
+input on native Wayland yet (#491, #2028). When a pen is attached as VectorCraft starts, the window opens through
+XWayland, where the pen works as a mouse and the app reads its pressure (#4967; `VECTORCRAFT_NATIVE_WAYLAND=1` keeps
+Wayland). For a pen attached later, set the same preference to **X11 (XWayland)** and restart, or start the app with
 `WAYLAND_DISPLAY= vectorcraft` (see [`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
 
 ### Use it from Claude Code and other agents
@@ -247,7 +247,7 @@ doesn't write Affinity files. Current `.af` validation includes 33 pinned files,
 and every-board SVG/PDF/PSD export, with fixes for Affinity 3 artboards, source-backed JPEGs and text runs.
 [Scope and limits](crates/affinity/README.md); [source audit and remaining gaps](docs/affinity-validation.md).
 The interface
-speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified Chinese, Spanish, French, Hungarian, Italian, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Finnish, Bulgarian, Greek, Czech and Georgian;
+speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified Chinese, Spanish, French, Hungarian, Italian, Polish, Brazilian Portuguese, Russian, Swedish, Ukrainian, Finnish, Bulgarian, Greek, Czech, Georgian and Catalan;
 [localization-parity.md](docs/localization-parity.md) has the details.
 The scores are self-assessed from our code against public documentation;
 [target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.

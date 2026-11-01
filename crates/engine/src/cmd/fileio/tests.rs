@@ -837,3 +837,33 @@ fn a_failed_save_does_not_stamp_the_documents_dates() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(!s.doc().unwrap().is_dirty());
 }
+
+/// #4284: a photo whose EXIF orientation says the camera was turned places upright: its pixels
+/// turned as the orientation says, its width and height swapped. One without keeps its own bytes.
+#[test]
+fn a_photo_places_the_way_its_exif_orientation_says() {
+    // 16 × 8, red on the left half.
+    let mut rgb = image::RgbImage::from_pixel(16, 8, image::Rgb([255, 255, 255]));
+    for y in 0..8 {
+        for x in 0..8 {
+            rgb.put_pixel(x, y, image::Rgb([220, 0, 0]));
+        }
+    }
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    // An EXIF segment with Orientation 6: turn a quarter clockwise to show.
+    let exif: Vec<u8> =
+        [b"Exif\0\0".as_slice(), b"II", &[0x2a, 0, 8, 0, 0, 0], &[1, 0], &[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0], &[0, 0, 0, 0]].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let plain = raster_image(&jpg).unwrap();
+    assert_eq!((plain.width, plain.height, plain.blob.bytes.as_slice()), (16, 8, jpg.as_slice()), "a photo as taken keeps its bytes");
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height), (8, 16), "turned a quarter");
+    let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+    let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
+    assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
+}

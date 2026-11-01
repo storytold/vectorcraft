@@ -3,7 +3,8 @@
 //! the out-of-gamut and out-of-web warnings (click to correct); New/Original chips; an eyedropper
 //! button that samples a color anywhere on the screen ([`crate::screen_color`]); and a Color
 //! Swatches list. With art selected the colour shows on it live as it is picked; OK keeps it as one
-//! undo step through `paint.setFill` / `paint.setStroke`, Cancel puts the art back.
+//! undo step through `paint.setFill` / `paint.setStroke` and makes the color the Color Guide's
+//! base color; Cancel puts the art back.
 //! Opened for an artboard (Properties › Artboards › Fill), it shows the color on the artboard's
 //! paper live, and OK keeps it as one undo step through `artboard.setProps {index, color}`.
 //! Opened over Recolor Artwork (double-click a row's new color), its OK sets that row's new color
@@ -636,7 +637,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         return Ok(Value::Null);
     }
     let (cmd, params) = paint_command(app, d);
-    super::form::commit_preview(app, cmd, params)
+    let c = in_document_model(app, picked(d).color);
+    let r = super::form::commit_preview(app, cmd, params)?;
+    // A color picked for the fill or stroke also becomes the Color Guide's base color.
+    if !d.fields.contains_key("artboard") {
+        crate::panels::color_guide::choose_base(app, c);
+    }
+    Ok(r)
 }
 
 #[cfg(test)]

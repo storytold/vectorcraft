@@ -36,7 +36,15 @@ fn compose_para(
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
     // The tab after a list marker always starts the first line and has a fixed width.
     let has_tab = sg.iter().any(|g| g.ch == '\t' && g.len > 0);
-    if composer != Composer::EveryLine || pen.regions.is_none() || sg.len() < 2 || sg.len() > MAX_COMPOSE_GLYPHS || may_hang || has_tab {
+    let has_soft_break = sg.iter().any(|g| g.ch == '\u{2028}');
+    if composer != Composer::EveryLine
+        || pen.regions.is_none()
+        || sg.len() < 2
+        || sg.len() > MAX_COMPOSE_GLYPHS
+        || may_hang
+        || has_tab
+        || has_soft_break
+    {
         return None;
     }
     let m = Metrics::of(&sg[0]);
@@ -382,7 +390,15 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
     let mut hyphen_run = 0;
     let mut line_in_paragraph = 0;
     let mut index = 0;
+    let mut emitted_empty_continuation = false;
     loop {
+        let pm = if index >= n
+            && let Some(last) = paragraph.sg.last()
+        {
+            Metrics::of(last)
+        } else {
+            paragraph.pm
+        };
         let mut placement = PlacementContext {
             para: paragraph.para,
             pr: &paragraph.pr,
@@ -390,7 +406,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
             continued: paragraph.continued,
             rtl: paragraph.rtl,
             mirror: paragraph.mirror,
-            pm: paragraph.pm,
+            pm,
             composed: &paragraph.composed,
             hyphen_run,
             hyphen_limit: paragraph.hyphen_limit,
@@ -407,7 +423,13 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         line_in_paragraph += 1;
         index = geometry.position.end;
         if index >= n {
-            break;
+            if emitted_empty_continuation {
+                break;
+            }
+            emitted_empty_continuation = paragraph.sg.last().is_some_and(|g| g.ch == '\u{2028}');
+            if !emitted_empty_continuation {
+                break;
+            }
         }
     }
     pen.pending += paragraph.para.space_after;
@@ -422,7 +444,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         if paragraph.regions.is_some() { (position.x0 + position.ind_l, position.x1 - position.ind_r) } else { (position.x0, position.x1) };
     let width = ax1 - ax0;
     let mut trimmed = position.end;
-    while trimmed > index && sg[trimmed - 1].is_space() {
+    while trimmed > index && (sg[trimmed - 1].is_space() || sg[trimmed - 1].ch == '\u{2028}') {
         trimmed -= 1;
     }
     let hyphen = (position.hyph && position.end > index).then(|| hyphen_glyph(&sg[position.end - 1]));
@@ -521,7 +543,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     // Justification adds nothing to the list marker's glyphs.
     let mut held = held;
     held.extend(index..paragraph.marker.min(body));
-    let last_of_para = position.end >= n;
+    let last_of_para = position.end >= n || position.end.checked_sub(1).and_then(|i| sg.get(i)).is_some_and(|g| g.ch == '\u{2028}');
     LineGeometry {
         position,
         index,
@@ -786,16 +808,21 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         } else {
             position.m.first_baseline(pen.fb, pen.fb_min)
         },
-        start: if index < sg.len() { sg[index].byte } else { paragraph.pr.start },
-        end: if line.last_of_para { paragraph.pr.end } else { sg[position.end].byte },
+        start: if index < sg.len() { sg[index].byte } else { paragraph.pr.end },
+        end: if position.end >= sg.len() { paragraph.pr.end } else { sg[position.end].byte },
         glyph_start,
         glyph_end: cx.out.glyphs.len(),
         avail: if paragraph.regions.is_some() { (ax0, ax1) } else { (start_x, x_end) },
         region: if paragraph.regions.is_some() { pen.ri } else { 0 },
     });
     pen.settled(position.baseline, position.m);
-    // Further spans of this line band share the settled baseline.
-    for queued in &mut pen.queued {
-        queued.0 = position.baseline;
+    let forced_break = position.end > index && sg.get(position.end - 1).is_some_and(|g| g.ch == '\u{2028}');
+    if forced_break {
+        pen.queued.clear();
+    } else {
+        // Further spans of this line band share the settled baseline.
+        for queued in &mut pen.queued {
+            queued.0 = position.baseline;
+        }
     }
 }

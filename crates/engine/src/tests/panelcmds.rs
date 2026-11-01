@@ -311,6 +311,39 @@ fn artboard_commands_refuse_a_boolean_or_number_given_as_text() {
     assert_eq!(node(&s, r).geometric_bounds().map(|b| b.x0), Some(20.0));
 }
 
+/// New Artboard refuses a position or size given as text or as another value that is not a number,
+/// such as "10", and New Artboard and Artboard Options refuse a name that is not text, such as 5.
+/// The artboards and the undo history stay as they were; a null reads as the key left out.
+#[test]
+fn artboard_commands_refuse_a_number_or_name_of_the_wrong_type() {
+    use crate::tests::{not_a_number, not_refused};
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let mut calls: Vec<_> = [
+        ("artboard.new", "x", json!({"x": "10"})),
+        ("artboard.new", "y", json!({"x": 2000, "y": [0]})),
+        ("artboard.new", "width", json!({"width": "200"})),
+        ("artboard.new", "height", json!({"height": true})),
+    ]
+    .into_iter()
+    .map(|(cmd, key, p)| not_a_number(cmd, p, key))
+    .collect();
+    let not_text = |cmd: &str, p: serde_json::Value| (cmd.to_string(), p, "`name` must be a string".to_string());
+    calls.extend([
+        not_text("artboard.new", json!({"name": 5})),
+        not_text("artboard.setProps", json!({"index": 0, "name": 5})),
+        not_text("artboard.setProps", json!({"index": 0, "x": 50, "name": true})),
+        not_text("artboard.setProps", json!({"artboards": [{"index": 0, "name": "Front"}, {"index": 1, "name": ["Back"]}]})),
+    ]);
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    s.execute("artboard.new", &json!({"x": null, "y": null, "width": null, "height": null, "name": null})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "Front"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "name": null})).unwrap();
+    let names: Vec<String> = boards(&s).into_iter().map(|(_, n)| n).collect();
+    assert_eq!(names, ["Front", "Artboard 2", "Artboard 3"]);
+}
+
 /// Artboards 1 and 2, each with a square on it, and an artboard 3 below artboard 1 with a square on
 /// it, with the Artboard tool selecting artboards 1 and 2 → the squares' ids, artboard by artboard.
 fn two_selected_artboards(s: &mut Session) -> [u64; 3] {

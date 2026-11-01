@@ -144,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); snapping lands the nearer edge of the objects' joint bounds on a gridline within a quarter cell; Transform Again repeats it",
+            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid), constrain?: bool (default false; constrain each in-plane move to its plane's nearest axis or 45° diagonal)} slide objects within their own planes (unattached objects attach to `plane`/the active plane first); snapping pulls the nearer edge of the first plane's joint bounds toward a gridline within a quarter cell while preserving the constrained direction; Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -198,8 +198,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Text",
             [],
             None,
-            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again → {id}",
-            has_doc,
+            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again; refused while an opacity mask is edited → {id}",
+            super::maskedit::outside_mask_editing,
             edit_text
         ),
     ]

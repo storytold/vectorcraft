@@ -27,15 +27,19 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     let active = s.active;
     s.batch_stash = Some(vec![]);
     let mut grouped = Vec::with_capacity(cmds.len());
+    // The Type tool keeps what the steps' Undo and Redo change in it, to put back on a rollback.
+    s.notify_text_tool("batch.begin");
     let r = run_steps(s, &label, artboard, &mut cmds, &mut grouped);
     let stash = s.batch_stash.take().unwrap_or_default();
     let results = match r {
         Ok(results) => {
+            s.notify_text_tool("batch.end");
             s.batch_steps = Some(grouped);
             results
         }
         Err(e) => {
             roll_back(s, start, &stash);
+            s.notify_text_tool("batch.rollBack");
             s.active = active;
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
             s.pending_paint = None;

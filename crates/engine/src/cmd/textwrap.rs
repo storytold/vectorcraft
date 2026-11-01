@@ -4,6 +4,8 @@
 //! resolves, for each area text object, the outlines of the wrap objects above it into
 //! `TextObject::wrap` (text space); the layout engine subtracts them from each line's span.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, TextKind, TextWrap, WrapShape};
 use vectorcraft_geom::{PathData, shapes};
@@ -149,21 +151,18 @@ fn collect<'a>(n: &'a Node, out: &mut Vec<Item<'a>>) {
     }
 }
 
-fn any_wrap_state(n: &Node) -> bool {
-    n.extras().wrap.is_some()
-        || matches!(&n.kind, NodeKind::Text(t) if !t.wrap.is_empty())
-        || n.children().is_some_and(|ch| ch.iter().any(|c| any_wrap_state(c)))
-}
-
 /// Re-resolve the wrap shapes of every area text object (called after each edit).
-pub(crate) fn refresh(doc: &mut Document) {
-    if !doc.layers.iter().any(|l| any_wrap_state(l)) {
-        return;
-    }
+pub(crate) fn refresh(before: &Document, doc: &mut Document) {
     let mut updates: Vec<(NodeId, Vec<WrapShape>)> = vec![];
-    for layer in &doc.layers {
+    for (idx, layer) in doc.layers.iter().enumerate() {
+        if before.layers.get(idx).is_some_and(|b| Arc::ptr_eq(b, layer)) || before.layers.iter().any(|b| b.id == layer.id && Arc::ptr_eq(b, layer)) {
+            continue;
+        }
         let mut items = vec![];
         collect(layer, &mut items);
+        if items.is_empty() {
+            continue;
+        }
         for (i, it) in items.iter().enumerate() {
             let Item::Text(id) = it else { continue };
             let Some(NodeKind::Text(t)) = doc.node(*id).map(|n| &n.kind) else { continue };

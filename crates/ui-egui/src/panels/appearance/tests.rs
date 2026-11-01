@@ -438,6 +438,28 @@ fn groups_show_a_contents_row_and_type_a_characters_row_in_their_slot() {
     assert_eq!(rows(frame(&mut app)), ["Fill:", "Characters"]);
 }
 
+/// Add New Fill (button, menu or shortcut) with rows selected: the copy of the active row lands
+/// right above it and is then the only selected row.
+#[test]
+fn add_new_fill_selects_the_new_fill_alone() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = NodeId(app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    app.run("appearance.addFill", json!({})).unwrap(); // [Fill, Stroke, Fill]
+    let ctx = egui::Context::default();
+    let n = app.session.doc().unwrap().doc.node(id).unwrap().clone();
+    // Rows 0 and 1 (the stroke) Cmd-clicked together, row 0 active.
+    click_item(&mut app, &ctx, &n, Sel::None, 0, egui::Modifiers::NONE);
+    click_item(&mut app, &ctx, &n, Sel::Item(0), 1, egui::Modifiers::COMMAND);
+    assert_eq!(selected_items(&ctx, Some(&n), Sel::Item(0)), [0, 1]);
+    app.run("appearance.addFill", json!({})).unwrap();
+    let n = app.session.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke", "fill"]);
+    let sel = current_sel(&app, &ctx, Some(&n));
+    assert_eq!(sel, Sel::Item(1));
+    assert_eq!(selected_items(&ctx, Some(&n), sel), [1]);
+}
+
 #[test]
 fn images_show_a_contents_row_with_new_fills_and_strokes_below_it() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -554,17 +576,20 @@ fn a_mixed_selection_lists_what_its_objects_share() {
     run(&mut app, "select.set", json!({"ids": ids}));
     let shown = frame(&mut app);
     let kind = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(ids[0].as_u64().unwrap())).unwrap().kind_label();
-    assert_eq!(shown.first().map(String::as_str), Some(kind), "the object row names their kind: {shown:?}");
+    assert_eq!(shown.iter().find(|t| *t != "?").map(String::as_str), Some(kind), "the object row names their kind: {shown:?}");
     assert!(shown.iter().any(|t| t == "Mixed Appearances"), "{shown:?}");
     assert!(shown.iter().any(|t| t == "Stroke:") && !shown.iter().any(|t| t == "Fill:"), "the stroke, not the fills: {shown:?}");
     assert!(shown.iter().any(|t| t.contains("Feather")), "the shared effect: {shown:?}");
     assert!(shown.iter().any(|t| t == "Opacity:"), "{shown:?}");
+    // The object row's chip says the fills differ, like the Properties panel's "?" chip.
+    assert!(shown.iter().any(|t| t == "?"), "{shown:?}");
     // Alike objects list their whole stack, without the note.
     run(&mut app, "paint.setFill", json!({"ids": ids, "color": "#ffff00"}));
     let shown = frame(&mut app);
     assert!(!shown.iter().any(|t| t == "Mixed Appearances") && shown.iter().any(|t| t == "Fill:"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "?"), "{shown:?}");
     // A path and type.
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 180, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [ids[0].clone(), t]}));
-    assert_eq!(frame(&mut app).first().map(String::as_str), Some("Mixed Objects"));
+    assert_eq!(frame(&mut app).iter().find(|t| *t != "?").map(String::as_str), Some("Mixed Objects"));
 }

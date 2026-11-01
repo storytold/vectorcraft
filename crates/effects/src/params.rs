@@ -118,14 +118,16 @@ pub fn is_raster(id: &str) -> bool {
         || PIXEL_EFFECTS.contains(&id)
 }
 
-/// Does `id` change geometry? (Crop Marks adds art of its own instead, [`crop_marks_art`]; colour
-/// adjustments recolour, [`adjust`].) Plug-in effects do, installed or not (a missing plug-in
+/// Does `id` change geometry? (Crop Marks and Vector Halftone add art of their own instead,
+/// [`crop_marks_art`] and [`crate::addons::halftone::halftone_art`]; colour adjustments recolour,
+/// [`adjust`].) Plug-in effects do, installed or not (a missing plug-in
 /// leaves the geometry as it is).
 pub fn is_geometry(id: &str) -> bool {
     !is_raster(id)
         && !is_pathfinder(id)
         && !is_adjustment(id)
         && id != CROP_MARKS
+        && id != crate::addons::halftone::HALFTONE
         && !is_three_d(id)
         && (catalog_index().contains_key(id) || vectorcraft_plugins::effect::plugin_id(id).is_some())
 }

@@ -29,6 +29,7 @@ pub(crate) fn has_object_fx(n: &Node) -> bool {
         || effects::has_transform_art(n)
         || effects::has_container_appearance(n)
         || effects::has_crop_marks(n)
+        || effects::addons::halftone::has_halftone(n)
         || effects::has_adjustment(n)
         || effects::has_revolve(n)
         || effects::has_solid(n)
@@ -51,8 +52,9 @@ pub(super) fn evaluates_live(n: &Node) -> bool {
 
 /// Can the art [`Renderer::fx_art`] makes for `n` change while `n` stays the same, other than
 /// through live objects it evaluates? It can when `n` holds type (laid out in the fonts installed),
-/// a symbol instance (made from its symbol's art), or an object with a 3D effect or a color
-/// adjustment (shaded or recolored through the color settings), in it or in the opacity masks of
+/// a symbol instance (made from its symbol's art), an object with a 3D effect or a color
+/// adjustment (shaded or recolored through the color settings), or one with Vector Halftone (its
+/// dots sampled from everything it draws), in it or in the opacity masks of
 /// the objects in it.
 pub(super) fn reads_outside(n: &Node) -> bool {
     let mut reads = false;
@@ -61,6 +63,7 @@ pub(super) fn reads_outside(n: &Node) -> bool {
             || effects::has_revolve(c)
             || effects::has_solid(c)
             || effects::has_adjustment(c)
+            || effects::addons::halftone::has_halftone(c)
             || c.extras().mask.as_ref().is_some_and(|m| reads_outside(&m.art))
     });
     reads

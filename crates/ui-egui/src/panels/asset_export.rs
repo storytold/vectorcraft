@@ -130,8 +130,13 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
                     let field = rename_id.with("field");
                     let kept = widgets::own_field_shift_enter(ui, field, &mut buf, &a.name);
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-                    let te = child
-                        .add(egui::TextEdit::singleline(&mut buf).id(field).desired_width(name_rect.width()).font(egui::FontId::proportional(11.5)));
+                    let te = child.add(
+                        egui::TextEdit::singleline(&mut buf)
+                            .id(field)
+                            .align(egui::Align2::LEFT_CENTER)
+                            .desired_width(name_rect.width())
+                            .font(egui::FontId::proportional(11.5)),
+                    );
                     // Enter or a click elsewhere commits, Escape cancels; Shift+Enter commits and
                     // keeps the field open.
                     if te.lost_focus() {
@@ -258,7 +263,7 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
     let preset = preset.unwrap_or_default().to_string();
     let n = rows.len();
     let mut d = Dialog::new(EXPORT_FOR_SCREENS, json!({ "formats": &rows, "preset": preset, "__settings": "" }));
-    screen_formats(ui, &mut d);
+    screen_formats(ui, &mut d, None);
     let (shown, picked) = (d.str("__settings"), d.str("preset"));
     let formats = d.fields.remove("formats").unwrap_or(Value::Null);
     let change = if !shown.is_empty() {
