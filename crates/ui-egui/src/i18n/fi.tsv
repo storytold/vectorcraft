@@ -6218,3 +6218,5 @@ breakText	Glyphs	Merkit
 @msg	the drawing has more objects than can be read; the rest were left out	piirustuksessa on enemmän objekteja kuin voidaan lukea; loput jätettiin pois
 @msg	the FreeHand file claims more path geometry than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän polun geometriaa kuin voidaan lukea
 @msg	the FreeHand file claims more objects than can be read	tämä FreeHand-tiedosto ilmoittaa enemmän objekteja kuin voidaan lukea
+
+@msg	text expansion exceeded the safety limit	tekstin laajennus ylitti turvarajan

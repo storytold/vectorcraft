@@ -6262,3 +6262,5 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the drawing has more objects than can be read; the rest were left out	o desenho tem mais objetos do que é possível ler; o restante foi deixado de fora
 @msg	the FreeHand file claims more path geometry than can be read	o arquivo FreeHand declara mais geometria de caminho do que é possível ler
 @msg	the FreeHand file claims more objects than can be read	o arquivo FreeHand declara mais objetos do que é possível ler
+
+@msg	text expansion exceeded the safety limit	a expansão do texto ultrapassou o limite de segurança

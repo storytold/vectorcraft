@@ -6080,3 +6080,27 @@ shape	Open	Otvoren
 	Small to Large	Od manjeg prema većem
 	Large to Small	Od većeg prema manjem
 	Distribute Evenly	Rasporedi ravnomjerno
+
+@msg	the FreeHand file is empty	FreeHand datoteka je prazna
+@msg	the FreeHand file is cut off in the header	FreeHand datoteka je odsječena u zaglavlju
+@msg	not a FreeHand file	nije FreeHand datoteka
+@msg	the FreeHand file is cut off in its compressed data	FreeHand datoteka je odsječena u komprimiranim podacima
+@msg	the FreeHand file's compressed data is damaged	komprimirani podaci FreeHand datoteke su oštećeni
+@msg	the FreeHand file is cut off in the dictionary	FreeHand datoteka je odsječena u rječniku
+@msg	the FreeHand file is cut off in the record list	FreeHand datoteka je odsječena u listi zapisa
+@msg	the FreeHand file is cut off in a record	FreeHand datoteka je odsječena u zapisu
+@msg	the FreeHand file claims more records than can be read	FreeHand datoteka navodi više zapisa nego što se može pročitati
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand datoteka navodi rječnik veći nego što se može pročitati
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand datoteka navodi više čvorova putanje nego što se može pročitati
+@msg	the FreeHand file claims more list entries than can be read	FreeHand datoteka navodi više stavki liste nego što se može pročitati
+@msg	a FreeHand record id points past the end of the file	identifikator zapisa FreeHand pokazuje iza kraja datoteke
+@msg	the FreeHand file decompresses past the safety limit	FreeHand datoteka se raspakuje iznad sigurnosne granice
+@msg	the FreeHand file's data block runs past the end of the file	blok podataka FreeHand datoteke prelazi kraj datoteke
+@msg	the FreeHand file is larger than can be read	FreeHand datoteka je veća nego što se može pročitati
+@msg	the FreeHand file claims more entries than can be read	FreeHand datoteka navodi više stavki nego što se može pročitati
+@msg	the FreeHand file has a record whose size is not known	FreeHand datoteka ima zapis čija veličina nije poznata
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	nepodržana verzija FreeHand {n}: VectorCraft otvara FreeHand 8 do MX (11); otvorite je u novijem FreeHandu i sačuvajte, ili je izvezite kao EPS, PDF ili AI
+@msg	the drawing has more objects than can be read; the rest were left out	crtež ima više objekata nego što se može pročitati; ostalo je izostavljeno
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand datoteka navodi više geometrije putanje nego što se može pročitati
+@msg	the FreeHand file claims more objects than can be read	FreeHand datoteka navodi više objekata nego što se može pročitati
+@msg	text expansion exceeded the safety limit	proširenje teksta prešlo je sigurnosnu granicu

@@ -6174,3 +6174,5 @@ breakText	Glyphs	Glifák
 @msg	the drawing has more objects than can be read; the rest were left out	a rajz több objektumot tartalmaz, mint amennyit be lehet olvasni; a többit kihagytuk
 @msg	the FreeHand file claims more path geometry than can be read	a FreeHand-fájl több útvonalgeometriát állít, mint amennyit be lehet olvasni
 @msg	the FreeHand file claims more objects than can be read	a FreeHand-fájl több objektumot állít, mint amennyit be lehet olvasni
+
+@msg	text expansion exceeded the safety limit	a szöveg kibontása túllépte a biztonsági korlátot

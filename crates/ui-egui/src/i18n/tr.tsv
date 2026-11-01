@@ -6122,3 +6122,27 @@ breakText	Glyphs	Glifler
 	Small to Large	Küçükten Büyüğe
 	Large to Small	Büyükten Küçüğe
 	Distribute Evenly	Eşit Dağıt
+
+@msg	the FreeHand file is empty	FreeHand dosyası boş
+@msg	the FreeHand file is cut off in the header	FreeHand dosyası üstbilgide kesilmiş
+@msg	not a FreeHand file	bir FreeHand dosyası değil
+@msg	the FreeHand file is cut off in its compressed data	FreeHand dosyası sıkıştırılmış verisinde kesilmiş
+@msg	the FreeHand file's compressed data is damaged	FreeHand dosyasının sıkıştırılmış verisi bozuk
+@msg	the FreeHand file is cut off in the dictionary	FreeHand dosyası sözlükte kesilmiş
+@msg	the FreeHand file is cut off in the record list	FreeHand dosyası kayıt listesinde kesilmiş
+@msg	the FreeHand file is cut off in a record	FreeHand dosyası bir kayıtta kesilmiş
+@msg	the FreeHand file claims more records than can be read	FreeHand dosyası okunabileceğinden fazla kayıt bildiriyor
+@msg	the FreeHand file claims a dictionary larger than can be read	FreeHand dosyası okunabileceğinden büyük bir sözlük bildiriyor
+@msg	the FreeHand file claims more path nodes than can be read	FreeHand dosyası okunabileceğinden fazla yol düğümü bildiriyor
+@msg	the FreeHand file claims more list entries than can be read	FreeHand dosyası okunabileceğinden fazla liste girdisi bildiriyor
+@msg	a FreeHand record id points past the end of the file	bir FreeHand kayıt kimliği dosyanın sonundan sonrasını gösteriyor
+@msg	the FreeHand file decompresses past the safety limit	FreeHand dosyası güvenlik sınırının ötesine açılıyor
+@msg	the FreeHand file's data block runs past the end of the file	FreeHand dosyasının veri bloğu dosyanın sonunu aşıyor
+@msg	the FreeHand file is larger than can be read	FreeHand dosyası okunabileceğinden büyük
+@msg	the FreeHand file claims more entries than can be read	FreeHand dosyası okunabileceğinden fazla girdi bildiriyor
+@msg	the FreeHand file has a record whose size is not known	FreeHand dosyasında boyutu bilinmeyen bir kayıt var
+@msg	unsupported FreeHand version {n}: VectorCraft opens FreeHand 8 to MX (11); open it in a newer FreeHand and save, or export it as EPS, PDF or AI	desteklenmeyen FreeHand sürümü {n}: VectorCraft, FreeHand 8 ile MX (11) arasını açar; daha yeni bir FreeHand'de açıp kaydedin veya EPS, PDF ya da AI olarak dışa aktarın
+@msg	the drawing has more objects than can be read; the rest were left out	çizimde okunabileceğinden fazla nesne var; geri kalanı bırakıldı
+@msg	the FreeHand file claims more path geometry than can be read	FreeHand dosyası okunabileceğinden fazla yol geometrisi bildiriyor
+@msg	the FreeHand file claims more objects than can be read	FreeHand dosyası okunabileceğinden fazla nesne bildiriyor
+@msg	text expansion exceeded the safety limit	metin genişlemesi güvenlik sınırını aştı

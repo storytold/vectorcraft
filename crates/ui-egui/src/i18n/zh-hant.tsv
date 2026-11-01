@@ -5828,3 +5828,5 @@ breakText	Glyphs	字符
 @msg	the drawing has more objects than can be read; the rest were left out	圖面的物件數超過可讀取的上限；其餘物件已略過
 @msg	the FreeHand file claims more path geometry than can be read	FreeHand 檔案宣告的路徑幾何超過可讀取的上限
 @msg	the FreeHand file claims more objects than can be read	FreeHand 檔案宣告的物件數超過可讀取的上限
+
+@msg	text expansion exceeded the safety limit	文字展開超過了安全上限

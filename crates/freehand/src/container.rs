@@ -18,12 +18,15 @@ use crate::records::{self, RawFile};
 pub struct Limits {
     /// Compressed file bytes read from the AGD block.
     pub max_input: usize,
-    /// Decompressed record stream.
+    /// Decompressed record stream. Also the budget for copies of paragraph text
+    /// while the drawing is built: twice the UTF-8 length of each paragraph, charged
+    /// before the copy.
     pub max_decompressed: usize,
     pub max_records: usize,
     pub max_dict: usize,
     /// Path nodes, list entries and property entries, each. Also the object-visit budget
-    /// while the drawing is built, including each child of a compound path.
+    /// while the drawing is built: each child-list entry (including a zero id or one the
+    /// cycle or depth check then skips) and each child of a compound path.
     pub max_items: usize,
     /// Cubic segments materialized for paths and shapes, across the whole drawing.
     /// One segment is three points. Charged before those points are allocated.

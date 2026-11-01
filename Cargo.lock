@@ -6295,7 +6295,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-freehand"
-version = "0.13.1"
+version = "0.19.0"
 dependencies = [
  "flate2",
  "proptest",

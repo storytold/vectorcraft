@@ -6140,3 +6140,5 @@ breakText	Glyphs	Γλύφοι
 @msg	the drawing has more objects than can be read; the rest were left out	το σχέδιο έχει περισσότερα αντικείμενα από όσα μπορούν να διαβαστούν· τα υπόλοιπα παραλείφθηκαν
 @msg	the FreeHand file claims more path geometry than can be read	το αρχείο FreeHand δηλώνει περισσότερη γεωμετρία διαδρομής από όση μπορεί να διαβαστεί
 @msg	the FreeHand file claims more objects than can be read	το αρχείο FreeHand δηλώνει περισσότερα αντικείμενα από όσα μπορούν να διαβαστούν
+
+@msg	text expansion exceeded the safety limit	η επέκταση του κειμένου ξεπέρασε το όριο ασφαλείας

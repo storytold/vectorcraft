@@ -6130,3 +6130,5 @@ breakText	Glyphs	Glyphs
 @msg	the drawing has more objects than can be read; the rest were left out	de tekening heeft meer objecten dan er gelezen kunnen worden; de rest is weggelaten
 @msg	the FreeHand file claims more path geometry than can be read	het FreeHand-bestand geeft meer padgeometrie op dan er gelezen kan worden
 @msg	the FreeHand file claims more objects than can be read	het FreeHand-bestand geeft meer objecten op dan er gelezen kunnen worden
+
+@msg	text expansion exceeded the safety limit	de tekstuitbreiding heeft de veiligheidsgrens overschreden

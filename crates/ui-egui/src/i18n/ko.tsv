@@ -5771,3 +5771,5 @@ breakText	Glyphs	글리프
 @msg	the drawing has more objects than can be read; the rest were left out	도면의 객체가 읽을 수 있는 것보다 많습니다. 나머지는 빼 두었습니다
 @msg	the FreeHand file claims more path geometry than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 패스 도형을 선언합니다
 @msg	the FreeHand file claims more objects than can be read	FreeHand 파일이 읽을 수 있는 것보다 많은 객체를 선언합니다
+
+@msg	text expansion exceeded the safety limit	텍스트 확장이 안전 한도를 넘었습니다

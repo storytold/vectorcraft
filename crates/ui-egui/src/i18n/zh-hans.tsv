@@ -6031,3 +6031,5 @@ breakText	Glyphs	字形
 @msg	the drawing has more objects than can be read; the rest were left out	绘图中的对象数超过了可读取的上限；其余对象已略去
 @msg	the FreeHand file claims more path geometry than can be read	FreeHand 文件声明的路径几何超过了可读取的上限
 @msg	the FreeHand file claims more objects than can be read	FreeHand 文件声明的对象数超过了可读取的上限
+
+@msg	text expansion exceeded the safety limit	文本展开超过了安全上限

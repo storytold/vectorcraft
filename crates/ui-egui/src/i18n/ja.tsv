@@ -5875,3 +5875,5 @@ breakText	Glyphs	字形
 @msg	the drawing has more objects than can be read; the rest were left out	図面のオブジェクトが読み取れる数を超えています。残りは省かれました
 @msg	the FreeHand file claims more path geometry than can be read	FreeHand ファイルが読み取れる数を超えるパスジオメトリを宣言しています
 @msg	the FreeHand file claims more objects than can be read	FreeHand ファイルが読み取れる数を超えるオブジェクトを宣言しています
+
+@msg	text expansion exceeded the safety limit	テキストの展開が安全上限を超えました

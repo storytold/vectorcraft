@@ -134,8 +134,12 @@ with it.
 Every size is checked before it is allocated (`Limits`): 64 MiB of input, 256 MiB decompressed,
 250_000 records, 8_192 dictionary names, 2_000_000 list entries and path nodes together,
 2_000_000 cubic segments of built path geometry, strings of at most 1_048_576 bytes. The
-inflated stream is capped before it grows. A compound path's children spend the same object
-budget and the same geometry budget as any other path, before their points are allocated.
+inflated stream is capped before it grows. A child list spends its length from the object
+budget before it is walked, including a zero id and an entry the cycle or depth check then
+skips. A compound path's children spend the same object budget and the same geometry budget
+as any other path, before their points are allocated. Each paragraph spends twice its UTF-8
+length from the decompressed-size budget before that text is copied, and a spent budget keeps
+the runs already read.
 Record-graph cycles,
 a symbol whose art contains that symbol, style chains and group nesting stop at 64 levels in
 this crate; the engine then merges anything past its own document depth, the same way it does

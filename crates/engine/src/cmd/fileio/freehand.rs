@@ -47,8 +47,12 @@ impl Builder {
                 id: i as u32 + 1,
                 name: format!("Page {}", i + 1),
                 rect: Rect::new(p.x, p.y, p.x + p.width, p.y + p.height),
+                locked: false,
                 show_center_mark: false,
                 show_cross_hairs: false,
+                show_video_safe_areas: false,
+                video_ruler_pixel_aspect_ratio: 1.0,
+                color: None,
             })
             .collect();
         if self.doc.artboards.is_empty() {
@@ -214,7 +218,7 @@ fn gradient(kind: GradientKind, stops: &[fh::Stop], geom: GradientGeom, angle: f
             stop
         })
         .collect();
-    let mut paint = GradientPaint::new(Gradient { kind, stops });
+    let mut paint = GradientPaint::new(Gradient::new(kind, stops));
     paint.angle = angle;
     paint.geom = Some(geom);
     Paint::Gradient(Box::new(paint))

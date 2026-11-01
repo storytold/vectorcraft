@@ -5788,3 +5788,5 @@ breakText	Glyphs	Гліфи
 @msg	the drawing has more objects than can be read; the rest were left out	у малюнку більше об’єктів, ніж можна прочитати; решту пропущено
 @msg	the FreeHand file claims more path geometry than can be read	файл FreeHand заявляє більше геометрії контуру, ніж можна прочитати
 @msg	the FreeHand file claims more objects than can be read	файл FreeHand заявляє більше об’єктів, ніж можна прочитати
+
+@msg	text expansion exceeded the safety limit	розгортання тексту перевищило межу безпеки

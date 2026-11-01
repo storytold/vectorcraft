@@ -5808,3 +5808,5 @@ breakText	Glyphs	Glifi
 @msg	the drawing has more objects than can be read; the rest were left out	il disegno ha più oggetti di quanti se ne possano leggere; il resto è stato lasciato fuori
 @msg	the FreeHand file claims more path geometry than can be read	il file FreeHand dichiara più geometria di tracciato di quanta se ne possa leggere
 @msg	the FreeHand file claims more objects than can be read	il file FreeHand dichiara più oggetti di quanti se ne possano leggere
+
+@msg	text expansion exceeded the safety limit	l’espansione del testo ha superato il limite di sicurezza

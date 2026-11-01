@@ -5791,3 +5791,5 @@ breakText	Glyphs	Glyph
 @msg	the drawing has more objects than can be read; the rest were left out	bản vẽ có nhiều đối tượng hơn mức có thể đọc; phần còn lại được bỏ qua
 @msg	the FreeHand file claims more path geometry than can be read	tệp FreeHand khai báo nhiều hình học đường dẫn hơn mức có thể đọc
 @msg	the FreeHand file claims more objects than can be read	tệp FreeHand khai báo nhiều đối tượng hơn mức có thể đọc
+
+@msg	text expansion exceeded the safety limit	phần mở rộng văn bản đã vượt giới hạn an toàn

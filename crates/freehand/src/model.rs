@@ -139,9 +139,12 @@ fn build(raw: &RawFile, limits: &Limits) -> Result<Document, Error> {
         depth_cap: u8::try_from(limits.max_depth).unwrap_or(DEPTH).min(DEPTH),
         // One visit of a record spends one unit. Sharing is not a cycle: the stack has
         // already dropped a record before its sibling names it again, so a list of the
-        // same child twice would otherwise expand as 2^n. Compound-path children are
-        // not visits of `one`, so they spend this same budget themselves.
+        // same child twice would otherwise expand as 2^n. A child list spends its
+        // length before that walk, and compound-path children spend this same budget.
         budget: limits.max_items,
+        // Copies of paragraph text. A shared text block is charged again each time a
+        // paragraph copies it, before the string is allocated.
+        text_budget: limits.max_decompressed,
         // Cubic segments still allowed across every path and shape. A shared path
         // record is charged again each time its geometry is built.
         geometry: limits.max_geometry,
@@ -171,6 +174,8 @@ struct Builder<'a> {
     depth_cap: u8,
     /// Visits of object records still allowed. Starts at `Limits::max_items`.
     budget: usize,
+    /// Bytes still allowed for copies of paragraph text. Starts at `Limits::max_decompressed`.
+    text_budget: usize,
     /// Cubic segments still allowed. Starts at `Limits::max_geometry`.
     geometry: usize,
     notes: BTreeMap<String, usize>,
@@ -191,13 +196,24 @@ impl Builder<'_> {
     }
 
     /// Spend `n` object visits from [`Limits::max_items`].
-    /// Compound-path children call this; a group walk spends one unit in [`Self::one`].
+    /// A child list spends its length here before the walk. Compound-path children
+    /// spend one unit per node. A group walk also spends one unit in [`Self::one`].
     fn spend_work(&mut self, n: usize) -> Result<(), Error> {
         if n > self.budget {
             return Err("the FreeHand file claims more objects than can be read".into());
         }
         self.budget -= n;
         Ok(())
+    }
+
+    /// Spend `n` bytes of expanded paragraph text from [`Limits::max_decompressed`].
+    /// False when the budget is spent; the caller keeps the runs already made.
+    fn spend_text(&mut self, n: usize) -> bool {
+        if n > self.text_budget {
+            return false;
+        }
+        self.text_budget -= n;
+        true
     }
 
     /// Reserve `n` cubic segments from [`Limits::max_geometry`], before the points are allocated.
@@ -296,9 +312,19 @@ impl Builder<'_> {
     }
 
     fn children(&mut self, list: u32, matrix: Matrix) -> Result<Vec<Item>, Error> {
-        let ids = self.list(list);
+        let n = match self.raw.get(list) {
+            Some(Rec::List { ids, .. }) => ids.len(),
+            _ => 0,
+        };
+        // Charge every entry before the walk, including zero ids and entries `one`
+        // then skips for a cycle or the depth cap. The ids stay in the record.
+        self.spend_work(n)?;
         let mut out = Vec::new();
-        for id in ids {
+        for i in 0..n {
+            let id = match self.raw.get(list) {
+                Some(Rec::List { ids, .. }) => ids.get(i).copied().unwrap_or(0),
+                _ => 0,
+            };
             out.extend(self.one(id, matrix)?);
         }
         Ok(out)
@@ -560,14 +586,30 @@ impl Builder<'_> {
         let paras = paras.clone();
         let mut out: Vec<TextRun> = Vec::new();
         for (i, para) in paras.iter().enumerate() {
+            let (block_id, mut runs) = match self.raw.get(*para) {
+                Some(Rec::Paragraph(p)) => (p.block, p.runs.clone()),
+                _ => {
+                    if i > 0
+                        && let Some(last) = out.last_mut()
+                    {
+                        last.text.push('\n');
+                    }
+                    continue;
+                }
+            };
+            // Twice the UTF-8 length: the owned paragraph, and the runs copied from it.
+            // Charged before the copy. A spent budget keeps the runs already made.
+            let block_len = self.raw.text(block_id).len();
+            if !self.spend_text(block_len.saturating_mul(2)) {
+                self.note_once("text expansion exceeded the safety limit");
+                return out;
+            }
             if i > 0
                 && let Some(last) = out.last_mut()
             {
                 last.text.push('\n');
             }
-            let Some(Rec::Paragraph(p)) = self.raw.get(*para) else { continue };
-            let block = self.raw.text(p.block).to_string();
-            let mut runs = p.runs.clone();
+            let block = self.raw.text(block_id).to_string();
             runs.sort_by_key(|(start, _)| *start);
             if runs.is_empty() {
                 out.push(self.run(&block, defaults));

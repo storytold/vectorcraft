@@ -526,6 +526,75 @@ fn a_style_referenced_twice_is_applied_once() {
     assert!(near(fill.r, 1.0) && near(fill.g, 0.0) && near(fill.b, 0.0));
 }
 
+/// A list of zero ids, named by several groups. The parser counts the list once. Each group
+/// walks it again, and those zeros have to spend the object budget or the walk is free.
+#[test]
+fn repeated_zero_id_lists_spend_the_work_budget() {
+    let once = read(&synth::repeated_zero_list(40, 1), Limits { max_items: 100, ..Limits::default() }).expect("one group of zeros fits");
+    let once_layer = once.layers.first().expect("layer");
+    assert!(once_layer.items.iter().all(|item| matches!(item, Item::Group(kids) if kids.is_empty())));
+    assert!(once.warnings.iter().all(|w| !w.contains("more objects")), "{:?}", once.warnings);
+
+    let limits = Limits { max_items: 100, ..Limits::default() };
+    let started = std::time::Instant::now();
+    let err = read(&synth::repeated_zero_list(40, 8), limits).expect_err("eight walks of the zero list pass the budget");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "zero-list read took {elapsed:?}");
+    assert_eq!(err.to_string(), "the FreeHand file claims more objects than can be read");
+}
+
+/// One paragraph, named several times. Each copy spends twice its UTF-8 length from the
+/// decompressed-size budget before the string is allocated. A spent budget keeps earlier runs.
+#[test]
+fn repeated_paragraphs_stop_at_the_text_budget() {
+    let text = "a".repeat(400);
+    let paras = 6u32;
+    let bytes = synth::repeated_paragraph(&text, paras);
+    let full = read(&bytes, Limits::default()).expect("text");
+    let shown = text_of(&full);
+    let want = std::iter::repeat_n(text.clone(), usize::try_from(paras).unwrap_or(0)).collect::<Vec<_>>().join("\n");
+    assert_eq!(shown, want);
+    assert!(full.warnings.iter().all(|w| !w.contains("text expansion")), "{:?}", full.warnings);
+
+    let stream = raw_stream_len(&bytes);
+    assert!(stream > text.len().saturating_mul(2), "the first paragraph has to fit in the stream budget");
+    assert!(stream < text.len().saturating_mul(2).saturating_mul(usize::try_from(paras).unwrap_or(0)), "later copies have to pass it");
+    let tight = Limits { max_decompressed: stream, ..Limits::default() };
+    let doc = read(&bytes, tight).expect("bounded text still opens");
+    let kept = text_of(&doc);
+    assert!(kept.starts_with(&text), "runs already produced stay: {kept:?}");
+    assert!(kept.len() < want.len(), "later copies were not taken: {kept:?}");
+    assert_eq!(doc.warnings.iter().filter(|w| w.contains("text expansion exceeded the safety limit")).count(), 1, "{:?}", doc.warnings);
+}
+
+fn text_of(doc: &crate::Document) -> String {
+    let mut out = String::new();
+    fn walk(items: &[Item], out: &mut String) {
+        for item in items {
+            match item {
+                Item::Text(text) => {
+                    for run in &text.runs {
+                        out.push_str(&run.text);
+                    }
+                }
+                Item::Group(kids) | Item::ClipGroup { children: kids, .. } => walk(kids, out),
+                Item::Path(_) | Item::Compound(_) => {}
+            }
+        }
+    }
+    for layer in &doc.layers {
+        walk(&layer.items, &mut out);
+    }
+    out
+}
+
+/// FreeHand 8 stores the record stream raw. Its length is the data block after the 12-byte header.
+fn raw_stream_len(bytes: &[u8]) -> usize {
+    let Some(head) = bytes.get(8..12) else { return 0 };
+    let data_len = u32::from_be_bytes([head[0], head[1], head[2], head[3]]);
+    usize::try_from(data_len).unwrap_or(0).saturating_sub(12)
+}
+
 /// Writes synthetic fixtures into `$FREEHAND_SEED_DIR` for a fuzz corpus. Does nothing when the
 /// variable is unset. Not run by `cargo test`.
 #[test]

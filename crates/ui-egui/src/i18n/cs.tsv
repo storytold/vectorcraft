@@ -6188,3 +6188,5 @@ breakText	Glyphs	Glyfy
 @msg	the drawing has more objects than can be read; the rest were left out	kresba má více objektů, než lze přečíst; zbytek byl vynechán
 @msg	the FreeHand file claims more path geometry than can be read	soubor FreeHand uvádí více geometrie cesty, než lze přečíst
 @msg	the FreeHand file claims more objects than can be read	soubor FreeHand uvádí více objektů, než lze přečíst
+
+@msg	text expansion exceeded the safety limit	rozšíření textu překročilo bezpečnostní limit

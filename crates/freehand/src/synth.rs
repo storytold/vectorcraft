@@ -539,6 +539,106 @@ pub fn repeated_compound(children: u32, nodes: u32, copies: u32) -> Vec<u8> {
     pack(&records, block_id, props)
 }
 
+/// `copies` groups on one layer, each naming the same list of `entries` zero ids.
+/// The list is stored once. Walking it again spends the object budget for every zero.
+pub fn repeated_zero_list(entries: u32, copies: u32) -> Vec<u8> {
+    let entries = entries.clamp(1, 4_096);
+    let copies = copies.clamp(1, 64);
+    let mut records: Vec<(String, Vec<u8>)> = Vec::new();
+    records.push(("MName".into(), mname("pages")));
+    records.push(("MName".into(), mname("Ink")));
+    let zeros = vec![0u32; usize::try_from(entries).unwrap_or(0)];
+    let list_id = push(&mut records, "MList", list(&zeros));
+    let mut groups = Vec::new();
+    for _ in 0..copies {
+        groups.push(push(&mut records, "Group", group(list_id, 0)));
+    }
+    let layer_list = push(&mut records, "MList", list(&groups));
+    let layer = push(&mut records, "Layer", layer(layer_list, 2));
+    let layers = push(&mut records, "MList", list(&[layer]));
+    let page_id = push(&mut records, "VMpObj", page(0.0, 0.0, 100.0, 100.0));
+    let pages = push(&mut records, "MList", list(&[page_id]));
+    let props = push(&mut records, "PropLst", prop_list(1, pages));
+    let block_id = push(&mut records, "Block", block(layers));
+    pack(&records, block_id, props)
+}
+
+/// One text block, named `paras` times from one story, on one text column.
+/// FreeHand 8, so the record stream is stored raw. The paragraph is stored once.
+pub fn repeated_paragraph(text: &str, paras: u32) -> Vec<u8> {
+    let paras = paras.clamp(1, 64);
+    let mut records: Vec<(String, Vec<u8>)> = Vec::new();
+    records.push(("MName".into(), mname("pages")));
+    records.push(("MName".into(), mname("Ink")));
+    let block = push(&mut records, "TextBlok", text_blok(text));
+    let para = push(&mut records, "Paragraph", paragraph(block));
+    let ids = vec![para; usize::try_from(paras).unwrap_or(0)];
+    let story = push(&mut records, "TString", tstring(&ids));
+    let column = push(&mut records, "TextColumn", text_column(story));
+    let layer_list = push(&mut records, "MList", list(&[column]));
+    let layer = push(&mut records, "Layer", layer(layer_list, 2));
+    let layers = push(&mut records, "MList", list(&[layer]));
+    let page_id = push(&mut records, "VMpObj", page(0.0, 0.0, 200.0, 200.0));
+    let pages = push(&mut records, "MList", list(&[page_id]));
+    let props = push(&mut records, "PropLst", prop_list(1, pages));
+    let block_id = push(&mut records, "Block", block_at(layers, 8));
+    pack_at(&records, block_id, props, 8)
+}
+
+fn text_blok(text: &str) -> Vec<u8> {
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let len = units.len().min(usize::from(u16::MAX));
+    let size = len.div_ceil(2).max(1);
+    let body = size.saturating_mul(4);
+    let mut w = Buf(Vec::new());
+    w.u16(u16::try_from(size).unwrap_or(1));
+    w.u16(u16::try_from(len).unwrap_or(0));
+    for u in units.iter().take(len) {
+        w.u16(*u);
+    }
+    let used = len.saturating_mul(2);
+    if body > used {
+        w.zeros(body - used);
+    }
+    w.0
+}
+
+fn paragraph(block: u32) -> Vec<u8> {
+    let mut w = Buf(Vec::new());
+    w.u16(0);
+    w.u16(0);
+    w.u16(0);
+    w.id(0);
+    w.id(block);
+    w.0
+}
+
+fn tstring(paras: &[u32]) -> Vec<u8> {
+    let mut w = Buf(Vec::new());
+    let n = u16::try_from(paras.len()).unwrap_or(0);
+    w.u16(n);
+    w.u16(n);
+    w.zeros(16);
+    for id in paras {
+        w.id(*id);
+    }
+    w.0
+}
+
+fn text_column(story: u32) -> Vec<u8> {
+    let mut w = Buf(Vec::new());
+    w.zeros(4);
+    w.u16(0);
+    w.u16(0);
+    w.id(0);
+    w.id(0);
+    w.zeros(8);
+    w.id(0);
+    w.id(story);
+    w.id(0);
+    w.0
+}
+
 /// `levels` groups. Group `A_k` names the list `[A_{k-1}, A_{k-1}]`, and the bottom list names
 /// one path twice. The file stays small. Walking the sharing builds about `2^levels` objects.
 pub fn shared_groups(levels: u32) -> Vec<u8> {

@@ -6043,3 +6043,5 @@ breakText	Glyphs	Glify
 @msg	the drawing has more objects than can be read; the rest were left out	rysunek ma więcej obiektów, niż można odczytać; resztę pominięto
 @msg	the FreeHand file claims more path geometry than can be read	plik FreeHand deklaruje więcej geometrii ścieżki, niż można odczytać
 @msg	the FreeHand file claims more objects than can be read	plik FreeHand deklaruje więcej obiektów, niż można odczytać
+
+@msg	text expansion exceeded the safety limit	rozwinięcie tekstu przekroczyło limit bezpieczeństwa

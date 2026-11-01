@@ -6086,3 +6086,5 @@ breakText	Glyphs	Glif
 @msg	the drawing has more objects than can be read; the rest were left out	gambar memiliki lebih banyak objek daripada yang dapat dibaca; sisanya tidak disertakan
 @msg	the FreeHand file claims more path geometry than can be read	berkas FreeHand menyatakan lebih banyak geometri jalur daripada yang dapat dibaca
 @msg	the FreeHand file claims more objects than can be read	berkas FreeHand menyatakan lebih banyak objek daripada yang dapat dibaca
+
+@msg	text expansion exceeded the safety limit	perluasan teks melampaui batas keamanan

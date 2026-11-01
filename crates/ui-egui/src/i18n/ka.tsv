@@ -6177,3 +6177,5 @@ breakText	Glyphs	გლიფები
 @msg	the drawing has more objects than can be read; the rest were left out	ნახატს იმაზე მეტი ობიექტი აქვს, ვიდრე წაკითხვა შეიძლება; დანარჩენი გამოტოვებულია
 @msg	the FreeHand file claims more path geometry than can be read	FreeHand ფაილი იმაზე მეტ ტრაექტორიის გეომეტრიას აცხადებს, ვიდრე წაკითხვა შეიძლება
 @msg	the FreeHand file claims more objects than can be read	FreeHand ფაილი იმაზე მეტ ობიექტს აცხადებს, ვიდრე წაკითხვა შეიძლება
+
+@msg	text expansion exceeded the safety limit	ტექსტის გაშლამ უსაფრთხოების ზღვარი გადააჭარბა
