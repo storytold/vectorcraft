@@ -81,22 +81,8 @@ impl BlendHandles {
             Some(f) => f,
             None => OrientedBox::aligned(n.geometric_bounds_with(&doc.symbol_boxes())?),
         };
-        // The right edge of the box on the page: from its bottom corner up, with the outward
-        // normal the handle hangs off.
         let (rect, h) = (frame.rect, frame.rect.height());
-        if !(h.is_finite() && h > 1e-6) {
-            return None;
-        }
         let to_doc = frame.to_doc();
-        let edge_base = to_doc * Point::new(rect.x1, rect.y1);
-        // The unit vectors up the edge and off it, from the corners (a rotation keeps lengths).
-        let edge_up = (to_doc * Point::new(rect.x1, rect.y0) - edge_base) / h;
-        let edge_out = to_doc * Point::new(rect.x1 + 1.0, rect.y1) - edge_base;
-        let gap = HANDLE_GAP / zoom;
-        // The count handle rests at the height that matches the blend's count on the fixed
-        // 1..1000 scale (bottom is 1, top is 1000), so a blend with few steps sits low and a
-        // blend near 1000 sits at the top. A drag reads the pointer's height on the edge, and
-        // the handle stays where the released count lands instead of snapping back.
         // The handles sit where the steps go: on the spine when it is followed, else on the
         // straight lines between the key centres. A replaced spine hidden by Spine Never must not
         // stretch the distance the steps are spaced by (blend_expand measures the straight line).
@@ -111,6 +97,28 @@ impl BlendHandles {
         if !stops.iter().all(|s| s.is_finite()) {
             return None;
         }
+        // The right edge of the box on the page: from its bottom corner up, with the outward
+        // normal the handle hangs off. A flat box (two horizontal lines) has no height: give it a
+        // screen-sized fallback edge at the spine's right end, so its handles stay reachable.
+        let flat = !(h.is_finite() && h > 1e-6);
+        let (edge_base, edge_up, edge_out, edge_h) = if flat {
+            let (end, _) = spine.at(1.0);
+            let up = to_doc * Point::new(0.0, -1.0) - to_doc * Point::ZERO;
+            let out = to_doc * Point::new(1.0, 0.0) - to_doc * Point::ZERO;
+            let half = 12.0 / zoom;
+            (end - up * half, up, out, half * 2.0)
+        } else {
+            let base = to_doc * Point::new(rect.x1, rect.y1);
+            // The unit vectors up the edge and off it, from the corners (a rotation keeps lengths).
+            let up = (to_doc * Point::new(rect.x1, rect.y0) - base) / h;
+            let out = to_doc * Point::new(rect.x1 + 1.0, rect.y1) - base;
+            (base, up, out, h)
+        };
+        let gap = HANDLE_GAP / zoom;
+        // The count handle rests at the height that matches the blend's count on the fixed
+        // 1..1000 scale (bottom is 1, top is 1000), so a blend with few steps sits low and a
+        // blend near 1000 sits at the top. A drag reads the pointer's height on the edge, and
+        // the handle stays where the released count lands instead of snapping back.
         let pair_len = match (stops.first(), stops.get(1)) {
             (Some(a), Some(b)) => (b - a).abs(),
             _ => spine.length(),
@@ -123,7 +131,7 @@ impl BlendHandles {
         // scale, so the handle's height shows the count now. Dragging above the box keeps the
         // knob at the 1000 cap; releasing leaves it at the count's position.
         let steps_height = (steps_now as f64).ln() / STEPS_MAX.ln();
-        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, h, steps_height.clamp(0.0, 1.0));
+        let steps_at = steps_place(edge_base, edge_up, edge_out, gap, edge_h, steps_height.clamp(0.0, 1.0));
         // The Ease knob sits at the shape's halfway point under the easing, and the Colour handle
         // sits at the colour's halfway point on the spine's other side. The easing moves the steps
         // between any two keys (spine or not), so these show in every spine mode.
@@ -134,7 +142,7 @@ impl BlendHandles {
             let (shift, _) = spine.at(a + (b - a) * spec.color_position(0.5));
             EasingHandles { ease, color: shift + Vec2::new(-angle.sin(), angle.cos()) * (14.0 / zoom) }
         });
-        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h: h, spine, stops, easing })
+        Some(Self { id, steps_at, steps_now, edge_base, edge_up, edge_out, edge_gap: gap, edge_h, spine, stops, easing })
     }
 
     /// The handles of a single blend selected whole (`frame` is the bounding box shown).
@@ -485,6 +493,34 @@ mod tests {
 
     fn blend(mode: BlendSpineMode, spacing: BlendSpacing) -> (Document, NodeId) {
         blend_with(BlendSpec { spacing, spine_mode: mode, ..Default::default() })
+    }
+
+    /// Two horizontal 20 × 0 lines at y = 10 (x 0..20 and 100..120): the blend's box has no
+    /// height, but its spine runs 100 pt from (10, 10) to (110, 10).
+    fn flat_blend() -> (Document, NodeId) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let key = |id: NodeId, x: f64| {
+            let path = PathData::single(SubPath::polyline(&[Point::new(x, 10.0), Point::new(x + 20.0, 10.0)], false));
+            Arc::new(Node::path(id, path, Appearance::default_art()))
+        };
+        let (k1, k2, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(4), spine_mode: BlendSpineMode::Always, ..Default::default() };
+        let blend = Node::new(b, NodeKind::Blend { children: vec![key(k1, 0.0), key(k2, 100.0)], spec: Box::new(spec) });
+        d.insert(Some(l), 0, blend).unwrap();
+        (d, b)
+    }
+
+    #[test]
+    fn a_flat_blend_keeps_its_handles() {
+        let (d, b) = flat_blend();
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).expect("a flat blend still has handles");
+        assert!(h.steps_at.is_finite(), "{:?}", h.steps_at);
+        assert!(h.easing_handles().is_some(), "the Ease and Colour handles still show");
+        // The fallback edge is 24 screen points tall at the spine's right end, so the knob is
+        // reachable and a drag still sets a count.
+        assert!((h.edge_h - 24.0).abs() < 1e-9, "{}", h.edge_h);
+        assert!(h.steps_params(Point::new(h.steps_at.x, h.steps_at.y - 10.0))["steps"].as_u64().unwrap_or(0) > 4);
     }
 
     #[test]
