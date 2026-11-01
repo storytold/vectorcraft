@@ -945,6 +945,60 @@ fn texts(s: &Session) -> Vec<String> {
     art.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect()
 }
 
+/// A `.ai` saved without its PDF part whose layer `Art` holds a story in two area type frames
+/// (art x 10 to 90 and 110 to 190, y 10 to 90), then a band across the first frame (y 30 to 70),
+/// made a wrap object with no offset when `wrap` is set.
+fn wrapped_thread_ai(wrap: bool) -> Vec<u8> {
+    // The template box is centred at (100, 50), the canvas centre 8191.5: y runs down the canvas.
+    let canvas = |x: f64, y: f64| (x + 8091.5, 8241.5 - y);
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        let corners = [canvas(x0, y1), canvas(x0, y0), canvas(x1, y0), canvas(x1, y1), canvas(x0, y1)];
+        let segments: Vec<String> =
+            corners.windows(2).map(|w| format!("{} {} {} {} {} {} {} {}", w[0].0, w[0].1, w[0].0, w[0].1, w[1].0, w[1].1, w[1].0, w[1].1)).collect();
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", segments.join(" "))
+    };
+    let story = "Words keep flowing from the first frame into the second one, line after line, until the story ends here. ".repeat(3);
+    let n = story.chars().count() + 1;
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {} {} ] >> >>\n\
+         /1 << /1 [ << /0 << /0 ({story}\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 {n} >> ] >> \
+         /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /1 10.0 >> >> >> /1 {n} >> ] >> >> /1 << /0 [ << /0 0 >> << /0 1 >> ] >> >> ] /2 << /1 12.0 >> >>\n",
+        rect(10.0, 10.0, 90.0, 90.0),
+        rect(110.0, 10.0, 190.0, 90.0)
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let frame = |f: u32| format!("/AI11Text :\n0 /FreeUndo ,\n{f} /FrameIndex ,\n0 /StoryIndex ,\n;\n");
+    let dict = if wrap { "%_/ArtDictionary :\n%_0 /Real (AI11TextWrapOffset) ,\n%_0 /Bool (AI11TextWrapInvert) ,\n%_;\n%_\n" } else { "" };
+    let art = format!("{}{}0.5 g\n{}f\n{dict}", frame(0), frame(1), ai::rect(10.0, 30.0, 90.0, 70.0));
+    let body = format!(
+        "%AI3_TemplateBox: 100 50 100 50\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n",
+        ai::layer("Art", &art),
+        lines.join("\n")
+    );
+    ai::ai(&compressed(ai::editing_data(200.0, 100.0, &body).as_bytes()), PLACEHOLDER)
+}
+
+/// Threaded area type below a wrap object flows around it when the file opens: the text the wrap
+/// object pushes out of the first frame goes on in the second.
+#[test]
+fn wrap_threaded_area_after_open() {
+    let second = |wrap: bool| {
+        let mut s = Session::new();
+        let r = open(&mut s, "thread.ai", &wrapped_thread_ai(wrap), json!({})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(doc.text_threads.len(), 1, "{r}");
+        let text = |id: NodeId| match &doc.node(id).unwrap().kind {
+            NodeKind::Text(t) => t.clone(),
+            _ => panic!("area type"),
+        };
+        let (first, second) = (text(doc.text_threads[0][0]), text(doc.text_threads[0][1]));
+        assert_eq!(first.wrap.len(), usize::from(wrap), "{r}");
+        second.plain_text().chars().count()
+    };
+    let (plain, wrapped) = (second(false), second(true));
+    assert!(wrapped > plain, "the second frame holds more of the story: {plain} → {wrapped}");
+}
+
 /// The note that glyphs were kept as outlines is dropped when the type comes from the editing data's
 /// text document, and stays with the PDF part alone.
 #[test]

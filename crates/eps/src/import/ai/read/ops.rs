@@ -125,11 +125,15 @@ impl<'a> Reader<'a> {
                 self.end_path_quietly();
                 self.open(Kind::Compound, hidden)?
             }
+            "*w" => {
+                self.end_path_quietly();
+                self.open(Kind::Wrap, hidden)?
+            }
             "q" => {
                 self.end_path_quietly();
                 self.open(Kind::Clip, hidden)?
             }
-            "U" | "*U" | "Q" => self.end_container(w, hidden)?,
+            "U" | "*U" | "*W" | "Q" => self.end_container(w, hidden)?,
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {

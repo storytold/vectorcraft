@@ -12,6 +12,7 @@ mod object;
 mod para_style;
 mod runs;
 mod tabs_lists;
+mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
@@ -22,6 +23,7 @@ pub use para_style::{
 };
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
 pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};
+pub use wrap::{resolve_wrap, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///

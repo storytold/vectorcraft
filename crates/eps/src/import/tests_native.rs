@@ -2697,6 +2697,109 @@ fn threaded_area_type_flows_through_its_frames() {
     assert_eq!(r.document.text_threads, [ids]);
 }
 
+/// A filled bar of the art from x 40 to 60, the whole page high, made a wrap object with an offset
+/// of 2 points when `wrap` is set.
+fn wrap_bar(wrap: bool) -> String {
+    let dict = "%_/ArtDictionary :\n%_0 /Bool (AI11TextWrapInvert) ,\n%_2 /Real (AI11TextWrapOffset) ,\n%_;\n%_\n";
+    format!("0 0 1 0 k\n40 0 m\n40 100 L\n60 100 L\n60 0 L\nf\n{}", if wrap { dict } else { "" })
+}
+
+/// A story long enough to fill several lines of a 10-point area type frame.
+const WRAP_STORY: &str = "Text flows around the bar in the middle of its frame when the bar is a wrap object\\r";
+
+/// The `.ai` editing data of area type from x 10 to 90 of the art, with `below` before it and
+/// `above` after it in its layer, and `other` on a layer above → the document read from it alone.
+fn wrapped_area(below: &str, above: &str, other: Option<&str>) -> Document {
+    let doc = document_of(&[area_frame(10.0, 10.0, 90.0, 90.0)], &[story(WRAP_STORY, &[0], "/0 0", "/1 10.0")]);
+    let mut layers = layer("Art", true, &format!("{below}\n{}{above}", frame_object(0, 0)));
+    if let Some(other) = other {
+        layers += &layer("Top", true, other);
+    }
+    let (d, notes) = crate::ai_alone(&private(&native_with_text(&layers, &doc))).unwrap();
+    assert!(!notes.iter().any(|n| n.contains("couldn't be read")), "{notes:?}");
+    d
+}
+
+/// The area type of `d` (its first text object).
+fn area_text(d: &Document) -> vectorcraft_doc::TextObject {
+    let mut found = None;
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind
+            && found.is_none()
+        {
+            found = Some((**t).clone());
+        }
+    });
+    found.expect("area type")
+}
+
+#[test]
+fn wrap_area_after_open() {
+    let d = wrapped_area("", &wrap_bar(true), None);
+    let t = area_text(&d);
+    assert_eq!(t.wrap.len(), 1, "one wrap shape, the bar's");
+    assert_eq!(t.wrap[0].wrap, vectorcraft_doc::TextWrap { offset: 2.0, invert: false });
+    // Each line keeps to one side of the bar and its 2-point offset.
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.lines.len() > 1);
+    let spans: Vec<(f64, f64)> = lay.lines.iter().map(|l| l.avail).collect();
+    assert!(spans.iter().all(|(a, b)| *b <= 38.0 + 1e-6 || *a >= 62.0 - 1e-6), "{spans:?}");
+    assert!(spans.iter().any(|(_, b)| *b <= 38.0 + 1e-6) && spans.iter().any(|(a, _)| *a >= 62.0 - 1e-6), "{spans:?}");
+    // A wrap object below the type, or on another layer, doesn't wrap it.
+    assert!(area_text(&wrapped_area(&wrap_bar(true), "", None)).wrap.is_empty());
+    assert!(area_text(&wrapped_area("", "", Some(&wrap_bar(true)))).wrap.is_empty());
+}
+
+#[test]
+fn no_wrap_metadata_unchanged() {
+    let d = wrapped_area("", &wrap_bar(false), None);
+    let t = area_text(&d);
+    assert!(t.wrap.is_empty());
+    let mut wraps = 0;
+    d.walk(|n| wraps += usize::from(n.extras().wrap.is_some()));
+    assert_eq!(wraps, 0);
+    // The lines span the frame, through the bar.
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(
+        lay.lines.iter().all(|l| l.avail.0 <= 10.0 + 1e-6 && l.avail.1 >= 90.0 - 1e-6),
+        "{:?}",
+        lay.lines.iter().map(|l| l.avail).collect::<Vec<_>>()
+    );
+}
+
+/// A text object that is itself a wrap object keeps its options when its type is made from the
+/// text document.
+#[test]
+fn a_wrapped_text_object_stays_a_wrap_object() {
+    let doc = document_of(
+        &[area_frame(10.0, 10.0, 90.0, 90.0), point_frame(45.0, 50.0)],
+        &[story(WRAP_STORY, &[0], "/0 0", "/1 10.0"), story("Mid\\r", &[1], "/0 0", "/1 10.0")],
+    );
+    let dict = "%_/ArtDictionary :\n%_0 /Bool (AI11TextWrapInvert) ,\n%_4 /Real (AI11TextWrapOffset) ,\n%_;\n%_\n";
+    let layers = layer("Art", true, &format!("{}{}{dict}", frame_object(0, 0), frame_object(1, 0)));
+    let (d, notes) = crate::ai_alone(&private(&native_with_text(&layers, &doc))).unwrap();
+    let kids = d.layers[0].children().unwrap();
+    assert_eq!(kids.len(), 2, "{notes:?}");
+    assert_eq!(kids[1].extras().wrap, Some(vectorcraft_doc::TextWrap { offset: 4.0, invert: false }), "{notes:?}");
+    let NodeKind::Text(area) = &kids[0].kind else { panic!("area type") };
+    assert_eq!(area.wrap.len(), 1, "the area type wraps around the text object above it");
+}
+
+/// A Large Canvas editing copy is written at 1/N scale: the wrap offset is scaled with the art.
+#[test]
+fn wrap_offset_on_a_large_canvas() {
+    let dict = "%_/ArtDictionary :\n%_0.5 /Real (AI11TextWrapOffset) ,\n%_0 /Bool (AI11TextWrapInvert) ,\n%_;\n%_\n";
+    let art = native_large_canvas(10.0, 10.0, &layer("Art", true, &format!("0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf\n{dict}")));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    assert_eq!(kids[0].extras().wrap.map(|w| w.offset), Some(5.0), "{:?}", r.warnings);
+    // A `.ai`'s art is scaled when its page is read in its units: the offset with it.
+    let art = native_large_canvas(100.0, 10.0, &layer("Art", true, &format!("{}\n{dict}", square(10, 10))));
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.layers[0].children().unwrap()[0].extras().wrap.map(|w| w.offset), Some(0.5), "{w:?}");
+}
+
 /// Replacing a group containing either threaded frame must use the PDF page instead.
 #[test]
 fn unread_group_holding_threaded_frame_falls_back() {
