@@ -139,6 +139,10 @@ pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
     PenPose { tilt, ..pose }
 }
 
+/// One pointer move of a frame: its position, and the pressure and the tilt and rotation kept for
+/// it, if any ([`frame_moves`]).
+pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
+
 /// The positions this frame's pointer moves passed through before its last one, each with the
 /// pen force a touch event gave just before it, or the pressure the host's feed kept for that move
 /// ([`StylusFeed::take_moves`], macOS), if any, and the tilt and rotation the feed kept for that
@@ -146,7 +150,7 @@ pub(crate) fn pose_on_page(pose: PenPose, xf: &Xf) -> PenPose {
 /// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
 /// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
 /// too few for a low Fidelity to follow the hand (#3328).
-pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<(Pos2, Option<f32>, Option<PenPose>)>, Option<PenPose>) {
+pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
         let mut moves = vec![];
@@ -185,7 +189,7 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<(Pos2, O
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
 /// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
 /// position come second, for every tool.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<(Pos2, Option<f32>, Option<PenPose>)>, Option<PenPose>) {
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<FrameMove>, Option<PenPose>) {
     let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref());
     (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }

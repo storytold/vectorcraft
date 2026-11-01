@@ -6810,7 +6810,13 @@ fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let moved = |tilt: f32| feed.set_move(crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() });
+    let moved = |tilt: f32| {
+        feed.set_move(crate::stylus::PenSample {
+            pressure: 0.5,
+            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) },
+            ..Default::default()
+        })
+    };
     moved(10.0);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
     moved(20.0);
@@ -6821,7 +6827,12 @@ fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
     frame(
         &mut app,
         &ctx,
-        vec![egui::Event::PointerMoved(at(380.0)), egui::Event::PointerMoved(at(420.0)), egui::Event::PointerMoved(at(460.0)), button(at(460.0), false)],
+        vec![
+            egui::Event::PointerMoved(at(380.0)),
+            egui::Event::PointerMoved(at(420.0)),
+            egui::Event::PointerMoved(at(460.0)),
+            button(at(460.0), false),
+        ],
     );
     let (cmd, p) = app.session.journal.last().unwrap().clone();
     assert_eq!(cmd, "path.freehand");
@@ -6845,7 +6856,8 @@ fn the_last_move_of_a_frame_keeps_its_own_tilt() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let sample = |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    let sample =
+        |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
     feed.set_move(sample(10.0));
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
     feed.set_move(sample(20.0));
@@ -6856,8 +6868,7 @@ fn the_last_move_of_a_frame_keeps_its_own_tilt() {
     frame(&mut app, &ctx, vec![button(at(380.0), false)]);
     let (cmd, p) = app.session.journal.last().unwrap().clone();
     assert_eq!(cmd, "path.freehand");
-    let points: Vec<(f64, f64)> =
-        p["points"].as_array().unwrap().iter().filter_map(|s| Some((s.get(0)?.as_f64()?, s.get(3)?.as_f64()?))).collect();
+    let points: Vec<(f64, f64)> = p["points"].as_array().unwrap().iter().filter_map(|s| Some((s.get(0)?.as_f64()?, s.get(3)?.as_f64()?))).collect();
     let last_move = points.iter().find(|(x, _)| (x - 380.0).abs() < 0.5);
     assert!(last_move.is_some_and(|(_, t)| (t - 30.0).abs() < 0.01), "{points:?}");
 }
