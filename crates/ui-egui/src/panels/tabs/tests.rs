@@ -1046,33 +1046,38 @@ fn above_text_moves_a_panel_floating_in_its_own_window() {
     assert_eq!([native[2], native[3]], [g.rect[2], g.rect[3]]);
 }
 
-/// Text near the top of the window: Position Panel Above Text keeps the panel's bar inside the
-/// window, so neither the panel nor its OS window goes above the screen.
+/// Text near the top of the window: Position Panel Above Text puts the panel just below the text,
+/// so neither the panel nor its OS window goes above the screen and the text stays in view. Text
+/// with no room below it either gets the panel at the window's top.
 #[test]
 fn above_text_keeps_the_panel_bar_in_the_window() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
-    app.session.execute("text.create", &json!({"x": 40, "y": 10, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
-    if let Some(v) = app.view_mut() {
-        v.zoom = 1.0;
+    for (text_height, below) in [(100.0, true), (760.0, false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+        app.session.execute("text.create", &json!({"x": 40, "y": 10, "text": "a	b", "area": {"width": 300, "height": text_height}})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+        if let Some(v) = app.view_mut() {
+            v.zoom = 1.0;
+        }
+        let (node, _, span) = current(&app).unwrap();
+        let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let frame = xf.rect_to_screen(node.geometric_bounds().unwrap());
+        assert!(frame.top() < 240.0, "no room above the text");
+        let ctx = egui::Context::default();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let mut layout = app.ui.docking.clone().unwrap();
+        let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        let top = if below { frame.bottom() + 6.0 } else { 0.0 };
+        assert_eq!(window.rect[1], top, "text {text_height} high");
+        window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
+        app.ui.docking = Some(layout);
+        let mut raw = egui::RawInput::default();
+        raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
+            Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
+        ctx.run_ui(raw, |_| {}).textures_delta.clear();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let layout = app.ui.docking.clone().unwrap();
+        let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        assert_eq!(g.native.unwrap()[1], 100.0 + top, "text {text_height} high: the OS window");
     }
-    let (node, _, span) = current(&app).unwrap();
-    let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
-    assert!(xf.rect_to_screen(node.geometric_bounds().unwrap()).top() < 240.0, "no room above the text");
-    let ctx = egui::Context::default();
-    above_text(&mut app, &ctx, &node, span).unwrap();
-    let mut layout = app.ui.docking.clone().unwrap();
-    let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
-    assert_eq!(window.rect[1], 0.0, "the panel's bar at the window's top");
-    window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
-    app.ui.docking = Some(layout);
-    let mut raw = egui::RawInput::default();
-    raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
-        Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
-    ctx.run_ui(raw, |_| {}).textures_delta.clear();
-    above_text(&mut app, &ctx, &node, span).unwrap();
-    let layout = app.ui.docking.clone().unwrap();
-    let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
-    assert_eq!(g.native.unwrap()[1], 100.0, "the OS window's bar at the main window's content top");
 }
