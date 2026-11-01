@@ -833,6 +833,43 @@ fn unread_object_on_second_artboard_takes_second_page_art() {
 }
 
 #[test]
+fn page_art_from_second_artboard_moves_its_pattern_tile() {
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let second = "u\n0 0 1 0 k\n50 -100 m\n54 -100 L\n54 -96 L\n50 -96 L\nf\nZZ\nU";
+    let art = native(&(boards.to_string() + dots + &layer("Live", true, &square(10, 10)) + &layer("Mixed", true, second)));
+    let (editing, _) = crate::ai_alone(&private(&native(&format!("{dots}{}", layer("Live", true, &square(10, 10)))))).unwrap();
+    let source = editing.pattern("Dots").unwrap();
+    let mut page = pdf_part(10.0, 86.0);
+    let mut pattern = source.clone();
+    pattern.art = source.art.iter().map(|node| std::sync::Arc::new(page.reid(node))).collect();
+    page.patterns.push(pattern);
+    let mut board = page.artboards[0].clone();
+    (board.id, board.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    page.artboards.push(board);
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(170.0, 46.0, 174.0, 50.0));
+    let paint = vectorcraft_color::Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    let appearance = vectorcraft_doc::Appearance {
+        items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint))],
+        ..Default::default()
+    };
+    let node = Node::path(page.alloc_id(), path, appearance);
+    let layer = page.layers[0].id;
+    page.insert(Some(layer), 1, node).unwrap();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let replacement = &doc.layers[1].children().unwrap()[0].children().unwrap()[0];
+    assert_eq!(replacement.visual_bounds().unwrap(), vectorcraft_geom::Rect::new(50.0, 196.0, 54.0, 200.0));
+    let Some(vectorcraft_color::Paint::Pattern { xf, .. }) = replacement.appearance.fill().map(|f| &f.paint) else {
+        panic!("the page art's pattern fill is kept: {:?}", replacement.appearance);
+    };
+    assert_eq!(*xf, vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(-120.0, 150.0)));
+}
+
+#[test]
 fn unknown_operator_between_objects_falls_back() {
     let body = format!("{}\nZZ\n{}", square(50, 10), square(70, 10));
     let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Mixed", true, &body)));
@@ -1441,6 +1478,38 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     assert_eq!(rects, [vectorcraft_geom::Rect::new(0.0, 0.0, 1000.0, 1000.0), vectorcraft_geom::Rect::new(0.0, 1500.0, 1000.0, 2500.0)]);
     let moved = squares(&d);
     assert!((moved[1] - vectorcraft_geom::Point::new(100.0, 1600.0)).hypot() < 1e-6, "the second's art goes with its page: {moved:?}");
+}
+
+#[test]
+fn art_moved_with_its_page_moves_its_pattern_tile() {
+    // Two 100-point artboards, the second 50 below the first; an operator this doesn't know, so
+    // the layers aren't read.
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let art = native(&(boards.to_string() + &layer("Art", true, &(square(10, 10) + "\n1 Zz"))));
+    // The PDF part: the second page 20 points right of the first, with a pattern-filled square.
+    let mut pdf = pdf_part(10.0, 10.0);
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page);
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(130.0, 10.0, 134.0, 14.0));
+    let paint = vectorcraft_color::Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    let appearance = vectorcraft_doc::Appearance {
+        items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint))],
+        ..Default::default()
+    };
+    let (id, layer_id) = (pdf.alloc_id(), pdf.layers[0].id);
+    pdf.insert(Some(layer_id), 1, Node::path(id, path, appearance)).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(!read, "{w:?}");
+    let square = &d.layers[0].children().unwrap()[1];
+    assert_eq!(square.visual_bounds().unwrap().origin(), vectorcraft_geom::Point::new(10.0, 160.0));
+    let Some(vectorcraft_color::Paint::Pattern { xf, .. }) = square.appearance.fill().map(|f| &f.paint) else {
+        panic!("the square keeps its pattern fill: {:?}", square.appearance);
+    };
+    assert_eq!(*xf, vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(-120.0, 150.0)));
 }
 
 #[test]
@@ -2124,6 +2193,41 @@ fn type_on_a_later_artboard_of_an_ai_file_goes_to_its_text_object() {
     let [.., e, f] = texts[0].xf.as_coeffs();
     assert!((e - 58.5).abs() < 1e-6 && (f - 200.0).abs() < 1e-6, "{:?}", texts[0].xf);
     assert!(!w.iter().any(|w| w.contains("with another's") || w.contains("doesn't draw")), "{w:?}");
+}
+
+#[test]
+fn page_type_on_a_later_artboard_moves_its_pattern_tile() {
+    // As above, with a frame this doesn't read, so the text object takes the page's type, which
+    // has a pattern fill.
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let doc = last_frame_unread(&text_document(&[("Hi there\r", 0, (8200.0, 8341.5), (0.0, 0.0), 0.0)]));
+    let art = native_with_text(&(boards.to_string() + &layer("Art", true, &(square(10, 10) + &text_object(0)))), &doc);
+    let mut pdf = pdf_part(10.0, 86.0);
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page);
+    let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(178.5, 50.0), "Hi there", style);
+    let (id, layer_id) = (pdf.alloc_id(), pdf.layers[0].id);
+    let mut node = Node::new(id, NodeKind::Text(Box::new(text)));
+    let paint = vectorcraft_color::Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    node.appearance = vectorcraft_doc::Appearance {
+        items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint))],
+        ..Default::default()
+    }
+    .into();
+    pdf.insert(Some(layer_id), 1, node).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let texts: Vec<&Node> = d.layers[0].children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).map(|n| &**n).collect();
+    assert_eq!(texts.len(), 1, "{w:?}");
+    let Some(vectorcraft_color::Paint::Pattern { xf, .. }) = texts[0].appearance.fill().map(|f| &f.paint) else {
+        panic!("the page's type keeps its pattern fill: {:?}", texts[0].appearance);
+    };
+    assert_eq!(*xf, vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(-120.0, 150.0)));
 }
 
 /// A global process colour (`Xk`) or a pattern fill on a sublayer no longer sends a `.ai` to its

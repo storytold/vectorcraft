@@ -1,4 +1,4 @@
-use super::build::{Page, build, build_from};
+use super::build::{PAGE_MOVE, Page, build, build_from};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -204,7 +204,7 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
         let fit = |p: &Rect| (p.intersect(r).area().max(0.0), -(p.center() - r.center()).hypot());
         let Some((i, _)) = pages.iter().map(fit).enumerate().max_by(|(_, a), (_, b)| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1))) else { continue };
         if let Some(v) = moves.get(i).filter(|v| **v != Vec2::ZERO) {
-            Arc::make_mut(child).transform(Affine::translate(*v), false);
+            Arc::make_mut(child).transform(Affine::translate(*v), PAGE_MOVE);
         }
     }
 }
