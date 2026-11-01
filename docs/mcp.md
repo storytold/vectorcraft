@@ -5257,8 +5257,8 @@ dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `rotation`,
 `language`, `section` (`general`, `basic` or `advanced`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
-Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000), `baseline_shift` (points,
--1296 to 1296), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+Advanced Character Formats holds `h_scale` and `v_scale` (percent, above 0 and at most 4000000),
+`baseline_shift` (points, -4000000 to 4000000), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.

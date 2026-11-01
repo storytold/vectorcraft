@@ -5904,6 +5904,7 @@ anchor	Points:	Точки:
 	Horizontal Scale	Масштаб по горизонтали
 	Vertical Scale	Масштаб по вертикали
 @msg	{label} must be a number from {min} to {max}	{label} должно быть числом от {min} до {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

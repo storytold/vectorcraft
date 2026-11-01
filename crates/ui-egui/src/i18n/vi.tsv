@@ -5529,6 +5529,7 @@ anchor	Points:	Điểm:
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

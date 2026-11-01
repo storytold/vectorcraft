@@ -5927,6 +5927,7 @@ anchor	Points:	Body:
 	Horizontal Scale	Vodorovná změna velikosti
 	Vertical Scale	Svislá změna velikosti
 @msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

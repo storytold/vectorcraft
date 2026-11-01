@@ -5546,6 +5546,7 @@ anchor	Points:	Punti:
 	Horizontal Scale	Scala orizzontale
 	Vertical Scale	Scala verticale
 @msg	{label} must be a number from {min} to {max}	{label} deve essere un numero da {min} a {max}
+@msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

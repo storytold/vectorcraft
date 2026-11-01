@@ -151,16 +151,16 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             if ["size", "leading"].contains(&key) && n < 0.1 {
                 return Err(format!("{label} must be a number of at least 0.1"));
             }
-            // The limits text.setRangeStyle gives scales and baseline shift.
-            let limits = match key {
-                "h_scale" | "v_scale" => Some((1.0, 10000.0)),
-                "baseline_shift" => Some((-1296.0, 1296.0)),
-                _ => None,
-            };
-            if let Some((min, max)) = limits.filter(|(min, max)| !(*min..=*max).contains(&n)) {
+            // The limits the document model keeps scales and baseline shift in.
+            let max = vectorcraft_doc::MAX_COORD;
+            if ["h_scale", "v_scale"].contains(&key) && !(n > 0.0 && n <= max) {
+                return Err(format!("{label} must be a number above 0 and at most {max}"));
+            }
+            let min = -max;
+            if key == "baseline_shift" && !(min..=max).contains(&n) {
                 return Err(format!("{label} must be a number from {min} to {max}"));
             }
-            // An angle from -180 to 180 degrees, as text.setRangeStyle stores it.
+            // An angle from -180 to 180 degrees, as text.setFormat stores it.
             let n = if key == "rotation" { (n + 180.0).rem_euclid(360.0) - 180.0 } else { n };
             Ok(Some(json!(n)))
         }
@@ -265,8 +265,7 @@ fn advanced_attrs(
     for key in ADVANCED {
         attrs.remove(*key);
     }
-    // A field still as it opened keeps its value below without a check: text in a scaled type
-    // object can hold a value outside the limits a typed one has.
+    // A field still as it opened keeps its original value below without a check.
     let unchanged = |key: &str| !reset && d.fields.get(key) == original_fields.get(key);
     for key in ADVANCED_NUMBERS {
         if unchanged(key) {
@@ -698,7 +697,7 @@ mod tests {
             json!({"h_scale": 100.0, "rotation": 0.0, "language": null}),
             json!({"v_scale": 50.0, "baseline_shift": -3.0, "language": "de"}),
             json!({"language": "x-file", "size": 12.0}),
-            // Captured from text in a scaled type object.
+            // Values a style captures from text in a scaled type object, Size and Leading below 0.1 included.
             json!({"h_scale": 20000.0, "baseline_shift": 3000.0, "size": 0.05, "leading": 0.05}),
         ] {
             let d = dialog_for(original.clone());
@@ -726,10 +725,11 @@ mod tests {
     #[test]
     fn advanced_numbers_outside_their_limits_are_errors() {
         for (key, value, message) in [
-            ("h_scale", "0", "Horizontal Scale must be a number from 1 to 10000"),
-            ("v_scale", "10001", "Vertical Scale must be a number from 1 to 10000"),
-            ("baseline_shift", "1300", "Baseline Shift must be a number from -1296 to 1296"),
-            ("baseline_shift", "-1300", "Baseline Shift must be a number from -1296 to 1296"),
+            ("h_scale", "0", "Horizontal Scale must be a number above 0 and at most 4000000"),
+            ("h_scale", "-5", "Horizontal Scale must be a number above 0 and at most 4000000"),
+            ("v_scale", "4000001", "Vertical Scale must be a number above 0 and at most 4000000"),
+            ("baseline_shift", "4000001", "Baseline Shift must be a number from -4000000 to 4000000"),
+            ("baseline_shift", "-4000001", "Baseline Shift must be a number from -4000000 to 4000000"),
             ("rotation", "inf", "Character Rotation must be a number"),
             ("h_scale", "wide", "Horizontal Scale must be a number"),
         ] {
@@ -737,6 +737,11 @@ mod tests {
             d.fields.insert(key.into(), json!(value));
             assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
         }
+        let mut d = dialog_for(json!({}));
+        for (key, value) in [("h_scale", "0.5"), ("v_scale", "4000000"), ("baseline_shift", "-4000000"), ("rotation", "-200")] {
+            d.fields.insert(key.into(), json!(value));
+        }
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"h_scale": 0.5, "v_scale": 4000000.0, "baseline_shift": -4000000.0, "rotation": 160.0})));
     }
 
     #[test]
