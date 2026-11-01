@@ -69,6 +69,9 @@ pub(crate) struct SGlyph {
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
+    /// Standard Vertical Roman Alignment (Character panel menu): in vertical type this glyph
+    /// stands upright when it would otherwise lie on its side ([`crate::layout`]).
+    pub vertical_roman: bool,
     /// The glyph is of a script whose letters join (Arabic, Syriac, N'Ko, Mongolian, Adlam…),
     /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
     /// along the path so its joins meet.
@@ -713,7 +716,9 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         char_direction: _,
         proportional_metrics,
         tate_chu_yoko,
+        standard_vertical_roman: _,
         digits,
+        font_height_reference,
         no_break,
         language,
     } = a;
@@ -731,6 +736,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *proportional_metrics == b.proportional_metrics
         && *tate_chu_yoko == b.tate_chu_yoko
         && *digits == b.digits
+        && *font_height_reference == b.font_height_reference
         && *no_break == b.no_break
         && *language == b.language
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
@@ -828,6 +834,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
         no_break: st.no_break,
+        vertical_roman: false,
         cursive: false,
     }
 }
@@ -1137,6 +1144,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             inline: None,
             word_end: false,
             no_break: gst.no_break,
+            vertical_roman: gst.standard_vertical_roman,
             cursive,
         });
     }

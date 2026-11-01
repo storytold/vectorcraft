@@ -457,6 +457,26 @@ fn hit_testing_picks_the_right_column() {
     }
 }
 
+/// Area Type Options › Text Flow (#4978): by columns (the default) the second cell is the one
+/// below the first; by rows it is the one beside it.
+#[test]
+fn text_flow_fills_the_cells_by_columns_or_by_rows() {
+    let t = area(&COPY.repeat(8), style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    let grid = LayoutOptions { rows: 2, columns: 2, gutter: 20.0, ..Default::default() };
+    for (flow, second) in [(TextFlow::Columns, (0.0, 160.0)), (TextFlow::Rows, (220.0, 0.0))] {
+        let l = layout_with(db(), &t, &LayoutOptions { flow, ..grid.clone() });
+        let frame = l.frames.get(1).copied().unwrap();
+        assert_eq!((frame.x0, frame.y0), second, "{flow:?}");
+        let line = l.lines.iter().find(|li| li.region == 1).expect("text reaches the second cell");
+        assert!(line.x0 >= second.0 - 1e-6 && line.baseline >= second.1, "{flow:?}: {line:?}");
+        assert!(l.lines.iter().all(|li| l.lines.iter().all(|m| m.region >= li.region || m.start <= li.start)), "{flow:?}: text runs in cell order");
+    }
+    // The object's own option lays out the same way.
+    let mut by_rows = t.clone();
+    (by_rows.area.rows, by_rows.area.columns, by_rows.area.gutter, by_rows.area.flow) = (2, 2, 20.0, TextFlow::Rows);
+    assert_eq!(layout(db(), &by_rows).frames.get(1).map(|f| (f.x0, f.y0)), Some((220.0, 0.0)));
+}
+
 // ---------- area flow ----------
 
 #[test]
@@ -1408,6 +1428,51 @@ fn restyling_one_character_keeps_its_kerning_with_its_neighbors() {
     edit::style_range(&mut t.runs, 6, 7, |s| s.leading = Some(60.0));
     let l = layout(db(), &t);
     assert!((l.lines[1].baseline - l.lines[0].baseline - 60.0).abs() < 1e-9, "{:?}", l.lines);
+}
+
+/// Baseline shift moves a rotated character up from its line by the shift, at any rotation, in
+/// point type and on a slanted path, and leaves its neighbors where they are. It turns about its
+/// pen position moved by the shift (`xf * pivot`), and `xf * unturned` still places the shifted
+/// glyph without its rotation.
+#[test]
+fn baseline_shift_moves_a_rotated_character_across_its_line() {
+    let slanted = vectorcraft_geom::PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (300.0, -300.0)).to_path(1e-3));
+    for on_path in [false, true] {
+        for rotation in [0.0, 45.0, 85.0, 90.0, 95.0, -90.0] {
+            let at = |shift: f64| {
+                let mut t = avav(1, |s| {
+                    s.rotation = rotation;
+                    s.baseline_shift = shift;
+                });
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                layout(db(), &t)
+            };
+            let (plain, shifted) = (at(0.0), at(10.0));
+            let pen = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.xf * Point::ZERO).unwrap();
+            let v = plain.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let up = kurbo::Vec2::new(v.angle.sin(), -v.angle.cos());
+            let moved = pen(&shifted, 1) - pen(&plain, 1);
+            assert!((moved - up * 10.0).hypot() < 1e-6, "on a path {on_path}, {rotation}°: {moved:?}, up {up:?}");
+            for byte in [0, 2, 3] {
+                assert!((pen(&shifted, byte) - pen(&plain, byte)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: byte {byte} moved");
+            }
+            let g = shifted.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let turn_at = g.xf * g.pivot;
+            assert!((turn_at - (v.origin + up * 10.0)).hypot() < 1e-6, "on a path {on_path}, {rotation}°: turns about {turn_at:?}");
+            let unrotated = layout(db(), &{
+                let mut t = avav(1, |s| s.baseline_shift = 10.0);
+                if on_path {
+                    t.kind = TextKind::OnPath { path: slanted.clone(), start: 0.0, end: None };
+                }
+                t
+            });
+            let u = unrotated.glyphs.iter().find(|g| g.byte == 1).unwrap();
+            let (a, b) = ((g.xf * g.unturned).as_coeffs(), u.xf.as_coeffs());
+            assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "on a path {on_path}, {rotation}°: {a:?} vs {b:?}");
+        }
+    }
 }
 
 #[test]

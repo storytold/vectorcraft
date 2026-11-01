@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
@@ -238,6 +238,245 @@ fn spot_colours_are_separations_and_overprints_are_kept_or_dropped() {
     let page = checked_page(&ps);
     assert!(page.contains("true op\nVCsp0 setcolorspace 0.5 setcolor\n") && page.contains("false op"), "{page}");
     assert!(!page_of(&d, &EpsOptions { overprint: Overprint::Discard, ..opts(&d) }).contains("true op"));
+}
+
+const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
+const LEAF: Color = Color::Cmyk { c: 1.0, m: 0.0, y: 1.0, k: 0.0 };
+
+/// A stop linked to spot swatch `name` (of color `color`) at `tint`.
+fn spot_stop(offset: f32, name: &str, color: Color, tint: f32) -> GradientStop {
+    GradientStop { swatch: Some(name.into()), tint, ..GradientStop::new(offset, color.tinted(tint)) }
+}
+
+/// A document with the spot swatches Gold Ink and Leaf Ink and a rectangle filled with a linear
+/// gradient of `stops`.
+fn spot_gradient_doc(stops: Vec<GradientStop>) -> Document {
+    spot_gradient_doc_of(Gradient::new(GradientKind::Linear, stops))
+}
+
+/// [`spot_gradient_doc`] with the rectangle filled with `gradient`.
+fn spot_gradient_doc_of(gradient: Gradient) -> Document {
+    let mut d = doc_with(|_| vec![]);
+    d.swatches.push(Swatch { name: "Gold Ink".into(), paint: Paint::solid(GOLD), global: true, spot: true });
+    d.swatches.push(Swatch { name: "Leaf Ink".into(), paint: Paint::solid(LEAF), global: true, spot: true });
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(gradient)));
+    let n = path(&mut d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    d
+}
+
+/// The solid fill colors of the objects of `d`, down through groups.
+fn fill_colors(d: &Document) -> Vec<Color> {
+    fn walk(n: &Node, out: &mut Vec<Color>) {
+        for i in &n.appearance.items {
+            if let AppearanceItem::Fill(f) = i
+                && let Some(c) = f.paint.color()
+            {
+                out.push(c);
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, out);
+        }
+    }
+    let mut out = vec![];
+    for l in &d.layers {
+        walk(l, &mut out);
+    }
+    out
+}
+
+/// Whether one of `colors` is CMYK `want`, to within rounding.
+fn has_cmyk(colors: &[Color], want: [f32; 4]) -> bool {
+    colors.iter().any(|c| matches!(*c, Color::Cmyk { c, m, y, k } if [c, m, y, k].iter().zip(want).all(|(a, b)| (a - b).abs() < 2e-3)))
+}
+
+#[test]
+fn a_gradient_of_one_spot_ink_is_a_separation_shading() {
+    let d = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        spot_stop(0.5, "Gold Ink", GOLD, 0.2),
+        GradientStop::new(1.0, Color::rgb(1.0, 1.0, 1.0)),
+    ]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Gold Ink)"));
+    assert!(ps.contains("/VCsp0 [/Separation (Gold Ink) cvn /DeviceCMYK"), "{ps}");
+    let page = checked_page(&ps);
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCsp0 /Coords"), "{page}");
+    assert!(page.contains("/C0 [1] /C1 [0.2]") && page.contains("/C0 [0.2] /C1 [0]"), "tints of Gold Ink to paper: {page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    // Level 2: bands of the ink's tints.
+    let out = export(&d, &EpsOptions { level: Level::Two, ..opts(&d) }, None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(!page.contains("shfill") && !page.contains(" k\n"), "{page}");
+    assert!(page.contains("VCsp0 setcolorspace 1 setcolor\n") && page.contains("VCsp0 setcolorspace 0 setcolor\n"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn gradients_mixing_spot_inks_with_other_inks_are_device_n_shadings() {
+    // Gold Ink, with its midpoint at 30%, to Leaf Ink at 50%.
+    let mut gold = spot_stop(0.0, "Gold Ink", GOLD, 1.0);
+    gold.midpoint = 0.3;
+    let two = spot_gradient_doc(vec![gold, spot_stop(1.0, "Leaf Ink", LEAF, 0.5)]);
+    let out = export(&two, &opts(&two), None, None).unwrap();
+    let ps = text(&out);
+    assert!(
+        ps.contains("%%DocumentCustomColors: (Gold Ink)\n%%+ (Leaf Ink)\n%%CMYKCustomColor: 0 0.2 0.8 0.1 (Gold Ink)\n%%+ 1 0 1 0 (Leaf Ink)\n"),
+        "both inks, each list continued right below its comment: {ps}"
+    );
+    assert!(
+        ps.contains(
+            "/VCdn0 [/DeviceN [(Gold Ink) cvn (Leaf Ink) cvn ] /DeviceCMYK {2 array astore 0 1 index 1 get 1 mul add \
+             0 2 index 0 get 0.2 mul add 0 3 index 0 get 0.8 mul add 3 index 1 get 1 mul add 0 4 index 0 get 0.1 mul add 5 -1 roll pop}] def"
+        ),
+        "{ps}"
+    );
+    let page = checked_page(&ps);
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCdn0 /Coords") && page.contains("/Bounds [0.3 ]"), "{page}");
+    assert!(page.contains("/C0 [1 0] /C1 [0.5 0.25]") && page.contains("/C0 [0.5 0.25] /C1 [0 0.5]"), "the inks through the midpoint: {page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+
+    // Gold Ink to 60% process yellow to 40% gray: Yellow, Black and Gold Ink.
+    let mixed = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        GradientStop::new(0.5, Color::cmyk(0.0, 0.0, 0.6, 0.0)),
+        GradientStop::new(1.0, Color::Gray { k: 0.4 }),
+    ]);
+    let out = export(&mixed, &opts(&mixed), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Yellow /Black (Gold Ink) cvn ] /DeviceCMYK {3 array astore"), "{ps}");
+    let page = checked_page(&ps);
+    assert!(page.contains("/C0 [0 0 1] /C1 [0.6 0 0]") && page.contains("/C0 [0.6 0 0] /C1 [0 0.4 0]"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+
+    // Read back as bands, the tint transforms give each ink's CMYK equivalent.
+    for (d, end) in [(&two, [0.5, 0.0, 0.5, 0.0]), (&mixed, [0.0, 0.0, 0.0, 0.4])] {
+        let out = export(d, &EpsOptions { compatible_gradients: true, ..opts(d) }, None, None).unwrap();
+        let page = checked_page(&text(&out));
+        assert!(page.contains("VCdn0 setcolorspace ") && !page.contains("shfill"), "{page}");
+        let colors = fill_colors(&import(&out.bytes).unwrap().document);
+        assert!(has_cmyk(&colors, [0.0, 0.2, 0.8, 0.1]) && has_cmyk(&colors, end), "{colors:?}");
+    }
+
+    // Level 2 has no DeviceN: process colors, with a warning.
+    let out = export(&two, &EpsOptions { level: Level::Two, ..opts(&two) }, None, None).unwrap();
+    assert!(!text(&out).contains("DeviceN"));
+    assert!(out.warnings.iter().any(|w| w.contains("process colors at PostScript Level 2")), "{:?}", out.warnings);
+}
+
+#[test]
+fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::rgb(0.0, 1.0, 0.0))]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert!(!ps.contains("/Separation") && !ps.contains("/DeviceN"), "{ps}");
+    assert!(out.warnings.iter().any(|w| w.contains("RGB or Lab colors are written without the spot ink")), "{:?}", out.warnings);
+    // Written as CMYK, the green stop mixes with the ink.
+    let out = export(&d, &EpsOptions { cmyk: true, ..opts(&d) }, None, None).unwrap();
+    assert!(text(&out).contains("/ColorSpace VCdn0"));
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn spot_inks_named_like_process_inks_all_or_none_are_not_device_n_colorants() {
+    for name in ["Cyan", "Black", "All", "None"] {
+        // Gold Ink to the spot ink, with no process ink in the stops.
+        let mut d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, name, LEAF, 1.0)]);
+        d.swatches.retain(|s| s.name != name);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(LEAF), global: true, spot: true });
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert!(!ps.contains("/DeviceN") && !ps.contains("/Separation"), "{name}: {ps}");
+        assert!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), "{name}: {:?}", out.warnings);
+    }
+}
+
+#[test]
+fn a_device_n_space_has_at_most_32_colorants() {
+    for (inks, device_n) in [(32, true), (33, false)] {
+        let names: Vec<String> = (0..inks).map(|i| format!("Ink {i}")).collect();
+        let stops = names.iter().enumerate().map(|(i, n)| spot_stop(i as f32 / (inks - 1) as f32, n, LEAF, 1.0)).collect();
+        let mut d = spot_gradient_doc(stops);
+        d.swatches.extend(names.iter().map(|n| Swatch { name: n.clone(), paint: Paint::solid(LEAF), global: true, spot: true }));
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert_eq!(ps.contains("/DeviceN [(Ink 0) cvn "), device_n, "{inks} inks: {ps}");
+        assert_eq!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), !device_n, "{:?}", out.warnings);
+    }
+}
+
+#[test]
+fn gradients_of_more_than_32_spot_inks_are_written_in_process_colors_at_every_level() {
+    // 400 stops over 40 inks.
+    let names: Vec<String> = (0..40).map(|i| format!("Ink {i}")).collect();
+    let stops = (0..400).map(|i| spot_stop(i as f32 / 399.0, &names[i % names.len()], LEAF, 1.0)).collect();
+    let mut d = spot_gradient_doc(stops);
+    d.swatches.extend(names.iter().map(|n| Swatch { name: n.clone(), paint: Paint::solid(LEAF), global: true, spot: true }));
+    for level in [Level::Three, Level::Two] {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert!(!ps.contains("/DeviceN") && !ps.contains("VCsp"), "{level:?}: {ps}");
+        assert!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), "{level:?}: {:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w.contains("PostScript Level 2")), "{level:?}: {:?}", out.warnings);
+    }
+}
+
+#[test]
+fn near_white_stops_next_to_a_spot_ink_keep_their_ink() {
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::Gray { k: 0.001 })]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Black (Gold Ink) cvn ]"), "{ps}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    // A near-white RGB stop is RGB, not paper.
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::rgb(1.0, 1.0, 0.999))]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("RGB or Lab colors are written without the spot ink")), "{:?}", out.warnings);
+}
+
+#[test]
+fn a_white_stop_linked_to_a_process_swatch_is_paper_next_to_a_spot_ink() {
+    let white = Color::rgb(1.0, 1.0, 1.0);
+    let mut d = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        GradientStop { swatch: Some("Paper".into()), ..GradientStop::new(1.0, white) },
+    ]);
+    d.swatches.push(Swatch { name: "Paper".into(), paint: Paint::solid(white), global: true, spot: false });
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCsp0 /Coords"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn perceptual_gradients_of_spot_inks_are_written_in_process_colors() {
+    let stops = vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, "Leaf Ink", LEAF, 1.0)];
+    let mut perceptual = Gradient::new(GradientKind::Linear, stops.clone());
+    perceptual.method = GradientMethod::Perceptual;
+    let d = spot_gradient_doc_of(perceptual);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(!page.contains("VCdn") && !page.contains("VCsp"), "{page}");
+    assert!(page.contains("/ColorSpace /DeviceCMYK"), "{page}");
+    assert!(out.warnings.iter().any(|w| w.contains("Perceptual gradients of spot colors are written in process colors")), "{:?}", out.warnings);
+    // The in-between stops follow the Perceptual mix, as for a gradient without spot inks.
+    let process = |c: Color| GradientStop::new(0.0, c);
+    let mut plain = Gradient::new(GradientKind::Linear, vec![process(GOLD), GradientStop { offset: 1.0, ..process(LEAF) }]);
+    plain.method = GradientMethod::Perceptual;
+    let p = spot_gradient_doc_of(plain);
+    let plain_page = checked_page(&text(&export(&p, &opts(&p), None, None).unwrap()));
+    let shading = |s: &str| -> Option<String> {
+        let i = s.find("/ShadingType")?;
+        Some(s[i..i + s[i..].find("shfill")?].to_string())
+    };
+    assert!(shading(&page).is_some_and(|s| s.contains("/Bounds")), "{page}");
+    assert_eq!(shading(&page), shading(&plain_page));
+    // Classic keeps the inks.
+    let d = spot_gradient_doc(stops);
+    assert!(text(&export(&d, &opts(&d), None, None).unwrap()).contains("/ColorSpace VCdn0"));
 }
 
 #[test]
@@ -633,7 +872,7 @@ fn an_instance_whose_art_reaches_the_region_is_written() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
 }
@@ -652,7 +891,7 @@ fn an_instance_whose_brush_art_reaches_the_region_is_written() {
     vectorcraft_brush::store(&mut d, &lib);
     let mut art = path(&mut d, shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0);
     art.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
 }

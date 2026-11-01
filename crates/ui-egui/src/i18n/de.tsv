@@ -730,6 +730,9 @@ font-technology	Variable	Variabel
 	Delete Swatch	Farbfeld löschen
 	Delete Symbol	Symbol löschen
 	Delete the selected symbol?	Ausgewähltes Symbol löschen?
+	Delete the selected symbols?	Ausgewählte Symbole löschen?
+	No unused symbols	Keine nicht verwendeten Symbole
+	Delete Symbols	Symbole löschen
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Mindestens eines der Symbole wird verwendet und kann erst gelöscht werden, wenn seine Instanzen umgewandelt oder gelöscht wurden.
 	Expand Instances	Instanzen umwandeln
 	Delete Instances	Instanzen löschen
@@ -737,6 +740,9 @@ font-technology	Variable	Variabel
 	No	Nein
 	Delete Tab	Tabulator löschen
 	Delete the graphic style “{name}”?	Grafikstil „{name}“ löschen?
+	Delete Action Sets	Aktionssätze löschen
+	Delete the action set “{name}” and its actions?	Aktionssatz „{name}“ und seine Aktionen löschen?
+	Delete the selected action sets and their actions?	Ausgewählte Aktionssätze und ihre Aktionen löschen?
 	Delete Theme	Thema löschen
 	Delete theme	Thema löschen
 	Delete these {n} graphic styles?	Diese {n} Grafikstile löschen?
@@ -898,6 +904,7 @@ font-technology	Variable	Variabel
 	Edit Selection	Auswahl bearbeiten
 	Edit Selection…	Auswahl bearbeiten…
 	Edit Symbol	Symbol bearbeiten
+	Exit Symbol Editing Mode	Symbolbearbeitungsmodus beenden
 	Edit Text	Text bearbeiten
 	Edit the applied effect, or add another one?	Den angewendeten Effekt bearbeiten oder einen weiteren hinzufügen?
 	Edit the point	Punkt bearbeiten
@@ -1248,6 +1255,9 @@ file-filter	Templates	Vorlagen
 	Hide Live Paint Gaps	Lücken beim interaktiven Malen ausblenden
 	Select Fills	Flächen auswählen
 	Select Strokes	Konturen auswählen
+	Paint Fills	Flächen malen
+	Paint Strokes	Konturen malen
+	Highlight	Hervorheben
 	Gaussian Blur…	Gaußscher Weichzeichner…
 	General	Allgemein
 	General › Placement › X	Allgemein › Platzierung › X
@@ -1459,6 +1469,8 @@ file-filter	Templates	Vorlagen
 	Objects on Path	Objekte auf Pfad
 	Attach	Anhängen
 	Objects on Path Options	Optionen für Objekte auf Pfad
+	Pivot:	Drehpunkt:
+	Rotate:	Drehung:
 	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
 	Attach Objects on Path	Objekte an Pfad anhängen
 	Expand Objects on Path	Objekte auf Pfad umwandeln
@@ -1562,6 +1574,7 @@ file-filter	Templates	Vorlagen
 	In Tangent Handles	Eingehende Tangentengriffe
 	In the selected objects	In den ausgewählten Objekten
 	Inches	Zoll
+	Include Artboard Fill	Zeichenflächenfüllung einschließen
 	Include Blacks with CMY:	Schwarz mit CMY einschließen:
 	Include Bleed	Anschnitt einschließen
 	Include Cmy Blacks	CMY-Schwarz einschließen
@@ -2429,6 +2442,7 @@ digits	Tamil	Tamil
 digits	Telugu	Telugu
 digits	Kannada	Kannada
 digits	Malayalam	Malayalam
+	Proportional Lining	Proportionale Versalziffern
 	Proportional Oldstyle	Proportionale Mediävalziffern
 	Pucker & Bloat…	Zusammenziehen und aufblasen…
 	Pucker Tool	Zusammenziehen-Werkzeug
@@ -3235,6 +3249,7 @@ effect	Points	Punkte
 	Swap Fill and Stroke (Shift+X)	Fläche und Kontur vertauschen (Shift+X)
 	Swap start and end arrowheads	Pfeilspitzen an Anfang und Ende vertauschen
 	Swap the selected object for the file, keeping its place and transform	Das ausgewählte Objekt durch die Datei ersetzen; Position und Transformation bleiben erhalten
+	Stylistic Alternates	Stilistische Varianten
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte
@@ -3287,6 +3302,7 @@ effect	Points	Punkte
 	Tabs	Tabulatoren
 	Tabular Lining	Tabellarische Versalziffern
 	Tabular Oldstyle	Tabellarische Mediävalziffern
+	Titling Alternates	Titelschriftvarianten
 	Target	Ziel
 	Target Contents	Inhalt als Ziel auswählen
 	Target:	Ziel:
@@ -3806,12 +3822,12 @@ theme	Appearance	Erscheinungsbild
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	die Ebenen der Datei wurden nicht gelesen ({_1}): sie wird als ihre Seite in einer Ebene geöffnet
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	die Ebenen der Datei wurden nicht aus ihren Bearbeitungsdaten gelesen ({_1}): sie stammen aus ihrem PDF-Teil
 @msg	`to` must be "corner" or "smooth"	`to` muss "corner" oder "smooth" sein
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` muss "emBox", "capHeight", "xHeight" oder "icfBox" sein
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-Dateien sind RGB oder Graustufen: colorModel rgb oder gray
 @msg	Blend colors: select at least three objects with filled colours	Farben angleichen: Wählen Sie mindestens drei Objekte mit Flächenfarbe aus
 @msg	Combine Slices: the slices have no bounds	Slices kombinieren: Die Slices haben keine Begrenzung
 @msg	Convert to Artboards: selection has no area	In Zeichenflächen umwandeln: Die Auswahl hat keine Fläche
 @msg	Convert to Shape: no rectangles or ellipses selected	In Form umwandeln: keine Rechtecke oder Ellipsen ausgewählt
-@msg	Copied the CSS of {rules} object(s)	CSS von {rules} Objekt(en) kopiert
 @msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
@@ -3828,13 +3844,11 @@ theme	Appearance	Erscheinungsbild
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
-@msg	Downloaded {_1} file(s)	{_1} Datei(en) heruntergeladen
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
 @msg	Expand: no brush strokes selected	Umwandeln: keine Pinselkonturen ausgewählt
 @msg	Expand: no gradient fills	Umwandeln: keine Verlaufsflächen
 @msg	Expand: nothing to expand	Umwandeln: nichts umzuwandeln
-@msg	Exported {count} file(s) to {folder}	{count} Datei(en) nach {folder} exportiert
 @msg	Exported {path}	{path} exportiert
 @msg	Flatten Transparency: select objects to flatten	Transparenz reduzieren: Wählen Sie die zu reduzierenden Objekte aus
 @msg	Flatten Transparency: {e}	Transparenz reduzieren: {e}
@@ -4255,6 +4269,8 @@ theme	Appearance	Erscheinungsbild
 @msg	a clipping path can't be attached to a path	ein Schnittpfad kann nicht an einen Pfad angehängt werden
 @msg	select a stroke with a variable width	wählen Sie eine Kontur mit variabler Breite aus
 @msg	select a symbol instance	wählen Sie eine Symbolinstanz aus
+@msg	select instances of one symbol	wählen Sie Instanzen eines einzigen Symbols aus
+@msg	a symbol can't hold an instance of itself	ein Symbol kann keine Instanz von sich selbst enthalten
 @msg	select an Image Trace object	wählen Sie ein Bildnachzeichner-Objekt aus
 @msg	could not decode image: {0}	das Bild konnte nicht dekodiert werden: {0}
 @msg	image is empty	das Bild ist leer
@@ -4395,9 +4411,6 @@ theme	Appearance	Erscheinungsbild
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` ist {size} Byte groß (Grenze {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} wird bereits von {_2} verwendet
 @msg	{_1} is reserved by the system	{_1} ist vom System reserviert
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} verknüpfte Datei(en) können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	{undecoded} Bild(er) konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} verknüpfte(s) Bild(er) wurde(n) auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
 @msg	{_1}: not saved, so not closed	{_1}: nicht gespeichert, daher nicht geschlossen
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-Bit-Bitmaps können nicht gelesen werden
 @msg	{command} didn't create an object	{command} hat kein Objekt erstellt
@@ -4417,7 +4430,6 @@ theme	Appearance	Erscheinungsbild
 @msg	Couldn't place {name}: {e}	{name} konnte nicht platziert werden: {e}
 @msg	Couldn't paste from the clipboard: {e}	Aus der Zwischenablage konnte nicht eingefügt werden: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} mit {_1} Hinweis(en) gespeichert: {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} mit {_1} Hinweis(en) exportiert: {first}
 @msg	Exported {what}	{what} exportiert
 @msg	Saved {n} files beside {path}	{n} Dateien neben {path} gespeichert
 @msg	Saving	Wird gespeichert
@@ -4428,12 +4440,26 @@ theme	Appearance	Erscheinungsbild
 @msg	Saving recovery data for {_1}	Wiederherstellungsdaten für {_1} werden gespeichert
 @msg	Discarded {_1} recovered document(s)	{_1} wiederhergestellte(s) Dokument(e) verworfen
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} wiederhergestellte(s) Dokument(e) geöffnet: Speichern Sie sie, um sie zu behalten
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} Bild(er) eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
-@msg	Embedded {n} image(s)	{n} Bild(er) eingebettet
-@msg	Relinked {_1} image(s)	{_1} Bild(er) neu verknüpft
-@msg	Relinked {n} image(s)	{n} Bild(er) neu verknüpft
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} Bild(er) neu verknüpft; nicht in diesem Ordner: {_1}
-@msg	Updated {_1} image(s)	{_1} Bild(er) aktualisiert
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
+@msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet
+@msgplural	Relinked {n} image|Relinked {n} images	{n} Bild neu verknüpft|{n} Bilder neu verknüpft
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} Bild neu verknüpft; nicht in diesem Ordner: {names}|{n} Bilder neu verknüpft; nicht in diesem Ordner: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} Bild neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}|{n} Bilder neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} Bild aktualisiert|{n} Bilder aktualisiert
+@msgplural	Replaced {n} image|Replaced {n} images	{n} Bild ersetzt|{n} Bilder ersetzt
+@msgplural	Broke {n} link|Broke {n} links	{n} Verknüpfung aufgehoben|{n} Verknüpfungen aufgehoben
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} Verknüpfung aufgehoben; {missing} können nicht gelesen werden: Verknüpfen oder aktualisieren Sie sie zuerst|{n} Verknüpfungen aufgehoben; {missing} können nicht gelesen werden: Verknüpfen oder aktualisieren Sie sie zuerst
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} verknüpfte Datei kann hier nicht gelesen werden: Ihre Vorschau wird angezeigt|{n} verknüpfte Dateien können hier nicht gelesen werden: Ihre Vorschauen werden angezeigt
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} Bild konnte nicht dekodiert werden und wird als durchgekreuzter Rahmen angezeigt|{n} Bilder konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} verknüpftes Bild wurde auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neue Version|{n} verknüpfte Bilder wurden auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} auf dem Datenträger geänderte verknüpfte Datei aktualisiert|{n} auf dem Datenträger geänderte verknüpfte Dateien aktualisiert
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} mit {n} Hinweis exportiert: {first}|{what} mit {n} Hinweisen exportiert: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} Schriftdatei liegt jetzt in {folder}|{n} Schriftdateien liegen jetzt in {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei liegt jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}|{n} Schriftdateien liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} Schrift ist hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt|{n} Schriften sind hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS von {n} Objekt kopiert|CSS von {n} Objekten kopiert
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} Datei heruntergeladen|{n} Dateien heruntergeladen
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} Datei nach {folder} exportiert|{n} Dateien nach {folder} exportiert
 @msg	Unembedded to {_1}	Einbettung aufgehoben, gespeichert unter {_1}
 @msg	Reset {_1}	{_1} zurückgesetzt
 @msg	Sent to {_1}	An {_1} gesendet
@@ -4485,9 +4511,6 @@ theme	Appearance	Erscheinungsbild
 @msg	every search thread stopped on an internal error (please report this bug)	alle Such-Threads wurden mit einem internen Fehler beendet (bitte melden Sie diesen Fehler)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	der Schriftenordner von VectorCraft ist hier nicht festgelegt: Die Desktop-App und vectorcraft-cli legen ihn fest
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
-@msg	{n} font file(s) are now in {folder}	{n} Schriftdatei(en) liegen jetzt in {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei(en) liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} Schrift(en) sind hier nicht verfügbar: Ihr Text wird in einer anderen Schrift angezeigt
 @msg	not a file	keine Datei
 @msg	not a font file	keine Schriftdatei
 @msg	that document is no longer open	dieses Dokument ist nicht mehr geöffnet
@@ -4496,7 +4519,6 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} Bild(er) neu verknüpft; {name} konnte nicht neu verknüpft werden: {reason}
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -4537,6 +4559,13 @@ theme	Appearance	Erscheinungsbild
 	Insert Inline Symbol	Inline-Symbol einfügen
 	ICF Top/Right	ICF oben/rechts
 	ICF Bottom/Left	ICF unten/links
+	Show Font Height Options	Optionen für Schrifthöhe einblenden
+	Hide Font Height Options	Optionen für Schrifthöhe ausblenden
+	Set Font Height Reference	Bezugsgröße der Schrifthöhe festlegen
+	Em Box	Geviert
+	Cap Height	Versalhöhe
+	x-Height	x-Höhe
+	ICF Box	ICF-Rahmen
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
@@ -4592,7 +4621,6 @@ theme	Appearance	Erscheinungsbild
 # Linked files changed on disk.
 	Update Changed Links	Geänderte Verknüpfungen aktualisieren
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} verknüpftes Bild wurde auf dem Datenträger geändert. Neue Version anzeigen?|{n} verknüpfte Bilder wurden auf dem Datenträger geändert. Neue Versionen anzeigen?
-@msg	Updated {_1} linked file(s) changed on disk	{_1} auf dem Datenträger geänderte verknüpfte Datei(en) aktualisiert
 # Window: the system's title bar (Windows, Linux).
 	System Title Bar	Systemtitelleiste
 # Brush Options: Scatter, Art and Pattern brushes.
@@ -5504,6 +5532,13 @@ anchor	Points:	Punkte:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geben Sie `inkLimit`, `removeWhiteOverprint` oder `overprintBlack` an
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Druckfarbkorrekturen wirken in CMYK-Dokumenten: Wählen Sie zuerst Datei › Dokumentfarbmodus › CMYK-Farbe
 @msg	`{key}` must be 0..{max}	`{key}` muss 0..{max} sein
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Ähnlichstes Farbfeld suchen…
+	Find Nearest Swatch	Ähnlichstes Farbfeld suchen
+	Apply Nearest Swatch	Ähnlichstes Farbfeld anwenden
+	Select objects to find the swatches nearest their colors.	Wählen Sie Objekte aus, um die Farbfelder zu finden, die ihren Farben am nächsten kommen.
+@msg	select objects or give `color`	wählen Sie Objekte aus oder geben Sie `color` an
+@msg	`color` is not a colour	`color` ist keine Farbe
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Ecken-Werkzeug
 	Slide Anchor Along Path	Ankerpunkt entlang des Pfads verschieben
@@ -5619,6 +5654,9 @@ breakText	Glyphs	Glyphen
 	Gap 4	Lücke 4
 	Dash 5	Strich 5
 	Gap 5	Lücke 5
+
+@msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
 @msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
 @msg	no pattern named `{choice}`	kein Muster mit dem Namen `{choice}`
@@ -5649,6 +5687,9 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Striche in Pfade umwandeln
+@msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
@@ -5671,3 +5712,42 @@ breakText	Glyphs	Glyphen
 	Odia	Oriya
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geöffneten Dokumente als PDF exportieren
+	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
+@msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Symboltyp:
+	Dynamic Symbol	Dynamisches Symbol
+	Static Symbol	Statisches Symbol
+	Symbol Instance Appearance	Aussehen der Symbolinstanz
+	Reset Symbol Instance	Symbolinstanz zurücksetzen
+@msg	type must be static or dynamic, not {v}	type muss static oder dynamic sein, nicht {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` ist ein statisches Symbol: Stellen Sie zuerst den Symboltyp auf „Dynamisch“ ein
+@msg	path must be a list of child indices	path muss eine Liste von Kindindizes sein
+@msg	no object at path {shown} in the symbol's art	kein Objekt am Pfad {shown} in der Grafik des Symbols
+@msg	give fill, stroke, opacity and/or blend	geben Sie fill, stroke, opacity und/oder blend an
+@msg	pass newName, registration, exportType, nineSlice and/or type	geben Sie newName, registration, exportType, nineSlice und/oder type an
+	Text Flow	Textfluss
+	By Rows	Nach Zeilen
+	By Columns	Nach Spalten
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Zufällige Deckkraft…
+	Randomize Opacity	Zufällige Deckkraft
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Startwert:
+@msg	`min` is greater than `max`	`min` ist größer als `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Objekte sortieren…
+	Sort Objects	Objekte sortieren
+	Sort By:	Sortieren nach:
+	Apply To:	Anwenden auf:
+	Area	Fläche
+	X Position	X-Position
+	Y Position	Y-Position
+	Stacking Order	Stapelreihenfolge
+	Small to Large	Von klein nach groß
+	Large to Small	Von groß nach klein
+	Distribute Evenly	Gleichmäßig verteilen

@@ -84,6 +84,7 @@ mod style;
 pub mod stylelib;
 mod swatch;
 pub mod swatchlib;
+pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
@@ -183,11 +184,15 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.len() < 2 { Err("select at least two objects".into()) } else { Ok(()) }
 }
-/// The isolated group, layer or object in isolation mode. Pattern editing mode and opacity mask
-/// editing isolate their own layer, which does not count here; an object isolated inside them
-/// counts.
+/// The isolated group, layer or object in isolation mode. Pattern editing mode, opacity mask
+/// editing and symbol editing mode isolate their own layer, which does not count here; an object
+/// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l) && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l))
+    st.isolation.filter(|l| {
+        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.

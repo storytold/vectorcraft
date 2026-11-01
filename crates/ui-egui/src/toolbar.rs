@@ -327,8 +327,8 @@ fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> Option<Flyo
 /// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
 /// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
-/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser and Shape Builder tools' are
-/// their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
+/// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
+/// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
 /// ([`crate::dialogs::shapes::open_options`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
@@ -362,6 +362,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
         "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // The Objects on Path tool: the Pivot and Rotate of the objects it attaches next.
+        "objectsOnPath" => Ok(crate::dialogs::objects_on_path_options::open(app)),
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
@@ -375,6 +377,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         _ if crate::dialogs::freehand::TOOLS.contains(&tool) => crate::dialogs::freehand::open(app, tool),
         // The Live Paint Selection tool: its Tool Options (what a click selects, the highlight).
         "livePaintSelection" => crate::dialogs::live_paint_selection::open(app),
+        // The Live Paint Bucket: its options (what a click paints, the highlight).
+        "livePaintBucket" => crate::dialogs::live_paint_bucket::open(app),
         // The Symbolism tools: the brush they share.
         _ if vectorcraft_tools::settings::SYMBOLISM.contains(&tool) => Ok(crate::dialogs::symbolism_options::open(app, tool)),
         // The graph tools: Graph Type for the selected graph.

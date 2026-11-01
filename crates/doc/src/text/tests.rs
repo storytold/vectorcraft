@@ -60,6 +60,24 @@ fn digits_map_between_the_numeral_systems() {
     assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
 }
 
+/// The font height reference is the em box by default and is saved only when it is another.
+#[test]
+fn font_height_reference_is_saved_only_when_not_the_em_box() {
+    let st = CharStyle::default();
+    assert_eq!(st.font_height_reference, FontHeightReference::EmBox);
+    assert!(serde_json::to_value(&st).unwrap().get("fontHeightReference").is_none());
+    for (r, key) in
+        [(FontHeightReference::CapHeight, "capHeight"), (FontHeightReference::XHeight, "xHeight"), (FontHeightReference::IcfBox, "icfBox")]
+    {
+        let set = CharStyle { font_height_reference: r, ..CharStyle::default() };
+        assert_eq!(serde_json::to_value(&set).unwrap()["fontHeightReference"], key);
+        assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&set).unwrap()).unwrap(), set);
+    }
+    // Styles written before the attribute existed read as the em box.
+    let old = serde_json::to_value(&st).unwrap();
+    assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().font_height_reference, FontHeightReference::EmBox);
+}
+
 /// Each Indic numeral system draws 0–9 (and the Arabic-Indic sets) as the ten digits of its
 /// script's block; every system saves under its id, which reads back, and other names are refused.
 #[test]
@@ -291,6 +309,19 @@ fn paragraph_styles_split_merge_and_normalize() {
     assert!(back.paras.is_empty() && back.para_at(3).justify == Justify::Center);
     let back: TextObject = serde_json::from_value(json).unwrap();
     assert_eq!(back.para_at(3).space_before, 4.0);
+}
+
+/// Text Flow is saved only when by rows: area type by columns (the default) saves as it did before
+/// the option, and files from before it read by columns; other values don't read.
+#[test]
+fn text_flow_is_saved_only_when_by_rows() {
+    let by_columns = serde_json::to_value(AreaOptions::default()).unwrap();
+    assert!(by_columns.get("flow").is_none());
+    assert_eq!(serde_json::from_value::<AreaOptions>(by_columns).unwrap().flow, TextFlow::Columns);
+    let by_rows = serde_json::to_value(AreaOptions { flow: TextFlow::Rows, ..AreaOptions::default() }).unwrap();
+    assert_eq!(by_rows["flow"], "rows");
+    assert_eq!(serde_json::from_value::<AreaOptions>(by_rows).unwrap().flow, TextFlow::Rows);
+    assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"flow": "diagonal"})).is_err());
 }
 
 /// 120 × 40 area type at (40, 40), its text drawn at twice its size.

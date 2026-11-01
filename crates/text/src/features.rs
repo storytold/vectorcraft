@@ -313,4 +313,23 @@ mod tests {
         let per_run: Vec<usize> = (0..2).map(|r| glyphs.iter().filter(|g| g.run == r).count()).collect();
         assert_eq!(per_run, [2, 1]);
     }
+
+    /// Serbian text gets the font's Serbian forms (`locl` for `SRB`): in the bundled Source Sans
+    /// 3 Italic, б, г, д, п, т differ from the Russian ones, in either Serbian list entry.
+    #[test]
+    fn serbian_gets_the_fonts_serbian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        let outlines = |language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, "бгдпт", st(language))).glyphs.into_iter().map(|g| g.outline).collect::<Vec<_>>()
+        };
+        let (serbian, russian) = (outlines("sr-Cyrl"), outlines("ru"));
+        assert_eq!((serbian.len(), russian.len()), (5, 5));
+        assert!(serbian.iter().zip(&russian).all(|(s, r)| s != r), "every letter in its Serbian form");
+        assert_eq!(outlines("sr-Latn"), serbian);
+    }
 }

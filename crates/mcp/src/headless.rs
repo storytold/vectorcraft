@@ -42,7 +42,7 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "file.exportForScreens",
         "Export for Screens…",
-        "{folder?, zip?, artboards? | range? | fullDocument? | assets?, includeBleed?, subfolders?, preset?, formats?, settings?, prefix?} = document.exportForScreens (no folder → the files, or one zip, as dataBase64)",
+        "{folder?, zip?, artboards? | range? | fullDocument? | assets?, includeBleed?, includeArtboardFill?, subfolders?, preset?, formats?, settings?, prefix?} = document.exportForScreens (no folder → the files, or one zip, as dataBase64)",
     ),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
     (

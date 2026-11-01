@@ -1117,13 +1117,12 @@ fn place_and_break_link_round_trip_geometry() {
 }
 
 #[test]
-fn edit_then_update_redefines_all_instances() {
+fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);
     let other = NodeId(s.execute("symbol.place", &json!({"x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
     select(&mut s, &[inst]);
-    let r = s.execute("symbol.edit", &json!({})).unwrap();
-    assert_eq!(r["name"], name);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
     let art = NodeId(r["ids"][0].as_u64().unwrap());
     // Make the art twice as wide, then redefine.
     s.execute("object.transform", &json!({"ids": [art.0], "matrix": [2, 0, 0, 1, -140, 0]})).ok();
@@ -1431,4 +1430,73 @@ fn symbol_nine_slice_guides_round_trip() {
     s.execute("symbol.options", &json!({"name": "Panel", "nineSlice": false})).unwrap();
     s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
     assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_NINE_SLICE).is_none());
+}
+
+/// Symbols panel › Select All Unused (#4918): a symbol counts as used when an instance in the art,
+/// a pattern tile, the art of a brush or a used symbol places it; one placed only inside an unused
+/// symbol is unused too. Delete Symbol with `names` deletes several in one undo step.
+#[test]
+fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
+    let mut s = session();
+    // A symbol of the selection (a new square at `x` when `x` is given), left placed.
+    let symbol = |s: &mut Session, name: &str, x: Option<f64>| {
+        if let Some(x) = x {
+            rect(s, x, 0.0, 10.0, 10.0);
+        }
+        NodeId(s.execute("symbol.new", &json!({"name": name})).unwrap()["id"].as_u64().unwrap())
+    };
+    let unused =
+        |s: &mut Session| -> Vec<String> { serde_json::from_value(s.execute("symbol.unused", &json!({})).unwrap()["names"].clone()).unwrap() };
+    // Placed: its instance stays on the artboard.
+    symbol(&mut s, "Placed", Some(0.0));
+    // Inner is placed only inside Outer, whose instance stays: both are used.
+    let inner = symbol(&mut s, "Inner", Some(20.0));
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    symbol(&mut s, "Outer", None);
+    // Lonely's and Nested's instances go; Nested is placed only inside Lonely.
+    let nested = symbol(&mut s, "Nested", Some(40.0));
+    s.execute("select.set", &json!({"ids": [nested.0]})).unwrap();
+    let lonely = symbol(&mut s, "Lonely", None);
+    s.execute("edit.clear", &json!({"ids": [lonely.0]})).unwrap();
+    // In a brush's art only.
+    let in_brush = symbol(&mut s, "Brushed", Some(60.0));
+    s.execute("brush.new", &json!({"type": "art", "name": "B", "ids": [in_brush.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [in_brush.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Nested", "Lonely"], "in panel order");
+    // A placed one becomes unused when its last instance goes.
+    let placed = s.doc().unwrap().doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .find(|n| matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Placed"))
+        .unwrap()
+        .id;
+    s.execute("edit.clear", &json!({"ids": [placed.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Placed", "Nested", "Lonely"]);
+    // Delete Symbol takes them all in one undo step, and Undo brings them back.
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.delete", &json!({"names": ["Placed", "Nested", "Lonely"]})).unwrap();
+    let names = |s: &Session| s.doc().unwrap().doc.symbols.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&s), ["Inner", "Outer", "Brushed"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1);
+    assert!(unused(&mut s).is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&s), ["Placed", "Inner", "Outer", "Nested", "Lonely", "Brushed"]);
+    // Deleting a symbol and the one placed inside it, in either order, expands every instance
+    // while both definitions are still there: no instance is left without its symbol.
+    for order in [["Inner", "Outer"], ["Outer", "Inner"]] {
+        s.execute("symbol.delete", &json!({"names": order})).unwrap();
+        let mut dangling = 0;
+        s.doc()
+            .unwrap()
+            .doc
+            .walk(|n| dangling += usize::from(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Inner" || symbol == "Outer")));
+        assert_eq!(dangling, 0, "{order:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Bad `names` are refused and change nothing.
+    for bad in [json!({"names": []}), json!({"names": "Placed"}), json!({"names": [1]}), json!({"names": ["Placed", "Nope"]})] {
+        assert!(s.execute("symbol.delete", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(names(&s).len(), 6);
 }

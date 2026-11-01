@@ -327,6 +327,7 @@ impl Session {
             },
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
+            precise_cursors: self.precise_cursors(),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -619,7 +620,12 @@ impl Session {
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
         };
-        if self.prefs.use_precise_cursors || self.caps_lock { c.precise() } else { c }
+        if self.precise_cursors() { c.precise() } else { c }
+    }
+
+    /// General › Use Precise Cursors is on, or Caps Lock is.
+    fn precise_cursors(&self) -> bool {
+        self.prefs.use_precise_cursors || self.caps_lock
     }
 
     pub fn tool_options(&self) -> Value {

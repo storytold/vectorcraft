@@ -256,6 +256,7 @@ fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
         if e.intertwine_tiers.capacity() > 0 {
             b += ALLOC + e.intertwine_tiers.capacity() * size_of::<PathData>() + e.intertwine_tiers.iter().map(path_bytes).sum::<usize>();
         }
+        b += e.symbol_overrides.capacity() * size_of::<crate::SymbolOverride>();
         b += e.objects_on_path.as_deref().map_or(0, |o| {
             ALLOC + size_of::<crate::objects_on_path::ObjectsOnPath>() + o.members.capacity() * size_of::<crate::objects_on_path::Member>()
         });

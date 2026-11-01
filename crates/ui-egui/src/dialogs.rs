@@ -56,6 +56,7 @@ pub mod justification;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
+pub mod live_paint_bucket;
 pub mod live_paint_gaps;
 pub mod live_paint_selection;
 pub mod missing_fonts;
@@ -66,6 +67,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
+pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
 pub(crate) mod path_ops;
@@ -377,6 +379,7 @@ registry! {
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
+    ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,
@@ -387,6 +390,7 @@ registry! {
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
     LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
+    LivePaintBucketOptions: [live_paint_bucket::KIND] => live_paint_bucket::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     NewBrush: [new_brush::KIND] => new_brush::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
@@ -398,7 +402,8 @@ registry! {
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
-    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE] => crate::addons::arrange::SPEC,
+    NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
+    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 

@@ -531,6 +531,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
+        crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
@@ -783,6 +784,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
             crate::dialogs::action_batch::open(app, set, action)
         }
+        crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };

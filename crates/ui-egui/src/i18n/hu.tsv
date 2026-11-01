@@ -975,6 +975,9 @@ font-technology	Variable	Változó
 	Delete Swatch	Színminta törlése
 	Delete Symbol	Szimbólum törlése
 	Delete the selected symbol?	Törli a kijelölt szimbólumot?
+	Delete the selected symbols?	Törli a kijelölt szimbólumokat?
+	No unused symbols	Nincsenek nem használt szimbólumok
+	Delete Symbols	Szimbólumok törlése
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Egy vagy több szimbólum használatban van, és nem törölhető, amíg a példányait ki nem bontja vagy nem törli.
 	Expand Instances	Példányok kibontása
 	Delete Instances	Példányok törlése
@@ -982,6 +985,9 @@ font-technology	Variable	Változó
 	No	Nem
 	Delete Tab	Tabulátor törlése
 	Delete the graphic style “{name}”?	Törlöd ezt a grafikai stílust: „{name}”?
+	Delete Action Sets	Műveletkészletek törlése
+	Delete the action set “{name}” and its actions?	Törlöd ezt a műveletkészletet és a műveleteit: „{name}”?
+	Delete the selected action sets and their actions?	Törlöd a kijelölt műveletkészleteket és a műveleteiket?
 	Delete the library “{name}”?	Törlöd ezt a könyvtárat: „{name}”?
 	Delete Theme	Téma törlése
 	Delete theme	Téma törlése
@@ -1187,6 +1193,7 @@ font-technology	Variable	Változó
 	Edit Selection	Kijelölés szerkesztése
 	Edit Selection…	Kijelölés szerkesztése…
 	Edit Symbol	Szimbólum szerkesztése
+	Exit Symbol Editing Mode	Kilépés a szimbólumszerkesztési módból
 	Edit Text	Szöveg szerkesztése
 	Edit the applied effect, or add another one?	Szerkeszted az alkalmazott effektust, vagy újat adsz hozzá?
 	Edit the point	Pont szerkesztése
@@ -1578,6 +1585,9 @@ file-filter	Templates	Sablonok
 	Hide Live Paint Gaps	Élő festés hézagainak elrejtése
 	Select Fills	Kitöltések kijelölése
 	Select Strokes	Körvonalak kijelölése
+	Paint Fills	Kitöltések festése
+	Paint Strokes	Körvonalak festése
+	Highlight	Kiemelés
 	Gaussian Blur	Gauss-elmosás
 	Gaussian Blur…	Gauss-elmosás…
 	General	Általános
@@ -1860,6 +1870,8 @@ file-filter	Templates	Sablonok
 	Objects on Path	Objektumok útvonalon
 	Attach	Csatolás
 	Objects on Path Options	Objektumok útvonalon beállításai
+	Pivot:	Forgáspont:
+	Rotate:	Elforgatás:
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
@@ -1926,6 +1938,12 @@ file-filter	Templates	Sablonok
 	Hyphenate Capitalized Words	Nagybetűs szavak elválasztása
 	ICC Profile	ICC-profil
 	ICF Bottom/Left	ICF alja/bal oldala
+	Show Font Height Options	Betűmagasság-beállítások megjelenítése
+	Hide Font Height Options	Betűmagasság-beállítások elrejtése
+	Set Font Height Reference	Betűmagasság viszonyítási alapjának beállítása
+	Em Box	Kvirtmező
+	x-Height	x-magasság
+	ICF Box	ICF-mező
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -1961,6 +1979,7 @@ file-filter	Templates	Sablonok
 	In Tangent Handles	Bejövő érintőfogantyúk
 	In the selected objects	A kijelölt objektumokban
 	Inches	Hüvelyk
+	Include Artboard Fill	Rajztábla kitöltésével együtt
 	Include all profiles	Összes profil beágyazása
 	Include Blacks with CMY:	CMY-alapú feketék is:
 	Include Bleed	Kifutóval együtt
@@ -2995,6 +3014,7 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	Proportional Lining	Arányos modern
 	Proportional Oldstyle	Arányos régies
 	Public Domain	Közkincs
 	Pucker	Összehúzás
@@ -3938,6 +3958,7 @@ mark-style	Japanese	Japán
 	Swap Fill and Stroke (Shift+X)	Kitöltés és körvonal cseréje (Shift+X)
 	Swap start and end arrowheads	Kezdő és záró nyílhegy cseréje
 	Swap the selected object for the file, keeping its place and transform	A kijelölt objektum cseréje a fájlra, a helye és az átalakítása megtartásával
+	Stylistic Alternates	Stilisztikai változatok
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
 	Swatch Conflicts	Színminta-ütközések
@@ -3983,6 +4004,7 @@ mark-style	Japanese	Japán
 	Tabs	Tabulátorok
 	Tabular Lining	Táblázatos modern
 	Tabular Oldstyle	Táblázatos régies
+	Titling Alternates	Címváltozatok
 	Tag	Címke
 	Tag (open)	Címke (nyitott)
 	Target	Célzás
@@ -4503,6 +4525,7 @@ imageTrace	Outline	Körvonal
 @msg	`stops` must be an array	`stops`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
 @msg	`to` must be "corner" or "smooth"	`to`: "corner" vagy "smooth" kell
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`: "emBox", "capHeight", "xHeight" vagy "icfBox" kell
 @msg	`{_1}` is no save command	nem mentési parancs: `{_1}`
 @msg	`{area}` is no recovery area name	nem helyreállítási terület neve: `{area}`
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	nem szín: `{color}` (#rrggbb vagy előbeállítás neve)
@@ -4670,7 +4693,6 @@ imageTrace	Outline	Körvonal
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
 @msg	Convert to Shape: no rectangles or ellipses selected	Átalakítás alakzattá: nincs kijelölt téglalap vagy ellipszis
-@msg	Copied the CSS of {rules} object(s)	CSS másolva, objektumok: {rules}
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -4695,27 +4717,21 @@ imageTrace	Outline	Körvonal
 @msg	Divide Objects Below: select a path	Alatta lévő objektumok felosztása: jelölj ki egy útvonalat
 @msg	Divide Objects Below: select exactly one path	Alatta lévő objektumok felosztása: pontosan egy útvonalat jelölj ki
 @msg	docking action contains an unknown panel or an excessive split path	a dokkolási művelet ismeretlen panelt vagy túl hosszú felosztási útvonalat tartalmaz
-@msg	Downloaded {_1} file(s)	Letöltött fájlok: {_1}
 @msg	Downloaded {what}	Letöltve: {what}
 @msg	effect {k} is `{_1}`, not `{id}`	az effektus ({k}) ez: `{_1}`, nem ez: `{id}`
-@msg	Embedded {n} image(s)	Beágyazott képek: {n}
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra
 @msg	empty brush stroke	üres ecsetvonás
 @msg	empty cutter	üres vágóobjektum
 @msg	empty path	üres útvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
 @msg	Expand: no gradient fills	Kibontás: nincs színátmenetes kitöltés
 @msg	Expand: nothing to expand	Kibontás: nincs mit kibontani
-@msg	Exported {count} file(s) to {folder}	Exportált fájlok: {count}, mappa: {folder}
 @msg	Exported {path}	Exportálva: {path}
 @msg	Exported {what}	Exportálva: {what}
-@msg	Exported {what} with {_1} note(s): {first}	Exportálva: {what}; megjegyzések: {_1}, az első: {first}
 @msg	Exporting {_1}	Exportálás: {_1}
 @msg	Packaging {_1}	Csomagolás: {_1}
 @msg	Placing {_1}	Elhelyezés: {_1}
@@ -5001,9 +5017,26 @@ imageTrace	Outline	Körvonal
 @msg	recovery copy `{file}`: {e}	helyreállítási másolat (`{file}`): {e}
 @msg	Release Guides: no guides	Segédvonalak visszaalakítása: nincs segédvonal
 @msg	Release: no layer to put the rectangle in	Megszüntetés: nincs réteg, amelybe a téglalap kerülhetne
-@msg	Relinked {_1} image(s)	Újracsatolt képek: {_1}
-@msg	Relinked {n} image(s)	Újracsatolt képek: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Újracsatolt képek: {n}; nincs a mappában: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra
+@msgplural	Embedded {n} image|Embedded {n} images	Beágyazott képek: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	Újracsatolt képek: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Újracsatolt képek: {n}; nincs a mappában: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Frissített képek: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	Lecserélt képek: {n}
+@msgplural	Broke {n} link|Broke {n} links	Bontott csatolások: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Bontott csatolások: {n}; nem olvasható: {missing}, ezeket előbb csatold újra vagy frissítsd
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {n}; az előnézetük látszik
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {n}; áthúzott keretként látszanak
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	Nem elérhető betűtípusok: {n}; a szövegük más betűtípussal jelenik meg
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS másolva, objektumok: {n}
+@msgplural	Downloaded {n} file|Downloaded {n} files	Letöltött fájlok: {n}
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportált fájlok: {n}, mappa: {folder}
 @msg	Reload the page to go on (changes not saved yet may be lost).	A folytatáshoz töltsd újra az oldalt (a még nem mentett módosítások elveszhetnek).
 @msg	Replace Spine: select a blend and a path	Gerinc cseréje: jelölj ki egy összemosást és egy útvonalat
 @msg	Reset {_1}	Visszaállítva: {_1}
@@ -5044,6 +5077,8 @@ imageTrace	Outline	Körvonal
 @msg	a clipping path can't be attached to a path	vágóútvonal nem csatolható útvonalhoz
 @msg	select a stroke with a variable width	jelölj ki egy változó szélességű körvonalat
 @msg	select a symbol instance	jelölj ki egy szimbólumpéldányt
+@msg	select instances of one symbol	egyetlen szimbólum példányait jelöld ki
+@msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
@@ -5214,8 +5249,6 @@ imageTrace	Outline	Körvonal
 @msg	unknown workspace (one of {_1})	ismeretlen munkaterület (ezek egyike lehet: {_1})
 @msg	unsupported native docking operation	nem támogatott natív dokkolási művelet
 @msg	unsupported: {0}	nem támogatott: {0}
-@msg	Updated {_1} image(s)	Frissített képek: {_1}
-@msg	Updated {_1} linked file(s) changed on disk	Frissített, a lemezen módosult csatolt fájlok: {_1}
 @msg	variables are locked	a változók zárolva vannak
 @msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	a VectorCraft nem keres más alkalmazások és a rendszer mappáiban: {path}
@@ -5244,9 +5277,6 @@ imageTrace	Outline	Körvonal
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	a `documentData` mérete {size} bájt (korlát: {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	már foglalt: {_1} (használja: {_2})
 @msg	{_1} is reserved by the system	A(z) {_1} a rendszer számára foglalt
-@msg	{_1} linked file(s) can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {_1}; az előnézetük látszik
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {undecoded}; áthúzott keretként látszanak
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {_1}; a Csatolások frissítése az új változatokat mutatja
 @msg	{_1}: not saved, so not closed	{_1}: nincs mentve, ezért nem záródott be
 @msg	{bpp}-bit bitmaps can't be read	ilyen bitmélységű bitkép nem olvasható: {bpp}
 @msg	{command} didn't create an object	a parancs nem hozott létre objektumot: {command}
@@ -5261,9 +5291,6 @@ imageTrace	Outline	Körvonal
 @msg	{name}: CRC mismatch	{name}: CRC-eltérés
 @msg	{name}: no local header	{name}: nincs helyi fejléc
 @msg	{name}: no such recovery entry	{name}: nincs ilyen helyreállítási bejegyzés
-@msg	{n} font file(s) are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
-@msg	{n} font(s) aren't available here: their text shows in another font	Nem elérhető betűtípusok: {n}; a szövegük más betűtípussal jelenik meg
 @msg	{path} can't be found: relink it first	nem található: {path}; előbb csatold újra
 @msg	{path} is not a folder	nem mappa: {path}
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: itt nincs fájlrendszer (megnyitáshoz add meg a dataBase64-et; az útvonal elhagyásával dataBase64-et kapsz)
@@ -5906,6 +5933,13 @@ anchor	Points:	Pontok:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	adja meg: `inkLimit`, `removeWhiteOverprint` vagy `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	A nyomdai festékjavítások CMYK-dokumentumokon működnek: előbb válassza a Fájl › Dokumentum színmódja › CMYK-szín parancsot
 @msg	`{key}` must be 0..{max}	`{key}` értéke 0..{max} lehet
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Legközelebbi színminta keresése…
+	Find Nearest Swatch	Legközelebbi színminta keresése
+	Apply Nearest Swatch	Legközelebbi színminta alkalmazása
+	Select objects to find the swatches nearest their colors.	Jelöljön ki objektumokat a színeikhez legközelebbi színminták megkereséséhez.
+@msg	select objects or give `color`	jelöljön ki objektumokat, vagy adja meg ezt: `color`
+@msg	`color` is not a colour	a(z) `color` nem szín
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Sarok eszköz
 	Slide Anchor Along Path	Horgonypont csúsztatása az útvonal mentén
@@ -6020,6 +6054,9 @@ breakText	Glyphs	Glifák
 	Gap 4	Hézag 4
 	Dash 5	Vonal 5
 	Gap 5	Hézag 5
+
+@msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.
 @msg	invalid pattern tile choice	érvénytelen mintacsempe-választás
 @msg	no pattern named `{choice}`	nincs `{choice}` nevű minta
@@ -6050,6 +6087,9 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
+@msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -6072,3 +6112,42 @@ breakText	Glyphs	Glifák
 	Odia	Odia
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
+	Export All Open Documents as SVG	Az összes megnyitott dokumentum exportálása SVG-ként
+@msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Szimbólum típusa:
+	Dynamic Symbol	Dinamikus szimbólum
+	Static Symbol	Statikus szimbólum
+	Symbol Instance Appearance	Szimbólumpéldány megjelenése
+	Reset Symbol Instance	Szimbólumpéldány visszaállítása
+@msg	type must be static or dynamic, not {v}	a type értéke static vagy dynamic lehet, nem {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statikus szimbólum: előbb állítsa a szimbólum típusát Dinamikusra
+@msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
+@msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
+@msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét
+@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+	Text Flow	Szövegfolyás
+	By Rows	Soronként
+	By Columns	Oszloponként
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Véletlenszerű átlátszatlanság…
+	Randomize Opacity	Véletlenszerű átlátszatlanság
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Kezdőérték:
+@msg	`min` is greater than `max`	`min` nagyobb, mint `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Objektumok rendezése…
+	Sort Objects	Objektumok rendezése
+	Sort By:	Rendezés alapja:
+	Apply To:	Alkalmazás erre:
+	Area	Terület
+	X Position	X pozíció
+	Y Position	Y pozíció
+	Stacking Order	Halmozási sorrend
+	Small to Large	Kicsitől a nagyig
+	Large to Small	Nagytól a kicsiig
+	Distribute Evenly	Egyenletes elosztás

@@ -52,6 +52,7 @@ impl Serialize for Node {
             e.colorize.is_none(),
             is_default(&e.compound_shape),
             is_default(&e.shape_mode),
+            e.symbol_overrides.is_empty(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -92,6 +93,7 @@ impl Serialize for Node {
         field!("colorize", &e.colorize);
         field!("compound_shape", &e.compound_shape);
         field!("shape_mode", &e.shape_mode);
+        field!("symbol_overrides", &e.symbol_overrides);
         st.end()
     }
 }
@@ -138,26 +140,26 @@ fn count_one<E: serde::de::Error>() -> Result<(), E> {
     Ok(())
 }
 
-/// A member's Intertwine areas of tier 2 and up, each counting against [`with_node_budget`] as
-/// an object does: a compressed file of repeated empty areas stays small while they take memory
-/// once read.
-fn counted_tiers<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<PathData>, D::Error> {
-    struct Tiers;
-    impl<'de> serde::de::Visitor<'de> for Tiers {
-        type Value = Vec<PathData>;
+/// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
+/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
+/// file of repeated empty items stays small while they take memory once read.
+fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+    struct Items<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
+        type Value = Vec<T>;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a list of areas")
+            f.write_str("a list")
         }
-        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<PathData>, A::Error> {
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<T>, A::Error> {
             let mut out = Vec::new();
-            while let Some(area) = seq.next_element::<PathData>()? {
+            while let Some(item) = seq.next_element::<T>()? {
                 count_one()?;
-                out.push(area);
+                out.push(item);
             }
             Ok(out)
         }
     }
-    d.deserialize_seq(Tiers)
+    d.deserialize_seq(Items(std::marker::PhantomData))
 }
 
 /// How a [`Node`] is read: the flat field list of the file format. Fields move into the node
@@ -216,7 +218,7 @@ pub(super) struct NodeWire {
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
     intertwine: Option<Box<PathData>>,
-    #[serde(default, deserialize_with = "counted_tiers")]
+    #[serde(default, deserialize_with = "counted_list")]
     intertwine_tiers: Vec<PathData>,
     #[serde(default)]
     live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
@@ -228,6 +230,8 @@ pub(super) struct NodeWire {
     compound_shape: bool,
     #[serde(default)]
     shape_mode: crate::ShapeMode,
+    #[serde(default, deserialize_with = "counted_list")]
+    symbol_overrides: Vec<crate::SymbolOverride>,
 }
 
 impl From<NodeWire> for Node {
@@ -253,6 +257,7 @@ impl From<NodeWire> for Node {
             colorize: w.colorize,
             compound_shape: w.compound_shape,
             shape_mode: w.shape_mode,
+            symbol_overrides: w.symbol_overrides,
         };
         Node {
             id: w.id,

@@ -19,9 +19,12 @@ const BASIC: &[&str] = &[
     "position",
     "underline",
     "strikethrough",
+    "standardVerticalRoman",
     "charAlign",
 ];
 const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
+/// The on, off or unset checkboxes.
+const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Character Style Options").into(),
@@ -41,6 +44,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "position",
             "underline",
             "strikethrough",
+            "standardVerticalRoman",
             "charAlign",
             "section",
         ]
@@ -68,9 +72,11 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
 
 pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>) -> Map<String, Value> {
     let mut fields = Map::new();
-    for key in ["font_family", "font_style", "size", "leading", "kerning", "tracking", "underline", "strikethrough", "charAlign"] {
+    for key in
+        ["font_family", "font_style", "size", "leading", "kerning", "tracking", "underline", "strikethrough", "standardVerticalRoman", "charAlign"]
+    {
         let value = attrs.get(key).cloned().unwrap_or(Value::Null);
-        let shown = if ["underline", "strikethrough"].contains(&key) {
+        let shown = if SWITCHES.contains(&key) {
             value
         } else if value.is_null() {
             if attrs.contains_key(key) && ["leading", "kerning"].contains(&key) { json!("Auto") } else { json!("") }
@@ -144,9 +150,9 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
             attrs.insert((*key).into(), v);
         }
     }
-    for key in ["underline", "strikethrough"] {
-        if let Some(v) = d.fields.get(key).and_then(Value::as_bool) {
-            attrs.insert(key.into(), json!(v));
+    for key in SWITCHES {
+        if let Some(v) = d.fields.get(*key).and_then(Value::as_bool) {
+            attrs.insert((*key).into(), json!(v));
         }
     }
     if reset || d.fields.get("case").and_then(Value::as_str) != case_from_attrs(&original) {
@@ -204,8 +210,20 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
 
 pub(crate) fn reset_basic(d: &mut Dialog) {
     d.fields.insert("__resetBasic".into(), json!(true));
-    for key in ["font_family", "font_style", "size", "leading", "kerning", "tracking", "case", "position", "underline", "strikethrough", "charAlign"]
-    {
+    for key in [
+        "font_family",
+        "font_style",
+        "size",
+        "leading",
+        "kerning",
+        "tracking",
+        "case",
+        "position",
+        "underline",
+        "strikethrough",
+        "standardVerticalRoman",
+        "charAlign",
+    ] {
         d.fields.insert(
             key.into(),
             if ["font_family", "font_style", "size", "leading", "kerning", "tracking"].contains(&key) { json!("") } else { Value::Null },
@@ -255,7 +273,11 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
         ui.label(tl!("Position"));
         choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
         ui.end_row();
-        for (key, caption) in [("underline", tl!("Underline")), ("strikethrough", tl!("Strikethrough"))] {
+        for (key, caption) in [
+            ("underline", tl!("Underline")),
+            ("strikethrough", tl!("Strikethrough")),
+            ("standardVerticalRoman", tl!("Standard Vertical Roman Alignment")),
+        ] {
             ui.label("");
             let value = d.fields.get(key).and_then(Value::as_bool);
             if crate::widgets::check3(ui, caption, value, true) {
@@ -270,7 +292,7 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
             }
             ui.end_row();
         }
-        ui.label(tl!("Standard Vertical Roman Alignment"));
+        ui.label(tl!("Character Alignment"));
         choice(
             ui,
             d,
@@ -464,6 +486,39 @@ mod tests {
         }
         super::super::confirm(&mut app).unwrap();
         assert_eq!(app.session.doc().unwrap().doc.char_styles.iter().find(|def| def.name == "Future").unwrap().attrs["size"], json!(36.0));
+    }
+
+    /// Basic Character Formats shows Character Alignment under its own name, and Standard Vertical
+    /// Roman Alignment as its own on, off or unset checkbox that the style saves.
+    #[test]
+    fn standard_vertical_roman_alignment_has_its_own_row() {
+        let mut d = Dialog::new(KIND, json!({}));
+        d.fields.extend(fields_from_attrs(&Map::new()));
+        d.fields.insert("__attrs".into(), json!({}));
+        let mut app = app();
+        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| basic_body(ui, &mut d));
+        assert!(shown.contains("Character Alignment"), "{shown}");
+        assert!(shown.contains("Standard Vertical Roman Alignment"), "{shown}");
+        assert!(d.fields["standardVerticalRoman"].is_null());
+        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
+        d.fields.insert("standardVerticalRoman".into(), json!(true));
+        d.fields.insert("charAlign".into(), json!("emBoxCenter"));
+        assert_eq!(edited_attrs(&d).unwrap(), json!({"standardVerticalRoman": true, "charAlign": "emBoxCenter"}).as_object().unwrap().clone());
+        let fields = fields_from_attrs(json!({"standardVerticalRoman": false}).as_object().unwrap());
+        assert_eq!(fields["standardVerticalRoman"], json!(false));
+        reset_basic(&mut d);
+        assert!(d.fields["standardVerticalRoman"].is_null());
+
+        app.run("charStyle.new", json!({"name": "Upright", "attrs": {}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "AB", "vertical": true})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Upright", "id": id})).unwrap();
+        open(&mut app, "Upright").unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("standardVerticalRoman".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.char_styles[0].attrs["standardVerticalRoman"], json!(true));
+        let vectorcraft_doc::NodeKind::Text(t) = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| r.style.standard_vertical_roman));
     }
 
     #[test]

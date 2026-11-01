@@ -640,7 +640,6 @@
 	Links	Koppelingen
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} gekoppelde afbeelding gewijzigd op de schijf. Nieuwe versie tonen?|{n} gekoppelde afbeeldingen gewijzigd op de schijf. Nieuwe versies tonen?
 	Update Changed Links	Gewijzigde koppelingen bijwerken
-@msg	Updated {_1} linked file(s) changed on disk	Bijgewerkt: {_1} gekoppelde bestand(en) gewijzigd op de schijf
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
 	Pattern Options	Patroonopties
@@ -1403,6 +1402,12 @@ digits	Malayalam	Malayalam
 	Axis	As
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
+	Show Font Height Options	Opties voor letterhoogte tonen
+	Hide Font Height Options	Opties voor letterhoogte verbergen
+	Set Font Height Reference	Referentie voor letterhoogte instellen
+	Em Box	Em-vak
+	x-Height	x-hoogte
+	ICF Box	ICF-vak
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
@@ -1495,6 +1500,9 @@ digits	Malayalam	Malayalam
 	Save to Swatches	Opslaan in stalen
 	Delete Graphic Style (Alt-click: without asking)	Grafische stijl verwijderen (Alt-klik: zonder vragen)
 	Delete the graphic style “{name}”?	De grafische stijl „{name}” verwijderen?
+	Delete Action Sets	Actiesets verwijderen
+	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
+	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken
@@ -1633,13 +1641,16 @@ digits	Malayalam	Malayalam
 	Fractions	Breuken
 	Ligatures are off while the text is tracked.	Ligaturen staan uit terwijl de tekst wordt gespatieerd.
 	Ordinals	Rangtelwoorden
+	Proportional Lining	Proportionele lining
 	Proportional Oldstyle	Proportionele oldstyle
 	Reset OpenType Features	OpenType-functies herstellen
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.
 	Standard Ligatures	Standaardligaturen
+	Stylistic Alternates	Stilistische alternatieven
 	Swash	Swash
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
+	Titling Alternates	Titelalternatieven
 	Every-line Composer	Compositie per alinea
 	First-line Left Indent	Eerste regel links inspringen
 	Hyphenation…	Afbreken…
@@ -2066,6 +2077,7 @@ digits	Malayalam	Malayalam
 	Compatible Gradient and Gradient Mesh Printing	Compatibel afdrukken van verlopen en verlooprasters
 	Embed Fonts (for other applications)	Lettertypen insluiten (voor andere programma's)
 	EPS Options	EPS-opties
+	Include Artboard Fill	Tekenbordvulling opnemen
 	Include CMYK PostScript in RGB Files	CMYK PostScript opnemen in RGB-bestanden
 	Include Document Thumbnails	Documentminiaturen opnemen
 	Include Linked Files	Gekoppelde bestanden opnemen
@@ -2863,6 +2875,9 @@ theme	Appearance	Vormgeving
 	Delete Brush	Penseel verwijderen
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
+	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
+	No unused symbols	Geen ongebruikte symbolen
+	Delete Symbols	Symbolen verwijderen
 	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Een of meer van de symbolen zijn in gebruik en kunnen pas worden verwijderd als hun exemplaren zijn uitgebreid of verwijderd.
 	Expand Instances	Exemplaren uitbreiden
 	Delete Instances	Exemplaren verwijderen
@@ -2871,6 +2886,7 @@ theme	Appearance	Vormgeving
 	Duplicate Brush	Kwast dupliceren
 	Duplicate Symbol	Symbool dupliceren
 	Edit Symbol	Symbool bewerken
+	Exit Symbol Editing Mode	Symboolbewerkingsmodus verlaten
 	Expand Brush Strokes	Penseelstreken omzetten
 	New Brush…	Nieuw penseel…
 	New Brush	Nieuw penseel
@@ -3930,7 +3946,6 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
-@msg	Copied the CSS of {rules} object(s)	CSS van {rules} object(en) gekopieerd
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
@@ -3947,13 +3962,11 @@ imageTrace	Outline	Contour
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecteer met directe selectie ankerpunten om te knippen (niet de eindpunten van open paden)
 @msg	Divide Objects Below: select a path	Objecten eronder verdelen: selecteer een pad
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
-@msg	Downloaded {_1} file(s)	{_1} bestand(en) gedownload
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
 @msg	Expand: no brush strokes selected	Uitbreiden: geen penseelstreken geselecteerd
 @msg	Expand: no gradient fills	Uitbreiden: geen verloopvullingen
 @msg	Expand: nothing to expand	Uitbreiden: niets om uit te breiden
-@msg	Exported {count} file(s) to {folder}	{count} bestand(en) geëxporteerd naar {folder}
 @msg	Exported {path}	{path} geëxporteerd
 @msg	Flatten Transparency: select objects to flatten	Transparantie afvlakken: selecteer objecten om af te vlakken
 @msg	Flatten Transparency: {e}	Transparantie afvlakken: {e}
@@ -4323,6 +4336,8 @@ imageTrace	Outline	Contour
 @msg	select a repeat	selecteer een herhaling
 @msg	select a stroke with a variable width	selecteer een lijn met een variabele breedte
 @msg	select a symbol instance	selecteer een symboolinstantie
+@msg	select instances of one symbol	selecteer instanties van één symbool
+@msg	a symbol can't hold an instance of itself	een symbool kan geen instantie van zichzelf bevatten
 @msg	select an Image Trace object	selecteer een Image Trace-object
 @msg	could not decode image: {0}	afbeelding kon niet worden gedecodeerd: {0}
 @msg	image is empty	afbeelding is leeg
@@ -4453,8 +4468,6 @@ imageTrace	Outline	Contour
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} is een live-effect (Effect › Plug-ins)
 @msg	{_1} is already used by {_2}	{_1} wordt al gebruikt door {_2}
 @msg	{_1} is reserved by the system	{_1} is gereserveerd door het systeem
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} gekoppelde bestand(en) kunnen hier niet worden gelezen: hun voorbeelden worden weergegeven
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} gekoppelde afbeelding(en) zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msg	{_1}: not saved, so not closed	{_1}: niet opgeslagen, dus niet gesloten
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bits bitmaps kunnen niet worden gelezen
 @msg	{command} didn't create an object	{command} heeft geen object gemaakt
@@ -4474,7 +4487,6 @@ imageTrace	Outline	Contour
 @msg	Couldn't place {name}: {e}	Kon {name} niet plaatsen: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kon niet van het klembord plakken: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} opgeslagen met {_1} opmerking(en): {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} geëxporteerd met {_1} opmerking(en): {first}
 @msg	Exported {what}	{what} geëxporteerd
 @msg	Saved {n} files beside {path}	{n} bestanden opgeslagen naast {path}
 @msg	Saving	Bezig met opslaan
@@ -4485,12 +4497,26 @@ imageTrace	Outline	Contour
 @msg	Saving recovery data for {_1}	Bezig met opslaan van herstelgegevens voor {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} hersteld(e) document(en) verworpen
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} hersteld(e) document(en) teruggezet: sla ze op om ze te behouden
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} afbeelding(en) ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
-@msg	Embedded {n} image(s)	{n} afbeelding(en) ingesloten
-@msg	Relinked {_1} image(s)	{_1} afbeelding(en) opnieuw gekoppeld
-@msg	Relinked {n} image(s)	{n} afbeelding(en) opnieuw gekoppeld
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} afbeelding(en) opnieuw gekoppeld; niet in die map: {_1}
-@msg	Updated {_1} image(s)	{_1} afbeelding(en) bijgewerkt
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
+@msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten
+@msgplural	Relinked {n} image|Relinked {n} images	{n} afbeelding opnieuw gekoppeld|{n} afbeeldingen opnieuw gekoppeld
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} afbeelding opnieuw gekoppeld; niet in die map: {names}|{n} afbeeldingen opnieuw gekoppeld; niet in die map: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} afbeelding opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}|{n} afbeeldingen opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} afbeelding bijgewerkt|{n} afbeeldingen bijgewerkt
+@msgplural	Replaced {n} image|Replaced {n} images	{n} afbeelding vervangen|{n} afbeeldingen vervangen
+@msgplural	Broke {n} link|Broke {n} links	{n} koppeling verbroken|{n} koppelingen verbroken
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} koppeling verbroken; {missing} kunnen niet worden gelezen: koppel ze eerst opnieuw of werk ze bij|{n} koppelingen verbroken; {missing} kunnen niet worden gelezen: koppel ze eerst opnieuw of werk ze bij
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} gekoppeld bestand kan hier niet worden gelezen: het voorbeeld wordt weergegeven|{n} gekoppelde bestanden kunnen hier niet worden gelezen: hun voorbeelden worden weergegeven
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} afbeelding kon niet worden gedecodeerd en wordt als doorgekruist vak weergegeven|{n} afbeeldingen konden niet worden gedecodeerd en worden als doorgekruiste vakken weergegeven
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} lettertype hier niet beschikbaar: de tekst verschijnt in een ander lettertype|{n} lettertypen hier niet beschikbaar: de tekst verschijnt in een ander lettertype
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS van {n} object gekopieerd|CSS van {n} objecten gekopieerd
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} bestand gedownload|{n} bestanden gedownload
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} bestand geëxporteerd naar {folder}|{n} bestanden geëxporteerd naar {folder}
 @msg	Unembedded to {_1}	Extern gemaakt: {_1}
 @msg	Reset {_1}	{_1} opnieuw ingesteld
 @msg	Sent to {_1}	Verzonden naar {_1}
@@ -4540,9 +4566,6 @@ imageTrace	Outline	Contour
 @msg	every search thread stopped on an internal error (please report this bug)	elke zoekthread is gestopt door een interne fout (meld deze bug)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	de map Lettertypen van VectorCraft is hier niet ingesteld: de desktopapp en vectorcraft-cli stellen die in
 @msg	choose the font files to add	kies de lettertypebestanden die je wilt toevoegen
-@msg	{n} font file(s) are now in {folder}	er staan nu {n} lettertypebestand(en) in {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	er staan nu {n} lettertypebestand(en) in {folder}; {failed} konden niet worden toegevoegd: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} lettertype(n) hier niet beschikbaar: de tekst verschijnt in een ander lettertype
 @msg	not a file	geen bestand
 @msg	not a font file	geen lettertypebestand
 @msg	that document is no longer open	dat document is niet langer geopend
@@ -4551,7 +4574,6 @@ imageTrace	Outline	Contour
 @msg	every numbered name for it is taken in the Fonts folder	elke genummerde naam ervoor is al vergeven in de map Lettertypen
 @msg	every numbered name for {name} is taken in the document's folder	elke genummerde naam voor {name} is al vergeven in de map van het document
 @msg	No linked files to look for	Geen gekoppelde bestanden om naar te zoeken
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} afbeelding(en) opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` is de stapverwijzing {r}, die alleen `run` en `command_batch` oplossen
 @msg	`ids` must be an array of object ids, not {v}	`ids` moet een array van object-id's zijn, niet {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` moet een array van ankerindices zijn, niet {v}
@@ -5310,6 +5332,9 @@ swatch	Bright Violet	Felviolet
 	Close Gaps With Paths	Openingen sluiten met paden
 	Select Fills	Vullingen selecteren
 	Select Strokes	Lijnen selecteren
+	Paint Fills	Vullingen verven
+	Paint Strokes	Lijnen verven
+	Highlight	Markering
 	Column Type:	Kolomtype:
 	Each Design Represents:	Elk ontwerp staat voor:
 	Event:	Gebeurtenis:
@@ -5405,6 +5430,8 @@ swatch	Bright Violet	Felviolet
 	Objects on Path	Objecten op pad
 	Attach	Koppelen
 	Objects on Path Options	Opties voor objecten op pad
+	Pivot:	Draaipunt:
+	Rotate:	Rotatie:
 	Objects on Path Tool	Objecten-op-pad-gereedschap
 	Attach Objects on Path	Objecten aan pad koppelen
 	Expand Objects on Path	Objecten op pad uitbreiden
@@ -5862,6 +5889,13 @@ anchor	Points:	Punten:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geef `inkLimit`, `removeWhiteOverprint` of `overprintBlack` op
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Drukinktcorrecties werken in CMYK-documenten: kies eerst Bestand › Documentkleurmodus › CMYK-kleur
 @msg	`{key}` must be 0..{max}	`{key}` moet 0..{max} zijn
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
+	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
+	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
+@msg	select objects or give `color`	selecteer objecten of geef `color` op
+@msg	`color` is not a colour	`color` is geen kleur
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hoekengereedschap
 	Slide Anchor Along Path	Ankerpunt langs pad schuiven
@@ -5976,6 +6010,9 @@ breakText	Glyphs	Glyphs
 	Gap 4	Tussenruimte 4
 	Dash 5	Streepje 5
 	Gap 5	Tussenruimte 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel
 @msg	no pattern named `{choice}`	geen patroon met de naam `{choice}`
@@ -6006,6 +6043,9 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Streepjes uitbreiden tot paden
+@msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Documentgereedschappen
 	Save a Timestamped Copy	Een kopie met tijdstempel opslaan
@@ -6028,3 +6068,42 @@ breakText	Glyphs	Glyphs
 	Odia	Odia
 	Urdu	Urdu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} en nieuwer (versie {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geopende documenten exporteren als PDF
+	Export All Open Documents as SVG	Alle geopende documenten exporteren als SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} document geëxporteerd|{n} documenten geëxporteerd
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} document geëxporteerd; {title} is niet geschreven: {error}|{n} documenten geëxporteerd; {title} is niet geschreven: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Symbooltype:
+	Dynamic Symbol	Dynamisch symbool
+	Static Symbol	Statisch symbool
+	Symbol Instance Appearance	Uiterlijk van symboolinstantie
+	Reset Symbol Instance	Symboolinstantie opnieuw instellen
+@msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
+@msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
+@msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
+@msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
+@msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
+	Text Flow	Tekstdoorloop
+	By Rows	Per rij
+	By Columns	Per kolom
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Willekeurige dekking…
+	Randomize Opacity	Willekeurige dekking
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Startwaarde:
+@msg	`min` is greater than `max`	`min` is groter dan `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Objecten sorteren…
+	Sort Objects	Objecten sorteren
+	Sort By:	Sorteren op:
+	Apply To:	Toepassen op:
+	Area	Oppervlakte
+	X Position	X-positie
+	Y Position	Y-positie
+	Stacking Order	Stapelvolgorde
+	Small to Large	Van klein naar groot
+	Large to Small	Van groot naar klein
+	Distribute Evenly	Gelijkmatig verdelen
