@@ -35,7 +35,9 @@ use brushes::{
 };
 use dynamic::{symbol_instance_reset, symbol_instance_set_appearance};
 use symbols::selected_instances;
-pub(crate) use symbols::{fit_instances_of, instance_in_place, instances_of, natural_size, normalize, place_xf, set_natural_size, store_symbol};
+pub(crate) use symbols::{
+    expand_instances_under, fit_instances_of, instance_in_place, instances_of, natural_size, normalize, place_xf, set_natural_size, store_symbol,
+};
 use symbols::{
     symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_list, symbol_new, symbol_options, symbol_place, symbol_replace,
     symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
@@ -174,7 +176,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a third each) → {name, id, registration, exportType, nineSlice, type}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions → {name, id, registration, exportType, nineSlice, type}",
             has_selection,
             symbol_new
         ),
@@ -201,7 +203,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol) → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them → {ids}",
             has_selection,
             symbol_break_link
         ),

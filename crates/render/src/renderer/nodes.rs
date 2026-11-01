@@ -470,11 +470,21 @@ impl Renderer {
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol)
-                    && self.charge_symbol(&sym.art)
-                {
-                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
-                    self.draw_placed_art(ctx, f, &art, kept);
+                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                    // The instance draws when the frame has room for its art's objects; a symbol
+                    // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
+                    let mut used = self.symbol_nodes;
+                    let placed = match f.doc.symbol_slice_map(symbol, *xf) {
+                        Some(m) => self.sliced_art(f.doc, &sym.art, &m, *xf, n, &mut used),
+                        None => {
+                            let count = sym.art.count() as u64;
+                            vectorcraft_doc::charge_symbol_art(&mut used, count, || (self.placed_art(&sym.art, *xf, false, Some(n)), count))
+                        }
+                    };
+                    self.symbol_nodes = used;
+                    if let Some((art, kept)) = placed {
+                        self.draw_placed_art(ctx, f, &art, kept);
+                    }
                 }
             }
             NodeKind::Blend { .. }
@@ -487,13 +497,6 @@ impl Renderer {
                 None => self.draw_live_node(ctx, f, n),
             },
         }
-    }
-
-    /// Count symbol art `art`'s objects against the frame's [`vectorcraft_doc::MAX_SYMBOL_NODES`]: `false` (the
-    /// instance isn't drawn) once they would pass it.
-    fn charge_symbol(&mut self, art: &Node) -> bool {
-        let total = self.symbol_nodes.saturating_add(art.count() as u64);
-        (total <= vectorcraft_doc::MAX_SYMBOL_NODES).then(|| self.symbol_nodes = total).is_some()
     }
 
     /// Draw symbol art `art` as [`Self::placed_art`] placed it for an instance or an inline graphic

@@ -551,7 +551,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   dynamic instance, with the Fill/Stroke controls and Appearance panel then setting its change) and their `.ai`
   read and write; Global Edit of groups holding type or
   images, rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
-  drawing the 9-slice guides on the canvas in symbol edit mode and scaling by them.
+  drawing the 9-slice guides on the canvas in symbol edit mode.
 - **Estimate:** 14–24 h.
 
 ## G3 3D and Materials

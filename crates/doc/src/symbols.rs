@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use vectorcraft_geom::{Affine, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeKind, SYMBOL_HALF};
+use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, Node, NodeKind, SYMBOL_HALF};
 
 /// The box a symbol instance is measured by when its symbol's art has no box
 /// ([`SymbolBoxes::art`]), and in [`Node::geometric_bounds`]: the 20 × 20 square around the origin
@@ -303,17 +303,28 @@ impl<'a> SymbolBoxes<'a> {
         }
     }
 
-    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it,
-    /// its strokes at their own weight, the instances in it measured by their art boxes. `None`
-    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], and while symbol art or a
-    /// click's box is measured.
+    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it
+    /// (through its 9-slice guides when it has them, [`Document::place_symbol_art`]), its strokes
+    /// at their own weight, the instances in it measured by their art boxes. `None`
+    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], while symbol art or a
+    /// click's box is measured, and when placing the art through its guides could make more than
+    /// [`MAX_SYMBOL_NODES`] objects ([`crate::NineSliceMap::most_placed`]).
     pub(crate) fn placed_visual(&self, name: &str, xf: Affine) -> Option<Rect> {
+        self.placed_visual_within(name, xf, MAX_SYMBOL_NODES)
+    }
+
+    /// [`Self::placed_visual`], `None` when placing the art through its guides could make more
+    /// than `most` objects.
+    pub(crate) fn placed_visual_within(&self, name: &str, xf: Affine, most: u64) -> Option<Rect> {
         if self.quick.get() {
             return None;
         }
         self.measure_art(name, |art| {
-            let mut art = (**art).clone();
-            art.transform(xf, false);
+            let art = match self.doc.symbol_slice_map(name, xf) {
+                Some(m) if m.most_placed(art, self.doc) > most => return None,
+                Some(m) => m.place(art, self.doc),
+                None => self.doc.place_symbol_art(name, art, xf)?,
+            };
             self.in_art(|| art.visual(Some(self)))
         })
         .flatten()

@@ -71,6 +71,11 @@ impl Reuse {
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
+                // A scale reaching an instance of a symbol with 9-slice guides changes how its
+                // cells are sized.
+                if doc.symbol_nine_slice(symbol).is_some() {
+                    self.scales = false;
+                }
                 if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
                     self.scan(doc, &s.art, depth + 1);
                 }
@@ -600,12 +605,38 @@ impl Writer<'_> {
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
+                // The instances nested in an inline graphic's art are ordinary instances again.
+                let inline = std::mem::take(&mut self.inline_graphic);
                 let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
                 if self.symbol_nest > MAX_SYMBOL_NEST {
                     return;
                 }
                 let id = self.id_attr(n);
                 let a = self.attrs(&css::transparency(n));
+                // A scaled instance of a symbol with 9-slice guides is written as its placed art,
+                // as the canvas draws it, instead of one `<use>` transform. The scale counts the
+                // transforms of the instances it sits in. An instance whose placed art could hold
+                // more than `MAX_SYMBOL_NODES` objects is left out, as the canvas leaves it out.
+                if let Some(map) = doc.symbol_slice_map(symbol, self.xf * *xf).filter(|_| !inline) {
+                    let art = vectorcraft_brush::instance_art(&sym.art, n);
+                    if map.most_placed(&art, doc) > vectorcraft_doc::MAX_SYMBOL_NODES {
+                        return;
+                    }
+                    let art = map.place(&art, doc);
+                    let saved = (self.xf, self.instance_xf);
+                    (self.xf, self.instance_xf) = (Affine::IDENTITY, Affine::IDENTITY);
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    let knockout = std::mem::take(&mut self.knockout);
+                    self.symbol_nest += 1;
+                    self.node(&art);
+                    self.symbol_nest -= 1;
+                    self.knockout = knockout;
+                    self.depth -= 1;
+                    self.line("</g>");
+                    (self.xf, self.instance_xf) = saved;
+                    return;
+                }
                 if let Some(def) = self.symbol_use(sym, n, *xf) {
                     let m = self.xf * *xf;
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };

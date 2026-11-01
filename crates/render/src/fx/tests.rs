@@ -796,6 +796,32 @@ fn a_moved_group_draws_the_shadow_of_the_instance_art_in_it_while_interacting() 
     }
 }
 
+/// A gradient bar with a drop shadow in a symbol with 9-slice guides, across the guides of an
+/// instance scaled twice across: the bar is drawn cell by cell, and its shadow still shows past
+/// the bar's right end, where the right cell ends.
+#[test]
+fn a_shadow_on_art_across_nine_slice_guides_reaches_past_the_outer_cells() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(300.0, 200.0);
+    let gradient = Paint::Gradient(Box::new(vectorcraft_doc::color::GradientPaint::new(Default::default())));
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    let mut bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 100.0, 60.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    let shadow = json!({"x": 8, "y": 0, "blur": 0, "opacity": 100});
+    bar.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let art = Node::group(d.alloc_id(), vec![std::sync::Arc::new(frame), std::sync::Arc::new(bar)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: std::sync::Arc::new(art) });
+    d.set_symbol_nine_slice("Bar", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let xf = Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    let instance = Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Bar".into(), xf });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, instance).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let out = Renderer::new().render(&d, 300, 200, Affine::IDENTITY, &opts);
+    // The bar runs from x 20 to 220 and y 60 to 80; its shadow, 8 pt to the right, to x 228.
+    assert!(lum(out.pixel(224, 70)) < WHITE, "{:?}", out.pixel(224, 70));
+    assert_eq!(lum(out.pixel(232, 70)), WHITE, "{:?}", out.pixel(232, 70));
+}
+
 /// While interacting, a raster moves with its object only when the content's pixels (for a
 /// shadow, their alpha) and the effects stayed the same (#1257): a new fill color under
 /// Craquelure, other effect settings, a pattern fill that stays on the page, a resized object,

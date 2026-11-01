@@ -69,11 +69,12 @@ pub(crate) type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>
 /// ([`live::Found`]).
 pub(crate) type FxArtEntry = (Arc<Node>, Arc<Node>, Option<live::Found>);
 
-/// What symbol art placed by [`Renderer::placed_art`] is kept under: the art's address, the bits
-/// of the transform's coefficients, whether strokes scale with it, and the stain ([`stain_bits`]).
+/// What symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`] is kept under:
+/// the art's address, the bits of the transform's coefficients, whether strokes scale with it, and
+/// the stain ([`stain_bits`]).
 pub(crate) type PlacedKey = (usize, [u64; 6], bool, [u32; 6]);
 
-/// Symbol art placed by [`Renderer::placed_art`].
+/// Symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`].
 pub(crate) struct PlacedEntry {
     /// The symbol's art, held weakly: the reference keeps the art's allocation, so no other art can
     /// get its address while the entry exists, and does not keep the art's content.
@@ -83,6 +84,10 @@ pub(crate) struct PlacedEntry {
     /// The font generation ([`vectorcraft_text::FontDb::generation`]) the art was placed in, when
     /// it holds type: the art is placed again when the fonts change.
     pub(crate) fonts: Option<u64>,
+    /// The 9-slice map the art was placed through ([`Renderer::sliced_art`]), or `None` for art
+    /// placed by the transform alone ([`Renderer::placed_art`]). An entry is used only by the
+    /// function that made it, with the same map.
+    pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.

@@ -23,7 +23,10 @@ pub const KIND: &str = "symbolOptions";
 /// The 9-slice guide fields, in `[left, top, right, bottom]` order.
 const SLICE_KEYS: [&str; 4] = ["sliceLeft", "sliceTop", "sliceRight", "sliceBottom"];
 
-/// The 9-slice dialog fields for `guides` (percent of the symbol's size; a third each when off).
+/// A guide field's value when the dialog has none: a quarter of the symbol's size, in percent.
+const DEFAULT_SLICE_PERCENT: f64 = 25.0;
+
+/// The 9-slice dialog fields for `guides` (percent of the symbol's size; a quarter each when off).
 fn slice_fields(guides: Option<vectorcraft_doc::SymbolNineSlice>) -> Map<String, Value> {
     let g = guides.unwrap_or_default();
     let mut m = Map::new();
@@ -36,7 +39,7 @@ fn slice_fields(guides: Option<vectorcraft_doc::SymbolNineSlice>) -> Map<String,
 
 /// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params.
 fn slice_params(d: &Dialog) -> Value {
-    let [l, t, r, b] = SLICE_KEYS.map(|key| d.f64(key, 100.0 / 3.0) / 100.0);
+    let [l, t, r, b] = SLICE_KEYS.map(|key| d.f64(key, DEFAULT_SLICE_PERCENT) / 100.0);
     if d.bool("nineSlice") { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
 }
 
@@ -130,7 +133,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if d.bool("nineSlice") {
             for (key, text) in SLICE_KEYS.into_iter().zip([tl!("Left:"), tl!("Top:"), tl!("Right:"), tl!("Bottom:")]) {
                 label(ui, text);
-                let v = d.f64(key, 100.0 / 3.0);
+                let v = d.f64(key, DEFAULT_SLICE_PERCENT);
                 if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, 0.0..=100.0, "%", 0, 64.0) {
                     d.fields.insert(key.into(), json!(n));
                 }
