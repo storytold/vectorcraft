@@ -1402,6 +1402,12 @@ digits	Malayalam	Malayalam
 	Axis	As
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
+	Show Font Height Options	Opties voor letterhoogte tonen
+	Hide Font Height Options	Opties voor letterhoogte verbergen
+	Set Font Height Reference	Referentie voor letterhoogte instellen
+	Em Box	Em-vak
+	x-Height	x-hoogte
+	ICF Box	ICF-vak
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
@@ -2882,6 +2888,7 @@ theme	Appearance	Vormgeving
 	Duplicate Brush	Kwast dupliceren
 	Duplicate Symbol	Symbool dupliceren
 	Edit Symbol	Symbool bewerken
+	Exit Symbol Editing Mode	Symboolbewerkingsmodus verlaten
 	Expand Brush Strokes	Penseelstreken omzetten
 	New Brush…	Nieuw penseel…
 	New Brush	Nieuw penseel
@@ -4331,6 +4338,8 @@ imageTrace	Outline	Contour
 @msg	select a repeat	selecteer een herhaling
 @msg	select a stroke with a variable width	selecteer een lijn met een variabele breedte
 @msg	select a symbol instance	selecteer een symboolinstantie
+@msg	select instances of one symbol	selecteer instanties van één symbool
+@msg	a symbol can't hold an instance of itself	een symbool kan geen instantie van zichzelf bevatten
 @msg	select an Image Trace object	selecteer een Image Trace-object
 @msg	could not decode image: {0}	afbeelding kon niet worden gedecodeerd: {0}
 @msg	image is empty	afbeelding is leeg

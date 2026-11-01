@@ -1388,6 +1388,12 @@ digits	Malayalam	Malayalam
 	Axis	Sumbu
 	ICF Top/Right	ICF atas/kanan
 	ICF Bottom/Left	ICF bawah/kiri
+	Show Font Height Options	Tampilkan opsi tinggi font
+	Hide Font Height Options	Sembunyikan opsi tinggi font
+	Set Font Height Reference	Atur acuan tinggi font
+	Em Box	Em Box
+	x-Height	Tinggi x
+	ICF Box	Kotak ICF
 	Copy Color Value (Hex)	Salin nilai warna (Hex)
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
@@ -2868,6 +2874,7 @@ theme	Appearance	Tampilan
 	Duplicate Brush	Duplikatkan kuas
 	Duplicate Symbol	Duplikatkan simbol
 	Edit Symbol	Edit simbol
+	Exit Symbol Editing Mode	Keluar dari mode edit simbol
 	Expand Brush Strokes	Perluas guratan kuas
 	New Brush…	Kuas baru…
 	New Brush	Kuas baru
@@ -4319,6 +4326,8 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	pilih pengulangan
 @msg	select a stroke with a variable width	pilih goresan dengan lebar variabel
 @msg	select a symbol instance	pilih instans simbol
+@msg	select instances of one symbol	pilih instans dari satu simbol saja
+@msg	a symbol can't hold an instance of itself	simbol tidak dapat memuat instans dirinya sendiri
 @msg	select an Image Trace object	pilih objek Image Trace
 @msg	could not decode image: {0}	tidak dapat mendekode gambar: {0}
 @msg	image is empty	gambar kosong

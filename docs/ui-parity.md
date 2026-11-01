@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Path Precision Tools add-on: Expand Dashes into Paths, #4922) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Artboards panel: drag a row to reorder the artboards, #4687) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -228,6 +228,7 @@ tools, never checked side by side) isn't captured row by row.
 | Escape while typing ends the edit, keeps the type selected and switches to the Selection tool | done | #1802 (#1686, #1656) |
 | Selection tool: selected area type and type on a path show an in port and an out port (empty, an arrow where threaded, the red "+" of overflow); a click on either loads the text cursor; a click on a closed path, on empty canvas or a drag threads the text there, after the clicked frame from its out port, before it from its in port; Escape or another tool drops it; a double-click on a threaded port breaks the thread there | partial | #2572 (`text.thread.add`, `before` for the in port); the out port sits on the frame's right side above the bottom-right corner handle and the in port on its left side below the top-left one, so the handles can still be grabbed; a double-click on a threaded port breaks the thread (`text.thread.break`, [archived help](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html)); the loaded cursor borrows the I-beam |
 | Shift-click selects several artboards (Artboard tool, Artboards panel); they move, Alt-copy and delete together | done | `artboard.move`/`artboard.delete` `indices` (#1139); panel menu, trash and Properties share selected-set deletion; all-selected retains artboard 1 and a single board cannot be deleted, with pointer-event and Undo/Redo coverage |
+| Artboards panel: drag a row above or below another to reorder the artboards (as Move Up / Move Down do) | done | #4687; a line shows where the row lands, `artboard.reorder` in one undo step, the moved artboard becomes active; public forum answers describe the drag |
 | Artboards panel › Delete Empty Artboards | done | `artboard.deleteEmpty`; one undo step, guides go too, locked artboards stay, and artboard 1 when every artboard is empty and none is locked; an artboard is empty when no object (hidden, locked and template art included; guides not) has visual bounds that meet or touch it, a group counting by its members and a clip group or clipping layer by its members inside the clip (our reading of "no artwork"; the pages give no finer rule); [spec](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/add-edit-artboards/delete-artboards.html) |
 | Artboard Delete/Backspace delete selected boards while protecting artwork, the last board and active drags | done | Headless shortcut regressions in `tests/distortkeys.rs` cover retaining the original first board when all are selected, single-board protection, artwork, saved state and Undo/Redo; the navigator follows the tool’s surviving board through repeated deletion and history changes. |
 | Artboard navigator synchronizes the active tool selection before deletion | done | Actual status-bar Next → Delete/Backspace and Next → Properties Delete regressions in `chrome.rs` cover surviving board records, preserved artwork and Undo/Redo; other tools keep object selection and history. **Tab-switch follow-up:** document-tab changes align the Artboard tool with the displayed board. Actual A → B → A tab clicks followed by Properties Delete and controls for same-tab multiselection, Move/Scale Artwork options and other tools passed, along with historical full CI on `a0671777`. [Validation evidence](target-app-parity.md#evidence-what-ships-today-by-area). **Clean-tab close:** with the Artboard tool active, closing a clean active tab restores the surviving document's displayed board before Properties Delete. |
@@ -393,6 +394,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |
 | 2026-11-01 | minor | Path Precision Tools add-on (a VectorCraft addition): Expand Dashes into Paths (#4922); scores and estimates unchanged |
 | 2026-11-01 | minor | Arrange Tools add-on (a VectorCraft addition): Randomize Opacity (#4925); scores and estimates unchanged |

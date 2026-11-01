@@ -1314,6 +1314,7 @@
 	Edit Selection	Edita la selecció
 	Edit Selection…	Edita la selecció…
 	Edit Symbol	Edita el símbol
+	Exit Symbol Editing Mode	Surt del mode d’edició de símbols
 	Edit Text	Edita el text
 	Edit the applied effect, or add another one?	Vols editar l’efecte aplicat o afegir-ne un altre?
 	Edit the point	Edita el punt
@@ -5379,6 +5380,9 @@ digits	Malayalam	Malaiàlam
 @msg	select a repeat	selecciona una repetició
 @msg	select a stroke with a variable width	selecciona un traç amb amplada variable
 @msg	select a symbol instance	selecciona una instància de símbol
+@msg	select instances of one symbol	selecciona instàncies d’un sol símbol
+@msg	a symbol can't hold an instance of itself	un símbol no pot contenir una instància de si mateix
+@msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
@@ -5737,6 +5741,12 @@ theme	Appearance	Aparença
 	Glyph Bounds	Límits del glif
 	Proximity Guides	Guies de proximitat
 	Angular Guides	Guies angulars
+	Show Font Height Options	Mostra les opcions d’alçada de la font
+	Hide Font Height Options	Amaga les opcions d’alçada de la font
+	Set Font Height Reference	Estableix la referència d’alçada de la font
+	Em Box	Caixa em
+	x-Height	Alçada de la x
+	ICF Box	Caixa ICF
 # Average & Join (Object › Path, Cmd+Alt+Shift+J).
 	Average & Join…	Mitjana i unió…
 	Average & Join	Mitjana i unió
