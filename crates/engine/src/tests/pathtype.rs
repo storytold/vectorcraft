@@ -277,3 +277,39 @@ fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
 }
+
+/// Sliding and flipping type on a closed circle (`type.pathOptions`, what dragging its centre
+/// bracket runs) changes where the type sits, never the circle it runs on.
+#[test]
+fn sliding_and_flipping_type_round_a_circle_leaves_the_circle_alone() {
+    let mut s = session();
+    let id = path_type(
+        &mut s,
+        "M300 200 C355 200 400 245 400 300 C400 355 355 400 300 400 C245 400 200 355 200 300 C200 245 245 200 300 200 Z",
+        [300.0, 190.0],
+        "Round",
+    );
+    let circle = |s: &Session| match text(s, id).kind {
+        TextKind::OnPath { path, .. } => path,
+        k => panic!("not type on a path: {k:?}"),
+    };
+    let before = circle(&s);
+    let bounds = ink(&s, id);
+    s.execute("type.pathOptions", &json!({"ids": [id.0], "start": 0.6})).unwrap();
+    assert_eq!(circle(&s), before, "the slide keeps the circle");
+    assert!((brackets(&s, id).0 - 0.6).abs() < 1e-9);
+    assert_ne!(ink(&s, id), bounds, "the type moved round it");
+    s.execute("type.pathOptions", &json!({"ids": [id.0], "start": 0.6, "flip": true})).unwrap();
+    let flipped = circle(&s);
+    // The same circle run the other way: every point of the flipped path lies on the original, and
+    // there the two run in opposite directions.
+    let (orig, flip) = (vectorcraft_geom::ArcPath::new(&before), vectorcraft_geom::ArcPath::new(&flipped));
+    assert!((orig.len() - flip.len()).abs() < 1e-6);
+    for i in 0..48 {
+        let (p, dir) = flip.at(flip.len() * f64::from(i) / 48.0);
+        let f = orig.fraction_at(p).unwrap();
+        let (q, odir) = orig.at(f * orig.len());
+        assert!(p.distance(q) < 1e-3, "off the circle at {p:?}");
+        assert!(dir.dot(odir) < -0.999, "not reversed at {p:?}: {dir:?} vs {odir:?}");
+    }
+}

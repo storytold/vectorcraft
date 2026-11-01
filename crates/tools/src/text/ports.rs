@@ -145,15 +145,26 @@ pub fn ports_shown(d: &vectorcraft_doc::Document, selected: &[NodeId]) -> bool {
 /// on the in port to thread into one before it. Every such frame has both ports, threaded,
 /// overflowing or not, while their ports show ([`PORTS_MAX`]).
 pub(crate) fn port_at(cx: &ToolContext, p: Point) -> Option<(NodeId, Port)> {
+    port_near(cx, p).map(|(id, port, _)| (id, port))
+}
+
+/// [`port_at`], with how far (document units) the port's centre is from `p`.
+pub(crate) fn port_near(cx: &ToolContext, p: Point) -> Option<(NodeId, Port, f64)> {
     if !ports_shown(cx.doc, &cx.selection.objects) {
         return None;
     }
     let h = cx.tol(PORT_HALF_PX + 1.0);
     let near = |c: Point| (c.x - p.x).abs() <= h && (c.y - p.y).abs() <= h;
-    cx.selection.objects.iter().find_map(|id| {
-        let t = ported(cx.doc, *id)?;
-        [Port::Out, Port::In].into_iter().find(|port| port_centre(t, *port, cx.tol(1.0)).is_some_and(near)).map(|port| (*id, port))
-    })
+    // The nearest port within reach, of every selected frame: ports of overlapping frames can both
+    // be in reach.
+    cx.selection
+        .objects
+        .iter()
+        .filter_map(|id| ported(cx.doc, *id).map(|t| (*id, t)))
+        .flat_map(|(id, t)| [Port::Out, Port::In].into_iter().filter_map(move |port| port_centre(t, port, cx.tol(1.0)).map(|c| (id, port, c))))
+        .filter(|(_, _, c)| near(*c))
+        .map(|(id, port, c)| (id, port, c.distance(p)))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
 }
 
 /// Which selected text overflows, for [`thread_ports`]: each text object's layout verdict kept
