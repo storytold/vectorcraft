@@ -412,6 +412,8 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // The drawer closed, a drag on the grip bar moves the toolbar.
     app.run("window.editToolbar", json!({"open": false})).unwrap();
     frame(&mut app, &ctx, 6.0, vec![]);
+    let grip = ctx.viewport(|vp| vp.prev_pass.widgets.get(crate::custom_toolbars::area_id("Mine").with("grip")).map(|w| w.sense));
+    assert!(grip.is_some_and(|s| s.senses_drag() && !s.is_focusable()), "only the pointer drags the grip, so Tab does not stop on it: {grip:?}");
     let before = area();
     drag(&mut app, &ctx, 7.0, before.center_top() + vec2(0.0, 5.0), before.center_top() + vec2(120.0, 205.0));
     frame(&mut app, &ctx, 7.5, vec![]);

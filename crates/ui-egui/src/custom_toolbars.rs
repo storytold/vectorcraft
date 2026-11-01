@@ -318,7 +318,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 if aresp.on_hover_text(tl!("Toggle single/double column")).clicked() {
                     actions.push(Action::Columns(bar.name.clone(), !bar.double));
                 }
-                let gresp = ui.interact(grip, id.with("grip"), Sense::drag());
+                // Not focusable (`Sense::drag()` is): only the pointer drags the grip, so Tab does not stop on it.
+                let gresp = ui.interact(grip, id.with("grip"), Sense::DRAG);
                 for n in 0..3 {
                     let y = grip.center().y - 2.0 + n as f32 * 2.0;
                     let half = (grip.width() / 2.0 - 2.0).clamp(0.0, 8.0);
