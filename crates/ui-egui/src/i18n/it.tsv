@@ -2415,6 +2415,8 @@ diagnostics	ui	interfaccia
 	Plates	Lastre
 	Platform:	Piattaforma:
 	Play Current Selection	Esegui selezione corrente
+	Save Actions…	Salva azioni…
+	Load Actions…	Carica azioni…
 	Plug-in Info	Informazioni plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Plug-in…
@@ -4291,6 +4293,14 @@ axis	Both	Entrambi
 @msg	no selection bounds	nessun limite della selezione
 @msg	no slice selected	nessuna sezione selezionata
 @msg	no such action	azione inesistente
+@msg	no such action set	set di azioni inesistente
+@msg	the action sets changed; nothing was deleted	i set di azioni sono cambiati; non è stato eliminato nulla
+@msg	no action set to save	nessun set di azioni da salvare
+@msg	not an action set file	non è un file di set di azioni
+@msg	the action set file is larger than 8 MiB	il file del set di azioni supera 8 MiB
+@msg	the action set file holds more than 1,000 actions	il file del set di azioni contiene più di 1.000 azioni
+@msg	the action set file needs a later version of VectorCraft	il file del set di azioni richiede una versione più recente di VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	un’azione nel file del set di azioni ha più di 10.000 passaggi
 @msg	no such anchor	punto di ancoraggio inesistente
 @msg	no such artboard	tavola da disegno inesistente
 @msg	the artboard is locked	la tavola da disegno è bloccata

@@ -1669,6 +1669,20 @@ already walks Image Trace. Short agent entry points:
   is one of the format's extensions (`.svg` and `SVG` give `.svg`, `.JPEG` gives `.jpeg`), and otherwise in the
   format's first extension (`png8` gives `.png`, `template` gives `.vctemplate`). A step without `format` keeps the
   source file's extension (`.vectorcraft` over data sets).
+- Action set files: `ui.actionSet.save {set?: index, id?, path?}` writes the Actions panel's set at `set` (0 is the
+  top set; by default the current set) with its actions to an action set file at `path`, else a picked file named
+  after the set (the web downloads it), and returns `{path}`. `id` holds the panel's own set id, which the panel menu
+  passes: the set with this id is saved wherever it is when the file dialog answers, and `set` is not read. A set that
+  would be larger than 8 MiB as a file, has more than 1,000 actions or has an action of more than 10,000 steps is not
+  written, and the command returns the same error as a load of such a file. `ui.actionSet.load {path? | data?}` reads
+  the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
+  `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
+  other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
+  `{"format": "vcactions", "version": 1, "name", "actions": [{"name", "steps": [{"command", "params"}]}]}`, each step
+  a command id and its params as `command.batch` takes them. A file with another `format` or a `version` other than
+  1, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
+  disabled where there is no open dialog (the web).
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the

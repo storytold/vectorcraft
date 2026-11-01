@@ -1120,6 +1120,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{set?: index, action?: index} open Batch (dialog `actionBatch`) for the action at set/action (default: the first action of the first set); OK runs action.batch with the dialog's source, destination and overrides",
     ),
     (
+        crate::panels::actions::SAVE_SET,
+        "Save Actions…",
+        "",
+        "{set?: index, id?, path?} write the Actions panel's set at set (0 is the top set; default: the current set) with its actions to an action set file (.vcactions) at path, else a picked file named after the set (the web downloads it). id holds the panel's own set id, which its menu passes: the set with this id is saved wherever it is now, and set is not read. A set over 8 MiB as a file, with more than 1,000 actions or with an action of more than 10,000 steps is not written; the panel menu's Save Actions… → {path}",
+    ),
+    (
+        crate::panels::actions::LOAD_SET,
+        "Load Actions…",
+        "",
+        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused; the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}",
+    ),
+    (
         crate::panels::actions::DELETE_SETS,
         "Delete Action Sets",
         "",

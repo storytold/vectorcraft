@@ -2385,6 +2385,8 @@ font-technology	Variable	Variables
 	Plates	Planchas
 	Platform:	Plataforma:
 	Play Current Selection	Reproducir la selección actual
+	Save Actions…	Guardar acciones…
+	Load Actions…	Cargar acciones…
 	Plug-in Info	Información del plugin
 	Plug-ins	Plugins
 	Plug-in…	Plugin…
@@ -4250,6 +4252,14 @@ axis	Both	Ambos
 @msg	no selection bounds	la selección no tiene límites
 @msg	no slice selected	no hay ningún sector seleccionado
 @msg	no such action	no existe esa acción
+@msg	no such action set	no existe ese conjunto de acciones
+@msg	the action sets changed; nothing was deleted	los conjuntos de acciones han cambiado; no se ha eliminado nada
+@msg	no action set to save	no hay ningún conjunto de acciones que guardar
+@msg	not an action set file	no es un archivo de conjunto de acciones
+@msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
+@msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
+@msg	the action set file needs a later version of VectorCraft	el archivo de conjunto de acciones necesita una versión más reciente de VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	una acción del archivo de conjunto de acciones tiene más de 10 000 pasos
 @msg	no such anchor	no existe ese punto de ancla
 @msg	no such artboard	no existe esa mesa de trabajo
 @msg	the artboard is locked	la mesa de trabajo está bloqueada

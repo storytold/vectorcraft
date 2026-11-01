@@ -2407,6 +2407,8 @@ diagnostics	ui	інтерфейс
 	Plates	Пластини
 	Platform:	Платформа:
 	Play Current Selection	Відтворити поточне виділення
+	Save Actions…	Зберегти дії…
+	Load Actions…	Завантажити дії…
 	Plug-in Info	Відомості про модуль
 	Plug-ins	Модулі
 	Plug-in…	Модуль…
@@ -4275,6 +4277,14 @@ axis	Both	Обидві
 @msg	no selection bounds	у виділення немає кордонів
 @msg	no slice selected	фрагмент не виділено
 @msg	no such action	такої дії немає
+@msg	no such action set	такого набору дій немає
+@msg	the action sets changed; nothing was deleted	набори дій змінилися; нічого не видалено
+@msg	no action set to save	немає набору дій для збереження
+@msg	not an action set file	це не файл набору дій
+@msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
+@msg	the action set file holds more than 1,000 actions	файл набору дій містить понад 1000 дій
+@msg	the action set file needs a later version of VectorCraft	для файлу набору дій потрібна новіша версія VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	у файлі набору дій є дія з понад 10 000 кроків
 @msg	no such anchor	такої опорної точки немає
 @msg	no such artboard	такої монтажної області немає
 @msg	the artboard is locked	монтажна область заблокована

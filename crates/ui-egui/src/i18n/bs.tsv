@@ -1316,6 +1316,8 @@ lighting	Light	Svjetlo
 	No actions. Press ● to record.	Nema akcija. Pritisnite ● za snimanje.
 	Outline Text	Tekst u obrise
 	Play Current Selection	Reprodukuj trenutni odabir
+	Save Actions…	Sačuvaj akcije…
+	Load Actions…	Učitaj akcije…
 	Reflect Horizontal	Odrazi vodoravno
 	Rotate 90° CW	Rotiraj za 90° u smjeru kazaljke
 	Set 1	Skup 1
@@ -4517,6 +4519,14 @@ imageTrace	Outline	Obris
 @msg	no selection bounds	nema granica odabira
 @msg	no slice selected	nije odabran isječak
 @msg	no such action	nema takve akcije
+@msg	no such action set	nema takvog skupa akcija
+@msg	the action sets changed; nothing was deleted	skupovi akcija su se promijenili; ništa nije izbrisano
+@msg	no action set to save	nema skupa akcija za čuvanje
+@msg	not an action set file	nije datoteka skupa akcija
+@msg	the action set file is larger than 8 MiB	datoteka skupa akcija je veća od 8 MiB
+@msg	the action set file holds more than 1,000 actions	datoteka skupa akcija sadrži više od 1.000 akcija
+@msg	the action set file needs a later version of VectorCraft	datoteka skupa akcija zahtijeva noviju verziju programa VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	akcija u datoteci skupa akcija ima više od 10.000 koraka
 @msg	no such anchor	nema takvog sidra
 @msg	no such artboard	nema takve radne ploče
 @msg	the artboard is locked	radna ploča je zaključana

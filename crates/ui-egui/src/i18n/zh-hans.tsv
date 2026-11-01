@@ -2286,6 +2286,8 @@ diagnostics	ui	界面
 	Plates	印版
 	Platform:	平台：
 	Play Current Selection	播放当前选择项目
+	Save Actions…	存储动作…
+	Load Actions…	载入动作…
 	Plug-in Info	插件信息
 	Plug-ins	增效工具
 	Plug-in…	增效工具…
@@ -4318,6 +4320,14 @@ imageTrace	Outline	轮廓
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
 @msg	no such action	没有此动作
+@msg	no such action set	没有此动作组
+@msg	the action sets changed; nothing was deleted	动作组已更改；未删除任何内容
+@msg	no action set to save	没有要存储的动作组
+@msg	not an action set file	不是动作组文件
+@msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
+@msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
+@msg	the action set file needs a later version of VectorCraft	动作组文件需要更高版本的 VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	动作组文件中有动作超过 10,000 个步骤
 @msg	choose a folder to export to	请选择要导出到的文件夹
 @msg	the selection has no URL (or they differ)	所选对象没有 URL (或其 URL 各不相同)
 @msg	select some type first	请先选择一些文字

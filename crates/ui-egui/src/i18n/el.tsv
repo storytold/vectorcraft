@@ -3009,6 +3009,8 @@ theme	Appearance	Εμφάνιση
 	Plates	Πλάκες εκτύπωσης
 	Platform:	Πλατφόρμα:
 	Play Current Selection	Αναπαραγωγή τρέχουσας επιλογής
+	Save Actions…	Αποθήκευση ενεργειών…
+	Load Actions…	Φόρτωση ενεργειών…
 	Plug-in Info	Πληροφορίες προσθέτου
 	Plug-in…	Πρόσθετο…
 	Point Text Objects	Αντικείμενα κειμένου σημείου
@@ -4204,6 +4206,14 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no selection bounds	δεν υπάρχουν όρια επιλογής
 @msg	no slice selected	δεν έχει επιλεγεί τομή
 @msg	no such action	δεν υπάρχει τέτοια ενέργεια
+@msg	no such action set	δεν υπάρχει τέτοιο σύνολο ενεργειών
+@msg	the action sets changed; nothing was deleted	τα σύνολα ενεργειών άλλαξαν· δεν διαγράφηκε τίποτα
+@msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
+@msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
+@msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
+@msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
+@msg	the action set file needs a later version of VectorCraft	το αρχείο συνόλου ενεργειών απαιτεί νεότερη έκδοση του VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	μια ενέργεια στο αρχείο συνόλου ενεργειών έχει περισσότερα από 10.000 βήματα
 @msg	no such anchor	δεν υπάρχει τέτοιο σημείο αγκύρωσης
 @msg	no such artboard	δεν υπάρχει τέτοιος πίνακας σχεδίασης
 @msg	the artboard is locked	ο πίνακας σχεδίασης είναι κλειδωμένος

@@ -2478,6 +2478,8 @@ diagnostics	ui	UI
 	Plates	版
 	Platform:	プラットフォーム:
 	Play Current Selection	選択項目を再生
+	Save Actions…	アクションを保存…
+	Load Actions…	アクションを読み込み…
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -4601,6 +4603,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです
 @msg	no such action	指定されたアクションが見つかりません
+@msg	no such action set	指定されたアクションセットが見つかりません
+@msg	the action sets changed; nothing was deleted	アクションセットが変更されたため、何も削除しませんでした
+@msg	no action set to save	保存するアクションセットがありません
+@msg	not an action set file	アクションセットファイルではありません
+@msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
+@msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
+@msg	the action set file needs a later version of VectorCraft	このアクションセットファイルには新しいバージョンの VectorCraft が必要です
+@msg	an action in the action set file has more than 10,000 steps	アクションセットファイルに 10,000 ステップを超えるアクションがあります
 @msg	choose a folder to export to	書き出し先のフォルダーを選択してください
 @msg	the selection has no URL (or they differ)	選択したオブジェクトに URL がありません (または URL がそれぞれ異なります)
 @msg	select some type first	先にテキストを選択してください

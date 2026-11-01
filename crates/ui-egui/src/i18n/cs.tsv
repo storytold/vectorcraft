@@ -1341,6 +1341,8 @@ lighting	Light	Světlo
 	No actions. Press ● to record.	Žádné akce. Stisknutím ● spustíte záznam.
 	Outline Text	Text převedený na křivky
 	Play Current Selection	Přehrát aktuální výběr
+	Save Actions…	Uložit akce…
+	Load Actions…	Načíst akce…
 	Reflect Horizontal	Zrcadlit vodorovně
 	Rotate 90° CW	Otočit o 90° po směru hodin
 	Set 1	Sada 1
@@ -4557,6 +4559,14 @@ imageTrace	Outline	Obrys
 @msg	no selection bounds	výběr nemá hranice
 @msg	no slice selected	není vybrán žádný řez
 @msg	no such action	taková akce neexistuje
+@msg	no such action set	taková sada akcí neexistuje
+@msg	the action sets changed; nothing was deleted	sady akcí se změnily; nic nebylo odstraněno
+@msg	no action set to save	žádná sada akcí k uložení
+@msg	not an action set file	není to soubor sady akcí
+@msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
+@msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí
+@msg	the action set file needs a later version of VectorCraft	soubor sady akcí vyžaduje novější verzi aplikace VectorCraft
+@msg	an action in the action set file has more than 10,000 steps	akce v souboru sady akcí má více než 10 000 kroků
 @msg	no such anchor	takový kotevní bod neexistuje
 @msg	no such artboard	taková pracovní plocha neexistuje
 @msg	the artboard is locked	pracovní plocha je zamčená

@@ -784,6 +784,8 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
             crate::dialogs::action_batch::open(app, set, action)
         }
+        crate::panels::actions::SAVE_SET => crate::panels::actions::save_set(app, p),
+        crate::panels::actions::LOAD_SET => crate::panels::actions::load_set(app, p),
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,

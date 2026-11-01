@@ -2197,6 +2197,8 @@ shape	Open	Açık
 	Plates	Plakalar
 	Platform:	Platform:
 	Play Current Selection	Geçerli Seçimi Oynat
+	Save Actions…	Eylemleri Kaydet…
+	Load Actions…	Eylemleri Yükle…
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
@@ -4013,6 +4015,14 @@ axis	Both	Her İkisi
 @msg	no selection bounds	seçim sınırı yok
 @msg	no slice selected	dilim seçilmedi
 @msg	no such action	öyle bir eylem yok
+@msg	no such action set	öyle bir eylem seti yok
+@msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
+@msg	no action set to save	kaydedilecek eylem seti yok
+@msg	not an action set file	bir eylem seti dosyası değil
+@msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
+@msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
+@msg	the action set file needs a later version of VectorCraft	eylem seti dosyası VectorCraft'ın daha yeni bir sürümünü gerektiriyor
+@msg	an action in the action set file has more than 10,000 steps	eylem seti dosyasındaki bir eylemde 10.000'den fazla adım var
 @msg	no such anchor	öyle bir çapa yok
 @msg	no such artboard	böyle bir çalışma yüzeyi yok
 @msg	no such document	öyle bir belge yok

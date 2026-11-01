@@ -1315,6 +1315,8 @@ lighting	Light	Valo
 	No actions. Press ● to record.	Ei toimintoja. Aloita tallennus painamalla ●.
 	Outline Text	Muunna teksti ääriviivoiksi
 	Play Current Selection	Toista nykyinen valinta
+	Save Actions…	Tallenna toiminnot…
+	Load Actions…	Lataa toiminnot…
 	Reflect Horizontal	Peilaa vaakasuunnassa
 	Rotate 90° CW	Kierrä 90° myötäpäivään
 	Set 1	Sarja 1
@@ -4465,6 +4467,14 @@ imageTrace	Outline	Ääriviiva
 @msg	no selection bounds	ei valinnan rajoja
 @msg	no slice selected	viipaletta ei ole valittu
 @msg	no such action	toimintoa ei ole
+@msg	no such action set	toimintosarjaa ei ole
+@msg	the action sets changed; nothing was deleted	toimintosarjat muuttuivat; mitään ei poistettu
+@msg	no action set to save	ei tallennettavaa toimintosarjaa
+@msg	not an action set file	ei ole toimintosarjatiedosto
+@msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
+@msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa
+@msg	the action set file needs a later version of VectorCraft	toimintosarjatiedosto vaatii uudemman VectorCraft-version
+@msg	an action in the action set file has more than 10,000 steps	toimintosarjatiedoston toiminnossa on yli 10 000 vaihetta
 @msg	no such anchor	ankkuria ei ole
 @msg	no such artboard	piirtoalustaa ei ole
 @msg	the artboard is locked	piirtoalusta on lukittu

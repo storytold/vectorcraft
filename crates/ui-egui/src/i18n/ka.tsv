@@ -1171,6 +1171,8 @@ lighting	Light	სინათლე
 	No actions. Press ● to record.	მოქმედებები არ არის. ჩასაწერად დააჭირეთ ●-ს.
 	Outline Text	ტექსტის კონტურებად გარდაქმნა
 	Play Current Selection	მიმდინარე მონიშნულის შესრულება
+	Save Actions…	მოქმედებების შენახვა…
+	Load Actions…	მოქმედებების ჩატვირთვა…
 	Reflect Horizontal	ჰორიზონტალურად არეკვლა
 	Rotate 90° CW	90°-ით შემობრუნება საათის ისრის მიმართულებით
 	Set 1	ნაკრები 1
@@ -4020,6 +4022,14 @@ font-technology	Variable	ცვლადი
 @msg	no selection bounds	მონიშნულის საზღვრები არ არის
 @msg	no slice selected	ნაჭერი მონიშნული არ არის
 @msg	no such action	ასეთი მოქმედება არ არის
+@msg	no such action set	ასეთი მოქმედებების ნაკრები არ არის
+@msg	the action sets changed; nothing was deleted	მოქმედებების ნაკრებები შეიცვალა; არაფერი წაშლილა
+@msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
+@msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
+@msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
+@msg	the action set file holds more than 1,000 actions	მოქმედებების ნაკრების ფაილი 1000-ზე მეტ მოქმედებას შეიცავს
+@msg	the action set file needs a later version of VectorCraft	მოქმედებების ნაკრების ფაილს VectorCraft-ის უფრო ახალი ვერსია სჭირდება
+@msg	an action in the action set file has more than 10,000 steps	მოქმედებების ნაკრების ფაილში ერთ-ერთ მოქმედებას 10 000-ზე მეტი ნაბიჯი აქვს
 @msg	no such anchor	ასეთი საყრდენი წერტილი არ არის
 @msg	no such artboard	ასეთი სამუშაო დაფა არ არის
 @msg	the artboard is locked	სამუშაო დაფა ჩაკეტილია
