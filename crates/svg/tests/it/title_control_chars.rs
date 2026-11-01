@@ -53,3 +53,19 @@ fn an_artboard_exported_alone_is_titled_after_it() {
     d.artboards[1].name = "\u{1}\u{2}".into();
     assert_eq!(title(&d, alone(Some(1))).as_deref(), Some("<title>Icons</title>"));
 }
+
+#[test]
+fn dublin_core_metadata_control_chars_are_filtered() {
+    let mut d = Document::new(200.0, 200.0);
+    d.title = "Poster\u{b}v2".into();
+    d.metadata.author = "Ann\u{1}e".into();
+    d.metadata.description = "a\u{1}b".into();
+    d.metadata.keywords = vec!["k\u{1}w".into()];
+    d.metadata.copyright_notice = "(c)\u{b}me\u{2}".into();
+    let svg = export(&d, &ExportOptions { metadata: true, ..ExportOptions::default() });
+    assert!(import(&svg).is_ok(), "export wrote invalid XML: {svg}");
+    assert!(svg.contains("<dc:creator>Anne</dc:creator>"));
+    assert!(svg.contains("<dc:title>Poster v2</dc:title>"));
+    assert!(svg.contains("<dc:subject>kw</dc:subject>"));
+    assert!(svg.contains("<dc:rights>(c) me</dc:rights>"));
+}
