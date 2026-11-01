@@ -910,6 +910,7 @@ font-technology	Variable	Променливи
 	Edit Selection	Редактиране на селекцията
 	Edit Selection…	Редактиране на селекцията…
 	Edit Symbol	Редактиране на символ
+	Exit Symbol Editing Mode	Изход от режим на редактиране на символ
 	Edit Text	Редактиране на текст
 	Edit the applied effect, or add another one?	Да се редактира ли приведеният ефект или да се добави друг?
 	Edit the point	Редактиране на точката
@@ -4225,6 +4226,8 @@ axis	Both	И двете
 @msg	select an Intertwine group	изберете група за преплитане (Intertwine)
 @msg	select a stroke with a variable width	изберете щрих с променлива дебелина
 @msg	select a symbol instance	изберете екземпляр на символ
+@msg	select instances of one symbol	изберете екземпляри на един символ
+@msg	a symbol can't hold an instance of itself	символ не може да съдържа свой собствен екземпляр
 @msg	select an Image Trace object	изберете обект за трасиране на изображение (Image Trace)
 @msg	could not decode image: {0}	изображението не може да бъде декодирано: {0}
 @msg	image is empty	изображението е празно
@@ -4504,6 +4507,12 @@ axis	Both	И двете
 	Insert Inline Symbol	Вграждане на вграден символ
 	ICF Top/Right	ICF горе/дясно
 	ICF Bottom/Left	ICF долу/ляво
+	Show Font Height Options	Показване на опциите за височина на шрифта
+	Hide Font Height Options	Скриване на опциите за височина на шрифта
+	Set Font Height Reference	Задаване на референтна височина на шрифта
+	Em Box	Квадратна касетка (Em Box)
+	x-Height	Височина на x
+	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}
@@ -5824,6 +5833,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Корекциите на мастилата за печат работят върху CMYK документи: първо изберете Файл › Цветен режим на документа › CMYK цвят
 @msg	`{key}` must be 0..{max}	`{key}` трябва да е 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Намиране на най-близкия образец…
+	Find Nearest Swatch	Намиране на най-близкия образец
+	Apply Nearest Swatch	Прилагане на най-близкия образец
+	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
+@msg	select objects or give `color`	изберете обекти или задайте `color`
+@msg	`color` is not a colour	`color` не е цвят
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Инструмент „Ъгли“
 	Slide Anchor Along Path	Плъзгане на опорна точка по пътя

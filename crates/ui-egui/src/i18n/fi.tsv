@@ -1455,6 +1455,12 @@ digits	Malayalam	Malajalam
 	Axis	Akseli
 	ICF Top/Right	ICF ylä/oikea
 	ICF Bottom/Left	ICF ala/vasen
+	Show Font Height Options	Näytä fontin korkeuden asetukset
+	Hide Font Height Options	Piilota fontin korkeuden asetukset
+	Set Font Height Reference	Aseta fontin korkeuden viite
+	Em Box	Em-laatikko
+	x-Height	x-korkeus
+	ICF Box	ICF-laatikko
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -3056,6 +3062,7 @@ theme	Appearance	Ulkoasu
 	Duplicate Brush	Monista sivellin
 	Duplicate Symbol	Monista symboli
 	Edit Symbol	Muokkaa symbolia
+	Exit Symbol Editing Mode	Poistu symbolin muokkaustilasta
 	Expand Brush Strokes	Laajenna sivellinviivat
 	New Brush…	Uusi sivellin…
 	New Brush	Uusi sivellin
@@ -4127,6 +4134,7 @@ imageTrace	Outline	Ääriviiva
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	niiden kuvitus eroaa sivun kuvituksesta {_1} %:n osalta: ne tuodaan silti sen muokkaustiedoista
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` tarkoittaa muutettuja asetuksia: tallenna esiasetus toisella nimellä
 @msg	`to` must be "corner" or "smooth"	`to` on oltava "corner" tai "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` on oltava "emBox", "capHeight", "xHeight" tai "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP-tiedostot ovat RGB- tai harmaasävykuvia: colorModel rgb tai gray
 @msg	Blend colors: select at least three objects with filled colours	Sulauta värit: valitse vähintään kolme objektia, joilla on väritäyttö
 @msg	Combine Slices: the slices have no bounds	Yhdistä viipaleet: viipaleilla ei ole rajoja
@@ -4558,6 +4566,8 @@ imageTrace	Outline	Ääriviiva
 @msg	select a repeat	valitse toisto
 @msg	select a stroke with a variable width	valitse viiva, jolla on vaihteleva leveys
 @msg	select a symbol instance	valitse symboli-ilmentymä
+@msg	select instances of one symbol	valitse yhden symbolin ilmentymiä
+@msg	a symbol can't hold an instance of itself	symboli ei voi sisältää omaa ilmentymäänsä
 @msg	select an Image Trace object	valitse kuvan jäljitys -objekti
 @msg	could not decode image: {0}	kuvaa ei voitu purkaa: {0}
 @msg	image is empty	kuva on tyhjä
@@ -5971,6 +5981,13 @@ anchor	Points:	Pisteet:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	anna `inkLimit`, `removeWhiteOverprint` tai `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Painovärien korjaukset toimivat CMYK-asiakirjoissa: valitse ensin Tiedosto › Asiakirjan väritila › CMYK-väri
 @msg	`{key}` must be 0..{max}	`{key}` on oltava 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Etsi lähin värimalli…
+	Find Nearest Swatch	Etsi lähin värimalli
+	Apply Nearest Swatch	Käytä lähintä värimallia
+	Select objects to find the swatches nearest their colors.	Valitse objektit, joiden väreille haluat etsiä lähimmät värimallit.
+@msg	select objects or give `color`	valitse objekteja tai anna `color`
+@msg	`color` is not a colour	`color` ei ole väri
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Kulmatyökalu
 	Slide Anchor Along Path	Liu’uta ankkuripistettä polkua pitkin

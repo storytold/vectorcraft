@@ -120,7 +120,7 @@ fn number_in(p: &Value, key: &str, default: f64, (lo, hi): (f64, f64), cmd: &str
 }
 
 /// Whole-number param `key` within `lo..=hi`, `None` when left out.
-fn whole_in(p: &Value, key: &str, (lo, hi): (u64, u64), cmd: &str) -> Result<Option<u64>> {
+pub(super) fn whole_in(p: &Value, key: &str, (lo, hi): (u64, u64), cmd: &str) -> Result<Option<u64>> {
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
     let n = v.as_u64().ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number")))?;
     if (lo..=hi).contains(&n) { Ok(Some(n)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }

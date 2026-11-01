@@ -1458,6 +1458,12 @@ digits	Malayalam	Malajalam
 	Axis	Osa
 	ICF Top/Right	ICF vrh/desno
 	ICF Bottom/Left	ICF dno/lijevo
+	Show Font Height Options	Prikaži opcije visine fonta
+	Hide Font Height Options	Sakrij opcije visine fonta
+	Set Font Height Reference	Postavi referentnu visinu fonta
+	Em Box	Em okvir
+	x-Height	Visina malih slova
+	ICF Box	ICF okvir
 	Copy Color Value (Hex)	Kopiraj vrijednost boje (hex)
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%
@@ -3086,6 +3092,7 @@ theme	Appearance	Izgled
 	Duplicate Brush	Dupliciraj četkicu
 	Duplicate Symbol	Dupliciraj simbol
 	Edit Symbol	Uredi simbol
+	Exit Symbol Editing Mode	Izađi iz načina uređivanja simbola
 	Expand Brush Strokes	Proširi poteze četkicom
 	New Brush…	Nova četkica…
 	New Brush	Nova četkica
@@ -4617,6 +4624,8 @@ imageTrace	Outline	Obris
 @msg	a clipping path can't be attached to a path	putanja isijecanja ne može se priložiti putanji
 @msg	select a stroke with a variable width	odaberite potez s promjenjivom širinom
 @msg	select a symbol instance	odaberite instancu simbola
+@msg	select instances of one symbol	odaberite instance jednog simbola
+@msg	a symbol can't hold an instance of itself	simbol ne može sadržavati instancu samog sebe
 @msg	select an Image Trace object	odaberite objekat praćenja slike
 @msg	could not decode image: {0}	nije moguće dekodirati sliku: {0}
 @msg	image is empty	slika je prazna
@@ -5948,6 +5957,13 @@ shape	Open	Otvoren
 	Gap 4	Razmak 4
 	Dash 5	Crtica 5
 	Gap 5	Razmak 5
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
+	Find Nearest Swatch	Pronađi najbliži uzorak boje
+	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
+@msg	select objects or give `color`	odaberite objekte ili navedite `color`
+@msg	`color` is not a colour	`color` nije boja
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Alat za uglove
 	Slide Anchor Along Path	Klizanje sidra po putanji
