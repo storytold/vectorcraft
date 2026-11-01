@@ -359,8 +359,9 @@ New Toolbar: Window › Toolbars › New Toolbar… (or New Toolbar… in the dr
 bar; its tools scroll when the window is too short for them. The title bar's × hides it, and its double arrow
 (`window.toolbarColumns {toolbar, double?}`) shows its tools in one column or two. Window › Toolbars lists each
 toolbar by its name, and its item (`window.toolbar.custom {name, show?}`) shows or hides it. Window › Tools hides
-the Tools panel alone, and Tab hides these toolbars with the other panels. A toolbar shown with its item after Tab
-shows alone, and the other toolbars Tab hid are turned off. A toolbar's ••• button
+the Tools panel alone, and Tab hides these toolbars with the other panels. Window › Tools after Tab shows the Tools
+panel without them. A toolbar shown with its item or made with New Toolbar after Tab shows alone, and the other
+toolbars Tab hid are turned off. A toolbar's ••• button
 (`window.editToolbar {toolbar}`) opens the All Tools drawer beside it, and the drawer's drags and
 `toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` with `toolbar` edit it; the drawer has no Show section
 there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with

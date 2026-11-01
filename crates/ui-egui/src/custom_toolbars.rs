@@ -104,7 +104,18 @@ pub(crate) fn create(ui: &mut UiState, name: &str) -> Result<String, String> {
         double: false,
         floating: vec![],
     });
+    show_alone_after_tab(ui, name);
     Ok(name.to_string())
+}
+
+/// Toolbar `name`, shown after Tab hid the toolbars, shows alone, as Window › Tools shows the
+/// Tools panel: the other toolbars Tab hid are turned off, and the next Tab hides it.
+fn show_alone_after_tab(ui: &mut UiState, name: &str) {
+    if ui.tab_hid.take().is_some() {
+        for b in ui.custom_toolbars.iter_mut().filter(|b| b.name != name) {
+            b.shown = false;
+        }
+    }
 }
 
 /// Keep named toolbars, each name once whatever its case and at most [`MAX_NAME`] characters, of
@@ -166,12 +177,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let bar = find_mut(&mut app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
             bar.shown = show.unwrap_or(!bar.shown);
             let (shown, name) = (bar.shown, bar.name.clone());
-            // Shown after Tab hid the toolbars, it shows alone, as Window › Tools shows the Tools
-            // panel: the other toolbars Tab hid are turned off, and the next Tab hides it.
-            if shown && app.ui.tab_hid.take().is_some() {
-                for b in app.ui.custom_toolbars.iter_mut().filter(|b| b.name != name) {
-                    b.shown = false;
-                }
+            if shown {
+                show_alone_after_tab(&mut app.ui, &name);
             }
             // The drawer beside a toolbar that is hidden closes with it, and so does an open flyout.
             if !shown {
@@ -296,7 +303,8 @@ enum Action {
 /// tool buttons (a group's flyout opens as the Tools panel's do) and the ••• button that opens the
 /// All Tools drawer beside it.
 pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    if app.ui.custom_toolbars.iter().all(|b| !b.shown) {
+    // Tab hides them, also when Window › Tools shows the Tools panel again.
+    if app.ui.tab_hid.is_some() || app.ui.custom_toolbars.iter().all(|b| !b.shown) {
         return;
     }
     let t = Tokens::get(ctx);
@@ -823,8 +831,10 @@ mod tests {
         frames(&mut app);
         let open = |app: &mut VectorcraftApp, toolbar: Option<String>| {
             app.ui.flyout = Some(0);
+            // A group not torn off as a strip of the same toolbar.
+            let group = if toolbar.is_some() { ["rectangle", "ellipse"] } else { ["pen", "curvature"] };
             ctx.data_mut(|d| {
-                d.insert_temp(egui::Id::unique("flyout-tools"), vec!["pen".to_string(), "curvature".to_string()]);
+                d.insert_temp(egui::Id::unique("flyout-tools"), group.map(String::from).to_vec());
                 d.insert_temp(crate::toolbar::flyout_toolbar_id(), toolbar);
             });
         };
@@ -837,6 +847,17 @@ mod tests {
         open(&mut app, Some("Mine".into()));
         frames(&mut app);
         assert_eq!(app.ui.flyout, Some(0), "a toolbar's own flyout stays open");
+        app.ui.flyout = None;
+        // Window › Tools after Tab shows the Tools panel alone; a toolbar made with New Toolbar
+        // then shows alone too.
+        app.run("window.dock", json!({})).unwrap();
+        app.run("window.toolbar", json!({})).unwrap();
+        frames(&mut app);
+        assert!(app.ui.toolbar && !drawn(&ctx, area_id("Mine"), egui::Order::Middle), "Window › Tools shows only the Tools panel");
+        app.run("window.toolbar.new", json!({"name": "Third"})).unwrap();
+        frames(&mut app);
+        assert!(drawn(&ctx, area_id("Third"), egui::Order::Middle), "a new toolbar shows after Tab");
+        assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle) && !find(&app.ui, "Mine").unwrap().shown);
     }
 
     /// A group's button shows the tool chosen last from it however it was chosen (its flyout, a

@@ -886,7 +886,7 @@ fn floating(app: &mut VectorcraftApp, ctx: &egui::Context, custom_only: bool) {
     let owners: Vec<Option<String>> = (!custom_only)
         .then_some(None)
         .into_iter()
-        .chain(app.ui.custom_toolbars.iter().filter(|b| b.shown && !b.floating.is_empty()).map(|b| Some(b.name.clone())))
+        .chain(app.ui.custom_toolbars.iter().filter(|b| b.shown && app.ui.tab_hid.is_none() && !b.floating.is_empty()).map(|b| Some(b.name.clone())))
         .collect();
     for owner in owners {
         floating_strips(app, ctx, owner.as_deref());
