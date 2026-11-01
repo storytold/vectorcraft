@@ -59,8 +59,8 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
-pub(crate) use raster::color_image;
 use raster::{changed_pixels, pixel_region, upload};
+pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
 pub use tool_overlays::HiddenChars;
@@ -524,17 +524,22 @@ fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
             app.canvas.fill_worker = crate::render_worker::Worker::spawn(ui.ctx().clone());
         }
     }
-    // Upload finished background renders.
+    // Upload finished background renders whenever they are not older than what is currently
+    // displayed on screen. This prevents canvas freezes during continuous edits (drags, arrow
+    // nudges, MCP command bursts) while ensuring obsolete out-of-order frames are dropped.
     if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll())
         && done.key.doc == key_doc
     {
-        upload(app, ui.ctx(), &done.img, done.key.pixel.is_some());
-        app.canvas.key = Some(done.key);
-        app.canvas.shown = Some((done.doc, done.opts));
-        app.perf.render_ms = done.ms;
-        app.canvas.last_ms = done.ms;
-        app.canvas.moved = done.moved > 0;
-        app.canvas.from_worker = true;
+        let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
+        if not_older {
+            upload(app, ui.ctx(), done.img, done.key.pixel.is_some());
+            app.canvas.key = Some(done.key);
+            app.canvas.shown = Some((done.doc, done.opts));
+            app.perf.render_ms = done.ms;
+            app.canvas.last_ms = done.ms;
+            app.canvas.moved = done.moved > 0;
+            app.canvas.from_worker = true;
+        }
     }
 }
 
@@ -644,7 +649,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
-            upload(app, ui.ctx(), &img, pixel.is_some());
+            upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
