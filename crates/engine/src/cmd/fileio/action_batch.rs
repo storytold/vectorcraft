@@ -114,11 +114,12 @@ const ONE_FILE_WARNING: &str = "each data set saves over the same file, which ke
 /// Whether an `action.batch` with params `p` plays on data sets of the open document in `s` and
 /// writes each data set to the same file. Save and Close saves the open document over its own file
 /// after every data set. A step that the batch does not point into `destinationFolder` writes the
-/// same file every time when it writes one: a Save, Save As, Save a Copy, Save as Template, Export
-/// or Export Selection step that gives a `path`; a Save step without a `path` when the document has
-/// a file of its own (saved, and not converted from an older version or restored by Data Recovery)
-/// and the step gives no `format` or the document's own; an Export for Screens
-/// step whose `folder`, given or from its `exportPreset`, names a folder, whatever the overrides.
+/// same file every time when it writes one: a Save, Save As, Save a Copy, Save as Template, Export,
+/// Export Selection, PDF, EPS, DXF, Save for Web or Save for Office Documents step that gives a
+/// `path`; a Save step without a `path` when the document has a file of its own (saved, and not
+/// converted from an older version or restored by Data Recovery) and the step gives no `format` or
+/// the document's own; an Export for Screens step whose `folder`, given or from its
+/// `exportPreset`, names a folder, whatever the overrides.
 /// Other steps return their data instead of writing a file.
 pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
     if p.get("source").and_then(Value::as_str) != Some("datasets") {
@@ -146,6 +147,8 @@ pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
                 "file.saveAs" => !save && path,
                 "file.saveCopy" | "file.saveAsTemplate" => path,
                 "document.export" | "document.exportSelection" => !export && path,
+                // The batch does not point these exports into `destinationFolder`.
+                "document.exportPdf" | "document.exportEps" | "document.exportDxf" | "document.exportForWeb" | "document.exportForOffice" => path,
                 // Override Export sets `path`, which Export for Screens does not read: its `folder` stays.
                 "document.exportForScreens" => super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
                 _ => false,
@@ -199,8 +202,15 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     if names.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} data sets")));
     }
-    if run.destination == "saveAndClose" && st.path.is_none() {
-        return Err(bad(cmd, "the document has never been saved"));
+    if run.destination == "saveAndClose" {
+        if st.path.is_none() {
+            return Err(bad(cmd, "the document has never been saved"));
+        }
+        // `save_plan` writes no file for a document converted from an older version or restored by
+        // Data Recovery.
+        if st.converted || st.recovered {
+            return Err(bad(cmd, "save the document with Save As before Save and Close"));
+        }
     }
     let doc_stem = st.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled").to_string();
     let stems = dataset_stems(&names, &doc_stem, run.dataset_file_naming, run, &st.doc)?;
@@ -1441,6 +1451,35 @@ mod tests {
         assert!(!with(json!({"commands": [{"command": "document.exportForScreens", "params": {}}]})));
         let preset = json!([{"command": "document.exportForScreens", "params": {"exportPreset": "Logo Package"}}]);
         assert!(!with(json!({"commands": preset})), "a preset without a folder: the data comes back");
+        for id in ["document.exportPdf", "document.exportEps", "document.exportDxf", "document.exportForWeb", "document.exportForOffice"] {
+            let step = json!([{"command": id, "params": {"path": "/x/a.out"}}]);
+            assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "commands": step})), "{id} keeps its path");
+            assert!(!with(json!({"commands": [{"command": id, "params": {}}]})), "{id} without a path: the data comes back");
+        }
+    }
+
+    #[test]
+    fn batch_refuses_save_and_close_over_data_sets_of_a_converted_or_recovered_document() {
+        for converted in [true, false] {
+            let path = tmp(if converted { "converted-sets" } else { "recovered-sets" }).join("template.vectorcraft");
+            let mut s = saved_with_two_data_sets(&path);
+            let bytes = std::fs::read(&path).unwrap();
+            let (active, revision) = {
+                let st = s.doc_mut().unwrap();
+                if converted {
+                    st.converted = true;
+                } else {
+                    st.recovered = true;
+                }
+                (st.doc.variables.active_dataset.clone(), st.revision)
+            };
+            let msg = save_and_close_over_data_sets(&mut s).unwrap_err().to_string();
+            assert!(msg.ends_with("save the document with Save As before Save and Close"), "{msg}");
+            assert_eq!(std::fs::read(&path).unwrap(), bytes, "the file is not written");
+            let st = s.doc().unwrap();
+            assert_eq!(st.doc.variables.active_dataset, active, "no data set is selected");
+            assert_eq!(st.revision, revision, "no step runs");
+        }
     }
 
     #[test]
