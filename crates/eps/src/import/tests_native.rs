@@ -1430,6 +1430,25 @@ fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
     assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
 }
 
+#[test]
+fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
+    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let list = "%AI9_BeginArtStyleList\n(Comic)\n%AI9_EndArtStyleList\n";
+    let art = native_with_text(&(comic_style() + list + &layer("Art", true, &format!("{look}{own}1 (Comic) XW\n"))), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(d.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect::<Vec<_>>(), [("Comic", 1)]);
+    let mut texts = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            texts.push(n.extras().graphic_style);
+        }
+    });
+    assert_eq!(texts, [Some(1)], "{notes:?}");
+}
+
 /// A `.ai` whose layers can't be read comes in as its PDF part, a page per artboard in a row; its
 /// pages still go where its editing data puts its artboards, with their art, and keep their names (#1068).
 #[test]
@@ -2995,25 +3014,6 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     check(&r.document, &r.warnings);
-}
-
-#[test]
-fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
-    let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
-    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
-    let look = format!("u\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{drawing}\nU\n9 () XW\n");
-    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
-    let list = "%AI9_BeginArtStyleList\n(Comic)\n%AI9_EndArtStyleList\n";
-    let art = native_with_text(&(comic_style() + list + &layer("Art", true, &format!("{look}{own}1 (Comic) XW\n"))), &doc);
-    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
-    assert_eq!(d.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect::<Vec<_>>(), [("Comic", 1)]);
-    let mut texts = vec![];
-    d.walk(|n| {
-        if matches!(n.kind, NodeKind::Text(_)) {
-            texts.push(n.extras().graphic_style);
-        }
-    });
-    assert_eq!(texts, [Some(1)], "{notes:?}");
 }
 
 #[test]
