@@ -481,7 +481,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.custom",
         "Show Toolbar",
         "",
-        "{name: string, show?: bool} show (true), hide (false) or toggle (omitted) the toolbar made with New Toolbar called `name`, as its item under Window › Toolbars does (its title bar's × hides it); returns the new state",
+        "{name: string, show?: bool} show (true), hide (false) or toggle (omitted) the toolbar made with New Toolbar called `name`, as its item under Window › Toolbars does (its title bar's × hides it); shown after Tab hid the toolbars, it shows alone and the others are turned off; returns the new state",
     ),
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),

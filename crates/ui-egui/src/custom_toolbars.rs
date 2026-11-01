@@ -166,6 +166,13 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let bar = find_mut(&mut app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
             bar.shown = show.unwrap_or(!bar.shown);
             let (shown, name) = (bar.shown, bar.name.clone());
+            // Shown after Tab hid the toolbars, it shows alone, as Window › Tools shows the Tools
+            // panel: the other toolbars Tab hid are turned off, and the next Tab hides it.
+            if shown && app.ui.tab_hid.take().is_some() {
+                for b in app.ui.custom_toolbars.iter_mut().filter(|b| b.name != name) {
+                    b.shown = false;
+                }
+            }
             // The drawer beside a toolbar that is hidden closes with it, and so does an open flyout.
             if !shown {
                 app.ui.flyout = None;
@@ -796,6 +803,19 @@ mod tests {
         frames(&mut app);
         assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle));
         assert!(!app.ui.dock && !app.ui.toolbar && !app.ui.control_bar, "the layout Tab hid comes back");
+        // Shown with its item after Tab hid the toolbars, it shows alone, as Window › Tools shows
+        // the Tools panel; the other toolbar Tab hid is unchecked, and the next Tab hides it.
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.run("window.dock", json!({})).unwrap();
+        assert!(app.ui.tab_hid.is_some());
+        app.run("window.toolbar.custom", json!({"name": "Mine", "show": true})).unwrap();
+        frames(&mut app);
+        assert!(drawn(&ctx, area_id("Mine"), egui::Order::Middle), "shown with its item after Tab");
+        assert!(!drawn(&ctx, area_id("Other"), egui::Order::Middle));
+        assert!(!find(&app.ui, "Other").unwrap().shown, "the menu shows what is on screen");
+        app.run("window.dock", json!({})).unwrap();
+        frames(&mut app);
+        assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle), "the next Tab hides it");
     }
 
     /// A group's button shows the tool chosen last from it however it was chosen (its flyout, a
