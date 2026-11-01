@@ -571,6 +571,28 @@ fn turned_cursors_step_with_the_view() {
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::ORIGIN, 90.0), Cursor::Rotate, "on the center");
 }
 
+/// #4980: with anchors selected on their own (the end anchor of a path the Pen is drawing, when
+/// Cmd/Ctrl lends the Selection tool) the canvas shows no bounding box, so its handles neither
+/// offer a resize pointer nor scale on a press: the press takes the path, as away from the box.
+#[test]
+fn hidden_box_handles_take_no_press_while_anchors_are_selected() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let top_middle = Point::new(150.0, 100.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&cx(&d, &s, &p), top_middle, Mods::default()), Cursor::ResizeV, "the shown box's handle");
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    s.anchors.entry(id).or_default().insert((0, 1));
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, top_middle, Mods::default()), Cursor::Move);
+    let down = t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+    assert!(!down.contains(&Action::Begin("Scale".into())), "{down:?}");
+    assert!(!crate::select::bbox_handle_at(&c, top_middle));
+}
+
 /// In a rotated view the resize and rotate cursors turn with the view.
 #[test]
 fn box_cursors_turn_with_the_view() {

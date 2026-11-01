@@ -604,8 +604,8 @@ impl Session {
         v
     }
 
-    /// The pointer the active tool shows at `p` (General › Use Precise Cursors makes the drawing
-    /// tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
+    /// The pointer the active tool shows at `p` (General › Use Precise Cursors, or Caps Lock while
+    /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         let lent = if mods.cmd && self.lender.is_none() { self.lent_tool(self.tool.id(), &mods) } else { None };
@@ -619,7 +619,7 @@ impl Session {
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
         };
-        if self.prefs.use_precise_cursors { c.precise() } else { c }
+        if self.prefs.use_precise_cursors || self.caps_lock { c.precise() } else { c }
     }
 
     pub fn tool_options(&self) -> Value {

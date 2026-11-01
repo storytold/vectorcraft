@@ -337,19 +337,21 @@ pub(super) fn progress(ui: &mut egui::Ui, d: &Dialog) {
         widgets::dim_name(ui, &crate::i18n::message(crate::i18n::current(), e));
     }
     if let Some(s) = d.fields.get("searched") {
-        let (folders, files) = (s["folders"].to_string(), s["files"].to_string());
-        widgets::dim_name(
-            ui,
-            &crate::i18n::fmt(tl!("{folders} folder(s) and {files} file(s) searched"), &[("folders", &folders), ("files", &files)]),
-        );
+        let folders = crate::i18n::tn(s["folders"].as_u64().unwrap_or(0), "{n} folder", "{n} folders");
+        let files = crate::i18n::tn(s["files"].as_u64().unwrap_or(0), "{n} file", "{n} files");
+        widgets::dim_name(ui, &crate::i18n::fmt(tl!("{folders} and {files} searched"), &[("folders", &folders), ("files", &files)]));
     }
-    let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).filter(|n| *n > 0).map(|n| n.to_string());
+    let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).filter(|n| *n > 0);
     if let Some(n) = count("skipped") {
-        let text = tl!("{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones");
-        widgets::dim_name(ui, &crate::i18n::fmt(text, &[("count", &n)]));
+        let text = crate::i18n::tn(
+            n,
+            "{n} folder skipped, such as another app's or the system's folder or a hidden one",
+            "{n} folders skipped, such as other apps' and the system's folders and hidden ones",
+        );
+        widgets::dim_name(ui, &text);
     }
     if let Some(n) = count("unreadable") {
-        widgets::dim_name(ui, &crate::i18n::fmt(tl!("{count} folder(s) or file(s) couldn't be read"), &[("count", &n)]));
+        widgets::dim_name(ui, &crate::i18n::tn(n, "{n} folder or file couldn't be read", "{n} folders or files couldn't be read"));
     }
     if matches!(d.fields.get("stopped").and_then(Value::as_str), Some("time" | "limit")) {
         widgets::dim_label(ui, tl!("The search stopped at its limit: search a smaller folder."));

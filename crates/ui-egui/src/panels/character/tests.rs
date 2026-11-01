@@ -130,6 +130,38 @@ fn kerning_at_a_caret_sets_the_pair_not_the_whole_text() {
     assert_eq!((kerning(&app, 1), kerning(&app, 2), kerning(&app, 3)), (Some(-50.0), Some(30.0), Some(30.0)));
 }
 
+#[test]
+fn character_kerning_setter_and_automatic_pair_value() {
+    let german = crate::i18n::Lang::from_code("de").unwrap();
+    assert!(crate::i18n::has(german, "Optical"));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "III", "size": 100, "font": "JetBrains Mono"})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    set_kerning(&mut app, json!("optical"));
+    assert!(text_style(&app).unwrap().0.optical_kerning);
+    let ctx = egui::Context::default();
+    let mut shown = None;
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    let (value, automatic) = shown.unwrap();
+    assert!(automatic && value != 0.0);
+    set_kerning(&mut app, json!(50));
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert_eq!(shown, Some((50.0, false)));
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    assert_eq!(shared(&app, |s| (s.optical_kerning, s.kerning)), None, "a mixed range shows a blank Kerning field");
+}
+
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
 /// keyboard focus with the value selected: what is typed replaces it, and Enter applies it.
 /// Highlight Font Name opens the font family menu with its search field focused. Without
@@ -506,6 +538,19 @@ fn digits_show_with_the_indic_options() {
     assert!(!shown(&mut app));
     app.session.prefs.show_indic_options = true;
     assert!(shown(&mut app));
+}
+
+/// The Digits submenu lists Default, the Arabic-script numeral systems and the Indic scripts'
+/// digits (#4942), and checks the selected characters' system.
+#[test]
+fn digits_submenu_lists_the_indic_scripts_and_checks_the_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| digits_items(app, ui, Some(vectorcraft_doc::Digits::Tamil)));
+    let items: Vec<_> = text.lines().map(|l| l.trim().trim_start_matches("✓ ")).collect();
+    let want =
+        ["Default", "Arabic", "Hindi", "Farsi", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Odia", "Tamil", "Telugu", "Kannada", "Malayalam"];
+    assert!(want.iter().all(|w| items.contains(w)), "{items:?}");
+    assert_eq!(text.lines().filter_map(|l| l.strip_prefix("✓ ")).collect::<Vec<_>>(), ["Tamil"]);
 }
 
 /// Character Direction is in the panel menu with the Middle Eastern (Indic) options, beside

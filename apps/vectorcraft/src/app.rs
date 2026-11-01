@@ -68,6 +68,9 @@ impl eframe::App for App {
         // macOS converts the frame from sRGB to the display's profile (#2249).
         #[cfg(all(target_os = "macos", feature = "wgpu"))]
         super::mac_color_space::tag(ui);
+        if let Some(on) = self.host_caps_lock.read_transition() {
+            self.app.set_caps_lock(on);
+        }
         file_access::unconfined(|| self.app.ui(ui));
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).

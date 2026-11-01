@@ -65,6 +65,7 @@ fn opens_on_defaults_and_draws_every_view() {
     assert_eq!(field(&app, "folder"), json!(fileio::export_folder().unwrap_or_default()), "the Desktop, else home");
     assert_eq!((field(&app, "openLocation"), field(&app, "subfolders"), field(&app, "preset")), (json!(true), json!(true), json!("")));
     assert_eq!((field(&app, "subfolderBy"), field(&app, "pdfs"), field(&app, "view")), (json!("scale"), json!("multiple"), json!("grid")));
+    assert_eq!((field(&app, "includeBleed"), field(&app, "includeArtboardFill")), (json!(false), json!(true)));
     let settings = field(&app, "settings");
     for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
         assert!(settings[f].is_object(), "{f} has settings");
@@ -450,6 +451,30 @@ fn the_web_downloads_one_zip_or_the_file() {
     assert_eq!(image::load_from_memory(&log[0].1).unwrap().to_rgba8().get_pixel(1, 1).0, [0, 0, 0, 255], "the PNG settings' background");
 }
 
+/// Include Artboard Fill: checked, the file shows the artboard's background color behind the art
+/// (on transparency too); unchecked, it doesn't, and the dialog reopens unchecked.
+#[test]
+fn include_artboard_fill_reaches_the_files_and_is_remembered() {
+    let (mut app, log) = app(1, true);
+    app.run("artboard.setProps", json!({"index": 0, "color": "#ff0000"})).unwrap();
+    for include in [true, false] {
+        log.borrow_mut().clear();
+        open(&mut app);
+        assert_eq!(field(&app, "includeArtboardFill"), json!(true), "on until unchecked");
+        set(&mut app, "includeArtboardFill", json!(include));
+        set(&mut app, "settings", json!({"png": {"background": "transparent"}}));
+        frame(&mut app);
+        confirm(&mut app).unwrap();
+        let px = image::load_from_memory(&log.borrow()[0].1).unwrap().to_rgba8().get_pixel(58, 38).0;
+        assert_eq!(px, if include { [255, 0, 0, 255] } else { [0, 0, 0, 0] }, "include {include}");
+        if include {
+            continue;
+        }
+        open(&mut app);
+        assert_eq!(field(&app, "includeArtboardFill"), json!(false), "remembered");
+    }
+}
+
 #[test]
 fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
@@ -784,6 +809,7 @@ fn the_dialog_is_laid_out_as_illustrators() {
         "Select:",
         "Full Document",
         "Include Bleed",
+        "Include Artboard Fill",
         "Export to:",
         "Open Location after Export",
         "Create Sub-folders",

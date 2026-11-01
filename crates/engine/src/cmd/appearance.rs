@@ -27,7 +27,7 @@ use vectorcraft_doc::appearance::SharedStack;
 use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, FillLayer, Node, NodeKind, ParaStyle, StrokeLayer};
 use vectorcraft_geom::Rect;
 
-use super::edit::{outermost, selected_roots};
+use super::edit::{outermost, roots_of, selected_roots};
 use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
@@ -255,17 +255,36 @@ impl ItemTarget {
         if fits == Some(true) { self } else { ItemTarget::Top }
     }
 
-    /// This target for each of `ids` in `d` (in their order): an aligned item (a row of the first
-    /// target's stack) is, in each other target, the item equal to it there (see
+    /// This target for each of `ids` (in their order): an aligned item (a row of the first
+    /// target's stack, or for the active item of the first selected object's, see
+    /// [`ItemTarget::anchor`]) is, in each other target, the item equal to it there (see
     /// [`SharedStack`]); `None` for a target that has none, which the edit leaves alone. A row the
     /// targets don't share, and any other target, stands for itself in every target.
-    pub(crate) fn per_target(self, d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
+    pub(crate) fn per_target(self, s: &Session, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
         let ItemTarget::Item { index, explicit, aligned: true } = self else { return vec![Some(self); ids.len()] };
-        let Some(shared) = shared_stack(d, ids) else { return vec![Some(self); ids.len()] };
+        let Some(st) = s.active().filter(|_| ids.len() >= 2) else { return vec![Some(self); ids.len()] };
+        let k = self.anchor(s, ids);
+        let mut order = ids.to_vec();
+        order.swap(0, k);
+        let Some(shared) = shared_stack(&st.doc, &order) else { return vec![Some(self); ids.len()] };
         if !shared.has_item(index) {
             return vec![Some(self); ids.len()];
         }
-        (0..ids.len()).map(|k| shared.item_in(index, k).map(|index| ItemTarget::Item { index, explicit, aligned: true })).collect()
+        let mut per: Vec<Option<ItemTarget>> =
+            (0..order.len()).map(|j| shared.item_in(index, j).map(|index| ItemTarget::Item { index, explicit, aligned: true })).collect();
+        per.swap(0, k);
+        per
+    }
+
+    /// Where among `ids` (the targets, in paint order) the object whose stack this item is a row of
+    /// is: the first selected object (or the compound path holding it) for the active item, which
+    /// need not paint first; the first target otherwise, or when that object is not among them.
+    pub(crate) fn anchor(self, s: &Session, ids: &[NodeId]) -> usize {
+        let ItemTarget::Item { explicit: false, .. } = self else { return 0 };
+        let Some(st) = s.active() else { return 0 };
+        let Some(first) = st.selection.subjects().first() else { return 0 };
+        let root = roots_of(&st.doc, vec![*first]).first().copied().unwrap_or(*first);
+        ids.iter().position(|id| *id == root).unwrap_or(0)
     }
 
     /// The item of `ap` a fill (`fill`) or stroke edit changes; `None` = the topmost one.
@@ -407,7 +426,7 @@ pub(crate) fn edit_items_then(
         return Ok(());
     }
     let before = s.doc()?.doc.clone();
-    let per = item.per_target(&before, ids);
+    let per = item.per_target(s, ids);
     super::overprint::edit_counted(s, label, |d| {
         let mut edited = Vec::new();
         for (id, item) in ids.iter().zip(&per) {
@@ -429,7 +448,7 @@ pub(crate) fn count_changed(d: &vectorcraft_doc::Document, before: &vectorcraft_
 }
 
 /// Whether an edit aimed at `item` changes a stroke: the `stroke` param, else the kind of the
-/// targeted item (on the first target object), else `default`. A `stroke` other than true, false or
+/// targeted item (on the object whose row it is, see [`ItemTarget::anchor`]), else `default`. A `stroke` other than true, false or
 /// null is an error of command `cmd`.
 pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bool, cmd: &str) -> Result<bool> {
     check_switches(p, &["stroke"], cmd)?;
@@ -439,7 +458,7 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     let ItemTarget::Item { index, .. } = item else { return Ok(default) };
     let ids = appearance_targets(s, p)?;
     let d = &s.doc()?.doc;
-    Ok(ids.first().and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
+    Ok(ids.get(item.anchor(s, &ids)).and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 
 /// The whole number of 0 or more that `key` holds, read with [`index`].

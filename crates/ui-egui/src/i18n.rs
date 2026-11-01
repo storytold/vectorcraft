@@ -23,6 +23,8 @@
 //!   message itself stays English (the control channel, MCP and tests read it); `@msg` catalog
 //!   rows hold whole messages or templates such as `Couldn't open {name}: {e}`, and the values in
 //!   the placeholders are translated in turn (the reason after `: {e}` is often a message too).
+//!   A `@msgplural` row is a template with a count: its source holds the English `one|other`
+//!   forms, its translation the language's plural forms, and the `{n}` value picks the form.
 
 mod catalog;
 
@@ -651,7 +653,10 @@ pub fn message(lang: Lang, s: &str) -> String {
 }
 
 fn message_at(lang: Lang, s: &str, depth: usize) -> String {
-    let Some((template, caps)) = lang.catalog().message(s) else { return s.to_string() };
+    let Some((forms, caps)) = lang.catalog().message_forms(s) else { return s.to_string() };
+    let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
+    let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
+    let Some(template) = forms.get(form) else { return s.to_string() };
     let values: Vec<(&str, String)> =
         caps.into_iter().map(|(k, v)| (k, if depth > 1 { message_at(lang, v, depth - 1) } else { v.to_string() })).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
