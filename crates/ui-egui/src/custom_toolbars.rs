@@ -109,7 +109,8 @@ pub(crate) fn create(ui: &mut UiState, name: &str) -> Result<String, String> {
 
 /// Keep named toolbars, each name once whatever its case and at most [`MAX_NAME`] characters, of
 /// known tools, each once in its toolbar, at a position that is a number, with one strip per group
-/// torn off them (a hand-edited preferences file or workspace).
+/// torn off them, and each group's tool chosen last only when the group holds it (a hand-edited
+/// preferences file or workspace).
 pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
     let mut names = std::collections::BTreeSet::new();
     bars.retain_mut(|b| {
@@ -119,6 +120,8 @@ pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
             s.retain(|id| tool_info(id).is_some() && seen.insert(id.clone()));
         }
         b.slots.retain(|s| !s.is_empty());
+        let slots = &b.slots;
+        b.slot_tool.retain(|first, id| slots.iter().any(|s| s.first() == Some(first) && s.contains(id)));
         crate::state::FloatingFlyout::sanitize(&mut b.floating);
         keep_strips(b);
         if !b.pos.iter().all(|v| v.is_finite()) {
@@ -995,7 +998,8 @@ mod tests {
         assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle));
     }
 
-    /// A hand-edited file: unnamed toolbars and repeated names go, unknown tools go, each tool once.
+    /// A hand-edited file: unnamed toolbars and repeated names go, unknown tools go, each tool once,
+    /// and a group shows a tool chosen last only when the group holds it.
     #[test]
     fn toolbars_load_sanitized() {
         let bar = |name: &str, slots: &[&[&str]]| CustomToolbar {
@@ -1011,10 +1015,23 @@ mod tests {
                 .collect(),
         };
         let long = "x".repeat(MAX_NAME + 1);
-        let mut bars =
-            vec![bar("A", &[&["pen", "nope", "curvature"], &["pen"], &["nope"]]), bar("a", &[]), bar(" ", &[]), bar(&long, &[]), bar("B", &[])];
+        let mut bars = vec![
+            bar("A", &[&["pen", "nope", "curvature"], &["pen"], &["nope"]]),
+            bar("a", &[]),
+            bar(" ", &[]),
+            bar(&long, &[]),
+            bar("B", &[]),
+            bar("C", &[&["pen"]]),
+        ];
+        // The tool a group shows: kept only for a group the toolbar holds, and a tool in it.
+        let chosen = |pairs: &[(&str, &str)]| pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        bars[0].slot_tool = chosen(&[("pen", "curvature"), ("curvature", "pen"), ("nope", "pen")]);
+        bars[4].slot_tool = chosen(&[("pen", "curvature")]);
+        bars[5].slot_tool = chosen(&[("pen", "curvature")]);
         sanitize(&mut bars);
-        assert_eq!(bars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["A", "B"], "a name past {MAX_NAME} characters goes too");
+        assert_eq!(bars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["A", "B", "C"], "a name past {MAX_NAME} characters goes too");
+        assert_eq!(bars[0].slot_tool, chosen(&[("pen", "curvature")]));
+        assert!(bars[1].slot_tool.is_empty() && bars[2].slot_tool.is_empty(), "{:?} {:?}", bars[1].slot_tool, bars[2].slot_tool);
         assert_eq!(bars[0].slots, [["pen", "curvature"]]);
         assert_eq!(bars[0].pos, NEW_AT);
         // One strip per group, of known tools, for a group the toolbar holds.
