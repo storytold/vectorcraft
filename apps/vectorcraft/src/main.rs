@@ -434,6 +434,7 @@ fn main() -> std::process::ExitCode {
                     let summary = adapter_summary(&rs.adapter.get_info());
                     log::info!("rendering with {summary} (power preference {power:?})");
                     created.created(&cc.egui_ctx);
+                    vectorcraft_ui_egui::gpu_invert::setup(rs);
                     if !gpu::skipped().is_empty() {
                         // A processor chosen in Settings can be the one that can't show the window.
                         let hint = if chosen_gpu {

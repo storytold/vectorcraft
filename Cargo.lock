@@ -6542,6 +6542,7 @@ dependencies = [
  "craft-ui",
  "craft-update",
  "egui",
+ "egui-wgpu",
  "egui_extras",
  "egui_kittest",
  "image",
