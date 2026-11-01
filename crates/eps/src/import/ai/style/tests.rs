@@ -326,3 +326,157 @@ fn a_hidden_fill_comes_in_hidden() {
     assert!(st.plain, "{st:?}");
     assert_eq!(st.looks.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
 }
+
+/// A descriptor (version 1) of `fields`.
+fn descriptor(fields: &[Vec<u8>]) -> Vec<u8> {
+    [vec![0, 0, 0, 1], fields.concat()].concat()
+}
+
+fn long_field(key: &[u8; 4], v: i32) -> Vec<u8> {
+    [&key[..], &[0; 4], b"long", &v.to_be_bytes()].concat()
+}
+
+fn enum_field(key: &[u8; 4], kind: &[u8; 4], v: &[u8; 4]) -> Vec<u8> {
+    [&key[..], &0x2000u32.to_be_bytes(), kind, v].concat()
+}
+
+/// Bas Relief's fields: the filter-gallery code, `detail`, `smoothness` and the light direction `light`.
+fn relief_fields(detail: i32, smoothness: i32, light: &[u8; 4]) -> Vec<Vec<u8>> {
+    vec![enum_field(b"GEfk", b"GEft", b"BsRl"), long_field(b"Dtl ", detail), long_field(b"Smth", smoothness), enum_field(b"LghD", b"LghD", light)]
+}
+
+/// A settings block of `data`: the ASCII85 on comment lines, then `; (data) ,`.
+fn block(data: &[u8]) -> String {
+    let lines: String = crate::ps::ascii85(data).lines().map(|l| format!("%{l}\n")).collect();
+    format!("/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n")
+}
+
+/// The style `name`: a black fill and Bas Relief on the object, whose dictionary holds `body`.
+fn relief_text(name: &str, body: &str) -> String {
+    let stack = compound("Stack Style Filter", &[fill("0 0 0 1 0 0 0 Xa"), basic("Conduit Filter", "")]);
+    let relief = basic("PSAdapter_plugin_BsRl", body);
+    format!("/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[stack, relief]))
+}
+
+/// The style of [`relief_text`].
+fn relief_style(body: &str) -> ArtStyle {
+    art_styles(relief_text("Relief", body).as_bytes()).remove("Relief").unwrap_or_default()
+}
+
+#[test]
+fn a_settings_block_without_its_end_leaves_the_next_style_alone() {
+    // GUARDS: the block's `~>` was looked for past its own lines, in the next style's block, which was skipped.
+    let data = descriptor(&relief_fields(8, 1, b"LDBt"));
+    let cut = format!("{}{} /Int (dataSize) ,\n", block(&data).replace("~>", ""), data.len());
+    let whole = format!("{}{} /Int (dataSize) ,\n", block(&data), data.len());
+    let styles = art_styles(format!("{}{}", relief_text("Cut", &cut), relief_text("Whole", &whole)).as_bytes());
+    assert!(styles["Cut"].effects.is_empty(), "{:?}", styles["Cut"]);
+    assert!(styles["Whole"].simple, "{:?}", styles["Whole"]);
+    assert_eq!(styles["Whole"].effects[0].params["detail"], json!(8.0));
+}
+
+/// [`relief_style`] with the settings block of `data` and a `dataSize` of its length.
+fn relief_with(data: &[u8]) -> ArtStyle {
+    relief_style(&format!("{}300 /Int (PrevDres) ,\n{} /Int (dataSize) ,\n1 /Bool (go) ,\n", block(data), data.len()))
+}
+
+#[test]
+fn bas_relief_reads_its_settings_block() {
+    // GUARDS: the effect's defaults stood in for the settings, and an object other than type with it
+    // came in as its drawn look.
+    for (code, light) in [
+        (b"LDBt", "bottom"),
+        (b"LDBL", "bottomLeft"),
+        (b"LDLf", "left"),
+        (b"LDTL", "topLeft"),
+        (b"LDTp", "top"),
+        (b"LDTR", "topRight"),
+        (b"LDRg", "right"),
+        (b"LDBR", "bottomRight"),
+    ] {
+        let st = relief_with(&descriptor(&relief_fields(8, 1, code)));
+        assert!(st.plain && st.simple, "{st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{st:?}") };
+        assert_eq!((e.id.as_str(), &e.params), ("sketch.basRelief", &json!({"detail": 8.0, "smoothness": 1.0, "lightDirection": light})));
+    }
+    // Without the filter-gallery code, and with the fields in another order.
+    let [_, detail, smoothness, light] = <[Vec<u8>; 4]>::try_from(relief_fields(15, 15, b"LDTp")).unwrap();
+    let st = relief_with(&descriptor(&[light, smoothness, detail]));
+    assert!(st.simple, "{st:?}");
+    assert_eq!(st.effects[0].params, json!({"detail": 15.0, "smoothness": 15.0, "lightDirection": "top"}));
+}
+
+#[test]
+fn bas_relief_without_a_settings_block_keeps_the_effects_defaults_on_type_only() {
+    let st = relief_style("300 /Int (PrevDres) ,\n");
+    assert!(st.plain && !st.simple, "{st:?}");
+    assert_eq!(st.effects[0].params, json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"}));
+}
+
+#[test]
+fn bas_relief_with_settings_not_read_here_keeps_the_drawn_look() {
+    let good = || relief_fields(8, 1, b"LDBt");
+    let with = |i: usize, field: Vec<u8>| {
+        let mut f = good();
+        f[i] = field;
+        descriptor(&f)
+    };
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("detail 0", with(1, long_field(b"Dtl ", 0))),
+        ("detail 16", with(1, long_field(b"Dtl ", 16))),
+        ("smoothness -1", with(2, long_field(b"Smth", -1))),
+        ("an unknown direction", with(3, enum_field(b"LghD", b"LghD", b"LDXx"))),
+        ("a direction of another type", with(3, enum_field(b"LghD", b"Dirc", b"LDBt"))),
+        ("a detail that isn't a whole number", with(1, [&b"Dtl "[..], &[0; 4], b"doub", &8.0f64.to_be_bytes()].concat())),
+        ("another effect's code", with(0, enum_field(b"GEfk", b"GEft", b"Crst"))),
+        ("an unknown key", [descriptor(&good()), long_field(b"Xtra", 1)].concat()),
+        ("a key twice", [descriptor(&good()), long_field(b"Dtl ", 8)].concat()),
+        ("a missing key", descriptor(&good()[..3])),
+        ("a byte after the last field", [descriptor(&good()), vec![0]].concat()),
+        ("a cut field", descriptor(&good()).split_last().unwrap().1.to_vec()),
+        ("version 2", [vec![0, 0, 0, 2], good().concat()].concat()),
+    ];
+    for (what, data) in cases {
+        let st = relief_with(&data);
+        assert!(!st.plain && !st.simple && st.effects.is_empty(), "{what}: {st:?}");
+    }
+    let data = descriptor(&good());
+    let encoded = block(&data);
+    for (what, body) in [
+        ("a wrong dataSize", format!("{encoded}{} /Int (dataSize) ,\n", data.len() + 1)),
+        ("no dataSize", encoded.clone()),
+        ("no ~>", format!("{}{} /Int (dataSize) ,\n", encoded.replace("~>", ""), data.len())),
+        ("a digit past u", format!("{}{} /Int (dataSize) ,\n", encoded.replacen("%", "%v", 2), data.len())),
+        ("a line without %", format!("{}{} /Int (dataSize) ,\n", encoded.replacen("\n%", "\n", 1), data.len())),
+        ("no (data) key", format!("{}{} /Int (dataSize) ,\n", encoded.replace("(data)", "(other)"), data.len())),
+        ("two blocks", format!("{encoded}{encoded}{} /Int (dataSize) ,\n", data.len())),
+    ] {
+        let st = relief_style(&body);
+        assert!(!st.plain && st.effects.is_empty(), "{what}: {st:?}");
+    }
+}
+
+#[test]
+fn settings_blocks_are_bounded() {
+    // More than the decoded limit, though its text is short (`z` is four zero bytes).
+    let zeros = format!("/Binary : /ASCII85Decode ,\n%{}~>\n; (data) ,\n4100 /Int (dataSize) ,\n", "z".repeat(1025));
+    assert!(relief_style(&zeros).effects.is_empty());
+    // An end further than the encoded limit.
+    let far = format!("/Binary : /ASCII85Decode ,\n{}%~>\n; (data) ,\n0 /Int (dataSize) ,\n", "%!!!!!\n".repeat(1000));
+    assert!(relief_style(&far).effects.is_empty());
+    // Objects nest two deep at most, and a descriptor holds 32 fields at most.
+    let object = |inner: Vec<u8>| [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &(inner.len() as u32).to_be_bytes(), &inner].concat();
+    let two = descriptor(&[object(descriptor(&[object(descriptor(&[long_field(b"Valu", 1)]))]))]);
+    assert!(adapter::decode(&two).is_some());
+    let three = descriptor(&[object(descriptor(&[object(descriptor(&[object(descriptor(&[]))]))]))]);
+    assert!(adapter::decode(&three).is_none());
+    assert!(adapter::decode(&descriptor(&vec![long_field(b"Valu", 1); 32])).is_some());
+    assert!(adapter::decode(&descriptor(&vec![long_field(b"Valu", 1); 33])).is_none());
+    let long_object = [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &u32::MAX.to_be_bytes()].concat();
+    assert!(adapter::decode(&descriptor(&[long_object])).is_none());
+    let nan = [&b"Valu"[..], &[0; 4], b"doub", &f64::NAN.to_be_bytes()].concat();
+    assert!(adapter::decode(&descriptor(&[nan])).is_none());
+    let flag = |b: u8| [&b"Valu"[..], &[0; 4], b"bool", &[b]].concat();
+    assert!(adapter::decode(&descriptor(&[flag(1)])).is_some());
+    assert!(adapter::decode(&descriptor(&[flag(2)])).is_none());
+}
