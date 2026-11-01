@@ -276,6 +276,13 @@ fn list_levels_count_their_own_numbers_and_save_only_past_the_first() {
     let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
     assert_eq!((read(serde_json::json!({"bullet": "dash"})).level, read(serde_json::json!({"level": 4}))), (1, dot(4).unwrap()));
     assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": "two"})).is_err());
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": 2.5})).is_err());
+    let levels = [serde_json::json!(0), serde_json::json!(-1), serde_json::json!(12), serde_json::json!(300), serde_json::json!(u64::MAX)];
+    assert_eq!(
+        levels.map(|l| read(serde_json::json!({ "level": l })).level),
+        [1, 1, 9, 9, 9],
+        "a saved level outside 1 to 9 reads as the nearest one"
+    );
     let deep = ListCounts([5, 0, 2, 0, 0, 0, 0, 0, 0]);
     assert_eq!(deep.parts(), (5, vec![0, 2]));
     assert_eq!((ListCounts::from_parts(5, &[0, 2]), ListCounts::default().parts()), (deep, (0, vec![])));

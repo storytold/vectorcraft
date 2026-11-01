@@ -579,6 +579,10 @@ fn tab_at_the_start_of_a_list_paragraph_changes_its_level() {
     let mut after = d.clone();
     let acts = typing.text_input(&cx(&d, &Selection::default(), &paint()), "!");
     apply(&mut after, &snapshot, &acts);
+    // Tab at level 9 does nothing, and the typing goes on as one undo step.
+    (typing.anchor, typing.caret) = (5, 5);
+    let acts = typing.key(&cx(&after, &Selection::default(), &paint()), ToolKey::Tab, Mods::default());
+    assert!(acts.is_empty() && typing.typing.is_some(), "Tab at level 9 while typing: {acts:?}");
     let acts = {
         (typing.anchor, typing.caret) = (5, 5);
         typing.key(&cx(&after, &Selection::default(), &paint()), ToolKey::Tab, SHIFT)

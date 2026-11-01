@@ -195,7 +195,7 @@ pub struct ParaList {
     /// the paragraph, Bullets and Numbering…'s Level): each level counts its own numbers
     /// ([`Self::next_marker`]). A value outside that range is read as the nearest level
     /// ([`Self::depth`]). The file saves it only when it is not 1.
-    #[serde(skip_serializing_if = "is_first_level")]
+    #[serde(skip_serializing_if = "is_first_level", deserialize_with = "read_level")]
     pub level: u8,
 }
 
@@ -209,6 +209,16 @@ impl Default for ParaList {
 /// Is `level` the first list level, which the file does not save?
 fn is_first_level(level: &u8) -> bool {
     *level == 1
+}
+
+/// Reads a saved list level, a whole number, as the nearest of 1 to [`LIST_LEVELS`], so a level
+/// such as -1 or 300 opens the file at level 1 or 9. Anything else is an error.
+fn read_level<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+    let level = match serde_json::Value::deserialize(d)? {
+        serde_json::Value::Number(n) if n.is_i64() || n.is_u64() => n.as_i64().map_or(LIST_LEVELS as i64, |n| n.clamp(1, LIST_LEVELS as i64)),
+        _ => return Err(serde::de::Error::custom("a list level must be a whole number")),
+    };
+    Ok(level as u8)
 }
 
 /// How many levels a list has (Bullets and Numbering…'s Level: 1 to 9).

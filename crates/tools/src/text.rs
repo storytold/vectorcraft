@@ -431,6 +431,8 @@ impl TypeTool {
     /// ([`Self::list_level_step`]); anywhere else Tab inserts a tab.
     fn tab(&mut self, cx: &ToolContext, t: &TextObject, text: &str, (a, b): (usize, usize), shift: bool) -> Vec<Action> {
         match self.list_level_step(t, text, a, b, if shift { -1 } else { 1 }) {
+            // At the first or the last level the key does nothing, and the typing goes on.
+            Some(step) if step.is_empty() => step,
             Some(step) => {
                 let mut out = self.commit();
                 out.extend(step);
