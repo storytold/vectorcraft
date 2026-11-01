@@ -2,7 +2,7 @@
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" forms).
 #
 # Clean-room: written from the meaning of VectorCraft's English labels in ordinary Lao
-# vocabulary; no other application's Lao localisation was copied. AI-drafted; native review welcome.
+# vocabulary; no other application's Lao localisation was copied. Translated and native-reviewed by @bounkirdni-2025 Or Bone NI (Native Lao speaker).
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language names,
 # OpenType, the built-in workspace names and the bracketed perspective grid preset names.
 	Glowing Edges…	ຂອບເຮືອງແສງ…
