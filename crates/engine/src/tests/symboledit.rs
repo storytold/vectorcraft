@@ -676,3 +676,45 @@ fn undoing_entry_with_a_group_isolated_inside_the_art_goes_back_to_before() {
     assert_eq!(st.isolation, None);
     assert_eq!(st.active_layer, before);
 }
+
+/// The text wrap of the area type in `n`.
+fn wrap_in(n: &Node) -> Vec<vectorcraft_doc::WrapShape> {
+    let mut wrap = None;
+    n.walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind {
+            wrap = Some(t.wrap.clone());
+        }
+    });
+    wrap.expect("area type")
+}
+
+#[test]
+fn moving_a_wrap_object_in_the_edit_gives_the_symbol_the_new_text_wrap() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 600, "height": 600}));
+    let text = "word ".repeat(200);
+    let t = id(&run(&mut s, "text.create", json!({"x": 0, "y": 0, "text": text, "size": 12, "area": {"width": 400, "height": 400}})));
+    let r = id(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 50, "width": 200, "height": 100})));
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    run(&mut s, "object.textWrap.make", json!({}));
+    run(&mut s, "select.set", json!({"ids": [t.0, r.0]}));
+    let instance = id(&run(&mut s, "symbol.new", json!({"name": "Wrapped"})));
+    let symbol_wrap = |s: &Session| wrap_in(&s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Wrapped").expect("the symbol").art);
+    let entered = symbol_wrap(&s);
+    assert!(!entered.is_empty());
+    run(&mut s, "symbol.edit", json!({"id": instance.0}));
+    let (layer, rect) = {
+        let st = s.doc().unwrap();
+        let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+        let rect = layer_art(&s).into_iter().find(|i| st.doc.node(*i).is_some_and(|n| n.extras().wrap.is_some())).expect("the wrap object");
+        (layer, rect)
+    };
+    run(&mut s, "select.set", json!({"ids": [rect.0]}));
+    run(&mut s, "object.move", json!({"dx": 150, "dy": 0}));
+    let on_layer = wrap_in(s.doc().unwrap().doc.node(layer).unwrap());
+    assert_ne!(on_layer, entered, "the editing layer's text wraps around the moved object");
+    assert_eq!(symbol_wrap(&s), on_layer);
+    // Leaving keeps it.
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(symbol_wrap(&s), on_layer);
+}

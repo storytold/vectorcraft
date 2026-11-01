@@ -39,10 +39,13 @@ impl Session {
                     }
                     // Symbol editing: the symbol follows its art on the editing layer, before
                     // inline graphics follow their symbols.
-                    let symbol_synced =
+                    let mut symbol_synced =
                         if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
                     cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
+                    // The document the passes below start from, for the symbol to follow what they
+                    // change on its editing layer.
+                    let synced = st.doc.symbol_edit.is_some().then(|| st.doc.clone());
                     // Text Wrap: area type follows its wrap objects; then threads re-flow.
                     cmd::textwrap::refresh(&before, Arc::make_mut(&mut st.doc));
                     // Type in no thread numbers its list paragraphs from 1 (before the mask copies
@@ -55,6 +58,28 @@ impl Session {
                     // Threaded text re-flows when any of its frames changed.
                     if !st.doc.text_threads.is_empty() {
                         cmd::threads::reflow(&before, Arc::make_mut(&mut st.doc));
+                    }
+                    // Symbol editing: the symbol also takes the text wrap, list numbering and
+                    // re-flow those passes gave its editing layer; when that changes the symbol, its
+                    // inline graphics follow it and the threads they are in re-flow.
+                    let editing = st.doc.symbol_edit.as_ref().map(|e| e.layer);
+                    if let Some(synced) = &synced
+                        && symbol_synced.is_ok()
+                        && editing.is_some()
+                        && before.symbol_edit.as_ref().map(|e| e.layer) == editing
+                    {
+                        let art =
+                            |d: &Document| d.symbol_edit.as_ref().and_then(|e| d.symbols.iter().find(|x| x.name == e.symbol)).map(|x| x.art.clone());
+                        let old = art(&st.doc);
+                        symbol_synced = cmd::symboledit::sync(synced, Arc::make_mut(&mut st.doc));
+                        let new = art(&st.doc);
+                        if symbol_synced.is_ok() && !matches!((&old, &new), (Some(a), Some(b)) if Arc::ptr_eq(a, b)) {
+                            let resynced = st.doc.clone();
+                            cmd::inline::refresh(synced, Arc::make_mut(&mut st.doc));
+                            if !st.doc.text_threads.is_empty() {
+                                cmd::threads::reflow(&resynced, Arc::make_mut(&mut st.doc));
+                            }
+                        }
                     }
                     // Asset Export: assets let go of deleted art.
                     if !st.doc.assets.is_empty() {
