@@ -143,6 +143,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn show_custom(app: &mut VectorcraftApp, ctx: &egui::Context) {
     floating(app, ctx, true);
     crate::custom_toolbars::show(app, ctx);
+    // A flyout of the hidden Tools panel closes with it.
+    if ctx.data(|d| d.get_temp::<Option<String>>(flyout_toolbar_id())).flatten().is_none() {
+        app.ui.flyout = None;
+    }
     flyout(app, ctx);
     if crate::custom_toolbars::drawer_target(&app.ui).is_some() {
         crate::edit_toolbar::drawer(app, ctx);

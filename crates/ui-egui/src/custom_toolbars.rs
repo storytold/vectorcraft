@@ -816,6 +816,27 @@ mod tests {
         app.run("window.dock", json!({})).unwrap();
         frames(&mut app);
         assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle), "the next Tab hides it");
+        // A flyout of the Tools panel closes when Window › Tools hides the panel; one of a toolbar
+        // made with New Toolbar stays open.
+        app.run("window.dock", json!({})).unwrap();
+        app.ui.toolbar = true;
+        frames(&mut app);
+        let open = |app: &mut VectorcraftApp, toolbar: Option<String>| {
+            app.ui.flyout = Some(0);
+            ctx.data_mut(|d| {
+                d.insert_temp(egui::Id::unique("flyout-tools"), vec!["pen".to_string(), "curvature".to_string()]);
+                d.insert_temp(crate::toolbar::flyout_toolbar_id(), toolbar);
+            });
+        };
+        open(&mut app, None);
+        app.run("window.toolbar", json!({})).unwrap();
+        assert!(!app.ui.toolbar);
+        frames(&mut app);
+        assert_eq!(app.ui.flyout, None, "the hidden Tools panel's flyout closes");
+        assert!(!drawn(&ctx, egui::Id::unique("tool-flyout"), egui::Order::Foreground));
+        open(&mut app, Some("Mine".into()));
+        frames(&mut app);
+        assert_eq!(app.ui.flyout, Some(0), "a toolbar's own flyout stays open");
     }
 
     /// A group's button shows the tool chosen last from it however it was chosen (its flyout, a
