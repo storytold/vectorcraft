@@ -360,6 +360,53 @@ fn compound_paths_and_clipping() {
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
 }
 
+/// A stroked clipping path (`W S`, `W B`, or a gradient fill with `1 BB`) keeps its stroke on the clipping path, and a
+/// fill goes on the painted copy under the clipped art.
+#[test]
+fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
+    let blue = Some(Color::rgb(0.0, 0.0, 1.0));
+    let red = Some(Color::rgb(1.0, 0.0, 0.0));
+    // (clipping, fill colour, a gradient fill, stroke colour and width) of each of the clipping group's children.
+    let children = |doc: &Document| {
+        let NodeKind::Group { children, clip: true } = &art(doc)[0].kind else { panic!("{:?}", art(doc)[0].kind) };
+        children
+            .iter()
+            .map(|c| {
+                let clipping = matches!(c.kind, NodeKind::Path { clipping: true, .. });
+                (clipping, fill(c).color(), matches!(fill(c), Paint::Gradient(_)), c.appearance.stroke().map(|s| (s.paint.color(), s.width)))
+            })
+            .collect::<Vec<_>>()
+    };
+    let under = rect_path(0.0, 0.0, 30.0, 30.0);
+    let clip = rect_path(5.0, 5.0, 25.0, 25.0);
+    let stroked = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nS\nQ\n");
+    assert_eq!(children(&read_ok(&layer(&stroked)).doc), [(true, None, false, Some((blue, 3.0))), (false, red, false, None)]);
+    let both = format!("0 Ae\nq\n{RED}{under}f\n0 1 0 0 0 1 0 Xa\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nB\nQ\n");
+    assert_eq!(
+        children(&read_ok(&layer(&both)).doc),
+        [(true, None, false, Some((blue, 3.0))), (false, Some(Color::rgb(0.0, 1.0, 0.0)), false, None), (false, red, false, None)]
+    );
+    let defs = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n0 0 0 0 1 0 0 2 0 6 %_BS\n%_0 0 0 0 1 0 0 2 0 6 0 0 Bs\n\
+                %_0 0 0 0 0 0 1 2 1 6 100 50 Bs\nBD\n%AI5_EndGradient\n";
+    let gradient = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nBb\n0 0 0 0 Bh\n1 (G) 5 5 0 20 1 0 0 1 0 0 1 Bg\nf\n1 BB\nQ\n");
+    assert_eq!(
+        children(&read_ok(&format!("{defs}{}", layer(&gradient))).doc),
+        [(true, None, false, Some((blue, 3.0))), (false, None, true, None), (false, red, false, None)]
+    );
+    // Several clipping paths clip as one compound path, which keeps their stroke when they all have the same one.
+    let inner = rect_path(10.0, 10.0, 20.0, 20.0);
+    let compound_stroke = |first: &str, second: &str| {
+        let body = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{first}{clip}W\nS\n{second}{inner}W\nS\nQ\n");
+        let doc = read_ok(&layer(&body)).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+        assert!(matches!(children[0].kind, NodeKind::Compound { .. }), "{:?}", children[0].kind);
+        (children[0].appearance.stroke().map(|s| (s.paint.color(), s.width)), children[0].opacity, children[0].blend)
+    };
+    assert_eq!(compound_stroke("", ""), (Some((blue, 3.0)), 1.0, BlendMode::Normal));
+    assert_eq!(compound_stroke("9 0.5 0 0 0 Xy\n", ""), (Some((blue, 3.0)), 0.5, BlendMode::Lighten));
+    assert_eq!(compound_stroke("", "5 w\n"), (None, 1.0, BlendMode::Normal), "strokes that differ");
+}
+
 /// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U
 /// … Q`): it still clips the clipping group.
 #[test]
