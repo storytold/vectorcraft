@@ -235,13 +235,18 @@ fn escape_drops_the_blend_tools_first_pick() {
 
 #[test]
 fn an_edit_undo_or_redo_made_outside_the_blend_tool_drops_its_first_pick() {
-    for case in ["edit", "undo", "redo"] {
+    for case in ["edit", "undo", "redo", "group"] {
         let undo = case == "undo";
         let mut s = session();
         let (a, b, c) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0), rect(&mut s, 400.0, 0.0, 40.0));
         if case == "redo" {
             s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap();
             s.execute("edit.undo", &json!({})).unwrap();
+        }
+        // In an open undo group, the edit after the pick is merged into the group's step.
+        if case == "group" {
+            s.begin_undo_group();
+            s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#00ff00"})).unwrap();
         }
         s.select_tool("blend", ViewInfo::default()).unwrap();
         let click = |s: &mut Session, x: f64, y: f64| s.pointer(&PointerEvent::new(PointerKind::Down, x, y), ViewInfo::default()).unwrap();

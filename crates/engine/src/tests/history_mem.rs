@@ -181,8 +181,8 @@ fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
 }
 
 /// `History::step` changes with every new step, Undo and Redo, also when an undo and a new edit
-/// leave as many steps as before, and stays the same for an edit merged into an undo group and for
-/// a selection change.
+/// leave as many steps as before, and with an edit merged into an undo group's step. It stays the
+/// same for a selection change.
 #[test]
 fn the_history_step_changes_with_each_step_undo_and_redo() {
     let mut s = session_with_rects(2);
@@ -210,9 +210,13 @@ fn the_history_step_changes_with_each_step_undo_and_redo() {
     s.execute("select.all", &json!({})).unwrap();
     s.begin_undo_group();
     s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
-    let grouped = step(&s);
-    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
-    assert_eq!(step(&s), grouped, "the second move is merged into the first");
-    s.end_undo_group(false);
+    let (grouped, depth) = (step(&s), s.doc().unwrap().history.undo.len());
     assert_ne!(grouped, other);
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "the second move is merged into the first");
+    let merged = step(&s);
+    assert!(merged != grouped && merged.1 == 0, "a merged edit moves the step: {merged:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), merged);
+    s.end_undo_group(false);
 }

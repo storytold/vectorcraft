@@ -129,8 +129,8 @@ impl History {
     }
 
     /// Which step the document is at: the newest undo step and the next redo step, by numbers no
-    /// other step takes (0 for none). Every new step, Undo and Redo changes it; an edit merged into
-    /// the newest step (an undo group) and a selection change do not.
+    /// other step takes (0 for none). Every new step, Undo, Redo and edit merged into the newest
+    /// step (an undo group) changes it; a selection change does not.
     pub fn step(&self) -> (u64, u64) {
         (self.undo.last().map_or(0, |e| e.serial), self.redo.last().map_or(0, |e| e.serial))
     }
@@ -161,11 +161,12 @@ impl History {
     }
 
     /// Estimate the newest undo step again, its next state now being `now` (the steps after it were
-    /// merged into it, or an undo group extended it).
+    /// merged into it, or an undo group extended it). It takes a new number ([`History::step`]).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
             (e.bytes, e.next_bytes) = e.doc.retained_bytes_each(now);
             e.next = std::ptr::from_ref(now) as usize;
+            e.serial = next_serial();
         }
     }
 }
