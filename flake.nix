@@ -16,31 +16,32 @@
 
       version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
 
-      commonDeps = with pkgs; [
-        # pkg-config
-        libxkbcommon
-        libx11
-        libxcursor
-        libxrandr
-        libxi
-        libxcb
-        libgcc
-        libGL
-        vulkan-loader
-        wayland
-        fontconfig
-        freetype
-        alsa-lib
-        zlib
-      ];
-      
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f {
-        inherit system;
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ rust-overlay.overlays.default ];
-        };
-      });
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          };
+          commonDeps = with pkgs; [
+            # pkg-config
+            libxkbcommon
+            libx11
+            libxcursor
+            libxrandr
+            libxi
+            libxcb
+            libgcc
+            libGL
+            vulkan-loader
+            wayland
+            fontconfig
+            freetype
+            alsa-lib
+            zlib
+          ];
+        in
+        f { inherit system pkgs commonDeps; }
+      );
     in
     {
       devShells = forAllSystems ({ pkgs, ... }:
