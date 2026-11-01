@@ -5588,6 +5588,13 @@ anchor	Points:	點：
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	請指定 `inkLimit`、`removeWhiteOverprint` 或 `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷油墨修正適用於 CMYK 文件：請先選擇 檔案 › 文件色彩模式 › CMYK 色彩
 @msg	`{key}` must be 0..{max}	`{key}` 必須為 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	尋找最接近的色票…
+	Find Nearest Swatch	尋找最接近的色票
+	Apply Nearest Swatch	套用最接近的色票
+	Select objects to find the swatches nearest their colors.	選取物件以尋找與其顏色最接近的色票。
+@msg	select objects or give `color`	請選取物件或提供 `color`
+@msg	`color` is not a colour	`color` 不是顏色
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	轉角工具
 	Slide Anchor Along Path	沿路徑滑動錨點

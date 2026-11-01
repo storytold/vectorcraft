@@ -5635,6 +5635,13 @@ anchor	Points:	ポイント:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`、`removeWhiteOverprint` または `overprintBlack` を指定してください
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	印刷インキの修正は CMYK ドキュメントで使用できます。先にファイル › ドキュメントのカラーモード › CMYK カラーを選択してください
 @msg	`{key}` must be 0..{max}	`{key}` は 0..{max} にしてください
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	最も近いスウォッチを検索…
+	Find Nearest Swatch	最も近いスウォッチを検索
+	Apply Nearest Swatch	最も近いスウォッチを適用
+	Select objects to find the swatches nearest their colors.	カラーに最も近いスウォッチを探すオブジェクトを選択してください。
+@msg	select objects or give `color`	オブジェクトを選択するか `color` を指定してください
+@msg	`color` is not a colour	`color` はカラーではありません
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	コーナーツール
 	Slide Anchor Along Path	パスに沿ってアンカーポイントをスライド

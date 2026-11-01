@@ -5906,6 +5906,13 @@ anchor	Points:	Noktalar:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` veya `overprintBlack` verin
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Baskı Mürekkebi Düzeltmeleri CMYK belgelerinde çalışır: önce Dosya › Belge Renk Modu › CMYK Rengi'ni seçin
 @msg	`{key}` must be 0..{max}	`{key}` 0..{max} olmalıdır
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	En Yakın Renk Örneğini Bul…
+	Find Nearest Swatch	En Yakın Renk Örneğini Bul
+	Apply Nearest Swatch	En Yakın Renk Örneğini Uygula
+	Select objects to find the swatches nearest their colors.	Renklerine en yakın renk örneklerini bulmak için nesneleri seçin.
+@msg	select objects or give `color`	nesneleri seçin veya `color` verin
+@msg	`color` is not a colour	`color` bir renk değil
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Köşe Aracı
 	Slide Anchor Along Path	Bağlantı Noktasını Yol Boyunca Kaydır

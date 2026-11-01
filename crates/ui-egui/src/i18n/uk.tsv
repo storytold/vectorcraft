@@ -5548,6 +5548,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` або `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Виправлення друкарських фарб працюють у документах CMYK: спершу виберіть Файл › Колірний режим документа › Колір CMYK
 @msg	`{key}` must be 0..{max}	`{key}` має бути 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Знайти найближчий зразок…
+	Find Nearest Swatch	Знайти найближчий зразок
+	Apply Nearest Swatch	Застосувати найближчий зразок
+	Select objects to find the swatches nearest their colors.	Виділіть об’єкти, щоб знайти зразки, найближчі до їхніх кольорів.
+@msg	select objects or give `color`	виділіть об’єкти або вкажіть `color`
+@msg	`color` is not a colour	`color` не є кольором
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Інструмент «Кути»
 	Slide Anchor Along Path	Зсунути опорну точку вздовж контуру

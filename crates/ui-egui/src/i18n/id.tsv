@@ -5847,6 +5847,13 @@ anchor	Points:	Titik:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	berikan `inkLimit`, `removeWhiteOverprint`, atau `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Perbaikan Tinta Cetak bekerja pada dokumen CMYK: pilih dulu Berkas › Mode warna dokumen › Warna CMYK
 @msg	`{key}` must be 0..{max}	`{key}` harus 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Cari Swatch Terdekat…
+	Find Nearest Swatch	Cari Swatch Terdekat
+	Apply Nearest Swatch	Terapkan Swatch Terdekat
+	Select objects to find the swatches nearest their colors.	Pilih objek untuk menemukan swatch yang paling dekat dengan warnanya.
+@msg	select objects or give `color`	pilih objek atau berikan `color`
+@msg	`color` is not a colour	`color` bukan warna
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Alat sudut
 	Slide Anchor Along Path	Geser titik jangkar sepanjang jalur

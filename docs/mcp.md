@@ -4122,8 +4122,11 @@ sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {�
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
 prefix, a suffix, a name pattern or an item's name become `-` in file and folder names, a folder name ends without
 periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) that
-is the whole name or comes before its first period gets a `-` after it (`CON-.png`). The document remembers the last
-params: `document.exportSettings`. As in `document.export`,
+is the whole name or comes before its first period gets a `-` after it (`CON-.png`). When a row's file would take a
+name another row's file already has, compared without case (two PNG rows with different backgrounds and no suffix),
+the later file is written as `-2`, `-3`… (`Artboard-1-2.png`) and listed under that name in `files`; two identical
+rows write one file, and row folders that differ only in case (`Print`, `print`) are one folder, spelled as the first
+row spells it. The document remembers the last params: `document.exportSettings`. As in `document.export`,
 the reply's `warnings` lists the notes of every file exported (an image that couldn't be decoded, type written in the
 fallback font…), each note once; the export still writes or returns every file.
 
@@ -6396,6 +6399,30 @@ one, out of range values and a request with no fix on.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.color.printFixes","params":{"scope":"document","inkLimit":300,"removeWhiteOverprint":true,"overprintBlack":100}}}
+```
+
+### Find Nearest Swatch
+
+`addon.color.nearestSwatch {library?, color?, fill?, stroke?, count?, ids?}` (a query: no undo step) lists, for each
+colour of the selected objects, the colour swatches of a library closest to it, closest first, by CIEDE2000 difference
+(`deltaE`: under 1 hardly tells apart, about 2 to 3 close) (#4923). `library` is a swatch library's id or name, as
+`swatch.library.list` lists them: the built-in ones, and the libraries and colour books (`.acb`, `.ase`, `.gpl`) the
+user saved or loaded with `swatch.library.load`; `"document"` (the default) is the document's own swatches. The colours
+are the solid colours and gradient stops of the selection's fills (`fill`, true) and strokes (`stroke`, true), of the
+objects inside it and of its type, once each, the first 100; `color` looks one colour up instead. `count` is 1…50 (5).
+Tint swatches, None and Registration aren't matched. → `{library, colors: [{values, hex, matches: [{name, values, hex,
+spot, deltaE}]}]}` (`values` as a default swatch name reads them: `C=10 M=20 Y=30 K=0`, `R=255 G=128 B=0`…)
+
+`addon.color.applyNearestSwatch {library?, fill?, stroke?, ids?}` (Object › Plug-ins › Color Effects › Find Nearest
+Swatch…, whose dialog lists each colour's three closest swatches with their difference; Apply runs it) gives each solid
+colour and gradient stop of the selected objects' fills and strokes (and gradient meshes) the colour of its nearest
+swatch, as one undo step. A global or spot swatch's colour links to it. The library's swatches the colours take are
+added to the document's first, as `swatch.library.add` adds them, so a spot colour from a colour book stays spot;
+images and patterns keep their colours. → `{changed, swatches: [the document swatches the colours took], added}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.color.nearestSwatch","params":{"library":"web-safe-216","color":{"c":10,"m":80,"y":90,"k":0},"count":3}}}
+{"name":"run_command","arguments":{"command":"addon.color.applyNearestSwatch","params":{"library":"document","stroke":false}}}
 ```
 
 ## Arrange Tools add-on

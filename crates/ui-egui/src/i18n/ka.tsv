@@ -5938,6 +5938,13 @@ anchor	Points:	წერტილები:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	მიუთითეთ `inkLimit`, `removeWhiteOverprint` ან `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	საბეჭდი მელნის შესწორებები მუშაობს CMYK დოკუმენტებზე: ჯერ აირჩიეთ ფაილი › დოკუმენტის ფერის რეჟიმი › CMYK ფერი
 @msg	`{key}` must be 0..{max}	`{key}` უნდა იყოს 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
+	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
+	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
+@msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
+@msg	`color` is not a colour	`color` ფერი არ არის
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	კუთხეების ხელსაწყო
 	Slide Anchor Along Path	საყრდენი წერტილის სრიალი ტრაექტორიაზე

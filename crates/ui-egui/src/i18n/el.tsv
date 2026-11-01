@@ -5900,6 +5900,13 @@ anchor	Points:	Σημεία:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	δώστε `inkLimit`, `removeWhiteOverprint` ή `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Οι διορθώσεις μελανιών εκτύπωσης ισχύουν σε έγγραφα CMYK: επιλέξτε πρώτα Αρχείο › Λειτουργία χρώματος εγγράφου › Χρώμα CMYK
 @msg	`{key}` must be 0..{max}	το `{key}` πρέπει να είναι 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Εύρεση πλησιέστερου δείγματος χρώματος…
+	Find Nearest Swatch	Εύρεση πλησιέστερου δείγματος χρώματος
+	Apply Nearest Swatch	Εφαρμογή πλησιέστερου δείγματος χρώματος
+	Select objects to find the swatches nearest their colors.	Επιλέξτε αντικείμενα για να βρείτε τα δείγματα χρωμάτων που πλησιάζουν περισσότερο τα χρώματά τους.
+@msg	select objects or give `color`	επιλέξτε αντικείμενα ή δώστε `color`
+@msg	`color` is not a colour	το `color` δεν είναι χρώμα
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Γωνίες (Corner Tool)
 	Slide Anchor Along Path	Ολίσθηση σημείου αγκύρωσης κατά μήκος διαδρομής

@@ -5979,6 +5979,13 @@ anchor	Points:	Pisteet:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	anna `inkLimit`, `removeWhiteOverprint` tai `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Painovärien korjaukset toimivat CMYK-asiakirjoissa: valitse ensin Tiedosto › Asiakirjan väritila › CMYK-väri
 @msg	`{key}` must be 0..{max}	`{key}` on oltava 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Etsi lähin värimalli…
+	Find Nearest Swatch	Etsi lähin värimalli
+	Apply Nearest Swatch	Käytä lähintä värimallia
+	Select objects to find the swatches nearest their colors.	Valitse objektit, joiden väreille haluat etsiä lähimmät värimallit.
+@msg	select objects or give `color`	valitse objekteja tai anna `color`
+@msg	`color` is not a colour	`color` ei ole väri
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Kulmatyökalu
 	Slide Anchor Along Path	Liu’uta ankkuripistettä polkua pitkin

@@ -5955,6 +5955,13 @@ shape	Open	Otvoren
 	Gap 4	Razmak 4
 	Dash 5	Crtica 5
 	Gap 5	Razmak 5
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
+	Find Nearest Swatch	Pronađi najbliži uzorak boje
+	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
+@msg	select objects or give `color`	odaberite objekte ili navedite `color`
+@msg	`color` is not a colour	`color` nije boja
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Alat za uglove
 	Slide Anchor Along Path	Klizanje sidra po putanji

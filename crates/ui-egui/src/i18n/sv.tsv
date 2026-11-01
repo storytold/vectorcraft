@@ -6001,6 +6001,13 @@ shape	Open	Öppen
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	ange `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Tryckfärgskorrigeringar fungerar i CMYK-dokument: välj först Fil › Dokumentets färgläge › CMYK-färg
 @msg	`{key}` must be 0..{max}	`{key}` måste vara 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Sök närmaste färgruta…
+	Find Nearest Swatch	Sök närmaste färgruta
+	Apply Nearest Swatch	Använd närmaste färgruta
+	Select objects to find the swatches nearest their colors.	Markera objekt för att hitta de färgrutor som ligger närmast deras färger.
+@msg	select objects or give `color`	markera objekt eller ange `color`
+@msg	`color` is not a colour	`color` är ingen färg
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hörnverktyget
 	Slide Anchor Along Path	Skjut ankarpunkt längs bana

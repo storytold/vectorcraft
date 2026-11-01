@@ -5847,6 +5847,13 @@ anchor	Points:	Punkter:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	angiv `inkLimit`, `removeWhiteOverprint` eller `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Trykfarverettelser virker på CMYK-dokumenter: vælg først Filer › Dokumentets farvetilstand › CMYK-farve
 @msg	`{key}` must be 0..{max}	`{key}` skal være 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Find nærmeste farveprøve…
+	Find Nearest Swatch	Find nærmeste farveprøve
+	Apply Nearest Swatch	Anvend nærmeste farveprøve
+	Select objects to find the swatches nearest their colors.	Markér objekter for at finde de farveprøver, der ligger tættest på deres farver.
+@msg	select objects or give `color`	markér objekter, eller angiv `color`
+@msg	`color` is not a colour	`color` er ikke en farve
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hjørneværktøj
 	Slide Anchor Along Path	Skub ankerpunkt langs sti

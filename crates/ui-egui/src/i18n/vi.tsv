@@ -5551,6 +5551,13 @@ anchor	Points:	Điểm:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	hãy cho `inkLimit`, `removeWhiteOverprint` hoặc `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Sửa mực in hoạt động trên tài liệu CMYK: trước hết chọn Tệp › Chế độ màu tài liệu › Màu CMYK
 @msg	`{key}` must be 0..{max}	`{key}` phải là 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Tìm mẫu màu gần nhất…
+	Find Nearest Swatch	Tìm mẫu màu gần nhất
+	Apply Nearest Swatch	Áp dụng mẫu màu gần nhất
+	Select objects to find the swatches nearest their colors.	Chọn đối tượng để tìm các mẫu màu gần nhất với màu của chúng.
+@msg	select objects or give `color`	chọn đối tượng hoặc cung cấp `color`
+@msg	`color` is not a colour	`color` không phải là màu
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Công cụ Góc
 	Slide Anchor Along Path	Trượt điểm neo dọc đường dẫn

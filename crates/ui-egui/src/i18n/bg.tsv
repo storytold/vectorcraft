@@ -5831,6 +5831,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` или `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Корекциите на мастилата за печат работят върху CMYK документи: първо изберете Файл › Цветен режим на документа › CMYK цвят
 @msg	`{key}` must be 0..{max}	`{key}` трябва да е 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Намиране на най-близкия образец…
+	Find Nearest Swatch	Намиране на най-близкия образец
+	Apply Nearest Swatch	Прилагане на най-близкия образец
+	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
+@msg	select objects or give `color`	изберете обекти или задайте `color`
+@msg	`color` is not a colour	`color` не е цвят
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Инструмент „Ъгли“
 	Slide Anchor Along Path	Плъзгане на опорна точка по пътя

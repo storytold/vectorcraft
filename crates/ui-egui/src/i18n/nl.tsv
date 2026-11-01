@@ -5891,6 +5891,13 @@ anchor	Points:	Punten:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geef `inkLimit`, `removeWhiteOverprint` of `overprintBlack` op
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Drukinktcorrecties werken in CMYK-documenten: kies eerst Bestand › Documentkleurmodus › CMYK-kleur
 @msg	`{key}` must be 0..{max}	`{key}` moet 0..{max} zijn
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
+	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
+	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
+@msg	select objects or give `color`	selecteer objecten of geef `color` op
+@msg	`color` is not a colour	`color` is geen kleur
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hoekengereedschap
 	Slide Anchor Along Path	Ankerpunt langs pad schuiven

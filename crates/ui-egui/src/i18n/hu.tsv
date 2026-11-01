@@ -5935,6 +5935,13 @@ anchor	Points:	Pontok:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	adja meg: `inkLimit`, `removeWhiteOverprint` vagy `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	A nyomdai festékjavítások CMYK-dokumentumokon működnek: előbb válassza a Fájl › Dokumentum színmódja › CMYK-szín parancsot
 @msg	`{key}` must be 0..{max}	`{key}` értéke 0..{max} lehet
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Legközelebbi színminta keresése…
+	Find Nearest Swatch	Legközelebbi színminta keresése
+	Apply Nearest Swatch	Legközelebbi színminta alkalmazása
+	Select objects to find the swatches nearest their colors.	Jelöljön ki objektumokat a színeikhez legközelebbi színminták megkereséséhez.
+@msg	select objects or give `color`	jelöljön ki objektumokat, vagy adja meg ezt: `color`
+@msg	`color` is not a colour	a(z) `color` nem szín
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Sarok eszköz
 	Slide Anchor Along Path	Horgonypont csúsztatása az útvonal mentén
