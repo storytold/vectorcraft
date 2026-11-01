@@ -672,7 +672,9 @@ impl Tool for SelectionTool {
         if let State::BlendControls(mut d) = self.state.clone() {
             match ev.kind {
                 PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(ev.pos);
+                    // A click that never dragged must not read the release point: it can be a few
+                    // points off the knob, and would commit a count the pointer never moved to.
+                    let mut out = if ev.kind == PointerKind::Up && !d.adjusting() { vec![] } else { d.drag(ev.pos) };
                     if ev.kind == PointerKind::Up {
                         out.extend(d.finish());
                         self.state = State::Idle;

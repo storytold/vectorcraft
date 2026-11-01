@@ -618,6 +618,21 @@ mod tests {
     }
 
     #[test]
+    fn a_click_off_a_step_knob_changes_nothing() {
+        let (d, b) = blend(BlendSpineMode::Always, BlendSpacing::Steps(4));
+        let mut s = Selection::default();
+        s.set([b]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
+        let at = h.steps_at + Vec2::new(0.0, 4.0);
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty());
+        let out = t.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x, at.y));
+        assert!(out.is_empty(), "a click without a drag must not commit: {out:?}");
+    }
+
+    #[test]
     fn the_steps_handle_rests_at_the_count_height_on_the_edge() {
         let (d, b) = blend(vectorcraft_doc::live::BlendSpineMode::Never, BlendSpacing::Steps(3));
         let h = BlendHandles::for_blend(&d, b, None, 1.0).unwrap();
