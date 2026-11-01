@@ -217,3 +217,62 @@ fn export_all_open_documents_writes_each_and_reports_failures() {
     assert_eq!(s.active_index(), Some(0));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An SVG document last saved with linked images exports as one SVG with its images embedded: no
+/// image file is written beside the copies (#4920 review).
+#[test]
+fn export_all_open_documents_writes_one_file_each() {
+    let dir = std::env::temp_dir().join(format!("vc-export-all-one-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "name": "pic"})).unwrap();
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("document.save", &json!({"path": dir.join("pic.svg"), "format": "svg", "options": {"images": "link"}})).unwrap();
+    let saved: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_file()).collect();
+    assert!(saved.len() > 1, "the linked save wrote its image beside it: {saved:?}");
+    let out = dir.join("out");
+    let r = s.execute("addon.document.exportAllOpen", &json!({"folder": out, "format": "svg"})).unwrap();
+    let names: Vec<String> = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, ["pic.svg"], "{r}");
+    assert!(std::fs::read_to_string(out.join("pic.svg")).unwrap().contains("data:image/png;base64,"), "the image is embedded");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A PDF document last saved with a page range exports with every page, and an SVG document with
+/// two artboards exports as one SVG holding the art of both (#4920 review).
+#[test]
+fn export_all_open_documents_keeps_every_page_and_artboard() {
+    let dir = std::env::temp_dir().join(format!("vc-export-all-pages-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "name": "pages"})).unwrap();
+    s.execute("document.save", &json!({"path": dir.join("pages.pdf"), "format": "pdf", "options": {"range": "1"}})).unwrap();
+    let pages = |b: &[u8]| {
+        String::from_utf8_lossy(b).matches("/Type /Page\n").count()
+            + String::from_utf8_lossy(b).matches("/Type/Page/").count()
+            + String::from_utf8_lossy(b).matches("/Type /Page/").count()
+            + String::from_utf8_lossy(b).matches("/Type /Page ").count()
+    };
+    let first = pages(&std::fs::read(dir.join("pages.pdf")).unwrap());
+    let out = dir.join("out");
+    s.execute("addon.document.exportAllOpen", &json!({"folder": out, "format": "pdf"})).unwrap();
+    let copy = pages(&std::fs::read(out.join("pages.pdf")).unwrap());
+    assert!(copy > first, "the copy has every page: {first} saved, {copy} exported");
+    // SVG: one file with the art on both artboards.
+    let a = s.doc().unwrap().doc.artboards[1].rect;
+    s.execute("shape.rectangle", &json!({"x": a.x0 + 10.0, "y": a.y0 + 10.0, "width": 20, "height": 20})).unwrap();
+    s.execute("addon.document.exportAllOpen", &json!({"folder": out, "format": "svg"})).unwrap();
+    let svgs: Vec<String> =
+        std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".svg")).collect();
+    assert_eq!(svgs, ["pages.svg"]);
+    let svg = std::fs::read_to_string(out.join("pages.svg")).unwrap();
+    // Not the first artboard alone (its 100 × 100 box at the origin): the art's own bounds.
+    let view = svg.split("viewBox=\"").nth(1).and_then(|v| v.split('"').next()).unwrap();
+    let w: f64 = view.split_whitespace().nth(2).unwrap().parse().unwrap();
+    assert!(w > 19.0 && w < 30.0, "the SVG shows the art (the square on the second artboard), not the first artboard: viewBox {view}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
