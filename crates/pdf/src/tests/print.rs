@@ -312,7 +312,7 @@ fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
         })
         .collect();
     let art = Node::group(d.alloc_id(), squares);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Squares".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Squares".into(), art: Arc::new(art) });
     let layer = d.default_layer().unwrap();
     for y in [10.0, 50.0] {
         let instance = NodeKind::SymbolInstance { symbol: "Squares".into(), xf: vectorcraft_geom::Affine::translate((10.0, y)) };
