@@ -596,4 +596,9 @@ fn vertical_alignment_buttons_set_the_selected_area_types_alignment() {
     assert_eq!(area_of(&app, b).vertical_align, vectorcraft_doc::VerticalAlign::Center);
     assert_eq!((area_of(&app, a).columns, area_of(&app, b).columns), (1, 2), "each keeps its own columns");
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    // A frame inside a selected group counts: with its alignment different, none shows shared.
+    app.run("text.areaOptions", json!({"ids": [b.0], "verticalAlign": "bottom"})).unwrap();
+    let g = app.run("object.group", json!({"ids": [b.0]})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a.0, g]})).unwrap();
+    assert_eq!(selected_vertical_align(&app), Some(None));
 }

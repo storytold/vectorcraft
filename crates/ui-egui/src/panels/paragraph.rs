@@ -366,17 +366,20 @@ pub const VERTICAL_ALIGNMENTS: [(vectorcraft_doc::VerticalAlign, &str, &str, &st
 fn selected_vertical_align(app: &VectorcraftApp) -> Option<Option<vectorcraft_doc::VerticalAlign>> {
     let st = app.session.active()?;
     let mut shared: Option<Option<vectorcraft_doc::VerticalAlign>> = None;
+    // The frames `text.areaOptions` changes: selected area type and area type in selected groups.
     for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        if let vectorcraft_doc::NodeKind::Text(t) = &n.kind
-            && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
-        {
-            let a = t.area.vertical_align;
-            shared = Some(match shared {
-                None => Some(a),
-                Some(Some(b)) if b == a => Some(a),
-                Some(_) => None,
-            });
-        }
+        n.walk(&mut |c| {
+            if let vectorcraft_doc::NodeKind::Text(t) = &c.kind
+                && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
+            {
+                let a = t.area.vertical_align;
+                shared = Some(match shared {
+                    None => Some(a),
+                    Some(Some(b)) if b == a => Some(a),
+                    Some(_) => None,
+                });
+            }
+        });
     }
     shared
 }

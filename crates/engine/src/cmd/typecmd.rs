@@ -1037,12 +1037,15 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         let t = area_text(s.doc()?.doc.node(first)).ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
         area_options_json(t)
     };
+    // Checked once up front (its errors don't depend on the frame); each frame resolves `fit`
+    // against its own setting below.
     let cur = area_text(s.doc()?.doc.node(first)).map(|t| t.area.clone()).unwrap_or_default();
-    let fit = fit_param(p, cur.fit, C)?;
+    fit_param(p, cur.fit, C)?;
+    let fit_given = p.get("fit").is_some_and(|v| !v.is_null()) || p.get("fitMinPercent").is_some_and(|v| !v.is_null());
     let size = |k: &str| p.get(k).and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(1.0, 100_000.0));
     let (w, h) = (size("width"), size("height"));
     let given: Vec<(&String, &Value)> = p.as_object().into_iter().flatten().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())).collect();
-    if w.is_none() && h.is_none() && fit.is_none() && given.is_empty() {
+    if w.is_none() && h.is_none() && !fit_given && given.is_empty() {
         return options(s);
     }
     // Each area type takes the options given over its own (#3759): setting one option on several
@@ -1061,7 +1064,8 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
         opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
         opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
-        opts.fit = fit.unwrap_or(own.fit);
+        // Each frame's fit from its own (`fitMinPercent` alone changes only Shrink Text frames).
+        opts.fit = fit_param(p, own.fit, C)?.unwrap_or(own.fit);
         Ok(opts)
     };
     let d = &s.doc()?.doc;
