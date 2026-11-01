@@ -3993,6 +3993,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
 @msg	Targa files are RGB: colorModel rgb	File Targa adalah RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Pembungkusan teks: pilih objek pembungkus
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` harus "none", "sharp", "crisp" atau "strong"
 @msg	`aspect` must be a number (%)	`aspect` harus berupa angka (%)
 @msg	`at` must be [x, y]	`at` harus [x, y]
 @msg	`color` must be a colour	`color` harus berupa warna

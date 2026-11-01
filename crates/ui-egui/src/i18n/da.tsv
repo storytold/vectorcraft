@@ -3993,6 +3993,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
 @msg	Targa files are RGB: colorModel rgb	Targa-filer er RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstombrydning: markér et ombrydningsobjekt
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` skal være "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` skal være et tal (%)
 @msg	`at` must be [x, y]	`at` skal være [x, y]
 @msg	`color` must be a colour	`color` skal være en farve
