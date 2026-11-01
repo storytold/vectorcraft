@@ -1815,6 +1815,10 @@ digits	Malayalam	Malajálamské
 	Ligatures are off while the text is tracked.	Ligatury jsou vypnuté, když má text prostrkání.
 	Ordinals	Řadové číslovky
 	Proportional Lining	Proporcionální verzálkové
+	Position:	Poloha:
+	Default Position	Výchozí poloha
+	Numerator	Čitatel
+	Denominator	Jmenovatel
 	Proportional Oldstyle	Proporcionální minuskové
 	Reset OpenType Features	Obnovit funkce OpenType
 	Select text to set its OpenType features.	Vyberte text, abyste mohli nastavit jeho funkce OpenType.

@@ -2514,6 +2514,10 @@ digits	Telugu	Телугу
 digits	Kannada	Каннада
 digits	Malayalam	Малаялам
 	Proportional Lining	Пропорциональные цифры
+	Position:	Положение:
+	Default Position	Положение по умолчанию
+	Numerator	Числитель
+	Denominator	Знаменатель
 	Proportional Oldstyle	Пропорциональные старого стиля
 	Pucker & Bloat…	Сморщивание и раздувание…
 	Pucker Tool	Инструмент «Сморщивание»

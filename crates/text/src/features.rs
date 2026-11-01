@@ -42,19 +42,21 @@ pub struct OtFeatures {
     /// Swashes (`swsh`).
     pub swash: bool,
     /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
-    /// sets, alternates, titling, proportional and lining figures, superscript and subscript.
+    /// sets, alternates, titling, proportional and lining figures, superscript, subscript,
+    /// numerators and denominators.
     pub extra: u32,
 }
 
 /// The most entries of a style's feature list read: every segment of its text reads the list again.
-const MAX_STYLE_FEATURES: usize = 256;
+pub const MAX_STYLE_FEATURES: usize = 256;
 
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
-/// and lining `lnum` figures, superscript `sups` and subscript `subs`.
-pub const EXTRA_FEATURES: [&str; 26] = [
+/// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr` and
+/// denominators `dnom`.
+pub const EXTRA_FEATURES: [&str; 28] = [
     "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
-    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom",
 ];
 
 impl Default for OtFeatures {
@@ -83,6 +85,40 @@ impl OtFeatures {
     /// Parse a feature list like `["dlig", "smcp", "-liga"]` (unknown tags are ignored).
     pub fn from_tags<'a>(tags: impl IntoIterator<Item = &'a str>) -> Self {
         Self::default().with_tags(tags)
+    }
+
+    /// The tags that make `change` on any set, for a `change` that turns each feature on, turns it
+    /// off or keeps it, whatever the other features are: `tag` for each feature it turns on, `-tag`
+    /// for each it turns off, and none for one it keeps. [`Self::with_tags`] applies them.
+    pub fn changes(change: impl Fn(&mut Self)) -> Vec<String> {
+        let mut off = Self { ligatures: false, contextual: false, ..Self::default() };
+        let mut on = Self {
+            vertical: false,
+            ligatures: true,
+            contextual: true,
+            discretionary_ligatures: true,
+            small_caps: true,
+            fractions: true,
+            oldstyle_figures: true,
+            tabular_figures: true,
+            ordinals: true,
+            swash: true,
+            extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
+        };
+        change(&mut off);
+        change(&mut on);
+        let named = ["liga", "calt", "dlig", "smcp", "frac", "onum", "tnum", "ordn", "swsh"];
+        let mut v = vec![];
+        for tag in named.into_iter().chain(EXTRA_FEATURES) {
+            let turn_off = format!("-{tag}");
+            let has = |f: &Self| f.with_tags([turn_off.as_str()]) != *f;
+            match (has(&off), has(&on)) {
+                (true, true) => v.push(tag.to_string()),
+                (false, false) => v.push(turn_off.clone()),
+                _ => {}
+            }
+        }
+        v
     }
 
     /// The tags this set differs from the defaults by (what `CharStyle::features` stores).
@@ -276,6 +312,44 @@ mod tests {
         let st = CharStyle { features: vec!["ss05".into(), "titl".into()], ..CharStyle::default() };
         let tags: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
         assert!(tags.contains(&"ss05".to_string()) && tags.contains(&"titl".to_string()), "{tags:?}");
+    }
+
+    /// Numerators and denominators (the OpenType panel's Position menu) are known, round-trip
+    /// through the stored tags and reach the shaper.
+    #[test]
+    fn numerators_and_denominators_are_kept_and_shaped() {
+        for t in ["numr", "dnom", "-numr", "+dnom"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        let o = OtFeatures::from_tags(["dnom", "sups", "numr"]);
+        assert_eq!(o.to_tags(), vec!["sups", "numr", "dnom"]);
+        assert_eq!(OtFeatures::from_tags(["numr", "dnom", "-numr"]).to_tags(), ["dnom"]);
+        for tag in ["numr", "dnom"] {
+            let st = CharStyle { features: vec![tag.into()], ..CharStyle::default() };
+            let on: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
+            assert_eq!(on, [tag], "{tag}");
+        }
+    }
+
+    /// `changes` lists the features a change turns on and off and leaves out the ones it keeps,
+    /// and applying them to any set makes the same change.
+    #[test]
+    fn changes_list_what_turns_on_and_off() {
+        let figure = |f: &mut OtFeatures| {
+            f.tabular_figures = true;
+            f.oldstyle_figures = false;
+            f.extra &= !(1 << 22);
+        };
+        assert_eq!(OtFeatures::changes(figure), ["-onum", "tnum", "-pnum"]);
+        assert_eq!(OtFeatures::changes(|f| f.ligatures = false), ["-liga"]);
+        assert_eq!(OtFeatures::changes(|f| f.extra |= 1 << 27), ["dnom"]);
+        assert!(OtFeatures::changes(|_| {}).is_empty());
+        for start in [&["lnum", "smcp"][..], &["pnum", "onum", "-liga"][..], &[][..]] {
+            let mut want = OtFeatures::from_tags(start.iter().copied());
+            figure(&mut want);
+            let tags = OtFeatures::changes(figure);
+            assert_eq!(OtFeatures::from_tags(start.iter().copied()).with_tags(tags.iter().map(String::as_str)), want, "{start:?}");
+        }
     }
     use crate::{FontDb, layout};
     use vectorcraft_doc::TextObject;

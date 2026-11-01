@@ -1628,6 +1628,10 @@ digits	Malayalam	Malayalam
 	Ligatures are off while the text is tracked.	Ligaturer er slået fra, mens der er sporing på teksten.
 	Ordinals	Ordenstal
 	Proportional Lining	Proportionale versalcifre
+	Position:	Placering:
+	Default Position	Standardplacering
+	Numerator	Tæller
+	Denominator	Nævner
 	Proportional Oldstyle	Proportionale mediævalcifre
 	Reset OpenType Features	Nulstil OpenType-funktioner
 	Select text to set its OpenType features.	Markér tekst for at angive dens OpenType-funktioner.

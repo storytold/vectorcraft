@@ -123,7 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -791,6 +791,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => Some(vectorcraft_color::Paint::solid(super::paint::new_color(s, p, color_value(v).ok_or_else(|| bad(C, "bad fill colour"))?))),
     };
     let features = super::textedit::features_param(p, C)?;
+    let feature_changes = super::textedit::feature_changes_param(p, C)?;
     if font.is_none()
         && style.is_none()
         && size.is_none()
@@ -799,6 +800,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         && justify.is_none()
         && fill.is_none()
         && features.is_none()
+        && feature_changes.is_none()
     {
         return Err(bad(C, "nothing to change"));
     }
@@ -843,6 +845,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Some(f) = &features {
                     st.features = f.clone();
+                }
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
                 }
             });
             if let Some(before) = before {
@@ -896,6 +901,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Some(f) = &features {
                     st.features = f.clone();
+                }
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
                 }
             });
         }

@@ -2391,6 +2391,10 @@ digits	Telugu	泰卢固数字
 digits	Kannada	卡纳达数字
 digits	Malayalam	马拉雅拉姆数字
 	Proportional Lining	比例齐线数字
+	Position:	位置：
+	Default Position	默认位置
+	Numerator	分子
+	Denominator	分母
 	Proportional Oldstyle	比例旧式数字
 	Pucker & Bloat…	缩拢与膨胀…
 	Pucker Tool	收缩工具

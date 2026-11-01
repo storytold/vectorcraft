@@ -1734,6 +1734,10 @@ digits	Malayalam	Malajalam
 	Ligatures are off while the text is tracked.	Ligatury są wyłączone, gdy tekst ma zmienione światło.
 	Ordinals	Liczebniki porządkowe
 	Proportional Lining	Proporcjonalne nowoczesne
+	Position:	Pozycja:
+	Default Position	Pozycja domyślna
+	Numerator	Licznik
+	Denominator	Mianownik
 	Proportional Oldstyle	Proporcjonalne nautyczne
 	Reset OpenType Features	Resetuj funkcje OpenType
 	Select text to set its OpenType features.	Zaznacz tekst, aby ustawić jego funkcje OpenType.
