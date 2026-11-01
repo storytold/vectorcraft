@@ -302,6 +302,29 @@ fn export_presets_export_and_import() {
     assert_eq!(r["count"], 1000);
 }
 
+/// An imported file's unknown keys are dropped, a scale that is not a positive number refuses
+/// the file, and a prefix with folder separators names files inside the export folder.
+#[test]
+fn export_presets_import_drops_unknown_keys_and_checks_values() {
+    let file = |settings: Value| {
+        json!({"format": "vcexportpresets", "comment": "extra", "presets": [{"name": "P", "extra": 1, "settings": settings}]}).to_string()
+    };
+    let mut s = session(2);
+    let r = s.execute("document.exportPresets.import", &json!({"data": file(json!({"formats": [{"format": "svg"}], "unknown": true}))})).unwrap();
+    assert_eq!(r["imported"], json!(["P"]));
+    let saved = &s.prefs.screen_export_presets[0].settings;
+    assert_eq!(saved.keys().collect::<Vec<_>>(), ["formats"], "{saved:?}");
+    for scale in [json!("0x"), json!("-2x"), json!("1e9x"), json!("2y"), json!("nanx")] {
+        let bad = file(json!({"formats": [{"format": "png", "scale": scale}]}));
+        assert!(s.execute("document.exportPresets.import", &json!({ "data": bad })).is_err(), "{scale}");
+    }
+    assert_eq!(s.prefs.screen_export_presets.len(), 1);
+    let climb = file(json!({"formats": [{"format": "svg"}], "prefix": "../..\\up/"}));
+    let r = s.execute("document.exportPresets.import", &json!({ "data": climb })).unwrap();
+    assert_eq!(r["imported"], json!(["P 2"]));
+    assert_eq!(names(&export(&mut s, json!({"exportPreset": "P 2", "range": "2"}))), ["..-..-up-Artboard-2.svg"]);
+}
+
 #[test]
 fn export_presets_import_replace_numbers_duplicates_from_one_file() {
     let mut source = session(1);
