@@ -395,6 +395,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Keyboard Shortcuts: every Effect menu item (Distort & Transform › Transform…, Stylize › Drop Shadow…, …) is listed under its menu path and takes a shortcut of its own, which the menu shows and which opens that effect's dialog (or applies an effect without options) (#3296); scores and estimates unchanged |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Document Tools add-on (a VectorCraft addition): Export All Open Documents as PDF or SVG (#4920); scores and estimates unchanged |

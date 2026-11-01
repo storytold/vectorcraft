@@ -211,11 +211,12 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
     Some(crate::panels::layers::shown_name(app, n, lang))
 }
 
-/// The shortcut a menu item shows: its command's (items without params), or a panel's for the
-/// Window menu's `window.panel {panel}` items.
+/// The shortcut a menu item shows: its command's (items without params), a panel's for the
+/// Window menu's `window.panel {panel}` items, or an effect's for the Effect menu's items.
 pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
     match (id, p.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
+        ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
         _ if p.is_null() => shortcut_of(id),
         _ => None,
     }
