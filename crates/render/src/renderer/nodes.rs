@@ -265,7 +265,14 @@ impl Renderer {
             return;
         }
         if vectorcraft_doc::live::is_live(a) || effects::has_pathfinder(a) {
-            return self.draw_live(ctx, f, a);
+            // The isolated object itself (a repeat isolated to edit its source, #5054) draws its
+            // art as usual, as an isolated group does in `draw_layer_node`.
+            let settle = f.opts.isolated == Some(a.id) && f.doc.mask_edit.is_none();
+            let outer = self.isolation_settled;
+            self.isolation_settled = outer || settle;
+            self.draw_live(ctx, f, a);
+            self.isolation_settled = outer;
+            return;
         }
         // Its live-effect geometry depends on the node alone, and for plug-in effects on the
         // plug-ins installed (`check_plugins`), so it can be kept across frames.
