@@ -5497,6 +5497,10 @@ anchor	Points:	Punkte:
 	Case	Großschreibung
 @msg	{label} must be a number	{label} muss eine Zahl sein
 @msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
+	Advanced Character Formats	Erweiterte Zeichenformate
+	Horizontal Scale	Horizontale Skalierung
+	Vertical Scale	Vertikale Skalierung
+@msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

@@ -5965,6 +5965,10 @@ shape	Open	Öppen
 	Case	Skiftläge
 @msg	{label} must be a number	{label} måste vara ett tal
 @msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
+	Advanced Character Formats	Avancerade teckenformat
+	Horizontal Scale	Horisontell skala
+	Vertical Scale	Vertikal skala
+@msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

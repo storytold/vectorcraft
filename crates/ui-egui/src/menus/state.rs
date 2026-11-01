@@ -228,7 +228,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
         "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
-                && d.str("section") == "basic"
+                && crate::dialogs::char_style_options::can_reset(d)
         }),
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),

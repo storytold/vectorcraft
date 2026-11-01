@@ -5598,6 +5598,10 @@ anchor	Points:	ポイント:
 	Case	大文字と小文字
 @msg	{label} must be a number	{label} には数値を指定してください
 @msg	{label} must be a number of at least 0.1	{label} には 0.1 以上の数値を指定してください
+	Advanced Character Formats	詳細文字形式
+	Horizontal Scale	水平比率
+	Vertical Scale	垂直比率
+@msg	{label} must be a number from {min} to {max}	{label} には {min} から {max} までの数値を指定してください
 @msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

@@ -25,6 +25,10 @@ const BASIC: &[&str] = &[
 const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
 /// The on, off or unset checkboxes.
 const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
+/// The attributes of Advanced Character Formats, in the order the section shows them.
+const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation", "language"];
+/// The number fields of Advanced Character Formats.
+const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation"];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Character Style Options").into(),
@@ -46,6 +50,11 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "strikethrough",
             "standardVerticalRoman",
             "charAlign",
+            "h_scale",
+            "v_scale",
+            "baseline_shift",
+            "rotation",
+            "language",
             "section",
         ]
     },
@@ -87,7 +96,22 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>) -> Map<String, Value
     }
     fields.insert("case".into(), case_from_attrs(attrs).map_or(Value::Null, Value::from));
     fields.insert("position".into(), attrs.get("position").and_then(|v| v.get("kind")).cloned().unwrap_or(Value::Null));
+    for key in ADVANCED_NUMBERS {
+        fields.insert((*key).into(), attrs.get(*key).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!("")));
+    }
+    fields.insert("language".into(), language_field(attrs.get("language")));
     fields
+}
+
+/// The Language field for a style's `language` attribute: unset for none, the default language's
+/// name for an explicit default (`null`), a listed tag's name, or a tag not in the list as it is.
+fn language_field(value: Option<&Value>) -> Value {
+    match value {
+        None => Value::Null,
+        Some(Value::Null) => vectorcraft_doc::setup::char_language_name(None).map_or(Value::Null, Value::from),
+        Some(Value::String(tag)) => json!(vectorcraft_doc::setup::char_language_name(Some(tag)).unwrap_or(tag)),
+        Some(other) => other.clone(),
+    }
 }
 
 fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
@@ -108,6 +132,10 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "leading" => tl!("Leading"),
         "kerning" => tl!("Kerning"),
         "tracking" => tl!("Tracking"),
+        "h_scale" => tl!("Horizontal Scale"),
+        "v_scale" => tl!("Vertical Scale"),
+        "baseline_shift" => tl!("Baseline Shift"),
+        "rotation" => tl!("Character Rotation"),
         _ => return Err("unknown character style number field".into()),
     };
     match d.fields.get(key) {
@@ -123,6 +151,17 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             if ["size", "leading"].contains(&key) && n < 0.1 {
                 return Err(format!("{label} must be a number of at least 0.1"));
             }
+            // The limits text.setRangeStyle gives scales and baseline shift.
+            let limits = match key {
+                "h_scale" | "v_scale" => Some((1.0, 10000.0)),
+                "baseline_shift" => Some((-1296.0, 1296.0)),
+                _ => None,
+            };
+            if let Some((min, max)) = limits.filter(|(min, max)| !(*min..=*max).contains(&n)) {
+                return Err(format!("{label} must be a number from {min} to {max}"));
+            }
+            // An angle from -180 to 180 degrees, as text.setRangeStyle stores it.
+            let n = if key == "rotation" { (n + 180.0).rem_euclid(360.0) - 180.0 } else { n };
             Ok(Some(json!(n)))
         }
     }
@@ -146,6 +185,10 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
         attrs.remove("fontAxes");
     }
     for key in NUMBERS {
+        // An unchanged field keeps the original value below, unchecked (see `advanced_attrs`).
+        if !reset && d.fields.get(*key) == original_fields.get(*key) {
+            continue;
+        }
         if let Some(v) = optional_number(d, key)? {
             attrs.insert((*key).into(), v);
         }
@@ -205,7 +248,53 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
             }
         }
     }
+    advanced_attrs(d, &original, &original_fields, &mut attrs)?;
     Ok(attrs)
+}
+
+/// Write the Advanced Character Formats fields of `d` into `attrs`: a filled field sets its
+/// attribute, an empty one leaves it unset, and a field still as it opened keeps the original
+/// value, an explicit default or a language tag not in the list included.
+fn advanced_attrs(
+    d: &Dialog,
+    original: &Map<String, Value>,
+    original_fields: &Map<String, Value>,
+    attrs: &mut Map<String, Value>,
+) -> Result<(), String> {
+    let reset = d.bool("__resetAdvanced");
+    for key in ADVANCED {
+        attrs.remove(*key);
+    }
+    // A field still as it opened keeps its value below without a check: text in a scaled type
+    // object can hold a value outside the limits a typed one has.
+    let unchanged = |key: &str| !reset && d.fields.get(key) == original_fields.get(key);
+    for key in ADVANCED_NUMBERS {
+        if unchanged(key) {
+            continue;
+        }
+        if let Some(v) = optional_number(d, key)? {
+            attrs.insert((*key).into(), v);
+        }
+    }
+    if !unchanged("language")
+        && let Some(language) = d.fields.get("language").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty())
+    {
+        let value = match vectorcraft_doc::setup::char_language(language) {
+            Ok(tag) => tag.map_or(Value::Null, Value::from),
+            // A tag not in the list goes to the command as it is: charStyle.edit keeps it only
+            // when the style already has it.
+            Err(_) => json!(language),
+        };
+        attrs.insert("language".into(), value);
+    }
+    for key in ADVANCED {
+        if unchanged(key)
+            && let Some(value) = original.get(*key)
+        {
+            attrs.insert((*key).into(), value.clone());
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn reset_basic(d: &mut Dialog) {
@@ -231,14 +320,57 @@ pub(crate) fn reset_basic(d: &mut Dialog) {
     }
 }
 
+/// Reset Panel in Advanced Character Formats: its five attributes become unset.
+pub(crate) fn reset_advanced(d: &mut Dialog) {
+    d.fields.insert("__resetAdvanced".into(), json!(true));
+    for key in ADVANCED_NUMBERS {
+        d.fields.insert((*key).into(), json!(""));
+    }
+    d.fields.insert("language".into(), Value::Null);
+}
+
+/// Whether the section `d` shows has a Reset Panel: Basic or Advanced Character Formats.
+pub(crate) fn can_reset(d: &Dialog) -> bool {
+    ["basic", "advanced"].contains(&d.str("section").as_str())
+}
+
+/// Reset Panel: clear the settings of the section `d` shows.
+pub(crate) fn reset_section(d: &mut Dialog) {
+    match d.str("section").as_str() {
+        "basic" => reset_basic(d),
+        "advanced" => reset_advanced(d),
+        _ => {}
+    }
+}
+
 pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
     let d = app.ui.dialog.as_mut().ok_or("no dialog open")?;
     let character_new = d.kind == super::new_text_style::KIND && !d.bool("__para");
-    if (d.kind != KIND && !character_new) || d.str("section") != "basic" {
+    if (d.kind != KIND && !character_new) || !can_reset(d) {
         return Err("the open dialog has no Reset".into());
     }
-    reset_basic(d);
+    reset_section(d);
     Ok(json!({"dialog": d.kind}))
+}
+
+/// The section list of Character Style Options and New Character Style.
+pub(crate) fn section_list(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.vertical(|ui| {
+        for (id, label) in [("general", tl!("General")), ("basic", tl!("Basic Character Formats")), ("advanced", tl!("Advanced Character Formats"))] {
+            if ui.selectable_label(d.str("section") == id, label).clicked() {
+                d.fields.insert("section".into(), json!(id));
+            }
+        }
+    });
+}
+
+/// The Reset Panel button, enabled on Basic and Advanced Character Formats.
+pub(crate) fn reset_button(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.add_enabled_ui(can_reset(d), |ui| {
+        if ui.button(tl!("Reset Panel")).clicked() {
+            reset_section(d);
+        }
+    });
 }
 
 fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)]) {
@@ -310,19 +442,45 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, Character Rotation
+/// and Language, each empty (unset) or set.
+pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        for (key, caption, unit) in [
+            ("h_scale", tl!("Horizontal Scale"), "%"),
+            ("v_scale", tl!("Vertical Scale"), "%"),
+            ("baseline_shift", tl!("Baseline Shift"), "pt"),
+            ("rotation", tl!("Character Rotation"), "°"),
+        ] {
+            ui.label(caption);
+            if d.fields.get(key).is_some_and(Value::is_null) {
+                d.fields.insert(key.into(), json!(""));
+            }
+            ui.horizontal(|ui| {
+                form::text(ui, d, key, 160.0);
+                ui.label(unit);
+            });
+            ui.end_row();
+        }
+        ui.label(tl!("Language:"));
+        let names: Vec<&str> = std::iter::once(" ").chain(vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| *name)).collect();
+        let current = d.fields.get("language").and_then(Value::as_str).unwrap_or("").to_string();
+        if let Some(i) = crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0) {
+            d.fields.insert("language".into(), if i == 0 { Value::Null } else { names.get(i).map_or(Value::Null, |name| json!(name)) });
+        }
+        ui.end_row();
+    });
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            for (id, label) in [("general", tl!("General")), ("basic", tl!("Basic Character Formats"))] {
-                if ui.selectable_label(d.str("section") == id, label).clicked() {
-                    d.fields.insert("section".into(), json!(id));
-                }
-            }
-        });
+        section_list(ui, d);
         ui.separator();
         ui.vertical(|ui| {
             if d.str("section") == "basic" {
                 basic_body(ui, d);
+            } else if d.str("section") == "advanced" {
+                advanced_body(ui, d);
             } else {
                 ui.horizontal(|ui| {
                     ui.label(tl!("Style Name:"));
@@ -337,11 +495,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     });
-    ui.add_enabled_ui(d.str("section") == "basic", |ui| {
-        if ui.button(tl!("Reset Panel")).clicked() {
-            reset_basic(d);
-        }
-    });
+    reset_button(ui, d);
     match edited_attrs(d) {
         Ok(attrs) => {
             let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
@@ -519,6 +673,163 @@ mod tests {
         assert_eq!(doc.char_styles[0].attrs["standardVerticalRoman"], json!(true));
         let vectorcraft_doc::NodeKind::Text(t) = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert!(t.runs.iter().all(|r| r.style.standard_vertical_roman));
+    }
+
+    fn attrs(v: Value) -> Map<String, Value> {
+        v.as_object().cloned().unwrap_or_default()
+    }
+
+    fn dialog_for(original: Value) -> Dialog {
+        let mut d = Dialog::new(KIND, json!({}));
+        d.fields.extend(fields_from_attrs(&attrs(original.clone())));
+        d.fields.insert("__attrs".into(), original);
+        d
+    }
+
+    #[test]
+    fn advanced_fields_show_set_values_and_keep_untouched_ones() {
+        let d = dialog_for(json!({}));
+        for key in ADVANCED_NUMBERS {
+            assert_eq!(d.fields[*key], json!(""), "{key}");
+        }
+        assert!(d.fields["language"].is_null());
+        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
+        for original in [
+            json!({"h_scale": 100.0, "rotation": 0.0, "language": null}),
+            json!({"v_scale": 50.0, "baseline_shift": -3.0, "language": "de"}),
+            json!({"language": "x-file", "size": 12.0}),
+            // Captured from text in a scaled type object.
+            json!({"h_scale": 20000.0, "baseline_shift": 3000.0, "size": 0.05, "leading": 0.05}),
+        ] {
+            let d = dialog_for(original.clone());
+            assert_eq!(edited_attrs(&d).unwrap(), attrs(original.clone()), "{original}");
+        }
+        let d = dialog_for(json!({"h_scale": 100.0, "rotation": 0.0, "language": null}));
+        assert_eq!((d.fields["h_scale"].clone(), d.fields["v_scale"].clone()), (json!(100.0), json!("")));
+        assert_eq!(d.fields["language"], json!("English: USA"));
+        assert_eq!(dialog_for(json!({"language": "de"})).fields["language"], json!("German"));
+        assert_eq!(dialog_for(json!({"language": "x-file"})).fields["language"], json!("x-file"));
+
+        let mut d = dialog_for(json!({"h_scale": 100.0, "language": "de"}));
+        d.fields.insert("h_scale".into(), json!(""));
+        d.fields.insert("v_scale".into(), json!("150"));
+        d.fields.insert("baseline_shift".into(), json!("-4"));
+        d.fields.insert("rotation".into(), json!("190"));
+        d.fields.insert("language".into(), json!("English: USA"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"v_scale": 150.0, "baseline_shift": -4.0, "rotation": -170.0, "language": null})));
+        d.fields.insert("language".into(), json!("French"));
+        assert_eq!(edited_attrs(&d).unwrap()["language"], json!("fr"));
+        d.fields.insert("language".into(), Value::Null);
+        assert!(!edited_attrs(&d).unwrap().contains_key("language"));
+    }
+
+    #[test]
+    fn advanced_numbers_outside_their_limits_are_errors() {
+        for (key, value, message) in [
+            ("h_scale", "0", "Horizontal Scale must be a number from 1 to 10000"),
+            ("v_scale", "10001", "Vertical Scale must be a number from 1 to 10000"),
+            ("baseline_shift", "1300", "Baseline Shift must be a number from -1296 to 1296"),
+            ("baseline_shift", "-1300", "Baseline Shift must be a number from -1296 to 1296"),
+            ("rotation", "inf", "Character Rotation must be a number"),
+            ("h_scale", "wide", "Horizontal Scale must be a number"),
+        ] {
+            let mut d = dialog_for(json!({}));
+            d.fields.insert(key.into(), json!(value));
+            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
+        }
+    }
+
+    #[test]
+    fn advanced_section_shows_its_five_controls() {
+        let mut d = dialog_for(json!({}));
+        let mut app = app();
+        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| advanced_body(ui, &mut d));
+        for label in ["Horizontal Scale", "Vertical Scale", "Baseline Shift", "Character Rotation", "Language:"] {
+            assert!(shown.contains(label), "{label}: {shown}");
+        }
+    }
+
+    #[test]
+    fn advanced_options_preview_cancel_reset_and_commit() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "h_scale": 90.0, "baseline_shift": 0.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 2, "end": 4, "baselineShift": 5.0})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        open(&mut app, "Body").unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["h_scale"], json!(90.0));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("rotation"), "");
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("section".into(), json!("advanced"));
+            d.fields.insert("h_scale".into(), json!("80"));
+            d.fields.insert("baseline_shift".into(), json!("2"));
+            d.fields.insert("rotation".into(), json!("45"));
+            d.fields.insert("language".into(), json!("Turkish"));
+        }
+        assert!(crate::menus::enabled(&app, "ui.charStyleOptions.resetPanel"));
+        frame(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["rotation"], json!(45.0));
+        super::super::cancel(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+
+        open(&mut app, "Body").unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("section".into(), json!("advanced"));
+            d.fields.insert("size".into(), json!(18));
+            d.fields.insert("v_scale".into(), json!("70"));
+        }
+        app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
+        assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap(), attrs(json!({"size": 18.0})));
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("h_scale".into(), json!("80"));
+            d.fields.insert("baseline_shift".into(), json!("2"));
+            d.fields.insert("rotation".into(), json!("45"));
+            d.fields.insert("language".into(), json!("Turkish"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.history.undo.len(), undo + 1);
+        assert_eq!(
+            state.doc.char_styles[0].attrs,
+            attrs(json!({"size": 18.0, "h_scale": 80.0, "baseline_shift": 2.0, "rotation": 45.0, "language": "tr"}))
+        );
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(
+            t.runs.iter().map(|r| (r.style.h_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone())).collect::<Vec<_>>(),
+            [(80.0, 2.0, 45.0, Some("tr".to_string())), (80.0, 5.0, 45.0, Some("tr".to_string()))]
+        );
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+    }
+
+    #[test]
+    fn new_character_style_sets_and_resets_advanced_formats() {
+        let mut app = app();
+        app.run("ui.newCharStyle", json!({})).unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("section".into(), json!("advanced"));
+            d.fields.insert("v_scale".into(), json!("130"));
+        }
+        app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("v_scale"), "");
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("name".into(), json!("Raised"));
+            d.fields.insert("baseline_shift".into(), json!("3"));
+            d.fields.insert("language".into(), json!("French"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let def = doc.char_styles.iter().find(|def| def.name == "Raised").unwrap();
+        assert_eq!((def.attrs["baseline_shift"].clone(), def.attrs["language"].clone()), (json!(3.0), json!("fr")));
+        assert!(!def.attrs.contains_key("v_scale"));
     }
 
     #[test]

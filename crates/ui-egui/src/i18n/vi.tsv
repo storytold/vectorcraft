@@ -5514,6 +5514,10 @@ anchor	Points:	Điểm:
 	Case	Chữ hoa và chữ thường
 @msg	{label} must be a number	{label} phải là một số
 @msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
+	Advanced Character Formats	Định dạng ký tự nâng cao
+	Horizontal Scale	Tỷ lệ ngang
+	Vertical Scale	Tỷ lệ dọc
+@msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

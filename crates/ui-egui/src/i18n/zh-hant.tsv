@@ -5551,6 +5551,10 @@ anchor	Points:	點：
 	Case	大小寫
 @msg	{label} must be a number	{label} 必須是數字
 @msg	{label} must be a number of at least 0.1	{label} 必須是至少 0.1 的數字
+	Advanced Character Formats	進階字元格式
+	Horizontal Scale	水平縮放
+	Vertical Scale	垂直縮放
+@msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

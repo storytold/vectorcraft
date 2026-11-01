@@ -5511,6 +5511,10 @@ anchor	Points:	Точки:
 	Case	Регістр
 @msg	{label} must be a number	{label} має бути числом
 @msg	{label} must be a number of at least 0.1	{label} має бути числом не менше 0,1
+	Advanced Character Formats	Додаткові формати символів
+	Horizontal Scale	Масштаб по горизонталі
+	Vertical Scale	Масштаб за вертикаллю
+@msg	{label} must be a number from {min} to {max}	{label} має бути числом від {min} до {max}
 @msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

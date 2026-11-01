@@ -5902,6 +5902,10 @@ anchor	Points:	წერტილები:
 	Case	ასოების რეგისტრი
 @msg	{label} must be a number	{label} უნდა იყოს რიცხვი
 @msg	{label} must be a number of at least 0.1	{label} უნდა იყოს მინიმუმ 0,1
+	Advanced Character Formats	სიმბოლოს დამატებითი ფორმატები
+	Horizontal Scale	ჰორიზონტალური მასშტაბი
+	Vertical Scale	ვერტიკალური მასშტაბი
+@msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

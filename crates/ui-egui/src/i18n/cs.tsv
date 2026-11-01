@@ -5913,6 +5913,10 @@ anchor	Points:	Body:
 	Case	Velikost písmen
 @msg	{label} must be a number	{label} musí být číslo
 @msg	{label} must be a number of at least 0.1	{label} musí být číslo alespoň 0,1
+	Advanced Character Formats	Rozšířené formáty znaků
+	Horizontal Scale	Vodorovná změna velikosti
+	Vertical Scale	Svislá změna velikosti
+@msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
