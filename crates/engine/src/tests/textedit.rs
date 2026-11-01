@@ -707,10 +707,16 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     assert_eq!(list_markers(&s, id), ["1."]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!((obj(&s, id).plain_text().as_str(), obj(&s, id).para_at(1).list), ("Fruit\n1) Apples", None));
-    let id = text(&mut s, "x\n# ");
-    let r = s.execute("text.startList", &json!({"id": id.0})).unwrap();
-    assert_eq!((r["started"].clone(), obj(&s, id).plain_text()), (json!(true), "x\n".to_string()));
-    assert_eq!(obj(&s, id).para_at(1).list, Some(ParaList::bulleted(Bullet::Square)));
+    for (typed, bullet, marker) in
+        [("* ", Bullet::Dot, "\u{2022}"), ("+ ", Bullet::Circle, "\u{25E6}"), ("# ", Bullet::Square, "\u{25AA}"), ("> ", Bullet::Dash, "\u{2013}")]
+    {
+        let id = text(&mut s, &format!("x\n{typed}"));
+        let r = s.execute("text.startList", &json!({"id": id.0})).unwrap();
+        assert_eq!((r["started"].clone(), obj(&s, id).plain_text()), (json!(true), "x\n".to_string()), "{typed:?}");
+        assert_eq!(obj(&s, id).para_at(1).list, Some(ParaList::bulleted(bullet)), "{typed:?}");
+        s.execute("text.editRange", &json!({"id": id.0, "start": 2, "end": 2, "insert": "Item"})).unwrap();
+        assert_eq!(list_markers(&s, id), [marker], "{typed:?}");
+    }
     let steps = undo_labels(&s).len();
     let id = text(&mut s, "1.x");
     assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": 3})).unwrap()["started"], json!(false));
