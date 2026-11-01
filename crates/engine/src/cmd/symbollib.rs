@@ -181,7 +181,7 @@ fn basic_shapes() -> SymbolLibrary {
         let id = doc.alloc_id();
         let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.0));
         let Ok((art, size, _)) = normalize(art) else { continue };
-        doc.symbols.push(Symbol { name: name.into(), art: Arc::new(art) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
         set_natural_size(&mut doc, name, Some(size));
     }
     doc.title = "Basic Shapes".into();

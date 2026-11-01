@@ -638,9 +638,8 @@
 	1 Layer	1 laag
 	Libraries	Bibliotheken
 	Links	Koppelingen
-	{count} linked image(s) changed on disk. Show the new versions?	{count} gekoppelde afbeelding(en) gewijzigd op de schijf. Nieuwe versies tonen?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} gekoppelde afbeelding gewijzigd op de schijf. Nieuwe versie tonen?|{n} gekoppelde afbeeldingen gewijzigd op de schijf. Nieuwe versies tonen?
 	Update Changed Links	Gewijzigde koppelingen bijwerken
-@msg	Updated {_1} linked file(s) changed on disk	Bijgewerkt: {_1} gekoppelde bestand(en) gewijzigd op de schijf
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
 	Pattern Options	Patroonopties
@@ -1141,12 +1140,12 @@ lighting	Light	Licht
 	 to set spacing and orientation	 om de tussenruimte en de oriëntatie in te stellen
 	Apply	Toepassen
 	Change Screen Mode (F)	Schermmodus wisselen (F)
-	Color (, or <)	Kleur (, of <)
+	Color (, or Shift+,)	Kleur (, of Shift+,)
 	Draw Behind	Achter tekenen
 	Draw Inside	Binnen tekenen
 	Draw Normal	Normaal tekenen
 	Expand:	Uitvouwen:
-	Gradient (. or >)	Verloop (. of >)
+	Gradient (. or Shift+.)	Verloop (. of Shift+.)
 	H:	H:
 	Modify	Wijzigen
 	Navigate	Navigeren
@@ -1365,7 +1364,6 @@ lighting	Light	Licht
 	Fractional Widths	Fractionele breedtes
 	Hide Options	Opties verbergen
 	Horizontal Scale %	Horizontale schaal %
-	Kerning (0 = Auto)	Kerning (0 = Auto)
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
@@ -1374,6 +1372,15 @@ lighting	Light	Licht
 	Arabic	Arabisch
 	Hindi	Hindi
 	Farsi	Farsi
+digits	Devanagari	Devanagari
+digits	Bengali	Bengaals
+digits	Gurmukhi	Gurmukhi
+digits	Gujarati	Gujarati
+digits	Odia	Odia
+digits	Tamil	Tamil
+digits	Telugu	Telugu
+digits	Kannada	Kannada
+digits	Malayalam	Malayalam
 	Reset Panel	Paneel herstellen
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
@@ -1395,6 +1402,12 @@ lighting	Light	Licht
 	Axis	As
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
+	Show Font Height Options	Opties voor letterhoogte tonen
+	Hide Font Height Options	Opties voor letterhoogte verbergen
+	Set Font Height Reference	Referentie voor letterhoogte instellen
+	Em Box	Em-vak
+	x-Height	x-hoogte
+	ICF Box	ICF-vak
 	Copy Color Value (Hex)	Kleurwaarde kopiëren (Hex)
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
@@ -1434,8 +1447,8 @@ lighting	Light	Licht
 	Select objects to see their CSS, or Generate CSS for the whole document.	Selecteer objecten om hun CSS te zien, of Genereer CSS voor het hele document.
 	The selected objects have no CSS of their own (see below).	De geselecteerde objecten hebben geen eigen CSS (zie hieronder).
 	Units: {units}	Eenheden: {units}
-	{count} more rules: Export writes every one.	{count} regels meer: Export schrijft ze allemaal.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{count} naamloze objecten weggelaten: geef ze een naam, of zet Naamloze objecten aan in het paneelmenu.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} regel meer: Export schrijft hem.|{n} regels meer: Export schrijft ze allemaal.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} naamloos object weggelaten: geef het een naam, of zet Naamloze objecten aan in het paneelmenu.|{n} naamloze objecten weggelaten: geef ze een naam, of zet Naamloze objecten aan in het paneelmenu.
 	All Categories	Alle categorieën
 	Repeat Objects	Herhalingsobjecten
 	Save…	Opslaan…
@@ -1468,7 +1481,7 @@ lighting	Light	Licht
 	Color:	Kleur:
 	Delete Stop	Stoppunt verwijderen
 	Edit Gradient	Verloop bewerken
-	Edit the selected point's colour in the Color panel	Bewerk de kleur van het geselecteerde punt in het Kleur-paneel
+	Edit the point	Punt bewerken
 	Edit the stop	Stoppunt bewerken
 	Eyedropper: click the art to sample the stop's colour	Pipet: klik op de illustratie om de kleur van het stoppunt over te nemen
 	Eyedropper: click the art to sample the key color	Pipet: klik op de illustratie om de sleutelkleur over te nemen
@@ -1487,6 +1500,9 @@ lighting	Light	Licht
 	Save to Swatches	Opslaan in stalen
 	Delete Graphic Style (Alt-click: without asking)	Grafische stijl verwijderen (Alt-klik: zonder vragen)
 	Delete the graphic style “{name}”?	De grafische stijl „{name}” verwijderen?
+	Delete Action Sets	Actiesets verwijderen
+	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
+	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken
@@ -1625,13 +1641,16 @@ lighting	Light	Licht
 	Fractions	Breuken
 	Ligatures are off while the text is tracked.	Ligaturen staan uit terwijl de tekst wordt gespatieerd.
 	Ordinals	Rangtelwoorden
+	Proportional Lining	Proportionele lining
 	Proportional Oldstyle	Proportionele oldstyle
 	Reset OpenType Features	OpenType-functies herstellen
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.
 	Standard Ligatures	Standaardligaturen
+	Stylistic Alternates	Stilistische alternatieven
 	Swash	Swash
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
+	Titling Alternates	Titelalternatieven
 	Every-line Composer	Compositie per alinea
 	First-line Left Indent	Eerste regel links inspringen
 	Hyphenation…	Afbreken…
@@ -1769,7 +1788,6 @@ lighting	Light	Licht
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
-	Delete these {count} swatches and groups?	Deze {count} stalen en groepen verwijderen?
 	Delete “{name}”?	„{name}” verwijderen?
 	Document Swatches	Documentstalen
 	Edit or Apply Color Group	Kleurgroep bewerken of toepassen
@@ -1867,6 +1885,7 @@ lighting	Light	Licht
 	Polygon Properties:	Veelhoekeigenschappen:
 	Rectangle Properties:	Rechthoekeigenschappen:
 	Shape Properties:	Vormeigenschappen:
+	Shape Properties	Vormeigenschappen
 	Sides:	Zijden:
 	Transform options	Transformatieopties
 	Transform Both	Beide transformeren
@@ -2058,6 +2077,7 @@ lighting	Light	Licht
 	Compatible Gradient and Gradient Mesh Printing	Compatibel afdrukken van verlopen en verlooprasters
 	Embed Fonts (for other applications)	Lettertypen insluiten (voor andere programma's)
 	EPS Options	EPS-opties
+	Include Artboard Fill	Tekenbordvulling opnemen
 	Include CMYK PostScript in RGB Files	CMYK PostScript opnemen in RGB-bestanden
 	Include Document Thumbnails	Documentminiaturen opnemen
 	Include Linked Files	Gekoppelde bestanden opnemen
@@ -2076,6 +2096,13 @@ lighting	Light	Licht
 	Use Artboards	Tekenborden gebruiken
 	Choose a folder	Kies een map
 	Create Sub-folders	Submappen maken
+	Clear Selection	Selectie wissen
+	Export PDFs As:	PDF's exporteren als:
+	Single File	Eén bestand
+	Multiple Files	Meerdere bestanden
+	Format Presets	Indelingsvoorinstellingen
+	Grid View	Rasterweergave
+	Selected: {n}, Total number of files to export: {m}	Geselecteerd: {n}, totaal aantal te exporteren bestanden: {m}
 	Export Asset	Asset exporteren
 	Export to:	Exporteren naar:
 	Format Settings	Indelingsinstellingen
@@ -2204,19 +2231,21 @@ lighting	Light	Licht
 	Stop	Stoppen
 	Searching…	Zoeken…
 	Not found	Niet gevonden
-	{folders} folder(s) and {files} file(s) searched	{folders} map(pen) en {files} bestand(en) doorzocht
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	{count} map(pen) overgeslagen, zoals mappen van andere apps, van het systeem en verborgen mappen
-	{count} folder(s) or file(s) couldn't be read	{count} map(pen) of bestand(en) konden niet worden gelezen
+	{folders} and {files} searched	{folders} en {files} doorzocht
+@plural	{n} folder|{n} folders	{n} map|{n} mappen
+@plural	{n} file|{n} files	{n} bestand|{n} bestanden
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	{n} map overgeslagen, zoals mappen van andere apps, van het systeem en verborgen mappen|{n} mappen overgeslagen, zoals mappen van andere apps, van het systeem en verborgen mappen
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} map of bestand kon niet worden gelezen|{n} mappen of bestanden konden niet worden gelezen
 	The search stopped at its limit: search a smaller folder.	De zoekopdracht is gestopt bij de limiet: doorzoek een kleinere map.
 	Copy only fonts you own or are licensed to install.	Kopieer alleen lettertypen die je bezit of waarvoor je een licentie hebt om ze te installeren.
 	VectorCraft copies the fonts to {folder}.	VectorCraft kopieert de lettertypen naar {folder}.
-	Apply to All ({count} more missing)	Op alles toepassen (er ontbreken nog {count})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Op alles toepassen (er ontbreekt nog {n})|Op alles toepassen (er ontbreken nog {n})
 	Ignore	Negeren
 	Linked File Not Found	Gekoppeld bestand niet gevonden
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Vervang het door een ander bestand of negeer het: de afbeeldingen blijven de voorbeeldweergave tonen die met het document is opgeslagen.
 	Replace…	Vervangen…
 	Update Modified Links	Gewijzigde koppelingen bijwerken
-	{count} linked image(s) changed since this document was saved. Show the new versions?	{count} gekoppelde afbeelding(en) zijn gewijzigd sinds dit document is opgeslagen. De nieuwe versies weergeven?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} gekoppelde afbeelding is gewijzigd sinds dit document is opgeslagen. De nieuwe versie weergeven?|{n} gekoppelde afbeeldingen zijn gewijzigd sinds dit document is opgeslagen. De nieuwe versies weergeven?
 	Dialog	Dialoogvenster
 	Convert Process to Global	Proces omzetten naar globaal
 	Create From:	Maken van:
@@ -2255,12 +2284,12 @@ lighting	Light	Licht
 	Fonts whose licence doesn't allow embedding are not copied.	Lettertypen waarvan de licentie insluiten niet toestaat, worden niet gekopieerd.
 	Package collects a saved document with its linked files and fonts.	Verpakken verzamelt een opgeslagen document met zijn gekoppelde bestanden en lettertypen.
 	Package created	Pakket gemaakt
-	Packaged {n} file(s) in {folder} {note}	{n} bestand(en) verpakt in {folder} {note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} bestand verpakt in {folder} {note}|{n} bestanden verpakt in {folder} {note}
 	Packaged {n} file(s){note}	{n} bestand(en) verpakt{note}
 	Relink Linked Files to the Document	Gekoppelde bestanden opnieuw koppelen aan het document
 	Save the document first?	Wil je het document eerst opslaan?
-	{count} file(s) in {folder} {note}. Show the package folder?	{count} bestand(en) in {folder} {note}. De pakketmap openen?
-	{count} linked file(s) not found	{count} gekoppelde bestand(en) niet gevonden
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} bestand in {folder} {note}. De pakketmap openen?|{n} bestanden in {folder} {note}. De pakketmap openen?
+@plural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
 	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ingebouwde voorinstellingen zijn alleen-lezen: Nieuw… start een bewerkbare kopie.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} op het tekenbord staat voor {real} {unit} in de scène.
@@ -2837,32 +2866,42 @@ theme	Appearance	Vormgeving
 	Remove Asset	Asset verwijderen
 	Rename Asset	Asset hernoemen
 	Fill Rule	Vulregel
-	Apply Brush	Kwast toepassen
+	Apply Brush	Penseel toepassen
 	Break Link to Symbol	Koppeling met symbool verbreken
-	Brush Definition	Kwastdefinitie
-	Brush Options…	Kwastopties…
-	Current Brush	Huidige kwast
-	Current Symbol	Huidige symbool
-	Delete Brush	Kwast verwijderen
+	Brush Definition	Penseeldefinitie
+	Brush Options…	Penseelopties…
+	Current Brush	Huidig penseel
+	Current Symbol	Huidig symbool
+	Delete Brush	Penseel verwijderen
 	Delete Symbol	Symbool verwijderen
+	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
+	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
+	No unused symbols	Geen ongebruikte symbolen
+	Delete Symbols	Symbolen verwijderen
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Een of meer van de symbolen zijn in gebruik en kunnen pas worden verwijderd als hun exemplaren zijn uitgebreid of verwijderd.
+	Expand Instances	Exemplaren uitbreiden
+	Delete Instances	Exemplaren verwijderen
+	Yes	Ja
+	No	Nee
 	Duplicate Brush	Kwast dupliceren
 	Duplicate Symbol	Symbool dupliceren
 	Edit Symbol	Symbool bewerken
-	Expand Brush Strokes	Kwaststreken omzetten
-	New Brush…	Nieuwe kwast…
-	New Brush	Nieuwe kwast
+	Exit Symbol Editing Mode	Symboolbewerkingsmodus verlaten
+	Expand Brush Strokes	Penseelstreken omzetten
+	New Brush…	Nieuw penseel…
+	New Brush	Nieuw penseel
 	Calligraphic Brush	Kalligrafisch penseel
 	Scatter Brush	Verspreidingspenseel
 	Art Brush	Artpenseel
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
-	Brush Art	Kwastillustratie
+	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool
 	New Symbol…	Nieuw symbool…
 	Place Symbol Instance	Symboolexemplaar plaatsen
 	Redefine Symbol	Symbool opnieuw definiëren
-	Remove Brush Stroke	Kwaststreek verwijderen
+	Remove Brush Stroke	Penseelstreek verwijderen
 	Replace Symbol	Symbool vervangen
 	Select All Instances	Alle exemplaren selecteren
 	Symbol Sprayer	Symboolspuit
@@ -2938,7 +2977,7 @@ theme	Appearance	Vormgeving
 	Saved Selections	Opgeslagen selecties
 	Select Guides	Hulplijnen selecteren
 	Move Guide to Layer	Hulplijn naar laag verplaatsen
-	Blob Brush	BLOB-kwast
+	Blob Brush	Blob-penseel
 	Convert Anchor Point	Ankerpunt omzetten
 	Curvature	Kromming
 	Delete Anchor Point	Ankerpunt verwijderen
@@ -3272,6 +3311,7 @@ theme	Appearance	Vormgeving
 	Identify Objects By	Objecten identificeren op
 	Include SVG Code	SVG-code opnemen
 	Italian	Italiaans
+	Kerning	Kerning
 	Keyboard Increment	Toetsenbordincrement
 	Language Options	Taalopties
 	Large	Groot
@@ -3300,6 +3340,7 @@ theme	Appearance	Vormgeving
 	On Paste	Bij plakken
 	On Screen	Op scherm
 	Open Documents As Tabs	Documenten openen als tabbladen
+	Optical	Optisch
 	Options	Opties
 	Output All Blacks Accurately	Alle zwarttinten nauwkeurig uitvoeren
 	Output All Blacks as Rich Black	Alle zwarttinten uitvoeren als rijk zwart
@@ -3421,7 +3462,7 @@ theme	Appearance	Vormgeving
 	Delete Swatch	Kleurstaal verwijderen
 	Duplicate Swatch	Kleurstaal dupliceren
 	Merge Swatches	Kleurstalen samenvoegen
-	Move Brush	Kwast verplaatsen
+	Move Brush	Penseel verplaatsen
 	Move Swatch	Kleurstaal verplaatsen
 	New Color Group	Nieuwe kleurgroep
 	New Swatch	Nieuw kleurstaal
@@ -3868,6 +3909,8 @@ imageTrace	Outline	Contour
 @plural	{n} item|{n} items	{n} item|{n} items
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Kleurentabel ({n} kleur)|Kleurentabel ({n} kleuren)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Deze {n} grafische stijl verwijderen?|Deze {n} grafische stijlen verwijderen?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Deze {n} kwast verwijderen?|Deze {n} kwasten verwijderen?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Deze {n} staal of groep verwijderen?|Deze {n} stalen en groepen verwijderen?
 @plural	{n} Layer|{n} Layers	{n} laag|{n} lagen
 @plural	{n} Object|{n} Objects	{n} object|{n} objecten
 @plural	{n} area highlighted|{n} areas highlighted	{n} gebied gemarkeerd|{n} gebieden gemarkeerd
@@ -3880,6 +3923,7 @@ imageTrace	Outline	Contour
 @plural	{n} stroke|{n} strokes	{n} lijn|{n} lijnen
 @msg	no library `{id}`	geen bibliotheek `{id}`
 @msg	select some type first	selecteer eerst wat tekst
+@msg	kerning must be a number, "auto", or "optical"	Kerning moet een getal, ‘auto’ of ‘optical’ zijn
 @msg	{_1} has no {_2} style	{_1} heeft geen {_2}stijl
 @msg	a layer couldn't be read	een laag kon niet worden gelezen
 @msg	it has more than one artboard	het heeft meer dan één tekengebied
@@ -3902,7 +3946,6 @@ imageTrace	Outline	Contour
 @msg	Combine Slices: the slices have no bounds	Slices combineren: de slices hebben geen grenzen
 @msg	Convert to Artboards: selection has no area	Converteren naar tekengebieden: de selectie heeft geen oppervlakte
 @msg	Convert to Shape: no rectangles or ellipses selected	Converteren naar vorm: geen rechthoeken of ellipsen geselecteerd
-@msg	Copied the CSS of {rules} object(s)	CSS van {rules} object(en) gekopieerd
 @msg	Copied the script report	Scriptrapport gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
@@ -3919,13 +3962,11 @@ imageTrace	Outline	Contour
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecteer met directe selectie ankerpunten om te knippen (niet de eindpunten van open paden)
 @msg	Divide Objects Below: select a path	Objecten eronder verdelen: selecteer een pad
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
-@msg	Downloaded {_1} file(s)	{_1} bestand(en) gedownload
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
 @msg	Expand: no brush strokes selected	Uitbreiden: geen penseelstreken geselecteerd
 @msg	Expand: no gradient fills	Uitbreiden: geen verloopvullingen
 @msg	Expand: nothing to expand	Uitbreiden: niets om uit te breiden
-@msg	Exported {count} file(s) to {folder}	{count} bestand(en) geëxporteerd naar {folder}
 @msg	Exported {path}	{path} geëxporteerd
 @msg	Flatten Transparency: select objects to flatten	Transparantie afvlakken: selecteer objecten om af te vlakken
 @msg	Flatten Transparency: {e}	Transparantie afvlakken: {e}
@@ -3948,7 +3989,7 @@ imageTrace	Outline	Contour
 @msg	PDF settings are not an object	PDF-instellingen zijn geen object
 @msg	PDF security settings are not an object	PDF-beveiligingsinstellingen zijn geen object
 @msg	PDF writer error: {0}	PDF-schrijffout: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	{n} bestand(en) verpakt in {folder} {note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} bestand verpakt in {folder} ({note})|{n} bestanden verpakt in {folder} ({note})
 @msg	Packaged {n} file(s){note}	{n} bestand(en) verpakt{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Voorvertoning in browser heeft de desktop-app nodig (het web downloadt in plaats daarvan bestanden)
 @msg	Release Guides: no guides	Hulplijnen vrijgeven: geen hulplijnen
@@ -4081,6 +4122,7 @@ imageTrace	Outline	Contour
 @msg	cannot split an open path at its end point	kan een open pad niet splitsen op zijn eindpunt
 @msg	closing needs three anchors	voor sluiten zijn drie ankers nodig
 @msg	check an asset to export	vink een asset aan om te exporteren
+@msg	check an artboard to export	vink een tekengebied aan om te exporteren
 @msg	choice must be "merge" or "add", not `{choice}`	choice moet "merge" of "add" zijn, niet `{choice}`
 @msg	choose a direction to divide in	kies een richting om in te verdelen
 @msg	choose a folder to export to	kies een map om naar te exporteren
@@ -4211,6 +4253,7 @@ imageTrace	Outline	Contour
 @msg	no such perspective grid preset	perspectiefrastervoorinstelling bestaat niet
 @msg	no such recent file	recent bestand bestaat niet
 @msg	no such recent font	recent lettertype bestaat niet
+@msg	some text is hidden or locked, so its font wasn't replaced	een deel van de tekst is verborgen of vergrendeld, dus het lettertype ervan is niet vervangen
 @msg	no such saved selection	opgeslagen selectie bestaat niet
 @msg	no such segment	segment bestaat niet
 @msg	no such subpath	subpad bestaat niet
@@ -4293,6 +4336,8 @@ imageTrace	Outline	Contour
 @msg	select a repeat	selecteer een herhaling
 @msg	select a stroke with a variable width	selecteer een lijn met een variabele breedte
 @msg	select a symbol instance	selecteer een symboolinstantie
+@msg	select instances of one symbol	selecteer instanties van één symbool
+@msg	a symbol can't hold an instance of itself	een symbool kan geen instantie van zichzelf bevatten
 @msg	select an Image Trace object	selecteer een Image Trace-object
 @msg	could not decode image: {0}	afbeelding kon niet worden gedecodeerd: {0}
 @msg	image is empty	afbeelding is leeg
@@ -4423,8 +4468,6 @@ imageTrace	Outline	Contour
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} is een live-effect (Effect › Plug-ins)
 @msg	{_1} is already used by {_2}	{_1} wordt al gebruikt door {_2}
 @msg	{_1} is reserved by the system	{_1} is gereserveerd door het systeem
-@msg	{_1} linked file(s) can't be read here: their previews show	{_1} gekoppelde bestand(en) kunnen hier niet worden gelezen: hun voorbeelden worden weergegeven
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	{_1} gekoppelde afbeelding(en) zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msg	{_1}: not saved, so not closed	{_1}: niet opgeslagen, dus niet gesloten
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bits bitmaps kunnen niet worden gelezen
 @msg	{command} didn't create an object	{command} heeft geen object gemaakt
@@ -4444,7 +4487,6 @@ imageTrace	Outline	Contour
 @msg	Couldn't place {name}: {e}	Kon {name} niet plaatsen: {e}
 @msg	Couldn't paste from the clipboard: {e}	Kon niet van het klembord plakken: {e}
 @msg	Saved {path} with {_1} note(s): {first}	{path} opgeslagen met {_1} opmerking(en): {first}
-@msg	Exported {what} with {_1} note(s): {first}	{what} geëxporteerd met {_1} opmerking(en): {first}
 @msg	Exported {what}	{what} geëxporteerd
 @msg	Saved {n} files beside {path}	{n} bestanden opgeslagen naast {path}
 @msg	Saving	Bezig met opslaan
@@ -4455,12 +4497,26 @@ imageTrace	Outline	Contour
 @msg	Saving recovery data for {_1}	Bezig met opslaan van herstelgegevens voor {_1}
 @msg	Discarded {_1} recovered document(s)	{_1} hersteld(e) document(en) verworpen
 @msg	Restored {_1} recovered document(s): save them to keep them	{_1} hersteld(e) document(en) teruggezet: sla ze op om ze te behouden
-@msg	Embedded {n} image(s); {missing} missing: relink them first	{n} afbeelding(en) ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
-@msg	Embedded {n} image(s)	{n} afbeelding(en) ingesloten
-@msg	Relinked {_1} image(s)	{_1} afbeelding(en) opnieuw gekoppeld
-@msg	Relinked {n} image(s)	{n} afbeelding(en) opnieuw gekoppeld
-@msg	Relinked {n} image(s); not in that folder: {_1}	{n} afbeelding(en) opnieuw gekoppeld; niet in die map: {_1}
-@msg	Updated {_1} image(s)	{_1} afbeelding(en) bijgewerkt
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
+@msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten
+@msgplural	Relinked {n} image|Relinked {n} images	{n} afbeelding opnieuw gekoppeld|{n} afbeeldingen opnieuw gekoppeld
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} afbeelding opnieuw gekoppeld; niet in die map: {names}|{n} afbeeldingen opnieuw gekoppeld; niet in die map: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} afbeelding opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}|{n} afbeeldingen opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} afbeelding bijgewerkt|{n} afbeeldingen bijgewerkt
+@msgplural	Replaced {n} image|Replaced {n} images	{n} afbeelding vervangen|{n} afbeeldingen vervangen
+@msgplural	Broke {n} link|Broke {n} links	{n} koppeling verbroken|{n} koppelingen verbroken
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} koppeling verbroken; {missing} kunnen niet worden gelezen: koppel ze eerst opnieuw of werk ze bij|{n} koppelingen verbroken; {missing} kunnen niet worden gelezen: koppel ze eerst opnieuw of werk ze bij
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} gekoppeld bestand kan hier niet worden gelezen: het voorbeeld wordt weergegeven|{n} gekoppelde bestanden kunnen hier niet worden gelezen: hun voorbeelden worden weergegeven
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} afbeelding kon niet worden gedecodeerd en wordt als doorgekruist vak weergegeven|{n} afbeeldingen konden niet worden gedecodeerd en worden als doorgekruiste vakken weergegeven
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} lettertype hier niet beschikbaar: de tekst verschijnt in een ander lettertype|{n} lettertypen hier niet beschikbaar: de tekst verschijnt in een ander lettertype
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS van {n} object gekopieerd|CSS van {n} objecten gekopieerd
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} bestand gedownload|{n} bestanden gedownload
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} bestand geëxporteerd naar {folder}|{n} bestanden geëxporteerd naar {folder}
 @msg	Unembedded to {_1}	Extern gemaakt: {_1}
 @msg	Reset {_1}	{_1} opnieuw ingesteld
 @msg	Sent to {_1}	Verzonden naar {_1}
@@ -4510,9 +4566,6 @@ imageTrace	Outline	Contour
 @msg	every search thread stopped on an internal error (please report this bug)	elke zoekthread is gestopt door een interne fout (meld deze bug)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	de map Lettertypen van VectorCraft is hier niet ingesteld: de desktopapp en vectorcraft-cli stellen die in
 @msg	choose the font files to add	kies de lettertypebestanden die je wilt toevoegen
-@msg	{n} font file(s) are now in {folder}	er staan nu {n} lettertypebestand(en) in {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	er staan nu {n} lettertypebestand(en) in {folder}; {failed} konden niet worden toegevoegd: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	{n} lettertype(n) hier niet beschikbaar: de tekst verschijnt in een ander lettertype
 @msg	not a file	geen bestand
 @msg	not a font file	geen lettertypebestand
 @msg	that document is no longer open	dat document is niet langer geopend
@@ -4521,7 +4574,6 @@ imageTrace	Outline	Contour
 @msg	every numbered name for it is taken in the Fonts folder	elke genummerde naam ervoor is al vergeven in de map Lettertypen
 @msg	every numbered name for {name} is taken in the document's folder	elke genummerde naam voor {name} is al vergeven in de map van het document
 @msg	No linked files to look for	Geen gekoppelde bestanden om naar te zoeken
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	{n} afbeelding(en) opnieuw gekoppeld; {name} kon niet opnieuw worden gekoppeld: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` is de stapverwijzing {r}, die alleen `run` en `command_batch` oplossen
 @msg	`ids` must be an array of object ids, not {v}	`ids` moet een array van object-id's zijn, niet {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` moet een array van ankerindices zijn, niet {v}
@@ -5280,6 +5332,9 @@ swatch	Bright Violet	Felviolet
 	Close Gaps With Paths	Openingen sluiten met paden
 	Select Fills	Vullingen selecteren
 	Select Strokes	Lijnen selecteren
+	Paint Fills	Vullingen verven
+	Paint Strokes	Lijnen verven
+	Highlight	Markering
 	Column Type:	Kolomtype:
 	Each Design Represents:	Elk ontwerp staat voor:
 	Event:	Gebeurtenis:
@@ -5375,6 +5430,8 @@ swatch	Bright Violet	Felviolet
 	Objects on Path	Objecten op pad
 	Attach	Koppelen
 	Objects on Path Options	Opties voor objecten op pad
+	Pivot:	Draaipunt:
+	Rotate:	Rotatie:
 	Objects on Path Tool	Objecten-op-pad-gereedschap
 	Attach Objects on Path	Objecten aan pad koppelen
 	Expand Objects on Path	Objecten op pad uitbreiden
@@ -5542,13 +5599,13 @@ swatch	Bright Violet	Felviolet
 	Slope:	Helling:
 axis	X Axis	X-as
 axis	Y Axis	Y-as
-@msg	Packaged {n} file(s) in {folder}	{n} bestand(en) verpakt in {folder}
-@msg	Packaged {n} file(s) {note}	{n} bestand(en) verpakt {note}
-@msg	Packaged {n} file(s)	{n} bestand(en) verpakt
-	Packaged {n} file(s)	{n} bestand(en) verpakt
-	Packaged {n} file(s) in {folder}	{n} bestand(en) verpakt in {folder}
-	Packaged {n} file(s) {note}	{n} bestand(en) verpakt {note}
-	{count} file(s) in {folder}. Show the package folder?	{count} bestand(en) in {folder}. De pakketmap openen?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} bestand verpakt in {folder}|{n} bestanden verpakt in {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} bestand verpakt {note}|{n} bestanden verpakt {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} bestand verpakt|{n} bestanden verpakt
+@plural	Packaged {n} file|Packaged {n} files	{n} bestand verpakt|{n} bestanden verpakt
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} bestand verpakt in {folder}|{n} bestanden verpakt in {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} bestand verpakt {note}|{n} bestanden verpakt {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{n} bestand in {folder}. De pakketmap openen?|{n} bestanden in {folder}. De pakketmap openen?
 	Clockwise	Met de klok mee
 	Dither	Dither
 	Fine noise hides banding in the gradient fill	Fijne ruis verbergt banden in de verloopvulling
@@ -5571,6 +5628,7 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
 	On Artboards	Op tekengebieden
 	All Artboards	Alle tekengebieden
@@ -5831,6 +5889,13 @@ anchor	Points:	Punten:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	geef `inkLimit`, `removeWhiteOverprint` of `overprintBlack` op
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Drukinktcorrecties werken in CMYK-documenten: kies eerst Bestand › Documentkleurmodus › CMYK-kleur
 @msg	`{key}` must be 0..{max}	`{key}` moet 0..{max} zijn
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
+	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
+	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
+@msg	select objects or give `color`	selecteer objecten of geef `color` op
+@msg	`color` is not a colour	`color` is geen kleur
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Hoekengereedschap
 	Slide Anchor Along Path	Ankerpunt langs pad schuiven
@@ -5858,6 +5923,7 @@ anchor	Points:	Punten:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Tekst splitsen
 	Combine Point Text	Punttekst combineren
+	Join Point Text	Punttekst samenvoegen
 	Remove Breaks	Einden verwijderen
 	Split Text at Cursor	Tekst splitsen bij cursor
 	Set Alignment, Keep Position	Uitlijning instellen, positie behouden
@@ -5886,6 +5952,7 @@ breakText	Glyphs	Glyphs
 @msg	Select horizontal point or area type whose text fits	Selecteer horizontale punt- of vlaktekst waarvan de tekst past
 @msg	Nothing to split at the cursor	Niets te splitsen bij de cursor
 @msg	Select two or more one-line point type objects on one baseline to combine	Selecteer twee of meer punttekstobjecten van één regel op één basislijn om ze te combineren
+@msg	Select two or more one-line point type objects to join	Selecteer twee of meer punttekstobjecten van één regel om ze samen te voegen
 @msg	No line breaks to remove	Geen regeleinden om te verwijderen
 @msg	No paragraph breaks to remove	Geen alinea-einden om te verwijderen
 @msg	Too many breaks to remove at once	Te veel einden om in één keer te verwijderen
@@ -5898,6 +5965,11 @@ breakText	Glyphs	Glyphs
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` moet lines, paragraphs, words of glyphs zijn, niet {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` moet "line" of "paragraph" zijn, niet {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` moet "left", "center" of "right" zijn, niet {other}
+	File + Number	Bestand + nummer
+	File + Data Set Name	Bestand + naam gegevensset
+	Data Set Name	Naam gegevensset
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` moet `fileNumber`, `fileDataSetName` of `dataSetName` zijn
+@msg	no free data set file name in destination folder	Geen vrije bestandsnaam voor de gegevensset in de doelmap
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Padeffecten
@@ -5938,3 +6010,100 @@ breakText	Glyphs	Glyphs
 	Gap 4	Tussenruimte 4
 	Dash 5	Streepje 5
 	Gap 5	Tussenruimte 5
+
+@msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+
+@msg	You must choose a side pattern.	Kies een zijpatroon.
+@msg	invalid pattern tile choice	ongeldige keuze voor patroontegel
+@msg	no pattern named `{choice}`	geen patroon met de naam `{choice}`
+	Delete the selected brushes?	Geselecteerde kwasten verwijderen?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
+	Remove Strokes	Contouren verwijderen
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Schikgereedschappen
+	Arrange in Grid…	In raster schikken…
+	Arrange in Grid	In raster schikken
+	Swap Objects	Objecten omwisselen
+	Swap Objects and Sizes	Objecten en formaten omwisselen
+	Replace with Top Object…	Vervangen door bovenste object…
+	Replace with Top Object	Vervangen door bovenste object
+	Set Size of Each…	Formaat van elk instellen…
+	Set Size of Each	Formaat van elk instellen
+@msg	select exactly two objects	selecteer precies twee objecten
+@msg	give `width` or `height`	geef `width` of `height` op
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Overlappende objecten groeperen
+@msg	too many objects selected (at most 20000)	te veel objecten geselecteerd (hoogstens 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Verdelen in streepjes…
+	Divide into Dashes	Verdelen in streepjes
+	Dash:	Streepje:
+	Gap:	Tussenruimte:
+	Fit to Corners and Ends	Passend maken op hoeken en uiteinden
+	Remove Gaps	Tussenruimten verwijderen
+@msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
+@msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Streepjes uitbreiden tot paden
+@msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Documentgereedschappen
+	Save a Timestamped Copy	Een kopie met tijdstempel opslaan
+@msg	there is no clock here	er is hier geen klok
+@msg	there is no clock here: give `time` (Unix seconds)	er is hier geen klok: geef `time` op (Unix-seconden)
+@msg	the document has never been saved: give `folder`	het document is nooit opgeslagen: geef `folder` op
+@msg	every numbered name for the copy is taken	alle genummerde namen voor de kopie zijn bezet
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Nieuwe symbolen van lagen
+	Convert Layers to Symbols	Lagen omzetten in symbolen
+@msg	{id} is no top-level layer	{id} is geen laag op het hoogste niveau
+	Marathi	Marathi
+	Gujarati	Gujarati
+	Bengali	Bengaals
+	Punjabi	Punjabi
+	Tamil	Tamil
+	Telugu	Telugu
+	Kannada	Kannada
+	Malayalam	Malayalam
+	Odia	Odia
+	Urdu	Urdu
+	VectorCraft {release} and later (version {n})	VectorCraft {release} en nieuwer (versie {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Alle geopende documenten exporteren als PDF
+	Export All Open Documents as SVG	Alle geopende documenten exporteren als SVG
+@msgplural	Exported {n} document|Exported {n} documents	{n} document geëxporteerd|{n} documenten geëxporteerd
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} document geëxporteerd; {title} is niet geschreven: {error}|{n} documenten geëxporteerd; {title} is niet geschreven: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Symbooltype:
+	Dynamic Symbol	Dynamisch symbool
+	Static Symbol	Statisch symbool
+	Symbol Instance Appearance	Uiterlijk van symboolinstantie
+	Reset Symbol Instance	Symboolinstantie opnieuw instellen
+@msg	type must be static or dynamic, not {v}	type moet static of dynamic zijn, niet {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` is een statisch symbool: stel eerst het symbooltype in op Dynamisch
+@msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
+@msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
+@msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
+@msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
+	Text Flow	Tekstdoorloop
+	By Rows	Per rij
+	By Columns	Per kolom
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Willekeurige dekking…
+	Randomize Opacity	Willekeurige dekking
+	Minimum:	Minimum:
+	Maximum:	Maximum:
+	Seed:	Startwaarde:
+@msg	`min` is greater than `max`	`min` is groter dan `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Objecten sorteren…
+	Sort Objects	Objecten sorteren
+	Sort By:	Sorteren op:
+	Apply To:	Toepassen op:
+	Area	Oppervlakte
+	X Position	X-positie
+	Y Position	Y-positie
+	Stacking Order	Stapelvolgorde
+	Small to Large	Van klein naar groot
+	Large to Small	Van groot naar klein
+	Distribute Evenly	Gelijkmatig verdelen

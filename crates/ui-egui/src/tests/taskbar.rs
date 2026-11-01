@@ -1,6 +1,7 @@
 //! The Contextual Task Bar's actions for each kind of selection: open paths offer Join and Edit
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
-//! Clipping Mask, and type converts between point and area type.
+//! Clipping Mask, type converts between point and area type, and a basic shape shows its
+//! properties in place of Lock.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -217,6 +218,170 @@ fn direct_selected_anchors_still_offer_remove_and_cut() {
         assert!(has(&texts, label), "{label}: {texts:?}");
     }
     assert!(!has(&texts, "Edit Path"), "{texts:?}");
+}
+
+/// Click the task bar's button left of More Options (Lock, or a basic shape's Shape Properties),
+/// and return the context and what the frame after the click draws.
+fn click_lock_slot(app: &mut VectorcraftApp) -> (egui::Context, Vec<(String, Rect)>) {
+    let (ctx, _) = bar(app);
+    let r = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    // Right to left: the frame's margin, More Options, then the button.
+    let p = Pos2::new(r.right() - 8.0 - 30.0 - 6.0 - 15.0, r.center().y);
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, &ctx, vec![Event::PointerMoved(p)]);
+    frame(app, &ctx, vec![press(true)]);
+    frame(app, &ctx, vec![press(false)]);
+    let texts = frame(app, &ctx, vec![]);
+    (ctx, texts)
+}
+
+/// Type `value` into the field showing `field` and press Enter.
+fn type_into(app: &mut VectorcraftApp, ctx: &egui::Context, texts: &[(String, Rect)], field: &str, value: &str) {
+    let p = at(texts, field);
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+    // Focus selected the whole field: typing replaces it.
+    frame(app, ctx, vec![]);
+    frame(app, ctx, vec![Event::Text(value.into())]);
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(app, ctx, vec![enter]);
+    frame(app, ctx, vec![]);
+}
+
+fn live(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::LiveShape {
+    match kind(app, id) {
+        NodeKind::Path { live: Some(l), .. } => *l,
+        k => panic!("not a live shape: {k:?}"),
+    }
+}
+
+fn locked(app: &VectorcraftApp, id: u64) -> bool {
+    app.session.active().unwrap().doc.node(NodeId(id)).unwrap().locked
+}
+
+/// A basic shape selected with the Selection tool shows Shape Properties in place of Lock: a
+/// rectangle, rounded rectangle, ellipse or polygon, each under its own heading.
+#[test]
+fn a_basic_shape_shows_its_properties_in_place_of_lock() {
+    let mut app = app();
+    let shapes = [
+        (id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap()), "Rectangle Properties:"),
+        (id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})).unwrap()), "Rectangle Properties:"),
+        (id(app.run("shape.ellipse", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap()), "Ellipse Properties:"),
+        (id(app.run("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 40, "sides": 6})).unwrap()), "Polygon Properties:"),
+    ];
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    for (shape, heading) in shapes {
+        select(&mut app, &[shape]);
+        let (_, texts) = bar(&mut app);
+        assert!(!has(&texts, heading), "the popup starts closed: {texts:?}");
+        let (_, texts) = click_lock_slot(&mut app);
+        assert!(has(&texts, heading), "{heading}: {texts:?}");
+        assert!(!locked(&app, shape), "the button doesn't lock the shape");
+    }
+}
+
+/// The popup's fields edit the shape through `object.setLiveShape`, and Undo restores it.
+#[test]
+fn the_shape_properties_popup_edits_the_shape() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let corners = |app: &VectorcraftApp, id: u64| match live(app, id) {
+        vectorcraft_doc::LiveShape::Rectangle { radii, .. } => radii,
+        l => panic!("{l:?}"),
+    };
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})).unwrap());
+    select(&mut app, &[rect]);
+    let (ctx, texts) = click_lock_slot(&mut app);
+    type_into(&mut app, &ctx, &texts, "10 pt", "20");
+    assert_eq!(corners(&app, rect), [20.0; 4]);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(corners(&app, rect), [10.0; 4]);
+
+    let ellipse = id(app.run("shape.ellipse", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[ellipse]);
+    let pie = |app: &VectorcraftApp| match live(app, ellipse) {
+        vectorcraft_doc::LiveShape::Ellipse { pie, .. } => pie,
+        l => panic!("{l:?}"),
+    };
+    let (ctx, texts) = click_lock_slot(&mut app);
+    type_into(&mut app, &ctx, &texts, "360°", "180");
+    assert_eq!(pie(&app), (0.0, 180.0));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(pie(&app), (0.0, 360.0));
+
+    let polygon = id(app.run("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 40, "sides": 6})).unwrap());
+    select(&mut app, &[polygon]);
+    let sides = |app: &VectorcraftApp| match live(app, polygon) {
+        vectorcraft_doc::LiveShape::Polygon { sides, .. } => sides,
+        l => panic!("{l:?}"),
+    };
+    let (ctx, texts) = click_lock_slot(&mut app);
+    type_into(&mut app, &ctx, &texts, "6", "5");
+    assert_eq!(sides(&app), 5);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(sides(&app), 6);
+}
+
+/// The popup stays open while a polygon's Corner dropdown is open, so a corner type can be picked
+/// from it.
+#[test]
+fn the_shape_properties_popup_keeps_its_corner_dropdown() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let polygon = id(app.run("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 40, "sides": 6})).unwrap());
+    select(&mut app, &[polygon]);
+    let (ctx, texts) = click_lock_slot(&mut app);
+    let click = |app: &mut VectorcraftApp, p: Pos2| {
+        let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, &ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+        frame(app, &ctx, vec![])
+    };
+    let texts = click(&mut app, at(&texts, "Round"));
+    assert!(has(&texts, "Polygon Properties:") && has(&texts, "Chamfer"), "the popup and its dropdown: {texts:?}");
+    click(&mut app, at(&texts, "Chamfer"));
+    let vectorcraft_doc::LiveShape::Polygon { kinds, .. } = live(&app, polygon) else { panic!("not a polygon") };
+    assert!(!kinds.is_empty() && kinds.iter().all(|k| *k == vectorcraft_geom::shapes::CornerKind::Chamfer), "{kinds:?}");
+}
+
+/// Every other selection keeps Lock: a plain closed path, a star (a plain path), a path with live
+/// corners, a group and several objects. The Direct Selection tool keeps it for a basic shape.
+#[test]
+fn other_selections_keep_lock() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let closed = json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}], "closed": true});
+    let path = id(app.run("path.create", closed).unwrap());
+    let star = id(app.run("shape.star", json!({"cx": 200, "cy": 150, "radius1": 40})).unwrap());
+    let rounded = id(app.run("shape.star", json!({"cx": 300, "cy": 150, "radius1": 40})).unwrap());
+    select(&mut app, &[rounded]);
+    app.run("object.setLiveShape", json!({"radius": 4})).unwrap();
+    assert!(matches!(live(&app, rounded), vectorcraft_doc::LiveShape::Path { .. }));
+    let a = id(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap());
+    let b = id(app.run("shape.ellipse", json!({"x": 60, "y": 20, "width": 30, "height": 30})).unwrap());
+    select(&mut app, &[a, b]);
+    let several = [a, b];
+    let c = id(app.run("shape.rectangle", json!({"x": 20, "y": 250, "width": 30, "height": 30})).unwrap());
+    let d = id(app.run("shape.rectangle", json!({"x": 60, "y": 250, "width": 30, "height": 30})).unwrap());
+    select(&mut app, &[c, d]);
+    let group = id(app.run("object.group", json!({})).unwrap());
+    let headings = ["Rectangle Properties:", "Ellipse Properties:", "Polygon Properties:"];
+    for ids in [vec![path], vec![star], vec![rounded], vec![group], several.to_vec()] {
+        select(&mut app, &ids);
+        let (_, texts) = click_lock_slot(&mut app);
+        assert!(!headings.iter().any(|h| has(&texts, h)), "{ids:?}: {texts:?}");
+        assert!(ids.iter().all(|i| locked(&app, *i)), "{ids:?} locks");
+        app.run("object.unlockAll", json!({})).unwrap();
+    }
+    let shape = id(app.run("shape.rectangle", json!({"x": 300, "y": 40, "width": 30, "height": 30})).unwrap());
+    for tool in ["directSelection", "groupSelection"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        select(&mut app, &[shape]);
+        let (_, texts) = click_lock_slot(&mut app);
+        assert!(!has(&texts, "Rectangle Properties:"), "{tool}: {texts:?}");
+        assert!(locked(&app, shape), "{tool} keeps Lock");
+        app.run("object.unlockAll", json!({})).unwrap();
+    }
 }
 
 /// A compound path under the Direct Selection tool isn't offered Edit Path, which would only switch

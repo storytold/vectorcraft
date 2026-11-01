@@ -29,8 +29,8 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A row of a datasets CSV: the file line it starts on, and its cells.
-type CsvRow = (usize, Vec<String>);
+/// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.
+type CsvRow = (usize, Vec<String>, Vec<bool>);
 
 /// Whether a datasets CSV separates its cells with tabs: its header row (the first line that
 /// isn't blank), read with tabs between cells, has a tab outside quotes and no comma outside
@@ -80,7 +80,7 @@ fn tab_separated(text: &str) -> bool {
 fn parse_datasets_csv(text: &str, cmd: &str) -> Result<Vec<CsvRow>> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let sep = if tab_separated(text) { '\t' } else { ',' };
-    let (mut rows, mut row, mut cur) = (Vec::new(), Vec::<String>::new(), String::new());
+    let (mut rows, mut row, mut quoted, mut cur) = (Vec::new(), Vec::<String>::new(), Vec::<bool>::new(), String::new());
     // `closed`: where the closing quote of a quoted cell falls in `cur`. `start`: the line the
     // current row starts on.
     let (mut in_quotes, mut closed, mut line, mut start) = (false, None, 1usize, 1usize);
@@ -98,18 +98,23 @@ fn parse_datasets_csv(text: &str, cmd: &str) -> Result<Vec<CsvRow>> {
                 }
             }
             Some('"') if cur.is_empty() => in_quotes = true,
-            Some(ch) if ch == sep && !in_quotes => row.push(end_csv_cell(&mut cur, &mut closed)),
+            Some(ch) if ch == sep && !in_quotes => {
+                quoted.push(closed.is_some());
+                row.push(end_csv_cell(&mut cur, &mut closed));
+            }
             Some('\r') if !in_quotes => {}
             Some('\n') | None if !in_quotes => {
+                quoted.push(closed.is_some());
                 row.push(end_csv_cell(&mut cur, &mut closed));
                 if row.iter().any(|c| !c.trim().is_empty()) {
-                    rows.push((start, std::mem::take(&mut row)));
+                    rows.push((start, std::mem::take(&mut row), std::mem::take(&mut quoted)));
                     // +1 for the header.
                     if rows.len() > MAX_CSV_ROWS + 1 {
                         return Err(bad(cmd, format!("more than {MAX_CSV_ROWS} data rows")));
                     }
                 }
                 row.clear();
+                quoted.clear();
                 if c.is_none() {
                     return Ok(rows);
                 }
@@ -143,7 +148,8 @@ fn end_csv_cell(cur: &mut String, closed: &mut Option<usize>) -> String {
 }
 
 fn csv_escape(s: &str) -> String {
-    if s.contains([',', '"', '\n', '\r']) || s != s.trim() { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
+    // An empty string is quoted so that it reads back as an empty value, not as a missing one.
+    if s.is_empty() || s.contains([',', '"', '\n', '\r']) || s != s.trim() { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
 }
 
 /// A visibility cell: true/false, 1/0, yes/no (ASCII, case-insensitive).
@@ -155,12 +161,13 @@ fn parse_visible_cell(s: &str, var: &str, cmd: &str) -> Result<bool> {
     }
 }
 
-fn cell_to_value(kind: VariableKind, cell: &str, var: &str, cmd: &str) -> Result<Option<DataValue>> {
+/// The value of a cell. A quoted empty text cell is an empty text value; any other empty cell is no value.
+fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &str) -> Result<Option<DataValue>> {
     // A text cell is not trimmed here (the parser trims unquoted cells); image, graph and
     // visibility cells are trimmed.
     let t = if kind == VariableKind::Text { cell } else { cell.trim() };
     if t.is_empty() {
-        return Ok(None);
+        return Ok((quoted && kind == VariableKind::Text).then(|| DataValue::Text(String::new())));
     }
     Ok(Some(match kind {
         VariableKind::Text => DataValue::Text(t.to_string()),
@@ -250,7 +257,7 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     let bytes = datasets_csv_bytes(p, C)?;
     let text = std::str::from_utf8(&bytes).map_err(|_| bad(C, "CSV is not UTF-8"))?;
     let rows = parse_datasets_csv(text, C)?;
-    let Some((_, header)) = rows.first() else {
+    let Some((_, header, _)) = rows.first() else {
         return Err(bad(C, "CSV is empty"));
     };
     let name_column = header.first().is_some_and(|h| h.trim().eq_ignore_ascii_case("name"));
@@ -280,7 +287,7 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     let mut parsed: Vec<DataSet> = Vec::new();
     // The names of the rows read so far, and the last number given to a row without a name.
     let (mut seen, mut number) = (BTreeSet::new(), 0usize);
-    for &(line, ref row) in rows.iter().skip(1) {
+    for &(line, ref row, ref quoted) in rows.iter().skip(1) {
         let raw_name = if name_column { row.first().map_or("", |c| c.trim()) } else { "" };
         let name = if raw_name.is_empty() {
             // Same numbering as Capture Data Set when a row leaves the name blank or the file has
@@ -302,7 +309,8 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         let mut values = BTreeMap::new();
         for &(col, ref var, kind) in &columns {
             let cell = row.get(col).map(String::as_str).unwrap_or("");
-            match cell_to_value(kind, cell, var, C) {
+            let was_quoted = quoted.get(col).copied().unwrap_or(false);
+            match cell_to_value(kind, cell, was_quoted, var, C) {
                 Ok(Some(v)) => {
                     values.insert(var.clone(), v);
                 }

@@ -22,9 +22,9 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Affine, Point};
 
-use super::{FEEDBACK, eraser_area, points_json, polyline};
+use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -71,9 +71,9 @@ pub struct GestureTool {
     pub size_pressure: bool,
     /// Blob Brush and Eraser Tool Options' Size Variation, in points.
     pub size_variation: f64,
-    /// The angle of the Eraser tip's long axis, in degrees counter-clockwise from horizontal.
+    /// The angle of the Blob Brush or Eraser tip's long axis, in degrees counter-clockwise from horizontal.
     pub angle: f64,
-    /// The Eraser tip's short axis in percent of its long one (100: round).
+    /// The Blob Brush or Eraser tip's short axis in percent of its long one (100: round).
     pub roundness: f64,
     /// Fill new pencil/brush strokes.
     pub fill: bool,
@@ -114,8 +114,14 @@ pub struct GestureTool {
     pub edit_within: f64,
     /// "Close paths when ends are within N pixels".
     pub close_within: f64,
-    /// Smart Guides for the Pencil's ends.
+    /// Smart Guides for the Pencil's ends and the press of a straight Knife cut.
     snap: DrawSnap,
+    /// Where the pointer went down, before any snap: a straight Knife cut released there cuts
+    /// nothing, even when its press snapped elsewhere.
+    pressed: Point,
+    /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
+    /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
+    tip_at: Option<Point>,
 }
 
 /// The paths a stroke can redraw for selected object `id`: the path itself, or a compound path's
@@ -191,12 +197,39 @@ impl GestureTool {
             edit_within: 12.0,
             close_within: 15.0,
             snap: DrawSnap::default(),
+            pressed: Point::ZERO,
+            tip_at: None,
         }
     }
 
     /// Do the ends of its strokes snap (the Pencil)?
     fn snaps(&self) -> bool {
         self.id == "pencil"
+    }
+
+    /// Does a straight Knife cut snap to anchors and paths? Only with Smart Guides on, which Snap to
+    /// Pixel and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the Pencil's straight
+    /// line's do: the press, and the release unless Shift keeps it on a 45° step.
+    fn knife_snaps(&self, cx: &ToolContext) -> bool {
+        self.id == "knife" && self.straight && cx.smart_guides && !cx.snap_to_pixel && !cx.snap_to_grid
+    }
+
+    /// Does the end of a straight line snap: the Pencil's Alt line's, or a straight Knife cut's
+    /// without Shift?
+    fn line_end_snaps(&self, cx: &ToolContext) -> bool {
+        self.straight && self.unconstrained && (self.snaps() || self.knife_snaps(cx))
+    }
+
+    /// Where a stroke or straight line released at `p` ends: where it snaps when its end snaps.
+    fn release_end(&mut self, cx: &ToolContext, p: Point) -> Point {
+        if (self.snaps() && !self.smoothing && !self.straight) || self.line_end_snaps(cx) { self.snap.drag(cx, p, None) } else { p }
+    }
+
+    /// Is a straight line with its end at `end` back at its press point (within a pixel), so that
+    /// there is no line? A Knife cut also is when the pointer, at `pointer`, is back where it went
+    /// down, though its press snapped elsewhere.
+    fn back_at_press(&self, cx: &ToolContext, pointer: Point, end: Point) -> bool {
+        self.points.first().is_some_and(|s| s.distance(end) < cx.tol(1.0)) || (self.id == "knife" && self.pressed.distance(pointer) < cx.tol(1.0))
     }
 
     fn draws_path(&self) -> bool {
@@ -272,6 +305,22 @@ impl GestureTool {
             };
         }
         start + vectorcraft_geom::constrain_angle_from(p - start, 180.0, self.shift_line.unwrap_or(cx.constrain_angle))
+    }
+
+    /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
+    /// `size` across at its angle and roundness, at the zoom, black on a white halo so it reads on
+    /// any art. Precise cursors show only the crosshair, and smoothing shows no tip.
+    fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
+        let tip = if self.id == "blobBrush" { blob_tip(self.angle, self.roundness) } else { eraser_tip(self.angle, self.roundness) };
+        let r = self.size / 2.0;
+        // A tolerance relative to the radius: four arcs at any size or zoom.
+        let circle = kurbo::Shape::to_path(&kurbo::Circle::new(Point::ORIGIN, r), 0.1 * r.max(1e-6));
+        let path = Affine::translate(at.to_vec2()) * tip * circle;
+        vec![
+            Overlay::Path { path: path.clone(), color: [0xff, 0xff, 0xff], width: 3.0, dashed: false },
+            Overlay::Path { path, color: [0, 0, 0], width: 1.0, dashed: false },
+        ]
     }
 
     /// Forget the stroke.
@@ -439,6 +488,8 @@ impl GestureTool {
                     "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
                     "sizeVariation": self.size_variation,
                     "fidelity": self.fidelity,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
                     "keepSelected": self.keep_selected,
                     "mergeOnlySelection": self.merge_only_selection
                 }),
@@ -474,6 +525,9 @@ impl Tool for GestureTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        if self.varies_size() {
+            self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
+        }
         match ev.kind {
             PointerKind::Move if self.snaps() => {
                 self.snap.hover(cx, p, &[], None);
@@ -507,10 +561,14 @@ impl Tool for GestureTool {
                     end
                 } else if self.snaps() && !self.smoothing && self.extend.is_none() && self.redraw.is_none() {
                     self.snap.press(cx, p, &[], None)
+                } else if self.knife_snaps(cx) {
+                    // A straight Knife cut, its overlay and Shift's 45° steps start from the snapped point.
+                    self.snap.press_on_paths(cx, p)
                 } else {
                     p
                 };
                 self.clear();
+                self.pressed = p;
                 self.push(start, ev.pressure);
                 vec![]
             }
@@ -529,19 +587,20 @@ impl Tool for GestureTool {
                     // Where the stroke would end: shown, taken on release.
                     end = self.snap.drag(cx, p, None);
                 }
-                let p = if self.straight && self.unconstrained && self.snaps() {
-                    // Alt's line ends where a stroke would: shown, taken on release.
+                let p = if self.line_end_snaps(cx) {
+                    // Alt's line ends where a stroke would, and a Knife cut's on the anchors and
+                    // paths its press snaps to: shown, taken on release.
                     self.snap.drag(cx, p, None)
                 } else {
                     p
                 };
                 if self.straight {
-                    if !self.unconstrained {
+                    if !self.line_end_snaps(cx) {
                         // The press's Smart Guides would stay on screen: the line's end doesn't snap.
                         self.snap.clear();
                     }
                     // The line runs from the press point to the pointer, wherever the drag went.
-                    if self.points.first().is_some_and(|s| s.distance(p) < cx.tol(1.0)) {
+                    if self.back_at_press(cx, ev.pos, p) {
                         // Back at the press point there is no line: the one shown goes.
                         self.points.truncate(1);
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
@@ -593,12 +652,12 @@ impl Tool for GestureTool {
                 // Alt only on release cannot turn a freehand Knife drag into a straight cut.
                 self.knife_shift(ev.mods);
                 let p = self.constrained(cx, p, ev.mods);
-                let end = if self.snaps() && !self.smoothing && (!self.straight || self.unconstrained) { self.snap.drag(cx, p, None) } else { p };
+                let end = self.release_end(cx, p);
                 self.snap.clear();
                 let mut cancel = false;
                 if self.straight {
                     self.points.truncate(1);
-                    if self.points.first().is_some_and(|s| s.distance(end) >= cx.tol(1.0)) {
+                    if !self.back_at_press(cx, ev.pos, end) {
                         self.push(end, ev.pressure);
                     } else {
                         cancel = self.began;
@@ -663,8 +722,12 @@ impl Tool for GestureTool {
             _ => vec![],
         }
     }
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.tip_at = None;
+    }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
+        self.tip_at = None;
         // Drags past the last preview are in the stroke kept, too, and with Live curve fitting
         // off the stroke kept is fitted.
         let stale = (began && (self.previewed != self.points.len() || !self.live_fit) && self.draws_path() && !self.smoothing)
@@ -683,6 +746,7 @@ impl Tool for GestureTool {
         let mut o = self.snap.guides().to_vec();
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
+            o.extend(self.tip_outline(cx));
             return o;
         }
         // A Blob Brush drag that smooths shows the Smooth tool's thin line.
@@ -691,15 +755,27 @@ impl Tool for GestureTool {
             _ => 1.0,
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
-        // A tip that is not round shows the outline of the area it covers.
-        // shortcut: at its Size even with Pressure; the release erases at the pen's widths.
-        if self.id == "eraser" && self.roundness < 100.0 {
-            let area = eraser_area(&self.points, self.size, self.angle, self.roundness);
-            o.push(Overlay::Path { path: area.to_bezpath(), color, width: 1.0, dashed: false });
-            return o;
-        }
-        // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
-        if let Some(pressures) = self.size_pressures() {
+        // A tip that is not round shows the outline of the area it covers, each step of the drag
+        // as wide as the pen pressed there with Size set to Pressure.
+        if matches!(self.id, "eraser" | "blobBrush") && self.roundness < 100.0 && !self.smoothing {
+            let area = |pts: &[Point], size| {
+                if self.id == "blobBrush" {
+                    blob_area(pts, size, self.angle, self.roundness)
+                } else {
+                    eraser_area(pts, size, self.angle, self.roundness)
+                }
+            };
+            if let Some(pressures) = self.size_pressures() {
+                for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
+                    let pressure = f64::from(p[0] + p[1]) / 2.0;
+                    let size = super::pressure_size(self.size, self.size_variation, pressure);
+                    o.push(Overlay::Path { path: area(seg, size).to_bezpath(), color, width: 1.0, dashed: false });
+                }
+            } else {
+                o.push(Overlay::Path { path: area(&self.points, self.size).to_bezpath(), color, width: 1.0, dashed: false });
+            }
+        } else if let Some(pressures) = self.size_pressures() {
+            // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
             for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
                 let pressure = f64::from(p[0] + p[1]) / 2.0;
                 let width = super::pressure_size(self.size, self.size_variation, pressure) * cx.zoom;
@@ -713,6 +789,8 @@ impl Tool for GestureTool {
             let length = self.points.windows(2).map(|w| w[0].distance(w[1])).sum();
             o.push(Overlay::Measure { p: last + vectorcraft_geom::Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("L: {}", cx.len(length)) });
         }
+        // Over the stroke's footprint, which reaches the tip's edge at the pointer.
+        o.extend(self.tip_outline(cx));
         o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
@@ -785,6 +863,8 @@ impl Tool for GestureTool {
                     "size": self.size,
                     "sizeMode": if self.size_pressure { "pressure" } else { "fixed" },
                     "sizeVariation": self.size_variation,
+                    "angle": self.angle,
+                    "roundness": self.roundness,
                     "keepSelected": self.keep_selected,
                     "mergeOnlySelection": self.merge_only_selection
                 })
@@ -810,7 +890,7 @@ impl Tool for GestureTool {
             },
             "sizeVariation" if self.varies_size() => self.size_variation = v.as_f64().unwrap_or(self.size_variation).clamp(0.0, 1000.0),
             "angle" => self.angle = v.as_f64().unwrap_or(self.angle).clamp(-180.0, 180.0),
-            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(1.0, 100.0),
+            "roundness" => self.roundness = v.as_f64().unwrap_or(self.roundness).clamp(if self.id == "blobBrush" { 0.0 } else { 1.0 }, 100.0),
             "fill" => self.fill = v.as_bool().unwrap_or(self.fill),
             "altSmooth" => self.alt_smooth = v.as_bool().unwrap_or(self.alt_smooth),
             "livePreview" if self.id == "pencil" => self.live_preview = v.as_bool().unwrap_or(self.live_preview),

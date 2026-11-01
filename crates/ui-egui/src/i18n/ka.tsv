@@ -566,9 +566,8 @@
 	Layers	შრეები
 	Libraries	ბიბლიოთეკა
 	Links	ბმულები
-	{count} linked image(s) changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({count}). ვაჩვენო ახალი ვერსიები?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
 	Update Changed Links	შეცვლილი ბმულების განახლება
-@msg	Updated {_1} linked file(s) changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {_1}
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
 	Pattern Options	პატერნის პარამეტრები
@@ -1061,12 +1060,12 @@ lighting	Light	სინათლე
 	 to set spacing and orientation	 — ინტერვალისა და ორიენტაციის დასაყენებლად
 	Apply	გამოყენება
 	Change Screen Mode (F)	ეკრანის რეჟიმის შეცვლა (F)
-	Color (, or <)	ფერი (, ან <)
+	Color (, or Shift+,)	ფერი (, ან Shift+,)
 	Draw Behind	უკან ხატვა
 	Draw Inside	შიგნით ხატვა
 	Draw Normal	ჩვეულებრივი ხატვა
 	Expand:	გაშლა:
-	Gradient (. or >)	გრადიენტი (. ან >)
+	Gradient (. or Shift+.)	გრადიენტი (. ან Shift+.)
 	H:	სიმ.:
 	Modify	შეცვლა
 	Navigate	ნავიგაცია
@@ -1268,7 +1267,6 @@ lighting	Light	სინათლე
 	Fractional Widths	წილადი სიგანეები
 	Hide Options	პარამეტრების დამალვა
 	Horizontal Scale %	ჰორიზონტალური მასშტაბი %
-	Kerning (0 = Auto)	კერნინგი (0 = ავტო)
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
@@ -1277,6 +1275,15 @@ lighting	Light	სინათლე
 	Arabic	არაბული
 	Hindi	ჰინდი
 	Farsi	სპარსული
+digits	Devanagari	დევანაგარი
+digits	Bengali	ბენგალური
+digits	Gurmukhi	გურმუხი
+digits	Gujarati	გუჯარათი
+digits	Odia	ორია
+digits	Tamil	ტამილური
+digits	Telugu	ტელუგუ
+digits	Kannada	კანადა
+digits	Malayalam	მალაიალამური
 	Reset Panel	პანელის ჩამოყრა
 	Roman Baseline	ლათინური საბაზისო ხაზი
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
@@ -1298,6 +1305,12 @@ lighting	Light	სინათლე
 	Axis	ღერძი
 	ICF Top/Right	ICF ზედა/მარჯვენა
 	ICF Bottom/Left	ICF ქვედა/მარცხენა
+	Show Font Height Options	შრიფტის სიმაღლის პარამეტრების ჩვენება
+	Hide Font Height Options	შრიფტის სიმაღლის პარამეტრების დამალვა
+	Set Font Height Reference	შრიფტის სიმაღლის საზომის დაყენება
+	Em Box	Em-ბლოკი
+	x-Height	x-სიმაღლე
+	ICF Box	ICF-ბლოკი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -1337,8 +1350,8 @@ lighting	Light	სინათლე
 	Select objects to see their CSS, or Generate CSS for the whole document.	მონიშნეთ ობიექტები მათი CSS-ის სანახავად, ან შექმენით CSS მთელი დოკუმენტისთვის.
 	The selected objects have no CSS of their own (see below).	მონიშნულ ობიექტებს საკუთარი CSS არ აქვს (იხ. ქვემოთ).
 	Units: {units}	ერთეულები: {units}
-	{count} more rules: Export writes every one.	კიდევ წესები: {count}. ექსპორტი ყველას ჩაწერს.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {count}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
 	All Categories	ყველა კატეგორია
 	Repeat Objects	გამეორების ობიექტები
 	Save…	შენახვა…
@@ -1371,7 +1384,7 @@ lighting	Light	სინათლე
 	Color:	ფერი:
 	Delete Stop	გადასვლის წერტილის წაშლა
 	Edit Gradient	გრადიენტის რედაქტირება
-	Edit the selected point's colour in the Color panel	მონიშნული წერტილის ფერის რედაქტირება ფერის პანელში
+	Edit the point	წერტილის რედაქტირება
 	Edit the stop	გადასვლის წერტილის რედაქტირება
 	Eyedropper: click the art to sample the stop's colour	პიპეტი: დაწკაპეთ ნახატზე გადასვლის წერტილის ფერის ასაღებად
 	Eyedropper: click the art to sample the key color	პიპეტი: დაწკაპეთ ნახატზე საკვანძო ფერის ასაღებად
@@ -1390,6 +1403,9 @@ lighting	Light	სინათლე
 	Save to Swatches	ფერის ნიმუშებში შენახვა
 	Delete Graphic Style (Alt-click: without asking)	გრაფიკული სტილის წაშლა (Alt-დაწკაპუნებით: დაუკითხავად)
 	Delete the graphic style “{name}”?	წაიშალოს გრაფიკული სტილი „{name}“?
+	Delete Action Sets	მოქმედებების ნაკრებების წაშლა
+	Delete the action set “{name}” and its actions?	წაიშალოს მოქმედებების ნაკრები „{name}“ და მისი მოქმედებები?
+	Delete the selected action sets and their actions?	წაიშალოს მონიშნული მოქმედებების ნაკრებები და მათი მოქმედებები?
 	Delete these {n} graphic styles?	წაიშალოს ეს გრაფიკული სტილები ({n})?
 	Delete this {n} graphic style?	წაიშალოს ეს გრაფიკული სტილი ({n})?
 	Graphic Style Libraries Menu	გრაფიკული სტილების ბიბლიოთეკების მენიუ
@@ -1514,13 +1530,16 @@ lighting	Light	სინათლე
 	Fractions	წილადები
 	Ligatures are off while the text is tracked.	ტექსტზე ტრეკინგის დროს ლიგატურები გამორთულია.
 	Ordinals	რიგობითი რიცხვები
+	Proportional Lining	პროპორციული ხაზოვანი
 	Proportional Oldstyle	პროპორციული ძველებური
 	Reset OpenType Features	OpenType შესაძლებლობების ჩამოყრა
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
+	Stylistic Alternates	სტილისტური ალტერნატივები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
+	Titling Alternates	სათაურის ალტერნატივები
 	Every-line Composer	აბზაცის მიხედვით აწყობა
 	First-line Left Indent	პირველი სტრიქონის მარცხენა შეწევა
 	Hyphenation…	სიტყვების გადატანა…
@@ -1658,7 +1677,6 @@ lighting	Light	სინათლე
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
-	Delete these {count} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({count})?
 	Delete “{name}”?	წაიშალოს „{name}“?
 	Document Swatches	დოკუმენტის ფერის ნიმუშები
 	Edit or Apply Color Group	ფერთა ჯგუფის რედაქტირება ან გამოყენება
@@ -1755,6 +1773,7 @@ lighting	Light	სინათლე
 	Polygon Properties:	მრავალკუთხედის თვისებები:
 	Rectangle Properties:	მართკუთხედის თვისებები:
 	Shape Properties:	ფიგურის თვისებები:
+	Shape Properties	ფიგურის თვისებები
 	Sides:	გვერდები:
 	Transform options	გარდაქმნის პარამეტრები
 	Transform Both	ორივეს გარდაქმნა
@@ -1944,6 +1963,7 @@ lighting	Light	სინათლე
 	Compatible Gradient and Gradient Mesh Printing	თავსებადი გრადიენტისა და გრადიენტული ბადის ბეჭდვა
 	Embed Fonts (for other applications)	შრიფტების ჩაშენება (სხვა აპლიკაციებისთვის)
 	EPS Options	EPS-ის პარამეტრები
+	Include Artboard Fill	სამუშაო დაფის შევსების ჩართვა
 	Include CMYK PostScript in RGB Files	CMYK PostScript-ის ჩართვა RGB ფაილებში
 	Include Document Thumbnails	დოკუმენტის ესკიზების ჩართვა
 	Include Linked Files	დაკავშირებული ფაილების ჩართვა
@@ -1962,6 +1982,13 @@ lighting	Light	სინათლე
 	Use Artboards	სამუშაო დაფების გამოყენება
 	Choose a folder	საქაღალდის არჩევა
 	Create Sub-folders	ქვესაქაღალდეების შექმნა
+	Clear Selection	მონიშვნის გასუფთავება
+	Export PDFs As:	PDF-ების ექსპორტი როგორც:
+	Single File	ერთი ფაილი
+	Multiple Files	რამდენიმე ფაილი
+	Format Presets	ფორმატის პრესეტები
+	Grid View	ბადის ხედი
+	Selected: {n}, Total number of files to export: {m}	არჩეულია: {n}, ექსპორტის ფაილების საერთო რაოდენობა: {m}
 	Export Asset	რესურსის ექსპორტირება
 	Export to:	ექსპორტის ადგილი:
 	Format Settings	ფორმატის პარამეტრები
@@ -2087,19 +2114,21 @@ lighting	Light	სინათლე
 	Stop	შეწყვეტა
 	Searching…	ძიება…
 	Not found	ვერ მოიძებნა
-	{folders} folder(s) and {files} file(s) searched	მოიძებნა საქაღალდეები: {folders}, ფაილები: {files}
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {count} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
-	{count} folder(s) or file(s) couldn't be read	ვერ წაიკითხა საქაღალდეები ან ფაილები: {count}
+	{folders} and {files} searched	მოიძებნა: {folders}, {files}
+@plural	{n} folder|{n} folders	{n} საქაღალდე
+@plural	{n} file|{n} files	{n} ფაილი
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	ვერ წაიკითხა საქაღალდეები ან ფაილები: {n}
 	The search stopped at its limit: search a smaller folder.	ძიება ზღვარზე შეჩერდა: მოძებნეთ უფრო პატარა საქაღალდეში.
 	Copy only fonts you own or are licensed to install.	დააკოპირეთ მხოლოდ ის შრიფტები, რომლებიც გეკუთვნით ან რომელთა დაყენების ლიცენზია გაქვთ.
 	VectorCraft copies the fonts to {folder}.	VectorCraft შრიფტებს აკოპირებს აქ: {folder}.
-	Apply to All ({count} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {count})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {n})
 	Ignore	უგულებელყოფა
 	Linked File Not Found	დაკავშირებული ფაილი ვერ მოიძებნა
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	ჩაანაცვლეთ სხვა ფაილით ან უგულებელყავით: მისი გამოსახულებები დოკუმენტთან შენახულ წინასწარ ხედს აჩვენებს.
 	Replace…	ჩანაცვლება…
 	Update Modified Links	შეცვლილი ბმულების განახლება
-	{count} linked image(s) changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {count}. ვაჩვენოთ ახალი ვერსიები?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?
 	Dialog	დიალოგი
 	Convert Process to Global	პროცესულის გლობალურად გარდაქმნა
 	Create From:	შექმნის წყარო:
@@ -2137,12 +2166,12 @@ lighting	Light	სინათლე
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
 	Package collects a saved document with its linked files and fonts.	შეფუთვა აგროვებს შენახულ დოკუმენტს მის დაკავშირებულ ფაილებთან და შრიფტებთან ერთად.
 	Package created	შეფუთვა შეიქმნა
-	Packaged {n} file(s) in {folder} {note}	შეიფუთა ფაილები: {n}, ადგილი: {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
 	Packaged {n} file(s){note}	შეიფუთა ფაილები: {n}{note}
 	Relink Linked Files to the Document	დაკავშირებული ფაილების დოკუმენტთან ხელახლა დაკავშირება
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
-	{count} file(s) in {folder} {note}. Show the package folder?	ფაილები: {count}, ადგილი: {folder}{note}. ვაჩვენოთ შეფუთვის საქაღალდე?
-	{count} linked file(s) not found	ვერ მოიძებნა დაკავშირებული ფაილები: {count}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
 	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	ჩაშენებული პრესეტები მხოლოდ წასაკითხია: „ახალი…“ ქმნის რედაქტირებად ასლს.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} სამუშაო დაფაზე სცენაში {real} {unit}-ს შეესაბამება.
@@ -2644,9 +2673,19 @@ theme	Appearance	იერსახე
 	Current Symbol	მიმდინარე სიმბოლო
 	Delete Brush	ფუნჯის წაშლა
 	Delete Symbol	სიმბოლოს წაშლა
+	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
+	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?
+	No unused symbols	გამოუყენებელი სიმბოლოები არ არის
+	Delete Symbols	სიმბოლოების წაშლა
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	ერთი ან მეტი სიმბოლო გამოიყენება და მისი წაშლა შეუძლებელია, სანამ მისი ეგზემპლარები არ გაიშლება ან არ წაიშლება.
+	Expand Instances	ეგზემპლარების გაშლა
+	Delete Instances	ეგზემპლარების წაშლა
+	Yes	დიახ
+	No	არა
 	Duplicate Brush	ფუნჯის დუბლირება
 	Duplicate Symbol	სიმბოლოს დუბლირება
 	Edit Symbol	სიმბოლოს რედაქტირება
+	Exit Symbol Editing Mode	სიმბოლოს რედაქტირების რეჟიმიდან გამოსვლა
 	Expand Brush Strokes	ფუნჯის შტრიხების გაშლა
 	New Brush…	ახალი ფუნჯი…
 	New Brush	ახალი ფუნჯი
@@ -3069,6 +3108,7 @@ theme	Appearance	იერსახე
 	Identify Objects By	ობიექტების იდენტიფიკაცია:
 	Include SVG Code	SVG კოდის ჩართვა
 	Italian	იტალიური
+	Kerning	კერნინგი
 	Keyboard Increment	კლავიატურის ბიჯი
 	Language Options	ენის პარამეტრები
 	Large	დიდი
@@ -3097,6 +3137,7 @@ theme	Appearance	იერსახე
 	On Paste	ჩასმისას
 	On Screen	ეკრანზე
 	Open Documents As Tabs	დოკუმენტების ჩანართებად გახსნა
+	Optical	ოპტიკური
 	Options	პარამეტრები
 	Output All Blacks Accurately	ყველა შავის ზუსტად გამოტანა
 	Output All Blacks as Rich Black	ყველა შავის მდიდარ შავად გამოტანა
@@ -3620,6 +3661,8 @@ font-technology	Variable	ცვლადი
 @plural	{n} item|{n} items	ელემენტი: {n}
 @plural	Color Table ({n} color)|Color Table ({n} colors)	ფერების ცხრილი (ფერი: {n})
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	წაიშალოს გრაფიკული სტილები ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	წაიშალოს ეს ფუნჯი ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?
 @plural	{n} Layer|{n} Layers	შრე: {n}
 @plural	{n} Object|{n} Objects	ობიექტი: {n}
 @plural	{n} area highlighted|{n} areas highlighted	გამოკვეთილი არე: {n}
@@ -3632,6 +3675,7 @@ font-technology	Variable	ცვლადი
 @plural	{n} stroke|{n} strokes	კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
+@msg	kerning must be a number, "auto", or "optical"	კერნინგი უნდა იყოს რიცხვი, „auto“ ან „optical“
 @msg	the selection has no gradient fill	მონიშნულს შევსების გრადიენტი არ აქვს
 @msg	the selection has no gradient stroke	მონიშნულს კონტურის გრადიენტი არ აქვს
 @msg	the selection has no pattern fill	მონიშნულს შევსების პატერნი არ აქვს
@@ -3655,12 +3699,12 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it	მათზე არსებული ნახატი გვერდისას {_1}%-ით განსხვავდება
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` შეცვლილ პარამეტრებს ნიშნავს: შეინახეთ პრესეტი სხვა სახელით
 @msg	`to` must be "corner" or "smooth"	`to` უნდა იყოს "corner" ან "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` უნდა იყოს "emBox", "capHeight", "xHeight" ან "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები RGB-ა ან ნაცრისფერი: colorModel rgb ან gray
 @msg	Blend colors: select at least three objects with filled colours	ფერების შერევა: მონიშნეთ მინიმუმ სამი ობიექტი ფერადი შევსებით
 @msg	Combine Slices: the slices have no bounds	ნაჭრების გაერთიანება: ნაჭრებს საზღვრები არ აქვს
 @msg	Convert to Artboards: selection has no area	სამუშაო დაფებად გარდაქმნა: მონიშნულს ფართობი არ აქვს
 @msg	Convert to Shape: no rectangles or ellipses selected	ფიგურად გარდაქმნა: მართკუთხედები ან ელიფსები მონიშნული არ არის
-@msg	Copied the CSS of {rules} object(s)	კოპირებულია ობიექტის CSS ({rules})
 @msg	Corners edits the corners of a path	„კუთხეები“ ტრაექტორიის კუთხეებს არედაქტირებს
 @msg	Couldn't copy to the system clipboard: {e}	სისტემის გაცვლის ბუფერში კოპირება ვერ მოხერხდა: {e}
 @msg	Couldn't open {name}: {e}	{name} ვერ გაიხსნა: {e}
@@ -3676,13 +3720,11 @@ font-technology	Variable	ცვლადი
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
-@msg	Downloaded {_1} file(s)	ჩამოტვირთულია ფაილი ({_1})
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
-@msg	Exported {count} file(s) to {folder}	ექსპორტირებულია ფაილი ({count}) საქაღალდეში {folder}
 @msg	Exported {path}	ექსპორტირებულია: {path}
 @msg	Flatten Transparency: select objects to flatten	გამჭვირვალობის გაბრტყელება: მონიშნეთ გასაბრტყელებელი ობიექტები
 @msg	Flatten Transparency: {e}	გამჭვირვალობის გაბრტყელება: {e}
@@ -3704,7 +3746,7 @@ font-technology	Variable	ცვლადი
 @msg	PDF settings are not an object	PDF-ის პარამეტრები ობიექტი არ არის
 @msg	PDF security settings are not an object	PDF-ის უსაფრთხოების პარამეტრები ობიექტი არ არის
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Packaged {n} file(s){note}	შეფუთულია ფაილი ({n}){note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
 @msg	Release Guides: no guides	დამხმარე ხაზების მოხსნა: დამხმარე ხაზები არ არის
@@ -3851,6 +3893,7 @@ font-technology	Variable	ცვლადი
 @msg	cannot split an open path at its end point	ღია ტრაექტორიის ბოლო წერტილში გაყოფა შეუძლებელია
 @msg	closing needs three anchors	შეკვრას სამი საყრდენი წერტილი სჭირდება
 @msg	check an asset to export	მონიშნეთ ექსპორტის რესურსი
+@msg	check an artboard to export	მონიშნეთ ექსპორტის სახატავი დაფა
 @msg	choice must be "merge" or "add", not `{choice}`	choice უნდა იყოს "merge" ან "add" და არა `{choice}`
 @msg	choose a direction to divide in	აირჩიეთ დაყოფის მიმართულება
 @msg	choose a folder to export to	აირჩიეთ ექსპორტის საქაღალდე
@@ -3986,6 +4029,7 @@ font-technology	Variable	ცვლადი
 @msg	no such perspective grid preset	პერსპექტივის ბადის ასეთი პრესეტი არ არის
 @msg	no such recent file	ასეთი ბოლოს გახსნილი ფაილი არ არის
 @msg	no such recent font	ასეთი ბოლოდროინდელი შრიფტი არ არის
+@msg	some text is hidden or locked, so its font wasn't replaced	ზოგიერთი ტექსტი დამალული ან ჩაკეტილია, ამიტომ მისი შრიფტი არ შეიცვალა
 @msg	no such saved selection	ასეთი შენახული მონიშვნა არ არის
 @msg	no such segment	ასეთი სეგმენტი არ არის
 @msg	no such subpath	ასეთი ქვეტრაექტორია არ არის
@@ -4065,6 +4109,8 @@ font-technology	Variable	ცვლადი
 @msg	select a repeat	მონიშნეთ გამეორება
 @msg	select a stroke with a variable width	მონიშნეთ ცვლადი სიგანის კონტური
 @msg	select a symbol instance	მონიშნეთ სიმბოლოს ეგზემპლარი
+@msg	select instances of one symbol	მონიშნეთ ერთი სიმბოლოს ეგზემპლარები
+@msg	a symbol can't hold an instance of itself	სიმბოლო ვერ შეიცავს საკუთარ ეგზემპლარს
 @msg	select an Image Trace object	მონიშნეთ გამოსახულების ვექტორიზაციის ობიექტი
 @msg	could not decode image: {0}	გამოსახულების დეკოდირება ვერ მოხერხდა: {0}
 @msg	image is empty	გამოსახულება ცარიელია
@@ -4198,9 +4244,6 @@ font-technology	Variable	ცვლადი
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` {size} ბაიტია (ლიმიტი {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} უკვე გამოიყენება აქ: {_2}
 @msg	{_1} is reserved by the system	{_1} დაჯავშნილია სისტემის მიერ
-@msg	{_1} linked file(s) can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({_1}): ჩანს მათი გადახედვა
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({undecoded}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({_1}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msg	{_1}: not saved, so not closed	{_1}: არ შენახულა, ამიტომ არ დაიხურა
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-ბიტიანი bitmap-ების წაკითხვა ვერ ხერხდება
 @msg	{command} didn't create an object	{command}-მა ობიექტი არ შექმნა
@@ -4219,7 +4262,6 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't place {name}: {e}	{name}-ის განთავსება ვერ მოხერხდა: {e}
 @msg	Couldn't paste from the clipboard: {e}	გაცვლის ბუფერიდან ჩასმა ვერ მოხერხდა: {e}
 @msg	Saved {path} with {_1} note(s): {first}	შენახულია {path}, შენიშვნები: {_1}: {first}
-@msg	Exported {what} with {_1} note(s): {first}	ექსპორტირებულია {what}, შენიშვნები: {_1}: {first}
 @msg	Exported {what}	ექსპორტირებულია {what}
 @msg	Saved {n} files beside {path}	{path}-ის გვერდით შენახულია ფაილები: {n}
 @msg	Saving	შენახვა
@@ -4230,12 +4272,26 @@ font-technology	Variable	ცვლადი
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
 @msg	Discarded {_1} recovered document(s)	უარყოფილია აღდგენილი დოკუმენტები: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	აღდგენილია დოკუმენტები: {_1}: შესანარჩუნებლად შეინახეთ ისინი
-@msg	Embedded {n} image(s); {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
-@msg	Embedded {n} image(s)	ჩაშენებულია გამოსახულებები: {n}
-@msg	Relinked {_1} image(s)	ხელახლა მიბმულია გამოსახულებები: {_1}
-@msg	Relinked {n} image(s)	ხელახლა მიბმულია გამოსახულებები: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {_1}
-@msg	Updated {_1} image(s)	განახლებულია გამოსახულებები: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
+@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
+@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}
+@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა მიაბით ან განაახლეთ
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	მიბმული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})
+@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}
@@ -4283,9 +4339,6 @@ font-technology	Variable	ცვლადი
 @msg	every search thread stopped on an internal error (please report this bug)	ძიების ყველა ნაკადი შიდა შეცდომით შეჩერდა (გთხოვთ, შეგვატყობინოთ ეს ხარვეზი)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCraft-ის შრიფტების საქაღალდე აქ დაყენებული არ არის: მას აყენებს სამაგიდო აპი და vectorcraft-cli
 @msg	choose the font files to add	აირჩიეთ დასამატებელი შრიფტის ფაილები
-@msg	{n} font file(s) are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
 @msg	not a file	ფაილი არ არის
 @msg	not a font file	შრიფტის ფაილი არ არის
 @msg	that document is no longer open	ის დოკუმენტი აღარ არის გახსნილი
@@ -4321,6 +4374,8 @@ font-technology	Variable	ცვლადი
 @msg	the PCX file is cut short	PCX ფაილი შეკვეცილია
 @msg	the PCX file's header is damaged	PCX ფაილის სათაური დაზიანებულია
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} სიბრტყეში {bits}-ბიტიანი პიქსელების მქონე PCX ფაილების წაკითხვა ვერ ხერხდება
+@msg	the JPEG 2000 file can't be read	JPEG 2000 ფაილის წაკითხვა შეუძლებელია
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ფაილს აქვს მხარდაუჭერელი ფერთა სივრცე ან JPX შიგთავსი
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
@@ -4641,7 +4696,6 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5268,6 +5322,8 @@ imageTrace	Outline	კონტური
 	Objects on Path	ობიექტები ტრაექტორიაზე
 	Attach	მიმაგრება
 	Objects on Path Options	ტრაექტორიაზე ობიექტების პარამეტრები
+	Pivot:	საყრდენი წერტილი:
+	Rotate:	შემობრუნება:
 	Objects on Path Tool	ტრაექტორიაზე ობიექტების ხელსაწყო
 	Attach Objects on Path	ობიექტების ტრაექტორიაზე მიმაგრება
 	Expand Objects on Path	ტრაექტორიაზე ობიექტების გაშლა
@@ -5293,6 +5349,9 @@ imageTrace	Outline	კონტური
 	Scale in Perspective	პერსპექტივაში მასშტაბირება
 	Select Fills	შევსებების მონიშვნა
 	Select Strokes	კონტურების მონიშვნა
+	Paint Fills	შევსებების შეღებვა
+	Paint Strokes	კონტურების შეღებვა
+	Highlight	გამოკვეთა
 	Set History Limit…	ისტორიის ლიმიტის დაყენება…
 	Shape Builder Delete	ფიგურების კონსტრუქტორით წაშლა
 	Sliding	სრიალა
@@ -5482,13 +5541,13 @@ imageTrace	Outline	კონტური
 	Slope:	დახრა:
 axis	X Axis	X ღერძი
 axis	Y Axis	Y ღერძი
-@msg	Packaged {n} file(s) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-@msg	Packaged {n} file(s) {note}	შეფუთულია ფაილი ({n}) {note}
-@msg	Packaged {n} file(s)	შეფუთულია ფაილი ({n})
-	Packaged {n} file(s)	შეფუთულია ფაილი ({n})
-	Packaged {n} file(s) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-	Packaged {n} file(s) {note}	შეფუთულია ფაილი ({n}) {note}
-	{count} file(s) in {folder}. Show the package folder?	ფაილები: {count}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
+@msgplural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
 	Create PDF layers from top-level layers	PDF-ის ფენების შექმნა ზედა დონის ფენებიდან
 @msg	this kind of brush has no options dialog yet	ამ ტიპის ფუნჯს პარამეტრების დიალოგი ჯერ არ აქვს
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	გადმოათრიეთ აქ გრაფიკა, ფერები და ტექსტის სტილები, რომ სხვა დოკუმენტებშიც გამოიყენოთ. ბიბლიოთეკები ამ კომპიუტერზე ინახება — ანგარიში არ არის საჭირო.
@@ -5526,7 +5585,7 @@ axis	Y Axis	Y ღერძი
 	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
 	Result(s): {count}	შედეგი: {count}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
-@msg	Global Edit works on paths, compound paths and symbol instances	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებსა და სიმბოლოს ეგზემპლარებზე
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
@@ -5849,6 +5908,11 @@ anchor	Points:	წერტილები:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	წერტილების ფერი ნახატიდან
+	Basic Character Formats	სიმბოლოს ძირითადი ფორმატები
+	Case	ასოების რეგისტრი
+@msg	{label} must be a number	{label} უნდა იყოს რიცხვი
+@msg	{label} must be a number of at least 0.1	{label} უნდა იყოს მინიმუმ 0,1
+@msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	დუოტონი…
@@ -5872,6 +5936,13 @@ anchor	Points:	წერტილები:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	მიუთითეთ `inkLimit`, `removeWhiteOverprint` ან `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	საბეჭდი მელნის შესწორებები მუშაობს CMYK დოკუმენტებზე: ჯერ აირჩიეთ ფაილი › დოკუმენტის ფერის რეჟიმი › CMYK ფერი
 @msg	`{key}` must be 0..{max}	`{key}` უნდა იყოს 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
+	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
+	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
+@msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
+@msg	`color` is not a colour	`color` ფერი არ არის
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	კუთხეების ხელსაწყო
 	Slide Anchor Along Path	საყრდენი წერტილის სრიალი ტრაექტორიაზე
@@ -5899,6 +5970,7 @@ anchor	Points:	წერტილები:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	ტექსტის დაყოფა
 	Combine Point Text	წერტილის ტექსტის გაერთიანება
+	Join Point Text	წერტილის ტექსტის შეერთება
 	Remove Breaks	წყვეტების წაშლა
 	Split Text at Cursor	ტექსტის დაყოფა კურსორთან
 	Set Alignment, Keep Position	სწორების დაყენება მდებარეობის შენარჩუნებით
@@ -5927,6 +5999,7 @@ breakText	Glyphs	გლიფები
 @msg	Select horizontal point or area type whose text fits	აირჩიეთ ჰორიზონტალური წერტილის ან არის ტექსტი, რომლის ტექსტიც ეტევა
 @msg	Nothing to split at the cursor	კურსორთან დასაყოფი არაფერია
 @msg	Select two or more one-line point type objects on one baseline to combine	გასაერთიანებლად აირჩიეთ ერთ საბაზისო ხაზზე მდებარე ორი ან მეტი ერთსტრიქონიანი წერტილის ტექსტის ობიექტი
+@msg	Select two or more one-line point type objects to join	შესაერთებლად აირჩიეთ ორი ან მეტი ერთსტრიქონიანი წერტილის ტექსტის ობიექტი
 @msg	No line breaks to remove	წასაშლელი სტრიქონის წყვეტები არ არის
 @msg	No paragraph breaks to remove	წასაშლელი აბზაცის წყვეტები არ არის
 @msg	Too many breaks to remove at once	ერთდროულად წასაშლელად ძალიან ბევრი წყვეტაა
@@ -5939,6 +6012,11 @@ breakText	Glyphs	გლიფები
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` უნდა იყოს lines, paragraphs, words ან glyphs და არა {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` უნდა იყოს "line" ან "paragraph" და არა {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` უნდა იყოს "left", "center" ან "right" და არა {other}
+	File + Number	ფაილი + ნომერი
+	File + Data Set Name	ფაილი + მონაცემთა ნაკრების სახელი
+	Data Set Name	მონაცემთა ნაკრების სახელი
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` უნდა იყოს `fileNumber`, `fileDataSetName` ან `dataSetName`
+@msg	no free data set file name in destination folder	დანიშნულების საქაღალდეში მონაცემთა ნაკრებისთვის თავისუფალი ფაილის სახელი არ არის
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	ტრაექტორიის ეფექტები
@@ -5979,3 +6057,100 @@ breakText	Glyphs	გლიფები
 	Gap 4	შუალედი 4
 	Dash 5	ტირე 5
 	Gap 5	შუალედი 5
+
+@msg	{_1}: they came in as the page's art	{_1}: იმპორტირებულია გვერდის გამოსახულების სახით
+
+@msg	You must choose a side pattern.	აირჩიეთ გვერდითი ნიმუში.
+@msg	invalid pattern tile choice	ნიმუშის ფილა არასწორად არის არჩეული
+@msg	no pattern named `{choice}`	ნიმუში სახელით `{choice}` არ არსებობს
+	Delete the selected brushes?	წაიშალოს არჩეული ფუნჯები?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	კონტურები იყენებს ამ ფუნჯებიდან ერთს ან მეტს. მოიხსნას ფუნჯები ამ კონტურებიდან და წაიშალოს ფუნჯები?
+	Remove Strokes	კონტურების მოხსნა
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	განლაგების ხელსაწყოები
+	Arrange in Grid…	ბადეში განლაგება…
+	Arrange in Grid	ბადეში განლაგება
+	Swap Objects	ობიექტების გაცვლა
+	Swap Objects and Sizes	ობიექტებისა და ზომების გაცვლა
+	Replace with Top Object…	ზედა ობიექტით ჩანაცვლება…
+	Replace with Top Object	ზედა ობიექტით ჩანაცვლება
+	Set Size of Each…	თითოეულის ზომის დაყენება…
+	Set Size of Each	თითოეულის ზომის დაყენება
+@msg	select exactly two objects	მონიშნეთ ზუსტად ორი ობიექტი
+@msg	give `width` or `height`	მიუთითეთ `width` ან `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	გადაფარვადი ობიექტების დაჯგუფება
+@msg	too many objects selected (at most 20000)	არჩეულია ძალიან ბევრი ობიექტი (მაქსიმუმ 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	ტირეებად დაყოფა…
+	Divide into Dashes	ტირეებად დაყოფა
+	Dash:	ტირე:
+	Gap:	ღრეჩო:
+	Fit to Corners and Ends	კუთხეებსა და ბოლოებზე მორგება
+	Remove Gaps	ღრეჩოების მოცილება
+@msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
+@msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი კონტურები ან სეგმენტები
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	ტირეების კონტურებად გაშლა
+@msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	დოკუმენტის ხელსაწყოები
+	Save a Timestamped Copy	ასლის შენახვა თარიღითა და დროით
+@msg	there is no clock here	აქ საათი არ არის
+@msg	there is no clock here: give `time` (Unix seconds)	აქ საათი არ არის: მიუთითეთ `time` (Unix წამები)
+@msg	the document has never been saved: give `folder`	დოკუმენტი არასოდეს შენახულა: მიუთითეთ `folder`
+@msg	every numbered name for the copy is taken	ასლის ყველა დანომრილი სახელი დაკავებულია
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	ახალი სიმბოლოები შრეებიდან
+	Convert Layers to Symbols	შრეების სიმბოლოებად გარდაქმნა
+@msg	{id} is no top-level layer	{id} არ არის ზედა დონის შრე
+	Marathi	მარათჰი
+	Gujarati	გუჯარათი
+	Bengali	ბენგალური
+	Punjabi	პენჯაბური
+	Tamil	ტამილური
+	Telugu	ტელუგუ
+	Kannada	კანადა
+	Malayalam	მალაიალამური
+	Odia	ორია
+	Urdu	ურდუ
+	VectorCraft {release} and later (version {n})	VectorCraft {release} და უფრო ახალი (ვერსია {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
+	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
+@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	სიმბოლოს ტიპი:
+	Dynamic Symbol	დინამიკური სიმბოლო
+	Static Symbol	სტატიკური სიმბოლო
+	Symbol Instance Appearance	სიმბოლოს ეგზემპლარის იერსახე
+	Reset Symbol Instance	სიმბოლოს ეგზემპლარის ჩამოყრა
+@msg	type must be static or dynamic, not {v}	type უნდა იყოს static ან dynamic და არა {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` სტატიკური სიმბოლოა: ჯერ სიმბოლოს ტიპად დააყენეთ „დინამიკური“
+@msg	path must be a list of child indices	path უნდა იყოს შვილობილი ინდექსების სია
+@msg	no object at path {shown} in the symbol's art	სიმბოლოს გრაფიკაში გზაზე {shown} ობიექტი არ არის
+@msg	give fill, stroke, opacity and/or blend	მიუთითეთ fill, stroke, opacity და/ან blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+	Text Flow	ტექსტის დინება
+	By Rows	სტრიქონების მიხედვით
+	By Columns	სვეტების მიხედვით
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	შემთხვევითი გაუმჭვირვალობა…
+	Randomize Opacity	შემთხვევითი გაუმჭვირვალობა
+	Minimum:	მინიმუმი:
+	Maximum:	მაქსიმუმი:
+	Seed:	საწყისი რიცხვი:
+@msg	`min` is greater than `max`	`min` მეტია, ვიდრე `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	ობიექტების დალაგება…
+	Sort Objects	ობიექტების დალაგება
+	Sort By:	დალაგება:
+	Apply To:	გამოყენება:
+	Area	ფართობი
+	X Position	X პოზიცია
+	Y Position	Y პოზიცია
+	Stacking Order	დაწყობის რიგი
+	Small to Large	პატარიდან დიდისკენ
+	Large to Small	დიდიდან პატარისკენ
+	Distribute Evenly	თანაბრად განაწილება

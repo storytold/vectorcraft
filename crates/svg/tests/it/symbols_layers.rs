@@ -28,7 +28,7 @@ fn symbol_doc(stroke: f64, xfs: &[Affine]) -> Document {
     let mut d = Document::new(200.0, 120.0);
     let ap = Appearance::basic(Paint::solid(Color::rgb8(30, 90, 220)), Paint::solid(Color::BLACK), stroke);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), ap);
-    d.symbols.push(Symbol { name: "My Mark".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "My Mark".into(), art: Arc::new(art) });
     for xf in xfs {
         instance(&mut d, "My Mark", *xf);
     }
@@ -108,7 +108,7 @@ fn pattern_paints_in_symbols_stay_on_the_page() {
     d.patterns.push(def);
     let art =
         Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
-    d.symbols.push(Symbol { name: "Tiles".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Tiles".into(), art: Arc::new(art) });
     instance(&mut d, "Tiles", Affine::translate((10.0, 10.0)));
     instance(&mut d, "Tiles", Affine::translate((105.0, 37.0)));
     let svg = export(&d, &ExportOptions::default());
@@ -143,7 +143,7 @@ fn masks_in_symbols_move_with_the_art_when_linked() {
         let mut mask = vectorcraft_doc::OpacityMask::new(shape, true);
         mask.linked = linked;
         art.extras_mut().mask = Some(Box::new(mask));
-        d.symbols.push(Symbol { name: "Half".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Half".into(), art: Arc::new(art) });
         instance(&mut d, "Half", Affine::translate((10.0, 10.0)));
         instance(&mut d, "Half", Affine::translate((15.0, 50.0)));
         let svg = export(&d, &ExportOptions::default());
@@ -160,7 +160,7 @@ fn symbols_inside_themselves_end() {
     let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Loop".into(), xf: Affine::translate((5.0, 0.0)) });
     let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(inner)], clip: false });
     g.name = Some("g".into());
-    d.symbols.push(Symbol { name: "Loop".into(), art: Arc::new(g) });
+    d.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(g) });
     instance(&mut d, "Loop", Affine::translate((20.0, 20.0)));
     let svg = export(&d, &ExportOptions::default());
     assert!(import(&svg).is_ok(), "{svg}");

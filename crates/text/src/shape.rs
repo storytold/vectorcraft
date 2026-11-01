@@ -1,5 +1,6 @@
 //! Shaping: text runs -> positioned glyphs in points (before line breaking).
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -8,6 +9,7 @@ use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
 use harfrust::{Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
 use skrifa::instance::Size;
@@ -67,6 +69,9 @@ pub(crate) struct SGlyph {
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
+    /// Standard Vertical Roman Alignment (Character panel menu): in vertical type this glyph
+    /// stands upright when it would otherwise lie on its side ([`crate::layout`]).
+    pub vertical_roman: bool,
     /// The glyph is of a script whose letters join (Arabic, Syriac, N'Ko, Mongolian, Adlam…),
     /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
     /// along the path so its joins meet.
@@ -446,6 +451,217 @@ pub(crate) fn shape_range(
     {
         o.sort_by_key(|g| g.byte);
     }
+    if !feats.vertical {
+        optical_pairs(db, text, out.get_mut(output_start..).unwrap_or_default(), runs);
+    }
+}
+
+/// Line segments of a glyph outline in font units, cached for the current shaping pass.
+type Profile = Vec<(f64, f64, f64, f64)>;
+type CachedProfile = (Profile, (f64, f64));
+
+fn outline_profile(db: &FontDb, g: &SGlyph, cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>) -> Option<Arc<CachedProfile>> {
+    let key = (g.face.id(), g.gid);
+    cache
+        .entry(key)
+        .or_insert_with(|| {
+            let path = db.outline(&g.face, g.gid);
+            let bounds = path.bounding_box();
+            if path.elements().is_empty()
+                || path.elements().len() > 512
+                || ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 100_000.0)
+            {
+                return None;
+            }
+            let mut lines = Vec::new();
+            let mut previous = None;
+            let mut contour_start = None;
+            kurbo::flatten(path.iter(), 2.0, |el| match el {
+                kurbo::PathEl::MoveTo(p) => {
+                    previous = Some(p);
+                    contour_start = Some(p);
+                }
+                kurbo::PathEl::LineTo(p) => {
+                    if let Some(a) = previous
+                        && lines.len() < 8192
+                    {
+                        lines.push((a.x, a.y, p.x, p.y));
+                    }
+                    previous = Some(p);
+                }
+                kurbo::PathEl::ClosePath => {
+                    if let Some((a, b)) = previous.zip(contour_start)
+                        && lines.len() < 8192
+                    {
+                        lines.push((a.x, a.y, b.x, b.y));
+                    }
+                    previous = None;
+                    contour_start = None;
+                }
+                _ => {}
+            });
+            (!lines.is_empty() && lines.len() < 8192).then(|| Arc::new((lines, (bounds.y0, bounds.y1))))
+        })
+        .clone()
+}
+
+/// The left and right ink edges where a horizontal slice crosses an outline.
+fn profile_edges(lines: &[(f64, f64, f64, f64)], y: f64, sx: f64, sy: f64, dx: f64, dy: f64) -> Option<(f64, f64)> {
+    let mut left = f64::INFINITY;
+    let mut right = f64::NEG_INFINITY;
+    for &(x0, y0, x1, y1) in lines {
+        let (a, b) = (y0 * sy + dy, y1 * sy + dy);
+        if (a <= y && y < b) || (b <= y && y < a) {
+            let x = (x0 + (x1 - x0) * (y - a) / (b - a)) * sx + dx;
+            left = left.min(x);
+            right = right.max(x);
+        }
+    }
+    (left.is_finite() && right.is_finite()).then_some((left, right))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn profile_correction(
+    a: &[(f64, f64, f64, f64)],
+    b: &[(f64, f64, f64, f64)],
+    left: (f64, f64, f64, f64),
+    right: (f64, f64, f64, f64),
+    advance: f64,
+    em: f64,
+    upem: f64,
+    low: f64,
+    high: f64,
+) -> Option<f64> {
+    if !low.is_finite() || !high.is_finite() || high <= low || !em.is_finite() || em <= 0.0 || !upem.is_finite() || upem <= 0.0 {
+        return None;
+    }
+    let mut gaps = Vec::new();
+    for j in 0..24 {
+        let y = low + (high - low) * (f64::from(j) + 0.5) / 24.0;
+        if let (Some((_, ar)), Some((bl, _))) =
+            (profile_edges(a, y, left.0, left.1, left.2, left.3), profile_edges(b, y, right.0, right.1, right.2, right.3))
+        {
+            gaps.push(advance + bl - ar);
+        }
+    }
+    if gaps.is_empty() {
+        return None;
+    }
+    gaps.sort_by(f64::total_cmp);
+    let gap = gaps.get(gaps.len() / 2).copied().unwrap_or(0.0);
+    let unit = em / upem;
+    let correction = ((0.08 * em - gap).clamp(-0.25 * em, 0.25 * em) / unit).round() * unit;
+    let correction = correction.clamp(-0.25 * em, 0.25 * em);
+    correction.is_finite().then_some(correction)
+}
+
+/// Move each Optical pair toward an ink gap of 0.08 em, at 24 overlapping vertical slices.
+/// The median avoids a single narrow tip deciding the entire pair. Corrections are rounded to
+/// one font unit and limited to 1/4 em in either direction. Missing ink gives zero correction.
+fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<usize>, &CharStyle)]) {
+    let mut cache = HashMap::new();
+    let mut corrections: HashMap<[u64; 15], Option<f64>> = HashMap::new();
+    let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv).collect();
+    for i in 0..glyphs.len().saturating_sub(1) {
+        let Some((a, b)) = glyphs.get(i).zip(glyphs.get(i + 1)) else { continue };
+        if a.level != b.level {
+            continue;
+        }
+        let Some(owner) = runs.get(a.run).map(|(_, s)| *s) else { continue };
+        let invisible = |ch: char| matches!(ch, SOFT_HYPHEN | '\u{2028}') || ch.is_control();
+        if !owner.optical_kerning
+            || a.byte == b.byte
+            || invisible(a.ch)
+            || invisible(b.ch)
+            || text.get(a.byte..b.byte).is_some_and(|between| between.chars().skip(1).any(invisible))
+            || a.rotation != 0.0
+            || b.rotation != 0.0
+        {
+            continue;
+        }
+        if owner.kerning.is_some() {
+            continue;
+        }
+        let mut start = i;
+        while start > 0 && glyphs.get(start - 1).is_some_and(|g| g.byte == a.byte) {
+            start -= 1;
+        }
+        let mut end = i + 1;
+        while end + 1 < glyphs.len() && glyphs[end + 1].byte == b.byte {
+            end += 1;
+        }
+        // A mark may precede its base inside either direction's shaped cluster.
+        let advance = |k: usize| shaped_advances.get(k).copied().unwrap_or(0.0);
+        let first_base = glyphs[start..=i]
+            .iter()
+            .enumerate()
+            .max_by(|(a, _), (b, _)| advance(start + *a).total_cmp(&advance(start + *b)))
+            .map_or(start, |(offset, _)| start + offset);
+        let second_base = glyphs[i + 1..=end]
+            .iter()
+            .enumerate()
+            .max_by(|(a, _), (b, _)| advance(i + 1 + *a).total_cmp(&advance(i + 1 + *b)))
+            .map_or(i + 1, |(offset, _)| i + 1 + offset);
+        let (left_index, right_index, target, cluster_start, cluster_end) =
+            if a.level.is_rtl() { (second_base, first_base, end, i + 1, end) } else { (first_base, second_base, i, start, i) };
+        let (left, right) = (&glyphs[left_index], &glyphs[right_index]);
+        if left.byte == right.byte
+            || left.is_space()
+            || right.is_space()
+            || is_mark(right.ch)
+            || left.inline.is_some()
+            || right.inline.is_some()
+            || left.ch == '\n'
+            || right.ch == '\n'
+        {
+            continue;
+        }
+        let left_y = left.dy - left.bshift;
+        let right_y = right.dy - right.bshift;
+        let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
+        let em = left.sx * left.face.upem / (left_style.h_scale / 100.0);
+        let tracking = left_style.tracking / 1000.0 * em;
+        let manual = left_style.kerning.unwrap_or(0.0) / 1000.0 * em;
+        let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv).sum::<f64>() - tracking - manual;
+        let key = [
+            u64::from(left.face.id()),
+            u64::from(left.gid),
+            u64::from(right.face.id()),
+            u64::from(right.gid),
+            left.sx.to_bits(),
+            left.sy.to_bits(),
+            left.dx.to_bits(),
+            left_y.to_bits(),
+            right.sx.to_bits(),
+            right.sy.to_bits(),
+            right.dx.to_bits(),
+            right_y.to_bits(),
+            advance.to_bits(),
+            em.to_bits(),
+            left.face.upem.to_bits(),
+        ];
+        let correction = *corrections.entry(key).or_insert_with(|| {
+            let (Some(a), Some(b)) = (outline_profile(db, left, &mut cache), outline_profile(db, right, &mut cache)) else { return None };
+            let low = (a.1.0 * left.sy + left_y).max(b.1.0 * right.sy + right_y);
+            let high = (a.1.1 * left.sy + left_y).min(b.1.1 * right.sy + right_y);
+            profile_correction(
+                &a.0,
+                &b.0,
+                (left.sx, left.sy, left.dx, left_y),
+                (right.sx, right.sy, right.dx, right_y),
+                advance,
+                em,
+                left.face.upem,
+                low,
+                high,
+            )
+        });
+        if let (Some(correction), Some(glyph)) = (correction, glyphs.get_mut(target))
+            && !invisible(glyph.ch)
+        {
+            glyph.adv += correction;
+        }
+    }
 }
 
 /// Index in the original run list containing `byte`, limited to one coalesced shaping span.
@@ -474,6 +690,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         leading: _,
         tracking,
         kerning: _,
+        optical_kerning: _,
         baseline_shift: _,
         h_scale,
         v_scale,
@@ -499,8 +716,11 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         char_direction: _,
         proportional_metrics,
         tate_chu_yoko,
+        standard_vertical_roman: _,
         digits,
+        font_height_reference,
         no_break,
+        language,
     } = a;
     *font_family == b.font_family
         && *font_style == b.font_style
@@ -516,7 +736,9 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *proportional_metrics == b.proportional_metrics
         && *tate_chu_yoko == b.tate_chu_yoko
         && *digits == b.digits
+        && *font_height_reference == b.font_height_reference
         && *no_break == b.no_break
+        && *language == b.language
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
 }
 
@@ -612,6 +834,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
         no_break: st.no_break,
+        vertical_roman: false,
         cursive: false,
     }
 }
@@ -696,9 +919,24 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     };
     let manual = |byte: usize| run_at(byte).1.kerning.is_some();
     let mixed_kerning = boundaries().any(|b| manual(b) != manual(range.start));
+    let optical = |byte: usize| run_at(byte).1.optical_kerning;
+    let mode_boundaries: Vec<usize> = boundaries().filter(|&b| !feats.vertical && optical(b - 1) && !optical(b)).collect();
+    if !mode_boundaries.is_empty() {
+        return shape_apart(mode_boundaries, out);
+    }
+    let manual_ends: Vec<usize> = boundaries().filter(|&b| manual(b - 1) && !manual(b)).collect();
+    if !manual_ends.is_empty() {
+        return shape_apart(manual_ends, out);
+    }
 
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
+        // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
+        let language = st
+            .language
+            .as_deref()
+            .filter(|l| l.len() <= 35 && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+            .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
         let Shaped { raw, proportional, vpal } = &mut shaped;
         let hb_shaped = face.hb().map(|hb| {
@@ -720,6 +958,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 }
                 buf.set_direction(direction);
                 buf.guess_segment_properties();
+                // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
+                // apart and the dot on its i).
+                if let Some(l) = &language {
+                    buf.set_language(l.clone());
+                }
                 // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
                 // glyphs for it. This retains context at real style/font segmentation boundaries without
                 // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
@@ -793,17 +1036,43 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         }
         shaped
     };
-    let Shaped { raw, proportional, vpal } = if mixed_kerning {
+    let first_optical = if optical(range.start) { Some(range.start) } else { boundaries().find(|&b| optical(b)) };
+    let Shaped { raw, proportional, vpal } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
+        // The pair entering Optical keeps the left character's font kerning. Subsequent
+        // Optical pairs use outline spacing, so font pair features stop at its second character.
+        let optical_off = if first == range.start {
+            first
+        } else {
+            text.get(first..range.end).and_then(|s| s.chars().next()).map_or(range.end, |c| first + c.len_utf8())
+        };
+        let first_manual = if manual(range.start) { Some(range.start) } else { boundaries().find(|&b| manual(b)) };
+        if let Some(start) = first_manual.filter(|&b| b > range.start)
+            && upper
+            && first_char(start).to_uppercase().nth(1).is_some()
+        {
+            return shape_apart(vec![start], out);
+        }
+        let manual_off = first_manual.map_or(range.end, |start| {
+            if start == range.start {
+                start
+            } else {
+                text.get(start..range.end).and_then(|s| s.chars().next()).map_or(range.end, |c| start + c.len_utf8())
+            }
+        });
+        let off = optical_off.min(manual_off);
+        let more: Vec<Feature> = [b"kern", b"apkn", b"vkrn", b"vapk"]
+            .into_iter()
+            .filter(|_| off < range.end)
+            .map(|t| Feature::new(Tag::new(t), 0, off..range.end))
+            .collect();
+        shape_in(&CharStyle { kerning: None, ..run_at(range.start).1.clone() }, &more)
+    } else if mixed_kerning {
         // A font's kerning pair applies after a character with automatic kerning and not after one
         // with manual kerning. The segment is shaped apart where manual kerning ends, so each piece
         // is text with automatic kerning followed by text with manual kerning. A piece is shaped
         // with the font's kerning on, and off (`kern`, and the `apkn`, `vkrn` and `vapk` that
         // `OtFeatures` turns off with it) from the second character with manual kerning on: a
         // pair is applied only when both of its glyphs have the feature on.
-        let ends: Vec<usize> = boundaries().filter(|&b| manual(b - 1) && !manual(b)).collect();
-        if !ends.is_empty() {
-            return shape_apart(ends, out);
-        }
         let first = boundaries().find(|&b| manual(b)).unwrap_or(range.end);
         // A first character with manual kerning that All Caps or Small Caps sets as several letters
         // (ß as SS) gives them one cluster, which a feature range cannot split, so the font's
@@ -875,7 +1144,32 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             inline: None,
             word_end: false,
             no_break: gst.no_break,
+            vertical_roman: gst.standard_vertical_roman,
             cursive,
         });
+    }
+}
+
+#[cfg(test)]
+mod optical_tests {
+    use super::*;
+
+    fn box_profile(left: f64, right: f64) -> Profile {
+        vec![(left, 0.0, left, 100.0), (right, 0.0, right, 100.0)]
+    }
+
+    #[test]
+    fn optical_side_profiles_tighten_loosen_and_stay_bounded() {
+        let a = box_profile(0.0, 80.0);
+        let b = box_profile(0.0, 20.0);
+        let place = (1.0, 1.0, 0.0, 0.0);
+        let tight = profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
+        let loose = profile_correction(&a, &b, place, place, 60.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
+        assert_eq!(tight, -25.0);
+        assert_eq!(loose, 25.0);
+        assert_eq!(profile_correction(&a, &b, place, place, 88.0, 100.0, 1000.0, 0.0, 100.0), Some(0.0));
+        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), Some(tight));
+        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 100.0, 100.0), None);
+        assert_eq!(profile_correction(&[], &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), None);
     }
 }

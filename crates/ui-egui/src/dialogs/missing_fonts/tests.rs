@@ -328,13 +328,36 @@ fn files_go_with_their_fonts_by_name() {
     assert_eq!((d.str("state"), &d.fields["chosen"]), ("done".to_string(), &json!([])));
 }
 
+/// A folder search's counts use the forms the language's plural rule picks for each count.
+#[test]
+fn search_counts_use_each_count_form() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut progress_text = |code: &str, n: u64| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let d = Dialog::new(KIND, json!({"state": "done", "searched": {"folders": n, "files": n}, "unreadable": n}));
+        let text = crate::tests_labels::painted_text(&mut app, |_, ui| progress(ui, &d));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        text
+    };
+    let text = progress_text("en", 1);
+    assert!(text.contains("1 folder and 1 file searched") && text.contains("1 folder or file couldn't be read"), "{text}");
+    for (n, searched, unreadable) in [
+        (1, "Prohledáno: 1 složka, 1 soubor", "Nepodařilo se přečíst 1 složku nebo soubor"),
+        (2, "Prohledáno: 2 složky, 2 soubory", "Nepodařilo se přečíst 2 složky nebo soubory"),
+        (5, "Prohledáno: 5 složek, 5 souborů", "Nepodařilo se přečíst 5 složek nebo souborů"),
+    ] {
+        let text = progress_text("cs", n);
+        assert!(text.contains(searched) && text.contains(unreadable), "{n}: {text}");
+    }
+}
+
 #[test]
 fn the_web_says_how_many_fonts_are_missing() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
     after_open_for(&mut app, &json!({}), true);
-    assert_eq!(app.ui.status, "1 font(s) aren't available here: their text shows in another font");
+    assert_eq!(app.ui.status, "1 font isn't available here: its text shows in another font");
     assert!(app.ui.pending_fonts.is_empty());
     // The open's notes stay on show.
     app.ui.status = "Opened with 1 note(s): fonts".into();

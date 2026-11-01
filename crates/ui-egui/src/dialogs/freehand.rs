@@ -6,7 +6,7 @@
 //! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush, Smooth and Blob Brush), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
-//! `angle` (degrees) and `roundness` (percent; Eraser), `livePreview` (Pencil: the stroke shows
+//! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
 //! (points; Blob Brush and Eraser), and `sizeMode` (`fixed` or `pressure`) and `sizeVariation`
 //! (points; Blob Brush and Eraser: with Pressure the tip is Size − Variation wide at the lightest
@@ -206,7 +206,11 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         number(ui, d, ("angle", tl!("Angle:")), "°", 0, (-180.0, 180.0));
     }
     if d.fields.contains_key("roundness") {
-        number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (1.0, 100.0));
+        let min = if d.str("tool") == "blobBrush" { 0.0 } else { 1.0 };
+        number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (min, 100.0));
+    }
+    if d.str("tool") == "blobBrush" {
+        blob_tip_preview(ui, d);
     }
     if d.fields.contains_key("sizeMode") {
         blob_size(ui, d);
@@ -243,6 +247,63 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         check(ui, d, "liveFit", tl!("Live curve fitting"));
     }
     false
+}
+
+/// Side of the Blob Brush tip preview's square, in points.
+const TIP_PREVIEW: f32 = 64.0;
+
+/// The Blob Brush's tip preview: a square with the tip at its Angle and Roundness and a line along
+/// its long axis, and beside it three dabs of the tip, the middle one darker. A click or a drag in
+/// the square points the Angle at the pointer and gives the square the keyboard focus; screen
+/// readers get it as the Angle slider, and its keys step the Angle as a dialog slider's do
+/// ([`widgets::stepped_area`]) within -180° to 180°.
+fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(CONTENT_W, TIP_PREVIEW), egui::Sense::hover());
+    let square = egui::Rect::from_min_size(rect.min, egui::vec2(TIP_PREVIEW, TIP_PREVIEW));
+    let response = ui.interact(square, ui.scope_id().with("freehand-tip-angle"), egui::Sense::click_and_drag());
+    if let Some((p, _)) = widgets::pointer_phase(&response) {
+        let delta = p - square.center();
+        if delta.length_sq() > 1.0 {
+            d.fields.insert("angle".into(), json!(f64::from((-delta.y).atan2(delta.x)).to_degrees().round()));
+        }
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(square, 2.0, t.input);
+    painter.rect_stroke(square, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // After the square's frame, so the focus outline draws over it.
+    let shown = widgets::SliderValue::field(d.f64("angle", 0.0), -180.0..=180.0, "°", 0);
+    if let Some(a) = widgets::stepped_area(ui, &response, tl!("Angle"), Some(shown)) {
+        d.fields.insert("angle".into(), json!(a));
+    }
+    let a = d.f64("angle", 0.0).clamp(-180.0, 180.0).to_radians();
+    // The long axis on screen (y down: a positive angle tilts it up to the right) and the short one.
+    let u = egui::vec2(a.cos() as f32, -a.sin() as f32);
+    let v = egui::vec2(-u.y, u.x);
+    let long = 18.0;
+    let short = long * blob_tip_short_ratio(d.f64("roundness", 100.0));
+    let dab = |center: egui::Pos2, color: egui::Color32| {
+        let points = (0..32)
+            .map(|i| {
+                let s = std::f32::consts::TAU * i as f32 / 32.0;
+                center + u * (long * s.cos()) + v * (short * s.sin())
+            })
+            .collect();
+        painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+    };
+    let center = square.center();
+    dab(center, t.text);
+    painter.line_segment([center, center + u * 25.0], egui::Stroke::new(1.0, t.accent));
+    let strip = square.right() + 2.5 * long;
+    for (i, color) in [t.text_dim, t.text, t.text_dim].into_iter().enumerate() {
+        dab(egui::pos2(strip + i as f32 * 1.5 * long, center.y), color);
+    }
+}
+
+/// The preview tip's short axis as a fraction of its long axis: Roundness in percent, with 0
+/// percent drawn as 0.1 percent, the minimum the brush draws with.
+fn blob_tip_short_ratio(roundness: f64) -> f32 {
+    (roundness.clamp(0.0, 100.0) as f32 / 100.0).max(0.001)
 }
 
 /// OK: set the tool's options.

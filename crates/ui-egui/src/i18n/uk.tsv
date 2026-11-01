@@ -211,7 +211,7 @@ font-technology	Variable	Варіативні
 	Apply Paragraph Style	Застосувати стиль абзацу
 	Apply SVG Filter…	Застосувати фільтр SVG…
 	Apply to All	Застосувати до всіх
-	Apply to All ({count} more missing)	Застосувати до всіх (ще {count} відсутні)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Застосувати до всіх (ще {n} відсутній)|Застосувати до всіх (ще {n} відсутні)|Застосувати до всіх (ще {n} відсутні)
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
@@ -503,7 +503,7 @@ font-technology	Variable	Варіативні
 	Collect in New Layer	Зібрати у новий шар
 	Collect Links in a Separate Folder	Зібрати зв’язки в окрему папку
 	Color	Колір
-	Color (, or <)	Колір (, або <)
+	Color (, or Shift+,)	Колір (, або Shift+,)
 	Color Adjustments	Налаштування кольору
 	Color bars	Кольорові смуги
 	Color blindness – Deuteranopia-type	Дальтонізм - дейтеранопія
@@ -657,6 +657,13 @@ font-technology	Variable	Варіативні
 	Create Report	Створити звіт
 	Create Slice	Створити фрагмент
 	Create Sub-folders	Створити вкладені папки
+	Clear Selection	Зняти виділення
+	Export PDFs As:	Експортувати PDF як:
+	Single File	Один файл
+	Multiple Files	Кілька файлів
+	Format Presets	Набори форматів
+	Grid View	Сітка
+	Selected: {n}, Total number of files to export: {m}	Вибрано: {n}, усього файлів для експорту: {m}
 	Create Text	Створити текст
 	Create Trim Marks	Створити мітки підрізування
 	Created	Створено
@@ -737,11 +744,22 @@ font-technology	Variable	Варіативні
 	Delete Stop	Видалити точку переходу
 	Delete Swatch	Видалити зразок
 	Delete Symbol	Видалити символ
+	Delete the selected symbol?	Видалити вибраний символ?
+	Delete the selected symbols?	Видалити вибрані символи?
+	No unused symbols	Немає невикористаних символів
+	Delete Symbols	Видалити символи
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	Один або кілька символів використовуються, і їх не можна видалити, доки їхні екземпляри не буде розібрано або видалено.
+	Expand Instances	Розібрати екземпляри
+	Delete Instances	Видалити екземпляри
+	Yes	Так
+	No	Ні
 	Delete Tab	Видалити табуляцію
 	Delete the graphic style “{name}”?	Видалити графічний стиль «{name}»?
+	Delete Action Sets	Видалити набори дій
+	Delete the action set “{name}” and its actions?	Видалити набір дій «{name}» і його дії?
+	Delete the selected action sets and their actions?	Видалити вибрані набори дій і їхні дії?
 	Delete Theme	Видалити тему
 	Delete theme	Видалити тему
-	Delete these {count} swatches and groups?	Видалити ці зразки та групи ({count})?
 	Delete these {n} graphic styles?	Видалити ці графічні стилі ({n})?
 	Delete this saved preset	Видалити цей збережений набір
 	Delete this {n} graphic style?	Видалити цей графічний стиль ({n})?
@@ -901,9 +919,10 @@ font-technology	Variable	Варіативні
 	Edit Selection	Редагувати виділення
 	Edit Selection…	Редагувати виділення…
 	Edit Symbol	Редагувати символ
+	Exit Symbol Editing Mode	Вийти з режиму редагування символу
 	Edit Text	Редагувати текст
 	Edit the applied effect, or add another one?	Редагувати застосований ефект або додати інший?
-	Edit the selected point's colour in the Color panel	Редагуйте колір вибраної точки на панелі «Колір»
+	Edit the point	Редагувати точку
 	Edit the stop	Редагувати точку переходу
 	Edit Theme	Редагувати тему
 	Edit theme	Редагувати тему
@@ -925,6 +944,13 @@ font-technology	Variable	Варіативні
 	Em Box Top/Right	Верх/право кегельного майданчика
 	ICF Top/Right	Верх/право ICF
 	ICF Bottom/Left	Нижній/лівий край ICF
+	Show Font Height Options	Показати параметри висоти шрифту
+	Hide Font Height Options	Приховати параметри висоти шрифту
+	Set Font Height Reference	Задати опорну висоту шрифту
+	Em Box	Кегельний майданчик
+	Cap Height	Висота великих літер
+	x-Height	Висота малих літер
+	ICF Box	Рамка ICF
 	Em Dash	Довге тире
 	Em Space	Кругла шпація
 	Embed	Вбудувати
@@ -1253,6 +1279,9 @@ file-filter	Templates	Шаблони
 	Hide Live Paint Gaps	Приховати проміжки швидкої заливки
 	Select Fills	Виділяти заливки
 	Select Strokes	Виділяти обведення
+	Paint Fills	Фарбувати заливки
+	Paint Strokes	Фарбувати обведення
+	Highlight	Підсвічування
 	Gaussian Blur…	Розмиття за Гауссом…
 	General	Загальні
 	General › Placement › X	Загальні › Розміщення › X
@@ -1277,7 +1306,7 @@ file-filter	Templates	Шаблони
 	GPL palettes keep solid colours only, as RGB.	Палітри GPL зберігають лише суцільні кольори RGB.
 	GPU Performance	Продуктивність GPU
 	Gradient	Градієнт
-	Gradient (. or >)	Градієнт (. або >)
+	Gradient (. or Shift+.)	Градієнт (. або Shift+.)
 	Gradient across stroke	Градієнт упоперек обведення
 	Gradient along stroke	Градієнт вздовж обведення
 	Gradient and Mesh Resolution:	Роздільна здатність градієнтів і сіток:
@@ -1465,6 +1494,8 @@ file-filter	Templates	Шаблони
 	Objects on Path	Об’єкти на контурі
 	Attach	Прикріпити
 	Objects on Path Options	Параметри об’єктів на контурі
+	Pivot:	Точка опори:
+	Rotate:	Поворот:
 	Objects on Path Tool	Інструмент «Об’єкти на контурі»
 	Attach Objects on Path	Прикріпити об’єкти до контуру
 	Expand Objects on Path	Розібрати об’єкти на контурі
@@ -1568,6 +1599,7 @@ file-filter	Templates	Шаблони
 	In Tangent Handles	Маркери вхідної дотичної
 	In the selected objects	У виділених об’єктах
 	Inches	Дюйми
+	Include Artboard Fill	Включати заливку монтажної області
 	Include Blacks with CMY:	Включати чорні з CMY:
 	Include Bleed	Включати виліт
 	Include Cmy Blacks	Включати чорні CMY
@@ -1632,7 +1664,7 @@ file-filter	Templates	Шаблони
 	Keep the pasted color as a new swatch with a numbered name.	Зберігати вставлений колір як новий зразок із номерним ім’ям.
 	Keep this row's colors (exclude)	Зберегти кольори цього рядка (виключити)
 	Keep:	Зберігати:
-	Kerning (0 = Auto)	Кернінг (0 = авто)
+	Kerning	Кернінг
 	Keyboard Increment	Крок клавіатури
 	Keyboard Shortcut Conflicts	Конфлікти поєднань клавіш
 	Keyboard Shortcut Set	Набір клавіш
@@ -2221,6 +2253,7 @@ file-filter	Templates	Шаблони
 	Open the URL in the web browser	Відкрити URL у веб-браузері
 	Opened with {} note(s): {}	Відкрито із примітками ({}) : {}
 	Open…	Відкрити…
+	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
@@ -2278,7 +2311,7 @@ file-filter	Templates	Шаблони
 	Package	Упакувати
 	Package collects a saved document with its linked files and fonts.	Упаковка збирає збережений документ із його пов’язаними файлами та шрифтами.
 	Package created	Пакет створено
-	Packaged {n} file(s) in {folder} {note}	Упаковано файли: {n} {folder}{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Упаковано файли: {n} {folder} {note}|Упаковано файли: {n} {folder} {note}|Упаковано файли: {n} {folder} {note}
 	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 	Package…	Упакувати…
 	Page	Сторінка
@@ -2468,6 +2501,16 @@ mark-style	Japanese	Японський
 	Arabic	Арабські
 	Hindi	Гінді
 	Farsi	Фарсі
+digits	Devanagari	Деванагарі
+digits	Bengali	Бенгальські
+digits	Gurmukhi	Гурмукхі
+digits	Gujarati	Гуджараті
+digits	Odia	Одія
+digits	Tamil	Тамільські
+digits	Telugu	Телугу
+digits	Kannada	Каннада
+digits	Malayalam	Малаялам
+	Proportional Lining	Пропорційні цифри
 	Proportional Oldstyle	Пропорційні цифри старого стилю
 	Pucker & Bloat…	Зморщування та роздування …
 	Pucker Tool	Інструмент «Зморщування»
@@ -2602,9 +2645,11 @@ mark-style	Japanese	Японський
 	Stop	Зупинити
 	Searching…	Пошук…
 	Not found	Не знайдено
-	{folders} folder(s) and {files} file(s) searched	Переглянуто папок: {folders}, файлів: {files}
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {count}, зокрема папки інших програм і системи та приховані папки
-	{count} folder(s) or file(s) couldn't be read	Не вдалося прочитати папок або файлів: {count}
+	{folders} and {files} searched	Переглянуто: {folders}, {files}
+@plural	{n} folder|{n} folders	{n} папка|{n} папки|{n} папок
+@plural	{n} file|{n} files	{n} файл|{n} файли|{n} файлів
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Пропущено папок: {n}, зокрема папки інших програм і системи та приховані папки|Пропущено папок: {n}, зокрема папки інших програм і системи та приховані папки|Пропущено папок: {n}, зокрема папки інших програм і системи та приховані папки
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Не вдалося прочитати папок або файлів: {n}|Не вдалося прочитати папок або файлів: {n}|Не вдалося прочитати папок або файлів: {n}
 	The search stopped at its limit: search a smaller folder.	Пошук зупинився на межі: виберіть меншу папку.
 	Copy only fonts you own or are licensed to install.	Копіюйте лише шрифти, які належать вам або які ви маєте право встановлювати за ліцензією.
 	VectorCraft copies the fonts to {folder}.	VectorCraft копіює шрифти в {folder}.
@@ -3006,6 +3051,7 @@ mark-style	Japanese	Японський
 	Shape Mode	Режим фігури
 	Shape Modes:	Режими фігур:
 	Shape Properties:	Властивості фігури:
+	Shape Properties	Властивості фігури
 	Shaper Tool	Інструмент «Формоутворення»
 	Shapes	Фігури
 	Shear	Нахилити
@@ -3271,6 +3317,7 @@ effect	Points	Точки
 	Swap Fill and Stroke (Shift+X)	Змінити заливку та обведення (Shift+X)
 	Swap start and end arrowheads	Поміняти початкову та кінцеву стрілки
 	Swap the selected object for the file, keeping its place and transform	Замінити виділений об’єкт файлом, зберігши його положення та перетворення
+	Stylistic Alternates	Стилістичні альтернативи
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
 	Swatch Conflicts	Конфлікти зразків
@@ -3340,6 +3387,7 @@ effect	Points	Точки
 	Tabs	Табуляції
 	Tabular Lining	Табличні цифри
 	Tabular Oldstyle	Табличні цифри старого стилю
+	Titling Alternates	Альтернативи для заголовків
 	Target	Об’єкт
 	Target Contents	Вміст об’єкта
 	Target:	Об’єкт:
@@ -3690,13 +3738,13 @@ effect	Points	Точки
 	Zoom Tool	Інструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
-	{count} file(s) in {folder} {note}. Show the package folder?	файлів: {count} {folder}{note}. Показати папку пакета?
-	{count} linked file(s) not found	не знайдено пов’язаних файлів: {count}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?
+@plural	{n} linked file not found|{n} linked files not found	не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}
 	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	пов’язані зображення ({count}) змінилися з моменту збереження цього документа. Показати нові версії?
-	{count} linked image(s) changed on disk. Show the new versions?	пов’язані зображення ({count}) змінилися на диску. Показати нові версії?
-	{count} more rules: Export writes every one.	ще правил: {count}: експорт записує все.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	пропущено об’єкти без імені: {count}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?|пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?|пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	пов’язані зображення ({n}) змінилися на диску. Показати нові версії?|пов’язані зображення ({n}) змінилися на диску. Показати нові версії?|пов’язані зображення ({n}) змінилися на диску. Показати нові версії?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	ще правил: {n}: експорт записує все.|ще правил: {n}: експорт записує все.|ще правил: {n}: експорт записує все.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	пропущено об’єкти без імені: {n}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.|пропущено об’єкти без імені: {n}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.|пропущено об’єкти без імені: {n}: назвіть їх або увімкніть «Об’єкти без імені» у меню панелі.
 	{effect} is already applied	{effect} вже застосований
 	{format} Options	параметри {format}
 	{kind} Gradient	градієнт {kind}
@@ -3719,6 +3767,8 @@ imageTrace	Outline	Контур
 @plural	{n} item|{n} items	{n} елемент|{n} елементи|{n} елементів
 @plural	Color Table ({n} color)|Color Table ({n} colors)	Таблиця кольорів ({n} колір)|Таблиця кольорів ({n} кольори)|Таблиця кольорів ({n} кольорів)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Видалити цей графічний стиль ({n})?|Видалити ці графічні стилі ({n})?|Видалити ці графічні стилі ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Видалити цей пензель ({n})?|Видалити ці пензлі ({n})?|Видалити {n} пензлів?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Видалити зразки та групи ({n})?|Видалити {n} зразки та групи?|Видалити {n} зразків і груп?
 @plural	{n} Layer|{n} Layers	{n} шар|{n} шари|{n} шарів
 @plural	{n} Object|{n} Objects	{n} об’єкт|{n} об’єкти|{n} об’єктів
 @plural	{n} area highlighted|{n} areas highlighted	Підсвічено {n} область|Підсвічено {n} області|Підсвічено {n} областей
@@ -3852,6 +3902,7 @@ axis	Both	Обидві
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
+@msg	kerning must be a number, "auto", or "optical"	Кернінг має бути числом, «auto» або «optical»
 @msg	the selection has no gradient fill	виділення не має градієнтної заливки
 @msg	the selection has no gradient stroke	виділення не має градієнтного обведення
 @msg	the selection has no pattern fill	виділення не має візерункової заливки
@@ -3882,12 +3933,12 @@ axis	Both	Обидві
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	шари файлу не прочитано ({_1}): він відкривається як його сторінка, на одному шарі
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	шари файлу не прочитано з його даних для редагування ({_1}): їх взято з його PDF-частини
 @msg	`to` must be "corner" or "smooth"	`to` має бути "corner" або "smooth"
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` має бути "emBox", "capHeight", "xHeight" або "icfBox"
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	Файли BMP бувають RGB або у відтінках сірого: colorModel rgb або gray
 @msg	Blend colors: select at least three objects with filled colours	Змішування кольорів: виберіть не менше трьох об’єктів із кольоровими заливками
 @msg	Combine Slices: the slices have no bounds	Об’єднання фрагментів: фрагменти не мають кордонів
 @msg	Convert to Artboards: selection has no area	Перетворення на монтажні області: виділення не має області
 @msg	Convert to Shape: no rectangles or ellipses selected	Перетворення на фігуру: не виділено прямокутники або еліпси
-@msg	Copied the CSS of {rules} object(s)	Скопійовано CSS об’єктів: {rules}
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -3904,13 +3955,11 @@ axis	Both	Обидві
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
-@msg	Downloaded {_1} file(s)	Завантажено файли: {_1}
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
 @msg	Expand: no brush strokes selected	Розбір: не виділено мазки пензлі
 @msg	Expand: no gradient fills	Розбір: немає градієнтних заливок
 @msg	Expand: nothing to expand	Розбір: нема чого розбирати
-@msg	Exported {count} file(s) to {folder}	Експортовано файли: {count} до {folder}
 @msg	Exported {path}	Експортовано: {path}
 @msg	Flatten Transparency: select objects to flatten	Зведення прозорості: виділіть об’єкти для зведення
 @msg	Flatten Transparency: {e}	Зведення прозорості: {e}
@@ -3933,7 +3982,7 @@ axis	Both	Обидві
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msg	Packaged {n} file(s) in {folder} {note}	Упаковано файли: {n} {folder}{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
 @msg	Packaged {n} file(s){note}	Упаковано файли: {n}{note}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
@@ -4092,6 +4141,7 @@ axis	Both	Обидві
 @msg	cannot split an open path at its end point	не можна розділити відкритий контур у його кінцевій точці
 @msg	closing needs three anchors	для замикання потрібні три опорні точки
 @msg	check an asset to export	позначте ресурс для експорту
+@msg	check an artboard to export	позначте монтажну область для експорту
 @msg	check a layer to export	позначте шар для експорту
 @msg	select the art to export first	спочатку виділіть об’єкти для експорту
 @msg	choice must be "merge" or "add", not `{choice}`	choice має бути "merge" або "add", а не `{choice}`
@@ -4234,6 +4284,7 @@ axis	Both	Обидві
 @msg	no such perspective grid preset	такого набору сітки перспективи немає
 @msg	no such recent file	такого останнього файлу немає
 @msg	no such recent font	такого останнього шрифту немає
+@msg	some text is hidden or locked, so its font wasn't replaced	частина тексту прихована або заблокована, тому її шрифт не замінено
 @msg	no such saved selection	такого збереженого виділення немає
 @msg	no such segment	такого сегменту немає
 @msg	no such spine point	такої точки осі немає
@@ -4328,6 +4379,8 @@ axis	Both	Обидві
 @msg	a clipping path can't be attached to a path	відсічний контур не можна прикріпити до контуру
 @msg	select a stroke with a variable width	виділіть обведення зі змінною шириною
 @msg	select a symbol instance	виділіть екземпляр символу
+@msg	select instances of one symbol	виділіть екземпляри одного символу
+@msg	a symbol can't hold an instance of itself	символ не може містити власний екземпляр
 @msg	select an Image Trace object	виділіть об’єкт трасування зображення
 @msg	could not decode image: {0}	не вдалося декодувати зображення: {0}
 @msg	image is empty	зображення порожнє
@@ -4468,10 +4521,6 @@ axis	Both	Обидві
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` займає {size} байт (межа {MAX_DOCUMENT_DATA})
 @msg	{_1} is already used by {_2}	{_1} вже використовується {_2}
 @msg	{_1} is reserved by the system	Сполучення {_1} зарезервоване системою
-@msg	{_1} linked file(s) can't be read here: their previews show	тут неможливо прочитати пов’язані файли: {_1}: відображаються їх попередні перегляди
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	не вдалося декодувати зображення ({undecoded}): вони показані як перекреслені рамки
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	пов’язаних зображень ({_1}) змінилися на диску: «Оновити зв’язки» покаже нові версії
-@msg	Updated {_1} linked file(s) changed on disk	Оновлено пов’язаних файлів, змінених на диску: {_1}
 @msg	{_1}: not saved, so not closed	{_1}: не збережено, тому не закрито
 @msg	{bpp}-bit bitmaps can't be read	растрові зображення з глибиною {bpp} біт не читаються
 @msg	{command} didn't create an object	{command} не створив об’єкт
@@ -4491,7 +4540,6 @@ axis	Both	Обидві
 @msg	Couldn't place {name}: {e}	Не вдалося помістити {name}: {e}
 @msg	Couldn't paste from the clipboard: {e}	Не вдалося вставити з буфера обміну: {e}
 @msg	Saved {path} with {_1} note(s): {first}	Збережено: {path} з примітками ({_1}) : {first}
-@msg	Exported {what} with {_1} note(s): {first}	Експортовано: {what} з примітками ({_1}) : {first}
 @msg	Exported {what}	Експортовано: {what}
 @msg	Saved {n} files beside {path}	Збережено файлів: {n} поруч із {path}
 @msg	Saving	Збереження
@@ -4502,12 +4550,26 @@ axis	Both	Обидві
 @msg	Saving recovery data for {_1}	Збереження даних відновлення для {_1}
 @msg	Discarded {_1} recovered document(s)	Скасовано відновлених документів: {_1}
 @msg	Restored {_1} recovered document(s): save them to keep them	Відновлено документів: {_1}: збережіть їх, щоб залишити
-@msg	Embedded {n} image(s); {missing} missing: relink them first	Вбудовано зображень: {n}; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
-@msg	Embedded {n} image(s)	Вбудовано зображення: {n}
-@msg	Relinked {_1} image(s)	Відновлено зв’язок із зображеннями: {_1}
-@msg	Relinked {n} image(s)	Відновлено зв’язок із зображеннями: {n}
-@msg	Relinked {n} image(s); not in that folder: {_1}	Відновлено зв’язок із зображеннями: {n}; немає в цій папці: {_1}
-@msg	Updated {_1} image(s)	Оновлено зображень: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
+@msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень
+@msgplural	Relinked {n} image|Relinked {n} images	Відновлено зв’язок із {n} зображенням|Відновлено зв’язок із {n} зображеннями|Відновлено зв’язок із {n} зображеннями
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Відновлено зв’язок із {n} зображенням; немає в цій папці: {names}|Відновлено зв’язок із {n} зображеннями; немає в цій папці: {names}|Відновлено зв’язок із {n} зображеннями; немає в цій папці: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Відновлено зв’язок із {n} зображенням; не вдалося відновити зв’язок із {name}: {reason}|Відновлено зв’язок із {n} зображеннями; не вдалося відновити зв’язок із {name}: {reason}|Відновлено зв’язок із {n} зображеннями; не вдалося відновити зв’язок із {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Оновлено {n} зображення|Оновлено {n} зображення|Оновлено {n} зображень
+@msgplural	Replaced {n} image|Replaced {n} images	Замінено {n} зображення|Замінено {n} зображення|Замінено {n} зображень
+@msgplural	Broke {n} link|Broke {n} links	Розірвано {n} зв’язок|Розірвано {n} зв’язки|Розірвано {n} зв’язків
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Розірвано {n} зв’язок; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки|Розірвано {n} зв’язки; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки|Розірвано {n} зв’язків; не вдається прочитати {missing}: спочатку відновіть або оновіть їхні зв’язки
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	тут неможливо прочитати {n} пов’язаний файл: відображається його попередній перегляд|тут неможливо прочитати {n} пов’язані файли: відображаються їх попередні перегляди|тут неможливо прочитати {n} пов’язаних файлів: відображаються їх попередні перегляди
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	не вдалося декодувати {n} зображення: воно показане як перекреслена рамка|не вдалося декодувати {n} зображення: вони показані як перекреслені рамки|не вдалося декодувати {n} зображень: вони показані як перекреслені рамки
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} пов’язане зображення змінилося на диску: «Оновити зв’язки» покаже нову версію|{n} пов’язані зображення змінилися на диску: «Оновити зв’язки» покаже нові версії|{n} пов’язаних зображень змінилися на диску: «Оновити зв’язки» покаже нові версії
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Оновлено {n} пов’язаний файл, змінений на диску|Оновлено {n} пов’язані файли, змінені на диску|Оновлено {n} пов’язаних файлів, змінених на диску
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Експортовано: {what} з {n} приміткою: {first}|Експортовано: {what} з {n} примітками: {first}|Експортовано: {what} з {n} примітками: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифту тепер у {folder}|{n} файли шрифтів тепер у {folder}|{n} файлів шрифтів тепер у {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифту тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файли шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}|{n} файлів шрифтів тепер у {folder}; не вдалося додати {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	тут недоступний {n} шрифт: його текст показано іншим шрифтом|тут недоступні {n} шрифти: їхній текст показано іншим шрифтом|тут недоступно {n} шрифтів: їхній текст показано іншим шрифтом
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	Скопійовано CSS {n} об’єкта|Скопійовано CSS {n} об’єктів|Скопійовано CSS {n} об’єктів
+@msgplural	Downloaded {n} file|Downloaded {n} files	Завантажено {n} файл|Завантажено {n} файли|Завантажено {n} файлів
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Експортовано {n} файл до {folder}|Експортовано {n} файли до {folder}|Експортовано {n} файлів до {folder}
 @msg	Unembedded to {_1}	Вилучено у {_1}
 @msg	Reset {_1}	Скинуто: {_1}
 @msg	Sent to {_1}	Відправлено до {_1}
@@ -4559,9 +4621,6 @@ axis	Both	Обидві
 @msg	every search thread stopped on an internal error (please report this bug)	усі потоки пошуку зупинилися через внутрішню помилку (повідомте про цю помилку)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	Папку Fonts VectorCraft тут не задано: її задають настільна програма та vectorcraft-cli
 @msg	choose the font files to add	виберіть файли шрифтів для додавання
-@msg	{n} font file(s) are now in {folder}	Файлів шрифтів тепер у {folder}: {n}
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	Файлів шрифтів тепер у {folder}: {n}; не вдалося додати {failed}: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	тут недоступно шрифтів: {n}; їхній текст показано іншим шрифтом
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифту
 @msg	that document is no longer open	цей документ більше не відкрито
@@ -4570,7 +4629,6 @@ axis	Both	Обидві
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	Відновлено зв’язок із зображеннями: {n}; не вдалося відновити зв’язок із {name}: {reason}
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -4626,6 +4684,8 @@ axis	Both	Обидві
 @msg	the PCX file is cut short	файл PCX обрізаний
 @msg	the PCX file's header is damaged	заголовок файлу PCX пошкоджений
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файли PCX з {bits}-бітними пікселями в {planes} площинах не читаються
+@msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
@@ -5165,13 +5225,13 @@ lighting	Light	Світло
 	Slope:	Ухил:
 axis	X Axis	Вісь X
 axis	Y Axis	Вісь Y
-@msg	Packaged {n} file(s) in {folder}	Упаковано файли: {n} {folder}
-@msg	Packaged {n} file(s) {note}	Упаковано файли: {n} {note}
-@msg	Packaged {n} file(s)	Упаковано файли: {n}
-	Packaged {n} file(s)	Упаковано файли: {n}
-	Packaged {n} file(s) in {folder}	Упаковано файли: {n} {folder}
-	Packaged {n} file(s) {note}	Упаковано файли: {n} {note}
-	{count} file(s) in {folder}. Show the package folder?	файлів: {count} {folder}. Показати папку пакета?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}
+@plural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	файлів: {n} {folder}. Показати папку пакета?|файлів: {n} {folder}. Показати папку пакета?|файлів: {n} {folder}. Показати папку пакета?
 	Clockwise	За годинниковою стрілкою
 	Dither	Дизеринг
 	Fine noise hides banding in the gradient fill	Дрібний шум приховує смуги в градієнтній заливці
@@ -5206,7 +5266,7 @@ axis	Y Axis	Вісь Y
 	Include Objects On Canvas	Включати об’єкти на полотні
 	Result(s): {count}	Результати: {count}
 @msg	select one object	виберіть один об’єкт
-@msg	Global Edit works on paths, compound paths and symbol instances	Глобальне редагування працює з контурами, складеними контурами та екземплярами символів
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
@@ -5458,6 +5518,11 @@ anchor	Points:	Точки:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Колір точок із малюнка
+	Basic Character Formats	Основні формати символів
+	Case	Регістр
+@msg	{label} must be a number	{label} має бути числом
+@msg	{label} must be a number of at least 0.1	{label} має бути числом не менше 0,1
+@msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	Дуплекс…
@@ -5481,6 +5546,13 @@ anchor	Points:	Точки:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	задайте `inkLimit`, `removeWhiteOverprint` або `overprintBlack`
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	Виправлення друкарських фарб працюють у документах CMYK: спершу виберіть Файл › Колірний режим документа › Колір CMYK
 @msg	`{key}` must be 0..{max}	`{key}` має бути 0..{max}
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	Знайти найближчий зразок…
+	Find Nearest Swatch	Знайти найближчий зразок
+	Apply Nearest Swatch	Застосувати найближчий зразок
+	Select objects to find the swatches nearest their colors.	Виділіть об’єкти, щоб знайти зразки, найближчі до їхніх кольорів.
+@msg	select objects or give `color`	виділіть об’єкти або вкажіть `color`
+@msg	`color` is not a colour	`color` не є кольором
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	Інструмент «Кути»
 	Slide Anchor Along Path	Зсунути опорну точку вздовж контуру
@@ -5508,6 +5580,7 @@ anchor	Points:	Точки:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	Розбити текст
 	Combine Point Text	Об’єднати текст із точки
+	Join Point Text	З’єднати текст із точки
 	Remove Breaks	Видалити розриви
 	Split Text at Cursor	Розбити текст біля курсора
 	Set Alignment, Keep Position	Задати вирівнювання, зберігши положення
@@ -5536,6 +5609,7 @@ breakText	Glyphs	Гліфи
 @msg	Select horizontal point or area type whose text fits	Виділіть горизонтальний текст із точки або в області, текст якого вміщується
 @msg	Nothing to split at the cursor	Біля курсора нічого розбивати
 @msg	Select two or more one-line point type objects on one baseline to combine	Виділіть два або більше однорядкових об’єктів тексту з точки на одній базовій лінії, щоб об’єднати їх
+@msg	Select two or more one-line point type objects to join	Виділіть два або більше однорядкових об’єктів тексту з точки, щоб з’єднати їх
 @msg	No line breaks to remove	Немає розривів рядків для видалення
 @msg	No paragraph breaks to remove	Немає розривів абзаців для видалення
 @msg	Too many breaks to remove at once	Забагато розривів, щоб видалити їх за раз
@@ -5548,6 +5622,11 @@ breakText	Glyphs	Гліфи
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by` має бути lines, paragraphs, words або glyphs, а не {other}
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` має бути "line" або "paragraph", а не {other}
 @msg	`align` must be "left", "center" or "right", not {other}	`align` має бути "left", "center" або "right", а не {other}
+	File + Number	Файл + номер
+	File + Data Set Name	Файл + назва набору даних
+	Data Set Name	Назва набору даних
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` має бути `fileNumber`, `fileDataSetName` або `dataSetName`
+@msg	no free data set file name in destination folder	У папці призначення немає вільного імені файлу набору даних
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	Ефекти контуру
@@ -5589,3 +5668,100 @@ breakText	Glyphs	Гліфи
 	Gap 4	Проміжок 4
 	Dash 5	Штрих 5
 	Gap 5	Проміжок 5
+
+@msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+
+@msg	You must choose a side pattern.	Виберіть бічний візерунок.
+@msg	invalid pattern tile choice	недійсний вибір плитки візерунка
+@msg	no pattern named `{choice}`	візерунка з назвою `{choice}` немає
+	Delete the selected brushes?	Видалити вибрані пензлі?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обведення використовують один або кілька з цих пензлів. Забрати пензлі з цих обведень і видалити пензлі?
+	Remove Strokes	Забрати обведення
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	Інструменти розміщення
+	Arrange in Grid…	Розмістити сіткою…
+	Arrange in Grid	Розмістити сіткою
+	Swap Objects	Поміняти об’єкти місцями
+	Swap Objects and Sizes	Поміняти об’єкти місцями та розмірами
+	Replace with Top Object…	Замінити верхнім об’єктом…
+	Replace with Top Object	Замінити верхнім об’єктом
+	Set Size of Each…	Задати розмір кожного…
+	Set Size of Each	Задати розмір кожного
+@msg	select exactly two objects	виділіть рівно два об’єкти
+@msg	give `width` or `height`	укажіть `width` або `height`
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	Згрупувати об’єкти, що перекриваються
+@msg	too many objects selected (at most 20000)	виділено забагато об’єктів (не більше 20000)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	Розділити на штрихи…
+	Divide into Dashes	Розділити на штрихи
+	Dash:	Тире:
+	Gap:	Проміжок:
+	Fit to Corners and Ends	Припасувати до кутів і кінців
+	Remove Gaps	Прибрати проміжки
+@msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
+@msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	Розібрати штрихи на контури
+@msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	Інструменти документа
+	Save a Timestamped Copy	Зберегти копію з датою і часом
+@msg	there is no clock here	тут немає годинника
+@msg	there is no clock here: give `time` (Unix seconds)	тут немає годинника: укажіть `time` (секунди Unix)
+@msg	the document has never been saved: give `folder`	документ жодного разу не зберігався: укажіть `folder`
+@msg	every numbered name for the copy is taken	усі нумеровані назви для копії зайняті
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	Нові символи з шарів
+	Convert Layers to Symbols	Перетворити шари на символи
+@msg	{id} is no top-level layer	{id} — не шар верхнього рівня
+	Marathi	Маратхі
+	Gujarati	Гуджараті
+	Bengali	Бенгальська
+	Punjabi	Панджабі
+	Tamil	Тамільська
+	Telugu	Телугу
+	Kannada	Каннада
+	Malayalam	Малаялам
+	Odia	Одія
+	Urdu	Урду
+	VectorCraft {release} and later (version {n})	VectorCraft {release} і новіші (версія {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	Експортувати всі відкриті документи як PDF
+	Export All Open Documents as SVG	Експортувати всі відкриті документи як SVG
+@msgplural	Exported {n} document|Exported {n} documents	Експортовано {n} документ|Експортовано {n} документи|Експортовано {n} документів
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортовано {n} документ; {title} не записано: {error}|Експортовано {n} документи; {title} не записано: {error}|Експортовано {n} документів; {title} не записано: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	Тип символу:
+	Dynamic Symbol	Динамічний символ
+	Static Symbol	Статичний символ
+	Symbol Instance Appearance	Оформлення екземпляра символу
+	Reset Symbol Instance	Скинути екземпляр символу
+@msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
+@msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
+@msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
+@msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
+@msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
+	Text Flow	Потік тексту
+	By Rows	За рядками
+	By Columns	За стовпцями
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	Випадкова непрозорість…
+	Randomize Opacity	Випадкова непрозорість
+	Minimum:	Мінімум:
+	Maximum:	Максимум:
+	Seed:	Початкове число:
+@msg	`min` is greater than `max`	`min` більше за `max`
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	Сортувати об’єкти…
+	Sort Objects	Сортувати об’єкти
+	Sort By:	Сортувати за:
+	Apply To:	Застосувати до:
+	Area	Площа
+	X Position	Положення за X
+	Y Position	Положення за Y
+	Stacking Order	Порядок накладання
+	Small to Large	Від меншого до більшого
+	Large to Small	Від більшого до меншого
+	Distribute Evenly	Розподілити рівномірно

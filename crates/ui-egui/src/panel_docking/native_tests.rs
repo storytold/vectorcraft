@@ -240,6 +240,37 @@ fn keys_typed_in_a_native_window_run_the_main_windows_shortcuts() {
     assert!(h.app.session.active().unwrap().selection.objects.is_empty());
 }
 
+/// Enter that commits a field of a floating panel's window, and Escape that cancels one, are the
+/// field's: with an object selected and the Selection tool, Enter didn't also open the Move dialog
+/// (#4803).
+#[test]
+fn enter_and_escape_in_a_native_windows_field_stay_in_the_field() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    h.app.run("select.all", json!({})).unwrap();
+    let viewport = h.float("transparency");
+    // The window's first text field (Opacity), by the state its text box keeps.
+    let ctx = h.ctx.clone();
+    let field = ctx
+        .viewport_for(viewport, |vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| (w.id, w.rect)).collect::<Vec<_>>())
+        .into_iter()
+        .find(|(id, _)| egui::TextEdit::load_state(&ctx, *id).is_some())
+        .map(|(_, rect)| rect.center())
+        .expect("the panel has a text field");
+    for key in [Key::Enter, Key::Escape] {
+        if let Some(window) = h.host.borrow_mut().windows.get_mut(&viewport) {
+            window.events.extend([button(field, true), button(field, false)]);
+        }
+        h.frames(2);
+        h.key_in(viewport, key);
+        assert!(h.app.ui.dialog.is_none(), "{key:?} in the field opens no dialog");
+        assert_eq!(h.app.session.active().unwrap().selection.objects.len(), 1, "{key:?} in the field keeps the selection");
+    }
+    // Keys typed with no field editing still reach the main window.
+    h.key_in(viewport, Key::Enter);
+    assert!(h.app.ui.dialog.is_some(), "Enter outside a field opens the Move dialog");
+}
+
 #[test]
 fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     let mut h = Harness::new();

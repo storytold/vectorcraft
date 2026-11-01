@@ -7,6 +7,35 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn blob_tip_fields_confirm_and_cancel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = painted(&mut app);
+    assert!(text.contains("Angle:") && text.contains("Roundness:"), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!((d.f64("angle", -1.0), d.f64("roundness", -1.0)), (0.0, 100.0));
+    d.fields.insert("angle".into(), json!(45));
+    d.fields.insert("roundness".into(), json!(0));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(
+        (app.session.tool_options_of("blobBrush")["angle"].as_f64(), app.session.tool_options_of("blobBrush")["roundness"].as_f64()),
+        (Some(45.0), Some(0.0))
+    );
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("roundness".into(), json!(75));
+    app.ui.dialog = None;
+    assert_eq!(app.session.tool_options_of("blobBrush")["roundness"], json!(0.0));
+}
+
+#[test]
+fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
+    for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
+        let drawn = vectorcraft_tools::draw2::blob_tip(0.0, roundness).as_coeffs()[3] as f32;
+        assert!((blob_tip_short_ratio(roundness) - drawn).abs() < 1e-6, "roundness {roundness}: drawn {drawn}");
+    }
+}
+
 /// The labels the open dialog paints.
 fn painted(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
@@ -118,8 +147,8 @@ fn each_tool_shows_its_options_and_ok_sets_them() {
         assert!(text.contains("Size:"), "{tool}: {text}");
         assert_eq!(text.contains("Fidelity:"), blob, "{tool}: {text}");
         assert_eq!((text.contains("Keep selected"), text.contains("Merge only with selection")), (blob, blob), "{tool}: {text}");
-        // The Eraser also has Angle and Roundness.
-        assert_eq!((text.contains("Angle:"), text.contains("Roundness:")), (!blob, !blob), "{tool}: {text}");
+        // Both tools have Angle and Roundness.
+        assert!(text.contains("Angle:") && text.contains("Roundness:"), "{tool}: {text}");
         app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!(24));
         super::super::confirm(&mut app).unwrap();
         assert_eq!(app.session.tool_options_of(tool)["size"].as_f64(), Some(24.0), "{tool}");

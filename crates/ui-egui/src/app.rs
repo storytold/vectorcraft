@@ -31,6 +31,16 @@ mod view;
 pub use fonts::MAX_RECENT_FONTS;
 
 impl VectorcraftApp {
+    /// Takes the host's Caps Lock state, which gives the drawing tools the crosshair while it is on
+    /// without changing the saved Use Precise Cursors preference.
+    pub fn set_caps_lock(&mut self, on: bool) {
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", json!({ "on": on }))
+        {
+            log::error!("Could not update Caps Lock cursor state: {err}");
+        }
+    }
+
     /// The app around `session`, reaching the platform through `services` (file pickers, the
     /// clipboard, files and the like). It starts cataloguing the installed fonts at once, gives
     /// Data Recovery the host's store and makes a view for each open document.
@@ -400,7 +410,8 @@ impl VectorcraftApp {
         crate::ime::install_hooks(ctx);
         self.adopt_context(ctx);
         if !self.styled {
-            theme::apply(ctx, self.ui.brightness);
+            // The saved accent, color scheme and canvas color, not the defaults (#4837).
+            prefs_dialog::reapply(self, ctx);
             egui_extras::install_image_loaders(ctx);
             self.styled = true;
         }

@@ -19,8 +19,8 @@ fn edit_functions_survive_hostile_numbers() {
     for paths in [square(), zigzag()] {
         for &v in &HOSTILE {
             let _ = simplify(&paths, v);
-            let _ = simplify_with(&paths, &SimplifyOptions { tolerance: v, corner_angle_deg: v, straight_lines: false });
-            let _ = simplify_with(&paths, &SimplifyOptions { tolerance: 0.5, corner_angle_deg: v, straight_lines: true });
+            let _ = simplify_with(&paths, &SimplifyOptions { tolerance: v, corner_angle_deg: v, straight_lines: false, ..Default::default() });
+            let _ = simplify_with(&paths, &SimplifyOptions { tolerance: 0.5, corner_angle_deg: v, straight_lines: true, ..Default::default() });
             let _ = smooth(&paths, v);
             let _ = smooth_level(&paths, v);
             let _ = remove_redundant_points(&paths, v);

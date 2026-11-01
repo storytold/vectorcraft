@@ -206,7 +206,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitAll"
         | "view.actualSize"
         | "view.rotate" => app.session.active().is_some(),
-        "view.rotateToSelection" => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
+        "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
         id if id.starts_with("type.recentFont") => {
@@ -225,7 +225,11 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
-        "ui.graphicStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
+        "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
+            (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
+                && d.str("section") == "basic"
+        }),
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),

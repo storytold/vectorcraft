@@ -117,6 +117,16 @@ fn report(app: &mut VectorcraftApp, r: Result<Value, String>, done: impl FnOnce(
     app.status(msg);
 }
 
+/// The status bar's line for `n` relinked images.
+pub(crate) fn relinked_status(n: usize) -> String {
+    crate::i18n::msg_n(n as u64, "Relinked {n} image", "Relinked {n} images", &[])
+}
+
+/// The status bar's line for `n` images read again from their updated files.
+pub(crate) fn updated_status(n: usize) -> String {
+    crate::i18n::msg_n(n as u64, "Updated {n} image", "Updated {n} images", &[])
+}
+
 /// Relink images `ids` to a picked file.
 pub(crate) fn relink(app: &mut VectorcraftApp, ids: Vec<u64>) {
     crate::picks::button(app, move |app| relink_picked(app, ids.clone()));
@@ -126,7 +136,7 @@ fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
     let Some(path) = crate::picks::open(app, &pick) else { return };
     let r = app.run("links.relink", json!({ "ids": ids, "path": path }));
-    report(app, r, |v| format!("Relinked {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
+    report(app, r, |v| relinked_status(v["relinked"].as_array().map_or(0, Vec::len)));
 }
 
 /// Replace images `ids` with a picked file (Control bar, Properties): it keeps its own aspect
@@ -137,7 +147,7 @@ pub(crate) fn replace(app: &mut VectorcraftApp, ids: Vec<u64>) {
         let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
         let Some(path) = crate::picks::open(app, &pick) else { return };
         let r = app.run("links.relink", json!({ "ids": ids.clone(), "path": path, "preserve": "fit" }));
-        report(app, r, |v| format!("Replaced {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
+        report(app, r, |v| crate::i18n::msg_n(v["relinked"].as_array().map_or(0, Vec::len) as u64, "Replaced {n} image", "Replaced {n} images", &[]));
     });
 }
 
@@ -153,7 +163,12 @@ fn relink_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     report(app, r, |v| {
         let missed: Vec<&str> = v["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         let n = v["relinked"].as_array().map_or(0, Vec::len);
-        if missed.is_empty() { format!("Relinked {n} image(s)") } else { format!("Relinked {n} image(s); not in that folder: {}", missed.join(", ")) }
+        if missed.is_empty() {
+            relinked_status(n)
+        } else {
+            let (one, other) = ("Relinked {n} image; not in that folder: {names}", "Relinked {n} images; not in that folder: {names}");
+            crate::i18n::msg_n(n as u64, one, other, &[("names", &missed.join(", "))])
+        }
     });
 }
 
@@ -400,7 +415,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             if widgets::icon_button_enabled(ui, "rotate-cw", tl!("Update Link"), false, !modified.is_empty(), 24.0).clicked() {
                 let r = app.run("links.update", json!({ "ids": modified }));
-                report(app, r, |v| format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)));
+                report(app, r, |v| updated_status(v["updated"].as_array().map_or(0, Vec::len)));
             }
             if widgets::icon_button_enabled(ui, "zoom-in", tl!("Go To Link"), false, sel.len() == 1, 24.0).clicked()
                 && let Some(id) = sel.first().and_then(|r| r["id"].as_u64())
@@ -424,7 +439,16 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
     report(app, r, |v| {
         let missing = v["missing"].as_array().map_or(0, Vec::len);
         let n = v["embedded"].as_array().map_or(0, Vec::len);
-        if missing == 0 { format!("Broke {n} link(s)") } else { format!("Broke {n} link(s); {missing} can't be read: relink or update them first") }
+        if missing == 0 {
+            crate::i18n::msg_n(n as u64, "Broke {n} link", "Broke {n} links", &[])
+        } else {
+            crate::i18n::msg_n(
+                n as u64,
+                "Broke {n} link; {missing} can't be read: relink or update them first",
+                "Broke {n} links; {missing} can't be read: relink or update them first",
+                &[("missing", &missing.to_string())],
+            )
+        }
     });
 }
 
@@ -534,7 +558,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Update Link"), sel.iter().any(|r| status_is(r, "modified")), false) {
         let r = app.run("links.update", json!({ "ids": ids(&sel, |r| status_is(r, "modified")) }));
-        report(app, r, |v| format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)));
+        report(app, r, |v| updated_status(v["updated"].as_array().map_or(0, Vec::len)));
     }
     if menu_item(ui, tl!("Edit Original"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
         crate::menus::invoke(app, "links.editOriginal", json!({}));
@@ -545,7 +569,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         report(app, r, |v| {
             let missing = v["missing"].as_array().map_or(0, Vec::len);
             let n = v["embedded"].as_array().map_or(0, Vec::len);
-            if missing == 0 { format!("Embedded {n} image(s)") } else { format!("Embedded {n} image(s); {missing} missing: relink them first") }
+            if missing == 0 {
+                crate::i18n::msg_n(n as u64, "Embedded {n} image", "Embedded {n} images", &[])
+            } else {
+                crate::i18n::msg_n(
+                    n as u64,
+                    "Embedded {n} image; {missing} missing: relink them first",
+                    "Embedded {n} images; {missing} missing: relink them first",
+                    &[("missing", &missing.to_string())],
+                )
+            }
         });
     }
     if menu_item(ui, tl!("Unembed…"), embedded.len() == 1, false)
